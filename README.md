@@ -26,4 +26,4 @@ Add `SceneToGameViewSync` to a Camera, or use:
 GameObject > Camera > Scene To Game View Sync Camera
 ```
 
-The component syncs the last active Scene view camera position, rotation, and FOV to the target Camera.
+The component syncs the last active Scene view camera position, rotation, FOV, and clipping planes to the target Camera.

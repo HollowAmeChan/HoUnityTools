@@ -70,6 +70,9 @@ namespace Hollow.HoUnityTools.Editor
             bool positionChanged = force || sync.LastScenePosition != sceneCamera.transform.position;
             bool rotationChanged = force || sync.LastSceneRotation != sceneCamera.transform.rotation;
             bool fovChanged = force || !Mathf.Approximately(sync.LastSceneFOV, sceneCamera.fieldOfView);
+            bool clippingPlanesChanged = force
+                || !Mathf.Approximately(sync.LastSceneNearClipPlane, sceneCamera.nearClipPlane)
+                || !Mathf.Approximately(sync.LastSceneFarClipPlane, sceneCamera.farClipPlane);
             bool changed = false;
 
             if (sync.syncPosition && positionChanged)
@@ -90,6 +93,15 @@ namespace Hollow.HoUnityTools.Editor
             {
                 targetCamera.fieldOfView = sceneCamera.fieldOfView;
                 sync.LastSceneFOV = sceneCamera.fieldOfView;
+                changed = true;
+            }
+
+            if (sync.syncClippingPlanes && clippingPlanesChanged)
+            {
+                targetCamera.nearClipPlane = sceneCamera.nearClipPlane;
+                targetCamera.farClipPlane = sceneCamera.farClipPlane;
+                sync.LastSceneNearClipPlane = sceneCamera.nearClipPlane;
+                sync.LastSceneFarClipPlane = sceneCamera.farClipPlane;
                 changed = true;
             }
 

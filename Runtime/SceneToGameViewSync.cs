@@ -23,6 +23,9 @@ namespace Hollow.HoUnityTools
         [Tooltip("是否同步视野 (FOV)")]
         public bool syncFOV = true;
 
+        [Tooltip("是否同步裁切平面")]
+        public bool syncClippingPlanes = true;
+
         [Tooltip("是否在播放模式下也同步")]
         public bool syncInPlayMode;
 
@@ -30,6 +33,8 @@ namespace Hollow.HoUnityTools
         internal Vector3 LastScenePosition { get; set; }
         internal Quaternion LastSceneRotation { get; set; }
         internal float LastSceneFOV { get; set; }
+        internal float LastSceneNearClipPlane { get; set; }
+        internal float LastSceneFarClipPlane { get; set; }
         internal float LastSyncTime { get; set; }
 
         private void OnEnable()

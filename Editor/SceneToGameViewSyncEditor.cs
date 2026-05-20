@@ -25,6 +25,7 @@ namespace Hollow.HoUnityTools.Editor
                 DrawProperty("syncPosition", "同步位置", "同步相机位置");
                 DrawProperty("syncRotation", "同步旋转", "同步相机旋转");
                 DrawProperty("syncFOV", "同步FOV", "同步相机视野");
+                DrawProperty("syncClippingPlanes", "同步裁切", "同步相机近远裁切平面");
                 DrawProperty("syncInPlayMode", "播放模式下同步", "在播放模式下也进行同步");
 
                 EditorGUILayout.Space();
