@@ -7,7 +7,7 @@ namespace Hollow.HoUnityTools.Editor
 {
     internal static class SceneToGameViewSyncMenu
     {
-        [MenuItem("GameObject/Camera/Scene To Game View Sync Camera", false, 10)]
+        [MenuItem("GameObject/HoUnityTools/Scene To Game View Sync Camera", false, 10)]
         private static void CreateSyncCamera(MenuCommand menuCommand)
         {
             GameObject cameraObject = new GameObject("Scene To Game Sync Camera");
