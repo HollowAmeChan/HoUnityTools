@@ -4,6 +4,8 @@ Small Unity tools packaged as a UPM package.
 
 ## Install
 
+Requires Unity 6000.0 or newer.
+
 Use Unity Package Manager with a local path:
 
 ```text
@@ -17,6 +19,23 @@ Or add it to `Packages/manifest.json`:
 ```
 
 ## Tools
+
+### Ho 跟随约束
+
+Add `HoFollowConstraint` to any GameObject, or use:
+
+```text
+GameObject > HoUnityTools > 约束 > 跟随约束
+```
+
+The component is a pure point-to-point Transform constraint. It follows a target without Rigidbody, Joint, PhysBone, bone-chain propagation, or physics solvers. It includes follow response, overshoot, position and rotation axis locks, rotation filtering, offset, optional oscillation, optional Perlin noise, optional soft limits, and selected gizmos.
+
+Inspector includes localized starting presets:
+
+- `光环`
+- `武器`
+- `背包`
+- `无人机`
 
 ### Scene To Game View Sync
 

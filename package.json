@@ -1,9 +1,9 @@
 {
   "name": "com.hollow.hounitytools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Ho Unity Tools",
   "description": "Small Unity editor and runtime tools used by Hollow projects.",
-  "unity": "2022.3",
+  "unity": "6000.0",
   "author": {
     "name": "Hollow"
   },
