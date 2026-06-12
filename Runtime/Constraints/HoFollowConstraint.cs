@@ -61,6 +61,19 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool initializeOnEnable = true;
 
+        [Header("Initial Transform")]
+        [SerializeField]
+        private bool hasInitialTransform;
+
+        [SerializeField]
+        private Vector3 initialLocalPosition = Vector3.zero;
+
+        [SerializeField]
+        private Vector3 initialLocalRotation = Vector3.zero;
+
+        [SerializeField]
+        private Vector3 initialLocalScale = Vector3.one;
+
         [Header("Follow")]
         [SerializeField, Range(0.0f, 1.0f)]
         private float positionFollow = 0.9f;
@@ -219,6 +232,9 @@ namespace Hollow.HoUnityTools.Constraints
         private Vector3 anchorPosition;
         private Quaternion anchorRotation = Quaternion.identity;
         private Vector3 anchorScale = Vector3.one;
+        private Vector3 anchorLocalPosition;
+        private Vector3 anchorLocalRotation;
+        private Vector3 anchorLocalScale = Vector3.one;
         private Quaternion targetAnchorRotation = Quaternion.identity;
         private Vector3 currentPosition;
         private Quaternion currentRotation = Quaternion.identity;
@@ -249,6 +265,8 @@ namespace Hollow.HoUnityTools.Constraints
         public Vector3 CurrentPosition => currentPosition;
 
         public Quaternion CurrentRotation => currentRotation;
+
+        public bool HasInitialTransform => hasInitialTransform;
 
         public HoFollowConstraintUpdateMode UpdateMode
         {
@@ -301,6 +319,7 @@ namespace Hollow.HoUnityTools.Constraints
         {
             maxVelocity = Mathf.Max(0.0f, maxVelocity);
             maxAngularVelocity = Mathf.Max(0.0f, maxAngularVelocity);
+            initialLocalScale = Max(initialLocalScale, Vector3.zero);
             oscillationMultiplier = Mathf.Max(0.0f, oscillationMultiplier);
             oscillationFrequency = Mathf.Max(0.0f, oscillationFrequency);
             noiseMultiplier = Mathf.Max(0.0f, noiseMultiplier);
@@ -319,10 +338,15 @@ namespace Hollow.HoUnityTools.Constraints
 
         public void ResetState()
         {
-            Transform self = transform;
-            anchorPosition = self.position;
-            anchorRotation = self.rotation;
-            anchorScale = self.localScale;
+            if (!hasInitialTransform)
+            {
+                Transform self = transform;
+                anchorLocalPosition = self.localPosition;
+                anchorLocalRotation = NormalizeEuler(self.localEulerAngles);
+                anchorLocalScale = self.localScale;
+            }
+
+            GetAnchorPose(out anchorPosition, out anchorRotation, out anchorScale);
             targetAnchorRotation = target != null ? Quaternion.Inverse(target.rotation) * anchorRotation : Quaternion.identity;
             currentPosition = anchorPosition;
             currentRotation = anchorRotation;
@@ -333,6 +357,38 @@ namespace Hollow.HoUnityTools.Constraints
             lastUpdateTime = GetTime();
             initialized = true;
             ClearMotionTrail();
+        }
+
+        public void SaveInitialTransform()
+        {
+            Transform self = transform;
+            initialLocalPosition = self.localPosition;
+            initialLocalRotation = NormalizeEuler(self.localEulerAngles);
+            initialLocalScale = self.localScale;
+            hasInitialTransform = true;
+            ResetState();
+        }
+
+        public void RestoreInitialTransform()
+        {
+            if (!hasInitialTransform)
+            {
+                return;
+            }
+
+            Transform self = transform;
+            self.SetLocalPositionAndRotation(initialLocalPosition, Quaternion.Euler(initialLocalRotation));
+            self.localScale = initialLocalScale;
+            ResetState();
+        }
+
+        public void ClearInitialTransform()
+        {
+            hasInitialTransform = false;
+            initialLocalPosition = Vector3.zero;
+            initialLocalRotation = Vector3.zero;
+            initialLocalScale = Vector3.one;
+            ResetState();
         }
 
         public void SnapToTarget()
@@ -349,11 +405,14 @@ namespace Hollow.HoUnityTools.Constraints
             currentScale = transform.localScale;
             velocity = Vector3.zero;
             angularVelocity = Vector3.zero;
-            WriteTransform(currentPosition, currentRotation, currentScale);
+            Vector3 finalPosition = currentPosition;
+            Quaternion finalRotation = currentRotation;
+            ApplyOffset(ref finalPosition, ref finalRotation);
+            WriteTransform(finalPosition, finalRotation, currentScale);
             previousEuler = currentRotation.eulerAngles;
             initialized = true;
             ClearMotionTrail();
-            AddMotionTrailPoint(currentPosition);
+            AddMotionTrailPoint(finalPosition);
         }
 
         public void Evaluate(float deltaTime)
@@ -370,28 +429,59 @@ namespace Hollow.HoUnityTools.Constraints
 
             if (target == null)
             {
-                return;
+                if (!HasMotionWithoutTarget())
+                {
+                    return;
+                }
+
+                GetAnchorPose(out anchorPosition, out anchorRotation, out anchorScale);
+                Vector3 desiredPosition = anchorPosition;
+                Quaternion desiredRotation = anchorRotation;
+                currentPosition = ApplyAxisLock(desiredPosition);
+                currentRotation = ApplyRotationLock(FilterRotation(desiredRotation));
+                currentScale = anchorScale;
+                velocity = Vector3.zero;
+                angularVelocity = Vector3.zero;
+                previousEuler = currentRotation.eulerAngles;
             }
+            else
+            {
+                float safeDeltaTime = Mathf.Max(0.0f, deltaTime);
+                GetTargetPose(out Vector3 desiredPosition, out Quaternion desiredRotation);
 
-            float safeDeltaTime = Mathf.Max(0.0f, deltaTime);
-            GetTargetPose(out Vector3 desiredPosition, out Quaternion desiredRotation);
+                desiredPosition = ApplyAxisLock(desiredPosition);
+                desiredRotation = ApplyRotationLock(FilterRotation(desiredRotation));
 
-            desiredPosition = ApplyAxisLock(desiredPosition);
-            desiredRotation = ApplyRotationLock(FilterRotation(desiredRotation));
-
-            UpdatePosition(desiredPosition, safeDeltaTime);
-            UpdateRotation(desiredRotation, safeDeltaTime);
+                UpdatePosition(desiredPosition, safeDeltaTime);
+                UpdateRotation(desiredRotation, safeDeltaTime);
+            }
 
             Vector3 finalPosition = currentPosition;
             Quaternion finalRotation = currentRotation;
             Vector3 finalScale = anchorScale;
 
+            ApplyOffset(ref finalPosition, ref finalRotation);
             ApplyOscillation(ref finalPosition, ref finalRotation, ref finalScale);
             ApplyNoise(ref finalPosition, ref finalRotation, ref finalScale);
             finalPosition = ApplyLimit(finalPosition);
 
             WriteTransform(finalPosition, finalRotation, finalScale);
             AddMotionTrailPoint(finalPosition);
+        }
+
+        private bool HasMotionWithoutTarget()
+        {
+            return HasProceduralMotion() || HasOffset();
+        }
+
+        private bool HasProceduralMotion()
+        {
+            return oscillationEnabled || noiseEnabled;
+        }
+
+        private bool HasOffset()
+        {
+            return positionOffset.sqrMagnitude > 0.0f || rotationOffset.sqrMagnitude > 0.0f;
         }
 
         private void EvaluateWithCurrentDelta()
@@ -412,17 +502,53 @@ namespace Hollow.HoUnityTools.Constraints
             return evaluateInEditMode;
         }
 
+        private void GetAnchorPose(out Vector3 position, out Quaternion rotation, out Vector3 scale)
+        {
+            Transform self = transform;
+            Vector3 localPosition = hasInitialTransform ? initialLocalPosition : anchorLocalPosition;
+            Vector3 localRotation = hasInitialTransform ? initialLocalRotation : anchorLocalRotation;
+            Vector3 localScale = hasInitialTransform ? initialLocalScale : anchorLocalScale;
+
+            Transform parent = self.parent;
+            rotation = Quaternion.Euler(localRotation);
+            if (parent != null)
+            {
+                position = parent.TransformPoint(localPosition);
+                rotation = parent.rotation * rotation;
+            }
+            else
+            {
+                position = localPosition;
+            }
+
+            scale = localScale;
+        }
+
         private void GetTargetPose(out Vector3 targetPosition, out Quaternion targetRotation)
         {
-            targetPosition = target.position + GetPositionOffset();
-            targetRotation = GetTargetRotation() * Quaternion.Euler(rotationOffset);
+            targetPosition = target.position;
+            targetRotation = GetTargetRotation();
+        }
+
+        private void ApplyOffset(ref Vector3 finalPosition, ref Quaternion finalRotation)
+        {
+            finalPosition += GetPositionOffset();
+            finalRotation *= Quaternion.Euler(rotationOffset);
         }
 
         private Vector3 GetPositionOffset()
         {
-            return offsetMode == HoFollowConstraintOffsetMode.Local && target != null
-                ? target.TransformVector(positionOffset)
-                : positionOffset;
+            if (offsetMode != HoFollowConstraintOffsetMode.Local)
+            {
+                return positionOffset;
+            }
+
+            if (target != null)
+            {
+                return target.TransformVector(positionOffset);
+            }
+
+            return anchorRotation * positionOffset;
         }
 
         private Quaternion GetTargetRotation()
@@ -693,9 +819,12 @@ namespace Hollow.HoUnityTools.Constraints
 
         private Vector3 TransformLocalVector(Vector3 vector)
         {
-            return offsetMode == HoFollowConstraintOffsetMode.Local && target != null
-                ? target.TransformVector(vector)
-                : vector;
+            if (offsetMode != HoFollowConstraintOffsetMode.Local)
+            {
+                return vector;
+            }
+
+            return target != null ? target.TransformVector(vector) : vector;
         }
 
         private Vector3 GetSignedNoise3(int seed, float frequency)

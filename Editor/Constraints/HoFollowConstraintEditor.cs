@@ -11,6 +11,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty updateMode;
         private SerializedProperty evaluateInEditMode;
         private SerializedProperty initializeOnEnable;
+        private SerializedProperty hasInitialTransform;
+        private SerializedProperty initialLocalPosition;
+        private SerializedProperty initialLocalRotation;
+        private SerializedProperty initialLocalScale;
         private SerializedProperty positionFollow;
         private SerializedProperty rotationFollow;
         private SerializedProperty response;
@@ -83,6 +87,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机", "约束求值发生在哪个 Unity 更新阶段。");
         private static readonly GUIContent EvaluateInEditModeLabel = new GUIContent("编辑模式求值", "未进入播放模式时也持续更新。");
         private static readonly GUIContent InitializeOnEnableLabel = new GUIContent("启用时重置锚点", "组件启用时用当前 Transform 作为锁定与跟随的初始锚点。");
+        private static readonly GUIContent InitialLocalPositionLabel = new GUIContent("初始位置", "保存的本地初始位置。");
+        private static readonly GUIContent InitialLocalRotationLabel = new GUIContent("初始旋转", "保存的本地初始旋转。");
+        private static readonly GUIContent InitialLocalScaleLabel = new GUIContent("初始缩放", "保存的本地初始缩放。");
         private static readonly GUIContent PositionFollowLabel = new GUIContent("位置跟随", "0 为保持锚点，1 为完全贴近目标位置。");
         private static readonly GUIContent RotationFollowLabel = new GUIContent("旋转跟随", "0 为保持锚点，1 为完全贴近目标旋转。");
         private static readonly GUIContent ResponseLabel = new GUIContent("响应", "收敛速度。值越大，越快追上目标。");
@@ -172,6 +179,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             updateMode = Find("updateMode");
             evaluateInEditMode = Find("evaluateInEditMode");
             initializeOnEnable = Find("initializeOnEnable");
+            hasInitialTransform = Find("hasInitialTransform");
+            initialLocalPosition = Find("initialLocalPosition");
+            initialLocalRotation = Find("initialLocalRotation");
+            initialLocalScale = Find("initialLocalScale");
             positionFollow = Find("positionFollow");
             rotationFollow = Find("rotationFollow");
             response = Find("response");
@@ -255,23 +266,28 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             EditorGUILayout.LabelField("Ho 跟随约束", EditorStyles.boldLabel);
             Rect rect = EditorGUILayout.GetControlRect(false, 22.0f);
-            float width = rect.width / 4.0f;
-            if (GUI.Button(new Rect(rect.x, rect.y, width - 2.0f, rect.height), "光环"))
+            float width = rect.width / 5.0f;
+            if (GUI.Button(new Rect(rect.x, rect.y, width - 2.0f, rect.height), "清空"))
+            {
+                ApplyPreset(-1);
+            }
+
+            if (GUI.Button(new Rect(rect.x + width, rect.y, width - 2.0f, rect.height), "光环"))
             {
                 ApplyPreset(0);
             }
 
-            if (GUI.Button(new Rect(rect.x + width, rect.y, width - 2.0f, rect.height), "武器"))
+            if (GUI.Button(new Rect(rect.x + width * 2.0f, rect.y, width - 2.0f, rect.height), "武器"))
             {
                 ApplyPreset(1);
             }
 
-            if (GUI.Button(new Rect(rect.x + width * 2.0f, rect.y, width - 2.0f, rect.height), "背包"))
+            if (GUI.Button(new Rect(rect.x + width * 3.0f, rect.y, width - 2.0f, rect.height), "背包"))
             {
                 ApplyPreset(2);
             }
 
-            if (GUI.Button(new Rect(rect.x + width * 3.0f, rect.y, width, rect.height), "无人机"))
+            if (GUI.Button(new Rect(rect.x + width * 4.0f, rect.y, width, rect.height), "无人机"))
             {
                 ApplyPreset(3);
             }
@@ -288,7 +304,47 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             DrawEnumPopup(updateMode, UpdateModeLabel, UpdateModeLabels, FourEnumValues);
             EditorGUILayout.PropertyField(evaluateInEditMode, EvaluateInEditModeLabel);
             EditorGUILayout.PropertyField(initializeOnEnable, InitializeOnEnableLabel);
+            DrawInitialTransformControls();
             DrawMissingTargetHelp();
+        }
+
+        private void DrawInitialTransformControls()
+        {
+            EditorGUILayout.Space(3.0f);
+            EditorGUILayout.LabelField("初始变换缓存", EditorStyles.boldLabel);
+
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.Toggle("已保存", hasInitialTransform.boolValue);
+            }
+
+            using (new EditorGUI.DisabledScope(!hasInitialTransform.boolValue))
+            {
+                EditorGUILayout.PropertyField(initialLocalPosition, InitialLocalPositionLabel);
+                EditorGUILayout.PropertyField(initialLocalRotation, InitialLocalRotationLabel);
+                EditorGUILayout.PropertyField(initialLocalScale, InitialLocalScaleLabel);
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("保存初始变换"))
+            {
+                SaveInitialTransformForTargets();
+            }
+
+            using (new EditorGUI.DisabledScope(!hasInitialTransform.boolValue))
+            {
+                if (GUILayout.Button("恢复初始变换"))
+                {
+                    RestoreInitialTransformForTargets();
+                }
+
+                if (GUILayout.Button("清除缓存"))
+                {
+                    ClearInitialTransformForTargets();
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
         }
 
         private void DrawFollowSection()
@@ -470,7 +526,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             if (targetProperty.objectReferenceValue == null)
             {
-                EditorGUILayout.HelpBox("请指定目标 Transform。组件会按“目标 -> 运动 -> 约束 -> 最终结果”的顺序驱动当前物体。", MessageType.Info);
+                EditorGUILayout.HelpBox("未指定目标时，组件会以当前锚点为基准应用偏移、呼吸与噪声。指定目标后会额外进行跟随。", MessageType.Info);
             }
         }
 
@@ -525,7 +581,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             serializedObject.Update();
 
+            SaveInitialTransformForTargets();
+            serializedObject.Update();
+
             SetDefaultsForAllPresets();
+            if (preset < 0)
+            {
+                serializedObject.ApplyModifiedProperties();
+                return;
+            }
+
             switch (preset)
             {
                 case 0:
@@ -567,6 +632,55 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
         }
 
+        private void SaveInitialTransformForTargets()
+        {
+            serializedObject.ApplyModifiedProperties();
+            foreach (Object selectedTarget in targets)
+            {
+                if (selectedTarget is HoFollowConstraint constraint)
+                {
+                    Undo.RecordObject(constraint, "保存跟随约束初始变换");
+                    constraint.SaveInitialTransform();
+                    EditorUtility.SetDirty(constraint);
+                }
+            }
+
+            serializedObject.Update();
+        }
+
+        private void RestoreInitialTransformForTargets()
+        {
+            serializedObject.ApplyModifiedProperties();
+            foreach (Object selectedTarget in targets)
+            {
+                if (selectedTarget is HoFollowConstraint constraint)
+                {
+                    Undo.RecordObjects(new Object[] { constraint, constraint.transform }, "恢复跟随约束初始变换");
+                    constraint.RestoreInitialTransform();
+                    EditorUtility.SetDirty(constraint);
+                    EditorUtility.SetDirty(constraint.transform);
+                }
+            }
+
+            serializedObject.Update();
+        }
+
+        private void ClearInitialTransformForTargets()
+        {
+            serializedObject.ApplyModifiedProperties();
+            foreach (Object selectedTarget in targets)
+            {
+                if (selectedTarget is HoFollowConstraint constraint)
+                {
+                    Undo.RecordObject(constraint, "清除跟随约束初始变换");
+                    constraint.ClearInitialTransform();
+                    EditorUtility.SetDirty(constraint);
+                }
+            }
+
+            serializedObject.Update();
+        }
+
         private void SetDefaultsForAllPresets()
         {
             SetFloat(positionFollow, 1.0f);
@@ -581,11 +695,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetFloat(lockPitch, 0.0f);
             SetFloat(lockYaw, 0.0f);
             SetFloat(lockRoll, 0.0f);
+            SetEnum(rotationMode, HoFollowConstraintRotationMode.World);
             SetBool(keepHorizon, false);
             SetBool(followYaw, true);
             SetBool(followPitch, true);
             SetBool(followRoll, true);
             SetBool(oscillationEnabled, false);
+            SetEnum(oscillationWaveform, HoFollowConstraintWaveform.Sin);
             SetFloat(oscillationMultiplier, 1.0f);
             SetFloat(oscillationFrequency, 1.0f);
             SetFloat(oscillationPhase, 0.0f);
@@ -595,16 +711,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetVector3(oscillationScaleAmplitude, Vector3.zero);
             SetBool(noiseEnabled, false);
             SetFloat(noiseMultiplier, 1.0f);
+            SetEnum(noiseSpace, HoFollowConstraintNoiseSpace.Local);
             SetFloat(noiseFrequency, 1.0f);
             SetVector3(noisePositionAmplitude, Vector3.zero);
             SetVector3(noiseRotationAmplitude, Vector3.zero);
             SetVector3(noiseScaleAmplitude, Vector3.zero);
             SetBool(limitEnabled, false);
+            SetEnum(limitShape, HoFollowConstraintLimitShape.Sphere);
             SetFloat(limitRadius, 1.0f);
             SetVector3(limitBoxSize, Vector3.one);
             SetFloat(limitCylinderHeight, 1.0f);
             SetFloat(limitSoftness, 0.2f);
             SetBool(limitClamp, true);
+            SetEnum(offsetMode, HoFollowConstraintOffsetMode.Local);
+            SetVector3(positionOffset, Vector3.zero);
+            SetVector3(rotationOffset, Vector3.zero);
         }
 
         private static void SetBool(SerializedProperty property, bool value)
@@ -628,6 +749,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             if (property != null)
             {
                 property.vector3Value = value;
+            }
+        }
+
+        private static void SetEnum<TEnum>(SerializedProperty property, TEnum value)
+            where TEnum : System.Enum
+        {
+            if (property != null)
+            {
+                property.enumValueIndex = System.Convert.ToInt32(value);
             }
         }
 
