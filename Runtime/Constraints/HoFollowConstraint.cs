@@ -15,19 +15,6 @@ namespace Hollow.HoUnityTools.Constraints
         World
     }
 
-    public enum HoFollowConstraintWaveform
-    {
-        Sin,
-        Triangle,
-        Curve
-    }
-
-    public enum HoFollowConstraintNoiseSpace
-    {
-        World,
-        Local
-    }
-
     public enum HoFollowConstraintLimitShape
     {
         Sphere,
@@ -127,62 +114,6 @@ namespace Hollow.HoUnityTools.Constraints
 
         [SerializeField]
         private bool followRoll = true;
-
-        [Header("Oscillation")]
-        [SerializeField]
-        private bool oscillationEnabled = false;
-
-        [SerializeField, Min(0.0f)]
-        private float oscillationMultiplier = 1.0f;
-
-        [SerializeField]
-        private HoFollowConstraintWaveform oscillationWaveform = HoFollowConstraintWaveform.Sin;
-
-        [SerializeField]
-        private AnimationCurve oscillationCurve = AnimationCurve.EaseInOut(0.0f, 0.0f, 1.0f, 1.0f);
-
-        [SerializeField, Min(0.0f)]
-        private float oscillationFrequency = 1.0f;
-
-        [SerializeField]
-        private float oscillationPhase = 0.0f;
-
-        [SerializeField]
-        private Vector3 oscillationPositionAmplitude = Vector3.zero;
-
-        [SerializeField]
-        private Vector3 oscillationRotationAmplitude = Vector3.zero;
-
-        [SerializeField]
-        private Vector3 oscillationScaleAmplitude = Vector3.zero;
-
-        [SerializeField]
-        private Vector3 oscillationAxisWeight = Vector3.up;
-
-        [Header("Noise")]
-        [SerializeField]
-        private bool noiseEnabled = false;
-
-        [SerializeField, Min(0.0f)]
-        private float noiseMultiplier = 1.0f;
-
-        [SerializeField]
-        private HoFollowConstraintNoiseSpace noiseSpace = HoFollowConstraintNoiseSpace.Local;
-
-        [SerializeField, Min(0.0f)]
-        private float noiseFrequency = 1.0f;
-
-        [SerializeField]
-        private int noiseSeed = 1;
-
-        [SerializeField]
-        private Vector3 noisePositionAmplitude = Vector3.zero;
-
-        [SerializeField]
-        private Vector3 noiseRotationAmplitude = Vector3.zero;
-
-        [SerializeField]
-        private Vector3 noiseScaleAmplitude = Vector3.zero;
 
         [Header("Limit")]
         [SerializeField]
@@ -320,10 +251,6 @@ namespace Hollow.HoUnityTools.Constraints
             maxVelocity = Mathf.Max(0.0f, maxVelocity);
             maxAngularVelocity = Mathf.Max(0.0f, maxAngularVelocity);
             initialLocalScale = Max(initialLocalScale, Vector3.zero);
-            oscillationMultiplier = Mathf.Max(0.0f, oscillationMultiplier);
-            oscillationFrequency = Mathf.Max(0.0f, oscillationFrequency);
-            noiseMultiplier = Mathf.Max(0.0f, noiseMultiplier);
-            noiseFrequency = Mathf.Max(0.0f, noiseFrequency);
             limitRadius = Mathf.Max(0.0f, limitRadius);
             limitBoxSize = Max(limitBoxSize, Vector3.zero);
             limitCylinderHeight = Mathf.Max(0.0f, limitCylinderHeight);
@@ -429,59 +356,29 @@ namespace Hollow.HoUnityTools.Constraints
 
             if (target == null)
             {
-                if (!HasMotionWithoutTarget())
-                {
-                    return;
-                }
-
-                GetAnchorPose(out anchorPosition, out anchorRotation, out anchorScale);
-                Vector3 desiredPosition = anchorPosition;
-                Quaternion desiredRotation = anchorRotation;
-                currentPosition = ApplyAxisLock(desiredPosition);
-                currentRotation = ApplyRotationLock(FilterRotation(desiredRotation));
-                currentScale = anchorScale;
-                velocity = Vector3.zero;
-                angularVelocity = Vector3.zero;
-                previousEuler = currentRotation.eulerAngles;
+                return;
             }
-            else
-            {
-                float safeDeltaTime = Mathf.Max(0.0f, deltaTime);
-                GetTargetPose(out Vector3 desiredPosition, out Quaternion desiredRotation);
 
-                desiredPosition = ApplyAxisLock(desiredPosition);
-                desiredRotation = ApplyRotationLock(FilterRotation(desiredRotation));
+            GetAnchorPose(out anchorPosition, out anchorRotation, out anchorScale);
 
-                UpdatePosition(desiredPosition, safeDeltaTime);
-                UpdateRotation(desiredRotation, safeDeltaTime);
-            }
+            float safeDeltaTime = Mathf.Max(0.0f, deltaTime);
+            GetTargetPose(out Vector3 desiredPosition, out Quaternion desiredRotation);
+
+            desiredPosition = ApplyAxisLock(desiredPosition);
+            desiredRotation = ApplyRotationLock(FilterRotation(desiredRotation));
+
+            UpdatePosition(desiredPosition, safeDeltaTime);
+            UpdateRotation(desiredRotation, safeDeltaTime);
 
             Vector3 finalPosition = currentPosition;
             Quaternion finalRotation = currentRotation;
             Vector3 finalScale = anchorScale;
 
             ApplyOffset(ref finalPosition, ref finalRotation);
-            ApplyOscillation(ref finalPosition, ref finalRotation, ref finalScale);
-            ApplyNoise(ref finalPosition, ref finalRotation, ref finalScale);
             finalPosition = ApplyLimit(finalPosition);
 
             WriteTransform(finalPosition, finalRotation, finalScale);
             AddMotionTrailPoint(finalPosition);
-        }
-
-        private bool HasMotionWithoutTarget()
-        {
-            return HasProceduralMotion() || HasOffset();
-        }
-
-        private bool HasProceduralMotion()
-        {
-            return oscillationEnabled || noiseEnabled;
-        }
-
-        private bool HasOffset()
-        {
-            return positionOffset.sqrMagnitude > 0.0f || rotationOffset.sqrMagnitude > 0.0f;
         }
 
         private void EvaluateWithCurrentDelta()
@@ -700,58 +597,6 @@ namespace Hollow.HoUnityTools.Constraints
             previousEuler = euler;
         }
 
-        private void ApplyOscillation(ref Vector3 finalPosition, ref Quaternion finalRotation, ref Vector3 finalScale)
-        {
-            if (!oscillationEnabled)
-            {
-                return;
-            }
-
-            float wave = EvaluateOscillationWave();
-            float scaledWave = wave * oscillationMultiplier;
-            Vector3 weightedPositionAmplitude = Vector3.Scale(oscillationPositionAmplitude, oscillationAxisWeight);
-            finalPosition += TransformLocalVector(Vector3.Scale(weightedPositionAmplitude, Vector3.one * scaledWave));
-            finalRotation *= Quaternion.Euler(oscillationRotationAmplitude * scaledWave);
-            finalScale += oscillationScaleAmplitude * scaledWave;
-        }
-
-        private float EvaluateOscillationWave()
-        {
-            float time = GetScaledTime(oscillationFrequency, oscillationPhase);
-            switch (oscillationWaveform)
-            {
-                case HoFollowConstraintWaveform.Triangle:
-                    return Mathf.PingPong(time * 2.0f, 2.0f) - 1.0f;
-                case HoFollowConstraintWaveform.Curve:
-                    if (oscillationCurve == null)
-                    {
-                        return 0.0f;
-                    }
-
-                    return oscillationCurve.Evaluate(Mathf.Repeat(time, 1.0f)) * 2.0f - 1.0f;
-                case HoFollowConstraintWaveform.Sin:
-                default:
-                    return Mathf.Sin(time * Mathf.PI * 2.0f);
-            }
-        }
-
-        private void ApplyNoise(ref Vector3 finalPosition, ref Quaternion finalRotation, ref Vector3 finalScale)
-        {
-            if (!noiseEnabled)
-            {
-                return;
-            }
-
-            Vector3 noise = GetSignedNoise3(noiseSeed, noiseFrequency);
-            Vector3 positionNoise = Vector3.Scale(noisePositionAmplitude, noise) * noiseMultiplier;
-            Vector3 rotationNoise = Vector3.Scale(noiseRotationAmplitude, GetSignedNoise3(noiseSeed + 17, noiseFrequency)) * noiseMultiplier;
-            Vector3 scaleNoise = Vector3.Scale(noiseScaleAmplitude, GetSignedNoise3(noiseSeed + 31, noiseFrequency)) * noiseMultiplier;
-
-            finalPosition += noiseSpace == HoFollowConstraintNoiseSpace.Local ? TransformLocalVector(positionNoise) : positionNoise;
-            finalRotation *= Quaternion.Euler(rotationNoise);
-            finalScale += scaleNoise;
-        }
-
         private Vector3 ApplyLimit(Vector3 finalPosition)
         {
             if (!limitEnabled || target == null)
@@ -815,35 +660,6 @@ namespace Hollow.HoUnityTools.Constraints
             Transform self = transform;
             self.SetPositionAndRotation(finalPosition, finalRotation);
             self.localScale = finalScale;
-        }
-
-        private Vector3 TransformLocalVector(Vector3 vector)
-        {
-            if (offsetMode != HoFollowConstraintOffsetMode.Local)
-            {
-                return vector;
-            }
-
-            return target != null ? target.TransformVector(vector) : vector;
-        }
-
-        private Vector3 GetSignedNoise3(int seed, float frequency)
-        {
-            float time = GetScaledTime(frequency, 0.0f);
-            return new Vector3(
-                SignedPerlin(seed * 0.071f + 11.0f, time),
-                SignedPerlin(seed * 0.113f + 29.0f, time + 19.0f),
-                SignedPerlin(seed * 0.157f + 47.0f, time + 37.0f));
-        }
-
-        private static float SignedPerlin(float x, float y)
-        {
-            return Mathf.PerlinNoise(x, y) * 2.0f - 1.0f;
-        }
-
-        private float GetScaledTime(float frequency, float phase)
-        {
-            return (float)GetTime() * Mathf.Max(0.0f, frequency) + phase;
         }
 
         private static float ResponseToSmoothTime(float value)

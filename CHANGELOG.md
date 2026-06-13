@@ -4,9 +4,11 @@
 
 - Added `HoFollowConstraint`, a point-to-point Transform constraint for stylized followers such as halos, floating props, drones, and attachment effects.
 - Added a custom inspector with foldout sections, presets, runtime readout, and gizmo controls for `HoFollowConstraint`.
-- Allowed offset, oscillation, and noise to evaluate from the local anchor pose when no target is assigned, preserving parent motion.
-- Composed offset after the base follow solve so it behaves as a stable additive layer in both targeted and targetless modes.
-- Added a `清空` preset that resets follow settings, axis locks, offsets, oscillation, noise, and limits to a neutral state.
+- Added `HoFloatingConstraint` for targetless offset, breathing, and noise motion.
+- Split breathing and noise motion out of `HoFollowConstraint`; follow is now target-driven only.
+- Composed follow offset after the base follow solve so it behaves as a stable additive layer.
+- Moved the `光环`, `武器`, `背包`, and `无人机` motion presets to `HoFloatingConstraint`.
+- Kept only a `清空` preset on `HoFollowConstraint` for resetting follow settings, axis locks, offsets, and limits.
 - Added explicit initial Transform cache controls; presets save the current Transform before changing settings, and restore only happens through the inspector button.
 - Updated the package target to Unity 6000.0.
 

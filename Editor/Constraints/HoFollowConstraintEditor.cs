@@ -32,24 +32,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty followYaw;
         private SerializedProperty followPitch;
         private SerializedProperty followRoll;
-        private SerializedProperty oscillationEnabled;
-        private SerializedProperty oscillationMultiplier;
-        private SerializedProperty oscillationWaveform;
-        private SerializedProperty oscillationCurve;
-        private SerializedProperty oscillationFrequency;
-        private SerializedProperty oscillationPhase;
-        private SerializedProperty oscillationPositionAmplitude;
-        private SerializedProperty oscillationRotationAmplitude;
-        private SerializedProperty oscillationScaleAmplitude;
-        private SerializedProperty oscillationAxisWeight;
-        private SerializedProperty noiseEnabled;
-        private SerializedProperty noiseMultiplier;
-        private SerializedProperty noiseSpace;
-        private SerializedProperty noiseFrequency;
-        private SerializedProperty noiseSeed;
-        private SerializedProperty noisePositionAmplitude;
-        private SerializedProperty noiseRotationAmplitude;
-        private SerializedProperty noiseScaleAmplitude;
         private SerializedProperty limitEnabled;
         private SerializedProperty limitShape;
         private SerializedProperty limitRadius;
@@ -69,8 +51,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private bool followExpanded = true;
         private bool axisExpanded = true;
         private bool rotationExpanded = true;
-        private bool oscillationExpanded;
-        private bool noiseExpanded;
         private bool limitExpanded;
         private bool offsetExpanded = true;
         private bool debugExpanded;
@@ -79,7 +59,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly Color FollowColor = new Color(0.24f, 0.86f, 0.58f);
         private static readonly Color AxisColor = new Color(1.0f, 0.70f, 0.28f);
         private static readonly Color RotationColor = new Color(0.78f, 0.48f, 1.0f);
-        private static readonly Color MotionColor = new Color(0.32f, 0.86f, 0.92f);
         private static readonly Color LimitColor = new Color(1.0f, 0.45f, 0.38f);
         private static readonly Color DebugColor = new Color(0.70f, 0.72f, 0.76f);
 
@@ -97,28 +76,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent MaxVelocityLabel = new GUIContent("最大速度", "0 表示不限制线速度。");
         private static readonly GUIContent MaxAngularVelocityLabel = new GUIContent("最大角速度", "0 表示不限制角速度，单位为度/秒。");
         private static readonly GUIContent RotationModeLabel = new GUIContent("旋转模式", "目标旋转的解释方式。");
-        private static readonly GUIContent KeepHorizonLabel = new GUIContent("保持水平", "忽略目标俯仰和翻滚，适合光环、头顶特效等。");
+        private static readonly GUIContent KeepHorizonLabel = new GUIContent("保持水平", "忽略目标俯仰和翻滚，适合需要稳定朝向的跟随物。");
         private static readonly GUIContent FollowPitchLabel = new GUIContent("跟随俯仰");
         private static readonly GUIContent FollowYawLabel = new GUIContent("跟随偏航");
         private static readonly GUIContent FollowRollLabel = new GUIContent("跟随翻滚");
-        private static readonly GUIContent OscillationEnabledLabel = new GUIContent("启用呼吸");
-        private static readonly GUIContent OscillationMultiplierLabel = new GUIContent("整体倍率", "统一缩放呼吸的位置、旋转和缩放振幅。");
-        private static readonly GUIContent OscillationWaveformLabel = new GUIContent("波形");
-        private static readonly GUIContent OscillationCurveLabel = new GUIContent("自定义曲线");
-        private static readonly GUIContent OscillationFrequencyLabel = new GUIContent("频率");
-        private static readonly GUIContent OscillationPhaseLabel = new GUIContent("相位");
-        private static readonly GUIContent OscillationAxisWeightLabel = new GUIContent("轴权重");
-        private static readonly GUIContent OscillationPositionLabel = new GUIContent("位置振幅");
-        private static readonly GUIContent OscillationRotationLabel = new GUIContent("旋转振幅");
-        private static readonly GUIContent OscillationScaleLabel = new GUIContent("缩放振幅");
-        private static readonly GUIContent NoiseEnabledLabel = new GUIContent("启用噪声");
-        private static readonly GUIContent NoiseMultiplierLabel = new GUIContent("整体倍率", "统一缩放噪声的位置、旋转和缩放振幅。");
-        private static readonly GUIContent NoiseSpaceLabel = new GUIContent("噪声空间");
-        private static readonly GUIContent NoiseFrequencyLabel = new GUIContent("频率");
-        private static readonly GUIContent NoiseSeedLabel = new GUIContent("种子");
-        private static readonly GUIContent NoisePositionLabel = new GUIContent("位置噪声");
-        private static readonly GUIContent NoiseRotationLabel = new GUIContent("旋转噪声");
-        private static readonly GUIContent NoiseScaleLabel = new GUIContent("缩放噪声");
         private static readonly GUIContent LimitEnabledLabel = new GUIContent("启用限制");
         private static readonly GUIContent LimitShapeLabel = new GUIContent("限制形状");
         private static readonly GUIContent LimitRadiusLabel = new GUIContent("半径");
@@ -147,13 +108,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             new GUIContent("世界"),
             new GUIContent("本地"),
             new GUIContent("目标相对")
-        };
-
-        private static readonly GUIContent[] WaveformLabels =
-        {
-            new GUIContent("正弦"),
-            new GUIContent("三角"),
-            new GUIContent("曲线")
         };
 
         private static readonly GUIContent[] SpaceLabels =
@@ -200,24 +154,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             followYaw = Find("followYaw");
             followPitch = Find("followPitch");
             followRoll = Find("followRoll");
-            oscillationEnabled = Find("oscillationEnabled");
-            oscillationMultiplier = Find("oscillationMultiplier");
-            oscillationWaveform = Find("oscillationWaveform");
-            oscillationCurve = Find("oscillationCurve");
-            oscillationFrequency = Find("oscillationFrequency");
-            oscillationPhase = Find("oscillationPhase");
-            oscillationPositionAmplitude = Find("oscillationPositionAmplitude");
-            oscillationRotationAmplitude = Find("oscillationRotationAmplitude");
-            oscillationScaleAmplitude = Find("oscillationScaleAmplitude");
-            oscillationAxisWeight = Find("oscillationAxisWeight");
-            noiseEnabled = Find("noiseEnabled");
-            noiseMultiplier = Find("noiseMultiplier");
-            noiseSpace = Find("noiseSpace");
-            noiseFrequency = Find("noiseFrequency");
-            noiseSeed = Find("noiseSeed");
-            noisePositionAmplitude = Find("noisePositionAmplitude");
-            noiseRotationAmplitude = Find("noiseRotationAmplitude");
-            noiseScaleAmplitude = Find("noiseScaleAmplitude");
             limitEnabled = Find("limitEnabled");
             limitShape = Find("limitShape");
             limitRadius = Find("limitRadius");
@@ -245,8 +181,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             DrawFollowSection();
             DrawAxisSection();
             DrawRotationSection();
-            DrawOscillationSection();
-            DrawNoiseSection();
             DrawLimitSection();
             DrawOffsetSection();
             DrawDebugSection();
@@ -266,30 +200,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             EditorGUILayout.LabelField("Ho 跟随约束", EditorStyles.boldLabel);
             Rect rect = EditorGUILayout.GetControlRect(false, 22.0f);
-            float width = rect.width / 5.0f;
-            if (GUI.Button(new Rect(rect.x, rect.y, width - 2.0f, rect.height), "清空"))
+            if (GUI.Button(rect, "清空"))
             {
-                ApplyPreset(-1);
-            }
-
-            if (GUI.Button(new Rect(rect.x + width, rect.y, width - 2.0f, rect.height), "光环"))
-            {
-                ApplyPreset(0);
-            }
-
-            if (GUI.Button(new Rect(rect.x + width * 2.0f, rect.y, width - 2.0f, rect.height), "武器"))
-            {
-                ApplyPreset(1);
-            }
-
-            if (GUI.Button(new Rect(rect.x + width * 3.0f, rect.y, width - 2.0f, rect.height), "背包"))
-            {
-                ApplyPreset(2);
-            }
-
-            if (GUI.Button(new Rect(rect.x + width * 4.0f, rect.y, width, rect.height), "无人机"))
-            {
-                ApplyPreset(3);
+                ApplyPreset();
             }
         }
 
@@ -407,54 +320,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(followYaw, FollowYawLabel);
         }
 
-        private void DrawOscillationSection()
-        {
-            string summary = HoConstraintEditorSectionGui.BoolSummary(oscillationEnabled);
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref oscillationExpanded, "呼吸", summary, MotionColor))
-            {
-                return;
-            }
-
-            EditorGUILayout.PropertyField(oscillationEnabled, OscillationEnabledLabel);
-            using (new EditorGUI.DisabledScope(!oscillationEnabled.boolValue))
-            {
-                EditorGUILayout.PropertyField(oscillationMultiplier, OscillationMultiplierLabel);
-                DrawEnumPopup(oscillationWaveform, OscillationWaveformLabel, WaveformLabels, ThreeEnumValues);
-                if (oscillationWaveform.enumValueIndex == (int)HoFollowConstraintWaveform.Curve)
-                {
-                    EditorGUILayout.PropertyField(oscillationCurve, OscillationCurveLabel);
-                }
-
-                EditorGUILayout.PropertyField(oscillationFrequency, OscillationFrequencyLabel);
-                EditorGUILayout.PropertyField(oscillationPhase, OscillationPhaseLabel);
-                EditorGUILayout.PropertyField(oscillationAxisWeight, OscillationAxisWeightLabel);
-                EditorGUILayout.PropertyField(oscillationPositionAmplitude, OscillationPositionLabel);
-                EditorGUILayout.PropertyField(oscillationRotationAmplitude, OscillationRotationLabel);
-                EditorGUILayout.PropertyField(oscillationScaleAmplitude, OscillationScaleLabel);
-            }
-        }
-
-        private void DrawNoiseSection()
-        {
-            string summary = HoConstraintEditorSectionGui.BoolSummary(noiseEnabled);
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref noiseExpanded, "噪声", summary, MotionColor))
-            {
-                return;
-            }
-
-            EditorGUILayout.PropertyField(noiseEnabled, NoiseEnabledLabel);
-            using (new EditorGUI.DisabledScope(!noiseEnabled.boolValue))
-            {
-                EditorGUILayout.PropertyField(noiseMultiplier, NoiseMultiplierLabel);
-                DrawEnumPopup(noiseSpace, NoiseSpaceLabel, SpaceLabels, TwoEnumValues);
-                EditorGUILayout.PropertyField(noiseFrequency, NoiseFrequencyLabel);
-                EditorGUILayout.PropertyField(noiseSeed, NoiseSeedLabel);
-                EditorGUILayout.PropertyField(noisePositionAmplitude, NoisePositionLabel);
-                EditorGUILayout.PropertyField(noiseRotationAmplitude, NoiseRotationLabel);
-                EditorGUILayout.PropertyField(noiseScaleAmplitude, NoiseScaleLabel);
-            }
-        }
-
         private void DrawLimitSection()
         {
             string summary = limitEnabled.boolValue ? GetLimitShapeSummary() : "关";
@@ -526,7 +391,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             if (targetProperty.objectReferenceValue == null)
             {
-                EditorGUILayout.HelpBox("未指定目标时，组件会以当前锚点为基准应用偏移、呼吸与噪声。指定目标后会额外进行跟随。", MessageType.Info);
+                EditorGUILayout.HelpBox("未指定目标时，跟随约束不会写入 Transform。需要独立漂浮、呼吸或噪声效果时请使用漂浮约束。", MessageType.Info);
             }
         }
 
@@ -577,7 +442,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndHorizontal();
         }
 
-        private void ApplyPreset(int preset)
+        private void ApplyPreset()
         {
             serializedObject.Update();
 
@@ -585,50 +450,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.Update();
 
             SetDefaultsForAllPresets();
-            if (preset < 0)
-            {
-                serializedObject.ApplyModifiedProperties();
-                return;
-            }
-
-            switch (preset)
-            {
-                case 0:
-                    SetFloat(positionFollow, 1.0f);
-                    SetFloat(rotationFollow, 1.0f);
-                    SetFloat(lockY, 0.8f);
-                    SetBool(keepHorizon, true);
-                    SetBool(oscillationEnabled, true);
-                    SetVector3(oscillationPositionAmplitude, new Vector3(0.0f, 0.025f, 0.0f));
-                    SetVector3(oscillationRotationAmplitude, new Vector3(0.0f, 0.3f, 0.0f));
-                    SetFloat(oscillationFrequency, 0.35f);
-                    break;
-                case 1:
-                    SetFloat(positionFollow, 1.0f);
-                    SetFloat(rotationFollow, 1.0f);
-                    SetBool(noiseEnabled, true);
-                    SetVector3(noisePositionAmplitude, Vector3.one * 0.012f);
-                    SetVector3(noiseRotationAmplitude, Vector3.one * 0.35f);
-                    break;
-                case 2:
-                    SetFloat(positionFollow, 1.0f);
-                    SetFloat(rotationFollow, 1.0f);
-                    SetBool(noiseEnabled, true);
-                    SetVector3(noisePositionAmplitude, Vector3.one * 0.018f);
-                    SetVector3(noiseRotationAmplitude, Vector3.one * 0.25f);
-                    break;
-                case 3:
-                    SetFloat(positionFollow, 1.0f);
-                    SetFloat(rotationFollow, 1.0f);
-                    SetBool(followYaw, true);
-                    SetBool(followPitch, false);
-                    SetBool(followRoll, false);
-                    SetBool(noiseEnabled, true);
-                    SetVector3(noisePositionAmplitude, Vector3.one * 0.02f);
-                    SetVector3(noiseRotationAmplitude, new Vector3(0.0f, 0.45f, 0.0f));
-                    break;
-            }
-
             serializedObject.ApplyModifiedProperties();
         }
 
@@ -700,22 +521,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetBool(followYaw, true);
             SetBool(followPitch, true);
             SetBool(followRoll, true);
-            SetBool(oscillationEnabled, false);
-            SetEnum(oscillationWaveform, HoFollowConstraintWaveform.Sin);
-            SetFloat(oscillationMultiplier, 1.0f);
-            SetFloat(oscillationFrequency, 1.0f);
-            SetFloat(oscillationPhase, 0.0f);
-            SetVector3(oscillationAxisWeight, Vector3.up);
-            SetVector3(oscillationPositionAmplitude, Vector3.zero);
-            SetVector3(oscillationRotationAmplitude, Vector3.zero);
-            SetVector3(oscillationScaleAmplitude, Vector3.zero);
-            SetBool(noiseEnabled, false);
-            SetFloat(noiseMultiplier, 1.0f);
-            SetEnum(noiseSpace, HoFollowConstraintNoiseSpace.Local);
-            SetFloat(noiseFrequency, 1.0f);
-            SetVector3(noisePositionAmplitude, Vector3.zero);
-            SetVector3(noiseRotationAmplitude, Vector3.zero);
-            SetVector3(noiseScaleAmplitude, Vector3.zero);
             SetBool(limitEnabled, false);
             SetEnum(limitShape, HoFollowConstraintLimitShape.Sphere);
             SetFloat(limitRadius, 1.0f);
