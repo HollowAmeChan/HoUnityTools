@@ -329,7 +329,7 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                             continue;
                         }
 
-                        DoBoneRender(bone.first, bone.second, shape, bone.color, size);
+                        DoBoneRender(bone.first, bone.second, shape, bone.color, size, boneRenderer.IsBoneSelectable(bone.first.name));
                     }
 
                     Transform[] tips = boneRenderer.Tips;
@@ -343,7 +343,7 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                         }
 
                         Color tipColor = (tipColors != null && k < tipColors.Length) ? tipColors[k] : boneRenderer.boneColor;
-                        DoBoneRender(tip, null, shape, tipColor, size);
+                        DoBoneRender(tip, null, shape, tipColor, size, boneRenderer.IsBoneSelectable(tip.name));
                     }
                 }
 
@@ -386,12 +386,13 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             Gizmos.color = gizmoColor;
         }
 
-        private static void DoBoneRender(Transform transform, Transform childTransform, BoneShape shape, Color color, float size)
+        private static void DoBoneRender(Transform transform, Transform childTransform, BoneShape shape, Color color, float size, bool selectable)
         {
             Vector3 start = transform.position;
             Vector3 end = childTransform != null ? childTransform.position : start;
 
             GameObject boneGO = transform.gameObject;
+            bool pickingEnabled = selectable && !SceneVisibilityManager.instance.IsPickingDisabled(boneGO, false);
 
             float length = (end - start).magnitude;
             bool tipBone = length < k_Epsilon;
@@ -403,9 +404,12 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             {
                 case EventType.Layout:
                 {
-                    HandleUtility.AddControl(id, tipBone
-                        ? HandleUtility.DistanceToCircle(start, k_BoneTipSize * size * 0.5f)
-                        : HandleUtility.DistanceToLine(start, end));
+                    if (pickingEnabled)
+                    {
+                        HandleUtility.AddControl(id, tipBone
+                            ? HandleUtility.DistanceToCircle(start, k_BoneTipSize * size * 0.5f)
+                            : HandleUtility.DistanceToLine(start, end));
+                    }
                     break;
                 }
                 case EventType.MouseMove:
@@ -422,14 +426,11 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                         break;
                     }
 
-                    if (HandleUtility.nearestControl == id && evt.button == 0)
+                    if (pickingEnabled && HandleUtility.nearestControl == id && evt.button == 0)
                     {
-                        if (!SceneVisibilityManager.instance.IsPickingDisabled(boneGO, false))
-                        {
-                            GUIUtility.hotControl = id;
-                            HandleClickSelection(boneGO, evt);
-                            evt.Use();
-                        }
+                        GUIUtility.hotControl = id;
+                        HandleClickSelection(boneGO, evt);
+                        evt.Use();
                     }
 
                     break;
@@ -438,7 +439,7 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 {
                     if (!evt.alt && GUIUtility.hotControl == id)
                     {
-                        if (!SceneVisibilityManager.instance.IsPickingDisabled(boneGO, false))
+                        if (pickingEnabled)
                         {
                             DragAndDrop.PrepareStartDrag();
                             DragAndDrop.objectReferences = new Object[] { transform };
@@ -466,7 +467,7 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                     Color highlight = color;
 
                     bool hoveringBone = GUIUtility.hotControl == 0 && HandleUtility.nearestControl == id;
-                    hoveringBone = hoveringBone && !SceneVisibilityManager.instance.IsPickingDisabled(boneGO, false);
+                    hoveringBone = hoveringBone && pickingEnabled;
 
                     if (hoveringBone)
                     {

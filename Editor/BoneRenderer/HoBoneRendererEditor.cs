@@ -201,10 +201,24 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 }
             }
 
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("全部可选", EditorStyles.miniButtonLeft))
+                {
+                    SetAllCollectionsSelectable(true);
+                }
+
+                if (GUILayout.Button("全部关闭可选", EditorStyles.miniButtonRight))
+                {
+                    SetAllCollectionsSelectable(false);
+                }
+            }
+
             EditorGUILayout.Space(2.0f);
 
             // 按层级缩进列出集合开关。多选编辑时,可见性状态以第一个对象为准显示。
             HashSet<string> hidden = ReadHiddenSet();
+            HashSet<string> unselectable = ReadUnselectableSet();
             var depthCache = new Dictionary<string, int>();
 
             for (int i = 0; i < set.collections.Count; i++)
@@ -217,6 +231,7 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
 
                 int depth = GetCollectionDepth(set, collection.name, depthCache);
                 bool visible = !hidden.Contains(collection.name);
+                bool selectable = !unselectable.Contains(collection.name);
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -234,6 +249,13 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                     {
                         SetCollectionHidden(collection.name, !newVisible);
                     }
+
+                    EditorGUI.BeginChangeCheck();
+                    bool newSelectable = EditorGUILayout.ToggleLeft("可选", selectable, GUILayout.Width(48.0f));
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        SetCollectionSelectable(collection.name, newSelectable);
+                    }
                 }
             }
         }
@@ -250,6 +272,20 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             }
 
             return hidden;
+        }
+
+        private HashSet<string> ReadUnselectableSet()
+        {
+            var unselectable = new HashSet<string>();
+            if (targets.Length == 1 && target is HoBoneRenderer boneRenderer && boneRenderer.UnselectableCollections != null)
+            {
+                foreach (string name in boneRenderer.UnselectableCollections)
+                {
+                    unselectable.Add(name);
+                }
+            }
+
+            return unselectable;
         }
 
         private bool HasGroupJsonToRefresh()
@@ -390,6 +426,70 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 }
 
                 boneRenderer.Invalidate();
+                EditorUtility.SetDirty(boneRenderer);
+            }
+
+            serializedObject.Update();
+            SceneView.RepaintAll();
+        }
+
+        private void SetCollectionSelectable(string collectionName, bool selectable)
+        {
+            foreach (Object target in targets)
+            {
+                if (!(target is HoBoneRenderer boneRenderer))
+                {
+                    continue;
+                }
+
+                Undo.RecordObject(boneRenderer, "切换骨骼集合可选性");
+                List<string> list = boneRenderer.UnselectableCollections;
+                bool contains = list.Contains(collectionName);
+                if (!selectable && !contains)
+                {
+                    list.Add(collectionName);
+                }
+                else if (selectable && contains)
+                {
+                    list.Remove(collectionName);
+                }
+
+                EditorUtility.SetDirty(boneRenderer);
+            }
+
+            serializedObject.Update();
+            SceneView.RepaintAll();
+        }
+
+        private void SetAllCollectionsSelectable(bool selectable)
+        {
+            foreach (Object target in targets)
+            {
+                if (!(target is HoBoneRenderer boneRenderer))
+                {
+                    continue;
+                }
+
+                HoBoneGroupSet activeSet = boneRenderer.GetActiveGroupSet();
+                if (activeSet == null)
+                {
+                    continue;
+                }
+
+                Undo.RecordObject(boneRenderer, "切换全部骨骼集合可选性");
+                List<string> list = boneRenderer.UnselectableCollections;
+                list.Clear();
+                if (!selectable)
+                {
+                    foreach (HoBoneCollection collection in activeSet.collections)
+                    {
+                        if (collection != null && !string.IsNullOrEmpty(collection.name))
+                        {
+                            list.Add(collection.name);
+                        }
+                    }
+                }
+
                 EditorUtility.SetDirty(boneRenderer);
             }
 

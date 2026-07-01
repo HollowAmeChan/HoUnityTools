@@ -97,6 +97,41 @@ namespace Hollow.HoUnityTools.BoneRendering
         }
 
         /// <summary>
+        /// 判断某集合当前是否允许 Scene 选择:自身未关闭选择,且所有祖先集合均未关闭选择。
+        /// </summary>
+        /// <param name="collectionName">集合名。</param>
+        /// <param name="unselectableCollections">被关闭选择的集合名集合。</param>
+        public bool IsCollectionSelectable(string collectionName, ICollection<string> unselectableCollections)
+        {
+            if (string.IsNullOrEmpty(collectionName))
+            {
+                return true;
+            }
+
+            string current = collectionName;
+            int guard = 0;
+            int max = collections.Count + 1;
+            while (!string.IsNullOrEmpty(current) && guard <= max)
+            {
+                if (unselectableCollections != null && unselectableCollections.Contains(current))
+                {
+                    return false;
+                }
+
+                HoBoneCollection collection = FindCollection(current);
+                if (collection == null)
+                {
+                    break;
+                }
+
+                current = collection.parent;
+                guard++;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// 判断某骨骼是否应显示(完全分组绘制):
         /// 命中某个可见的显式集合即显示,取其颜色;
         /// 不属于任何显式集合的骨骼归入 Other 兜底组,按 Other 组的可见性与颜色处理。
@@ -148,6 +183,45 @@ namespace Hollow.HoUnityTools.BoneRendering
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// 判断某骨骼是否允许 Scene 选择。
+        /// 命中至少一个可选的显式集合即允许选择;不属于任何显式集合时按 Other 兜底组处理。
+        /// </summary>
+        /// <param name="boneName">骨骼名。</param>
+        /// <param name="unselectableCollections">被关闭选择的集合名集合。</param>
+        public bool IsBoneSelectable(string boneName, ICollection<string> unselectableCollections)
+        {
+            bool belongsToExplicit = false;
+
+            for (int i = 0; i < collections.Count; i++)
+            {
+                HoBoneCollection collection = collections[i];
+                if (collection == null || collection.bones == null || !collection.bones.Contains(boneName))
+                {
+                    continue;
+                }
+
+                if (collection.isOther)
+                {
+                    continue;
+                }
+
+                belongsToExplicit = true;
+                if (IsCollectionSelectable(collection.name, unselectableCollections))
+                {
+                    return true;
+                }
+            }
+
+            if (belongsToExplicit)
+            {
+                return false;
+            }
+
+            HoBoneCollection other = FindOtherCollection();
+            return other != null && IsCollectionSelectable(other.name, unselectableCollections);
         }
 
         /// <summary>某骨骼是否被任一显式集合(Other 兜底组除外)收录。用于编辑器统计 Other 组实际骨骼数。</summary>

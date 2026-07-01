@@ -64,6 +64,10 @@ namespace Hollow.HoUnityTools.BoneRendering
         [SerializeField]
         private List<string> hiddenCollections = new List<string>();
 
+        [Tooltip("被关闭 Scene 选择的集合名称。选择状态存在本组件上,不修改分组 JSON。")]
+        [SerializeField]
+        private List<string> unselectableCollections = new List<string>();
+
         [SerializeField]
         private Transform[] m_Transforms;
 
@@ -139,6 +143,27 @@ namespace Hollow.HoUnityTools.BoneRendering
 
         /// <summary>被关闭显示的集合名称列表。</summary>
         public List<string> HiddenCollections => hiddenCollections;
+
+        /// <summary>被关闭 Scene 选择的集合名称列表。</summary>
+        public List<string> UnselectableCollections
+        {
+            get
+            {
+                if (unselectableCollections == null)
+                {
+                    unselectableCollections = new List<string>();
+                }
+
+                return unselectableCollections;
+            }
+        }
+
+        /// <summary>判断指定骨骼当前是否允许在 Scene 视图中被点击选择。</summary>
+        public bool IsBoneSelectable(string boneName)
+        {
+            HoBoneGroupSet activeSet = GetActiveGroupSet();
+            return activeSet == null || activeSet.IsBoneSelectable(boneName, UnselectableCollections);
+        }
 
 #if UNITY_EDITOR
         /// <summary>由两个 Transform 描述的一根骨骼,带显示颜色。</summary>
