@@ -1,4 +1,3 @@
-using Hollow.HoUnityTools;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -6,14 +5,14 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor
 {
     [InitializeOnLoad]
-    internal static class SceneToGameViewSyncDriver
+    internal static class HoSceneToGameViewSyncDriver
     {
-        static SceneToGameViewSyncDriver()
+        static HoSceneToGameViewSyncDriver()
         {
             EditorApplication.update += OnEditorUpdate;
         }
 
-        internal static void SyncNow(SceneToGameViewSync sync)
+        internal static void SyncNow(HoSceneToGameViewSync sync)
         {
             SceneView sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null || sceneView.camera == null)
@@ -32,13 +31,13 @@ namespace Hollow.HoUnityTools.Editor
 
         private static void OnEditorUpdate()
         {
-            foreach (SceneToGameViewSync sync in Object.FindObjectsByType<SceneToGameViewSync>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            foreach (HoSceneToGameViewSync sync in Object.FindObjectsByType<HoSceneToGameViewSync>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
             {
                 UpdateSync(sync);
             }
         }
 
-        private static void UpdateSync(SceneToGameViewSync sync)
+        private static void UpdateSync(HoSceneToGameViewSync sync)
         {
             if (!sync.enableSync)
                 return;
@@ -65,7 +64,7 @@ namespace Hollow.HoUnityTools.Editor
                 MarkCameraDirty(targetCamera);
         }
 
-        private static bool ApplySceneCamera(SceneToGameViewSync sync, Camera targetCamera, Camera sceneCamera, bool force)
+        private static bool ApplySceneCamera(HoSceneToGameViewSync sync, Camera targetCamera, Camera sceneCamera, bool force)
         {
             bool positionChanged = force || sync.LastScenePosition != sceneCamera.transform.position;
             bool rotationChanged = force || sync.LastSceneRotation != sceneCamera.transform.rotation;

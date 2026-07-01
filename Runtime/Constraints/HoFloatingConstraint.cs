@@ -25,7 +25,7 @@ namespace Hollow.HoUnityTools.Constraints
 
     [ExecuteAlways]
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/约束/漂浮约束")]
+    [AddComponentMenu("HoUnityTools/Constraints/Ho Floating Constraint")]
     public sealed class HoFloatingConstraint : MonoBehaviour
     {
         [Header("Update")]

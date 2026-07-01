@@ -7,7 +7,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 {
     internal static class HoFloatingConstraintMenu
     {
-        [MenuItem("GameObject/HoUnityTools/约束/漂浮约束", false, 11)]
+        [MenuItem("GameObject/HoUnityTools/Constraints/Ho Floating Constraint", false, 11)]
         private static void CreateFloatingConstraint(MenuCommand menuCommand)
         {
             GameObject context = menuCommand.context as GameObject;
@@ -15,7 +15,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (targetObject == null)
             {
-                targetObject = new GameObject("Ho 漂浮约束");
+                targetObject = new GameObject("Ho Floating Constraint");
                 GameObjectUtility.SetParentAndAlign(targetObject, context);
                 Undo.RegisterCreatedObjectUndo(targetObject, "创建 Ho 漂浮约束");
             }

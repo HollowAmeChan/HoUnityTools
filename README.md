@@ -1,48 +1,48 @@
 # Ho Unity Tools
 
-Small Unity tools packaged as a UPM package.
+Hollow 的 Unity 小工具集，以 UPM 包形式发布。
 
-## Install
+## 安装
 
-Requires Unity 6000.0 or newer.
+需要 Unity 6000.0 或更新版本。
 
-Use Unity Package Manager with a local path:
+在 Unity Package Manager 中通过本地路径安装：
 
 ```text
 D:/Unity_Fork/HoUnityTools
 ```
 
-Or add it to `Packages/manifest.json`:
+或添加到 `Packages/manifest.json`：
 
 ```json
 "com.hollow.hounitytools": "file:D:/Unity_Fork/HoUnityTools"
 ```
 
-## Tools
+## 工具
 
-### Ho 跟随约束
+### Ho 跟随约束（Ho Follow Constraint）
 
-Add `HoFollowConstraint` to any GameObject, or use:
-
-```text
-GameObject > HoUnityTools > 约束 > 跟随约束
-```
-
-The component is a pure point-to-point Transform constraint. It follows a target without Rigidbody, Joint, PhysBone, bone-chain propagation, or physics solvers. It includes follow response, overshoot, position and rotation axis locks, rotation filtering, offset, optional soft limits, and selected gizmos. If no target is assigned, the component does not write to the Transform.
-
-Use `保存初始变换` to cache the original local transform before applying presets. Restoring is explicit through `恢复初始变换`; removing the component does not automatically restore the Transform.
-
-### Ho Floating Constraint
-
-Add `HoFloatingConstraint` to any GameObject, or use:
+给任意 GameObject 添加 `HoFollowConstraint`，或使用菜单：
 
 ```text
-GameObject > HoUnityTools > 约束 > 漂浮约束
+GameObject > HoUnityTools > Constraints > Ho Follow Constraint
 ```
 
-Use this component for targetless offset, breathing, and noise motion. It keeps its own initial Transform cache and can be stacked with `HoFollowConstraint`.
+这是一个纯粹的点对点 Transform 约束，不依赖 Rigidbody、Joint、PhysBone、骨骼链传导或物理求解器即可跟随目标。支持跟随响应、超调、位置与旋转轴锁定、旋转过滤、偏移、可选的柔性限制以及若干 Gizmo。未指定目标时，组件不会写入 Transform。
 
-Inspector includes localized starting presets:
+应用预设前，可用 `保存初始变换` 缓存原始的本地变换。恢复需要显式点击 `恢复初始变换`；移除组件不会自动还原 Transform。
+
+### Ho 漂浮约束（Ho Floating Constraint）
+
+给任意 GameObject 添加 `HoFloatingConstraint`，或使用菜单：
+
+```text
+GameObject > HoUnityTools > Constraints > Ho Floating Constraint
+```
+
+用于无目标的偏移、呼吸和噪声运动。它自带初始 Transform 缓存，可与 `HoFollowConstraint` 叠加使用。
+
+Inspector 提供以下起始预设：
 
 - `清空`
 - `光环`
@@ -50,12 +50,30 @@ Inspector includes localized starting presets:
 - `背包`
 - `无人机`
 
-### Scene To Game View Sync
+### Ho 骨骼渲染器（Ho Bone Renderer）
 
-Add `SceneToGameViewSync` to a Camera, or use:
+给骨架根节点所在的 GameObject 添加 `HoBoneRenderer`，或使用菜单：
 
 ```text
-GameObject > Camera > Scene To Game View Sync Camera
+Component > HoUnityTools > Ho Bone Renderer
 ```
 
-The component syncs the last active Scene view camera position, rotation, FOV, and clipping planes to the target Camera.
+把骨架根拖入组件即可在 Scene 视图显示全部骨骼，可在场景中点击骨骼直接选中对应的 GameObject。支持链接从 Blender 骨骼集合导出的 JSON 分组文件，按集合逐组开关显示；未归入任何集合的骨骼（如自动生成的 end 骨）会归入 Other 兜底组。
+
+### Ho 同步摄像机（Ho Scene To Game View Sync）
+
+给相机添加 `HoSceneToGameViewSync`，或使用菜单：
+
+```text
+GameObject > HoUnityTools > Ho Scene To Game View Sync Camera
+```
+
+该组件把最近活动的 Scene 视图相机的位置、旋转、FOV 与裁切平面同步到目标相机。
+
+### 动画处理
+
+菜单 `HoUnityTools > 动画处理` 打开工具窗口，可将动画剪辑（.anim）中除 Float 曲线外的其他曲线全部删除，用于精简动画文件。
+
+### 骨架约束导入
+
+菜单 `HoUnityTools > 骨架约束 > 导入标准约束` 打开工具窗口，可从 JSON 配置批量为骨架导入 Unity 标准约束（Rotation / Position / Scale / Parent），并支持一键锁定或清除全部约束。

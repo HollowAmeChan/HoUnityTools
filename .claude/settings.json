@@ -3,7 +3,17 @@
     "allow": [
       "Bash([ -f \"$LOG\" ])",
       "Read(//c/Users/hhh12/AppData/Local/Unity/Editor/**)",
-      "Bash(LOG=\"/c/Users/hhh12/AppData/Local/Unity/Editor/Editor.log\"; echo \"=== CS errors / compilation ===\"; grep -niE \"CS[0-9]{3,4}|Compilation failed|error CS|Scripts have compiler errors|\\\\.cs\\\\\\(\" \"$LOG\" 2>/dev/null | tail -30; echo \"=== done ===\")"
+      "Bash(LOG=\"/c/Users/hhh12/AppData/Local/Unity/Editor/Editor.log\"; echo \"=== CS errors / compilation ===\"; grep -niE \"CS[0-9]{3,4}|Compilation failed|error CS|Scripts have compiler errors|\\\\.cs\\\\\\(\" \"$LOG\" 2>/dev/null | tail -30; echo \"=== done ===\")",
+      "Bash(git mv *)",
+      "Bash(mv Runtime/SceneToGameViewSync.cs Runtime/HoSceneToGameViewSync.cs)",
+      "Bash(mv Editor/SceneToGameViewSyncDriver.cs Editor/HoSceneToGameViewSyncDriver.cs)",
+      "Bash(mv Editor/SceneToGameViewSyncEditor.cs Editor/HoSceneToGameViewSyncEditor.cs)",
+      "Bash(mv Editor/SceneToGameViewSyncMenu.cs Editor/HoSceneToGameViewSyncMenu.cs)",
+      "Bash(mkdir -p Editor/AnimationTools)",
+      "Bash(mv Editor/AnimationClipProcessorWindow.cs Editor/AnimationTools/AnimationClipProcessorWindow.cs)",
+      "Bash(mv Editor/AnimationClipProcessorWindow.cs.meta Editor/AnimationTools/AnimationClipProcessorWindow.cs.meta)",
+      "Bash(git rm *)",
+      "Bash(rm -f CHANGELOG.md CHANGELOG.md.meta)"
     ]
   }
 }

@@ -9,7 +9,7 @@ namespace Hollow.HoUnityTools.BoneRendering
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/骨骼渲染器")]
+    [AddComponentMenu("HoUnityTools/Ho Bone Renderer")]
     public sealed class HoBoneRenderer : MonoBehaviour
     {
         /// <summary>骨骼形状。</summary>

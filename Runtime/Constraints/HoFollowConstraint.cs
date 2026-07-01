@@ -32,7 +32,7 @@ namespace Hollow.HoUnityTools.Constraints
 
     [ExecuteAlways]
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/约束/跟随约束")]
+    [AddComponentMenu("HoUnityTools/Constraints/Ho Follow Constraint")]
     public sealed class HoFollowConstraint : MonoBehaviour
     {
         [Header("Target")]

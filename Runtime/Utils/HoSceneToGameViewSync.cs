@@ -5,7 +5,8 @@ namespace Hollow.HoUnityTools
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Camera))]
-    public sealed class SceneToGameViewSync : MonoBehaviour
+    [AddComponentMenu("HoUnityTools/Ho Scene To Game View Sync")]
+    public sealed class HoSceneToGameViewSync : MonoBehaviour
     {
         [Tooltip("是否启用Scene视图到Game视图的同步")]
         public bool enableSync = true;

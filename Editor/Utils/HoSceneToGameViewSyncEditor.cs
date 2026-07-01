@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor
 {
-    [CustomEditor(typeof(SceneToGameViewSync))]
-    internal sealed class SceneToGameViewSyncEditor : UnityEditor.Editor
+    [CustomEditor(typeof(HoSceneToGameViewSync))]
+    internal sealed class HoSceneToGameViewSyncEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
@@ -37,8 +37,8 @@ namespace Hollow.HoUnityTools.Editor
                 {
                     foreach (Object selectedTarget in targets)
                     {
-                        if (selectedTarget is SceneToGameViewSync sync)
-                            SceneToGameViewSyncDriver.SyncNow(sync);
+                        if (selectedTarget is HoSceneToGameViewSync sync)
+                            HoSceneToGameViewSyncDriver.SyncNow(sync);
                     }
                 }
             }

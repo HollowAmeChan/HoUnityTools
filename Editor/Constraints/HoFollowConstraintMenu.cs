@@ -7,7 +7,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 {
     internal static class HoFollowConstraintMenu
     {
-        [MenuItem("GameObject/HoUnityTools/约束/跟随约束", false, 10)]
+        [MenuItem("GameObject/HoUnityTools/Constraints/Ho Follow Constraint", false, 10)]
         private static void CreateFollowConstraint(MenuCommand menuCommand)
         {
             GameObject context = menuCommand.context as GameObject;
@@ -15,7 +15,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (targetObject == null)
             {
-                targetObject = new GameObject("Ho 跟随约束");
+                targetObject = new GameObject("Ho Follow Constraint");
                 GameObjectUtility.SetParentAndAlign(targetObject, context);
                 Undo.RegisterCreatedObjectUndo(targetObject, "创建 Ho 跟随约束");
             }

@@ -5,16 +5,16 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor
 {
-    internal static class SceneToGameViewSyncMenu
+    internal static class HoSceneToGameViewSyncMenu
     {
-        [MenuItem("GameObject/HoUnityTools/Scene To Game View Sync Camera", false, 10)]
+        [MenuItem("GameObject/HoUnityTools/Ho Scene To Game View Sync Camera", false, 10)]
         private static void CreateSyncCamera(MenuCommand menuCommand)
         {
-            GameObject cameraObject = new GameObject("Scene To Game Sync Camera");
+            GameObject cameraObject = new GameObject("Ho Scene To Game Sync Camera");
             GameObjectUtility.SetParentAndAlign(cameraObject, menuCommand.context as GameObject);
 
             Camera camera = cameraObject.AddComponent<Camera>();
-            cameraObject.AddComponent<SceneToGameViewSync>();
+            cameraObject.AddComponent<HoSceneToGameViewSync>();
 
             if (GameObject.FindGameObjectWithTag("MainCamera") == null)
                 camera.tag = "MainCamera";
