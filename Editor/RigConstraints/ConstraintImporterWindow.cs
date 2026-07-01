@@ -45,28 +45,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             EditorGUILayout.Space(5);
         }
 
-        private string _configFilePath;
         private void DrawConfigSection()
         {
-            // 选择配置文件
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField("配置文件 (.json)", GUILayout.Width(100));
-
-                if (GUILayout.Button("选择文件", GUILayout.Width(80)))
-                {
-                    var path = EditorUtility.OpenFilePanel("选择配置文件", Application.dataPath, "json");
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        _configFilePath = path; // 保存文件路径
-                        var jsonContent = System.IO.File.ReadAllText(path);
-                        configFile = new TextAsset(jsonContent);
-                    }
-                }
-
-                // 显示文件路径
-                EditorGUILayout.LabelField(_configFilePath ?? "未选择文件", EditorStyles.textField);
-            }
+            // 直接拖入项目内的 .json（TextAsset），与骨骼分组文件的填写方式一致
+            configFile = (TextAsset)EditorGUILayout.ObjectField(
+                "配置文件 (.json)",
+                configFile,
+                typeof(TextAsset),
+                false
+            );
 
             targetRig = (GameObject)EditorGUILayout.ObjectField(
                 "目标骨架",
