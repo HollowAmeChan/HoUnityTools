@@ -503,11 +503,117 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         }
 
         /// <summary>
-        /// 复位骨架到 Prefab 原始姿态：对每根骨的 Transform 还原 Prefab 覆盖（override），
-        /// 等价于 Inspector 里右键 Transform → Revert，位置/旋转/缩放全部恢复为 Prefab 存的值。
+        /// 定位骨架子树的根节点：取骨架下所有 SkinnedMeshRenderer 的 rootBone，
+        /// 没有 rootBone 时退回其 bones 的公共祖先。这样网格、挂点道具等非骨骼子树会被排除。
+        /// 结果会去重，并剔除本身是其它根后代的根，避免重复遍历。
+        /// 找不到任何蒙皮网格时返回空列表（调用方回退到整树处理）。
+        /// </summary>
+        private static List<Transform> FindSkeletonRoots(GameObject rig)
+        {
+            var roots = new List<Transform>();
+            foreach (var smr in rig.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                Transform root = smr.rootBone != null ? smr.rootBone : FindCommonAncestor(smr.bones);
+                if (root != null && !roots.Contains(root))
+                {
+                    roots.Add(root);
+                }
+            }
+
+            // 剔除本身是其它根后代的根，只保留最上层的骨架根
+            roots.RemoveAll(r => roots.Exists(other => other != r && r.IsChildOf(other)));
+            return roots;
+        }
+
+        /// <summary>求一组骨骼的最近公共祖先，用于 rootBone 缺失时定位骨架根。空集返回 null。</summary>
+        private static Transform FindCommonAncestor(Transform[] bones)
+        {
+            if (bones == null || bones.Length == 0)
+            {
+                return null;
+            }
+
+            Transform ancestor = bones[0];
+            for (int i = 1; i < bones.Length && ancestor != null; i++)
+            {
+                Transform b = bones[i];
+                if (b == null) continue;
+
+                // 把 ancestor 上移，直到它是 b 的祖先（或自身）
+                while (ancestor != null && !b.IsChildOf(ancestor))
+                {
+                    ancestor = ancestor.parent;
+                }
+            }
+
+            return ancestor;
+        }
+
+        /// <summary>某节点是否为骨骼：不带任何渲染器与 MeshFilter（网格、挂点道具会因此被判为非骨骼）。</summary>
+        private static bool IsBoneNode(Transform node)
+        {
+            return node.GetComponent<Renderer>() == null && node.GetComponent<MeshFilter>() == null;
+        }
+
+        /// <summary>
+        /// 在骨架根子树下递归收集骨骼：遇到带渲染器/MeshFilter 的节点即跳过它及其整棵子树
+        /// （挂在骨骼上的网格、武器道具等不算骨骼，也不误改其子节点）。
+        /// </summary>
+        private static void CollectBonesUnderRoot(Transform node, List<Transform> output)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            if (!IsBoneNode(node))
+            {
+                return; // 非骨骼节点，连同其子树一起跳过
+            }
+
+            output.Add(node);
+            for (int i = 0; i < node.childCount; i++)
+            {
+                CollectBonesUnderRoot(node.GetChild(i), output);
+            }
+        }
+
+        /// <summary>
+        /// 采集骨架下的骨骼节点：先经蒙皮网格定位骨架根，再在其下过滤掉带渲染器的节点。
+        /// 没有蒙皮网格时回退为对整个骨架树做同样的渲染器过滤。
+        /// </summary>
+        private static List<Transform> CollectBones(GameObject rig)
+        {
+            var bones = new List<Transform>();
+            var roots = FindSkeletonRoots(rig);
+
+            if (roots.Count > 0)
+            {
+                foreach (var root in roots)
+                {
+                    CollectBonesUnderRoot(root, bones);
+                }
+            }
+            else
+            {
+                // 无蒙皮网格可定位骨架，退回整树并按渲染器过滤
+                CollectBonesUnderRoot(rig.transform, bones);
+            }
+
+            return bones;
+        }
+
+        /// <summary>
+        /// 复位骨架到 Prefab 原始姿态：把每根骨的本地位置/旋转/缩放还原为 Prefab 源中的值。
         ///
-        /// 依赖 Prefab 实例关系，仅编辑器可用。目标骨架必须是 Prefab 实例；
-        /// 非 Prefab 实例的骨骼（无覆盖可还原）会被跳过。
+        /// 只处理骨骼节点（经蒙皮网格定位骨架、并排除带渲染器的网格/挂点），不动网格与道具。
+        ///
+        /// 直接从 Prefab 源 Transform 拷贝本地 TRS，而不是逐骨调用
+        /// PrefabUtility.RevertObjectOverride —— 后者每次都会重新合并整份 Prefab 实例，
+        /// 几百根骨骼会造成几百次全量重合并，非常卡。直接拷贝彻底绕开合并，
+        /// 并用一次 Undo.RecordObjects 批量记录撤销。
+        ///
+        /// 仅编辑器可用。目标骨架必须是 Prefab 实例；在源 Prefab 中找不到对应骨的节点会被跳过。
         /// </summary>
         private void ResetRigToDefault()
         {
@@ -521,36 +627,56 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 EditorUtility.DisplayDialog("错误",
                     "目标骨架不是 Prefab 实例，无法还原到 Prefab 原始姿态。\n" +
-                    "此功能依赖 Prefab 覆盖关系（等价于 Inspector 里 Transform 的 Revert）。",
+                    "此功能依赖 Prefab 源关系（等价于 Inspector 里 Transform 的 Revert）。",
                     "确定");
                 return;
             }
 
-            var bones = targetRig.GetComponentsInChildren<Transform>(true);
-            if (bones.Length == 0)
+            var bones = CollectBones(targetRig);
+            if (bones.Count == 0)
             {
                 EditorUtility.DisplayDialog("提示", "骨架下没有可复位的骨骼", "确定");
                 return;
             }
 
-            if (!EditorUtility.DisplayDialog("确认",
-                $"将把 {bones.Length} 根骨骼的 Transform 还原到 Prefab 原始姿态（位置/旋转/缩放全部恢复），当前改动会被丢弃。是否继续？",
-                "确定", "取消")) return;
-
-            var count = 0;
+            // 收集能在源 Prefab 中找到对应节点的骨骼及其源 Transform
+            var editableBones = new List<Transform>(bones.Count);
+            var sourceBones = new List<Transform>(bones.Count);
             foreach (var bone in bones)
             {
                 if (bone == null) continue;
-                // 只处理属于 Prefab 实例的骨骼；无覆盖时 RevertObjectOverride 是安全的空操作
-                if (!PrefabUtility.IsPartOfPrefabInstance(bone)) continue;
-
-                // 还原该 Transform 上的全部覆盖（InteractionMode.UserAction 记录 Undo）
-                PrefabUtility.RevertObjectOverride(bone, InteractionMode.UserAction);
-                count++;
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(bone) as Transform;
+                if (source == null) continue; // 非 Prefab 派生的骨骼（无源可还原）跳过
+                editableBones.Add(bone);
+                sourceBones.Add(source);
             }
 
+            if (editableBones.Count == 0)
+            {
+                EditorUtility.DisplayDialog("提示", "没有可还原的骨骼（均无 Prefab 源）", "确定");
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("确认",
+                $"将把 {editableBones.Count} 根骨骼的 Transform 还原到 Prefab 原始姿态（位置/旋转/缩放全部恢复），当前改动会被丢弃。是否继续？",
+                "确定", "取消")) return;
+
+            // 一次性记录全部骨骼的 Undo，再批量赋值，避免逐骨的高开销操作
+            Undo.RecordObjects(editableBones.ToArray(), "还原骨架到 Prefab 姿态");
+
+            for (int i = 0; i < editableBones.Count; i++)
+            {
+                var bone = editableBones[i];
+                var source = sourceBones[i];
+                bone.localPosition = source.localPosition;
+                bone.localRotation = source.localRotation;
+                bone.localScale = source.localScale;
+            }
+
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(targetRig.scene);
+
             EditorUtility.DisplayDialog("完成",
-                $"已还原 {count} 根骨骼到 Prefab 原始姿态",
+                $"已还原 {editableBones.Count} 根骨骼到 Prefab 原始姿态",
                 "确定");
         }
 
