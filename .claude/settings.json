@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash([ -f \"$LOG\" ])",
+      "Read(//c/Users/hhh12/AppData/Local/Unity/Editor/**)",
+      "Bash(LOG=\"/c/Users/hhh12/AppData/Local/Unity/Editor/Editor.log\"; echo \"=== CS errors / compilation ===\"; grep -niE \"CS[0-9]{3,4}|Compilation failed|error CS|Scripts have compiler errors|\\\\.cs\\\\\\(\" \"$LOG\" 2>/dev/null | tail -30; echo \"=== done ===\")"
+    ]
+  }
+}
