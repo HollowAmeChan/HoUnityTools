@@ -2,8 +2,12 @@
 
 ## Unreleased
 
-- Extended `ConstraintConfig` to parse the HoTools Blender export format v1.0 (`version`, `exportTime`, `armatureName`, plus per-constraint `semantic`, `fanType`, `sourceBone`, `space`, and `axes` fields). Old flat-format files remain compatible.
-- Rig constraint import now honors per-axis flags: twist constraints lock the Y axis (X|Z only), fan and generic constraints use all axes. Missing or all-false `axes` falls back to full X|Y|Z for backward compatibility.
+- Added a "还原骨架到 Prefab 姿态" action that reverts every bone Transform's prefab overrides (equivalent to right-clicking a Transform in the Inspector and choosing Revert), restoring position, rotation, and scale to the prefab's stored values. Editor-only, since it relies on the prefab instance relationship; the target rig must be a prefab instance.
+- Imported rig constraints are now tagged with a `HoImportedConstraintMarker` component recording the source armature, export time, and exporter version. A new "安全清除（仅删除导入的约束）" action removes only tool-generated constraints and leaves hand-authored constraints untouched.
+- Constraint import no longer overwrites pre-existing user constraints of the same type on a bone; such bones are skipped with a warning. Re-importing tool-managed constraints is idempotent (old sources are cleared and rebuilt).
+- The destructive "清除全部约束" now also removes orphaned import markers so rig state stays consistent.
+- `ConstraintConfig` parses the HoTools Blender export format v1.0 (`version`, `exportTime`, `armatureName`, plus per-constraint `semantic`, `fanType`, `sourceBone`, `space`, and `axes` fields). Only format v1.0 is supported; the legacy flat format is no longer accepted.
+- Rig constraint import honors per-axis flags directly: twist constraints lock the Y axis (X|Z only), fan and generic constraints use all axes.
 
 ## 0.2.0
 

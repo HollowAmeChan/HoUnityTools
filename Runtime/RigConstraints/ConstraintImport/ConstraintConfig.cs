@@ -46,7 +46,6 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         /// <summary>
         /// HoTools 语义标记：fan / twist / generic。
         /// 由 Blender 导出器识别辅助骨约束语义后写入，Unity 端可据此选择处理策略。
-        /// 旧格式文件无此字段，反序列化后为空字符串。
         /// </summary>
         public string semantic;
 
@@ -72,13 +71,12 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public float weight;
 
         /// <summary>
-        /// 空间参数（source/target 空间，如 world→world）。旧格式无此字段。
+        /// 空间参数（source/target 空间，如 world→world）。
         /// </summary>
         public SpaceInfo space;
 
         /// <summary>
         /// 轴向开关（Rotation/Location/Scale）。twist 约束会锁 Y 轴（y=false）。
-        /// 旧格式无此字段，此时按全轴处理（见导入器 ResolveAxis）。
         /// </summary>
         public AxesInfo axes;
     }

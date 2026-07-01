@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -37,7 +38,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 "此工具用于批量导入 Unity 标准约束到骨架系统。\n" +
                 "支持的约束类型：Rotation, Location, Scale, Child\n" +
                 "识别 HoTools 语义约束（fan / twist）：twist 自动锁 Y 轴。\n" +
-                "兼容旧格式导出文件（无 semantic / axes 字段时按全轴处理）。",
+                "导入的约束会被标记，可用「安全清除」只删除本工具生成的约束，保留手工约束。\n" +
+                "「还原骨架到 Prefab 姿态」把骨骼 Transform 还原到 Prefab 原始值（需为 Prefab 实例）。",
                 MessageType.Info
             );
             EditorGUILayout.Space(5);
@@ -100,11 +102,30 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 LockAllConstraints();
             }
 
+            // 安全清除：只删除本导入器生成并标记的约束，保留用户手工约束
+            if (GUILayout.Button("安全清除（仅删除导入的约束）", GUILayout.Height(30)))
+            {
+                SafeClearImportedConstraints();
+            }
+
             if (GUILayout.Button("清除全部约束", GUILayout.Height(30)))
             {
                 ClearAllConstraints();
             }
+
+            EditorGUILayout.Space(5);
+
+            // 还原骨架：把所有骨骼 Transform 还原到 Prefab 原始姿态（等价于 Inspector 里 Revert）
+            if (GUILayout.Button("还原骨架到 Prefab 姿态", GUILayout.Height(30)))
+            {
+                ResetRigToDefault();
+            }
         }
+
+        // 当前导入批次的元数据，供标记组件记录来源，"安全清除"时可追溯
+        private string _importArmature;
+        private string _importTime;
+        private string _importVersion;
 
         private void ApplyConstraints()
         {
@@ -113,6 +134,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 var config = JsonUtility.FromJson<ConstraintConfig>(configFile.text);
                 var successCount = 0;
                 var totalCount = 0;
+
+                // 记录本次导入来源信息，写入每个骨骼的标记组件
+                _importArmature = config.armatureName;
+                _importTime = config.exportTime;
+                _importVersion = config.version;
 
                 Undo.RecordObject(targetRig, "Apply Constraints");
 
@@ -188,24 +214,63 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         /// <summary>
         /// 根据约束的 axes 字段解析出 Unity 的 Axis 位掩码。
-        /// axes 缺失（旧格式）或三轴全 false 时回退到全轴 X|Y|Z。
         /// twist 约束会把 y 设为 false，从而只保留 X|Z（锁 Y 轴，只传 twist 分量）。
         /// </summary>
         private static Axis ResolveAxis(AxesInfo axes)
         {
-            // 注意 JsonUtility 的坑：JSON 里缺 "axes" 字段时，反序列化出的不是 null，而是
-            // 一个全 false 的 AxesInfo。因此 axes==null 与「三轴全 false」都当作「未指定」，
-            // 回退到全轴——一个不锁任何轴的旋转约束没有意义，只可能是旧格式或缺字段。
-            if (axes == null || (!axes.x && !axes.y && !axes.z))
-            {
-                return Axis.X | Axis.Y | Axis.Z;
-            }
-
             Axis result = Axis.None;
             if (axes.x) result |= Axis.X;
             if (axes.y) result |= Axis.Y;
             if (axes.z) result |= Axis.Z;
             return result;
+        }
+
+        /// <summary>
+        /// 获取或创建"由导入器管理"的约束组件，是安全删除的核心。
+        /// - 骨骼上已有本导入器管理的同类型约束：复用它并清空旧源，供调用方重建（幂等重导入）。
+        /// - 骨骼上存在用户手工添加的同类型约束（未被标记管理）：跳过并返回 null，绝不污染用户数据。
+        /// - 否则：新建约束，并确保骨骼挂有标记组件、把新约束登记进去。
+        /// </summary>
+        private T GetOrCreateManaged<T>(Transform bone) where T : Component, IConstraint
+        {
+            var marker = bone.GetComponent<HoImportedConstraintMarker>();
+            var existing = bone.GetComponents<T>();
+
+            if (existing.Length > 0)
+            {
+                // 优先复用本导入器管理的实例
+                if (marker != null)
+                {
+                    foreach (var c in existing)
+                    {
+                        if (marker.Manages(c))
+                        {
+                            // 幂等：清空旧源，交由调用方重建，避免重复导入累积源
+                            var con = (IConstraint)c;
+                            for (int i = con.sourceCount - 1; i >= 0; i--)
+                            {
+                                con.RemoveSource(i);
+                            }
+                            return c;
+                        }
+                    }
+                }
+                // 存在但非本导入器管理 → 用户手工约束，跳过不动
+                Debug.LogWarning($"骨骼 {bone.name} 已存在用户添加的 {typeof(T).Name}，跳过以避免覆盖");
+                return null;
+            }
+
+            // 全新创建并登记到标记组件
+            var created = Undo.AddComponent<T>(bone.gameObject);
+            if (marker == null)
+            {
+                marker = Undo.AddComponent<HoImportedConstraintMarker>(bone.gameObject);
+            }
+            marker.SetMetadata(_importArmature, _importTime, _importVersion);
+            marker.Register(created);
+            EditorUtility.SetDirty(marker);
+
+            return created;
         }
 
         private bool AddRotationConstraint(Transform bone, ConstraintInfo constraint)
@@ -220,12 +285,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
 
-                // 添加/获取约束组件
-                var rotationConstraint = bone.GetComponent<RotationConstraint>();
-                if (rotationConstraint == null)
-                {
-                    rotationConstraint = Undo.AddComponent<RotationConstraint>(bone.gameObject);
-                }
+                // 获取或创建"由导入器管理"的约束组件；用户手工约束会被跳过
+                var rotationConstraint = GetOrCreateManaged<RotationConstraint>(bone);
+                if (rotationConstraint == null) return false;
 
                 // 配置约束源
                 var source = new ConstraintSource
@@ -263,12 +325,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
 
-                // 添加/获取约束组件
-                var positionConstraint = bone.GetComponent<PositionConstraint>();
-                if (positionConstraint == null)
-                {
-                    positionConstraint = Undo.AddComponent<PositionConstraint>(bone.gameObject);
-                }
+                // 获取或创建"由导入器管理"的约束组件；用户手工约束会被跳过
+                var positionConstraint = GetOrCreateManaged<PositionConstraint>(bone);
+                if (positionConstraint == null) return false;
 
                 // 配置约束源
                 var source = new ConstraintSource
@@ -305,12 +364,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
 
-                // 添加/获取约束组件
-                var scaleConstraint = bone.GetComponent<ScaleConstraint>();
-                if (scaleConstraint == null)
-                {
-                    scaleConstraint = Undo.AddComponent<ScaleConstraint>(bone.gameObject);
-                }
+                // 获取或创建"由导入器管理"的约束组件；用户手工约束会被跳过
+                var scaleConstraint = GetOrCreateManaged<ScaleConstraint>(bone);
+                if (scaleConstraint == null) return false;
 
                 // 配置约束源
                 var source = new ConstraintSource
@@ -347,12 +403,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
 
-                // 添加/获取约束组件
-                var parentConstraint = bone.GetComponent<ParentConstraint>();
-                if (parentConstraint == null)
-                {
-                    parentConstraint = Undo.AddComponent<ParentConstraint>(bone.gameObject);
-                }
+                // 获取或创建"由导入器管理"的约束组件；用户手工约束会被跳过
+                var parentConstraint = GetOrCreateManaged<ParentConstraint>(bone);
+                if (parentConstraint == null) return false;
 
                 // 配置约束源
                 var source = new ConstraintSource
@@ -374,6 +427,48 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 安全清除：只删除由本导入器生成并标记的约束，保留用户手工添加的约束。
+        /// 依据每个骨骼上的 HoImportedConstraintMarker：删除它登记的约束组件，
+        /// 随后连同标记组件一并移除。用户未经导入器创建的约束不受影响。
+        /// </summary>
+        private void SafeClearImportedConstraints()
+        {
+            if (targetRig == null)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择目标骨架", "确定");
+                return;
+            }
+
+            var markers = targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true);
+            if (markers.Length == 0)
+            {
+                EditorUtility.DisplayDialog("提示", "未找到由导入器生成的约束（无标记）", "确定");
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("确认",
+                $"将删除 {markers.Length} 个骨骼上由导入器生成的约束，用户手工添加的约束不受影响。是否继续？",
+                "确定", "取消")) return;
+
+            var clearedCount = 0;
+
+            foreach (var marker in markers)
+            {
+                // 先销毁受管约束，再移除标记本身
+                foreach (var constraint in new List<Component>(marker.GetLiveConstraints()))
+                {
+                    Undo.DestroyObjectImmediate(constraint);
+                    clearedCount++;
+                }
+                Undo.DestroyObjectImmediate(marker);
+            }
+
+            EditorUtility.DisplayDialog("完成",
+                $"已安全清除 {clearedCount} 个导入的约束（保留用户约束）",
+                "确定");
         }
 
         private void ClearAllConstraints()
@@ -409,8 +504,66 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
             }
 
+            // 约束已全部删除，导入标记组件失去意义，一并移除避免留下空标记
+            foreach (var marker in targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+            {
+                Undo.DestroyObjectImmediate(marker);
+            }
+
             EditorUtility.DisplayDialog("完成",
                 $"已清除 {clearedCount} 个标准约束",
+                "确定");
+        }
+
+        /// <summary>
+        /// 复位骨架到 Prefab 原始姿态：对每根骨的 Transform 还原 Prefab 覆盖（override），
+        /// 等价于 Inspector 里右键 Transform → Revert，位置/旋转/缩放全部恢复为 Prefab 存的值。
+        ///
+        /// 依赖 Prefab 实例关系，仅编辑器可用。目标骨架必须是 Prefab 实例；
+        /// 非 Prefab 实例的骨骼（无覆盖可还原）会被跳过。
+        /// </summary>
+        private void ResetRigToDefault()
+        {
+            if (targetRig == null)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择目标骨架", "确定");
+                return;
+            }
+
+            if (!PrefabUtility.IsPartOfPrefabInstance(targetRig))
+            {
+                EditorUtility.DisplayDialog("错误",
+                    "目标骨架不是 Prefab 实例，无法还原到 Prefab 原始姿态。\n" +
+                    "此功能依赖 Prefab 覆盖关系（等价于 Inspector 里 Transform 的 Revert）。",
+                    "确定");
+                return;
+            }
+
+            var bones = targetRig.GetComponentsInChildren<Transform>(true);
+            if (bones.Length == 0)
+            {
+                EditorUtility.DisplayDialog("提示", "骨架下没有可复位的骨骼", "确定");
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("确认",
+                $"将把 {bones.Length} 根骨骼的 Transform 还原到 Prefab 原始姿态（位置/旋转/缩放全部恢复），当前改动会被丢弃。是否继续？",
+                "确定", "取消")) return;
+
+            var count = 0;
+            foreach (var bone in bones)
+            {
+                if (bone == null) continue;
+                // 只处理属于 Prefab 实例的骨骼；无覆盖时 RevertObjectOverride 是安全的空操作
+                if (!PrefabUtility.IsPartOfPrefabInstance(bone)) continue;
+
+                // 还原该 Transform 上的全部覆盖（InteractionMode.UserAction 记录 Undo）
+                PrefabUtility.RevertObjectOverride(bone, InteractionMode.UserAction);
+                count++;
+            }
+
+            EditorUtility.DisplayDialog("完成",
+                $"已还原 {count} 根骨骼到 Prefab 原始姿态",
                 "确定");
         }
 
