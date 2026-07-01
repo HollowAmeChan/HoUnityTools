@@ -124,6 +124,19 @@ namespace Hollow.HoUnityTools.BoneRendering
             return m_ParsedGroupSet;
         }
 
+        /// <summary>
+        /// 强制丢弃缓存并重新解析分组 JSON,再重建骨骼。
+        /// 用于外部重新导出覆盖了同一个 .json(TextAsset 引用未变,缓存不会自动失效)时手动刷新。
+        /// </summary>
+        public void RefreshGroupJson()
+        {
+            m_ParsedGroupSet = null;
+            m_ParsedFrom = null;
+#if UNITY_EDITOR
+            ExtractBones();
+#endif
+        }
+
         /// <summary>被关闭显示的集合名称列表。</summary>
         public List<string> HiddenCollections => hiddenCollections;
 

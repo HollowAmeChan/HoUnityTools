@@ -142,14 +142,30 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
         {
             EditorGUILayout.LabelField("分组", EditorStyles.boldLabel);
 
-            EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(groupJson, new GUIContent("分组 JSON"));
-            bool groupSourceChanged = EditorGUI.EndChangeCheck();
+            bool refreshClicked = false;
+            bool groupSourceChanged;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(groupJson, new GUIContent("分组 JSON"));
+                groupSourceChanged = EditorGUI.EndChangeCheck();
+
+                // 小刷新按钮:重新导出覆盖同一 .json 后,手动强制重解析(引用未变不会自动刷新)
+                using (new EditorGUI.DisabledScope(!HasGroupJsonToRefresh()))
+                {
+                    refreshClicked = GUILayout.Button(new GUIContent("↻", "从文件重新读取分组 JSON"), GUILayout.Width(22.0f));
+                }
+            }
 
             if (groupSourceChanged)
             {
                 serializedObject.ApplyModifiedProperties();
                 RebuildAllTargets();
+                serializedObject.Update();
+            }
+            else if (refreshClicked)
+            {
+                RefreshAllTargets();
                 serializedObject.Update();
             }
 
@@ -234,6 +250,29 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             }
 
             return hidden;
+        }
+
+        private bool HasGroupJsonToRefresh()
+        {
+            if (groupJson.objectReferenceValue != null)
+            {
+                return true;
+            }
+
+            if (!groupJson.hasMultipleDifferentValues)
+            {
+                return false;
+            }
+
+            foreach (Object target in targets)
+            {
+                if (target is HoBoneRenderer boneRenderer && boneRenderer.GroupJson != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -365,6 +404,37 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 if (target is HoBoneRenderer boneRenderer)
                 {
                     boneRenderer.Invalidate();
+                    EditorUtility.SetDirty(boneRenderer);
+                }
+            }
+
+            SceneView.RepaintAll();
+        }
+
+        private void RefreshAllTargets()
+        {
+            serializedObject.ApplyModifiedProperties();
+
+            var importedPaths = new HashSet<string>();
+            foreach (Object target in targets)
+            {
+                if (!(target is HoBoneRenderer boneRenderer) || boneRenderer.GroupJson == null)
+                {
+                    continue;
+                }
+
+                string assetPath = AssetDatabase.GetAssetPath(boneRenderer.GroupJson);
+                if (!string.IsNullOrEmpty(assetPath) && importedPaths.Add(assetPath))
+                {
+                    AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+                }
+            }
+
+            foreach (Object target in targets)
+            {
+                if (target is HoBoneRenderer boneRenderer)
+                {
+                    boneRenderer.RefreshGroupJson();
                     EditorUtility.SetDirty(boneRenderer);
                 }
             }
