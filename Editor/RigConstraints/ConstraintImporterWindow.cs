@@ -35,7 +35,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             EditorGUILayout.HelpBox(
                 "此工具用于批量导入 Unity 标准约束到骨架系统。\n" +
-                "支持的约束类型：Rotation, Location, Scale, Child",
+                "支持的约束类型：Rotation, Location, Scale, Child\n" +
+                "识别 HoTools 语义约束（fan / twist）：twist 自动锁 Y 轴。\n" +
+                "兼容旧格式导出文件（无 semantic / axes 字段时按全轴处理）。",
                 MessageType.Info
             );
             EditorGUILayout.Space(5);
@@ -184,6 +186,28 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return null;
         }
 
+        /// <summary>
+        /// 根据约束的 axes 字段解析出 Unity 的 Axis 位掩码。
+        /// axes 缺失（旧格式）或三轴全 false 时回退到全轴 X|Y|Z。
+        /// twist 约束会把 y 设为 false，从而只保留 X|Z（锁 Y 轴，只传 twist 分量）。
+        /// </summary>
+        private static Axis ResolveAxis(AxesInfo axes)
+        {
+            // 注意 JsonUtility 的坑：JSON 里缺 "axes" 字段时，反序列化出的不是 null，而是
+            // 一个全 false 的 AxesInfo。因此 axes==null 与「三轴全 false」都当作「未指定」，
+            // 回退到全轴——一个不锁任何轴的旋转约束没有意义，只可能是旧格式或缺字段。
+            if (axes == null || (!axes.x && !axes.y && !axes.z))
+            {
+                return Axis.X | Axis.Y | Axis.Z;
+            }
+
+            Axis result = Axis.None;
+            if (axes.x) result |= Axis.X;
+            if (axes.y) result |= Axis.Y;
+            if (axes.z) result |= Axis.Z;
+            return result;
+        }
+
         private bool AddRotationConstraint(Transform bone, ConstraintInfo constraint)
         {
             try
@@ -214,7 +238,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 rotationConstraint.AddSource(source);
                 rotationConstraint.constraintActive = true;
                 rotationConstraint.weight = constraint.weight;
-                rotationConstraint.rotationAxis = Axis.X | Axis.Y | Axis.Z;
+                // 轴向由导出的 axes 决定：twist 约束锁 Y 轴（只传 X|Z），fan/其他默认全轴。
+                rotationConstraint.rotationAxis = ResolveAxis(constraint.axes);
 
                 EditorUtility.SetDirty(rotationConstraint);
 
@@ -256,7 +281,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 positionConstraint.AddSource(source);
                 positionConstraint.constraintActive = true;
                 positionConstraint.weight = constraint.weight; // 约束整体权重
-                positionConstraint.translationAxis = Axis.X | Axis.Y | Axis.Z;
+                positionConstraint.translationAxis = ResolveAxis(constraint.axes);
 
                 EditorUtility.SetDirty(positionConstraint);
 
@@ -298,7 +323,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 scaleConstraint.AddSource(source);
                 scaleConstraint.constraintActive = true;
                 scaleConstraint.weight = constraint.weight; // 约束整体权重
-                scaleConstraint.scalingAxis = Axis.X | Axis.Y | Axis.Z;
+                scaleConstraint.scalingAxis = ResolveAxis(constraint.axes);
 
                 EditorUtility.SetDirty(scaleConstraint);
 

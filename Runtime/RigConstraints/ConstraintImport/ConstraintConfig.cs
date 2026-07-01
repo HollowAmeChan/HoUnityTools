@@ -10,6 +10,21 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
     [System.Serializable]
     public class ConstraintConfig
     {
+        /// <summary>
+        /// 导出格式版本（HoTools Blender 导出器写入，如 "1.0"）
+        /// </summary>
+        public string version;
+
+        /// <summary>
+        /// 导出时间戳（ISO8601）
+        /// </summary>
+        public string exportTime;
+
+        /// <summary>
+        /// 源骨架名称
+        /// </summary>
+        public string armatureName;
+
         public List<BoneConstraint> bones;
     }
 
@@ -29,6 +44,23 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string type;
 
         /// <summary>
+        /// HoTools 语义标记：fan / twist / generic。
+        /// 由 Blender 导出器识别辅助骨约束语义后写入，Unity 端可据此选择处理策略。
+        /// 旧格式文件无此字段，反序列化后为空字符串。
+        /// </summary>
+        public string semantic;
+
+        /// <summary>
+        /// Fan 约束子类型：FAN / FAN_SINGLE / FAN_SIDE（仅 semantic="fan" 时有效）
+        /// </summary>
+        public string fanType;
+
+        /// <summary>
+        /// Twist 链的源骨名（仅 semantic="twist" 时有效）
+        /// </summary>
+        public string sourceBone;
+
+        /// <summary>
         /// 目标骨骼路径或名称
         /// </summary>
         public string targetPath;
@@ -38,5 +70,37 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         /// </summary>
         [Range(0, 1)]
         public float weight;
+
+        /// <summary>
+        /// 空间参数（source/target 空间，如 world→world）。旧格式无此字段。
+        /// </summary>
+        public SpaceInfo space;
+
+        /// <summary>
+        /// 轴向开关（Rotation/Location/Scale）。twist 约束会锁 Y 轴（y=false）。
+        /// 旧格式无此字段，此时按全轴处理（见导入器 ResolveAxis）。
+        /// </summary>
+        public AxesInfo axes;
+    }
+
+    /// <summary>
+    /// 约束空间参数。对应 Blender 的 owner_space / target_space。
+    /// </summary>
+    [System.Serializable]
+    public class SpaceInfo
+    {
+        public string source;
+        public string target;
+    }
+
+    /// <summary>
+    /// 约束轴向开关。对应 Blender COPY_ROTATION/COPY_LOCATION 的 use_x/use_y/use_z。
+    /// </summary>
+    [System.Serializable]
+    public class AxesInfo
+    {
+        public bool x;
+        public bool y;
+        public bool z;
     }
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Extended `ConstraintConfig` to parse the HoTools Blender export format v1.0 (`version`, `exportTime`, `armatureName`, plus per-constraint `semantic`, `fanType`, `sourceBone`, `space`, and `axes` fields). Old flat-format files remain compatible.
+- Rig constraint import now honors per-axis flags: twist constraints lock the Y axis (X|Z only), fan and generic constraints use all axes. Missing or all-false `axes` falls back to full X|Y|Z for backward compatibility.
+
 ## 0.2.0
 
 - Added `HoFollowConstraint`, a point-to-point Transform constraint for stylized followers such as halos, floating props, drones, and attachment effects.
