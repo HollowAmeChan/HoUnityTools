@@ -50,9 +50,9 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string semantic;
 
         /// <summary>
-        /// Fan 约束子类型：FAN / FAN_SINGLE / FAN_SIDE（仅 semantic="fan" 时有效）
+        /// 语义子类型。由 Blender 导出端按 semantic 写入，例如 fan 的 FAN / FAN_SINGLE / FAN_SIDE。
         /// </summary>
-        public string fanType;
+        public string subType;
 
         /// <summary>
         /// Twist 链的源骨名（仅 semantic="twist" 时有效）
@@ -76,7 +76,8 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public SpaceInfo space;
 
         /// <summary>
-        /// 轴向开关（Rotation/Location/Scale）。twist 约束会锁 Y 轴（y=false）。
+        /// 轴向开关（Rotation/Location/Scale）。对 RotationConstraint 来说对应 Unity 的冻结/约束轴。
+        /// fan/twist 的轴向预设由 Blender 导出端写入。
         /// </summary>
         public AxesInfo axes;
     }

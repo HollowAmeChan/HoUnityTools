@@ -37,7 +37,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             EditorGUILayout.HelpBox(
                 "此工具用于批量导入 Unity 标准约束到骨架系统。\n" +
                 "支持的约束类型：Rotation, Location, Scale, Child\n" +
-                "识别 HoTools 语义约束（fan / twist）：twist 自动锁 Y 轴。\n" +
+                "轴向与权重由 JSON 直接写入（Blender 导出端决定 fan / twist 预设）。\n" +
                 "导入的约束会被标记，可用「安全清除」只删除本工具生成的约束，保留手工约束。\n" +
                 "「还原骨架到 Prefab 姿态」把骨骼 Transform 还原到 Prefab 原始值（需为 Prefab 实例）。",
                 MessageType.Info
@@ -201,7 +201,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         /// <summary>
         /// 根据约束的 axes 字段解析出 Unity 的 Axis 位掩码。
-        /// twist 约束会把 y 设为 false，从而只保留 X|Z（锁 Y 轴，只传 twist 分量）。
+        /// 轴向完全由 JSON 的 axes 字段决定；fan / twist 的预设在 Blender 导出端完成。
         /// </summary>
         private static Axis ResolveAxis(AxesInfo axes)
         {
@@ -287,7 +287,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 rotationConstraint.AddSource(source);
                 rotationConstraint.constraintActive = true;
                 rotationConstraint.weight = constraint.weight;
-                // 轴向由导出的 axes 决定：twist 约束锁 Y 轴（只传 X|Z），fan/其他默认全轴。
+                // axes 对应 Unity 的冻结旋转轴：fan 冻结/约束全轴，twist 只冻结/约束 Y 轴，均由 Blender 侧预设。
                 rotationConstraint.rotationAxis = ResolveAxis(constraint.axes);
 
                 EditorUtility.SetDirty(rotationConstraint);
