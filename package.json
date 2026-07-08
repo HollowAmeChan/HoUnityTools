@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "displayName": "Ho Unity Tools",
   "description": "Small Unity editor and runtime tools used by Hollow projects.",
-  "unity": "6000.0",
+  "unity": "2022.1",
   "author": {
     "name": "Hollow"
   },
