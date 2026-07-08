@@ -14,7 +14,8 @@ namespace Hollow.HoUnityTools.Editor
             GameObjectUtility.SetParentAndAlign(cameraObject, menuCommand.context as GameObject);
 
             Camera camera = cameraObject.AddComponent<Camera>();
-            cameraObject.AddComponent<HoSceneToGameViewSync>();
+            HoSceneToGameViewSync sync = cameraObject.AddComponent<HoSceneToGameViewSync>();
+            sync.enableSync = false;
 
             if (GameObject.FindGameObjectWithTag("MainCamera") == null)
                 camera.tag = "MainCamera";
@@ -24,13 +25,15 @@ namespace Hollow.HoUnityTools.Editor
             {
                 cameraObject.transform.SetPositionAndRotation(sceneView.camera.transform.position, sceneView.camera.transform.rotation);
                 camera.fieldOfView = sceneView.camera.fieldOfView;
+                camera.nearClipPlane = sceneView.camera.nearClipPlane;
+                camera.farClipPlane = sceneView.camera.farClipPlane;
             }
 
             Undo.RegisterCreatedObjectUndo(cameraObject, "Create Scene To Game View Sync Camera");
             Selection.activeGameObject = cameraObject;
             EditorSceneManager.MarkSceneDirty(cameraObject.scene);
 
-            Debug.Log("已创建Scene To Game View同步相机！");
+            Debug.Log("已创建 Scene 视图吸附相机，自动同步默认关闭。");
         }
     }
 }

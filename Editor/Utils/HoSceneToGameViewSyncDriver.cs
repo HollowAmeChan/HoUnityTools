@@ -7,26 +7,42 @@ namespace Hollow.HoUnityTools.Editor
     [InitializeOnLoad]
     internal static class HoSceneToGameViewSyncDriver
     {
+        internal enum SyncResult
+        {
+            Synced,
+            MissingComponent,
+            MissingSceneView,
+            MissingCamera,
+            NoChannelsSelected
+        }
+
         static HoSceneToGameViewSyncDriver()
         {
             EditorApplication.update += OnEditorUpdate;
         }
 
-        internal static void SyncNow(HoSceneToGameViewSync sync)
+        internal static SyncResult SyncNow(HoSceneToGameViewSync sync)
         {
+            if (sync == null)
+                return SyncResult.MissingComponent;
+
             SceneView sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null || sceneView.camera == null)
-                return;
+                return SyncResult.MissingSceneView;
 
-            Camera targetCamera = sync.TargetCamera != null ? sync.TargetCamera : sync.GetComponent<Camera>();
+            Camera targetCamera = sync.AttachedCamera;
             if (targetCamera == null)
-                return;
+                return SyncResult.MissingCamera;
 
-            Undo.RecordObject(targetCamera.transform, "Sync Scene View Camera");
-            Undo.RecordObject(targetCamera, "Sync Scene View Camera");
+            if (!HasAnySyncChannel(sync))
+                return SyncResult.NoChannelsSelected;
+
+            Undo.RecordObject(targetCamera.transform, "Snap Scene View To Camera");
+            Undo.RecordObject(targetCamera, "Snap Scene View To Camera");
 
             ApplySceneCamera(sync, targetCamera, sceneView.camera, true);
             MarkCameraDirty(targetCamera);
+            return SyncResult.Synced;
         }
 
         private static void OnEditorUpdate()
@@ -39,6 +55,9 @@ namespace Hollow.HoUnityTools.Editor
 
         private static void UpdateSync(HoSceneToGameViewSync sync)
         {
+            if (sync == null || !sync.isActiveAndEnabled)
+                return;
+
             if (!sync.enableSync)
                 return;
 
@@ -56,22 +75,38 @@ namespace Hollow.HoUnityTools.Editor
             if (sceneView == null || sceneView.camera == null)
                 return;
 
-            Camera targetCamera = sync.TargetCamera != null ? sync.TargetCamera : sync.GetComponent<Camera>();
+            Camera targetCamera = sync.AttachedCamera;
             if (targetCamera == null)
+                return;
+
+            if (!HasAnySyncChannel(sync))
                 return;
 
             if (ApplySceneCamera(sync, targetCamera, sceneView.camera, false) && !EditorApplication.isPlaying)
                 MarkCameraDirty(targetCamera);
         }
 
+        private static bool HasAnySyncChannel(HoSceneToGameViewSync sync)
+        {
+            return sync.syncPosition || sync.syncRotation || sync.syncFOV || sync.syncClippingPlanes;
+        }
+
         private static bool ApplySceneCamera(HoSceneToGameViewSync sync, Camera targetCamera, Camera sceneCamera, bool force)
         {
-            bool positionChanged = force || sync.LastScenePosition != sceneCamera.transform.position;
-            bool rotationChanged = force || sync.LastSceneRotation != sceneCamera.transform.rotation;
-            bool fovChanged = force || !Mathf.Approximately(sync.LastSceneFOV, sceneCamera.fieldOfView);
+            bool positionChanged = force
+                || sync.LastScenePosition != sceneCamera.transform.position
+                || targetCamera.transform.position != sceneCamera.transform.position;
+            bool rotationChanged = force
+                || sync.LastSceneRotation != sceneCamera.transform.rotation
+                || targetCamera.transform.rotation != sceneCamera.transform.rotation;
+            bool fovChanged = force
+                || !Mathf.Approximately(sync.LastSceneFOV, sceneCamera.fieldOfView)
+                || !Mathf.Approximately(targetCamera.fieldOfView, sceneCamera.fieldOfView);
             bool clippingPlanesChanged = force
                 || !Mathf.Approximately(sync.LastSceneNearClipPlane, sceneCamera.nearClipPlane)
-                || !Mathf.Approximately(sync.LastSceneFarClipPlane, sceneCamera.farClipPlane);
+                || !Mathf.Approximately(sync.LastSceneFarClipPlane, sceneCamera.farClipPlane)
+                || !Mathf.Approximately(targetCamera.nearClipPlane, sceneCamera.nearClipPlane)
+                || !Mathf.Approximately(targetCamera.farClipPlane, sceneCamera.farClipPlane);
             bool changed = false;
 
             if (sync.syncPosition && positionChanged)
@@ -109,9 +144,11 @@ namespace Hollow.HoUnityTools.Editor
 
         private static void MarkCameraDirty(Camera camera)
         {
+            EditorUtility.SetDirty(camera.transform);
             EditorUtility.SetDirty(camera);
             EditorUtility.SetDirty(camera.gameObject);
-            EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
+            if (camera.gameObject.scene.IsValid())
+                EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
     }

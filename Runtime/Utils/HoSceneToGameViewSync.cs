@@ -8,10 +8,10 @@ namespace Hollow.HoUnityTools
     [AddComponentMenu("HoUnityTools/Ho Scene To Game View Sync")]
     public sealed class HoSceneToGameViewSync : MonoBehaviour
     {
-        [Tooltip("是否启用Scene视图到Game视图的同步")]
-        public bool enableSync = true;
+        [Tooltip("持续自动跟随Scene视图。默认关闭，建议优先使用手动吸附。")]
+        public bool enableSync;
 
-        [Tooltip("同步频率 (每秒次数)")]
+        [Tooltip("自动跟随频率（每秒次数）")]
         [Min(1f)]
         public float syncFrequency = 30f;
 
@@ -27,10 +27,9 @@ namespace Hollow.HoUnityTools
         [Tooltip("是否同步裁切平面")]
         public bool syncClippingPlanes = true;
 
-        [Tooltip("是否在播放模式下也同步")]
+        [Tooltip("自动跟随是否在播放模式下也生效")]
         public bool syncInPlayMode;
 
-        internal Camera TargetCamera { get; private set; }
         internal Vector3 LastScenePosition { get; set; }
         internal Quaternion LastSceneRotation { get; set; }
         internal float LastSceneFOV { get; set; }
@@ -38,10 +37,7 @@ namespace Hollow.HoUnityTools
         internal float LastSceneFarClipPlane { get; set; }
         internal float LastSyncTime { get; set; }
 
-        private void OnEnable()
-        {
-            TargetCamera = GetComponent<Camera>();
-        }
+        internal Camera AttachedCamera => GetComponent<Camera>();
 
         private void OnValidate()
         {

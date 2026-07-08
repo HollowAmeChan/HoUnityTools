@@ -68,7 +68,9 @@ Component > HoUnityTools > Ho Bone Renderer
 GameObject > HoUnityTools > Ho Scene To Game View Sync Camera
 ```
 
-该组件把最近活动的 Scene 视图相机的位置、旋转、FOV 与裁切平面同步到目标相机。
+该组件挂在 Camera 所在的 GameObject 上，只控制这个 Camera。默认不做后台同步，Inspector 中点击 `吸附当前 Scene 视图`，即可把最近活动的 Scene 视图相机的位置、旋转、FOV 与裁切平面应用过来。
+
+如果确实需要实时跟随，可在 Inspector 中开启 `持续跟随 Scene 视图`。组件未勾选、GameObject 未激活或播放模式下未允许同步时，自动同步会暂停。
 
 ### 动画处理
 
