@@ -4,7 +4,7 @@
   "displayName": "Ho Unity Tools",
   "description": "Small Unity editor and runtime tools used by Hollow projects.",
   "unity": "2021.3",
-  "unityRelease": "45f2",
+  "unityRelease": "18",
   "author": {
     "name": "Hollow"
   },

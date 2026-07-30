@@ -4,7 +4,7 @@ Hollow 的 Unity 小工具集，以 UPM 包形式发布。
 
 ## 安装
 
-需要 Unity 2021.3.45f2 或更新版本。
+需要 Unity 2021.3.18 或更新版本。
 
 在 Unity Package Manager 中通过本地路径安装：
 
