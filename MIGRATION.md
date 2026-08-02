@@ -34,16 +34,15 @@
 
 ---
 
-### 3. 骨架约束导入工具
-**源文件**: `Hotools/Editor/ConstraintImporterWindow.cs`  
-**目标位置**: `Editor/RigConstraints/ConstraintImporterWindow.cs`
+### 3. HoFBX 导入处理中控
+**原功能来源**: 旧标准约束导入窗口（已合并进中控）
+**目标位置**: `Editor/RigConstraints/HoFbxImportProcessingWindow.cs`
 
 **改动**:
 - 命名空间更新: `Hollow.HoUnityTools.Editor.RigConstraints`
-- 菜单路径更新: `HoUnityTools/骨架约束/导入标准约束`
-- 窗口标题更新为"骨架约束导入"
-- 添加了骨架专用的功能说明
-- 简化了描述，专注于骨架处理场景
+- 统一入口: `HoUnityTools/HoFBX导入处理`
+- FBX 资产可在窗口内直接替换，右键入口只负责自动扫描并预填配置
+- 集中提供 Humanoid 映射、约束、骨骼集合和骨架姿态处理
 
 **支持的约束类型**:
 - Rotation → RotationConstraint
@@ -53,7 +52,6 @@
 
 **功能**:
 - 从 JSON 配置文件批量导入约束
-- 锁定所有标准约束
 - 清除所有标准约束
 
 ---
@@ -74,12 +72,12 @@ Hollow.HoUnityTools
     │   ├── HoFollowConstraintEditor
     │   └── HoFloatingConstraintEditor
     └── RigConstraints            # 骨架约束工具
-        └── ConstraintImporterWindow  # 骨架约束导入工具
+        └── HoFbxImportProcessingWindow  # FBX 导入处理中控
 ```
 
 ### 未来扩展空间
 1. **骨架约束系统（RigConstraints）**:
-   - 当前：`ConstraintImporterWindow` 处理标准 Unity 约束导入
+   - 当前：`HoFbxImportProcessingWindow` 统一处理 FBX 映射和骨架约束
    - 未来：可添加更多骨架专用工具，如骨架验证、约束优化等
    - 可扩展 `ConstraintConfig` 支持更复杂的骨架配置结构
 

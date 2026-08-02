@@ -78,4 +78,4 @@ GameObject > HoUnityTools > Ho Scene To Game View Sync Camera
 
 ### 骨架约束导入
 
-菜单 `HoUnityTools > 骨架约束 > 导入标准约束` 打开工具窗口，可从 JSON 配置批量为骨架导入 Unity 标准约束（Rotation / Position / Scale / Parent），并支持一键锁定或清除全部约束。
+菜单 `HoUnityTools > HoFBX导入处理` 打开中控窗口，可从 JSON 配置应用 Humanoid 映射、骨骼集合和 Unity 标准约束，并提供安全清除、全部清除和 Prefab 姿态还原工具。
