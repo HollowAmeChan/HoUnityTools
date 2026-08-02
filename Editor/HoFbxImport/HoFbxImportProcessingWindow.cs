@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -78,6 +79,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private GUIStyle panelTitleStyle;
         private GUIStyle panelStatusStyle;
         private GUIStyle primaryButtonStyle;
+
+        // Unity's Inspector Activate button calls the internal
+        // IConstraintInternal.ActivateAndPreserveOffset method. Cache the
+        // explicit interface implementation so imported constraints behave
+        // exactly like constraints activated from the Inspector.
+        private static readonly Dictionary<Type, MethodInfo> ActivateConstraintMethods =
+            new Dictionary<Type, MethodInfo>();
+        private static readonly HashSet<Type> MissingActivateConstraintMethods =
+            new HashSet<Type>();
 
         [MenuItem("HoUnityTools/HoFBX导入处理", false, 20)]
         internal static void ShowWindow()
@@ -262,7 +272,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             HumanBone[] previewBones;
             int mappedCount;
             string error;
-            bool previewValid = TryBuildHumanBones(humanoidJson, out previewBones, out mappedCount, out error);
+            bool previewValid = TryBuildHumanBonePreview(
+                humanoidJson, out previewBones, out mappedCount, out error);
             string summary = humanoidJson == null
                 ? "最终 Humanoid 映射预览"
                 : $"最终 Humanoid 映射预览  {mappedCount}/{HumanTrait.BoneCount}";
@@ -1010,23 +1021,60 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
             }
 
-            var result = new HumanBone[HumanTrait.BoneCount];
+            var result = new List<HumanBone>(mappedBones.Count);
+            foreach (string humanName in HumanTrait.BoneName)
+            {
+                if (!mappedBones.TryGetValue(humanName, out string boneName))
+                    continue;
+
+                var humanBone = new HumanBone
+                {
+                    humanName = humanName,
+                    boneName = boneName,
+                };
+                humanBone.limit.useDefaultValues = true;
+                result.Add(humanBone);
+            }
+
+            return result.ToArray();
+        }
+
+        private static bool TryBuildHumanBonePreview(
+            TextAsset mappingAsset,
+            out HumanBone[] previewBones,
+            out int mappedCount,
+            out string error)
+        {
+            previewBones = Array.Empty<HumanBone>();
+            mappedCount = 0;
+            error = string.Empty;
+            if (!TryBuildHumanBones(
+                    mappingAsset,
+                    out HumanBone[] mappedBones,
+                    out mappedCount,
+                    out error))
+                return false;
+
+            var mappedByHumanName = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (HumanBone humanBone in mappedBones)
+                mappedByHumanName[humanBone.humanName] = humanBone.boneName;
+
+            previewBones = new HumanBone[HumanTrait.BoneCount];
             for (int i = 0; i < HumanTrait.BoneCount; i++)
             {
                 string humanName = HumanTrait.BoneName[i];
-                mappedBones.TryGetValue(humanName, out string boneName);
+                mappedByHumanName.TryGetValue(humanName, out string boneName);
                 var humanBone = new HumanBone
                 {
                     humanName = humanName,
                     boneName = boneName ?? string.Empty,
                 };
                 humanBone.limit.useDefaultValues = true;
-                result[i] = humanBone;
+                previewBones[i] = humanBone;
             }
 
-            return result;
+            return true;
         }
-
         private static bool IsUnityHumanoidName(string name)
         {
             foreach (string knownName in HumanTrait.BoneName)
@@ -1094,7 +1142,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 if (marker != null && marker.Manages(item))
                 {
-                    UnlockConstraint(item);
+                    PrepareConstraintForReconfigure(item);
                     IConstraint constraint = item;
                     for (int i = constraint.sourceCount - 1; i >= 0; i--)
                         constraint.RemoveSource(i);
@@ -1114,23 +1162,102 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return created;
         }
 
-        private static void UnlockConstraint(Component constraint)
+        private static void PrepareConstraintForReconfigure(Component constraint)
         {
-            switch (constraint)
+            if (!(constraint is IConstraint standardConstraint))
+                return;
+
+            // Removing sources from an active/locked constraint can leave its
+            // native offset state stale. Reconfiguration must start from the
+            // same inactive/unlocked state as a newly-created component.
+            standardConstraint.constraintActive = false;
+            standardConstraint.locked = false;
+        }
+
+        private static void ActivateAndLockConstraint(IConstraint constraint)
+        {
+            Component component = constraint as Component;
+            // The public assignments are the fallback for Unity versions that
+            // do not expose the internal interface implementation to
+            // reflection. They also make the serialized state unambiguous
+            // after the native helper has preserved the current offset.
+            if (component != null)
+                TryInvokeActivateAndPreserveOffset(component);
+            constraint.constraintActive = true;
+            constraint.locked = true;
+
+            if (component == null)
+                return;
+
+            EditorUtility.SetDirty(component);
+            EditorUtility.SetDirty(component.transform);
+            if (PrefabUtility.IsPartOfPrefabInstance(component))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(component);
+            if (component.gameObject.scene.IsValid())
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(component.gameObject.scene);
+        }
+
+        private static bool TryInvokeActivateAndPreserveOffset(Component constraint)
+        {
+            Type constraintType = constraint.GetType();
+            MethodInfo method;
+            if (!ActivateConstraintMethods.TryGetValue(constraintType, out method))
             {
-                case RotationConstraint rotation when rotation.locked:
-                    rotation.locked = false;
-                    break;
-                case PositionConstraint position when position.locked:
-                    position.locked = false;
-                    break;
-                case ScaleConstraint scale when scale.locked:
-                    scale.locked = false;
-                    break;
-                case ParentConstraint parent when parent.locked:
-                    parent.locked = false;
-                    break;
+                method = FindConstraintInternalMethod(constraintType);
+                ActivateConstraintMethods.Add(constraintType, method);
             }
+
+            if (method == null)
+            {
+                if (MissingActivateConstraintMethods.Add(constraintType))
+                {
+                    Debug.LogWarning(
+                        "HoFBX: Unity constraint activation helper was not found for " +
+                        constraintType.FullName + ". Falling back to public state properties.");
+                }
+                return false;
+            }
+
+            try
+            {
+                method.Invoke(constraint, null);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                if (MissingActivateConstraintMethods.Add(constraintType))
+                {
+                    Debug.LogWarning(
+                        "HoFBX: Unity constraint activation helper failed for " +
+                        constraintType.FullName + ". Falling back to public state properties. " +
+                        exception.Message);
+                }
+                return false;
+            }
+        }
+
+        private static MethodInfo FindConstraintInternalMethod(Type constraintType)
+        {
+            foreach (Type interfaceType in constraintType.GetInterfaces())
+            {
+                if (!string.Equals(
+                        interfaceType.FullName,
+                        "UnityEngine.Animations.IConstraintInternal",
+                        StringComparison.Ordinal))
+                    continue;
+
+                InterfaceMapping mapping = constraintType.GetInterfaceMap(interfaceType);
+                for (int i = 0; i < mapping.InterfaceMethods.Length; i++)
+                {
+                    if (string.Equals(
+                            mapping.InterfaceMethods[i].Name,
+                            "ActivateAndPreserveOffset",
+                            StringComparison.Ordinal))
+                        return mapping.TargetMethods[i];
+                }
+            }
+
+            return null;
         }
 
         private static bool ConfigureRotation(Transform bone, Transform target, ConstraintInfo info, ConstraintConfig config)
@@ -1138,10 +1265,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             RotationConstraint constraint = GetManaged<RotationConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.constraintActive = true;
             constraint.weight = info.weight;
             constraint.rotationAxis = ResolveAxis(info.axes);
-            EditorUtility.SetDirty(constraint);
+            ActivateAndLockConstraint(constraint);
             return true;
         }
 
@@ -1150,10 +1276,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             PositionConstraint constraint = GetManaged<PositionConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.constraintActive = true;
             constraint.weight = info.weight;
             constraint.translationAxis = ResolveAxis(info.axes);
-            EditorUtility.SetDirty(constraint);
+            ActivateAndLockConstraint(constraint);
             return true;
         }
 
@@ -1162,10 +1287,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             ScaleConstraint constraint = GetManaged<ScaleConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.constraintActive = true;
             constraint.weight = info.weight;
             constraint.scalingAxis = ResolveAxis(info.axes);
-            EditorUtility.SetDirty(constraint);
+            ActivateAndLockConstraint(constraint);
             return true;
         }
 
@@ -1174,9 +1298,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             ParentConstraint constraint = GetManaged<ParentConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.constraintActive = true;
             constraint.weight = info.weight;
-            EditorUtility.SetDirty(constraint);
+            ActivateAndLockConstraint(constraint);
             return true;
         }
 

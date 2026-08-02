@@ -36,7 +36,7 @@
 
 ### 3. HoFBX 导入处理中控
 **原功能来源**: 旧标准约束导入窗口（已合并进中控）
-**目标位置**: `Editor/RigConstraints/HoFbxImportProcessingWindow.cs`
+**目标位置**: `Editor/HoFbxImport/HoFbxImportProcessingWindow.cs`
 
 **改动**:
 - 命名空间更新: `Hollow.HoUnityTools.Editor.RigConstraints`
@@ -71,7 +71,7 @@ Hollow.HoUnityTools
     ├── Constraints               # 通用约束编辑器
     │   ├── HoFollowConstraintEditor
     │   └── HoFloatingConstraintEditor
-    └── RigConstraints            # 骨架约束工具
+    └── HoFbxImport               # FBX 导入处理中控
         └── HoFbxImportProcessingWindow  # FBX 导入处理中控
 ```
 
