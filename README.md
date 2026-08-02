@@ -1,1 +1,1 @@
-本工具联动 HoTools 的 Blender 插件：[HollowAmeChan/HoTools](https://github.com/HollowAmeChan/HoTools)。
+本工具联动Hotools的blender插件，在[HollowAmeChan/HoTools](https://github.com/HollowAmeChan/HoTools)
