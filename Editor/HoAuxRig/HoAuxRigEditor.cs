@@ -1,85 +1,163 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using Hollow.HoUnityTools.RigConstraints;
 
 namespace Hollow.HoUnityTools.Editor.RigConstraints
 {
+    /// <summary>
+    /// HoAuxRig 的只读状态面板。操作由 HoFBX 导入中控写入，用户只需要控制
+    /// 组件是否在运行时启用；删除组件即移除整套 HoAux Rig 操作。
+    /// </summary>
     [CustomEditor(typeof(HoAuxRig))]
     internal sealed class HoAuxRigEditor : UnityEditor.Editor
     {
-        private HoAuxRig.OperationType newOperationType = HoAuxRig.OperationType.Twist;
-        private Transform newOwner;
-        private Transform newTarget;
-        private float newWeight = 1.0f;
+        private bool showOperationDetails;
 
         public override void OnInspectorGUI()
         {
             HoAuxRig rig = (HoAuxRig)target;
+
+            DrawRuntimePanel(rig);
+            GUILayout.Space(7f);
+            DrawSourcePanel(rig);
+            GUILayout.Space(7f);
+            DrawLayersPanel(rig);
+
+            GUILayout.Space(7f);
             EditorGUILayout.HelpBox(
-                $"单组件 Rig 中控：{rig.Layers.Count} 层，{CountOperations(rig)} 条操作。" +
-                "层会按顺序执行，Parent 先于 Twist，Fan 最后执行。",
+                "此组件由 HoFBX 导入中控维护，只在播放时执行。删除组件会移除整套 HoAux Rig 约束；添加或更新请重新走导入中控。",
                 MessageType.Info);
+        }
 
-            serializedObject.Update();
-            DrawPropertiesExcluding(serializedObject, "m_Script");
-            serializedObject.ApplyModifiedProperties();
-
-            GUILayout.Space(6f);
-            DrawAddOperationPanel(rig);
-
-            GUILayout.Space(6f);
-            using (new EditorGUILayout.HorizontalScope())
+        private static void DrawRuntimePanel(HoAuxRig rig)
+        {
+            string status;
+            Color accent;
+            if (!Application.isPlaying)
             {
-                if (GUILayout.Button("以当前姿态重新绑定", GUILayout.Height(26f)))
-                {
-                    Undo.RecordObject(rig, "重新绑定 HoAux Rig");
-                    rig.CaptureBindPose();
-                    EditorUtility.SetDirty(rig);
-                }
-                if (GUILayout.Button("立即计算", GUILayout.Height(26f)))
-                {
-                    Undo.RecordObject(rig, "计算 HoAux Rig");
-                    rig.EvaluateNow();
-                    EditorUtility.SetDirty(rig);
-                }
+                status = "等待播放";
+                accent = new Color(0.91f, 0.65f, 0.25f);
+            }
+            else if (!rig.enabled)
+            {
+                status = "已停用";
+                accent = new Color(0.88f, 0.42f, 0.28f);
+            }
+            else
+            {
+                status = "运行中";
+                accent = new Color(0.20f, 0.68f, 0.57f);
             }
 
-            if (GUILayout.Button("清空全部 Rig 操作", GUILayout.Height(24f)) &&
-                EditorUtility.DisplayDialog(
-                    "清空 HoAux Rig",
-                    "只会清空这个中控组件中的层和操作，不会删除骨骼或通用约束。",
-                    "清空",
-                    "取消"))
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                Undo.RecordObject(rig, "清空 HoAux Rig");
-                rig.ClearOperations();
-                EditorUtility.SetDirty(rig);
+                DrawPanelHeader("HoAux Rig", status, accent);
+                GUILayout.Space(5f);
+
+                EditorGUI.BeginChangeCheck();
+                bool enabled = EditorGUILayout.ToggleLeft("运行时启用", rig.enabled);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(rig, "切换 HoAux Rig");
+                    rig.enabled = enabled;
+                    EditorUtility.SetDirty(rig);
+                }
+
+                EditorGUILayout.LabelField(
+                    "执行方式",
+                    rig.Mode == HoAuxRig.UpdateMode.Manual
+                        ? "运行时手动调用 EvaluateNow"
+                        : "运行时 LateUpdate（不在编辑态求值）");
+                EditorGUILayout.LabelField("当前操作", $"{CountOperations(rig)} 条 / {rig.Layers.Count} 层");
             }
         }
 
-        private void DrawAddOperationPanel(HoAuxRig rig)
+        private static void DrawSourcePanel(HoAuxRig rig)
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("新增绑定操作", EditorStyles.boldLabel);
-                newOperationType = (HoAuxRig.OperationType)EditorGUILayout.EnumPopup(
-                    "类型", newOperationType);
-                newOwner = (Transform)EditorGUILayout.ObjectField(
-                    "Owner", newOwner, typeof(Transform), true);
-                newTarget = (Transform)EditorGUILayout.ObjectField(
-                    "Target", newTarget, typeof(Transform), true);
-                newWeight = EditorGUILayout.Slider("权重", newWeight, 0.0f, 1.0f);
-
-                using (new EditorGUI.DisabledScope(newOwner == null || newTarget == null))
+                DrawPanelHeader("导入来源", "只读", new Color(0.24f, 0.54f, 0.88f));
+                GUILayout.Space(5f);
+                using (new EditorGUI.DisabledScope(true))
                 {
-                    if (GUILayout.Button("添加到对应层"))
+                    EditorGUILayout.ObjectField("Rig 根节点", rig.RigRoot, typeof(Transform), true);
+                    EditorGUILayout.LabelField("Blender Armature", EmptyLabel(rig.SourceArmature));
+                    EditorGUILayout.LabelField("导出时间", EmptyLabel(rig.ExportTime));
+                    EditorGUILayout.LabelField("IR 版本", EmptyLabel(rig.ExporterVersion));
+                }
+            }
+        }
+
+        private void DrawLayersPanel(HoAuxRig rig)
+        {
+            List<HoAuxRig.Layer> layers = new List<HoAuxRig.Layer>();
+            foreach (HoAuxRig.Layer layer in rig.Layers)
+            {
+                if (layer != null)
+                    layers.Add(layer);
+            }
+            layers.Sort((left, right) => left.order.CompareTo(right.order));
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                DrawPanelHeader("Rig 层", $"{layers.Count} 层", new Color(0.62f, 0.45f, 0.84f));
+                GUILayout.Space(5f);
+
+                if (layers.Count == 0)
+                {
+                    EditorGUILayout.LabelField("暂无导入操作", EditorStyles.centeredGreyMiniLabel);
+                    return;
+                }
+
+                foreach (HoAuxRig.Layer layer in layers)
+                {
+                    int operationCount = layer.operations == null ? 0 : layer.operations.Count;
+                    string state = layer.enabled ? "启用" : "停用";
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        Undo.RecordObject(rig, "新增 HoAux Rig 操作");
-                        rig.AddOperation(newOperationType, newOwner, newTarget, newWeight);
-                        EditorUtility.SetDirty(rig);
-                        newOwner = null;
-                        newTarget = null;
+                        EditorGUILayout.LabelField(layer.name, EditorStyles.boldLabel);
+                        GUILayout.FlexibleSpace();
+                        EditorGUILayout.LabelField(
+                            $"{operationCount} 条 · {state}",
+                            EditorStyles.miniLabel,
+                            GUILayout.Width(105f));
+                    }
+                }
+
+                GUILayout.Space(4f);
+                showOperationDetails = EditorGUILayout.Foldout(
+                    showOperationDetails,
+                    "查看绑定摘要",
+                    true,
+                    EditorStyles.foldoutHeader);
+                if (showOperationDetails)
+                    DrawOperationDetails(layers);
+            }
+        }
+
+        private static void DrawOperationDetails(List<HoAuxRig.Layer> layers)
+        {
+            using (new EditorGUI.DisabledScope(true))
+            {
+                foreach (HoAuxRig.Layer layer in layers)
+                {
+                    if (layer.operations == null)
+                        continue;
+                    foreach (HoAuxRig.Operation operation in layer.operations)
+                    {
+                        if (operation == null)
+                            continue;
+                        string owner = operation.owner == null
+                            ? operation.ownerPath
+                            : operation.owner.name;
+                        string target = operation.target == null
+                            ? operation.targetPath
+                            : operation.target.name;
+                        EditorGUILayout.LabelField(
+                            operation.type.ToString(),
+                            $"{owner}  ->  {target}  ({operation.weight:0.##})");
                     }
                 }
             }
@@ -94,6 +172,34 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     count += layer.operations.Count;
             }
             return count;
+        }
+
+        private static string EmptyLabel(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "（未记录）" : value;
+        }
+
+        private static void DrawPanelHeader(string title, string status, Color accent)
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 27f, GUILayout.ExpandWidth(true));
+            Color background = EditorGUIUtility.isProSkin
+                ? new Color(0.17f, 0.18f, 0.20f)
+                : new Color(0.82f, 0.83f, 0.85f);
+            EditorGUI.DrawRect(rect, background);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 4f, rect.height), accent);
+
+            GUIStyle titleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(12, 0, 0, 0),
+            };
+            GUIStyle statusStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                alignment = TextAnchor.MiddleRight,
+                padding = new RectOffset(0, 8, 0, 0),
+            };
+            GUI.Label(new Rect(rect.x, rect.y, rect.width - 100f, rect.height), title, titleStyle);
+            GUI.Label(new Rect(rect.xMax - 100f, rect.y, 94f, rect.height), status, statusStyle);
         }
     }
 }

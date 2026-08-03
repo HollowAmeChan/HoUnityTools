@@ -11,10 +11,9 @@ namespace Hollow.HoUnityTools.RigConstraints
     /// 同一个组件中，不创建 Animation Rigging 的 Rig/Proxy 空物体，也不依赖
     /// 现有的通用约束组件。
     /// </summary>
-    [ExecuteAlways]
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32000)]
-    [AddComponentMenu("HoUnityTools/Rig/Ho Aux Rig")]
+    [AddComponentMenu("")]
     public sealed class HoAuxRig : MonoBehaviour
     {
         public enum OperationType
@@ -98,8 +97,6 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         [SerializeField] private Transform rigRoot;
         [SerializeField] private UpdateMode updateMode = UpdateMode.LateUpdate;
-        [SerializeField] private bool evaluateInEditMode = true;
-        [SerializeField] private bool evaluateOnEnable = true;
         [SerializeField] private string sourceArmature = string.Empty;
         [SerializeField] private string exporterVersion = string.Empty;
         [SerializeField] private string exportTime = string.Empty;
@@ -109,20 +106,18 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         public Transform RigRoot
         {
-            get { return rigRoot != null ? rigRoot : transform; }
-            set { rigRoot = value; needsBinding = true; }
+            get { return transform; }
+            set
+            {
+                rigRoot = transform;
+                needsBinding = true;
+            }
         }
 
         public UpdateMode Mode
         {
             get { return updateMode; }
             set { updateMode = value; }
-        }
-
-        public bool EvaluateInEditMode
-        {
-            get { return evaluateInEditMode; }
-            set { evaluateInEditMode = value; }
         }
 
         public string SourceArmature
@@ -150,18 +145,20 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void OnEnable()
         {
-            needsBinding = true;
-            if (evaluateOnEnable)
-                CaptureBindPose();
+            rigRoot = transform;
+            ResolveReferences();
+            needsBinding = !HasCompleteBindPose();
         }
 
         private void OnDisable()
         {
-            RestoreOwnersToBindPose();
+            if (Application.isPlaying)
+                RestoreOwnersToBindPose();
         }
 
         private void OnValidate()
         {
+            rigRoot = transform;
             for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
             {
                 Layer layer = layers[layerIndex];
@@ -170,19 +167,19 @@ namespace Hollow.HoUnityTools.RigConstraints
                 for (int operationIndex = 0; operationIndex < layer.operations.Count; operationIndex++)
                     ClampOperation(layer.operations[operationIndex]);
             }
-            needsBinding = true;
+            needsBinding = !HasCompleteBindPose();
         }
 
         private void LateUpdate()
         {
-            if (updateMode == UpdateMode.LateUpdate)
+            if (Application.isPlaying && updateMode == UpdateMode.LateUpdate)
                 EvaluateNow();
         }
 
         /// <summary>手动执行一次全部启用层。Warudo/其他宿主可在自己的 PostLateUpdate 调用。</summary>
         public void EvaluateNow()
         {
-            if (!enabled || (!Application.isPlaying && !evaluateInEditMode))
+            if (!enabled || !Application.isPlaying)
                 return;
 
             ResolveReferences();
@@ -227,7 +224,7 @@ namespace Hollow.HoUnityTools.RigConstraints
                 for (int operationIndex = 0; operationIndex < layer.operations.Count; operationIndex++)
                     CaptureBindPose(layer.operations[operationIndex]);
             }
-            needsBinding = false;
+            needsBinding = !HasCompleteBindPose();
         }
 
         /// <summary>
@@ -505,6 +502,26 @@ namespace Hollow.HoUnityTools.RigConstraints
             }
         }
 
+        private bool HasCompleteBindPose()
+        {
+            if (layers == null)
+                return true;
+
+            for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
+            {
+                Layer layer = layers[layerIndex];
+                if (layer == null || layer.operations == null)
+                    continue;
+                for (int operationIndex = 0; operationIndex < layer.operations.Count; operationIndex++)
+                {
+                    Operation operation = layer.operations[operationIndex];
+                    if (operation != null && !operation.hasBindPose)
+                        return false;
+                }
+            }
+            return true;
+        }
+
         private Transform FindRelativeTransform(string path)
         {
             Transform root = RigRoot;
@@ -512,23 +529,7 @@ namespace Hollow.HoUnityTools.RigConstraints
                 return null;
             if (string.IsNullOrEmpty(path) || path == ".")
                 return root;
-            Transform result = root.Find(path);
-            if (result != null)
-                return result;
-            return FindByName(root, path);
-        }
-
-        private static Transform FindByName(Transform root, string name)
-        {
-            if (root.name == name)
-                return root;
-            for (int index = 0; index < root.childCount; index++)
-            {
-                Transform result = FindByName(root.GetChild(index), name);
-                if (result != null)
-                    return result;
-            }
-            return null;
+            return root.Find(path);
         }
 
         private static void CaptureBindPose(Operation operation)

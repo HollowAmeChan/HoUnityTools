@@ -1162,7 +1162,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             HoImportedConstraintMarker[] markers =
                 targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true);
-            HoAuxRig hoAux = targetRig.GetComponent<HoAuxRig>();
+            HoAuxRig hoAux = ResolveSingleHoAuxRig(targetRig);
             if (hoAux != null && string.IsNullOrEmpty(hoAux.SourceArmature))
                 hoAux = null;
             if (markers.Length == 0 && hoAux == null)
@@ -1848,10 +1848,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             List<ConstraintPlanEntry> plan = BuildConstraintImportPlan(config);
             Dictionary<string, Transform> transformMap = BuildTransformMap(rig.transform);
 
-            HoAuxRig hoAux = null;
+            HoAuxRig hoAux = ResolveSingleHoAuxRig(rig);
             if (useHoAuxRig && ContainsHoAuxOperations(plan))
             {
-                hoAux = rig.GetComponent<HoAuxRig>();
                 if (hoAux == null)
                     hoAux = Undo.AddComponent<HoAuxRig>(rig);
                 else
@@ -2113,13 +2112,36 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static void RemoveImportedHoAuxRig(GameObject rig, string armatureName)
         {
-            HoAuxRig component = rig.GetComponent<HoAuxRig>();
+            HoAuxRig component = ResolveSingleHoAuxRig(rig);
             if (component == null || string.IsNullOrEmpty(component.SourceArmature))
                 return;
             if (!string.IsNullOrEmpty(armatureName) &&
                 !string.Equals(component.SourceArmature, armatureName, StringComparison.Ordinal))
                 return;
             Undo.DestroyObjectImmediate(component);
+        }
+
+        private static HoAuxRig ResolveSingleHoAuxRig(GameObject rig)
+        {
+            if (rig == null)
+                return null;
+
+            HoAuxRig[] components = rig.GetComponentsInChildren<HoAuxRig>(true);
+            if (components.Length == 0)
+                return null;
+            if (components.Length > 1)
+            {
+                throw new InvalidOperationException(
+                    "目标骨架层级中存在多个 HoAuxRig；请只保留根节点上的一个组件。\n" +
+                    "导入中控会让这一个组件统一控制骨架内的全部 Rig 约束。");
+            }
+            if (components[0].transform != rig.transform)
+            {
+                throw new InvalidOperationException(
+                    "HoAuxRig 必须挂在目标骨架根节点，不能挂在子骨上。\n" +
+                    "请删除子骨上的组件后重新执行导入中控。");
+            }
+            return components[0];
         }
 
         private static T GetManaged<T>(Transform bone, ConstraintConfig config) where T : Component, IConstraint
