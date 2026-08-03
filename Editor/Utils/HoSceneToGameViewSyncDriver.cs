@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -7,6 +8,11 @@ namespace Hollow.HoUnityTools.Editor
     [InitializeOnLoad]
     internal static class HoSceneToGameViewSyncDriver
     {
+        private static readonly HashSet<HoSceneToGameViewSync> s_SyncComponents =
+            new HashSet<HoSceneToGameViewSync>();
+        private static bool s_RefreshQueued;
+        private static bool s_UpdateSubscribed;
+
         internal enum SyncResult
         {
             Synced,
@@ -18,7 +24,10 @@ namespace Hollow.HoUnityTools.Editor
 
         static HoSceneToGameViewSyncDriver()
         {
-            EditorApplication.update += OnEditorUpdate;
+            EditorApplication.hierarchyChanged += QueueRefresh;
+            EditorSceneManager.sceneOpened += OnSceneOpened;
+            EditorSceneManager.sceneClosed += OnSceneClosed;
+            RefreshRegistry();
         }
 
         internal static SyncResult SyncNow(HoSceneToGameViewSync sync)
@@ -47,13 +56,88 @@ namespace Hollow.HoUnityTools.Editor
 
         private static void OnEditorUpdate()
         {
-            foreach (HoSceneToGameViewSync sync in Object.FindObjectsByType<HoSceneToGameViewSync>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            if (s_SyncComponents.Count == 0)
             {
-                UpdateSync(sync);
+                return;
+            }
+
+            SceneView sceneView = SceneView.lastActiveSceneView;
+            Camera sceneCamera = sceneView == null ? null : sceneView.camera;
+
+            List<HoSceneToGameViewSync> staleComponents = null;
+            foreach (HoSceneToGameViewSync sync in s_SyncComponents)
+            {
+                if (sync == null)
+                {
+                    if (staleComponents == null)
+                        staleComponents = new List<HoSceneToGameViewSync>();
+
+                    staleComponents.Add(sync);
+                    continue;
+                }
+
+                UpdateSync(sync, sceneCamera);
+            }
+
+            if (staleComponents != null)
+            {
+                foreach (HoSceneToGameViewSync stale in staleComponents)
+                    s_SyncComponents.Remove(stale);
+
+                UpdateEditorUpdateSubscription();
             }
         }
 
-        private static void UpdateSync(HoSceneToGameViewSync sync)
+        private static void OnSceneOpened(UnityEngine.SceneManagement.Scene scene, OpenSceneMode mode)
+        {
+            QueueRefresh();
+        }
+
+        private static void OnSceneClosed(UnityEngine.SceneManagement.Scene scene)
+        {
+            QueueRefresh();
+        }
+
+        private static void QueueRefresh()
+        {
+            if (s_RefreshQueued)
+                return;
+
+            s_RefreshQueued = true;
+            EditorApplication.delayCall += RefreshRegistry;
+        }
+
+        private static void RefreshRegistry()
+        {
+            s_RefreshQueued = false;
+            s_SyncComponents.Clear();
+
+            foreach (HoSceneToGameViewSync sync in Object.FindObjectsByType<HoSceneToGameViewSync>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None))
+            {
+                if (sync != null)
+                    s_SyncComponents.Add(sync);
+            }
+
+            UpdateEditorUpdateSubscription();
+        }
+
+        private static void UpdateEditorUpdateSubscription()
+        {
+            if (s_SyncComponents.Count > 0 && !s_UpdateSubscribed)
+            {
+                EditorApplication.update += OnEditorUpdate;
+                s_UpdateSubscribed = true;
+            }
+            else if (s_SyncComponents.Count == 0 && s_UpdateSubscribed)
+            {
+                EditorApplication.update -= OnEditorUpdate;
+                s_UpdateSubscribed = false;
+            }
+        }
+
+        private static void UpdateSync(HoSceneToGameViewSync sync, Camera sceneCamera)
         {
             if (sync == null || !sync.isActiveAndEnabled)
                 return;
@@ -71,8 +155,7 @@ namespace Hollow.HoUnityTools.Editor
 
             sync.LastSyncTime = currentTime;
 
-            SceneView sceneView = SceneView.lastActiveSceneView;
-            if (sceneView == null || sceneView.camera == null)
+            if (sceneCamera == null)
                 return;
 
             Camera targetCamera = sync.AttachedCamera;
@@ -82,7 +165,7 @@ namespace Hollow.HoUnityTools.Editor
             if (!HasAnySyncChannel(sync))
                 return;
 
-            if (ApplySceneCamera(sync, targetCamera, sceneView.camera, false) && !EditorApplication.isPlaying)
+            if (ApplySceneCamera(sync, targetCamera, sceneCamera, false) && !EditorApplication.isPlaying)
                 MarkCameraDirty(targetCamera);
         }
 
