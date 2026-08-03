@@ -33,6 +33,17 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             private readonly List<Matrix4x4> m_Matrices = new List<Matrix4x4>();
             private readonly List<Vector4> m_Colors = new List<Vector4>();
             private readonly List<Vector4> m_Highlights = new List<Vector4>();
+            private readonly MaterialPropertyBlock m_PropertyBlock = new MaterialPropertyBlock();
+            private readonly CommandBuffer m_CommandBuffer = new CommandBuffer();
+            private readonly Matrix4x4[] m_MatrixChunk = new Matrix4x4[MaxDrawMeshInstanceCount];
+            private readonly Vector4[] m_ColorChunk = new Vector4[MaxDrawMeshInstanceCount];
+            private readonly Vector4[] m_HighlightChunk = new Vector4[MaxDrawMeshInstanceCount];
+            private bool m_Released;
+
+            public BatchRenderer()
+            {
+                m_CommandBuffer.name = "Ho Bone Renderer";
+            }
 
             public void AddInstance(Matrix4x4 matrix, Color color, Color highlight)
             {
@@ -48,20 +59,6 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 m_Highlights.Clear();
             }
 
-            private static int RenderChunkCount(int totalCount)
-            {
-                return Mathf.CeilToInt(totalCount / (float)MaxDrawMeshInstanceCount);
-            }
-
-            private static T[] GetRenderChunk<T>(List<T> array, int chunkIndex)
-            {
-                int rangeCount = (chunkIndex < (RenderChunkCount(array.Count) - 1))
-                    ? MaxDrawMeshInstanceCount
-                    : array.Count - (chunkIndex * MaxDrawMeshInstanceCount);
-
-                return array.GetRange(chunkIndex * MaxDrawMeshInstanceCount, rangeCount).ToArray();
-            }
-
             public void Render()
             {
                 if (m_Matrices.Count == 0 || m_Colors.Count == 0 || m_Highlights.Count == 0)
@@ -72,29 +69,46 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 int count = System.Math.Min(m_Matrices.Count, System.Math.Min(m_Colors.Count, m_Highlights.Count));
 
                 Material mat = material;
-                mat.SetPass(0);
-
-                MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
-                CommandBuffer cb = new CommandBuffer();
-
-                int chunkCount = RenderChunkCount(count);
-                for (int i = 0; i < chunkCount; ++i)
+                if (mat == null)
                 {
-                    cb.Clear();
-                    Matrix4x4[] matrices = GetRenderChunk(m_Matrices, i);
-                    propertyBlock.SetVectorArray("_Color", GetRenderChunk(m_Colors, i));
+                    return;
+                }
+
+                for (int chunkStart = 0; chunkStart < count; chunkStart += MaxDrawMeshInstanceCount)
+                {
+                    int chunkLength = Mathf.Min(MaxDrawMeshInstanceCount, count - chunkStart);
+                    m_Matrices.CopyTo(chunkStart, m_MatrixChunk, 0, chunkLength);
+                    m_Colors.CopyTo(chunkStart, m_ColorChunk, 0, chunkLength);
+                    m_Highlights.CopyTo(chunkStart, m_HighlightChunk, 0, chunkLength);
+
+                    m_CommandBuffer.Clear();
+                    m_PropertyBlock.SetVectorArray("_Color", m_ColorChunk);
 
                     material.DisableKeyword("WIRE_ON");
-                    cb.DrawMeshInstanced(mesh, (int)SubMeshType.BoneFaces, material, 0, matrices, matrices.Length, propertyBlock);
-                    Graphics.ExecuteCommandBuffer(cb);
+                    mat.SetPass(0);
+                    m_CommandBuffer.DrawMeshInstanced(mesh, (int)SubMeshType.BoneFaces, mat, 0, m_MatrixChunk, chunkLength, m_PropertyBlock);
+                    Graphics.ExecuteCommandBuffer(m_CommandBuffer);
 
-                    cb.Clear();
-                    propertyBlock.SetVectorArray("_Color", GetRenderChunk(m_Highlights, i));
+                    m_CommandBuffer.Clear();
+                    m_PropertyBlock.SetVectorArray("_Color", m_HighlightChunk);
 
                     material.EnableKeyword("WIRE_ON");
-                    cb.DrawMeshInstanced(mesh, (int)SubMeshType.BoneWire, material, 0, matrices, matrices.Length, propertyBlock);
-                    Graphics.ExecuteCommandBuffer(cb);
+                    mat.SetPass(0);
+                    m_CommandBuffer.DrawMeshInstanced(mesh, (int)SubMeshType.BoneWire, mat, 0, m_MatrixChunk, chunkLength, m_PropertyBlock);
+                    Graphics.ExecuteCommandBuffer(m_CommandBuffer);
                 }
+
+                material.DisableKeyword("WIRE_ON");
+                m_CommandBuffer.Clear();
+            }
+
+            public void Release()
+            {
+                if (m_Released)
+                    return;
+
+                m_CommandBuffer.Release();
+                m_Released = true;
             }
         }
         private static readonly List<HoBoneRenderer> s_BoneRenderers = new List<HoBoneRenderer>();
@@ -117,6 +131,8 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             SceneVisibilityManager.visibilityChanged += OnVisibilityChanged;
             EditorApplication.hierarchyChanged += OnHierarchyChanged;
             SceneView.duringSceneGui += DrawSkeletons;
+            AssemblyReloadEvents.beforeAssemblyReload += ReleaseRenderResources;
+            EditorApplication.quitting += ReleaseRenderResources;
 
             s_VisibleLayersCache = Tools.visibleLayers;
         }
@@ -281,18 +297,35 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
 
         private static void DrawSkeletons(SceneView sceneView)
         {
-            if (Tools.visibleLayers != s_VisibleLayersCache)
+            if (s_BoneRenderers.Count == 0)
+                return;
+
+            Color oldHandlesColor = Handles.color;
+            Matrix4x4 oldHandlesMatrix = Handles.matrix;
+            CompareFunction oldHandlesZTest = Handles.zTest;
+            bool oldHandlesLighting = Handles.lighting;
+            Color oldGizmosColor = Gizmos.color;
+            Matrix4x4 oldGizmosMatrix = Gizmos.matrix;
+
+            try
             {
-                OnVisibilityChanged();
-                s_VisibleLayersCache = Tools.visibleLayers;
-            }
+                Handles.color = Color.white;
+                Handles.matrix = Matrix4x4.identity;
+                Handles.zTest = CompareFunction.Always;
+                Handles.lighting = false;
+                Gizmos.color = Color.white;
+                Gizmos.matrix = Matrix4x4.identity;
+
+                if (Tools.visibleLayers != s_VisibleLayersCache)
+                {
+                    OnVisibilityChanged();
+                    s_VisibleLayersCache = Tools.visibleLayers;
+                }
 
             if (material == null)
             {
                 return;
             }
-
-            Color gizmoColor = Gizmos.color;
 
             pyramidMeshRenderer.Clear();
             boxMeshRenderer.Clear();
@@ -380,10 +413,27 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
                 }
             }
 
-            pyramidMeshRenderer.Render();
-            boxMeshRenderer.Render();
+                if (Event.current.type == EventType.Repaint)
+                {
+                    pyramidMeshRenderer.Render();
+                    boxMeshRenderer.Render();
+                }
+            }
+            finally
+            {
+                Handles.color = oldHandlesColor;
+                Handles.matrix = oldHandlesMatrix;
+                Handles.zTest = oldHandlesZTest;
+                Handles.lighting = oldHandlesLighting;
+                Gizmos.color = oldGizmosColor;
+                Gizmos.matrix = oldGizmosMatrix;
+            }
+        }
 
-            Gizmos.color = gizmoColor;
+        private static void ReleaseRenderResources()
+        {
+            s_PyramidMeshRenderer?.Release();
+            s_BoxMeshRenderer?.Release();
         }
 
         private static void DoBoneRender(Transform transform, Transform childTransform, BoneShape shape, Color color, float size, bool selectable)
