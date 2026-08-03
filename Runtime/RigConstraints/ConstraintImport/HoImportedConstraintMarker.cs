@@ -27,7 +27,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string exportTime;
 
         /// <summary>
-        /// 导出格式版本（来自导出 JSON 的 version）。
+        /// 中立 Rig 约束 IR 版本（来自导出 JSON 的 schemaVersion）。
         /// </summary>
         public string exporterVersion;
 

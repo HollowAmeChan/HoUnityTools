@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
 using Hollow.HoUnityTools.BoneRendering;
+using Hollow.HoUnityTools.RigConstraints;
 using Hollow.HoUnityTools.RigConstraints.Import;
 
 namespace Hollow.HoUnityTools.Editor.RigConstraints
@@ -27,8 +28,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private const string ManifestSuffix = "_unity.json";
         private const string MetadataDirectoryName = "HoFBX";
         private const string HumanoidKind = "humanoid";
-        private const string ConstraintKind = "constraints";
+        private const string ConstraintKind = "rigConstraintIR";
         private const string CollectionKind = "collections";
+        private const string ConstraintSchema = "hotools.rig-constraint-ir";
+        private const int ConstraintSchemaVersion = 2;
 
         [Serializable]
         private sealed class MetadataManifest
@@ -63,17 +66,43 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string humanName;
         }
 
+        private enum ConstraintPlanKind
+        {
+            Parent,
+            Twist,
+            Fan,
+            Unknown,
+        }
+
+        private sealed class ConstraintPlanEntry
+        {
+            public ConstraintPlanKind kind;
+            public string ownerBone;
+            public string targetBone;
+            public string sourceBone;
+            public string reason;
+            public string hoAuxUnsupportedReason;
+            public float weight = 1.0f;
+            public bool maintainOffset = true;
+            public BlenderConstraintInfo copyRotation;
+            public BlenderConstraintInfo stretchTo;
+            public BlenderConstraintInfo rawConstraint;
+        }
+
         [SerializeField] private GameObject fbxAsset;
         [SerializeField] private string fbxAssetPath;
         [SerializeField] private TextAsset humanoidJson;
         [SerializeField] private TextAsset constraintJson;
+        [SerializeField] private List<TextAsset> constraintJsonCandidates = new List<TextAsset>();
         [SerializeField] private TextAsset collectionJson;
         [SerializeField] private GameObject targetRig;
         [SerializeField] private bool applyHumanoid = true;
         [SerializeField] private bool applyConstraints;
         [SerializeField] private bool applyCollections;
+        [SerializeField] private bool useHoAuxRig;
         [SerializeField] private Vector2 scrollPosition;
         [SerializeField] private bool mappingPreviewExpanded;
+        [SerializeField] private bool constraintPreviewExpanded = true;
         [SerializeField] private ToolPage currentPage;
 
         private GUIStyle panelTitleStyle;
@@ -242,6 +271,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             humanoidJson = null;
             constraintJson = null;
+            if (constraintJsonCandidates == null)
+                constraintJsonCandidates = new List<TextAsset>();
+            else
+                constraintJsonCandidates.Clear();
             collectionJson = null;
         }
 
@@ -258,6 +291,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     "Humanoid 映射", humanoidJson, typeof(TextAsset), false);
                 constraintJson = (TextAsset)EditorGUILayout.ObjectField(
                     "约束 JSON", constraintJson, typeof(TextAsset), false);
+                DrawConstraintCandidatePopup();
                 collectionJson = (TextAsset)EditorGUILayout.ObjectField(
                     "骨骼集合", collectionJson, typeof(TextAsset), false);
 
@@ -329,6 +363,655 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             GUI.color = previousColor;
         }
 
+        private void DrawConstraintImportPreview()
+        {
+            ConstraintConfig config = null;
+            string error = string.Empty;
+            List<ConstraintPlanEntry> plan = new List<ConstraintPlanEntry>();
+            if (constraintJson != null)
+            {
+                try
+                {
+                    config = JsonUtility.FromJson<ConstraintConfig>(constraintJson.text);
+                    if (config != null && TryValidateConstraintConfig(config, out error))
+                        plan = BuildConstraintImportPlan(config);
+                }
+                catch (Exception exception)
+                {
+                    error = exception.Message;
+                }
+            }
+
+            string mode = useHoAuxRig ? "HoAux Rig" : "标准 Constraint";
+            constraintPreviewExpanded = EditorGUILayout.Foldout(
+                constraintPreviewExpanded,
+                $"约束导入预览  {plan.Count} 项 / {mode}",
+                true,
+                EditorStyles.foldoutHeader);
+            if (!constraintPreviewExpanded)
+                return;
+
+            if (constraintJson == null)
+            {
+                EditorGUILayout.LabelField("未选择约束 JSON。", EditorStyles.centeredGreyMiniLabel);
+                return;
+            }
+            if (!string.IsNullOrEmpty(error) || config == null)
+            {
+                EditorGUILayout.HelpBox(
+                    string.IsNullOrEmpty(error) ? "约束 JSON 结构无效。" : error,
+                    MessageType.Error);
+                return;
+            }
+
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                GUILayout.Label("Owner -> Target", EditorStyles.miniBoldLabel, GUILayout.Width(220f));
+                GUILayout.Label("最终导入结果", EditorStyles.miniBoldLabel);
+            }
+
+            Dictionary<string, Transform> previewTransforms = targetRig == null
+                ? null
+                : BuildTransformMap(targetRig.transform);
+            for (int rowIndex = 0; rowIndex < plan.Count; rowIndex++)
+            {
+                ConstraintPlanEntry entry = plan[rowIndex];
+                string description = DescribeConstraintImport(entry, useHoAuxRig);
+                if (entry.kind != ConstraintPlanKind.Unknown &&
+                    !(useHoAuxRig && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason)) &&
+                    previewTransforms != null)
+                {
+                    if (!TryResolveTransform(previewTransforms, entry.ownerBone, out Transform owner) ||
+                        !TryResolveTransform(previewTransforms, entry.targetBone, out _))
+                    {
+                        description = "跳过：目标骨架缺少或无法唯一定位 Owner/Target";
+                    }
+                    else if (!useHoAuxRig && HasUnmanagedStandardConstraint(owner, entry.kind))
+                    {
+                        description = "跳过：Owner 已有用户创建的同类型标准约束";
+                    }
+                }
+                DrawConstraintPreviewRow(
+                    entry.ownerBone,
+                    entry.targetBone,
+                    description,
+                    rowIndex);
+            }
+        }
+
+        private void DrawConstraintCandidatePopup()
+        {
+            if (constraintJsonCandidates == null || constraintJsonCandidates.Count <= 1)
+                return;
+
+            string[] labels = new string[constraintJsonCandidates.Count];
+            for (int index = 0; index < constraintJsonCandidates.Count; index++)
+                labels[index] = ConstraintCandidateLabel(constraintJsonCandidates[index]);
+
+            int current = constraintJsonCandidates.IndexOf(constraintJson);
+            EditorGUI.BeginChangeCheck();
+            int selected = EditorGUILayout.Popup("约束骨架", Mathf.Max(0, current), labels);
+            if (EditorGUI.EndChangeCheck())
+                constraintJson = constraintJsonCandidates[selected];
+        }
+
+        private static string ConstraintCandidateLabel(TextAsset asset)
+        {
+            if (asset == null)
+                return "（缺失）";
+            try
+            {
+                ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(asset.text);
+                if (config != null && !string.IsNullOrEmpty(config.armatureName))
+                    return config.armatureName + "  /  " + asset.name;
+            }
+            catch (Exception)
+            {
+                // The selected file's preview reports detailed validation errors.
+            }
+            return asset.name;
+        }
+
+        private static void DrawConstraintPreviewRow(
+            string owner,
+            string target,
+            string result,
+            int index)
+        {
+            Rect row = GUILayoutUtility.GetRect(0f, 19f, GUILayout.ExpandWidth(true));
+            if ((index & 1) != 0)
+            {
+                Color stripe = EditorGUIUtility.isProSkin
+                    ? new Color(1f, 1f, 1f, 0.025f)
+                    : new Color(0f, 0f, 0f, 0.035f);
+                EditorGUI.DrawRect(row, stripe);
+            }
+
+            Rect relationRect = new Rect(row.x + 5f, row.y, 215f, row.height);
+            Rect resultRect = new Rect(row.x + 225f, row.y, row.width - 230f, row.height);
+            GUI.Label(relationRect, $"{owner} -> {target}", EditorStyles.miniLabel);
+            GUI.Label(resultRect, new GUIContent(result, result), EditorStyles.miniLabel);
+        }
+
+        private static string DescribeConstraintImport(ConstraintPlanEntry entry, bool useHoAux)
+        {
+            if (entry.kind == ConstraintPlanKind.Unknown)
+            {
+                string type = entry.rawConstraint == null
+                    ? "未知类型"
+                    : entry.rawConstraint.constraintType;
+                return $"未知约束 / 跳过  {type}  {entry.reason}";
+            }
+
+            if (useHoAux)
+            {
+                if (!string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
+                    return "HoAuxRig / 跳过  " + entry.hoAuxUnsupportedReason;
+                if (entry.kind == ConstraintPlanKind.Parent) return "HoAuxRig / Parent";
+                if (entry.kind == ConstraintPlanKind.Twist)
+                {
+                    string stretch = entry.stretchTo == null
+                        ? "缺少 Stretch To"
+                        : "S:" + ConstraintSpacePair(entry.stretchTo);
+                    return $"HoAuxRig / Twist  R:{ConstraintSpacePair(entry.copyRotation)}  {stretch}";
+                }
+                if (entry.kind == ConstraintPlanKind.Fan)
+                    return $"HoAuxRig / Fan  R:{ConstraintSpacePair(entry.copyRotation)}";
+            }
+            else
+            {
+                if (entry.kind == ConstraintPlanKind.Parent) return "ParentConstraint";
+                if (entry.kind == ConstraintPlanKind.Twist)
+                    return $"RotationConstraint（仅 Y）  原始:{ConstraintSpacePair(entry.copyRotation)}";
+                if (entry.kind == ConstraintPlanKind.Fan)
+                    return $"RotationConstraint（XYZ）  原始:{ConstraintSpacePair(entry.copyRotation)}";
+            }
+
+            return "不支持";
+        }
+
+        private static string ConstraintSpacePair(BlenderConstraintInfo constraint)
+        {
+            BlenderConstraintParameters parameters = constraint == null
+                ? null
+                : constraint.parameters;
+            if (parameters == null)
+                return "未记录";
+            string owner = string.IsNullOrEmpty(parameters.owner_space)
+                ? "WORLD"
+                : parameters.owner_space;
+            string target = string.IsNullOrEmpty(parameters.target_space)
+                ? "WORLD"
+                : parameters.target_space;
+            return owner + "->" + target;
+        }
+
+        private static List<ConstraintPlanEntry> BuildConstraintImportPlan(ConstraintConfig config)
+        {
+            var result = new List<ConstraintPlanEntry>();
+            BuildNeutralIrPlan(config, result);
+            return result;
+        }
+
+        private static bool TryValidateConstraintConfig(
+            ConstraintConfig config,
+            out string error)
+        {
+            if (config == null)
+            {
+                error = "约束 JSON 为空。";
+                return false;
+            }
+            if (!string.Equals(config.schema, ConstraintSchema, StringComparison.Ordinal))
+            {
+                error = $"不支持的约束 schema：{config.schema ?? "<空>"}。";
+                return false;
+            }
+            if (config.schemaVersion != ConstraintSchemaVersion)
+            {
+                error = $"不支持的约束 IR 版本：{config.schemaVersion}，当前要求 {ConstraintSchemaVersion}。";
+                return false;
+            }
+            if (string.IsNullOrEmpty(config.armatureName))
+            {
+                error = "约束 IR 缺少 armatureName。";
+                return false;
+            }
+            if (config.mchEnabledBones == null || config.mchBindings == null || config.auxBones == null ||
+                config.knownConstraints == null || config.unknownConstraints == null)
+            {
+                error = "约束 IR 缺少 v2 必需的关系或分类列表。";
+                return false;
+            }
+
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            var knownByKey = new Dictionary<string, KnownConstraintInfo>(StringComparer.Ordinal);
+            foreach (KnownConstraintInfo known in config.knownConstraints)
+            {
+                if (known == null || known.constraint == null || string.IsNullOrEmpty(known.ownerBone) ||
+                    string.IsNullOrEmpty(known.relationType))
+                {
+                    error = "knownConstraints 中存在不完整记录。";
+                    return false;
+                }
+                if (!string.Equals(known.relationType, "MCH_BINDING", StringComparison.Ordinal) &&
+                    !string.Equals(known.relationType, "AUX_CONSTRAINT", StringComparison.Ordinal))
+                {
+                    error = $"knownConstraints 中存在未知 relationType：{known.relationType ?? "<空>"}。";
+                    return false;
+                }
+                string key = ConstraintRecordKey(known.ownerBone, known.constraint);
+                if (!keys.Add(key))
+                {
+                    error = $"约束分类重复：{known.ownerBone} / {known.constraint.stackIndex}。";
+                    return false;
+                }
+                knownByKey.Add(key, known);
+            }
+            foreach (UnknownConstraintInfo unknown in config.unknownConstraints)
+            {
+                if (unknown == null || unknown.constraint == null || string.IsNullOrEmpty(unknown.ownerBone))
+                {
+                    error = "unknownConstraints 中存在不完整记录。";
+                    return false;
+                }
+                if (!keys.Add(ConstraintRecordKey(unknown.ownerBone, unknown.constraint)))
+                {
+                    error = $"约束分类重复：{unknown.ownerBone} / {unknown.constraint.stackIndex}。";
+                    return false;
+                }
+            }
+
+            var auxByBone = new Dictionary<string, AuxBoneInfo>(StringComparer.Ordinal);
+            foreach (AuxBoneInfo aux in config.auxBones)
+            {
+                if (aux == null || string.IsNullOrEmpty(aux.boneName) ||
+                    string.IsNullOrEmpty(aux.auxType) || aux.sourceBones == null ||
+                    aux.constraintNames == null || aux.involvedBones == null ||
+                    aux.constraints == null)
+                {
+                    error = "auxBones 中存在不完整记录。";
+                    return false;
+                }
+                if (auxByBone.ContainsKey(aux.boneName))
+                {
+                    error = $"auxBones 中存在重复骨骼：{aux.boneName}。";
+                    return false;
+                }
+                auxByBone.Add(aux.boneName, aux);
+
+                var registeredNames = new HashSet<string>(aux.constraintNames, StringComparer.Ordinal);
+                if (registeredNames.Count != aux.constraintNames.Count)
+                {
+                    error = $"骨骼 {aux.boneName} 的 constraintNames 重复。";
+                    return false;
+                }
+                if (string.Equals(aux.auxType, "MCH", StringComparison.OrdinalIgnoreCase) &&
+                    aux.constraints.Count != 0)
+                {
+                    error = $"MCH 骨 {aux.boneName} 不能通过普通 Aux constraints 认领约束。";
+                    return false;
+                }
+
+                var auxConstraintKeys = new HashSet<string>(StringComparer.Ordinal);
+                foreach (BlenderConstraintInfo constraint in aux.constraints)
+                {
+                    if (constraint == null || string.IsNullOrEmpty(constraint.name))
+                    {
+                        error = $"Aux 骨 {aux.boneName} 中存在不完整约束。";
+                        return false;
+                    }
+                    if (!registeredNames.Contains(constraint.name))
+                    {
+                        error = $"Aux 骨 {aux.boneName} 的约束未登记到 constraintNames：{constraint.name}。";
+                        return false;
+                    }
+                    string key = ConstraintRecordKey(aux.boneName, constraint);
+                    if (!auxConstraintKeys.Add(key))
+                    {
+                        error = $"Aux 骨 {aux.boneName} 的约束栈索引重复：{constraint.stackIndex}。";
+                        return false;
+                    }
+                    if (!knownByKey.TryGetValue(key, out KnownConstraintInfo known) ||
+                        !string.Equals(known.relationType, "AUX_CONSTRAINT", StringComparison.Ordinal) ||
+                        !string.Equals(known.auxBone, aux.boneName, StringComparison.Ordinal) ||
+                        !string.Equals(known.auxType, aux.auxType, StringComparison.Ordinal) ||
+                        !SameConstraintIdentity(known.constraint, constraint))
+                    {
+                        error = $"Aux 骨 {aux.boneName} 的约束未与 knownConstraints 汇总一致：{constraint.name}。";
+                        return false;
+                    }
+                }
+            }
+
+            var mchConstraintKeys = new HashSet<string>(StringComparer.Ordinal);
+            var enabledMchBones = new HashSet<string>(
+                config.mchEnabledBones ?? new List<string>(),
+                StringComparer.Ordinal);
+            foreach (MchBindingInfo binding in config.mchBindings)
+            {
+                if (binding == null || binding.constraint == null ||
+                    string.IsNullOrEmpty(binding.mchBone) || string.IsNullOrEmpty(binding.sourceBone))
+                {
+                    error = "mchBindings 中存在不完整记录。";
+                    return false;
+                }
+                if (!enabledMchBones.Contains(binding.sourceBone) ||
+                    !string.Equals(binding.constraint.constraintType, "CHILD_OF", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(binding.constraint.targetObjectName, config.armatureName, StringComparison.Ordinal) ||
+                    !string.Equals(binding.constraint.targetBoneName, binding.sourceBone, StringComparison.Ordinal))
+                {
+                    error = $"MCH 绑定不满足严格 source/CHILD_OF 签名：{binding.mchBone}。";
+                    return false;
+                }
+                if (!auxByBone.TryGetValue(binding.mchBone, out AuxBoneInfo mchAux) ||
+                    !string.Equals(mchAux.auxType, "MCH", StringComparison.OrdinalIgnoreCase) ||
+                    mchAux.sourceBones == null || !mchAux.sourceBones.Contains(binding.sourceBone) ||
+                    mchAux.constraintNames == null || !mchAux.constraintNames.Contains(binding.constraint.name))
+                {
+                    error = $"MCH 绑定没有对应的显式 MCH Aux 元数据：{binding.mchBone}。";
+                    return false;
+                }
+                string key = ConstraintRecordKey(binding.mchBone, binding.constraint);
+                if (!mchConstraintKeys.Add(key))
+                {
+                    error = $"mchBindings 中存在重复约束：{binding.mchBone} / {binding.constraint.stackIndex}。";
+                    return false;
+                }
+                if (!knownByKey.TryGetValue(key, out KnownConstraintInfo known) ||
+                    !string.Equals(known.relationType, "MCH_BINDING", StringComparison.Ordinal) ||
+                    !string.Equals(known.auxBone, binding.mchBone, StringComparison.Ordinal) ||
+                    !string.Equals(known.auxType, "MCH", StringComparison.Ordinal) ||
+                    !SameConstraintIdentity(known.constraint, binding.constraint))
+                {
+                    error = $"MCH 绑定未与 knownConstraints 汇总一致：{binding.mchBone}。";
+                    return false;
+                }
+            }
+
+            foreach (KnownConstraintInfo known in config.knownConstraints)
+            {
+                string key = ConstraintRecordKey(known.ownerBone, known.constraint);
+                bool inMch = mchConstraintKeys.Contains(key);
+                bool inAux = false;
+                if (known.relationType == "AUX_CONSTRAINT" &&
+                    auxByBone.TryGetValue(known.ownerBone, out AuxBoneInfo aux))
+                {
+                    foreach (BlenderConstraintInfo constraint in aux.constraints)
+                    {
+                        if (ConstraintRecordKey(aux.boneName, constraint) == key)
+                        {
+                            inAux = true;
+                            break;
+                        }
+                    }
+                }
+                if (inMch == inAux)
+                {
+                    error = $"knownConstraints 无法唯一对应关系：{known.ownerBone} / {known.constraint.stackIndex}。";
+                    return false;
+                }
+            }
+            error = string.Empty;
+            return true;
+        }
+
+        private static bool SameConstraintIdentity(
+            BlenderConstraintInfo first,
+            BlenderConstraintInfo second)
+        {
+            return first != null && second != null &&
+                first.stackIndex == second.stackIndex &&
+                string.Equals(first.name, second.name, StringComparison.Ordinal) &&
+                string.Equals(first.constraintType, second.constraintType, StringComparison.Ordinal) &&
+                string.Equals(first.targetObjectName, second.targetObjectName, StringComparison.Ordinal) &&
+                string.Equals(first.targetBoneName, second.targetBoneName, StringComparison.Ordinal);
+        }
+
+        private static void BuildNeutralIrPlan(
+            ConstraintConfig config,
+            List<ConstraintPlanEntry> result)
+        {
+            var consumed = new HashSet<string>(StringComparer.Ordinal);
+            foreach (MchBindingInfo binding in config.mchBindings)
+            {
+                if (binding == null || binding.constraint == null ||
+                    ConstraintMuted(binding.constraint) ||
+                    string.IsNullOrEmpty(binding.mchBone) || string.IsNullOrEmpty(binding.sourceBone))
+                    continue;
+                result.Add(new ConstraintPlanEntry
+                {
+                    kind = ConstraintPlanKind.Parent,
+                    ownerBone = binding.mchBone,
+                    targetBone = binding.sourceBone,
+                    weight = ConstraintInfluence(binding.constraint, 1.0f),
+                    maintainOffset = true,
+                    copyRotation = binding.constraint,
+                });
+                consumed.Add(ConstraintRecordKey(binding.mchBone, binding.constraint));
+            }
+
+            foreach (AuxBoneInfo aux in config.auxBones)
+            {
+                if (aux == null || string.IsNullOrEmpty(aux.boneName))
+                    continue;
+                string auxType = string.IsNullOrEmpty(aux.auxType)
+                    ? string.Empty
+                    : aux.auxType.Trim().ToUpperInvariant();
+                BlenderConstraintInfo copyRotation = FindBlenderConstraint(aux, "COPY_ROTATION");
+                BlenderConstraintInfo stretchTo = FindBlenderConstraint(aux, "STRETCH_TO");
+
+                if (auxType == "TWIST" || auxType.EndsWith("_TWIST", StringComparison.Ordinal))
+                {
+                    if (copyRotation == null || stretchTo == null ||
+                        !HaveSameCurrentArmatureTarget(config, copyRotation, stretchTo))
+                        continue;
+                    var entry = new ConstraintPlanEntry
+                    {
+                        kind = ConstraintPlanKind.Twist,
+                        ownerBone = aux.boneName,
+                        targetBone = copyRotation.targetBoneName,
+                        sourceBone = FirstSourceBone(aux),
+                        weight = ConstraintInfluence(copyRotation, 1.0f),
+                        copyRotation = copyRotation,
+                        stretchTo = stretchTo,
+                    };
+                    if (ConstraintMuted(copyRotation) || ConstraintMuted(stretchTo))
+                        continue;
+                    entry.hoAuxUnsupportedReason = ValidateHoAuxTwist(entry);
+                    result.Add(entry);
+                    consumed.Add(ConstraintRecordKey(aux.boneName, copyRotation));
+                    consumed.Add(ConstraintRecordKey(aux.boneName, stretchTo));
+                    continue;
+                }
+
+                if (auxType == "FAN" || auxType == "FAN_SINGLE" || auxType == "FAN_SIDE")
+                {
+                    if (copyRotation == null || !TargetsCurrentArmature(config, copyRotation))
+                        continue;
+                    var entry = new ConstraintPlanEntry
+                    {
+                        kind = ConstraintPlanKind.Fan,
+                        ownerBone = aux.boneName,
+                        targetBone = copyRotation.targetBoneName,
+                        sourceBone = FirstSourceBone(aux),
+                        weight = ConstraintInfluence(copyRotation, 1.0f),
+                        copyRotation = copyRotation,
+                    };
+                    if (ConstraintMuted(copyRotation))
+                        continue;
+                    entry.hoAuxUnsupportedReason = ValidateHoAuxFan(entry);
+                    result.Add(entry);
+                    consumed.Add(ConstraintRecordKey(aux.boneName, copyRotation));
+                }
+            }
+
+            foreach (KnownConstraintInfo known in config.knownConstraints)
+            {
+                if (consumed.Contains(ConstraintRecordKey(known.ownerBone, known.constraint)))
+                    continue;
+                AddUnknownPlan(
+                    result,
+                    known.ownerBone,
+                    known.constraint,
+                    ConstraintMuted(known.constraint)
+                        ? "Blender 约束已静音"
+                        : $"已知关系 {known.relationType}/{known.auxType} 未被当前 Parent/Twist/Fan 解析器完整消费");
+            }
+
+            foreach (UnknownConstraintInfo unknown in config.unknownConstraints)
+            {
+                AddUnknownPlan(result, unknown.ownerBone, unknown.constraint, unknown.reason);
+            }
+        }
+
+        private static void AddUnknownPlan(
+            List<ConstraintPlanEntry> result,
+            string ownerBone,
+            BlenderConstraintInfo constraint,
+            string reason)
+        {
+            result.Add(new ConstraintPlanEntry
+            {
+                kind = ConstraintPlanKind.Unknown,
+                ownerBone = ownerBone,
+                targetBone = ConstraintTargetLabel(constraint),
+                reason = reason,
+                rawConstraint = constraint,
+                weight = ConstraintInfluence(constraint, 1.0f),
+            });
+        }
+
+        private static string ConstraintRecordKey(string ownerBone, BlenderConstraintInfo constraint)
+        {
+            return (ownerBone ?? string.Empty) + "\u001f" +
+                (constraint == null ? -1 : constraint.stackIndex).ToString();
+        }
+
+        private static string ConstraintTargetLabel(BlenderConstraintInfo constraint)
+        {
+            if (constraint == null)
+                return "（无目标）";
+            string objectName = constraint.targetObjectName ?? string.Empty;
+            string boneName = constraint.targetBoneName ?? string.Empty;
+            if (string.IsNullOrEmpty(objectName))
+                return string.IsNullOrEmpty(boneName) ? "（无目标）" : boneName;
+            return string.IsNullOrEmpty(boneName) ? objectName : objectName + ":" + boneName;
+        }
+
+        private static bool TargetsCurrentArmature(
+            ConstraintConfig config,
+            BlenderConstraintInfo constraint)
+        {
+            return constraint != null && !string.IsNullOrEmpty(constraint.targetBoneName) &&
+                string.Equals(
+                    constraint.targetObjectName,
+                    config.armatureName,
+                    StringComparison.Ordinal);
+        }
+
+        private static bool HaveSameCurrentArmatureTarget(
+            ConstraintConfig config,
+            BlenderConstraintInfo first,
+            BlenderConstraintInfo second)
+        {
+            return TargetsCurrentArmature(config, first) && TargetsCurrentArmature(config, second) &&
+                string.Equals(first.targetBoneName, second.targetBoneName, StringComparison.Ordinal);
+        }
+
+        private static string FirstSourceBone(AuxBoneInfo aux)
+        {
+            return aux.sourceBones != null && aux.sourceBones.Count > 0
+                ? aux.sourceBones[0]
+                : string.Empty;
+        }
+
+        private static BlenderConstraintInfo FindBlenderConstraint(AuxBoneInfo aux, string type)
+        {
+            if (aux.constraints == null)
+                return null;
+            foreach (BlenderConstraintInfo constraint in aux.constraints)
+            {
+                if (constraint != null &&
+                    string.Equals(constraint.constraintType, type, StringComparison.OrdinalIgnoreCase))
+                    return constraint;
+            }
+            return null;
+        }
+
+        private static float ConstraintInfluence(
+            BlenderConstraintInfo constraint,
+            float fallback)
+        {
+            return Mathf.Clamp01(constraint == null || constraint.parameters == null
+                ? fallback
+                : constraint.parameters.influence);
+        }
+
+        private static bool ConstraintMuted(BlenderConstraintInfo constraint)
+        {
+            return constraint != null && constraint.parameters != null && constraint.parameters.mute;
+        }
+
+        private static string ValidateHoAuxTwist(ConstraintPlanEntry entry)
+        {
+            BlenderConstraintParameters copy = entry.copyRotation == null
+                ? null
+                : entry.copyRotation.parameters;
+            BlenderConstraintParameters stretch = entry.stretchTo == null
+                ? null
+                : entry.stretchTo.parameters;
+            if (!SupportsCopyRotationSpaces(copy, true))
+                return "Copy Rotation 空间/轴/mix mode 超出当前 HoAux 能力";
+            if (stretch == null || !IsWorldSpace(stretch.owner_space) ||
+                !IsWorldSpace(stretch.target_space))
+                return "Stretch To 当前只支持 WORLD -> WORLD";
+            if (Mathf.Abs(stretch.head_tail) > 0.0001f)
+                return "Stretch To head_tail 尚未实现";
+            if (!string.IsNullOrEmpty(stretch.keep_axis) &&
+                !string.Equals(stretch.keep_axis, "SWING_Y", StringComparison.OrdinalIgnoreCase))
+                return "Stretch To 当前只支持 SWING_Y";
+            if (!string.IsNullOrEmpty(stretch.volume) &&
+                !string.Equals(stretch.volume, "NO_VOLUME", StringComparison.OrdinalIgnoreCase))
+                return "Stretch To volume 保持尚未精确实现";
+            return string.Empty;
+        }
+
+        private static string ValidateHoAuxFan(ConstraintPlanEntry entry)
+        {
+            BlenderConstraintParameters parameters = entry.copyRotation == null
+                ? null
+                : entry.copyRotation.parameters;
+            return SupportsCopyRotationSpaces(parameters, false)
+                ? string.Empty
+                : "Fan 只支持 WORLD -> WORLD、XYZ、REPLACE";
+        }
+
+        private static bool SupportsCopyRotationSpaces(
+            BlenderConstraintParameters parameters,
+            bool allowLocalOwnerOrient)
+        {
+            if (parameters == null || !parameters.use_x || !parameters.use_y ||
+                !parameters.use_z || parameters.invert_x || parameters.invert_y ||
+                parameters.invert_z)
+                return false;
+            if (!string.IsNullOrEmpty(parameters.mix_mode) &&
+                !string.Equals(parameters.mix_mode, "REPLACE", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (IsWorldSpace(parameters.owner_space) && IsWorldSpace(parameters.target_space))
+                return true;
+            return allowLocalOwnerOrient &&
+                string.Equals(parameters.owner_space, "LOCAL", StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(parameters.target_space, "LOCAL", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(parameters.target_space, "LOCAL_OWNER_ORIENT", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsWorldSpace(string value)
+        {
+            return string.IsNullOrEmpty(value) ||
+                string.Equals(value, "WORLD", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void DrawTargetPanel()
         {
             bool targetRequired = applyConstraints || applyCollections;
@@ -355,6 +1038,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 GUILayout.Space(5f);
                 applyHumanoid = EditorGUILayout.ToggleLeft("应用 Humanoid 映射", applyHumanoid);
                 applyConstraints = EditorGUILayout.ToggleLeft("导入约束", applyConstraints);
+                if (applyConstraints)
+                {
+                    using (new EditorGUI.IndentLevelScope())
+                    {
+                        useHoAuxRig = EditorGUILayout.ToggleLeft(
+                            new GUIContent(
+                                "使用 HoAux Rig 解析中间语义",
+                                "关闭：导入标准 Unity Constraint，Twist 默认只取 Y 轴。打开：Parent/Twist/Fan 进入单一 HoAuxRig 中控组件。"),
+                            useHoAuxRig);
+                        DrawConstraintImportPreview();
+                    }
+                }
                 applyCollections = EditorGUILayout.ToggleLeft("应用 Bone Renderer 骨骼集合", applyCollections);
                 GUILayout.Space(2f);
             }
@@ -371,6 +1066,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     "目标骨架", targetRig, typeof(GameObject), true);
                 constraintJson = (TextAsset)EditorGUILayout.ObjectField(
                     "约束 JSON", constraintJson, typeof(TextAsset), false);
+                DrawConstraintCandidatePopup();
+                useHoAuxRig = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "使用 HoAux Rig 解析中间语义",
+                        "默认关闭并使用 VRC 兼容的标准约束；打开后 Parent/Twist/Fan 由单一 HoAuxRig 组件执行。"),
+                    useHoAuxRig);
+                DrawConstraintImportPreview();
                 GUILayout.Space(2f);
             }
 
@@ -414,14 +1116,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             if (!EditorUtility.DisplayDialog(
                     "导入约束",
-                    "将把约束 JSON 显式应用到目标骨架。用户手工创建的同类型约束不会被覆盖。",
+                    "将按上方预览把中立约束 IR 应用到目标骨架。\n当前模式：" +
+                    (useHoAuxRig ? "HoAux Rig" : "标准 Unity Constraint（Twist 仅 Y）") +
+                    "\n用户手工创建的同类型通用约束不会被覆盖。",
                     "导入",
                     "取消"))
                 return;
 
             try
             {
-                int importedCount = ApplyConstraints(constraintJson, targetRig);
+                int importedCount = ApplyConstraints(constraintJson, targetRig, useHoAuxRig);
                 EditorUtility.DisplayDialog(
                     "HoFBX导入处理",
                     $"约束导入完成。导入：{importedCount}",
@@ -458,7 +1162,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             HoImportedConstraintMarker[] markers =
                 targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true);
-            if (markers.Length == 0)
+            HoAuxRig hoAux = targetRig.GetComponent<HoAuxRig>();
+            if (hoAux != null && string.IsNullOrEmpty(hoAux.SourceArmature))
+                hoAux = null;
+            if (markers.Length == 0 && hoAux == null)
             {
                 EditorUtility.DisplayDialog("HoFBX导入处理", "没有找到工具导入的约束。", "确定");
                 return;
@@ -466,7 +1173,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             if (!EditorUtility.DisplayDialog(
                     "安全清除导入约束",
-                    $"将清除 {markers.Length} 个骨骼上的工具约束，用户手工约束不受影响。",
+                    $"将清除 {markers.Length} 个骨骼上的工具约束" +
+                    (hoAux == null ? "。" : "以及根骨架上的 HoAuxRig。") +
+                    "用户手工创建的通用约束不受影响。",
                     "清除",
                     "取消"))
                 return;
@@ -482,10 +1191,27 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 Undo.DestroyObjectImmediate(marker);
             }
 
+            if (hoAux != null)
+            {
+                clearedCount += CountHoAuxOperations(hoAux);
+                Undo.DestroyObjectImmediate(hoAux);
+            }
+
             EditorUtility.DisplayDialog(
                 "HoFBX导入处理",
                 $"已安全清除 {clearedCount} 个导入约束。",
                 "确定");
+        }
+
+        private static int CountHoAuxOperations(HoAuxRig rig)
+        {
+            int count = 0;
+            foreach (HoAuxRig.Layer layer in rig.Layers)
+            {
+                if (layer != null && layer.operations != null)
+                    count += layer.operations.Count;
+            }
+            return count;
         }
 
         private void ClearAllStandardConstraints()
@@ -703,6 +1429,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             humanoidJson = null;
             collectionJson = null;
             constraintJson = null;
+            if (constraintJsonCandidates == null)
+                constraintJsonCandidates = new List<TextAsset>();
+            else
+                constraintJsonCandidates.Clear();
 
             string directory = Path.GetDirectoryName(fbxAssetPath) ?? string.Empty;
             string baseName = Path.GetFileNameWithoutExtension(fbxAssetPath);
@@ -740,11 +1470,14 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                             humanoidJson = asset;
                         else if (entry.kind == CollectionKind && collectionJson == null)
                             collectionJson = asset;
-                        else if (entry.kind == ConstraintKind && constraintJson == null)
-                            constraintJson = asset;
+                        else if (entry.kind == ConstraintKind)
+                            AddConstraintCandidate(asset);
                     }
                 }
             }
+
+            if (constraintJsonCandidates.Count > 0)
+                constraintJson = constraintJsonCandidates[0];
 
             // Manual export mode can omit the manifest; scan only the new HoFBX folder.
             if (humanoidJson == null)
@@ -761,12 +1494,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             if (constraintJson == null)
             {
                 foreach (string path in FindMetadataJson(metadataDirectory, baseName, "_constraint.json"))
-                {
-                    constraintJson = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
-                    if (constraintJson != null)
-                        break;
-                }
+                    AddConstraintCandidate(AssetDatabase.LoadAssetAtPath<TextAsset>(path));
+                if (constraintJsonCandidates.Count > 0)
+                    constraintJson = constraintJsonCandidates[0];
             }
+        }
+
+        private void AddConstraintCandidate(TextAsset asset)
+        {
+            if (constraintJsonCandidates == null)
+                constraintJsonCandidates = new List<TextAsset>();
+            if (asset != null && !constraintJsonCandidates.Contains(asset))
+                constraintJsonCandidates.Add(asset);
         }
 
         private static TextAsset LoadMetadataTextAsset(string metadataDirectory, string fileName)
@@ -900,7 +1639,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 if (applyConstraints)
                 {
                     if (targetRig != null)
-                        constraintCount = ApplyConstraints(constraintJson, targetRig);
+                        constraintCount = ApplyConstraints(constraintJson, targetRig, useHoAuxRig);
                 }
 
                 if (applyCollections && collectionJson != null && targetRig != null)
@@ -932,7 +1671,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             return "将执行以下显式操作：\n" +
                    humanoidOperation +
-                   (applyConstraints ? "- 导入约束 JSON\n" : string.Empty) +
+                   (applyConstraints
+                       ? useHoAuxRig
+                           ? "- 以 HoAux Rig 解析 Parent / Twist / Fan 中间语义\n"
+                           : "- 以标准 Unity Constraint 导入（Twist 仅 Y 轴）\n"
+                       : string.Empty) +
                    (applyCollections ? "- 更新 Bone Renderer 集合\n" : string.Empty) +
                    "\n用户已有的手动配置不会被 AssetPostprocessor 自动覆盖。";
         }
@@ -1096,42 +1839,287 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
         }
 
-        private static int ApplyConstraints(TextAsset configAsset, GameObject rig)
+        private static int ApplyConstraints(TextAsset configAsset, GameObject rig, bool useHoAuxRig)
         {
             ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(configAsset.text);
-            if (config == null || config.bones == null)
-                return 0;
+            if (!TryValidateConstraintConfig(config, out string validationError))
+                throw new InvalidDataException(validationError);
 
-            var boneMap = new Dictionary<string, Transform>(StringComparer.Ordinal);
-            foreach (Transform bone in rig.GetComponentsInChildren<Transform>(true))
-                boneMap[bone.name] = bone;
+            List<ConstraintPlanEntry> plan = BuildConstraintImportPlan(config);
+            Dictionary<string, Transform> transformMap = BuildTransformMap(rig.transform);
+
+            HoAuxRig hoAux = null;
+            if (useHoAuxRig && ContainsHoAuxOperations(plan))
+            {
+                hoAux = rig.GetComponent<HoAuxRig>();
+                if (hoAux == null)
+                    hoAux = Undo.AddComponent<HoAuxRig>(rig);
+                else
+                {
+                    if (string.IsNullOrEmpty(hoAux.SourceArmature) && CountHoAuxOperations(hoAux) > 0)
+                    {
+                        throw new InvalidOperationException(
+                            "目标已有手动配置的 HoAuxRig。请先清空或移除该组件，导入器不会覆盖手动操作。");
+                    }
+                    if (!string.IsNullOrEmpty(hoAux.SourceArmature) &&
+                        !string.Equals(hoAux.SourceArmature, config.armatureName, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            $"目标 HoAuxRig 属于另一骨架：{hoAux.SourceArmature}。");
+                    }
+                    Undo.RecordObject(hoAux, "重新导入 HoAux Rig");
+                }
+                ClearImportedStandardConstraints(rig);
+                hoAux.RigRoot = rig.transform;
+                string schemaVersion = config.schemaVersion.ToString();
+                hoAux.RemoveOperationsFromSource(config.armatureName, config.exportTime, schemaVersion);
+                hoAux.SourceArmature = config.armatureName;
+                hoAux.ExportTime = config.exportTime;
+                hoAux.ExporterVersion = schemaVersion;
+            }
+            else if (useHoAuxRig)
+            {
+                ClearImportedStandardConstraints(rig);
+                RemoveImportedHoAuxRig(rig, config.armatureName);
+            }
+            else
+            {
+                ClearImportedStandardConstraints(rig);
+                RemoveImportedHoAuxRig(rig, config.armatureName);
+            }
 
             int count = 0;
-            foreach (BoneConstraint boneConfig in config.bones)
+            foreach (ConstraintPlanEntry entry in plan)
             {
-                if (boneConfig == null || !boneMap.TryGetValue(boneConfig.boneName, out Transform bone))
+                if (entry.kind == ConstraintPlanKind.Unknown)
                     continue;
-
-                if (boneConfig.constraints == null)
+                if (useHoAuxRig && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
                     continue;
-
-                foreach (ConstraintInfo info in boneConfig.constraints)
+                if (!TryResolveTransform(transformMap, entry.ownerBone, out Transform bone) ||
+                    !TryResolveTransform(transformMap, entry.targetBone, out Transform target))
                 {
-                    if (info == null || !boneMap.TryGetValue(info.targetPath, out Transform target))
-                        continue;
-
-                    if (info.type == "Rotation")
-                        count += ConfigureRotation(bone, target, info, config) ? 1 : 0;
-                    else if (info.type == "Location")
-                        count += ConfigurePosition(bone, target, info, config) ? 1 : 0;
-                    else if (info.type == "Scale")
-                        count += ConfigureScale(bone, target, info, config) ? 1 : 0;
-                    else if (info.type == "Child")
-                        count += ConfigureParent(bone, target, info, config) ? 1 : 0;
+                    Debug.LogWarning(
+                        $"HoFBX: 无法解析约束骨骼 {entry.ownerBone} -> {entry.targetBone}，已跳过。");
+                    continue;
                 }
+
+                bool isHoAuxSemantic = entry.kind == ConstraintPlanKind.Parent ||
+                    entry.kind == ConstraintPlanKind.Twist || entry.kind == ConstraintPlanKind.Fan;
+                if (useHoAuxRig && isHoAuxSemantic)
+                {
+                    if (hoAux != null && ConfigureHoAuxOperation(hoAux, bone, target, entry))
+                        count++;
+                    continue;
+                }
+
+                count += ConfigureStandardOperation(bone, target, entry, config) ? 1 : 0;
+            }
+
+            if (hoAux != null)
+            {
+                hoAux.CaptureBindPose();
+                EditorUtility.SetDirty(hoAux);
+                if (PrefabUtility.IsPartOfPrefabInstance(hoAux))
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(hoAux);
+            }
+            return count;
+        }
+
+        private static bool ContainsHoAuxOperations(List<ConstraintPlanEntry> plan)
+        {
+            foreach (ConstraintPlanEntry entry in plan)
+            {
+                if (entry.kind == ConstraintPlanKind.Parent ||
+                    entry.kind == ConstraintPlanKind.Twist || entry.kind == ConstraintPlanKind.Fan)
+                {
+                    if (!string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
+                        continue;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static Dictionary<string, Transform> BuildTransformMap(Transform root)
+        {
+            var result = new Dictionary<string, Transform>(StringComparer.Ordinal);
+            var duplicateNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Transform transform in root.GetComponentsInChildren<Transform>(true))
+            {
+                string path = HoAuxRig.GetRelativePath(root, transform);
+                result[path] = transform;
+                if (duplicateNames.Contains(transform.name))
+                    continue;
+                if (result.TryGetValue(transform.name, out Transform existing) && existing != transform)
+                {
+                    result.Remove(transform.name);
+                    duplicateNames.Add(transform.name);
+                }
+                else
+                {
+                    result[transform.name] = transform;
+                }
+            }
+            return result;
+        }
+
+        private static bool TryResolveTransform(
+            Dictionary<string, Transform> transformMap,
+            string pathOrName,
+            out Transform transform)
+        {
+            transform = null;
+            return !string.IsNullOrEmpty(pathOrName) && transformMap.TryGetValue(pathOrName, out transform);
+        }
+
+        private static bool HasUnmanagedStandardConstraint(
+            Transform owner,
+            ConstraintPlanKind kind)
+        {
+            if (owner == null)
+                return false;
+            HoImportedConstraintMarker marker = owner.GetComponent<HoImportedConstraintMarker>();
+            if (kind == ConstraintPlanKind.Parent)
+            {
+                foreach (ParentConstraint constraint in owner.GetComponents<ParentConstraint>())
+                {
+                    if (marker == null || !marker.Manages(constraint))
+                        return true;
+                }
+                return false;
+            }
+            if (kind == ConstraintPlanKind.Twist || kind == ConstraintPlanKind.Fan)
+            {
+                foreach (RotationConstraint constraint in owner.GetComponents<RotationConstraint>())
+                {
+                    if (marker == null || !marker.Manages(constraint))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool ConfigureHoAuxOperation(
+            HoAuxRig rig,
+            Transform owner,
+            Transform target,
+            ConstraintPlanEntry entry)
+        {
+            HoAuxRig.OperationType type;
+            if (entry.kind == ConstraintPlanKind.Parent) type = HoAuxRig.OperationType.Parent;
+            else if (entry.kind == ConstraintPlanKind.Twist) type = HoAuxRig.OperationType.Twist;
+            else if (entry.kind == ConstraintPlanKind.Fan) type = HoAuxRig.OperationType.Fan;
+            else return false;
+
+            HoAuxRig.Operation operation = rig.AddOperation(type, owner, target, entry.weight);
+            operation.sourceBone = entry.sourceBone ?? string.Empty;
+            operation.maintainOffset = entry.maintainOffset;
+            BlenderConstraintParameters copyParameters = entry.copyRotation == null
+                ? null
+                : entry.copyRotation.parameters;
+            operation.sourceSpace = ResolveHoAuxSpace(
+                copyParameters == null ? null : copyParameters.owner_space);
+            operation.targetSpace = ResolveHoAuxSpace(
+                copyParameters == null ? null : copyParameters.target_space);
+
+            // HoAux Twist/Fan 使用完整四元数；标准模式的 Twist 才退化为 Y 轴。
+            operation.useX = true;
+            operation.useY = true;
+            operation.useZ = true;
+
+            if (entry.kind == ConstraintPlanKind.Twist)
+            {
+                BlenderConstraintInfo stretch = entry.stretchTo;
+                BlenderConstraintParameters stretchParameters = stretch == null
+                    ? null
+                    : stretch.parameters;
+                operation.stretchEnabled = stretch != null;
+                operation.stretchWeight = Mathf.Clamp01(
+                    ConstraintInfluence(stretch, 1.0f));
+                operation.stretchHeadTail = stretchParameters == null ? 0.0f : stretchParameters.head_tail;
+                operation.restLength = stretchParameters == null ? 0.0f : stretchParameters.rest_length;
+                operation.stretchSourceSpace = ResolveHoAuxSpace(
+                    stretchParameters == null ? null : stretchParameters.owner_space);
+                operation.stretchTargetSpace = ResolveHoAuxSpace(
+                    stretchParameters == null ? null : stretchParameters.target_space);
+                operation.volume = stretchParameters == null || string.IsNullOrEmpty(stretchParameters.volume)
+                    ? "NO_VOLUME"
+                    : stretchParameters.volume;
+                operation.keepAxis = stretchParameters == null || string.IsNullOrEmpty(stretchParameters.keep_axis)
+                    ? "SWING_Y"
+                    : stretchParameters.keep_axis;
+            }
+            else
+            {
+                operation.stretchEnabled = false;
+            }
+            return true;
+        }
+
+        private static HoAuxRig.Space ResolveHoAuxSpace(string value)
+        {
+            if (string.Equals(value, "LOCAL_OWNER_ORIENT", StringComparison.OrdinalIgnoreCase))
+                return HoAuxRig.Space.LocalOwnerOrient;
+            if (string.Equals(value, "LOCAL_WITH_PARENT", StringComparison.OrdinalIgnoreCase))
+                return HoAuxRig.Space.LocalWithParent;
+            if (string.Equals(value, "LOCAL", StringComparison.OrdinalIgnoreCase))
+                return HoAuxRig.Space.Local;
+            if (string.Equals(value, "POSE", StringComparison.OrdinalIgnoreCase))
+                return HoAuxRig.Space.Pose;
+            if (string.Equals(value, "CUSTOM", StringComparison.OrdinalIgnoreCase))
+                return HoAuxRig.Space.Custom;
+            return HoAuxRig.Space.World;
+        }
+
+        private static bool ConfigureStandardOperation(
+            Transform bone,
+            Transform target,
+            ConstraintPlanEntry entry,
+            ConstraintConfig config)
+        {
+            // 标准模式保留 VRC 兼容退化：Twist 只取 Y 轴，Fan 只接受 XYZ 的世界对世界语义。
+            if (entry.kind == ConstraintPlanKind.Parent)
+                return ConfigureParent(bone, target, entry.weight, config);
+            if (entry.kind == ConstraintPlanKind.Twist)
+                return ConfigureRotation(bone, target, entry.weight, config, Axis.Y);
+            if (entry.kind == ConstraintPlanKind.Fan)
+            {
+                return ConfigureRotation(
+                    bone,
+                    target,
+                    entry.weight,
+                    config,
+                    Axis.X | Axis.Y | Axis.Z);
+            }
+            return false;
+        }
+
+        private static int ClearImportedStandardConstraints(GameObject rig)
+        {
+            int count = 0;
+            foreach (HoImportedConstraintMarker marker in
+                     rig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+            {
+                foreach (Component constraint in new List<Component>(marker.GetLiveConstraints()))
+                {
+                    Undo.DestroyObjectImmediate(constraint);
+                    count++;
+                }
+                Undo.DestroyObjectImmediate(marker);
             }
 
             return count;
+        }
+
+        private static void RemoveImportedHoAuxRig(GameObject rig, string armatureName)
+        {
+            HoAuxRig component = rig.GetComponent<HoAuxRig>();
+            if (component == null || string.IsNullOrEmpty(component.SourceArmature))
+                return;
+            if (!string.IsNullOrEmpty(armatureName) &&
+                !string.Equals(component.SourceArmature, armatureName, StringComparison.Ordinal))
+                return;
+            Undo.DestroyObjectImmediate(component);
         }
 
         private static T GetManaged<T>(Transform bone, ConstraintConfig config) where T : Component, IConstraint
@@ -1156,7 +2144,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             T created = Undo.AddComponent<T>(bone.gameObject);
             if (marker == null)
                 marker = Undo.AddComponent<HoImportedConstraintMarker>(bone.gameObject);
-            marker.SetMetadata(config.armatureName, config.exportTime, config.version);
+            marker.SetMetadata(
+                config.armatureName,
+                config.exportTime,
+                config.schemaVersion.ToString());
             marker.Register(created);
             EditorUtility.SetDirty(marker);
             return created;
@@ -1260,56 +2251,34 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return null;
         }
 
-        private static bool ConfigureRotation(Transform bone, Transform target, ConstraintInfo info, ConstraintConfig config)
+        private static bool ConfigureRotation(
+            Transform bone,
+            Transform target,
+            float weight,
+            ConstraintConfig config,
+            Axis axes)
         {
             RotationConstraint constraint = GetManaged<RotationConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.weight = info.weight;
-            constraint.rotationAxis = ResolveAxis(info.axes);
+            constraint.weight = weight;
+            constraint.rotationAxis = axes;
             ActivateAndLockConstraint(constraint);
             return true;
         }
 
-        private static bool ConfigurePosition(Transform bone, Transform target, ConstraintInfo info, ConstraintConfig config)
-        {
-            PositionConstraint constraint = GetManaged<PositionConstraint>(bone, config);
-            if (constraint == null) return false;
-            constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.weight = info.weight;
-            constraint.translationAxis = ResolveAxis(info.axes);
-            ActivateAndLockConstraint(constraint);
-            return true;
-        }
-
-        private static bool ConfigureScale(Transform bone, Transform target, ConstraintInfo info, ConstraintConfig config)
-        {
-            ScaleConstraint constraint = GetManaged<ScaleConstraint>(bone, config);
-            if (constraint == null) return false;
-            constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.weight = info.weight;
-            constraint.scalingAxis = ResolveAxis(info.axes);
-            ActivateAndLockConstraint(constraint);
-            return true;
-        }
-
-        private static bool ConfigureParent(Transform bone, Transform target, ConstraintInfo info, ConstraintConfig config)
+        private static bool ConfigureParent(
+            Transform bone,
+            Transform target,
+            float weight,
+            ConstraintConfig config)
         {
             ParentConstraint constraint = GetManaged<ParentConstraint>(bone, config);
             if (constraint == null) return false;
             constraint.AddSource(new ConstraintSource { sourceTransform = target, weight = 1f });
-            constraint.weight = info.weight;
+            constraint.weight = weight;
             ActivateAndLockConstraint(constraint);
             return true;
-        }
-
-        private static Axis ResolveAxis(AxesInfo axes)
-        {
-            Axis result = Axis.None;
-            if (axes != null && axes.x) result |= Axis.X;
-            if (axes != null && axes.y) result |= Axis.Y;
-            if (axes != null && axes.z) result |= Axis.Z;
-            return result;
         }
 
         private static bool ApplyCollections(TextAsset json, GameObject rig)
