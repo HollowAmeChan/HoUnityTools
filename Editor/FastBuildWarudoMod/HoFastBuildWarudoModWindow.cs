@@ -35,7 +35,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private sealed class ScriptMapping
         {
             public string sourcePath = string.Empty;
-            public string stagedPath = string.Empty;
             public bool removeFromPrefab;
         }
 
@@ -44,7 +43,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             public string phase = string.Empty;
             public string stateFilePath = string.Empty;
-            public string sourcePrefabPath = string.Empty;
             public string temporaryAssetRoot = string.Empty;
             public string temporaryPrefabPath = string.Empty;
             public string exportSettingsPath = string.Empty;
@@ -67,7 +65,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private int missingScriptCount;
         [SerializeField] private string exportSettingsPath = string.Empty;
         [SerializeField] private string activeModAssetPath = string.Empty;
-        [SerializeField] private string previewMessage = string.Empty;
+        [SerializeField] private string lastBuildStatus = string.Empty;
+        [SerializeField] private string dependencyPreviewHash = string.Empty;
+
+        private GUIStyle panelTitleStyle;
+        private GUIStyle panelStatusStyle;
+        private GUIStyle primaryButtonStyle;
+        private bool sdkAvailable;
+        private string sdkError = string.Empty;
 
         private static bool resumeHookInstalled;
 
@@ -111,7 +116,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
 
             var window = GetWindow<HoFastBuildWarudoModWindow>(WindowTitle);
-            window.minSize = new Vector2(680f, 560f);
+            window.minSize = new Vector2(600f, 520f);
             window.SetSourcePrefab(path);
             window.Show();
         }
@@ -127,7 +132,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (sourcePrefab == null && IsPrefab(sourcePrefabPath))
                 sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
 
-            RefreshExportSettingsPreview();
+            RefreshSdkStatus();
             if (sourcePrefab != null && scriptPreview.Count == 0)
                 RefreshDependencyPreview();
         }
@@ -135,28 +140,85 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private void OnGUI()
         {
             EditorGUIUtility.labelWidth = 132f;
+            EnsureStyles();
+            SynchronizeSourcePrefab();
             pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
             GUILayout.Space(8f);
 
-            DrawSourcePanel();
+            DrawWindowHeader(sdkAvailable, sdkError);
             GUILayout.Space(8f);
-            DrawExportSettingsPanel();
-            GUILayout.Space(8f);
-            DrawDependencyPanel();
-            GUILayout.Space(8f);
-            DrawBuildOptionsPanel();
-            GUILayout.Space(12f);
-            DrawBuildButton();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Space(10f);
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    using (new EditorGUI.DisabledScope(!sdkAvailable))
+                    {
+                        DrawSourcePanel();
+                        GUILayout.Space(8f);
+                        DrawExportSettingsPanel();
+                        GUILayout.Space(8f);
+                        DrawDependencyPanel();
+                        GUILayout.Space(8f);
+                        DrawBuildOptionsPanel();
+                        GUILayout.Space(12f);
+                        DrawBuildButton();
+                    }
+                }
+                GUILayout.Space(10f);
+            }
 
             GUILayout.Space(10f);
             EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawWindowHeader(bool sdkAvailable, string sdkError)
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                DrawPanelHeader(
+                    "FastBuild Warudo Mod",
+                    sdkAvailable ? "SDK 已就绪" : "SDK 不可用",
+                    sdkAvailable ? new Color(0.20f, 0.68f, 0.57f) : new Color(0.88f, 0.42f, 0.28f));
+                if (sdkAvailable)
+                {
+                    EditorGUILayout.LabelField(
+                        "复制当前 Prefab 为 Character 并调用 UMod 官方构建，源资源不会被修改。",
+                        EditorStyles.miniLabel);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox(
+                        sdkError + "\n当前仓库未安装 Warudo SDK，FastBuild 面板已禁用。",
+                        MessageType.Warning);
+                    if (GUILayout.Button("重新检测 SDK", GUILayout.Width(96f)))
+                        RefreshSdkStatus();
+                }
+            }
+        }
+
+        private void RefreshSdkStatus()
+        {
+            sdkAvailable = TryValidateOfficialBuildApi(out sdkError);
+            if (sdkAvailable)
+                RefreshExportSettingsPreview();
+            else
+            {
+                exportSettingsPath = string.Empty;
+                activeModAssetPath = string.Empty;
+            }
         }
 
         private void DrawSourcePanel()
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("构建对象", EditorStyles.boldLabel);
+                DrawPanelHeader(
+                    "源 Prefab",
+                    IsPrefab(sourcePrefabPath) ? "已选择" : "未选择",
+                    new Color(0.24f, 0.54f, 0.88f));
+                GUILayout.Space(5f);
                 EditorGUI.BeginChangeCheck();
                 GameObject nextPrefab = (GameObject)EditorGUILayout.ObjectField(
                     "Prefab",
@@ -174,10 +236,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(sourcePrefabPath)))
                     EditorGUILayout.SelectableLabel(sourcePrefabPath, EditorStyles.textField, GUILayout.Height(18f));
-
-                EditorGUILayout.HelpBox(
-                    "源 Prefab 不会被修改。构建时会在 Assets 下创建临时副本，并固定命名为 Character.prefab。",
-                    MessageType.Info);
             }
         }
 
@@ -185,24 +243,22 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
+                DrawPanelHeader(
+                    "Warudo 工作区",
+                    string.IsNullOrEmpty(exportSettingsPath) ? "未找到" : "已连接",
+                    new Color(0.20f, 0.68f, 0.57f));
+                GUILayout.Space(5f);
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("Warudo / UMod", EditorStyles.boldLabel);
                     GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("刷新", GUILayout.Width(62f)))
+                    GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
+                    refreshContent.tooltip = "重新读取 UMod ExportSettings";
+                    if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
                         RefreshExportSettingsPreview();
                 }
 
                 EditorGUILayout.LabelField("ExportSettings", string.IsNullOrEmpty(exportSettingsPath) ? "未找到" : exportSettingsPath);
-                EditorGUILayout.LabelField("当前 Mod 目录", string.IsNullOrEmpty(activeModAssetPath) ? "未读取" : activeModAssetPath);
-
-                string apiError;
-                bool apiReady = TryValidateOfficialBuildApi(out apiError);
-                EditorGUILayout.HelpBox(
-                    apiReady
-                        ? "已检测到 UMod 官方构建入口：ModToolsUtil.StartBuild。"
-                        : apiError,
-                    apiReady ? MessageType.Info : MessageType.Error);
+                EditorGUILayout.LabelField("Mod 目录", string.IsNullOrEmpty(activeModAssetPath) ? "未读取" : activeModAssetPath);
             }
         }
 
@@ -210,35 +266,38 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
+                DrawPanelHeader(
+                    "依赖审查",
+                    scriptPreview.Count + " 个脚本",
+                    new Color(0.62f, 0.45f, 0.84f));
+                GUILayout.Space(5f);
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("依赖审查", EditorStyles.boldLabel);
                     GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("重新扫描", GUILayout.Width(78f)))
+                    GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
+                    refreshContent.tooltip = "重新扫描 Prefab 依赖";
+                    if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
                         RefreshDependencyPreview();
                 }
 
                 EditorGUILayout.LabelField(
                     "资源概览",
-                    string.Format("总依赖 {0}，非脚本资源 {1}，组件脚本 {2}，丢失脚本 {3}",
+                    string.Format("依赖 {0} | 非脚本 {1} | 脚本 {2} | Missing {3}",
                         dependencyCount,
                         nonScriptDependencyCount,
                         scriptPreview.Count,
                         missingScriptCount));
                 if (missingScriptCount > 0)
                     EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
-                EditorGUILayout.HelpBox(
-                    "材质、贴图、网格等普通资源仍由 UMod Linker 按 Prefab 引用收集；这里只管理需要交给 UMod 单独编译的 C# 源码。",
-                    MessageType.None);
-                EditorGUILayout.HelpBox(
-                    "脚本预览以直接挂载的 MonoBehaviour 为入口；基类、partial 文件和辅助源码需要单独确认。UMod 编译失败时不会产出成功包。",
-                    MessageType.Warning);
+                EditorGUILayout.LabelField(
+                    "普通资源由 UMod 按 Prefab 引用收集；此处只管理需要单独编译的 C# 源码。",
+                    EditorStyles.miniLabel);
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button("选择运行时脚本"))
+                    if (GUILayout.Button("全选运行时", GUILayout.Width(92f)))
                         SetRuntimeScriptSelection(true);
-                    if (GUILayout.Button("全部不复制"))
+                    if (GUILayout.Button("全部不复制", GUILayout.Width(92f)))
                         SetRuntimeScriptSelection(false);
                 }
 
@@ -257,25 +316,20 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private static void DrawScriptPreviewRow(ScriptPreview item)
+        private void DrawScriptPreviewRow(ScriptPreview item)
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    using (new EditorGUI.DisabledScope(item.removeWhenExcluded))
-                        item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
+                using (new EditorGUI.DisabledScope(!copySelectedScripts || item.removeWhenExcluded))
+                    item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
 
-                    EditorGUILayout.LabelField(
-                        string.IsNullOrEmpty(item.typeName) ? Path.GetFileNameWithoutExtension(item.sourcePath) : item.typeName,
-                        EditorStyles.boldLabel);
-                    GUILayout.FlexibleSpace();
-                    EditorGUILayout.LabelField("引用 " + item.referenceCount, GUILayout.Width(52f));
-                }
-
-                EditorGUILayout.SelectableLabel(item.sourcePath, EditorStyles.miniLabel, GUILayout.Height(16f));
-                if (!string.IsNullOrEmpty(item.note))
-                    EditorGUILayout.HelpBox(item.note, item.removeWhenExcluded ? MessageType.Warning : MessageType.None);
+                string displayName = string.IsNullOrEmpty(item.typeName)
+                    ? Path.GetFileNameWithoutExtension(item.sourcePath)
+                    : item.typeName;
+                GUIContent typeContent = new GUIContent(displayName, item.note);
+                EditorGUILayout.LabelField(typeContent, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
+                EditorGUILayout.LabelField("引用 " + item.referenceCount, GUILayout.Width(56f));
+                EditorGUILayout.LabelField(Path.GetFileName(item.sourcePath), EditorStyles.miniLabel);
             }
         }
 
@@ -283,37 +337,91 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("临时构建设置", EditorStyles.boldLabel);
-                copySelectedScripts = EditorGUILayout.ToggleLeft("复制勾选的脚本到临时 Mod 目录", copySelectedScripts);
-                removeUnsafeComponents = EditorGUILayout.ToggleLeft("从临时 Prefab 移除明确不适合运行时的组件", removeUnsafeComponents);
-                cleanupTemporaryAssets = EditorGUILayout.ToggleLeft("构建完成后自动删除临时目录", cleanupTemporaryAssets);
-
-                EditorGUILayout.HelpBox(
-                    "复制源码会短暂进入 Unity 的运行时编译列表；域重载后 UMod 再按完整类型名连接到 Prefab。活动 Mod 目录在结束后始终恢复。",
-                    MessageType.Info);
+                DrawPanelHeader(
+                    "构建选项",
+                    cleanupTemporaryAssets ? "自动清理" : "保留临时目录",
+                    new Color(0.91f, 0.65f, 0.25f));
+                GUILayout.Space(5f);
+                GUIContent copyContent = new GUIContent(
+                    "复制已勾选脚本",
+                    "复制源码会暂时进入 Unity 编译列表，之后由 UMod 按完整类型名连接 Prefab。");
+                GUIContent removeContent = new GUIContent(
+                    "移除编辑器组件",
+                    "从临时 Character.prefab 移除明确只适用于编辑器的组件。");
+                GUIContent cleanupContent = new GUIContent(
+                    "构建完成后清理临时目录",
+                    "关闭后仍可在 Library/HoFastBuildWarudoMod 恢复未完成流程。");
+                copySelectedScripts = EditorGUILayout.ToggleLeft(copyContent, copySelectedScripts);
+                removeUnsafeComponents = EditorGUILayout.ToggleLeft(removeContent, removeUnsafeComponents);
+                cleanupTemporaryAssets = EditorGUILayout.ToggleLeft(cleanupContent, cleanupTemporaryAssets);
             }
         }
 
         private void DrawBuildButton()
         {
             bool hasPendingBuild = HasPendingBuildState();
-            string apiError;
             bool canBuild = IsPrefab(sourcePrefabPath) &&
+                            sdkAvailable &&
                             missingScriptCount == 0 &&
                             !hasPendingBuild &&
-                            TryValidateOfficialBuildApi(out apiError) &&
                             !string.IsNullOrEmpty(exportSettingsPath);
 
             using (new EditorGUI.DisabledScope(!canBuild))
             {
-                if (GUILayout.Button("Build Warudo Mod", GUILayout.Height(34f)))
+                if (GUILayout.Button("构建 Warudo Mod", primaryButtonStyle))
                     BeginBuild();
             }
 
             if (hasPendingBuild)
                 EditorGUILayout.HelpBox("已有一个 FastBuild 流程正在等待脚本编译或构建完成。", MessageType.Warning);
-            else if (!string.IsNullOrEmpty(previewMessage))
-                EditorGUILayout.HelpBox(previewMessage, MessageType.Info);
+            else if (!string.IsNullOrEmpty(lastBuildStatus))
+                EditorGUILayout.HelpBox(lastBuildStatus, MessageType.Info);
+        }
+
+        private void DrawPanelHeader(string title, string status, Color accent)
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true));
+            Color background = EditorGUIUtility.isProSkin
+                ? new Color(0.17f, 0.18f, 0.20f)
+                : new Color(0.82f, 0.83f, 0.85f);
+            EditorGUI.DrawRect(rect, background);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 4f, rect.height), accent);
+
+            Rect titleRect = new Rect(rect.x + 12f, rect.y, rect.width - 120f, rect.height);
+            Rect statusRect = new Rect(rect.xMax - 104f, rect.y, 94f, rect.height);
+            GUI.Label(titleRect, title, panelTitleStyle);
+            GUI.Label(statusRect, status, panelStatusStyle);
+        }
+
+        private void EnsureStyles()
+        {
+            if (panelTitleStyle == null)
+            {
+                panelTitleStyle = new GUIStyle(EditorStyles.boldLabel)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                    padding = new RectOffset(0, 0, 0, 0)
+                };
+            }
+
+            if (panelStatusStyle == null)
+            {
+                panelStatusStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    alignment = TextAnchor.MiddleRight,
+                    padding = new RectOffset(0, 0, 0, 0)
+                };
+            }
+
+            if (primaryButtonStyle == null)
+            {
+                primaryButtonStyle = new GUIStyle(GUI.skin.button)
+                {
+                    fixedHeight = 36f,
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 13
+                };
+            }
         }
 
         private void SetSourcePrefab(string path)
@@ -322,17 +430,52 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             sourcePrefab = string.IsNullOrEmpty(sourcePrefabPath)
                 ? null
                 : AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
+            lastBuildStatus = string.Empty;
             RefreshDependencyPreview();
             Repaint();
         }
 
-        private void RefreshDependencyPreview()
+        private void SynchronizeSourcePrefab()
         {
+            if (sourcePrefab != null)
+            {
+                string objectPath = AssetDatabase.GetAssetPath(sourcePrefab);
+                if (!IsPrefab(objectPath))
+                {
+                    sourcePrefab = null;
+                    sourcePrefabPath = string.Empty;
+                    RefreshDependencyPreview();
+                }
+                else if (!string.Equals(sourcePrefabPath, objectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    sourcePrefabPath = objectPath;
+                    RefreshDependencyPreview();
+                }
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(sourcePrefabPath) && !IsPrefab(sourcePrefabPath))
+            {
+                sourcePrefabPath = string.Empty;
+                RefreshDependencyPreview();
+            }
+        }
+
+        private void RefreshDependencyPreview(bool preserveSelection = false)
+        {
+            Dictionary<string, bool> previousSelection = null;
+            if (preserveSelection)
+            {
+                previousSelection = scriptPreview
+                    .Where(item => item != null && !string.IsNullOrEmpty(item.sourcePath))
+                    .ToDictionary(item => item.sourcePath, item => item.copySource, StringComparer.OrdinalIgnoreCase);
+            }
+
             scriptPreview.Clear();
             dependencyCount = 0;
             nonScriptDependencyCount = 0;
             missingScriptCount = 0;
-            previewMessage = string.Empty;
+            dependencyPreviewHash = string.Empty;
 
             if (!IsPrefab(sourcePrefabPath))
                 return;
@@ -376,6 +519,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         removeWhenExcluded = unsafeForRuntime,
                         note = GetScriptNote(path, typeName, unsafeForRuntime),
                     };
+                    bool previousValue;
+                    if (previousSelection != null && previousSelection.TryGetValue(path, out previousValue))
+                        row.copySource = previousValue;
                     rows.Add(path, row);
                 }
 
@@ -386,7 +532,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 .OrderByDescending(item => item.copySource)
                 .ThenBy(item => item.typeName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            previewMessage = "依赖预览已更新。";
+            dependencyPreviewHash = AssetDatabase.GetAssetDependencyHash(sourcePrefabPath).ToString();
         }
 
         private static bool IsUnsafeRuntimeScript(string path, string typeName)
@@ -443,15 +589,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (settings == null)
                 return;
 
-            string ignored;
             int ignoredIndex;
-            TryReadActiveModAssetPath(settings, out activeModAssetPath, out ignoredIndex, out ignored);
+            TryReadActiveModAssetPath(settings, out activeModAssetPath, out ignoredIndex);
         }
 
         private void BeginBuild()
         {
             if (HasPendingBuildState())
                 throw new InvalidOperationException("已有未完成的 FastBuild，请等待恢复流程完成。");
+
+            SynchronizeSourcePrefab();
+            if (!IsDependencyPreviewCurrent())
+                RefreshDependencyPreview(true);
 
             RefreshExportSettingsPreview();
             if (!IsPrefab(sourcePrefabPath))
@@ -468,7 +617,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-                previewMessage = "临时目录已生成，正在等待脚本编译后调用 UMod 官方构建 API。";
+                lastBuildStatus = "临时目录已生成，正在等待脚本编译后调用 UMod 官方构建 API。";
                 SchedulePendingBuildResume();
             }
             catch (Exception exception)
@@ -476,8 +625,20 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (state != null)
                     FinishBuildState(state, true);
                 Debug.LogException(exception);
-                EditorUtility.DisplayDialog(WindowTitle, "准备构建失败：\n" + GetRootMessage(exception), "确定");
+                lastBuildStatus = "准备构建失败：\n" + GetRootMessage(exception);
+                EditorUtility.DisplayDialog(WindowTitle, lastBuildStatus, "确定");
             }
+        }
+
+        private bool IsDependencyPreviewCurrent()
+        {
+            if (!IsPrefab(sourcePrefabPath) || string.IsNullOrEmpty(dependencyPreviewHash))
+                return false;
+
+            return string.Equals(
+                dependencyPreviewHash,
+                AssetDatabase.GetAssetDependencyHash(sourcePrefabPath).ToString(),
+                StringComparison.Ordinal);
         }
 
         private BuildState CreateStagedBuildState()
@@ -487,9 +648,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 throw new InvalidOperationException("无法加载 ExportSettings：" + exportSettingsPath);
 
             string originalModPath;
-            string ignoredPropertyPath;
             int activeProfileIndex;
-            if (!TryReadActiveModAssetPath(settings, out originalModPath, out activeProfileIndex, out ignoredPropertyPath))
+            if (!TryReadActiveModAssetPath(settings, out originalModPath, out activeProfileIndex))
                 throw new InvalidOperationException("ExportSettings 中找不到活动配置的 modAssetPath。");
 
             string buildId = DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
@@ -500,7 +660,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             {
                 phase = PendingPhase,
                 stateFilePath = stateFilePath,
-                sourcePrefabPath = sourcePrefabPath,
                 temporaryAssetRoot = temporaryRoot,
                 temporaryPrefabPath = temporaryPrefabPath,
                 exportSettingsPath = exportSettingsPath,
@@ -517,7 +676,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 var mappings = new List<ScriptMapping>();
                 if (copySelectedScripts)
-                    StageSelectedScripts(temporaryRoot, mappings);
+                    StageSelectedScripts(temporaryRoot);
 
                 if (removeUnsafeComponents)
                 {
@@ -544,7 +703,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private void StageSelectedScripts(string temporaryRoot, List<ScriptMapping> mappings)
+        private void StageSelectedScripts(string temporaryRoot)
         {
             string scriptsRoot = temporaryRoot + "/" + StagedScriptsDirectoryName;
             EnsureAssetFolder(scriptsRoot);
@@ -571,13 +730,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string wrappedSource = "#if !UNITY_EDITOR\n" + sourceText + "\n#endif\n";
                 File.WriteAllText(absoluteDestination, wrappedSource, new UTF8Encoding(false));
                 WriteFreshMetaFile(absoluteDestination + ".meta");
-
-                mappings.Add(new ScriptMapping
-                {
-                    sourcePath = item.sourcePath,
-                    stagedPath = stagedPath,
-                    removeFromPrefab = false,
-                });
             }
         }
 
@@ -661,6 +813,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 resultMessage = "FastBuild 失败：\n" + GetRootMessage(exception);
             }
 
+            UpdateOpenWindowStatus(resultMessage);
+
             if (!stateValidated)
             {
                 QuarantinePendingState(stateFilePath);
@@ -687,6 +841,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
+        private static void UpdateOpenWindowStatus(string status)
+        {
+            foreach (HoFastBuildWarudoModWindow window in Resources.FindObjectsOfTypeAll<HoFastBuildWarudoModWindow>())
+            {
+                window.lastBuildStatus = status;
+                window.Repaint();
+            }
+        }
+
         private static void PrepareStagedPrefab(BuildState state)
         {
             if (!IsPrefab(state.temporaryPrefabPath))
@@ -706,11 +869,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     if (behaviour == null)
                         continue;
 
-                    var serializedBehaviour = new SerializedObject(behaviour);
-                    SerializedProperty scriptProperty = serializedBehaviour.FindProperty("m_Script");
-                    MonoScript currentScript = scriptProperty == null
-                        ? null
-                        : scriptProperty.objectReferenceValue as MonoScript;
+                    MonoScript currentScript = MonoScript.FromMonoBehaviour(behaviour);
                     string currentPath = currentScript == null
                         ? string.Empty
                         : AssetDatabase.GetAssetPath(currentScript);
@@ -793,6 +952,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(state.exportSettingsPath);
             if (settings == null)
                 throw new InvalidOperationException("无法加载 UMod ExportSettings：" + state.exportSettingsPath);
+
+            string currentModPath;
+            int currentProfileIndex;
+            if (!TryReadActiveModAssetPath(settings, out currentModPath, out currentProfileIndex) ||
+                currentProfileIndex != state.activeProfileIndex ||
+                !string.Equals(
+                    NormalizePath(currentModPath),
+                    NormalizePath(state.originalModAssetPath),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("活动 UMod ExportProfile 在构建等待期间发生变化，请重新开始 FastBuild。");
 
             var serializedSettings = new SerializedObject(settings);
             SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
@@ -920,12 +1089,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private static bool TryReadActiveModAssetPath(
             UnityEngine.Object settings,
             out string modAssetPath,
-            out int activeProfileIndex,
-            out string serializedPropertyPath)
+            out int activeProfileIndex)
         {
             modAssetPath = string.Empty;
             activeProfileIndex = 0;
-            serializedPropertyPath = string.Empty;
 
             var serializedSettings = new SerializedObject(settings);
             SerializedProperty activeProfile = serializedSettings.FindProperty("activeProfile");
@@ -933,16 +1100,17 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (profiles == null || !profiles.isArray || profiles.arraySize == 0)
                 return false;
 
-            activeProfileIndex = activeProfile == null
-                ? 0
-                : Mathf.Clamp(activeProfile.intValue, 0, profiles.arraySize - 1);
+            if (activeProfile != null &&
+                (activeProfile.intValue < 0 || activeProfile.intValue >= profiles.arraySize))
+                return false;
+
+            activeProfileIndex = activeProfile == null ? 0 : activeProfile.intValue;
             SerializedProperty profile = profiles.GetArrayElementAtIndex(activeProfileIndex);
             SerializedProperty pathProperty = profile.FindPropertyRelative("modAssetPath");
             if (pathProperty == null)
                 return false;
 
             modAssetPath = pathProperty.stringValue;
-            serializedPropertyPath = pathProperty.propertyPath;
             return true;
         }
 

@@ -9,6 +9,7 @@
 | --- | --- |
 | 动画处理 | `HoUnityTools/动画处理` |
 | FBX 导入处理中控 | `HoUnityTools/HoFBX导入处理` |
+| Warudo Prefab 快速构建 | `Assets/HoUnityTools/FastBuildWarudoMod` |
 
 选中 FBX 资产后，也可以使用 `Assets/HoUnityTools/HoFBX导入处理` 打开同一个 FBX 面板并自动扫描相邻配置文件。这是面板的上下文快捷入口，不是另一套功能。
 
@@ -24,3 +25,8 @@
 | 骨骼绘制器 | `HoUnityTools/Ho Bone Renderer` |
 
 FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标准约束。`HoImportedConstraintMarker` 是导入器内部标记组件，不应手动添加。
+
+## 文档
+
+- [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
+- [旧 Hotools 源码迁移说明](docs/MIGRATION.md)
