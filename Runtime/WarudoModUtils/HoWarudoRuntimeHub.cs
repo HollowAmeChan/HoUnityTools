@@ -181,7 +181,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                     }
                     catch (System.Exception exception)
                     {
-                        GUILayout.Label("Module UI error: " + exception.GetType().Name);
+                        GUILayout.Label("Module UI error");
                         Debug.LogException(exception);
                     }
                     GUILayout.EndVertical();
