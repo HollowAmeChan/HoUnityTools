@@ -34,6 +34,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         public Color zAxisColor = new Color(0.2f, 0.45f, 1f, 0.95f);
 
         [Header("Grouping")]
+        [Tooltip("Optional bone collection JSON exported by HoTools.")]
+        public TextAsset groupJson;
+
         [Tooltip("Optional bone collection asset used to filter runtime drawing.")]
         public HoBoneGroupSet boneGroupSet;
 
@@ -77,6 +80,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private bool m_IsReady;
         private bool m_UsesShaderBillboard;
         private int m_VisibleNodeCount;
+        private HoBoneGroupSet m_ParsedGroupSet;
+        private TextAsset m_ParsedFrom;
         private Vector2 m_RuntimeCollectionScroll;
 
         private static readonly int[] QuadTriangles = { 0, 1, 2, 2, 1, 3 };
@@ -191,24 +196,25 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return false;
             }
 
-            if (boneGroupSet == null)
+            HoBoneGroupSet activeGroupSet = GetActiveGroupSet();
+            if (activeGroupSet == null)
             {
                 collectionColor = boneColor;
                 return true;
             }
 
-            if (boneGroupSet.collections == null)
+            if (activeGroupSet.collections == null)
             {
                 collectionColor = boneColor;
                 return true;
             }
 
-            return boneGroupSet.IsBoneVisible(node.name, hiddenCollections, out collectionColor);
+            return activeGroupSet.IsBoneVisible(node.name, hiddenCollections, out collectionColor);
         }
 
         private Color ResolveBoneColor(Color collectionColor)
         {
-            return boneGroupSet != null && useCollectionColors ? collectionColor : boneColor;
+            return GetActiveGroupSet() != null && useCollectionColors ? collectionColor : boneColor;
         }
 
         private void OnDisable()
@@ -237,6 +243,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 Destroy(m_Material);
             if (m_DrawTransform != null)
                 Destroy(m_DrawTransform.gameObject);
+            if (m_ParsedGroupSet != null)
+                Destroy(m_ParsedGroupSet);
         }
 
         private static void DrawActiveRenderers(Camera camera)
@@ -289,24 +297,31 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             context.Label("Collected nodes: " + m_Nodes.Count);
             context.Label("Visible nodes: " + m_VisibleNodeCount);
 
-            if (boneGroupSet == null)
+            HoBoneGroupSet activeGroupSet = GetActiveGroupSet();
+            if (activeGroupSet == null)
             {
                 context.Label("Collection filter: none");
                 return;
             }
 
             context.Space(6f);
-            if (boneGroupSet.collections == null)
+            if (boneGroupSet == null && groupJson != null && context.Button("Refresh collection data"))
+            {
+                RefreshGroupJson();
+                activeGroupSet = GetActiveGroupSet();
+            }
+
+            if (activeGroupSet.collections == null)
             {
                 context.Label("Collection asset has no collections");
                 return;
             }
 
-            context.Label("Collections: " + boneGroupSet.name);
+            context.Label("Collections: " + (boneGroupSet != null ? boneGroupSet.name : groupJson.name));
             m_RuntimeCollectionScroll = context.BeginScrollView(m_RuntimeCollectionScroll, GUILayout.Height(120f));
-            for (int i = 0; i < boneGroupSet.collections.Count; i++)
+            for (int i = 0; i < activeGroupSet.collections.Count; i++)
             {
-                HoBoneCollection collection = boneGroupSet.collections[i];
+                HoBoneCollection collection = activeGroupSet.collections[i];
                 if (collection == null || string.IsNullOrEmpty(collection.name))
                     continue;
 
@@ -321,6 +336,40 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 }
             }
             context.EndScrollView();
+        }
+
+        public HoBoneGroupSet GetActiveGroupSet()
+        {
+            if (boneGroupSet != null)
+                return boneGroupSet;
+
+            if (groupJson == null)
+            {
+                if (m_ParsedGroupSet != null)
+                    Destroy(m_ParsedGroupSet);
+                m_ParsedGroupSet = null;
+                m_ParsedFrom = null;
+                return null;
+            }
+
+            if (m_ParsedGroupSet == null || m_ParsedFrom != groupJson)
+            {
+                if (m_ParsedGroupSet != null)
+                    Destroy(m_ParsedGroupSet);
+                m_ParsedGroupSet = HoBoneGroupSet.CreateFromJson(groupJson.text);
+                m_ParsedFrom = groupJson;
+            }
+
+            return m_ParsedGroupSet;
+        }
+
+        public void RefreshGroupJson()
+        {
+            if (m_ParsedGroupSet != null)
+                Destroy(m_ParsedGroupSet);
+            m_ParsedGroupSet = null;
+            m_ParsedFrom = null;
+            RebuildMesh();
         }
 
         private void AddNode(Transform node)

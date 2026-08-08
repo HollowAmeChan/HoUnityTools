@@ -85,7 +85,7 @@ HoHub launcher
 - 骨骼集合过滤。
 - 当前收集到的骨骼数量和可见数量。
 
-集合过滤应复用 `HoBoneGroupSet` 现有的判断逻辑，不在运行时 UI 中重新实现一套过滤规则。运行时只修改隐藏集合、显示集合或过滤文本，然后请求 Renderer 重建可见节点。
+集合过滤支持直接引用 `HoBoneGroupSet`，也支持拖入 HoTools 导出的 `TextAsset` JSON。两种方式都复用 `HoBoneGroupSet` 现有的判断逻辑，不在运行时 UI 中重新实现一套过滤规则。运行时只修改隐藏集合、显示集合或过滤文本，然后请求 Renderer 重建可见节点。
 
 ### HoRig / Constraints
 
