@@ -65,6 +65,22 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 - Warudo SDK 或其他包的脚本默认保留原引用，不主动复制；启用复制前必须确认源码和依赖可以由 UMod 编译。
 - 源码会短暂出现在 Unity 的运行时编译列表，构建完成后随临时目录一起清理。
 
+### UMod 运行时安全审查
+
+UMod 会在脚本编译后检查运行时程序集的 API 引用。复制进角色 Mod 的源码禁止引用 `System.Reflection` 或通过反射访问成员，否则构建会在 `RunCodeValidation` 阶段失败。
+
+以下写法也属于反射引用，不能出现在运行时脚本中：
+
+```csharp
+exception.GetType().Name
+typeof(SomeType).GetProperty("Value")
+methodInfo.Invoke(target, args)
+```
+
+其中 `exception.GetType().Name` 看起来只是错误文本，但编译后的 IL 会调用 `System.Reflection.MemberInfo.Name`，同样会被拒绝。运行时错误显示应使用固定文本，并用 `Debug.LogException(exception)` 保留诊断信息。
+
+FastBuild 自身位于 `Editor` 程序集，可以反射调用 UMod 官方构建入口；这不等于运行时 Mod 可以使用反射。两者必须保持程序集边界。
+
 当前版本不创建额外 asmdef。UMod 多 Mod 模式会根据 Unity 生成的运行时 `.csproj` 判断源码是否能进入编译；额外 asmdef 可能让临时源码落到错误的工程文件，导致构建日志出现 `not in the .csproj file and will not be compiled`。临时脚本必须位于普通、可被 Unity 导入的 `Assets` 路径；`Assets/...~` 等 Unity 忽略目录不能作为 Mod 工作区。
 
 为避免 Unity 编辑器侧出现重复类型，FastBuild 临时源码使用编辑器条件包装；Warudo UMod 构建在已验证的 SDK 版本中仍会生成运行时类型。这个行为属于 SDK 版本相关实现，不能只以“Build succeeded”判断成功，必须同时检查构建日志和产物中的程序集类型。

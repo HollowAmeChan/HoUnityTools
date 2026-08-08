@@ -123,6 +123,20 @@ IMGUI 的 `Event.current.Use()` 可以阻止部分 IMGUI/EventSystem 层的事�
 
 `InputSystem.onEvent` 不是 Warudo 专用接口，只能阻止 Input System 继续更新鼠标状态，不能保证拦截已经在其他层读取的输入。它不能直接加入通用的 `HoUnityTools.Runtime` 程序集，否则会给不含 Input System 引用的工程造成编译错误。不采用修改全局鼠标状态、反射调用私有字段或禁用整个输入系统的方式。
 
+## UMod 运行时安全边界
+
+Warudo UMod 会对编译后的 Mod 程序集执行代码安全审查。运行时模块禁止引用 `System.Reflection`，也不能通过反射间接访问被禁止的成员。
+
+运行时脚本中不要使用：
+
+- `System.Reflection` 命名空间。
+- `GetType().Name`、`MemberInfo`、`MethodInfo`、`FieldInfo`、`PropertyInfo`。
+- `Activator`、动态程序集加载或私有成员查找。
+
+即使只是为了显示异常类型，`exception.GetType().Name` 也会生成对 `System.Reflection.MemberInfo.Name` 的调用并被 UMod 拒绝。运行时 UI 应使用固定文本，详细异常交给 `Debug.LogException` 输出。
+
+FastBuild 编辑器代码可以使用反射查找 UMod 官方构建入口，但这部分代码位于 `Editor` 程序集，不会复制进 Warudo Mod。运行时 Hub、BoneDebug 和后续模块必须保持纯静态类型调用。
+
 ## 实施顺序
 
 1. 保留当前 Hub 原型，确认 Mod 构建和运行时显示正常。
