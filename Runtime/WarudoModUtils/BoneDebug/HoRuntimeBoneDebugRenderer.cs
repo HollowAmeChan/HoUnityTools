@@ -22,7 +22,10 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [Header("Display")]
         public bool drawBones = true;
         public bool drawAxes = true;
+        [Tooltip("Fallback world-space width used only when a custom material does not expose _LineWidth.")]
         public float lineWidth = 0.006f;
+        [Tooltip("Shader billboard path width in screen pixels.")]
+        public float lineWidthPixels = 3f;
         public float axisLength = 0.04f;
         public Color boneColor = new Color(0.2f, 0.65f, 1f, 0.9f);
         public Color xAxisColor = new Color(1f, 0.15f, 0.15f, 0.95f);
@@ -48,7 +51,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private readonly List<Transform> m_Nodes = new List<Transform>();
         private readonly HashSet<Transform> m_NodeSet = new HashSet<Transform>();
         private readonly List<Vector3> m_Vertices = new List<Vector3>();
+        private readonly List<Vector3> m_OtherVertices = new List<Vector3>();
         private readonly List<Color> m_Colors = new List<Color>();
+        private readonly List<Vector2> m_Uvs = new List<Vector2>();
         private readonly List<int> m_Indices = new List<int>();
 
         private Mesh m_Mesh;
@@ -59,6 +64,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private Camera m_CachedCamera;
         private bool m_OwnsMaterial;
         private bool m_IsReady;
+        private bool m_UsesShaderBillboard;
 
         private static readonly int[] QuadTriangles = { 0, 1, 2, 2, 1, 3 };
         private static readonly List<HoRuntimeBoneDebugRenderer> ActiveRenderers =
@@ -83,6 +89,52 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
 
             RebuildMesh();
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (skeletonRoot == null)
+                return;
+
+            Color previousColor = Gizmos.color;
+            if (includeRoot)
+            {
+                DrawSceneGizmos(skeletonRoot);
+            }
+            else
+            {
+                for (int i = 0; i < skeletonRoot.childCount; i++)
+                    DrawSceneGizmos(skeletonRoot.GetChild(i));
+            }
+
+            Gizmos.color = previousColor;
+        }
+
+        private void DrawSceneGizmos(Transform node)
+        {
+            if (drawBones)
+            {
+                Gizmos.color = boneColor;
+                for (int i = 0; i < node.childCount; i++)
+                    Gizmos.DrawLine(node.position, node.GetChild(i).position);
+            }
+
+            if (drawAxes)
+            {
+                float length = Mathf.Max(0f, axisLength);
+                if (length > 0f)
+                {
+                    Gizmos.color = xAxisColor;
+                    Gizmos.DrawLine(node.position, node.position + node.right * length);
+                    Gizmos.color = yAxisColor;
+                    Gizmos.DrawLine(node.position, node.position + node.up * length);
+                    Gizmos.color = zAxisColor;
+                    Gizmos.DrawLine(node.position, node.position + node.forward * length);
+                }
+            }
+
+            for (int i = 0; i < node.childCount; i++)
+                DrawSceneGizmos(node.GetChild(i));
         }
 
         private void OnDisable()
@@ -211,6 +263,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (m_Material != null)
             {
                 m_MeshRenderer.sharedMaterial = m_Material;
+                m_UsesShaderBillboard = m_Material.HasProperty("_LineWidth");
                 ConfigureMaterial();
             }
 
@@ -238,15 +291,21 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
             }
 
-            Camera camera = ResolveCamera();
-            Vector3 cameraPosition = camera != null
-                ? camera.transform.position
-                : skeletonRoot.position + Vector3.back * 10f;
+            Vector3 cameraPosition = Vector3.zero;
+            if (!m_UsesShaderBillboard)
+            {
+                Camera camera = ResolveCamera();
+                cameraPosition = camera != null
+                    ? camera.transform.position
+                    : skeletonRoot.position + Vector3.back * 10f;
+            }
             float safeLineWidth = Mathf.Max(0.0001f, lineWidth);
             float safeAxisLength = Mathf.Max(0f, axisLength);
 
             m_Vertices.Clear();
+            m_OtherVertices.Clear();
             m_Colors.Clear();
+            m_Uvs.Clear();
             m_Indices.Clear();
 
             for (int i = 0; i < m_Nodes.Count; i++)
@@ -282,10 +341,15 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             m_Mesh.Clear(false);
             m_Mesh.SetVertices(m_Vertices);
+            m_Mesh.SetUVs(0, m_Uvs);
+            m_Mesh.SetUVs(1, m_OtherVertices);
             m_Mesh.SetColors(m_Colors);
             m_Mesh.SetIndices(m_Indices, MeshTopology.Triangles, 0, false);
             m_Mesh.RecalculateBounds();
             m_MeshRenderer.enabled = !drawAfterCamera;
+
+            if (m_UsesShaderBillboard && m_Material.HasProperty("_LineWidth"))
+                m_Material.SetFloat("_LineWidth", Mathf.Max(0.5f, lineWidthPixels));
         }
 
         private void DrawAfterCamera(Camera camera)
@@ -320,6 +384,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (length < 0.00001f)
                 return;
 
+            if (m_UsesShaderBillboard)
+            {
+                AddShaderSegment(start, end, color);
+                return;
+            }
+
             direction /= length;
             Vector3 viewDirection = ((start + end) * 0.5f - cameraPosition).normalized;
             Vector3 side = Vector3.Cross(direction, viewDirection);
@@ -330,19 +400,33 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             side = side.normalized * (width * 0.5f);
 
             int vertexStart = m_Vertices.Count;
-            AddVertex(start - side, color);
-            AddVertex(start + side, color);
-            AddVertex(end - side, color);
-            AddVertex(end + side, color);
+            AddVertex(start - side, color, Vector2.zero, end);
+            AddVertex(start + side, color, Vector2.up, end);
+            AddVertex(end - side, color, Vector2.right, start);
+            AddVertex(end + side, color, Vector2.one, start);
 
             for (int i = 0; i < QuadTriangles.Length; i++)
                 m_Indices.Add(vertexStart + QuadTriangles[i]);
         }
 
-        private void AddVertex(Vector3 worldPosition, Color color)
+        private void AddShaderSegment(Vector3 start, Vector3 end, Color color)
+        {
+            AddVertex(start, color, new Vector2(0f, -1f), end);
+            AddVertex(start, color, new Vector2(0f, 1f), end);
+            AddVertex(end, color, new Vector2(1f, -1f), start);
+            AddVertex(end, color, new Vector2(1f, 1f), start);
+
+            int vertexStart = m_Vertices.Count - 4;
+            for (int i = 0; i < QuadTriangles.Length; i++)
+                m_Indices.Add(vertexStart + QuadTriangles[i]);
+        }
+
+        private void AddVertex(Vector3 worldPosition, Color color, Vector2 uv, Vector3 otherPosition)
         {
             m_Vertices.Add(m_DrawTransform.InverseTransformPoint(worldPosition));
+            m_OtherVertices.Add(m_DrawTransform.InverseTransformPoint(otherPosition));
             m_Colors.Add(color);
+            m_Uvs.Add(uv);
         }
     }
 }

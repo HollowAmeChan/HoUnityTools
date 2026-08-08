@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -17,6 +18,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const string PendingStateSessionKey = "HoUnityTools.FastBuildWarudoMod.PendingState";
         private const string TemporaryAssetRoot = "Assets/HoFastBuildWarudoModTemp";
         private const string StagedScriptsDirectoryName = "Scripts";
+        private const string StagedResourcesDirectoryName = "Resources";
+        private const string RuntimeBoneDebugResourceKey = "HoRuntimeDebugLine";
+        private const string RuntimeBoneDebugTypeName =
+            "Hollow.HoUnityTools.WarudoModUtils.HoRuntimeBoneDebugRenderer";
         private const string PendingPhase = "AwaitingCompile";
         private const string BuildingPhase = "Building";
 
@@ -29,6 +34,19 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public bool copySource;
             public bool removeWhenExcluded;
             public int referenceCount;
+            public List<string> componentReferences = new List<string>();
+            public bool showReferencedAssets;
+            public List<RuntimeAssetPreview> referencedAssets = new List<RuntimeAssetPreview>();
+        }
+
+        [Serializable]
+        private sealed class RuntimeAssetPreview
+        {
+            public string resourceKey = string.Empty;
+            public string assetPath = string.Empty;
+            public bool found;
+            public bool willCopy;
+            public List<string> componentReferences = new List<string>();
         }
 
         [Serializable]
@@ -55,6 +73,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private GameObject sourcePrefab;
         [SerializeField] private string sourcePrefabPath = string.Empty;
         [SerializeField] private List<ScriptPreview> scriptPreview = new List<ScriptPreview>();
+        [SerializeField] private List<RuntimeAssetPreview> runtimeAssetPreview = new List<RuntimeAssetPreview>();
         [SerializeField] private Vector2 pageScroll;
         [SerializeField] private Vector2 scriptScroll;
         [SerializeField] private bool copySelectedScripts = true;
@@ -75,6 +94,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private string sdkError = string.Empty;
 
         private static bool resumeHookInstalled;
+        private static readonly Regex ResourcesLoadPattern = new Regex(
+            @"Resources\s*\.\s*Load(?:Async)?(?:\s*<[^>]+>)?\s*\(\s*""([^""]+)""",
+            RegexOptions.Compiled);
 
         [InitializeOnLoadMethod]
         private static void InitializePendingBuildResume()
@@ -266,9 +288,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
+                int runtimeAssetCount = runtimeAssetPreview == null ? 0 : runtimeAssetPreview.Count;
+                string dependencyStatus = scriptPreview.Count + " 个脚本";
+                if (runtimeAssetCount > 0)
+                    dependencyStatus += " / " + runtimeAssetCount + " 个脚本资源";
                 DrawPanelHeader(
                     "依赖审查",
-                    scriptPreview.Count + " 个脚本",
+                    dependencyStatus,
                     new Color(0.62f, 0.45f, 0.84f));
                 GUILayout.Space(5f);
                 using (new EditorGUILayout.HorizontalScope())
@@ -282,10 +308,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 EditorGUILayout.LabelField(
                     "资源概览",
-                    string.Format("依赖 {0} | 非脚本 {1} | 脚本 {2} | Missing {3}",
+                    string.Format("依赖 {0} | 非脚本 {1} | 脚本 {2} | 脚本资源 {3} | Missing {4}",
                         dependencyCount,
                         nonScriptDependencyCount,
                         scriptPreview.Count,
+                        runtimeAssetPreview == null ? 0 : runtimeAssetPreview.Count,
                         missingScriptCount));
                 if (missingScriptCount > 0)
                     EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
@@ -316,21 +343,123 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private void DrawScriptPreviewRow(ScriptPreview item)
+        private void DrawRuntimeAssetPreviewInlineRow(RuntimeAssetPreview item)
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
-                using (new EditorGUI.DisabledScope(!copySelectedScripts || item.removeWhenExcluded))
-                    item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
+                GUILayout.Space(34f);
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.Toggle(item.found && item.willCopy, GUILayout.Width(18f));
 
-                string displayName = string.IsNullOrEmpty(item.typeName)
-                    ? Path.GetFileNameWithoutExtension(item.sourcePath)
-                    : item.typeName;
-                GUIContent typeContent = new GUIContent(displayName, item.note);
-                EditorGUILayout.LabelField(typeContent, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
-                EditorGUILayout.LabelField("引用 " + item.referenceCount, GUILayout.Width(56f));
-                EditorGUILayout.LabelField(Path.GetFileName(item.sourcePath), EditorStyles.miniLabel);
+                string displayName = item.found
+                    ? item.resourceKey
+                    : item.resourceKey + "（未找到）";
+                string reference = item.componentReferences == null || item.componentReferences.Count == 0
+                    ? "脚本字符串引用"
+                    : item.componentReferences[0];
+                if (item.componentReferences != null && item.componentReferences.Count > 1)
+                    reference += " +" + (item.componentReferences.Count - 1);
+
+                GUIContent content = new GUIContent(
+                    displayName,
+                    BuildRuntimeAssetTooltip(item));
+                EditorGUILayout.LabelField(content, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
+                EditorGUILayout.LabelField(reference, EditorStyles.miniLabel, GUILayout.MinWidth(220f));
+                EditorGUILayout.LabelField(
+                    item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
+                    EditorStyles.miniLabel);
             }
+        }
+
+        private static string BuildRuntimeAssetTooltip(RuntimeAssetPreview item)
+        {
+            var builder = new StringBuilder();
+            builder.Append("资源路径：");
+            builder.Append(item.found ? item.assetPath : "未找到");
+            builder.Append("\n构建复制：");
+            builder.Append(item.willCopy ? "是" : "否（请勾选引用它的脚本）");
+            if (item.componentReferences != null && item.componentReferences.Count > 0)
+            {
+                builder.Append("\n\n组件引用：");
+                for (int i = 0; i < item.componentReferences.Count && i < 24; i++)
+                {
+                    builder.Append("\n");
+                    builder.Append(item.componentReferences[i]);
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private void DrawScriptPreviewRow(ScriptPreview item)
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool hasReferencedAssets = item.referencedAssets != null && item.referencedAssets.Count > 0;
+                    if (hasReferencedAssets)
+                    {
+                        string marker = item.showReferencedAssets ? "-" : "+";
+                        if (GUILayout.Button(marker, EditorStyles.miniButton, GUILayout.Width(18f)))
+                            item.showReferencedAssets = !item.showReferencedAssets;
+                    }
+                    else
+                        GUILayout.Space(18f);
+
+                    using (new EditorGUI.DisabledScope(!copySelectedScripts || item.removeWhenExcluded))
+                        item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
+
+                    string displayName = string.IsNullOrEmpty(item.typeName)
+                        ? Path.GetFileNameWithoutExtension(item.sourcePath)
+                        : item.typeName;
+                    GUIContent typeContent = new GUIContent(displayName, BuildScriptTooltip(item));
+                    EditorGUILayout.LabelField(typeContent, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
+                    bool hasComponentReference = item.componentReferences != null && item.componentReferences.Count > 0;
+                    string referenceSummary = !hasComponentReference
+                        ? "组件引用 0"
+                        : "组件引用 " + item.referenceCount + ": " + item.componentReferences[0];
+                    GUIContent referenceContent = new GUIContent(referenceSummary, BuildScriptTooltip(item));
+                    EditorGUILayout.LabelField(
+                        referenceContent,
+                        EditorStyles.miniLabel,
+                        GUILayout.MinWidth(180f),
+                        GUILayout.MaxWidth(320f));
+                    EditorGUILayout.LabelField(Path.GetFileName(item.sourcePath), EditorStyles.miniLabel);
+                }
+
+                if (item.showReferencedAssets && item.referencedAssets != null)
+                {
+                    for (int i = 0; i < item.referencedAssets.Count; i++)
+                        DrawRuntimeAssetPreviewInlineRow(item.referencedAssets[i]);
+                }
+            }
+        }
+
+        private static string BuildScriptTooltip(ScriptPreview item)
+        {
+            var builder = new StringBuilder(item.note ?? string.Empty);
+            if (item.componentReferences == null || item.componentReferences.Count == 0)
+                return builder.ToString();
+
+            if (builder.Length > 0)
+                builder.Append("\n\n");
+            builder.Append("组件引用：");
+            int visibleCount = Mathf.Min(item.componentReferences.Count, 24);
+            for (int i = 0; i < visibleCount; i++)
+            {
+                builder.Append("\n");
+                builder.Append(item.componentReferences[i]);
+            }
+
+            if (item.componentReferences.Count > visibleCount)
+            {
+                builder.Append("\n… 其余 ");
+                builder.Append(item.componentReferences.Count - visibleCount);
+                builder.Append(" 个引用未显示");
+            }
+
+            return builder.ToString();
         }
 
         private void DrawBuildOptionsPanel()
@@ -472,6 +601,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
 
             scriptPreview.Clear();
+            if (runtimeAssetPreview == null)
+                runtimeAssetPreview = new List<RuntimeAssetPreview>();
+            runtimeAssetPreview.Clear();
             dependencyCount = 0;
             nonScriptDependencyCount = 0;
             missingScriptCount = 0;
@@ -526,13 +658,96 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 }
 
                 row.referenceCount++;
+                row.componentReferences.Add(
+                    GetTransformPath(prefab.transform, behaviour.transform) +
+                    " / " +
+                    behaviour.GetType().Name);
             }
 
             scriptPreview = rows.Values
                 .OrderByDescending(item => item.copySource)
                 .ThenBy(item => item.typeName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            RefreshReferencedAssetPreview();
             dependencyPreviewHash = AssetDatabase.GetAssetDependencyHash(sourcePrefabPath).ToString();
+        }
+
+        private void RefreshReferencedAssetPreview()
+        {
+            if (runtimeAssetPreview == null)
+                runtimeAssetPreview = new List<RuntimeAssetPreview>();
+            runtimeAssetPreview.Clear();
+
+            var rows = new Dictionary<string, RuntimeAssetPreview>(StringComparer.OrdinalIgnoreCase);
+            foreach (ScriptPreview script in scriptPreview)
+            {
+                if (script == null || string.IsNullOrEmpty(script.sourcePath))
+                    continue;
+
+                string absoluteSource = AssetPathToAbsolute(script.sourcePath);
+                if (!File.Exists(absoluteSource))
+                    continue;
+
+                string sourceText = File.ReadAllText(absoluteSource, Encoding.UTF8);
+                MatchCollection matches = ResourcesLoadPattern.Matches(sourceText);
+                foreach (Match match in matches)
+                {
+                    string resourceKey = NormalizeResourceKey(match.Groups[1].Value);
+                    if (string.IsNullOrEmpty(resourceKey))
+                        continue;
+
+                    RuntimeAssetPreview asset;
+                    if (!rows.TryGetValue(resourceKey, out asset))
+                    {
+                        string assetPath = FindResourceAsset(resourceKey);
+                        asset = new RuntimeAssetPreview
+                        {
+                            resourceKey = resourceKey,
+                            assetPath = assetPath,
+                            found = !string.IsNullOrEmpty(assetPath),
+                        };
+                        rows.Add(resourceKey, asset);
+                    }
+
+                    if (script.referencedAssets == null)
+                        script.referencedAssets = new List<RuntimeAssetPreview>();
+                    if (!script.referencedAssets.Contains(asset))
+                        script.referencedAssets.Add(asset);
+                    asset.willCopy |= script.copySource && !script.removeWhenExcluded;
+                    if (script.componentReferences == null)
+                        continue;
+
+                    for (int i = 0; i < script.componentReferences.Count; i++)
+                    {
+                        string componentReference = script.componentReferences[i];
+                        if (!asset.componentReferences.Contains(componentReference))
+                            asset.componentReferences.Add(componentReference);
+                    }
+                }
+            }
+
+            runtimeAssetPreview = rows.Values
+                .OrderBy(item => item.resourceKey, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static string GetTransformPath(Transform root, Transform target)
+        {
+            if (root == null || target == null)
+                return string.Empty;
+
+            var parts = new List<string>();
+            Transform current = target;
+            while (current != null)
+            {
+                parts.Add(current.name);
+                if (current == root)
+                    break;
+                current = current.parent;
+            }
+
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
         }
 
         private static bool IsUnsafeRuntimeScript(string path, string typeName)
@@ -676,7 +891,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 var mappings = new List<ScriptMapping>();
                 if (copySelectedScripts)
+                {
                     StageSelectedScripts(temporaryRoot);
+                    StageReferencedRuntimeAssets(temporaryRoot);
+                }
 
                 if (removeUnsafeComponents)
                 {
@@ -734,6 +952,160 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 File.WriteAllText(absoluteDestination, wrappedSource, new UTF8Encoding(false));
                 WriteFreshMetaFile(absoluteDestination + ".meta");
             }
+        }
+
+        private void StageReferencedRuntimeAssets(string temporaryRoot)
+        {
+            var stagedAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string stagedDebugShaderPath = string.Empty;
+            foreach (ScriptPreview item in scriptPreview)
+            {
+                if (!item.copySource || item.removeWhenExcluded)
+                    continue;
+
+                string absoluteSource = AssetPathToAbsolute(item.sourcePath);
+                if (!File.Exists(absoluteSource))
+                    continue;
+
+                string sourceText = File.ReadAllText(absoluteSource, Encoding.UTF8);
+                MatchCollection matches = ResourcesLoadPattern.Matches(sourceText);
+                foreach (Match match in matches)
+                {
+                    string resourceKey = NormalizeResourceKey(match.Groups[1].Value);
+                    if (string.IsNullOrEmpty(resourceKey))
+                        continue;
+
+                    string resourcePath = FindResourceAsset(resourceKey);
+                    if (string.IsNullOrEmpty(resourcePath))
+                    {
+                        Debug.LogWarning(
+                            "[HoUnityTools] FastBuild 无法定位脚本资源：Resources.Load(\"" +
+                            resourceKey + "\")，脚本：" + item.sourcePath);
+                        continue;
+                    }
+
+                    StageResourceAssetRecursive(resourcePath, temporaryRoot, stagedAssets);
+                    if (string.Equals(resourceKey, RuntimeBoneDebugResourceKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        stagedDebugShaderPath = NormalizeAssetPath(temporaryRoot).TrimEnd('/') + "/" +
+                                                StagedResourcesDirectoryName + "/" +
+                                                GetResourcesRelativePath(resourcePath);
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(stagedDebugShaderPath))
+                StageRuntimeDebugMaterial(temporaryRoot, stagedDebugShaderPath);
+        }
+
+        private static void StageRuntimeDebugMaterial(string temporaryRoot, string stagedShaderPath)
+        {
+            Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(stagedShaderPath);
+            if (shader == null)
+            {
+                Debug.LogWarning("[HoUnityTools] FastBuild 无法为 HoRuntimeDebugLine 创建材质：" + stagedShaderPath);
+                return;
+            }
+
+            string materialPath = NormalizeAssetPath(temporaryRoot).TrimEnd('/') + "/" +
+                                  StagedResourcesDirectoryName + "/HoRuntimeDebugLine.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null)
+                return;
+
+            EnsureAssetFolder(NormalizeAssetPath(Path.GetDirectoryName(materialPath)));
+            var material = new Material(shader)
+            {
+                name = "Ho Runtime Debug Line Material"
+            };
+            AssetDatabase.CreateAsset(material, materialPath);
+            AssetDatabase.ImportAsset(materialPath, ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        private static void StageResourceAssetRecursive(
+            string sourcePath,
+            string temporaryRoot,
+            HashSet<string> stagedAssets)
+        {
+            string normalizedSourcePath = NormalizeAssetPath(sourcePath);
+            if (!stagedAssets.Add(normalizedSourcePath) || !IsResourcesAsset(normalizedSourcePath))
+                return;
+
+            string relativePath = GetResourcesRelativePath(normalizedSourcePath);
+            string stagedPath = NormalizeAssetPath(temporaryRoot).TrimEnd('/') + "/" +
+                                StagedResourcesDirectoryName + "/" + relativePath;
+            string absoluteSource = AssetPathToAbsolute(normalizedSourcePath);
+            string absoluteDestination = AssetPathToAbsolute(stagedPath);
+            string destinationDirectory = NormalizeAssetPath(Path.GetDirectoryName(stagedPath));
+            EnsureAssetFolder(destinationDirectory);
+            if (!AssetDatabase.CopyAsset(normalizedSourcePath, stagedPath))
+            {
+                File.Copy(absoluteSource, absoluteDestination, true);
+                AssetDatabase.ImportAsset(stagedPath, ImportAssetOptions.ForceSynchronousImport);
+            }
+
+            string[] dependencies = AssetDatabase.GetDependencies(normalizedSourcePath, true);
+            foreach (string dependency in dependencies)
+            {
+                string normalizedDependency = NormalizeAssetPath(dependency);
+                if (!string.Equals(normalizedDependency, normalizedSourcePath, StringComparison.OrdinalIgnoreCase) &&
+                    IsResourcesAsset(normalizedDependency))
+                {
+                    StageResourceAssetRecursive(normalizedDependency, temporaryRoot, stagedAssets);
+                }
+            }
+        }
+
+        private static string FindResourceAsset(string resourceKey)
+        {
+            string[] assetPaths = AssetDatabase.GetAllAssetPaths();
+            for (int i = 0; i < assetPaths.Length; i++)
+            {
+                string candidate = NormalizeAssetPath(assetPaths[i]);
+                if (candidate.StartsWith(TemporaryAssetRoot + "/", StringComparison.OrdinalIgnoreCase) ||
+                    !IsResourcesAsset(candidate))
+                    continue;
+
+                string candidateKey = GetResourcesRelativePath(candidate);
+                int extensionIndex = candidateKey.LastIndexOf('.');
+                if (extensionIndex > 0)
+                    candidateKey = candidateKey.Substring(0, extensionIndex);
+
+                if (string.Equals(candidateKey, resourceKey, StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+            }
+
+            return string.Empty;
+        }
+
+        private static bool IsResourcesAsset(string assetPath)
+        {
+            string normalized = NormalizeAssetPath(assetPath);
+            return normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase)
+                ? normalized.IndexOf("/Resources/", StringComparison.OrdinalIgnoreCase) >= 0
+                : false;
+        }
+
+        private static string GetResourcesRelativePath(string assetPath)
+        {
+            string normalized = NormalizeAssetPath(assetPath);
+            int markerIndex = normalized.IndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+                return string.Empty;
+
+            return normalized.Substring(markerIndex + "/Resources/".Length);
+        }
+
+        private static string NormalizeResourceKey(string value)
+        {
+            string key = NormalizeAssetPath(value).Trim('/');
+            if (string.IsNullOrEmpty(key))
+                return string.Empty;
+
+            int extensionIndex = key.LastIndexOf('.');
+            if (extensionIndex > key.LastIndexOf('/'))
+                key = key.Substring(0, extensionIndex);
+            return key;
         }
 
         private static string SanitizeFileName(string value)
@@ -866,11 +1238,26 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             try
             {
                 root.name = "Character";
+                Material runtimeDebugMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+                    NormalizeAssetPath(state.temporaryAssetRoot).TrimEnd('/') +
+                    "/" + StagedResourcesDirectoryName + "/HoRuntimeDebugLine.mat");
                 MonoBehaviour[] behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);
                 foreach (MonoBehaviour behaviour in behaviours)
                 {
                     if (behaviour == null)
                         continue;
+
+                    if (runtimeDebugMaterial != null &&
+                        string.Equals(behaviour.GetType().FullName, RuntimeBoneDebugTypeName, StringComparison.Ordinal))
+                    {
+                        var serializedBehaviour = new SerializedObject(behaviour);
+                        SerializedProperty materialProperty = serializedBehaviour.FindProperty("debugMaterial");
+                        if (materialProperty != null && materialProperty.objectReferenceValue == null)
+                        {
+                            materialProperty.objectReferenceValue = runtimeDebugMaterial;
+                            serializedBehaviour.ApplyModifiedPropertiesWithoutUndo();
+                        }
+                    }
 
                     MonoScript currentScript = MonoScript.FromMonoBehaviour(behaviour);
                     string currentPath = currentScript == null
