@@ -1,0 +1,348 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace Hollow.HoUnityTools.WarudoModUtils
+{
+    /// <summary>
+    /// Runtime skeleton diagnostics for Warudo and other player builds.
+    /// This component intentionally has no UnityEditor or Warudo dependency.
+    /// </summary>
+    [DisallowMultipleComponent]
+    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer")]
+    public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour
+    {
+        [Header("Source")]
+        [Tooltip("Skeleton root. All descendants are collected as debug nodes.")]
+        public Transform skeletonRoot;
+
+        [Tooltip("Include the skeleton root when drawing axes.")]
+        public bool includeRoot = true;
+
+        [Header("Display")]
+        public bool drawBones = true;
+        public bool drawAxes = true;
+        public float lineWidth = 0.006f;
+        public float axisLength = 0.04f;
+        public Color boneColor = new Color(0.2f, 0.65f, 1f, 0.9f);
+        public Color xAxisColor = new Color(1f, 0.15f, 0.15f, 0.95f);
+        public Color yAxisColor = new Color(0.2f, 1f, 0.2f, 0.95f);
+        public Color zAxisColor = new Color(0.2f, 0.45f, 1f, 0.95f);
+
+        [Header("Runtime")]
+        [Tooltip("Camera used to orient the line ribbons. Camera.main is used when empty.")]
+        public Camera viewCamera;
+
+        [Tooltip("Optional runtime-compatible material. When empty, the bundled debug shader is used.")]
+        public Material debugMaterial;
+
+        [Tooltip("Force the debug material into the overlay queue and disable depth testing when supported.")]
+        public bool forceOverlay = true;
+
+        [Tooltip("Draw from Camera.onPostRender so the debug geometry is composited after the character. Requires the built-in render pipeline.")]
+        public bool drawAfterCamera = true;
+
+        [Tooltip("Rebuild the collected Transform list after changing the hierarchy.")]
+        public bool refreshOnEnable = true;
+
+        private readonly List<Transform> m_Nodes = new List<Transform>();
+        private readonly HashSet<Transform> m_NodeSet = new HashSet<Transform>();
+        private readonly List<Vector3> m_Vertices = new List<Vector3>();
+        private readonly List<Color> m_Colors = new List<Color>();
+        private readonly List<int> m_Indices = new List<int>();
+
+        private Mesh m_Mesh;
+        private MeshFilter m_MeshFilter;
+        private MeshRenderer m_MeshRenderer;
+        private Material m_Material;
+        private Transform m_DrawTransform;
+        private Camera m_CachedCamera;
+        private bool m_OwnsMaterial;
+        private bool m_IsReady;
+
+        private static readonly int[] QuadTriangles = { 0, 1, 2, 2, 1, 3 };
+        private static readonly List<HoRuntimeBoneDebugRenderer> ActiveRenderers =
+            new List<HoRuntimeBoneDebugRenderer>();
+
+        private void OnEnable()
+        {
+            if (!ActiveRenderers.Contains(this))
+                ActiveRenderers.Add(this);
+            if (ActiveRenderers.Count == 1)
+                Camera.onPostRender += DrawActiveRenderers;
+
+            EnsureResources();
+            if (refreshOnEnable)
+                RefreshSkeleton();
+            RebuildMesh();
+        }
+
+        private void LateUpdate()
+        {
+            if (!m_IsReady)
+                return;
+
+            RebuildMesh();
+        }
+
+        private void OnDisable()
+        {
+            if (m_MeshRenderer != null)
+                m_MeshRenderer.enabled = false;
+
+            ActiveRenderers.Remove(this);
+            if (ActiveRenderers.Count == 0)
+                Camera.onPostRender -= DrawActiveRenderers;
+        }
+
+        private void OnDestroy()
+        {
+            ActiveRenderers.Remove(this);
+            if (ActiveRenderers.Count == 0)
+                Camera.onPostRender -= DrawActiveRenderers;
+
+            if (m_Mesh != null)
+                Destroy(m_Mesh);
+            if (m_OwnsMaterial && m_Material != null)
+                Destroy(m_Material);
+            if (m_DrawTransform != null)
+                Destroy(m_DrawTransform.gameObject);
+        }
+
+        private static void DrawActiveRenderers(Camera camera)
+        {
+            for (int i = ActiveRenderers.Count - 1; i >= 0; i--)
+            {
+                HoRuntimeBoneDebugRenderer renderer = ActiveRenderers[i];
+                if (renderer == null)
+                {
+                    ActiveRenderers.RemoveAt(i);
+                    continue;
+                }
+
+                renderer.DrawAfterCamera(camera);
+            }
+        }
+
+        /// <summary>
+        /// Recollect the skeleton hierarchy. Call this after adding or removing bones at runtime.
+        /// </summary>
+        public void RefreshSkeleton()
+        {
+            m_Nodes.Clear();
+            m_NodeSet.Clear();
+
+            if (skeletonRoot == null)
+                return;
+
+            if (includeRoot)
+                AddNode(skeletonRoot);
+            CollectChildren(skeletonRoot);
+        }
+
+        private void AddNode(Transform node)
+        {
+            if (node != null && m_NodeSet.Add(node))
+                m_Nodes.Add(node);
+        }
+
+        private void CollectChildren(Transform parent)
+        {
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                AddNode(child);
+                CollectChildren(child);
+            }
+        }
+
+        private void EnsureResources()
+        {
+            if (m_IsReady)
+                return;
+
+            GameObject drawObject = new GameObject("__HoRuntimeBoneDebug");
+            drawObject.hideFlags = HideFlags.DontSave;
+            drawObject.layer = gameObject.layer;
+            m_DrawTransform = drawObject.transform;
+            m_DrawTransform.SetParent(transform, false);
+
+            m_MeshFilter = drawObject.AddComponent<MeshFilter>();
+            m_MeshRenderer = drawObject.AddComponent<MeshRenderer>();
+            m_MeshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            m_MeshRenderer.receiveShadows = false;
+            m_MeshRenderer.lightProbeUsage = LightProbeUsage.Off;
+            m_MeshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+            m_Mesh = new Mesh { name = "Ho Runtime Bone Debug Mesh" };
+            m_Mesh.MarkDynamic();
+            m_MeshFilter.sharedMesh = m_Mesh;
+
+            if (debugMaterial != null)
+            {
+                m_Material = new Material(debugMaterial)
+                {
+                    name = "Ho Runtime Bone Debug Material",
+                    hideFlags = HideFlags.DontSave
+                };
+                m_OwnsMaterial = true;
+            }
+            else
+            {
+                Shader shader = Resources.Load<Shader>("HoRuntimeDebugLine");
+                if (shader == null)
+                    shader = Shader.Find("Hidden/HoUnityTools/WarudoModUtils/DebugLine");
+                if (shader == null)
+                    shader = Shader.Find("Sprites/Default");
+                if (shader == null)
+                    shader = Shader.Find("Unlit/Color");
+
+                if (shader != null)
+                {
+                    m_Material = new Material(shader)
+                    {
+                        name = "Ho Runtime Bone Debug Material",
+                        hideFlags = HideFlags.DontSave
+                    };
+                    m_OwnsMaterial = true;
+                }
+            }
+
+            if (m_Material != null)
+            {
+                m_MeshRenderer.sharedMaterial = m_Material;
+                ConfigureMaterial();
+            }
+
+            m_IsReady = m_MeshRenderer != null && m_Mesh != null && m_Material != null;
+        }
+
+        private void ConfigureMaterial()
+        {
+            if (!forceOverlay || m_Material == null)
+                return;
+
+            m_Material.renderQueue = (int)RenderQueue.Overlay;
+            if (m_Material.HasProperty("_ZTest"))
+                m_Material.SetInt("_ZTest", (int)CompareFunction.Always);
+            if (m_Material.HasProperty("_ZWrite"))
+                m_Material.SetInt("_ZWrite", 0);
+        }
+
+        private void RebuildMesh()
+        {
+            if (!m_IsReady || skeletonRoot == null || m_Nodes.Count == 0)
+            {
+                if (m_MeshRenderer != null)
+                    m_MeshRenderer.enabled = false;
+                return;
+            }
+
+            Camera camera = ResolveCamera();
+            Vector3 cameraPosition = camera != null
+                ? camera.transform.position
+                : skeletonRoot.position + Vector3.back * 10f;
+            float safeLineWidth = Mathf.Max(0.0001f, lineWidth);
+            float safeAxisLength = Mathf.Max(0f, axisLength);
+
+            m_Vertices.Clear();
+            m_Colors.Clear();
+            m_Indices.Clear();
+
+            for (int i = 0; i < m_Nodes.Count; i++)
+            {
+                Transform node = m_Nodes[i];
+                if (node == null)
+                    continue;
+
+                if (drawBones)
+                {
+                    for (int childIndex = 0; childIndex < node.childCount; childIndex++)
+                    {
+                        Transform child = node.GetChild(childIndex);
+                        if (m_NodeSet.Contains(child))
+                            AddSegment(node.position, child.position, boneColor, safeLineWidth, cameraPosition);
+                    }
+                }
+
+                if (drawAxes && safeAxisLength > 0f)
+                {
+                    Vector3 origin = node.position;
+                    AddSegment(origin, origin + node.right * safeAxisLength, xAxisColor, safeLineWidth, cameraPosition);
+                    AddSegment(origin, origin + node.up * safeAxisLength, yAxisColor, safeLineWidth, cameraPosition);
+                    AddSegment(origin, origin + node.forward * safeAxisLength, zAxisColor, safeLineWidth, cameraPosition);
+                }
+            }
+
+            if (m_Vertices.Count == 0)
+            {
+                m_MeshRenderer.enabled = false;
+                return;
+            }
+
+            m_Mesh.Clear(false);
+            m_Mesh.SetVertices(m_Vertices);
+            m_Mesh.SetColors(m_Colors);
+            m_Mesh.SetIndices(m_Indices, MeshTopology.Triangles, 0, false);
+            m_Mesh.RecalculateBounds();
+            m_MeshRenderer.enabled = !drawAfterCamera;
+        }
+
+        private void DrawAfterCamera(Camera camera)
+        {
+            if (!drawAfterCamera || !m_IsReady || m_Mesh == null || m_Mesh.vertexCount == 0)
+                return;
+
+            Camera targetCamera = ResolveCamera();
+            if (targetCamera != null && camera != targetCamera)
+                return;
+
+            if (m_Material == null || !m_Material.SetPass(0))
+                return;
+
+            Graphics.DrawMeshNow(m_Mesh, m_DrawTransform.localToWorldMatrix);
+        }
+
+        private Camera ResolveCamera()
+        {
+            if (viewCamera != null)
+                return viewCamera;
+
+            if (m_CachedCamera == null)
+                m_CachedCamera = Camera.main;
+            return m_CachedCamera;
+        }
+
+        private void AddSegment(Vector3 start, Vector3 end, Color color, float width, Vector3 cameraPosition)
+        {
+            Vector3 direction = end - start;
+            float length = direction.magnitude;
+            if (length < 0.00001f)
+                return;
+
+            direction /= length;
+            Vector3 viewDirection = ((start + end) * 0.5f - cameraPosition).normalized;
+            Vector3 side = Vector3.Cross(direction, viewDirection);
+            if (side.sqrMagnitude < 0.000001f)
+                side = Vector3.Cross(direction, Vector3.up);
+            if (side.sqrMagnitude < 0.000001f)
+                side = Vector3.Cross(direction, Vector3.right);
+            side = side.normalized * (width * 0.5f);
+
+            int vertexStart = m_Vertices.Count;
+            AddVertex(start - side, color);
+            AddVertex(start + side, color);
+            AddVertex(end - side, color);
+            AddVertex(end + side, color);
+
+            for (int i = 0; i < QuadTriangles.Length; i++)
+                m_Indices.Add(vertexStart + QuadTriangles[i]);
+        }
+
+        private void AddVertex(Vector3 worldPosition, Color color)
+        {
+            m_Vertices.Add(m_DrawTransform.InverseTransformPoint(worldPosition));
+            m_Colors.Add(color);
+        }
+    }
+}

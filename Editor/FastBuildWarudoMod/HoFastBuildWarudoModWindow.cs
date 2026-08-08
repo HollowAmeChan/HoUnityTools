@@ -727,7 +727,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string stagedPath = stagedFolder + "/" + baseName;
                 string absoluteDestination = AssetPathToAbsolute(stagedPath);
                 string sourceText = File.ReadAllText(absoluteSource, Encoding.UTF8);
-                string wrappedSource = "#if !UNITY_EDITOR\n" + sourceText + "\n#endif\n";
+                sourceText = sourceText.Replace("\r\n", "\n").Replace("\r", "\n");
+                string wrappedSource = "#if !UNITY_EDITOR\r\n" +
+                                       sourceText.Replace("\n", "\r\n") +
+                                       "\r\n#endif\r\n";
                 File.WriteAllText(absoluteDestination, wrappedSource, new UTF8Encoding(false));
                 WriteFreshMetaFile(absoluteDestination + ".meta");
             }
