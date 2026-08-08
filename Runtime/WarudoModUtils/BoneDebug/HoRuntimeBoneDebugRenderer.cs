@@ -108,6 +108,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private bool m_IsReady;
         private bool m_UsesShaderBillboard;
         private int m_VisibleNodeCount;
+        private int m_LastDrawFrame = -1;
+        private Camera m_LastDrawCamera;
         private HoBoneGroupSet m_ParsedGroupSet;
         private TextAsset m_ParsedFrom;
         private Vector2 m_RuntimeCollectionScroll;
@@ -158,6 +160,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
 
             RebuildMesh();
+        }
+
+        private void OnRenderObject()
+        {
+            if (Application.isPlaying && drawAfterCamera)
+                DrawAfterCamera(Camera.current);
         }
 
         private void OnDrawGizmos()
@@ -574,6 +582,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (!drawAfterCamera || !m_IsReady || m_Mesh == null || m_Mesh.vertexCount == 0)
                 return;
 
+            if (camera == null || (m_LastDrawFrame == Time.frameCount && m_LastDrawCamera == camera))
+                return;
+
             Camera targetCamera = ResolveCamera();
             if (targetCamera != null && camera != targetCamera)
                 return;
@@ -582,6 +593,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
 
             Graphics.DrawMeshNow(m_Mesh, m_DrawTransform.localToWorldMatrix);
+            m_LastDrawFrame = Time.frameCount;
+            m_LastDrawCamera = camera;
         }
 
         private Camera ResolveCamera()
