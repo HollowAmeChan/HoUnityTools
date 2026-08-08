@@ -65,6 +65,10 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [Tooltip("由运行时 Hub 控制的隐藏集合。不会修改集合资产本身。")]
         public List<string> hiddenCollections = new List<string>();
 
+        [InspectorName("启用集合过滤")]
+        [Tooltip("启用后才按骨骼集合筛选绘制。默认关闭，以保证集合数据不匹配时仍能看到骨骼。")]
+        public bool filterByCollections;
+
         [InspectorName("使用集合颜色")]
         [Tooltip("指定集合资产时，骨链是否使用集合颜色。")]
         public bool useCollectionColors = true;
@@ -235,7 +239,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return false;
             }
 
-            HoBoneGroupSet activeGroupSet = GetActiveGroupSet();
+            HoBoneGroupSet activeGroupSet = filterByCollections ? GetActiveGroupSet() : null;
             if (activeGroupSet == null)
             {
                 collectionColor = boneColor;
@@ -253,7 +257,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         private Color ResolveBoneColor(Color collectionColor)
         {
-            return GetActiveGroupSet() != null && useCollectionColors ? collectionColor : boneColor;
+            return filterByCollections && GetActiveGroupSet() != null && useCollectionColors
+                ? collectionColor
+                : boneColor;
         }
 
         private void OnDisable()
@@ -327,6 +333,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 includeRoot = nextIncludeRoot;
                 RefreshSkeleton();
             }
+            filterByCollections = context.Toggle("Filter by collections", filterByCollections);
             useCollectionColors = context.Toggle("Use collection colors", useCollectionColors);
             lineWidth = context.Slider("World line width", lineWidth, 0.0001f, 0.05f);
             lineWidthPixels = context.Slider("Screen line width", lineWidthPixels, 0.5f, 12f);
@@ -349,6 +356,11 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 context.Label("Collection filter: none");
                 return;
             }
+
+            context.Label("Collection filter: " + (filterByCollections ? "enabled" : "disabled"));
+            context.Label("Hidden collections: " + hiddenCollections.Count);
+            if (hiddenCollections.Count > 0 && context.Button("Show all collections"))
+                hiddenCollections.Clear();
 
             context.Space(6f);
             if (boneGroupSet == null && groupJson != null && context.Button("Refresh collection data"))
