@@ -55,7 +55,7 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 
 ## 脚本依赖和安全边界
 
-依赖预览的入口是 Prefab 上直接挂载的 `MonoBehaviour`。当前工具会合并同一源码的多个挂载，并显示引用次数；它不会自动推导基类、`partial` 伴随文件或任意辅助源码的完整闭包。这些源码需要在构建前人工确认，或者在预览中单独加入。
+依赖预览的入口是 Prefab 上直接挂载的 `MonoBehaviour`。当前工具会合并同一源码的多个挂载，并显示引用次数。构建时，如果选中的脚本属于非 Editor asmdef，FastBuild 会继续收集该运行时程序集目录下的源码闭包，避免临时 Mod 只带组件脚本而遗失 `HoUnityTools.Runtime` 这类程序集内部类型；Editor 目录、`AssemblyInfo.cs` 和明确的编辑器骨骼绘制器会被排除。
 
 脚本复制遵循以下规则：
 

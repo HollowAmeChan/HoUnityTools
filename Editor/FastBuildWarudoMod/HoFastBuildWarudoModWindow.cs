@@ -925,18 +925,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             string scriptsRoot = temporaryRoot + "/" + StagedScriptsDirectoryName;
             EnsureAssetFolder(scriptsRoot);
+            List<string> sourcePaths = CollectRuntimeSourceClosure();
             int scriptIndex = 0;
 
-            foreach (ScriptPreview item in scriptPreview)
+            foreach (string sourcePath in sourcePaths)
             {
-                if (!item.copySource || item.removeWhenExcluded)
-                    continue;
-
-                string absoluteSource = AssetPathToAbsolute(item.sourcePath);
+                string absoluteSource = AssetPathToAbsolute(sourcePath);
                 if (!File.Exists(absoluteSource))
-                    throw new FileNotFoundException("找不到脚本源码", absoluteSource);
+                    throw new FileNotFoundException("找不到运行时脚本源码", absoluteSource);
 
-                string baseName = Path.GetFileName(item.sourcePath);
+                string baseName = Path.GetFileName(sourcePath);
                 string scriptFolderName = scriptIndex.ToString("D3") + "_" +
                                           SanitizeFileName(Path.GetFileNameWithoutExtension(baseName));
                 scriptIndex++;
@@ -954,16 +952,102 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
+        private List<string> CollectRuntimeSourceClosure()
+        {
+            var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var assemblyRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (ScriptPreview item in scriptPreview)
+            {
+                if (item == null || !item.copySource || item.removeWhenExcluded ||
+                    string.IsNullOrEmpty(item.sourcePath))
+                    continue;
+
+                string sourcePath = NormalizeAssetPath(item.sourcePath);
+                sourcePaths.Add(sourcePath);
+
+                string assemblyRoot = FindRuntimeAssemblyRoot(sourcePath);
+                if (!string.IsNullOrEmpty(assemblyRoot))
+                    assemblyRoots.Add(assemblyRoot);
+            }
+
+            foreach (string assemblyRoot in assemblyRoots)
+            {
+                string absoluteRoot = AssetPathToAbsolute(assemblyRoot);
+                if (!Directory.Exists(absoluteRoot))
+                    continue;
+
+                string[] files = Directory.GetFiles(absoluteRoot, "*.cs", SearchOption.AllDirectories);
+                for (int i = 0; i < files.Length; i++)
+                {
+                    string relative = files[i].Substring(absoluteRoot.TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar).Length + 1);
+                    string candidate = NormalizeAssetPath(assemblyRoot + "/" + relative);
+                    if (string.IsNullOrEmpty(candidate) ||
+                        candidate.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        candidate.EndsWith("/Runtime/BoneRenderer/HoBoneRenderer.cs", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(Path.GetFileName(candidate), "AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    string typeName = GetScriptTypeName(candidate);
+                    if (IsUnsafeRuntimeScript(candidate, typeName))
+                        continue;
+
+                    sourcePaths.Add(candidate);
+                }
+            }
+
+            return sourcePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static string FindRuntimeAssemblyRoot(string sourcePath)
+        {
+            string normalized = NormalizeAssetPath(sourcePath);
+            string directory = NormalizeAssetPath(Path.GetDirectoryName(normalized));
+            while (!string.IsNullOrEmpty(directory) &&
+                   !string.Equals(directory, "Assets", StringComparison.OrdinalIgnoreCase) &&
+                   !string.Equals(directory, "Packages", StringComparison.OrdinalIgnoreCase))
+            {
+                string absoluteDirectory = AssetPathToAbsolute(directory);
+                if (Directory.Exists(absoluteDirectory))
+                {
+                    string[] asmdefs = Directory.GetFiles(absoluteDirectory, "*.asmdef", SearchOption.TopDirectoryOnly);
+                    for (int i = 0; i < asmdefs.Length; i++)
+                    {
+                        string asmdefText = File.ReadAllText(asmdefs[i], Encoding.UTF8);
+                        if (asmdefText.IndexOf("\"Editor\"", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                            asmdefText.IndexOf("\"includePlatforms\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                            continue;
+
+                        return directory;
+                    }
+                }
+
+                string parent = NormalizeAssetPath(Path.GetDirectoryName(directory));
+                if (string.Equals(parent, directory, StringComparison.OrdinalIgnoreCase))
+                    break;
+                directory = parent;
+            }
+
+            return string.Empty;
+        }
+
+        private static string GetScriptTypeName(string assetPath)
+        {
+            MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(assetPath);
+            Type type = script == null ? null : script.GetClass();
+            return type == null ? string.Empty : type.FullName;
+        }
+
         private void StageReferencedRuntimeAssets(string temporaryRoot)
         {
             var stagedAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string stagedDebugShaderPath = string.Empty;
-            foreach (ScriptPreview item in scriptPreview)
+            List<string> sourcePaths = CollectRuntimeSourceClosure();
+            foreach (string sourcePath in sourcePaths)
             {
-                if (!item.copySource || item.removeWhenExcluded)
-                    continue;
-
-                string absoluteSource = AssetPathToAbsolute(item.sourcePath);
+                string absoluteSource = AssetPathToAbsolute(sourcePath);
                 if (!File.Exists(absoluteSource))
                     continue;
 
@@ -980,7 +1064,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     {
                         Debug.LogWarning(
                             "[HoUnityTools] FastBuild 无法定位脚本资源：Resources.Load(\"" +
-                            resourceKey + "\")，脚本：" + item.sourcePath);
+                            resourceKey + "\")，脚本：" + sourcePath);
                         continue;
                     }
 
