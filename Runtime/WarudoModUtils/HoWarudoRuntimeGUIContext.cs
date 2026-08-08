@@ -8,12 +8,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// </summary>
     public sealed class HoWarudoRuntimeGUIContext
     {
-        internal HoWarudoRuntimeGUIContext(HoWarudoRuntimeHub hub)
+        public HoWarudoRuntimeGUIContext()
         {
-            Hub = hub;
         }
-
-        public HoWarudoRuntimeHub Hub { get; private set; }
 
         public void Label(string text)
         {

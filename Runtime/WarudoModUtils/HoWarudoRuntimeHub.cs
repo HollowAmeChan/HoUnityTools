@@ -51,7 +51,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_LauncherWindowId = GetInstanceID() ^ 0x4F485542;
             m_HubWindowId = m_LauncherWindowId + 1;
             m_ShowWindow = showWindowOnStart;
-            m_GuiContext = new HoWarudoRuntimeGUIContext(this);
+            m_GuiContext = new HoWarudoRuntimeGUIContext();
         }
 
         private void OnEnable()
