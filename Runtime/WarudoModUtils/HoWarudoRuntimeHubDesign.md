@@ -55,7 +55,7 @@ public interface IHoWarudoRuntimeModule
 
 模块应当在 `OnEnable` 时注册，在 `OnDisable` 或 `OnDestroy` 时注销。Hub 管理的是组件实例，而不是脚本类型，因此同一个脚本挂在多个角色上时可以分别控制。
 
-原型中的 `HoWarudoRuntimeHub.IRuntimePanel` 只是验证用接口，正式实现时应移到独立的运行时接口文件中。
+当前接口已提取到 `IHoWarudoRuntimeModule.cs`，GUI 控件统一由 `HoWarudoRuntimeGUIContext` 提供。
 
 ## UI 结构
 
@@ -135,8 +135,9 @@ IMGUI 的 `Event.current.Use()` 可以阻止部分 IMGUI/EventSystem 层的事�
 
 ## 当前状态
 
-- `HoWarudoRuntimeHub` 原型已提交并能在 Warudo 运行时显示交互窗口。
+- `HoWarudoRuntimeHub` 已能在 Warudo 运行时显示交互窗口，并支持模块扫描、排序和折叠。
 - 原型中的测试按钮用于验证上传后的输入链路。
 - 已评估 Input System 鼠标位移/滚轮事件拦截方案；当前未放入通用运行时程序集，避免引入强制依赖。
-- Bone Debug 和 HoRig 尚未正式注册到 Hub。
+- `HoRuntimeBoneDebugRenderer` 已接入 Hub，支持显示参数和骨骼集合过滤。
+- HoRig 尚未正式注册到 Hub。
 - 当前窗口样式仍是 Unity 默认 IMGUI 样式，后续统一处理。

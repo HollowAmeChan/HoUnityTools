@@ -11,13 +11,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Hub")]
     public sealed class HoWarudoRuntimeHub : MonoBehaviour
     {
-        public interface IRuntimePanel
-        {
-            string DisplayName { get; }
-            int Order { get; }
-            void DrawRuntimeGUI();
-        }
-
         [Header("Startup")]
         [Tooltip("Show the small draggable launcher button when the component starts.")]
         public bool showLauncher = true;
@@ -26,12 +19,15 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         public bool showWindowOnStart;
 
         private static HoWarudoRuntimeHub s_Current;
-        private readonly List<IRuntimePanel> m_Panels = new List<IRuntimePanel>();
+        private readonly List<IHoWarudoRuntimeModule> m_Modules = new List<IHoWarudoRuntimeModule>();
+        private readonly Dictionary<string, bool> m_ModuleFoldouts = new Dictionary<string, bool>();
+        private HoWarudoRuntimeGUIContext m_GuiContext;
 
         private Rect m_LauncherRect = new Rect(24f, 24f, 140f, 52f);
         private Rect m_WindowRect = new Rect(180f, 80f, 360f, 300f);
         private bool m_ShowWindow;
         private bool m_ConsumePointerEvents;
+        private Vector2 m_ModuleScroll;
         private int m_TestClickCount;
         private int m_LauncherWindowId;
         private int m_HubWindowId;
@@ -53,6 +49,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_LauncherWindowId = GetInstanceID() ^ 0x4F485542;
             m_HubWindowId = m_LauncherWindowId + 1;
             m_ShowWindow = showWindowOnStart;
+            m_GuiContext = new HoWarudoRuntimeGUIContext(this);
         }
 
         private void OnEnable()
@@ -73,16 +70,43 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 s_Current = null;
         }
 
-        public void Register(IRuntimePanel panel)
+        private void Start()
         {
-            if (panel != null && !m_Panels.Contains(panel))
-                m_Panels.Add(panel);
+            RefreshModules();
         }
 
-        public void Unregister(IRuntimePanel panel)
+        public void Register(IHoWarudoRuntimeModule module)
         {
-            if (panel != null)
-                m_Panels.Remove(panel);
+            if (module == null || m_Modules.Contains(module))
+                return;
+
+            m_Modules.Add(module);
+            m_Modules.Sort(CompareModules);
+            if (!m_ModuleFoldouts.ContainsKey(module.Id))
+                m_ModuleFoldouts[module.Id] = true;
+        }
+
+        public void Unregister(IHoWarudoRuntimeModule module)
+        {
+            if (module != null)
+                m_Modules.Remove(module);
+        }
+
+        public void RefreshModules()
+        {
+            MonoBehaviour[] behaviours = FindObjectsOfType<MonoBehaviour>();
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                IHoWarudoRuntimeModule module = behaviours[i] as IHoWarudoRuntimeModule;
+                if (module != null)
+                    Register(module);
+            }
+        }
+
+        private static int CompareModules(IHoWarudoRuntimeModule left, IHoWarudoRuntimeModule right)
+        {
+            int order = left.Order.CompareTo(right.Order);
+            return order != 0 ? order : string.Compare(left.DisplayName, right.DisplayName, System.StringComparison.Ordinal);
         }
 
         private void OnGUI()
@@ -112,7 +136,10 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private void DrawHubWindow(int windowId)
         {
             GUILayout.Label("Runtime hub connected");
-            GUILayout.Label("Registered modules: " + m_Panels.Count);
+            GUILayout.Label("Registered modules: " + m_Modules.Count);
+
+            if (GUILayout.Button("Refresh modules"))
+                RefreshModules();
 
             if (GUILayout.Button("Test button"))
             {
@@ -122,21 +149,69 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             GUILayout.Label("Clicks: " + m_TestClickCount);
 
-            if (m_Panels.Count > 0)
+            if (m_Modules.Count > 0)
             {
                 GUILayout.Space(8f);
-                for (int i = 0; i < m_Panels.Count; i++)
+                m_ModuleScroll = m_GuiContext.BeginScrollView(m_ModuleScroll, GUILayout.ExpandHeight(true));
+                for (int i = 0; i < m_Modules.Count; i++)
                 {
-                    IRuntimePanel panel = m_Panels[i];
-                    if (panel == null)
+                    IHoWarudoRuntimeModule module = m_Modules[i];
+                    if (!IsModuleAlive(module))
+                    {
+                        m_Modules.RemoveAt(i--);
+                        continue;
+                    }
+
+                    bool expanded = IsModuleExpanded(module);
+                    if (GUILayout.Button((expanded ? "- " : "+ ") + module.DisplayName, GUI.skin.button))
+                    {
+                        expanded = !expanded;
+                        m_ModuleFoldouts[module.Id] = expanded;
+                    }
+
+                    if (!expanded)
                         continue;
 
-                    GUILayout.Label(panel.DisplayName);
-                    panel.DrawRuntimeGUI();
+                    GUILayout.BeginVertical(GUI.skin.box);
+                    try
+                    {
+                        module.DrawRuntimeGUI(m_GuiContext);
+                    }
+                    catch (System.Exception exception)
+                    {
+                        GUILayout.Label("Module UI error: " + exception.GetType().Name);
+                        Debug.LogException(exception);
+                    }
+                    GUILayout.EndVertical();
                 }
+                m_GuiContext.EndScrollView();
             }
 
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
+        }
+
+        private bool IsModuleExpanded(IHoWarudoRuntimeModule module)
+        {
+            bool expanded;
+            if (!m_ModuleFoldouts.TryGetValue(module.Id, out expanded))
+            {
+                expanded = true;
+                m_ModuleFoldouts[module.Id] = expanded;
+            }
+
+            return expanded;
+        }
+
+        private static bool IsModuleAlive(IHoWarudoRuntimeModule module)
+        {
+            if (module == null)
+                return false;
+
+            MonoBehaviour behaviour = module as MonoBehaviour;
+            if (behaviour != null)
+                return true;
+
+            return !(module is MonoBehaviour);
         }
 
         private void ConsumeHubPointerEvents()

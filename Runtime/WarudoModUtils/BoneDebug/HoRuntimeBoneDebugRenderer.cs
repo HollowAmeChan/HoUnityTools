@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Hollow.HoUnityTools.BoneRendering;
 
 namespace Hollow.HoUnityTools.WarudoModUtils
 {
@@ -10,7 +11,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer")]
-    public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour
+    public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour, IHoWarudoRuntimeModule
     {
         [Header("Source")]
         [Tooltip("Skeleton root. All descendants are collected as debug nodes.")]
@@ -31,6 +32,16 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         public Color xAxisColor = new Color(1f, 0.15f, 0.15f, 0.95f);
         public Color yAxisColor = new Color(0.2f, 1f, 0.2f, 0.95f);
         public Color zAxisColor = new Color(0.2f, 0.45f, 1f, 0.95f);
+
+        [Header("Grouping")]
+        [Tooltip("Optional bone collection asset used to filter runtime drawing.")]
+        public HoBoneGroupSet boneGroupSet;
+
+        [Tooltip("Collections hidden by the runtime Hub. The asset itself is not modified.")]
+        public List<string> hiddenCollections = new List<string>();
+
+        [Tooltip("Use the collection color for bone links when a collection asset is assigned.")]
+        public bool useCollectionColors = true;
 
         [Header("Runtime")]
         [Tooltip("Camera used to orient the line ribbons. Camera.main is used when empty.")]
@@ -65,13 +76,33 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private bool m_OwnsMaterial;
         private bool m_IsReady;
         private bool m_UsesShaderBillboard;
+        private int m_VisibleNodeCount;
+        private Vector2 m_RuntimeCollectionScroll;
 
         private static readonly int[] QuadTriangles = { 0, 1, 2, 2, 1, 3 };
         private static readonly List<HoRuntimeBoneDebugRenderer> ActiveRenderers =
             new List<HoRuntimeBoneDebugRenderer>();
 
+        public string Id
+        {
+            get { return "HoRuntimeBoneDebugRenderer/" + GetInstanceID(); }
+        }
+
+        public string DisplayName
+        {
+            get { return "Bone Debug / " + gameObject.name; }
+        }
+
+        public int Order
+        {
+            get { return 100; }
+        }
+
         private void OnEnable()
         {
+            if (hiddenCollections == null)
+                hiddenCollections = new List<string>();
+
             if (!ActiveRenderers.Contains(this))
                 ActiveRenderers.Add(this);
             if (ActiveRenderers.Count == 1)
@@ -81,6 +112,11 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (refreshOnEnable)
                 RefreshSkeleton();
             RebuildMesh();
+        }
+
+        private void Start()
+        {
+            HoWarudoRuntimeHub.Current?.Register(this);
         }
 
         private void LateUpdate()
@@ -112,14 +148,24 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         private void DrawSceneGizmos(Transform node)
         {
-            if (drawBones)
+            Color nodeColor;
+            bool nodeVisible = TryGetNodeColor(node, out nodeColor);
+
+            if (nodeVisible && drawBones)
             {
-                Gizmos.color = boneColor;
                 for (int i = 0; i < node.childCount; i++)
-                    Gizmos.DrawLine(node.position, node.GetChild(i).position);
+                {
+                    Transform child = node.GetChild(i);
+                    Color childColor;
+                    if (TryGetNodeColor(child, out childColor))
+                    {
+                        Gizmos.color = ResolveBoneColor(nodeColor);
+                        Gizmos.DrawLine(node.position, child.position);
+                    }
+                }
             }
 
-            if (drawAxes)
+            if (nodeVisible && drawAxes)
             {
                 float length = Mathf.Max(0f, axisLength);
                 if (length > 0f)
@@ -137,8 +183,38 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 DrawSceneGizmos(node.GetChild(i));
         }
 
+        private bool TryGetNodeColor(Transform node, out Color collectionColor)
+        {
+            if (node == null)
+            {
+                collectionColor = boneColor;
+                return false;
+            }
+
+            if (boneGroupSet == null)
+            {
+                collectionColor = boneColor;
+                return true;
+            }
+
+            if (boneGroupSet.collections == null)
+            {
+                collectionColor = boneColor;
+                return true;
+            }
+
+            return boneGroupSet.IsBoneVisible(node.name, hiddenCollections, out collectionColor);
+        }
+
+        private Color ResolveBoneColor(Color collectionColor)
+        {
+            return boneGroupSet != null && useCollectionColors ? collectionColor : boneColor;
+        }
+
         private void OnDisable()
         {
+            HoWarudoRuntimeHub.Current?.Unregister(this);
+
             if (m_MeshRenderer != null)
                 m_MeshRenderer.enabled = false;
 
@@ -149,6 +225,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         private void OnDestroy()
         {
+            HoWarudoRuntimeHub.Current?.Unregister(this);
+
             ActiveRenderers.Remove(this);
             if (ActiveRenderers.Count == 0)
                 Camera.onPostRender -= DrawActiveRenderers;
@@ -190,6 +268,59 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (includeRoot)
                 AddNode(skeletonRoot);
             CollectChildren(skeletonRoot);
+        }
+
+        public void DrawRuntimeGUI(HoWarudoRuntimeGUIContext context)
+        {
+            drawBones = context.Toggle("Draw bones", drawBones);
+            drawAxes = context.Toggle("Draw axes", drawAxes);
+            includeRoot = context.Toggle("Include root", includeRoot);
+            useCollectionColors = context.Toggle("Use collection colors", useCollectionColors);
+            lineWidth = context.Slider("World line width", lineWidth, 0.0001f, 0.05f);
+            lineWidthPixels = context.Slider("Screen line width", lineWidthPixels, 0.5f, 12f);
+            axisLength = context.Slider("Axis length", axisLength, 0f, 0.3f);
+
+            if (context.Button("Refresh skeleton"))
+            {
+                RefreshSkeleton();
+                RebuildMesh();
+            }
+
+            context.Label("Collected nodes: " + m_Nodes.Count);
+            context.Label("Visible nodes: " + m_VisibleNodeCount);
+
+            if (boneGroupSet == null)
+            {
+                context.Label("Collection filter: none");
+                return;
+            }
+
+            context.Space(6f);
+            if (boneGroupSet.collections == null)
+            {
+                context.Label("Collection asset has no collections");
+                return;
+            }
+
+            context.Label("Collections: " + boneGroupSet.name);
+            m_RuntimeCollectionScroll = context.BeginScrollView(m_RuntimeCollectionScroll, GUILayout.Height(120f));
+            for (int i = 0; i < boneGroupSet.collections.Count; i++)
+            {
+                HoBoneCollection collection = boneGroupSet.collections[i];
+                if (collection == null || string.IsNullOrEmpty(collection.name))
+                    continue;
+
+                bool visible = !hiddenCollections.Contains(collection.name);
+                bool nextVisible = context.Toggle(collection.name, visible);
+                if (nextVisible != visible)
+                {
+                    if (nextVisible)
+                        hiddenCollections.Remove(collection.name);
+                    else if (!hiddenCollections.Contains(collection.name))
+                        hiddenCollections.Add(collection.name);
+                }
+            }
+            context.EndScrollView();
         }
 
         private void AddNode(Transform node)
@@ -286,6 +417,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         {
             if (!m_IsReady || skeletonRoot == null || m_Nodes.Count == 0)
             {
+                m_VisibleNodeCount = 0;
                 if (m_MeshRenderer != null)
                     m_MeshRenderer.enabled = false;
                 return;
@@ -307,6 +439,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_Colors.Clear();
             m_Uvs.Clear();
             m_Indices.Clear();
+            m_VisibleNodeCount = 0;
 
             for (int i = 0; i < m_Nodes.Count; i++)
             {
@@ -314,13 +447,20 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 if (node == null)
                     continue;
 
+                Color nodeColor;
+                if (!TryGetNodeColor(node, out nodeColor))
+                    continue;
+
+                m_VisibleNodeCount++;
+
                 if (drawBones)
                 {
                     for (int childIndex = 0; childIndex < node.childCount; childIndex++)
                     {
                         Transform child = node.GetChild(childIndex);
-                        if (m_NodeSet.Contains(child))
-                            AddSegment(node.position, child.position, boneColor, safeLineWidth, cameraPosition);
+                        Color childColor;
+                        if (m_NodeSet.Contains(child) && TryGetNodeColor(child, out childColor))
+                            AddSegment(node.position, child.position, ResolveBoneColor(nodeColor), safeLineWidth, cameraPosition);
                     }
                 }
 
