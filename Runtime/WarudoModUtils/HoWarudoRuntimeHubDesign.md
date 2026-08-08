@@ -118,10 +118,10 @@ IMGUI 的 `Event.current.Use()` 可以阻止部分 IMGUI/EventSystem 层的事�
 当前输入处理分为两层：
 
 1. Hub 维护 `InputCaptureState`，窗口内按下、拖动、释放和滚轮时进行捕获。
-2. 可选地监听 Unity Input System 的 `InputSystem.onEvent`，只将 Hub 区域内的鼠标位移和滚轮事件标记为 `handled`。
+2. 如果将 Input System 方案放入单独的 Warudo 专用程序集，可以尝试监听 `InputSystem.onEvent`，只将 Hub 区域内的鼠标位移和滚轮事件标记为 `handled`。
 3. 如果 Warudo 提供公开的输入屏蔽或鼠标事件消费接口，再将捕获状态接入 Warudo 相机输入链。
 
-`InputSystem.onEvent` 不是 Warudo 专用接口，只能阻止 Input System 继续更新鼠标状态，不能保证拦截已经在其他层读取的输入。它默认作为可关闭的兼容性尝试，不采用修改全局鼠标状态、反射调用私有字段或禁用整个输入系统的方式。
+`InputSystem.onEvent` 不是 Warudo 专用接口，只能阻止 Input System 继续更新鼠标状态，不能保证拦截已经在其他层读取的输入。它不能直接加入通用的 `HoUnityTools.Runtime` 程序集，否则会给不含 Input System 引用的工程造成编译错误。不采用修改全局鼠标状态、反射调用私有字段或禁用整个输入系统的方式。
 
 ## 实施顺序
 
@@ -137,6 +137,6 @@ IMGUI 的 `Event.current.Use()` 可以阻止部分 IMGUI/EventSystem 层的事�
 
 - `HoWarudoRuntimeHub` 原型已提交并能在 Warudo 运行时显示交互窗口。
 - 原型中的测试按钮用于验证上传后的输入链路。
-- 已加入可关闭的 Input System 鼠标位移/滚轮事件拦截尝试，尚未在 Warudo Mod 中验证。
+- 已评估 Input System 鼠标位移/滚轮事件拦截方案；当前未放入通用运行时程序集，避免引入强制依赖。
 - Bone Debug 和 HoRig 尚未正式注册到 Hub。
 - 当前窗口样式仍是 Unity 默认 IMGUI 样式，后续统一处理。

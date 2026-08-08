@@ -31,6 +31,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private Rect m_LauncherRect = new Rect(24f, 24f, 140f, 52f);
         private Rect m_WindowRect = new Rect(180f, 80f, 360f, 300f);
         private bool m_ShowWindow;
+        private bool m_ConsumePointerEvents;
         private int m_TestClickCount;
         private int m_LauncherWindowId;
         private int m_HubWindowId;
@@ -52,6 +53,18 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_LauncherWindowId = GetInstanceID() ^ 0x4F485542;
             m_HubWindowId = m_LauncherWindowId + 1;
             m_ShowWindow = showWindowOnStart;
+        }
+
+        private void OnEnable()
+        {
+            if (s_Current == null)
+                s_Current = this;
+        }
+
+        private void OnDisable()
+        {
+            if (s_Current == this)
+                s_Current = null;
         }
 
         private void OnDestroy()
@@ -83,6 +96,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (showLauncher)
                 m_LauncherRect = GUI.Window(m_LauncherWindowId, m_LauncherRect, DrawLauncher, "HoHub");
 
+            ConsumeHubPointerEvents();
             ClampWindow(ref m_LauncherRect);
             ClampWindow(ref m_WindowRect);
         }
@@ -123,6 +137,40 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             }
 
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
+        }
+
+        private void ConsumeHubPointerEvents()
+        {
+            Event currentEvent = Event.current;
+            if (currentEvent == null)
+                return;
+
+            bool overLauncher = showLauncher && m_LauncherRect.Contains(currentEvent.mousePosition);
+            bool overHub = m_ShowWindow && m_WindowRect.Contains(currentEvent.mousePosition);
+            bool overHubUI = overLauncher || overHub;
+
+            switch (currentEvent.type)
+            {
+                case EventType.MouseDown:
+                    if (overHubUI)
+                    {
+                        m_ConsumePointerEvents = true;
+                        currentEvent.Use();
+                    }
+                    break;
+                case EventType.MouseDrag:
+                case EventType.ScrollWheel:
+                    if (m_ConsumePointerEvents || overHubUI)
+                        currentEvent.Use();
+                    break;
+                case EventType.MouseUp:
+                    if (m_ConsumePointerEvents || overHubUI)
+                    {
+                        currentEvent.Use();
+                        m_ConsumePointerEvents = false;
+                    }
+                    break;
+            }
         }
 
         private static void ClampWindow(ref Rect rect)
