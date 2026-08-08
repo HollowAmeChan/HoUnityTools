@@ -11,11 +11,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Hub")]
     public sealed class HoWarudoRuntimeHub : MonoBehaviour
     {
-        [Header("Startup")]
-        [Tooltip("Show the small draggable launcher button when the component starts.")]
+        [Header("启动设置")]
+        [InspectorName("显示浮动入口")]
+        [Tooltip("组件启动时显示可拖动的 Hub 浮动入口。")]
         public bool showLauncher = true;
 
-        [Tooltip("Open the runtime hub window when the component starts.")]
+        [InspectorName("启动时打开窗口")]
+        [Tooltip("组件启动时直接打开运行时中控窗口。")]
         public bool showWindowOnStart;
 
         private static HoWarudoRuntimeHub s_Current;

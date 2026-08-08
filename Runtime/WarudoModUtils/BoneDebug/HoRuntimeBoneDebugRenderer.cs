@@ -10,56 +10,84 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// This component intentionally has no UnityEditor or Warudo dependency.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer")]
+    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo 运行时骨骼调试绘制器")]
     public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour, IHoWarudoRuntimeModule
     {
-        [Header("Source")]
-        [Tooltip("Skeleton root. All descendants are collected as debug nodes.")]
+        [Header("骨架来源")]
+        [InspectorName("骨架根节点")]
+        [Tooltip("骨架根节点。其下所有子节点都会被递归采集为调试骨骼。")]
         public Transform skeletonRoot;
 
-        [Tooltip("Include the skeleton root when drawing axes.")]
+        [InspectorName("包含根节点")]
+        [Tooltip("绘制轴向时是否包含骨架根节点。")]
         public bool includeRoot = true;
 
-        [Header("Display")]
+        [Header("显示")]
+        [InspectorName("绘制骨链")]
         public bool drawBones = true;
+
+        [InspectorName("绘制轴向")]
         public bool drawAxes = true;
-        [Tooltip("Fallback world-space width used only when a custom material does not expose _LineWidth.")]
+
+        [InspectorName("线宽")]
+        [Tooltip("当自定义材质没有 _LineWidth 属性时使用的世界空间线宽。")]
         public float lineWidth = 0.006f;
-        [Tooltip("Shader billboard path width in screen pixels.")]
+
+        [InspectorName("屏幕线宽")]
+        [Tooltip("面向视图的 Shader 线条宽度，单位为屏幕像素。")]
         public float lineWidthPixels = 3f;
+
+        [InspectorName("轴向长度")]
         public float axisLength = 0.04f;
+
+        [InspectorName("骨链颜色")]
         public Color boneColor = new Color(0.2f, 0.65f, 1f, 0.9f);
+
+        [InspectorName("X 轴颜色")]
         public Color xAxisColor = new Color(1f, 0.15f, 0.15f, 0.95f);
+
+        [InspectorName("Y 轴颜色")]
         public Color yAxisColor = new Color(0.2f, 1f, 0.2f, 0.95f);
+
+        [InspectorName("Z 轴颜色")]
         public Color zAxisColor = new Color(0.2f, 0.45f, 1f, 0.95f);
 
-        [Header("Grouping")]
-        [Tooltip("Optional bone collection JSON exported by HoTools.")]
+        [Header("骨骼集合")]
+        [InspectorName("集合 JSON")]
+        [Tooltip("可选的骨骼集合 JSON，由 HoTools 导出。")]
         public TextAsset groupJson;
 
-        [Tooltip("Optional bone collection asset used to filter runtime drawing.")]
+        [InspectorName("骨骼集合资产")]
+        [Tooltip("可选的骨骼集合资产，用于过滤运行时绘制。")]
         public HoBoneGroupSet boneGroupSet;
 
-        [Tooltip("Collections hidden by the runtime Hub. The asset itself is not modified.")]
+        [InspectorName("隐藏集合")]
+        [Tooltip("由运行时 Hub 控制的隐藏集合。不会修改集合资产本身。")]
         public List<string> hiddenCollections = new List<string>();
 
-        [Tooltip("Use the collection color for bone links when a collection asset is assigned.")]
+        [InspectorName("使用集合颜色")]
+        [Tooltip("指定集合资产时，骨链是否使用集合颜色。")]
         public bool useCollectionColors = true;
 
-        [Header("Runtime")]
-        [Tooltip("Camera used to orient the line ribbons. Camera.main is used when empty.")]
+        [Header("运行时绘制")]
+        [InspectorName("观察相机")]
+        [Tooltip("用于计算线条朝向的相机。留空时使用 Camera.main。")]
         public Camera viewCamera;
 
-        [Tooltip("Optional runtime-compatible material. When empty, the bundled debug shader is used.")]
+        [InspectorName("调试材质")]
+        [Tooltip("可选的运行时材质。留空时使用内置调试 Shader。")]
         public Material debugMaterial;
 
-        [Tooltip("Force the debug material into the overlay queue and disable depth testing when supported.")]
+        [InspectorName("强制最前显示")]
+        [Tooltip("将调试材质放入 Overlay 队列，并在材质支持时关闭深度测试。")]
         public bool forceOverlay = true;
 
-        [Tooltip("Draw from Camera.onPostRender so the debug geometry is composited after the character. Requires the built-in render pipeline.")]
+        [InspectorName("相机绘制后绘制")]
+        [Tooltip("从 Camera.onPostRender 绘制，使调试几何体叠加在角色之后。需要内置渲染管线。")]
         public bool drawAfterCamera = true;
 
-        [Tooltip("Rebuild the collected Transform list after changing the hierarchy.")]
+        [InspectorName("启用时刷新")]
+        [Tooltip("层级发生变化后，在组件启用时重新采集 Transform 列表。")]
         public bool refreshOnEnable = true;
 
         private readonly List<Transform> m_Nodes = new List<Transform>();
