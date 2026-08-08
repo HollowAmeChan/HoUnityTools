@@ -57,10 +57,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [Tooltip("可选的骨骼集合 JSON，由 HoTools 导出。")]
         public TextAsset groupJson;
 
-        [InspectorName("骨骼集合资产")]
-        [Tooltip("可选的骨骼集合资产，用于过滤运行时绘制。")]
-        public HoBoneGroupSet boneGroupSet;
-
         [InspectorName("隐藏集合")]
         [Tooltip("由运行时 Hub 控制的隐藏集合。不会修改集合资产本身。")]
         public List<string> hiddenCollections = new List<string>();
@@ -288,8 +284,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 Destroy(m_Material);
             if (m_DrawTransform != null)
                 Destroy(m_DrawTransform.gameObject);
-            if (m_ParsedGroupSet != null)
-                Destroy(m_ParsedGroupSet);
+            ReleaseParsedGroupSet();
         }
 
         private static void DrawActiveRenderers(Camera camera)
@@ -357,25 +352,40 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
             }
 
+            if (activeGroupSet.collections == null)
+            {
+                context.Label("Collection data has no collections");
+                return;
+            }
+
             context.Label("Collection filter: " + (filterByCollections ? "enabled" : "disabled"));
             context.Label("Hidden collections: " + hiddenCollections.Count);
             if (hiddenCollections.Count > 0 && context.Button("Show all collections"))
+            {
+                filterByCollections = true;
                 hiddenCollections.Clear();
+            }
+
+            if (hiddenCollections.Count < activeGroupSet.collections.Count && context.Button("Hide all collections"))
+            {
+                filterByCollections = true;
+                hiddenCollections.Clear();
+                for (int i = 0; i < activeGroupSet.collections.Count; i++)
+                {
+                    HoBoneCollection collection = activeGroupSet.collections[i];
+                    if (collection != null && !string.IsNullOrEmpty(collection.name))
+                        hiddenCollections.Add(collection.name);
+                }
+            }
 
             context.Space(6f);
-            if (boneGroupSet == null && groupJson != null && context.Button("Refresh collection data"))
+            if (groupJson != null && context.Button("Refresh collection data"))
             {
                 RefreshGroupJson();
                 activeGroupSet = GetActiveGroupSet();
             }
 
-            if (activeGroupSet.collections == null)
-            {
-                context.Label("Collection asset has no collections");
-                return;
-            }
-
-            context.Label("Collections: " + (boneGroupSet != null ? boneGroupSet.name : groupJson.name));
+            context.Label("Collections: " + groupJson.name);
             m_RuntimeCollectionScroll = context.BeginScrollView(m_RuntimeCollectionScroll, GUILayout.Height(120f));
             for (int i = 0; i < activeGroupSet.collections.Count; i++)
             {
@@ -387,6 +397,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 bool nextVisible = context.Toggle(collection.name, visible);
                 if (nextVisible != visible)
                 {
+                    filterByCollections = true;
                     if (nextVisible)
                         hiddenCollections.Remove(collection.name);
                     else if (!hiddenCollections.Contains(collection.name))
@@ -398,22 +409,15 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         public HoBoneGroupSet GetActiveGroupSet()
         {
-            if (boneGroupSet != null)
-                return boneGroupSet;
-
             if (groupJson == null)
             {
-                if (m_ParsedGroupSet != null)
-                    Destroy(m_ParsedGroupSet);
-                m_ParsedGroupSet = null;
-                m_ParsedFrom = null;
+                ReleaseParsedGroupSet();
                 return null;
             }
 
             if (m_ParsedGroupSet == null || m_ParsedFrom != groupJson)
             {
-                if (m_ParsedGroupSet != null)
-                    Destroy(m_ParsedGroupSet);
+                ReleaseParsedGroupSet();
                 m_ParsedGroupSet = HoBoneGroupSet.CreateFromJson(groupJson.text);
                 m_ParsedFrom = groupJson;
             }
@@ -423,11 +427,25 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         public void RefreshGroupJson()
         {
-            if (m_ParsedGroupSet != null)
+            ReleaseParsedGroupSet();
+            RebuildMesh();
+        }
+
+        private void ReleaseParsedGroupSet()
+        {
+            if (m_ParsedGroupSet == null)
+            {
+                m_ParsedFrom = null;
+                return;
+            }
+
+            if (Application.isPlaying)
                 Destroy(m_ParsedGroupSet);
+            else
+                DestroyImmediate(m_ParsedGroupSet);
+
             m_ParsedGroupSet = null;
             m_ParsedFrom = null;
-            RebuildMesh();
         }
 
         private void AddNode(Transform node)
@@ -525,6 +543,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (!m_IsReady || skeletonRoot == null || m_Nodes.Count == 0)
             {
                 m_VisibleNodeCount = 0;
+                if (m_Mesh != null)
+                    m_Mesh.Clear(false);
                 if (m_MeshRenderer != null)
                     m_MeshRenderer.enabled = false;
                 return;
@@ -582,6 +602,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             if (m_Vertices.Count == 0)
             {
+                m_Mesh.Clear(false);
                 m_MeshRenderer.enabled = false;
                 return;
             }
