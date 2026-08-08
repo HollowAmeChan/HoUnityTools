@@ -138,6 +138,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (hiddenCollections == null)
                 hiddenCollections = new List<string>();
 
+            if (skeletonRoot == null)
+                skeletonRoot = transform;
+
             if (!ActiveRenderers.Contains(this))
                 ActiveRenderers.Add(this);
             if (ActiveRenderers.Count == 1)
@@ -318,7 +321,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         {
             drawBones = context.Toggle("Draw bones", drawBones);
             drawAxes = context.Toggle("Draw axes", drawAxes);
-            includeRoot = context.Toggle("Include root", includeRoot);
+            bool nextIncludeRoot = context.Toggle("Include root", includeRoot);
+            if (nextIncludeRoot != includeRoot)
+            {
+                includeRoot = nextIncludeRoot;
+                RefreshSkeleton();
+            }
             useCollectionColors = context.Toggle("Use collection colors", useCollectionColors);
             lineWidth = context.Slider("World line width", lineWidth, 0.0001f, 0.05f);
             lineWidthPixels = context.Slider("Screen line width", lineWidthPixels, 0.5f, 12f);
@@ -332,6 +340,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             context.Label("Collected nodes: " + m_Nodes.Count);
             context.Label("Visible nodes: " + m_VisibleNodeCount);
+            context.Label("Skeleton root: " + (skeletonRoot != null ? skeletonRoot.name : "none"));
+            context.Label("Renderer: " + (m_IsReady ? "ready" : "not ready"));
 
             HoBoneGroupSet activeGroupSet = GetActiveGroupSet();
             if (activeGroupSet == null)
