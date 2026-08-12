@@ -12,7 +12,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo 形态键状态广告牌")]
     public sealed class HoWarudoBlendShapeBillboard : MonoBehaviour
     {
-        private const int RowsPerColumnGroup = 10;
         private static readonly Quaternion TextFacingCorrection = Quaternion.Euler(0f, 180f, 0f);
 
         [Header("数据来源")]
@@ -47,8 +46,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         [InspectorName("最大条目数")]
         [Min(0)]
-        [Tooltip("0 表示显示全部；大于 0 时限制显示数量。每组固定最多 10 行，超出后向右扩展。")]
+        [Tooltip("0 表示显示全部；大于 0 时限制显示总数量。")]
         public int maxEntries;
+
+        [InspectorName("每列最大行数")]
+        [Min(1)]
+        [Tooltip("达到此数量后向右扩展新的一组键名列和值列。")]
+        public int maxRowsPerColumn = 20;
 
         [InspectorName("字体大小")]
         [Min(1)]
@@ -66,7 +70,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         [InspectorName("分组列间距")]
         [Min(0f)]
-        [Tooltip("每组 10 行数据之间的横向间距。")]
+        [Tooltip("相邻数据分组之间的横向间距。")]
         public float columnGroupSpacing = 1.5f;
 
         [InspectorName("文字颜色")]
@@ -93,6 +97,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private float m_LastNonZeroThreshold;
         private int m_LastDecimalPlaces;
         private int m_LastMaxEntries;
+        private int m_LastMaxRowsPerColumn;
         private int m_LastFontSize;
         private float m_LastLineSpacing;
         private float m_LastNameValueColumnSpacing;
@@ -224,7 +229,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             int count = maxEntries <= 0
                 ? m_Entries.Count
                 : Mathf.Min(maxEntries, m_Entries.Count);
-            int groupCount = Mathf.Max(1, (count + RowsPerColumnGroup - 1) / RowsPerColumnGroup);
+            int rowsPerColumn = Mathf.Max(1, maxRowsPerColumn);
+            int groupCount = Mathf.Max(1, (count + rowsPerColumn - 1) / rowsPerColumn);
             EnsureColumnGroupCount(groupCount);
             UpdateTitle(count);
 
@@ -237,8 +243,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 string valueFormat = "F" + Mathf.Clamp(decimalPlaces, 0, 4);
                 for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
                 {
-                    int start = groupIndex * RowsPerColumnGroup;
-                    int end = Mathf.Min(start + RowsPerColumnGroup, count);
+                    int start = groupIndex * rowsPerColumn;
+                    int end = Mathf.Min(start + rowsPerColumn, count);
                     BuildColumnText(start, end, valueFormat);
                     SetGroupText(m_ColumnGroups[groupIndex], m_NameBuilder.ToString(), m_ValueBuilder.ToString());
                 }
@@ -428,6 +434,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 || !Mathf.Approximately(m_LastNonZeroThreshold, nonZeroThreshold)
                 || m_LastDecimalPlaces != decimalPlaces
                 || m_LastMaxEntries != maxEntries
+                || m_LastMaxRowsPerColumn != maxRowsPerColumn
                 || m_LastFontSize != fontSize
                 || !Mathf.Approximately(m_LastLineSpacing, lineSpacing)
                 || !Mathf.Approximately(m_LastNameValueColumnSpacing, nameValueColumnSpacing)
@@ -441,6 +448,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_LastNonZeroThreshold = nonZeroThreshold;
             m_LastDecimalPlaces = decimalPlaces;
             m_LastMaxEntries = maxEntries;
+            m_LastMaxRowsPerColumn = maxRowsPerColumn;
             m_LastFontSize = fontSize;
             m_LastLineSpacing = lineSpacing;
             m_LastNameValueColumnSpacing = nameValueColumnSpacing;
