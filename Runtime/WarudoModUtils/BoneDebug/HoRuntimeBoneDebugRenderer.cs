@@ -10,7 +10,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// This component intentionally has no UnityEditor or Warudo dependency.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo 运行时骨骼调试绘制器")]
+    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer")]
     public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour, IHoWarudoRuntimeModule
     {
         [Header("骨架来源")]

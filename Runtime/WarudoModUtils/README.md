@@ -6,7 +6,7 @@
 
 - `HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Hub`
 - `HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer`
-- `HoUnityTools/Warudo Mod Utils/HoWarudo 形态键状态广告牌`
+- `HoUnityTools/Warudo Mod Utils/HoWarudo Blend Shape Billboard`
 
 这里的代码保持运行时独立，不依赖 `UnityEditor` 或 Warudo 私有程序集，方便后续由 Warudo 蓝图或脚本传递参数。
 

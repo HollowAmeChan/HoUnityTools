@@ -9,7 +9,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// This component is deliberately independent from HoWarudoRuntimeHub.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo 形态键状态广告牌")]
+    [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Blend Shape Billboard")]
     public sealed class HoWarudoBlendShapeBillboard : MonoBehaviour
     {
         private static readonly Quaternion TextFacingCorrection = Quaternion.Euler(0f, 180f, 0f);
