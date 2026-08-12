@@ -76,6 +76,14 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [InspectorName("文字颜色")]
         public Color textColor = Color.white;
 
+        [InspectorName("显示字体")]
+        [Tooltip("留空时使用 Unity 内置 Arial 字体。Warudo 中建议保持为空。")]
+        public Font displayFont;
+
+        [InspectorName("显示屏幕诊断")]
+        [Tooltip("在屏幕左上角显示组件是否运行、目标网格及形态键数量。用于排查 Warudo Mod。")]
+        public bool showScreenDiagnostics = true;
+
         [InspectorName("整体缩放")]
         [Min(0.001f)]
         public float worldScale = 0.01f;
@@ -92,6 +100,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private float[] m_LastWeights;
         private int m_LastVisibleCount = -1;
         private Camera m_CachedCamera;
+        private Font m_ResolvedFont;
+        private string m_RuntimeStatus = "等待初始化";
         private bool m_LastShowTitle;
         private bool m_LastOnlyNonZero;
         private float m_LastNonZeroThreshold;
@@ -120,14 +130,26 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         {
             EnsureDisplayObjects();
             RefreshImmediately();
+            UpdateRuntimeStatus();
         }
 
         private void LateUpdate()
         {
             EnsureDisplayObjects();
+            SynchronizeDisplayLayer();
             ApplyVisualSettings();
             RefreshTextIfNeeded();
             UpdateDisplayTransform();
+            UpdateRuntimeStatus();
+        }
+
+        private void OnGUI()
+        {
+            if (!showScreenDiagnostics)
+                return;
+
+            GUI.Box(new Rect(12f, 12f, 440f, 46f), "HoWarudo Blend Shape Billboard");
+            GUI.Label(new Rect(20f, 34f, 424f, 20f), m_RuntimeStatus);
         }
 
         private void OnDisable()
@@ -168,10 +190,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             var displayObject = new GameObject("HoWarudoBlendShapeBillboard");
             displayObject.hideFlags = HideFlags.DontSave;
+            displayObject.layer = gameObject.layer;
             m_DisplayRoot = displayObject.transform;
             m_DisplayRoot.SetParent(transform, false);
 
             m_TitleText = CreateTextMesh("Title", m_DisplayRoot);
+            SynchronizeDisplayLayer();
             ApplyVisualSettings();
         }
 
@@ -179,12 +203,72 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         {
             var textObject = new GameObject(objectName);
             textObject.hideFlags = HideFlags.DontSave;
+            textObject.layer = gameObject.layer;
             textObject.transform.SetParent(parent, false);
             TextMesh textMesh = textObject.AddComponent<TextMesh>();
             textMesh.richText = false;
             textMesh.alignment = TextAlignment.Left;
             textMesh.anchor = TextAnchor.UpperLeft;
+            ConfigureTextRenderer(textMesh);
             return textMesh;
+        }
+
+        private void ConfigureTextRenderer(TextMesh textMesh)
+        {
+            if (textMesh == null)
+                return;
+
+            Font font = ResolveFont();
+            if (font != null)
+                textMesh.font = font;
+
+            MeshRenderer renderer = textMesh.GetComponent<MeshRenderer>();
+            if (renderer == null)
+                return;
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+            renderer.sortingOrder = 32767;
+            if (font != null && font.material != null)
+                renderer.sharedMaterial = font.material;
+        }
+
+        private Font ResolveFont()
+        {
+            if (displayFont != null)
+                return displayFont;
+            if (m_ResolvedFont != null)
+                return m_ResolvedFont;
+
+            m_ResolvedFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            return m_ResolvedFont;
+        }
+
+        private void UpdateRuntimeStatus()
+        {
+            Mesh mesh = targetRenderer == null ? null : targetRenderer.sharedMesh;
+            if (targetRenderer == null)
+            {
+                m_RuntimeStatus = "组件已运行 | 目标蒙皮网格为空";
+                return;
+            }
+
+            if (mesh == null)
+            {
+                m_RuntimeStatus = "组件已运行 | " + targetRenderer.name + " | Mesh 为空";
+                return;
+            }
+
+            MeshRenderer titleRenderer = m_TitleText == null
+                ? null
+                : m_TitleText.GetComponent<MeshRenderer>();
+            m_RuntimeStatus = "组件已运行 | " + targetRenderer.name +
+                              " | 形态键 " + mesh.blendShapeCount +
+                              " | 字体 " + (ResolveFont() == null ? "缺失" : "就绪") +
+                              " | Renderer " + (titleRenderer == null ? "缺失" : "就绪") +
+                              " | Layer " + gameObject.layer;
         }
 
         private void RefreshTextIfNeeded()
@@ -322,6 +406,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             {
                 var rootObject = new GameObject("ColumnGroup" + m_ColumnGroups.Count);
                 rootObject.hideFlags = HideFlags.DontSave;
+                rootObject.layer = gameObject.layer;
                 rootObject.transform.SetParent(m_DisplayRoot, false);
                 m_ColumnGroups.Add(new ColumnGroup
                 {
@@ -334,6 +419,28 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             for (int i = 0; i < m_ColumnGroups.Count; i++)
                 m_ColumnGroups[i].root.SetActive(i < requiredCount);
             ApplyVisualSettings();
+        }
+
+        private void SynchronizeDisplayLayer()
+        {
+            if (m_DisplayRoot == null)
+                return;
+
+            int layer = gameObject.layer;
+            m_DisplayRoot.gameObject.layer = layer;
+            if (m_TitleText != null)
+                m_TitleText.gameObject.layer = layer;
+
+            for (int i = 0; i < m_ColumnGroups.Count; i++)
+            {
+                ColumnGroup group = m_ColumnGroups[i];
+                if (group.root != null)
+                    group.root.layer = layer;
+                if (group.names != null)
+                    group.names.gameObject.layer = layer;
+                if (group.values != null)
+                    group.values.gameObject.layer = layer;
+            }
         }
 
         private static void SetGroupText(ColumnGroup group, string names, string values)
@@ -422,6 +529,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (textMesh == null)
                 return;
 
+            Font font = ResolveFont();
+            if (textMesh.font != font)
+                ConfigureTextRenderer(textMesh);
             textMesh.fontSize = Mathf.Max(1, fontSize);
             textMesh.lineSpacing = Mathf.Max(0.1f, lineSpacing);
             textMesh.color = textColor;
