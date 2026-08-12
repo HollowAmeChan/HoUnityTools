@@ -82,7 +82,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         [InspectorName("显示屏幕诊断")]
         [Tooltip("在屏幕左上角显示组件是否运行、目标网格及形态键数量。用于排查 Warudo Mod。")]
-        public bool showScreenDiagnostics = true;
+        public bool showScreenDiagnostics;
 
         [InspectorName("整体缩放")]
         [Min(0.001f)]

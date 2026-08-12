@@ -68,6 +68,8 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
   Define，避免 Autodesk FBX 包的运行时测试程序集污染 Player 编译；构建结束或失败后恢复原值。
 - Warudo SDK 或其他包的脚本默认保留原引用，不主动复制；启用复制前必须确认源码和依赖可以由 UMod 编译。
 - 源码会短暂出现在 Unity 的运行时编译列表，构建完成后随临时目录一起清理。
+- FastBuild 会把临时 Prefab 上需要随 Mod 编译的组件重绑到临时脚本副本。不能保留包内
+  `MonoScript` 引用，否则 UMod 会记录原 asmdef 程序集名，运行时即使已编译同名类型也会显示 Missing Script。
 
 ### UMod 运行时安全审查
 

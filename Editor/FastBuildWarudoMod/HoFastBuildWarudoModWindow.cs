@@ -55,6 +55,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private sealed class ScriptMapping
         {
             public string sourcePath = string.Empty;
+            public string stagedPath = string.Empty;
             public bool removeFromPrefab;
         }
 
@@ -929,7 +930,25 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 var mappings = new List<ScriptMapping>();
                 if (copySelectedScripts)
                 {
-                    StageSelectedScripts(temporaryRoot);
+                    Dictionary<string, string> stagedScripts = StageSelectedScripts(temporaryRoot);
+                    foreach (ScriptPreview item in scriptPreview)
+                    {
+                        if (item == null || !item.copySource || item.removeWhenExcluded || item.hostProvided)
+                            continue;
+
+                        string sourcePath = NormalizeAssetPath(item.sourcePath);
+                        string stagedPath;
+                        if (!stagedScripts.TryGetValue(sourcePath, out stagedPath))
+                            throw new InvalidOperationException("未找到组件脚本的临时副本：" + sourcePath);
+
+                        mappings.Add(new ScriptMapping
+                        {
+                            sourcePath = sourcePath,
+                            stagedPath = stagedPath,
+                            removeFromPrefab = false,
+                        });
+                    }
+
                     StageReferencedRuntimeAssets(temporaryRoot);
                 }
 
@@ -958,11 +977,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private void StageSelectedScripts(string temporaryRoot)
+        private Dictionary<string, string> StageSelectedScripts(string temporaryRoot)
         {
             string scriptsRoot = temporaryRoot + "/" + StagedScriptsDirectoryName;
             EnsureAssetFolder(scriptsRoot);
             List<string> sourcePaths = CollectRuntimeSourceClosure();
+            var stagedScripts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var componentSourcePaths = new HashSet<string>(
+                scriptPreview
+                    .Where(item => item != null && item.copySource && !item.removeWhenExcluded &&
+                                   !item.hostProvided && !string.IsNullOrEmpty(item.sourcePath))
+                    .Select(item => NormalizeAssetPath(item.sourcePath)),
+                StringComparer.OrdinalIgnoreCase);
             int scriptIndex = 0;
 
             foreach (string sourcePath in sourcePaths)
@@ -981,12 +1007,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string absoluteDestination = AssetPathToAbsolute(stagedPath);
                 string sourceText = File.ReadAllText(absoluteSource, Encoding.UTF8);
                 sourceText = sourceText.Replace("\r\n", "\n").Replace("\r", "\n");
-                string wrappedSource = "#if !UNITY_EDITOR\r\n" +
-                                       sourceText.Replace("\n", "\r\n") +
-                                       "\r\n#endif\r\n";
+                string normalizedSource = sourceText.Replace("\n", "\r\n");
+                string wrappedSource = componentSourcePaths.Contains(sourcePath)
+                    ? "#pragma warning disable 0436\r\n" + normalizedSource + "\r\n"
+                    : "#if !UNITY_EDITOR\r\n" + normalizedSource + "\r\n#endif\r\n";
                 File.WriteAllText(absoluteDestination, wrappedSource, new UTF8Encoding(false));
                 WriteFreshMetaFile(absoluteDestination + ".meta");
+                stagedScripts[sourcePath] = stagedPath;
             }
+
+            return stagedScripts;
         }
 
         private List<string> CollectRuntimeSourceClosure()
@@ -1375,12 +1405,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     if (runtimeDebugMaterial != null &&
                         string.Equals(behaviour.GetType().FullName, RuntimeBoneDebugTypeName, StringComparison.Ordinal))
                     {
-                        var serializedBehaviour = new SerializedObject(behaviour);
-                        SerializedProperty materialProperty = serializedBehaviour.FindProperty("debugMaterial");
+                        var materialSerializedObject = new SerializedObject(behaviour);
+                        SerializedProperty materialProperty = materialSerializedObject.FindProperty("debugMaterial");
                         if (materialProperty != null && materialProperty.objectReferenceValue == null)
                         {
                             materialProperty.objectReferenceValue = runtimeDebugMaterial;
-                            serializedBehaviour.ApplyModifiedPropertiesWithoutUndo();
+                            materialSerializedObject.ApplyModifiedPropertiesWithoutUndo();
                         }
                     }
 
@@ -1399,8 +1429,17 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         continue;
                     }
 
-                    // UMod links its compiled script by full type name. The original
-                    // MonoScript reference must remain intact on the staged prefab.
+                    MonoScript stagedScript = AssetDatabase.LoadAssetAtPath<MonoScript>(mapping.stagedPath);
+                    if (stagedScript == null)
+                        throw new InvalidOperationException("无法加载临时组件脚本：" + mapping.stagedPath);
+
+                    var scriptSerializedObject = new SerializedObject(behaviour);
+                    SerializedProperty scriptProperty = scriptSerializedObject.FindProperty("m_Script");
+                    if (scriptProperty == null)
+                        throw new InvalidOperationException("组件缺少 m_Script 字段：" + behaviour.GetType().FullName);
+
+                    scriptProperty.objectReferenceValue = stagedScript;
+                    scriptSerializedObject.ApplyModifiedPropertiesWithoutUndo();
                 }
 
                 GameObject savedPrefab = PrefabUtility.SaveAsPrefabAsset(root, state.temporaryPrefabPath);
