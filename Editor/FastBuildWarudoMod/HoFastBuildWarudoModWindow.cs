@@ -22,6 +22,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const string RuntimeBoneDebugResourceKey = "HoRuntimeDebugLine";
         private const string RuntimeBoneDebugTypeName =
             "Hollow.HoUnityTools.WarudoModUtils.HoRuntimeBoneDebugRenderer";
+        private const string FbxSdkRuntimeDefine = "FBXSDK_RUNTIME";
         private const string PendingPhase = "AwaitingCompile";
         private const string BuildingPhase = "Building";
 
@@ -33,6 +34,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public string note = string.Empty;
             public bool copySource;
             public bool removeWhenExcluded;
+            public bool hostProvided;
             public int referenceCount;
             public List<string> componentReferences = new List<string>();
             public bool showReferencedAssets;
@@ -65,6 +67,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public string temporaryPrefabPath = string.Empty;
             public string exportSettingsPath = string.Empty;
             public string originalModAssetPath = string.Empty;
+            public string originalStandaloneDefines = string.Empty;
+            public bool managesStandaloneDefines;
             public int activeProfileIndex;
             public bool cleanupTemporaryAssets = true;
             public ScriptMapping[] scripts = Array.Empty<ScriptMapping>();
@@ -407,7 +411,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     else
                         GUILayout.Space(18f);
 
-                    using (new EditorGUI.DisabledScope(!copySelectedScripts || item.removeWhenExcluded))
+                    using (new EditorGUI.DisabledScope(
+                               !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
                         item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
 
                     string displayName = string.IsNullOrEmpty(item.typeName)
@@ -425,7 +430,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         EditorStyles.miniLabel,
                         GUILayout.MinWidth(180f),
                         GUILayout.MaxWidth(320f));
-                    EditorGUILayout.LabelField(Path.GetFileName(item.sourcePath), EditorStyles.miniLabel);
+                    string sourceStatus = item.hostProvided
+                        ? "宿主提供 / " + Path.GetFileName(item.sourcePath)
+                        : Path.GetFileName(item.sourcePath);
+                    EditorGUILayout.LabelField(sourceStatus, EditorStyles.miniLabel);
                 }
 
                 if (item.showReferencedAssets && item.referencedAssets != null)
@@ -643,16 +651,19 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     Type scriptType = script.GetClass();
                     string typeName = scriptType == null ? string.Empty : scriptType.FullName;
                     bool unsafeForRuntime = IsUnsafeRuntimeScript(path, typeName);
+                    bool hostProvided = IsHostProvidedRuntimeScript(path, typeName);
                     row = new ScriptPreview
                     {
                         sourcePath = path,
                         typeName = typeName,
-                        copySource = !unsafeForRuntime && ShouldCopyScriptByDefault(path),
+                        copySource = !unsafeForRuntime && !hostProvided && ShouldCopyScriptByDefault(path),
                         removeWhenExcluded = unsafeForRuntime,
+                        hostProvided = hostProvided,
                         note = GetScriptNote(path, typeName, unsafeForRuntime),
                     };
                     bool previousValue;
-                    if (previousSelection != null && previousSelection.TryGetValue(path, out previousValue))
+                    if (!hostProvided && previousSelection != null &&
+                        previousSelection.TryGetValue(path, out previousValue))
                         row.copySource = previousValue;
                     rows.Add(path, row);
                 }
@@ -771,6 +782,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (string.Equals(typeName, "Hollow.HoUnityTools.RigConstraints.HoAuxRig", StringComparison.Ordinal))
                 return "HoAuxRig 运行时脚本可独立复制；UMod 会按完整类型名链接现有组件。";
+            if (IsWarudoSupportedClothType(typeName))
+                return "Warudo 宿主已提供 MC1/MC2 运行时：保留 Prefab 组件引用，不复制或重新编译源码。";
             if (path.StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase))
                 return "Warudo SDK 自带脚本：默认保留现有引用，不复制进角色 Mod。";
             if (path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
@@ -784,11 +797,31 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                    path.StartsWith("Packages/com.hollow.hounitytools/", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsHostProvidedRuntimeScript(string path, string typeName)
+        {
+            string normalized = NormalizeAssetPath(path);
+            return normalized.StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase) ||
+                   IsWarudoSupportedClothType(typeName);
+        }
+
+        private static bool IsWarudoSupportedClothType(string typeName)
+        {
+            return HasTypeNamespace(typeName, "MagicaCloth") ||
+                   HasTypeNamespace(typeName, "MagicaCloth2");
+        }
+
+        private static bool HasTypeNamespace(string typeName, string namespaceName)
+        {
+            return string.Equals(typeName, namespaceName, StringComparison.Ordinal) ||
+                   (!string.IsNullOrEmpty(typeName) &&
+                    typeName.StartsWith(namespaceName + ".", StringComparison.Ordinal));
+        }
+
         private void SetRuntimeScriptSelection(bool selected)
         {
             foreach (ScriptPreview item in scriptPreview)
             {
-                if (!item.removeWhenExcluded)
+                if (!item.removeWhenExcluded && !item.hostProvided)
                     item.copySource = selected;
             }
         }
@@ -829,6 +862,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 state = CreateStagedBuildState();
                 WriteBuildState(state);
                 SessionState.SetString(PendingStateSessionKey, state.stateFilePath);
+                ApplyTemporaryPlayerSettings(state);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -879,6 +913,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 temporaryPrefabPath = temporaryPrefabPath,
                 exportSettingsPath = exportSettingsPath,
                 originalModAssetPath = originalModPath,
+                originalStandaloneDefines =
+                    PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone),
+                managesStandaloneDefines = true,
                 activeProfileIndex = activeProfileIndex,
                 cleanupTemporaryAssets = cleanupTemporaryAssets,
             };
@@ -959,11 +996,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             foreach (ScriptPreview item in scriptPreview)
             {
-                if (item == null || !item.copySource || item.removeWhenExcluded ||
+                if (item == null || !item.copySource || item.removeWhenExcluded || item.hostProvided ||
                     string.IsNullOrEmpty(item.sourcePath))
                     continue;
 
                 string sourcePath = NormalizeAssetPath(item.sourcePath);
+                if (IsHostProvidedRuntimeScript(sourcePath, item.typeName))
+                    continue;
                 sourcePaths.Add(sourcePath);
 
                 string assemblyRoot = FindRuntimeAssemblyRoot(sourcePath);
@@ -991,7 +1030,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         continue;
 
                     string typeName = GetScriptTypeName(candidate);
-                    if (IsUnsafeRuntimeScript(candidate, typeName))
+                    if (IsUnsafeRuntimeScript(candidate, typeName) ||
+                        IsHostProvidedRuntimeScript(candidate, typeName))
                         continue;
 
                     sourcePaths.Add(candidate);
@@ -1257,6 +1297,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     throw new InvalidOperationException("未知的 FastBuild 状态：" + state.phase);
 
                 PrepareStagedPrefab(state);
+                ValidateTemporaryPlayerSettings(state);
                 state.phase = BuildingPhase;
                 WriteBuildState(state);
                 ApplyTemporaryExportSettings(state);
@@ -1281,11 +1322,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return;
             }
 
-            if (!TryRestoreExportSettings(state))
+            if (!TryRestoreBuildEnvironment(state))
             {
                 EditorUtility.DisplayDialog(
                     WindowTitle,
-                    resultMessage + "\n\n恢复 ExportSettings 失败，临时状态已保留，未执行清理。",
+                    resultMessage + "\n\n恢复构建环境失败，临时状态已保留，未执行清理。",
                     "确定");
                 return;
             }
@@ -1458,6 +1499,56 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             AssetDatabase.SaveAssets();
         }
 
+        private static void ApplyTemporaryPlayerSettings(BuildState state)
+        {
+            if (!state.managesStandaloneDefines)
+                return;
+
+            string currentDefines =
+                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            if (!string.Equals(currentDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
+                throw new InvalidOperationException("Standalone Define Symbols 在构建准备期间发生变化，请重新开始 FastBuild。");
+
+            string temporaryDefines = RemoveScriptingDefine(
+                state.originalStandaloneDefines,
+                FbxSdkRuntimeDefine);
+            if (string.Equals(temporaryDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
+                return;
+
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(
+                BuildTargetGroup.Standalone,
+                temporaryDefines);
+            Debug.Log("[HoUnityTools] FastBuild 构建期间暂时移除 Standalone Define：" + FbxSdkRuntimeDefine);
+        }
+
+        private static void ValidateTemporaryPlayerSettings(BuildState state)
+        {
+            if (!state.managesStandaloneDefines)
+                return;
+
+            string expectedDefines = RemoveScriptingDefine(
+                state.originalStandaloneDefines,
+                FbxSdkRuntimeDefine);
+            string currentDefines =
+                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            if (!string.Equals(currentDefines, expectedDefines, StringComparison.Ordinal))
+                throw new InvalidOperationException("Standalone Define Symbols 在等待构建期间发生变化，请重新开始 FastBuild。");
+        }
+
+        private static string RemoveScriptingDefine(string defines, string defineToRemove)
+        {
+            if (string.IsNullOrEmpty(defines))
+                return string.Empty;
+
+            return string.Join(
+                ";",
+                defines.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(value => value.Trim())
+                    .Where(value => !string.IsNullOrEmpty(value) &&
+                                    !string.Equals(value, defineToRemove, StringComparison.Ordinal))
+                    .ToArray());
+        }
+
         private static string ValidateBuildResult(object result)
         {
             if (result == null)
@@ -1590,11 +1681,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private static void FinishBuildState(BuildState state, bool removeTemporaryAssets)
         {
-            if (TryRestoreExportSettings(state))
+            if (TryRestoreBuildEnvironment(state))
                 CompleteBuildCleanup(state, removeTemporaryAssets);
         }
 
-        private static bool TryRestoreExportSettings(BuildState state)
+        private static bool TryRestoreBuildEnvironment(BuildState state)
         {
             try
             {
@@ -1603,7 +1694,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
             catch (Exception exception)
             {
-                Debug.LogError("[HoUnityTools] 恢复 ExportSettings 失败：" + GetRootMessage(exception));
+                Debug.LogError("[HoUnityTools] 恢复 FastBuild 构建环境失败：" + GetRootMessage(exception));
                 if (IsSafeStateFilePath(state.stateFilePath))
                     SessionState.SetString(PendingStateSessionKey, state.stateFilePath);
                 Debug.LogError("[HoUnityTools] 已保留 FastBuild 状态与临时目录，等待下次域重载重试恢复。");
@@ -1633,6 +1724,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private static void RestoreExportSettings(BuildState state)
         {
+            RestorePlayerSettings(state);
+
             UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(state.exportSettingsPath);
             if (settings == null)
                 throw new InvalidOperationException("无法加载原 ExportSettings：" + state.exportSettingsPath);
@@ -1652,6 +1745,22 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             serializedSettings.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
+        }
+
+        private static void RestorePlayerSettings(BuildState state)
+        {
+            if (!state.managesStandaloneDefines)
+                return;
+
+            string currentDefines =
+                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            if (string.Equals(currentDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
+                return;
+
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(
+                BuildTargetGroup.Standalone,
+                state.originalStandaloneDefines ?? string.Empty);
+            Debug.Log("[HoUnityTools] 已恢复 Standalone Define Symbols。");
         }
 
         private static void DeleteStagingRootWhenEmpty()

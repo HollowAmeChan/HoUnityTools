@@ -62,6 +62,10 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 - `HoAuxRig` 是独立运行时脚本，可以复制到临时 Mod。
 - 位于 `Editor` 目录的脚本不作为运行时源码复制。
 - `HoBoneRenderer` 含编辑器可视化逻辑，默认从临时 Prefab 移除。
+- MC1 (`MagicaCloth`) 与 MC2 (`MagicaCloth2`) 由 Warudo 宿主提供。FastBuild 会保留
+  Prefab 上的组件引用，但禁止复制其源码，也不会把其 asmdef 源码闭包加入临时 Mod。
+- 如果工程启用了 `FBXSDK_RUNTIME`，FastBuild 会在 UMod 构建期间临时移除该 Standalone
+  Define，避免 Autodesk FBX 包的运行时测试程序集污染 Player 编译；构建结束或失败后恢复原值。
 - Warudo SDK 或其他包的脚本默认保留原引用，不主动复制；启用复制前必须确认源码和依赖可以由 UMod 编译。
 - 源码会短暂出现在 Unity 的运行时编译列表，构建完成后随临时目录一起清理。
 
