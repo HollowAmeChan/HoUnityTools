@@ -13,8 +13,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     public sealed class HoWarudoBlendShapeBillboard : MonoBehaviour
     {
         private const int RowsPerColumnGroup = 10;
-        private const float NameValueGap = 0.75f;
-        private const float ColumnGroupGap = 1.5f;
         private static readonly Quaternion TextFacingCorrection = Quaternion.Euler(0f, 180f, 0f);
 
         [Header("数据来源")]
@@ -61,6 +59,16 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [Tooltip("字体行高的倍数。标题与正文间距也会按此值自动计算。")]
         public float lineSpacing = 1f;
 
+        [InspectorName("键值列间距")]
+        [Min(0f)]
+        [Tooltip("同一组中键名列与数值列之间的间距。")]
+        public float nameValueColumnSpacing = 0.75f;
+
+        [InspectorName("分组列间距")]
+        [Min(0f)]
+        [Tooltip("每组 10 行数据之间的横向间距。")]
+        public float columnGroupSpacing = 1.5f;
+
         [InspectorName("文字颜色")]
         public Color textColor = Color.white;
 
@@ -87,6 +95,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private int m_LastMaxEntries;
         private int m_LastFontSize;
         private float m_LastLineSpacing;
+        private float m_LastNameValueColumnSpacing;
+        private float m_LastColumnGroupSpacing;
 
         private struct BlendShapeEntry
         {
@@ -340,8 +350,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 float nameWidth = MeasureTextWidth(group.names, group.names.text);
                 float valueWidth = MeasureTextWidth(group.values, group.values.text);
                 group.names.transform.localPosition = Vector3.zero;
-                group.values.transform.localPosition = new Vector3(nameWidth + NameValueGap, 0f, 0f);
-                x += nameWidth + NameValueGap + valueWidth + ColumnGroupGap;
+                float nameValueGap = Mathf.Max(0f, nameValueColumnSpacing);
+                group.values.transform.localPosition = new Vector3(nameWidth + nameValueGap, 0f, 0f);
+                x += nameWidth + nameValueGap + valueWidth + Mathf.Max(0f, columnGroupSpacing);
             }
         }
 
@@ -418,7 +429,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 || m_LastDecimalPlaces != decimalPlaces
                 || m_LastMaxEntries != maxEntries
                 || m_LastFontSize != fontSize
-                || !Mathf.Approximately(m_LastLineSpacing, lineSpacing);
+                || !Mathf.Approximately(m_LastLineSpacing, lineSpacing)
+                || !Mathf.Approximately(m_LastNameValueColumnSpacing, nameValueColumnSpacing)
+                || !Mathf.Approximately(m_LastColumnGroupSpacing, columnGroupSpacing);
         }
 
         private void CacheTextSettings()
@@ -430,6 +443,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_LastMaxEntries = maxEntries;
             m_LastFontSize = fontSize;
             m_LastLineSpacing = lineSpacing;
+            m_LastNameValueColumnSpacing = nameValueColumnSpacing;
+            m_LastColumnGroupSpacing = columnGroupSpacing;
         }
 
         private void EnsureWeightCache(int blendShapeCount)
