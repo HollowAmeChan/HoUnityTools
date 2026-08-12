@@ -148,7 +148,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (!showScreenDiagnostics)
                 return;
 
-            GUI.Box(new Rect(12f, 12f, 440f, 46f), "HoWarudo Blend Shape Billboard");
+            GUI.Box(new Rect(12f, 12f, 440f, 46f), "HoWarudo 形态键监视器");
             GUI.Label(new Rect(20f, 34f, 424f, 20f), m_RuntimeStatus);
         }
 
@@ -257,7 +257,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             if (mesh == null)
             {
-                m_RuntimeStatus = "组件已运行 | " + targetRenderer.name + " | Mesh 为空";
+                m_RuntimeStatus = "组件已运行 | " + targetRenderer.name + " | 网格为空";
                 return;
             }
 
@@ -267,8 +267,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_RuntimeStatus = "组件已运行 | " + targetRenderer.name +
                               " | 形态键 " + mesh.blendShapeCount +
                               " | 字体 " + (ResolveFont() == null ? "缺失" : "就绪") +
-                              " | Renderer " + (titleRenderer == null ? "缺失" : "就绪") +
-                              " | Layer " + gameObject.layer;
+                              " | 文字渲染器 " + (titleRenderer == null ? "缺失" : "就绪") +
+                              " | 层 " + gameObject.layer;
         }
 
         private void RefreshTextIfNeeded()
@@ -283,7 +283,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 m_LastMesh = null;
                 m_LastVisibleCount = 0;
                 CacheTextSettings();
-                SetStatusText("No blend shapes");
+                SetStatusText("没有形态键");
                 return;
             }
 
@@ -320,7 +320,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             if (count == 0)
             {
-                SetGroupText(m_ColumnGroups[0], "No active blend shapes", string.Empty);
+                SetGroupText(m_ColumnGroups[0], "没有符合条件的形态键", string.Empty);
             }
             else
             {
@@ -380,12 +380,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             m_NameBuilder.Length = 0;
             m_NameBuilder.Append(targetRenderer.name);
-            m_NameBuilder.Append(" | Blend Shapes");
+            m_NameBuilder.Append(" | 形态键");
             if (m_Entries.Count > shownCount)
             {
-                m_NameBuilder.Append(" (+");
+                m_NameBuilder.Append("（另有 ");
                 m_NameBuilder.Append(m_Entries.Count - shownCount);
-                m_NameBuilder.Append(" more)");
+                m_NameBuilder.Append(" 项未显示）");
             }
 
             m_TitleText.text = m_NameBuilder.ToString();
