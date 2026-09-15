@@ -64,26 +64,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty equilibriumColor;
         private SerializedProperty accelerationColor;
 
-        private bool updateExpanded = true;
-        private bool initialExpanded = true;
-        private bool anchorExpanded = true;
-        private bool pendulumExpanded = true;
-        private bool stretchExpanded = true;
-        private bool samplingExpanded;
-        private bool inputExpanded;
-        private bool outputExpanded = true;
+        private const string SectionStatePrefix = "HoPendulumConstraint.";
+
+        private bool basicExpanded;
+        private bool outputExpanded;
+        private bool advancedExpanded;
         private bool debugExpanded;
 
         private readonly List<bool> bindingFoldouts = new List<bool>();
         private int pendingRemoveIndex = -1;
 
-        private static readonly Color UpdateColor = new Color(0.28f, 0.62f, 1.0f);
-        private static readonly Color InitialColor = new Color(0.24f, 0.86f, 0.58f);
-        private static readonly Color AnchorColor = new Color(0.35f, 0.72f, 1.0f);
-        private static readonly Color PendulumColor = new Color(0.32f, 0.86f, 0.92f);
-        private static readonly Color StretchColor = new Color(0.42f, 0.78f, 1.0f);
-        private static readonly Color SamplingColor = new Color(0.62f, 0.66f, 0.92f);
-        private static readonly Color InputColor = new Color(1.0f, 0.70f, 0.28f);
+        private static readonly Color BasicColor = new Color(0.32f, 0.86f, 0.92f);
+        private static readonly Color AdvancedColor = new Color(0.62f, 0.66f, 0.92f);
         private static readonly Color OutputColor = new Color(0.78f, 0.48f, 1.0f);
         private static readonly Color DebugColor = new Color(0.70f, 0.72f, 0.76f);
 
@@ -242,6 +234,40 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             swingColor = Find("swingColor");
             equilibriumColor = Find("equilibriumColor");
             accelerationColor = Find("accelerationColor");
+
+            LoadSectionStates();
+        }
+
+        private void OnDisable()
+        {
+            SaveSectionStates();
+        }
+
+        // 折叠状态存进 SessionState：默认全部折叠，但展开过的分区在脚本重编译后仍然保持展开。
+        private void LoadSectionStates()
+        {
+            basicExpanded = GetSectionState("basic");
+            outputExpanded = GetSectionState("output");
+            advancedExpanded = GetSectionState("advanced");
+            debugExpanded = GetSectionState("debug");
+        }
+
+        private void SaveSectionStates()
+        {
+            SetSectionState("basic", basicExpanded);
+            SetSectionState("output", outputExpanded);
+            SetSectionState("advanced", advancedExpanded);
+            SetSectionState("debug", debugExpanded);
+        }
+
+        private static bool GetSectionState(string key)
+        {
+            return SessionState.GetBool(SectionStatePrefix + key, false);
+        }
+
+        private static void SetSectionState(string key, bool value)
+        {
+            SessionState.SetBool(SectionStatePrefix + key, value);
         }
 
         public override void OnInspectorGUI()
@@ -251,14 +277,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             DrawPresetToolbar();
             EditorGUILayout.Space(4.0f);
 
-            DrawUpdateSection();
-            DrawInitialTransformSection();
-            DrawAnchorSection();
-            DrawPendulumSection();
-            DrawStretchSection();
-            DrawSamplingSection();
-            DrawInputSection();
+            DrawBasicSection();
             DrawOutputSection();
+            DrawAdvancedSection();
             DrawDebugSection();
 
             serializedObject.ApplyModifiedProperties();
@@ -289,32 +310,114 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
         }
 
-        private void DrawUpdateSection()
+        private void DrawBasicSection()
         {
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref updateExpanded, "更新", GetPopupSummary(updateMode, UpdateModeLabels), UpdateColor))
+            string summary = GetPopupSummary(driveSource, DriveSourceLabels) + " · " +
+                             ResolveFrequency().ToString("0.##") + "Hz · " +
+                             maxAngle.floatValue.ToString("0.#") + "°";
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref basicExpanded, "基本", summary, BasicColor))
             {
                 return;
             }
 
+            DrawEnumPopup(driveSource, DriveSourceLabel, DriveSourceLabels, FourEnumValues);
+            if (driveSource.enumValueIndex == (int)HoPendulumDriveSource.AnchorTransform)
+            {
+                EditorGUILayout.PropertyField(anchor, AnchorLabel);
+                if (anchor.objectReferenceValue == null)
+                {
+                    EditorGUILayout.HelpBox("未指定锚点时回退到自身 Transform。", MessageType.Info);
+                }
+            }
+
+            EditorGUILayout.PropertyField(frequencyFromLength, FrequencyFromLengthLabel);
+            if (frequencyFromLength.boolValue)
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.FloatField(FrequencyLabel, ResolveFrequency());
+                }
+
+                EditorGUILayout.LabelField("频率由摆长决定，可在高级里关掉", EditorStyles.miniLabel);
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(frequency, FrequencyLabel);
+            }
+
+            EditorGUILayout.PropertyField(dampingRatio, DampingRatioLabel);
+            EditorGUILayout.PropertyField(maxAngle, MaxAngleLabel);
+            EditorGUILayout.PropertyField(sensitivity, SensitivityLabel);
+        }
+
+        private void DrawAdvancedSection()
+        {
+            string summary = GetPopupSummary(updateMode, UpdateModeLabels) +
+                             " · 拉伸" + HoConstraintEditorSectionGui.BoolSummary(radialEnabled) +
+                             " · " + estimationWindow.intValue + "帧";
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref advancedExpanded, "高级", summary, AdvancedColor))
+            {
+                return;
+            }
+
+            EditorGUILayout.LabelField("更新", EditorStyles.boldLabel);
             DrawEnumPopup(updateMode, UpdateModeLabel, UpdateModeLabels, FourEnumValues);
             EditorGUILayout.PropertyField(evaluateInEditMode, EvaluateInEditModeLabel);
             EditorGUILayout.PropertyField(initializeOnEnable, InitializeOnEnableLabel);
-        }
 
-        private void DrawInitialTransformSection()
-        {
-            string summary = hasInitialTransform.boolValue ? "已保存" : "未保存";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref initialExpanded, "初始变换", summary, InitialColor))
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("摆长与朝向", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(length, LengthLabel);
+            EditorGUILayout.PropertyField(gravityInfluence, GravityInfluenceLabel);
+            EditorGUILayout.PropertyField(centrifugalInfluence, CentrifugalInfluenceLabel);
+            EditorGUILayout.PropertyField(referenceGravity, ReferenceGravityLabel);
+
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("饱和", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(saturationSoftness, SaturationSoftnessLabel);
+
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("竖直拉伸", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(radialEnabled, RadialEnabledLabel);
+            using (new EditorGUI.DisabledScope(!radialEnabled.boolValue))
             {
-                return;
+                EditorGUILayout.PropertyField(restElongation, RestElongationLabel);
+                EditorGUILayout.PropertyField(radialDampingRatio, RadialDampingRatioLabel);
+
+                if (restElongation.floatValue > 0.0f)
+                {
+                    EditorGUILayout.LabelField(
+                        "径向弹簧频率 " + ResolveRadialFrequency().ToString("0.###") + " Hz（周期 " +
+                        (1.0f / Mathf.Max(0.0001f, ResolveRadialFrequency())).ToString("0.###") + " s）",
+                        EditorStyles.miniLabel);
+                }
             }
 
-            EditorGUILayout.HelpBox("摆锤约束不写自身 Transform。这里保存的位姿只用于「恢复初始变换」，以及给采样提供静止参考。", MessageType.Info);
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("采样", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "加速度由最近「估计窗口」帧位置的二次最小二乘拟合给出，不是逐帧二阶差分。" +
+                "总响应延迟 ≈ (窗口-1)/2 帧 + 平衡角平滑。",
+                EditorStyles.miniLabel);
+            EditorGUILayout.PropertyField(estimationWindow, EstimationWindowLabel);
+            EditorGUILayout.PropertyField(equilibriumSmoothing, EquilibriumSmoothingLabel);
+            EditorGUILayout.PropertyField(maxStep, MaxStepLabel);
 
-            using (new EditorGUI.DisabledScope(true))
+            if (driveSource.enumValueIndex == (int)HoPendulumDriveSource.Manual)
             {
-                EditorGUILayout.Toggle("已保存", hasInitialTransform.boolValue);
+                EditorGUILayout.Space(5.0f);
+                EditorGUILayout.LabelField("手动输入", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(manualAcceleration, ManualAccelerationLabel);
+                EditorGUILayout.PropertyField(inputValue, InputValueLabel);
+                EditorGUILayout.PropertyField(sourceValueMin, SourceValueMinLabel);
+                EditorGUILayout.PropertyField(sourceValueMax, SourceValueMaxLabel);
+                EditorGUILayout.PropertyField(inputAcceleration, InputAccelerationLabel);
+                EditorGUILayout.PropertyField(inputAxis, InputAxisLabel);
             }
+
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("初始变换", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("摆锤约束不写自身 Transform，这里保存的位姿只用于「恢复初始变换」。", EditorStyles.miniLabel);
 
             using (new EditorGUI.DisabledScope(!hasInitialTransform.boolValue))
             {
@@ -345,119 +448,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawAnchorSection()
-        {
-            string summary = GetPopupSummary(driveSource, DriveSourceLabels);
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref anchorExpanded, "锚点", summary, AnchorColor))
-            {
-                return;
-            }
-
-            DrawEnumPopup(driveSource, DriveSourceLabel, DriveSourceLabels, FourEnumValues);
-            if (driveSource.enumValueIndex == (int)HoPendulumDriveSource.AnchorTransform)
-            {
-                EditorGUILayout.PropertyField(anchor, AnchorLabel);
-                if (anchor.objectReferenceValue == null)
-                {
-                    EditorGUILayout.HelpBox("未指定锚点时回退到自身 Transform。", MessageType.Info);
-                }
-            }
-        }
-
-        private void DrawPendulumSection()
-        {
-            string summary = string.Format(
-                "L {0:0.##}m / {1:0.#}°",
-                length.floatValue,
-                maxAngle.floatValue);
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref pendulumExpanded, "摆锤", summary, PendulumColor))
-            {
-                return;
-            }
-
-            EditorGUILayout.PropertyField(length, LengthLabel);
-            EditorGUILayout.PropertyField(frequencyFromLength, FrequencyFromLengthLabel);
-
-            if (frequencyFromLength.boolValue)
-            {
-                using (new EditorGUI.DisabledScope(true))
-                {
-                    EditorGUILayout.FloatField(FrequencyLabel, ResolveFrequency());
-                }
-
-                if (length.floatValue > 0.0f)
-                {
-                    EditorGUILayout.LabelField(
-                        "  ",
-                        "摆长 " + length.floatValue.ToString("0.###") + "m 的物理单摆周期 " +
-                        (1.0f / Mathf.Max(0.0001f, ResolveFrequency())).ToString("0.###") + " s",
-                        EditorStyles.miniLabel);
-                }
-            }
-            else
-            {
-                EditorGUILayout.PropertyField(frequency, FrequencyLabel);
-            }
-
-            EditorGUILayout.PropertyField(dampingRatio, DampingRatioLabel);
-            EditorGUILayout.PropertyField(maxAngle, MaxAngleLabel);
-            EditorGUILayout.PropertyField(saturationSoftness, SaturationSoftnessLabel);
-            EditorGUILayout.PropertyField(sensitivity, SensitivityLabel);
-            EditorGUILayout.PropertyField(gravityInfluence, GravityInfluenceLabel);
-            EditorGUILayout.PropertyField(centrifugalInfluence, CentrifugalInfluenceLabel);
-            EditorGUILayout.PropertyField(referenceGravity, ReferenceGravityLabel);
-        }
-
-        private void DrawStretchSection()
-        {
-            string summary = radialEnabled.boolValue
-                ? "ΔL " + restElongation.floatValue.ToString("0.###") + "m / " + ResolveRadialFrequency().ToString("0.#") + "Hz"
-                : "关";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref stretchExpanded, "竖直拉伸", summary, StretchColor))
-            {
-                return;
-            }
-
-            EditorGUILayout.PropertyField(radialEnabled, RadialEnabledLabel);
-            using (new EditorGUI.DisabledScope(!radialEnabled.boolValue))
-            {
-                EditorGUILayout.PropertyField(restElongation, RestElongationLabel);
-                EditorGUILayout.PropertyField(radialDampingRatio, RadialDampingRatioLabel);
-
-                if (restElongation.floatValue > 0.0f)
-                {
-                    EditorGUILayout.LabelField(
-                        "  ",
-                        "径向弹簧频率 " + ResolveRadialFrequency().ToString("0.###") + " Hz（周期 " +
-                        (1.0f / Mathf.Max(0.0001f, ResolveRadialFrequency())).ToString("0.###") + " s）",
-                        EditorStyles.miniLabel);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("静止伸长为 0 表示径向刚性，竖直方向不会有伸缩。", MessageType.Info);
-                }
-            }
-        }
-
-        private void DrawSamplingSection()
-        {
-            string summary = estimationWindow.intValue + " 帧 + " + equilibriumSmoothing.floatValue.ToString("0") + "ms";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref samplingExpanded, "采样", summary, SamplingColor))
-            {
-                return;
-            }
-
-            EditorGUILayout.HelpBox(
-                "加速度不是逐帧二阶差分算出来的，而是对最近「估计窗口」帧的位置做二次最小二乘拟合：" +
-                "对匀速与恒加速都精确，但对位置抖动/量化/低采样率的放大远小于二阶差分（实测 20Hz 采样台阶下相差约 28 倍）。\n" +
-                "总响应延迟 ≈ (估计窗口-1)/2 帧 + 平衡角平滑。",
-                MessageType.Info);
-
-            EditorGUILayout.PropertyField(estimationWindow, EstimationWindowLabel);
-            EditorGUILayout.PropertyField(equilibriumSmoothing, EquilibriumSmoothingLabel);
-            EditorGUILayout.PropertyField(maxStep, MaxStepLabel);
-        }
-
         private float ResolveFrequency()
         {
             if (!frequencyFromLength.boolValue)
@@ -477,27 +467,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             return HoPendulumSolver.RadialFrequencyFromElongation(restElongation.floatValue, referenceGravity.floatValue);
-        }
-
-        private void DrawInputSection()
-        {
-            string summary = driveSource.enumValueIndex == (int)HoPendulumDriveSource.Manual ? "生效中" : "未启用";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref inputExpanded, "手动输入", summary, InputColor))
-            {
-                return;
-            }
-
-            if (driveSource.enumValueIndex != (int)HoPendulumDriveSource.Manual)
-            {
-                EditorGUILayout.HelpBox("驱动源不是「手动输入」时，本节参数不参与求解，可改由运动采样驱动。", MessageType.Info);
-            }
-
-            EditorGUILayout.PropertyField(manualAcceleration, ManualAccelerationLabel);
-            EditorGUILayout.PropertyField(inputValue, InputValueLabel);
-            EditorGUILayout.PropertyField(sourceValueMin, SourceValueMinLabel);
-            EditorGUILayout.PropertyField(sourceValueMax, SourceValueMaxLabel);
-            EditorGUILayout.PropertyField(inputAcceleration, InputAccelerationLabel);
-            EditorGUILayout.PropertyField(inputAxis, InputAxisLabel);
         }
 
         private void DrawOutputSection()
@@ -568,7 +537,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             while (bindingFoldouts.Count <= index)
             {
-                bindingFoldouts.Add(index == 0);
+                // 默认折叠，只显示「通道 → 目标」标题；新增的那条才自动展开。
+                bindingFoldouts.Add(false);
             }
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
