@@ -4,6 +4,11 @@
 
 FastBuild 面向一个已经在 Unity 中完成配置的角色 Prefab。它只负责准备可交给 Warudo SDK 的临时 Mod 目录，然后调用 UMod 官方构建入口；它不是 Warudo 的 `Setup Character` 替代品，也不创建蓝图或 Plugin 资产。
 
+面板有两个入口，打开的是同一个窗口：
+
+- 顶栏菜单 `HoUnityTools/FastBuildWarudoMod`：不要求选中 Prefab；窗口没有源 Prefab 时会采用当前选中的 Prefab。
+- Project 窗口右键 Prefab 的 `Assets/HoUnityTools/FastBuildWarudoMod`：始终把右键的 Prefab 作为源 Prefab。
+
 本记录基于以下环境验证：
 
 - Warudo Mod Tool 0.14.4.8

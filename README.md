@@ -9,9 +9,11 @@
 | --- | --- |
 | 动画处理 | `HoUnityTools/动画处理` |
 | FBX 导入处理中控 | `HoUnityTools/HoFBX导入处理` |
-| Warudo Prefab 快速构建 | `Assets/HoUnityTools/FastBuildWarudoMod` |
+| Warudo Prefab 快速构建 | `HoUnityTools/FastBuildWarudoMod` |
 
 选中 FBX 资产后，也可以使用 `Assets/HoUnityTools/HoFBX导入处理` 打开同一个 FBX 面板并自动扫描相邻配置文件。这是面板的上下文快捷入口，不是另一套功能。
+
+在 Project 窗口中右键 Prefab，可以使用 `Assets/HoUnityTools/FastBuildWarudoMod` 打开 FastBuild 面板并把该 Prefab 作为源 Prefab。顶栏入口 `HoUnityTools/FastBuildWarudoMod` 在没有选中 Prefab 时也能打开面板，源 Prefab 可以在面板里手动指定；窗口已经有源 Prefab 时，顶栏入口不会覆盖它。
 
 ## 组件
 

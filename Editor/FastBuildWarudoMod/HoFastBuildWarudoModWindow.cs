@@ -14,6 +14,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
     internal sealed class HoFastBuildWarudoModWindow : EditorWindow
     {
         private const string MenuPath = "Assets/HoUnityTools/FastBuildWarudoMod";
+        private const string TopLevelMenuPath = "HoUnityTools/FastBuildWarudoMod";
         private const string WindowTitle = "FastBuild Warudo Mod";
         private const string PendingStateSessionKey = "HoUnityTools.FastBuildWarudoMod.PendingState";
         private const string TemporaryAssetRoot = "Assets/HoFastBuildWarudoModTemp";
@@ -132,6 +133,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             SchedulePendingBuildResume();
         }
 
+        [MenuItem(TopLevelMenuPath, false, 40)]
+        internal static void ShowWindow()
+        {
+            HoFastBuildWarudoModWindow window = OpenWindow();
+
+            // 顶栏入口没有 Prefab 上下文。仅在窗口还没选定源 Prefab 时采用当前选择，
+            // 避免覆盖正在审查的依赖勾选状态。
+            if (string.IsNullOrEmpty(window.sourcePrefabPath))
+            {
+                string path = GetSelectedPrefabPath();
+                if (IsPrefab(path))
+                    window.SetSourcePrefab(path);
+            }
+        }
+
         [MenuItem(MenuPath, false, 2010)]
         private static void OpenFromSelection()
         {
@@ -142,16 +158,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return;
             }
 
-            var window = GetWindow<HoFastBuildWarudoModWindow>(WindowTitle);
-            window.minSize = new Vector2(600f, 520f);
-            window.SetSourcePrefab(path);
-            window.Show();
+            OpenWindow().SetSourcePrefab(path);
         }
 
         [MenuItem(MenuPath, true)]
         private static bool ValidateOpenFromSelection()
         {
             return IsPrefab(GetSelectedPrefabPath());
+        }
+
+        private static HoFastBuildWarudoModWindow OpenWindow()
+        {
+            var window = GetWindow<HoFastBuildWarudoModWindow>(WindowTitle);
+            window.minSize = new Vector2(600f, 520f);
+            window.Show();
+            return window;
         }
 
         private void OnEnable()
