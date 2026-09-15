@@ -23,6 +23,7 @@
 | --- | --- |
 | 跟随约束 | `HoUnityTools/Constraints/Ho Follow Constraint` |
 | 漂浮约束 | `HoUnityTools/Constraints/Ho Floating Constraint` |
+| 摆锤约束 | `HoUnityTools/Constraints/Ho Pendulum Constraint` |
 | Scene/Game View 相机同步 | `HoUnityTools/Ho Scene To Game View Sync` |
 | 骨骼绘制器 | `HoUnityTools/Ho Bone Renderer` |
 
@@ -31,4 +32,5 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 ## 文档
 
 - [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
+- [摆锤约束设计与验证](docs/PENDULUM_CONSTRAINT.md)
 - [旧 Hotools 源码迁移说明](docs/MIGRATION.md)
