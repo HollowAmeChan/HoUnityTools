@@ -9,12 +9,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     internal sealed class HoPendulumConstraintEditor : UnityEditor.Editor
     {
         /// <summary>
-        /// 水瓶液面预设的斜率缩放。1 表示通道值就是液面真实斜率 tanθ；
-        /// 2.4 是按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定的（旧/新 ≈ 2.42），
-        /// 只有当 shader 侧的摆动项用法与旧 shader 一致时才有意义。
-        /// 新写的液面 shader 如果把 _LiquidTiltX/_LiquidTiltZ 当斜率用，把它改成 1。
+        /// 水瓶液面预设的斜率缩放。1 表示通道值就是液面真实斜率 tanθ。
+        /// 晃动强度 ≈ 灵敏度 × 这个缩放，所以它和「加速度灵敏度」一起决定观感强度；
+        /// 上限则由「最大倾斜角」压住：输出斜率不会超过 tan(最大倾斜角) × 缩放。
         /// </summary>
-        private const float BottleTiltScale = 2.4f;
+        private const float BottleTiltScale = 3.0f;
 
         private SerializedProperty updateMode;
         private SerializedProperty evaluateInEditMode;
@@ -844,12 +843,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetFloat(frequency, 3.0f);
             SetFloat(length, 0.25f);
             SetFloat(dampingRatio, 0.22f);
-            SetFloat(maxAngle, 20.0f);
+            // 强度：灵敏度 2 表示"输出斜率 ≈ 2 倍物理值"，常见手持运动（a≈1~3m/s²）
+            // 就能跑满量程的大部分；30° 上限保证猛甩时不至于把液面翻过去。
+            SetFloat(maxAngle, 30.0f);
             SetFloat(saturationSoftness, 0.65f);
-            // 灵敏度 1 是物理值（tanθ = a/g），但 a 只要 3.6m/s² 就会顶到 20° 上限，
-            // 场景里拖动很容易超过，结果是碟子长期贴在极限处翻。
-            // 0.5 把常见手持运动放到量程中段：a=1 约 2.9°、a=3 约 8.7°、a=7 才接近上限。
-            SetFloat(sensitivity, 0.5f);
+            SetFloat(sensitivity, 2.0f);
             SetFloat(restElongation, 0.015f);
             SetInt(estimationWindow, HoMotionEstimator.DefaultWindow);
             SetFloat(equilibriumSmoothing, 20.0f);
