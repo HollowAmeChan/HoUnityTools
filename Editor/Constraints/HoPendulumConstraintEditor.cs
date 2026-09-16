@@ -98,58 +98,52 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly Color OutputColor = new Color(0.78f, 0.48f, 1.0f);
         private static readonly Color DebugColor = new Color(0.70f, 0.72f, 0.76f);
 
-        private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机", "摆锤约束在哪个 Unity 更新阶段求值。");
-        private static readonly GUIContent EvaluateInEditModeLabel = new GUIContent("编辑模式求值", "未进入播放模式时也持续更新。");
-        private static readonly GUIContent InitializeOnEnableLabel = new GUIContent("启用时重置摆锤", "组件启用时把采样基准复位到当前位姿，避免启用瞬间抖动。");
-        private static readonly GUIContent InitialLocalPositionLabel = new GUIContent("初始位置", "保存的本地初始位置。");
-        private static readonly GUIContent InitialLocalRotationLabel = new GUIContent("初始旋转", "保存的本地初始旋转。");
-        private static readonly GUIContent InitialLocalScaleLabel = new GUIContent("初始缩放", "保存的本地初始缩放。");
-        private static readonly GUIContent DriveSourceLabel = new GUIContent("驱动源", "采样哪个 Transform 的运动。液面用自身运动，被驱动的挂件用父级运动。");
-        private static readonly GUIContent AnchorLabel = new GUIContent("锚点", "驱动源为「指定锚点」时采样的 Transform。");
-        private static readonly GUIContent LengthLabel = new GUIContent("摆长", "摆锤末端到锚点的静止距离，同时是离心项半径。默认不再决定晃动频率。");
-        private static readonly GUIContent FrequencyFromLengthLabel = new GUIContent("摆长决定频率", "勾选后改用物理单摆频率 √(g/L)/2π，摆长越长晃得越慢。");
-        private static readonly GUIContent FrequencyLabel = new GUIContent("液面响应频率", "单位 Hz。液面晃动快慢由容器与液体决定：手持运动频段在 0.5~2Hz，把响应频率放在 2~3Hz 可以让液面跟得上倾斜、又不会与手的动作共振。");
-        private static readonly GUIContent DampingRatioLabel = new GUIContent("阻尼比", "1 为临界阻尼不再晃动，0 为无阻尼。液面建议 0.5~0.8：液体的黏性本来就大，ζ=0.3 那种来回振铃看起来像果冻。");
-        private static readonly GUIContent MaxAngleLabel = new GUIContent("最大倾斜角", "**相对平衡面**的摆动幅度上限（度），不是液面绝对倾角上限。液面始终完整跟随重力方向（放平、倒过来都对），这个值只限制它相对平衡面还能晃多少。6~10° 已经很明显。");
-        private static readonly GUIContent SaturationSoftnessLabel = new GUIContent("饱和柔和度", "0 为硬夹取（到顶就停住），1 为完全 tanh 软饱和。软饱和的大幅晃动更像液体而不是撞墙。");
-        private static readonly GUIContent SensitivityLabel = new GUIContent("加速度灵敏度", "1 为物理值：恒加速度下 tanθ = a/g。它只缩放**惯性项**，不影响「倾斜容器时液面屈服重力」。手的加速度尖峰常到十几 m/s²，1.0 会让液面跟着手抖一起摆，液面预设用 0.5。");
-        private static readonly GUIContent GravityInfluenceLabel = new GUIContent("朝向跟随", "1 表示液面始终与 世界水平面 平行，0 表示始终垂直于物体自身轴。");
-        private static readonly GUIContent CentrifugalInfluenceLabel = new GUIContent("离心影响", "旋转产生的离心加速度对液面的影响强度。");
-        private static readonly GUIContent ReferenceGravityLabel = new GUIContent("参考重力", "用于换算平衡角与径向弹簧的参考重力加速度。");
-        private static readonly GUIContent RadialEnabledLabel = new GUIContent("启用竖直拉伸", "竖直方向的伸缩由一维弹簧描述：静止时在摆长上，过载拉长，失重收缩。");
-        private static readonly GUIContent RestElongationLabel = new GUIContent("静止伸长", "1g 静止时的伸长量（米）。同时决定径向弹簧固有频率 √(g/ΔL)：0.02m 约 3.5Hz。0 表示刚性。");
-        private static readonly GUIContent RadialDampingRatioLabel = new GUIContent("径向阻尼比", "竖直伸缩的阻尼比。");
-        private static readonly GUIContent MaxStepLabel = new GUIContent("最大子步", "单步积分上限。越小越精确，代价是子步更多。");
-        private static readonly GUIContent EstimationWindowLabel = new GUIContent("估计窗口", "帧。对最近这么多帧的位置做二次最小二乘拟合来求速度与加速度。窗口越大越抗抖动，但加速度变化时会多出约 (窗口-1)/2 帧的滞后。逐帧二阶差分在 20Hz 采样、位置量化、编辑器拖拽下会产生几十 m/s² 的噪声，所以不建议调到 3。");
-        private static readonly GUIContent AccelerationSmoothingLabel = new GUIContent(
-            "加速度平滑",
-            "毫秒。只对**加速度**做一阶低通，不滤朝向 —— 手抖的几十 m/s² 尖峰会让液面抽搐，" +
-            "而倾斜容器时的重力响应不受影响（那是另一条路）。0 表示不滤。" +
-            "它是「左右移动时液面颤抖」的主开关：实测走路晃动（2Hz / 3cm）下，" +
-            "高频抖动 RMS 从 3.8° 降到 0.9°（120ms + 灵敏度 0.5 + 阻尼 0.7）。");
-        private static readonly GUIContent EquilibriumSmoothingLabel = new GUIContent(
-            "平衡角平滑",
-            "毫秒。对平衡角做一阶低通，直流增益为 1，因此不会影响稳态倾角，只增加这一点延迟。" +
-            "它会同时延迟「倾斜容器」的响应，所以优先用「加速度平滑」压抖动，这里保持 20~30ms。");
-        private static readonly GUIContent ManualAccelerationLabel = new GUIContent("手动加速度", "驱动源为「手动输入」时直接注入的加速度（锚点本地坐标系，m/s²）。");
-        private static readonly GUIContent InputValueLabel = new GUIContent("输入值", "外部脚本写入的驱动值，会按区间归一化后乘到输入加速度上。");
+        // 工具提示只保留「名字看不出来」的那一句；含义、调参区间、实测量级与推导全部在
+        // docs/PENDULUM_CONSTRAINT.md（参数 / 惯性项为什么要单独滤波 / 水瓶液面预设的其余参数）。
+        private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机");
+        private static readonly GUIContent EvaluateInEditModeLabel = new GUIContent("编辑模式求值");
+        private static readonly GUIContent InitializeOnEnableLabel = new GUIContent("启用时重置摆锤", "复位采样基准，避免启用瞬间抖动。");
+        private static readonly GUIContent InitialLocalPositionLabel = new GUIContent("初始位置");
+        private static readonly GUIContent InitialLocalRotationLabel = new GUIContent("初始旋转");
+        private static readonly GUIContent InitialLocalScaleLabel = new GUIContent("初始缩放");
+        private static readonly GUIContent DriveSourceLabel = new GUIContent("驱动源", "液面用自身运动，挂件用父级运动。");
+        private static readonly GUIContent AnchorLabel = new GUIContent("锚点");
+        private static readonly GUIContent LengthLabel = new GUIContent("摆长", "末端到锚点的静止距离，也是离心半径。");
+        private static readonly GUIContent FrequencyFromLengthLabel = new GUIContent("摆长决定频率", "改用物理单摆频率 √(g/L)/2π。");
+        private static readonly GUIContent FrequencyLabel = new GUIContent("液面响应频率", "Hz。手持运动在 0.5~2Hz，建议放 2~3Hz。");
+        private static readonly GUIContent DampingRatioLabel = new GUIContent("阻尼比", "1 为临界阻尼。液面建议 0.5~0.8。");
+        private static readonly GUIContent MaxAngleLabel = new GUIContent("最大倾斜角", "**相对平衡面**的摆动幅度上限（度），不是液面绝对倾角。");
+        private static readonly GUIContent SaturationSoftnessLabel = new GUIContent("饱和柔和度", "0 硬夹取，1 最软。");
+        private static readonly GUIContent SensitivityLabel = new GUIContent("加速度灵敏度", "1 为物理值；只缩放惯性项。");
+        private static readonly GUIContent GravityInfluenceLabel = new GUIContent("朝向跟随", "1 平行世界水平面，0 垂直物体轴。");
+        private static readonly GUIContent CentrifugalInfluenceLabel = new GUIContent("离心影响");
+        private static readonly GUIContent ReferenceGravityLabel = new GUIContent("参考重力");
+        private static readonly GUIContent RadialEnabledLabel = new GUIContent("启用竖直拉伸", "过载拉长，失重收缩。");
+        private static readonly GUIContent RestElongationLabel = new GUIContent("静止伸长", "米。决定径向频率 √(g/ΔL)，0 为刚性。");
+        private static readonly GUIContent RadialDampingRatioLabel = new GUIContent("径向阻尼比");
+        private static readonly GUIContent MaxStepLabel = new GUIContent("最大子步", "越小越精确，代价是子步更多。");
+        private static readonly GUIContent EstimationWindowLabel = new GUIContent("估计窗口", "帧。越大越抗抖动，滞后约 (窗口-1)/2 帧。");
+        private static readonly GUIContent AccelerationSmoothingLabel = new GUIContent("加速度平滑", "毫秒。只滤加速度、不滤朝向。颤抖的主开关。");
+        private static readonly GUIContent EquilibriumSmoothingLabel = new GUIContent("平衡角平滑", "毫秒。同时会延迟倾斜容器的响应。");
+        private static readonly GUIContent ManualAccelerationLabel = new GUIContent("手动加速度", "本地坐标系，m/s²。");
+        private static readonly GUIContent InputValueLabel = new GUIContent("输入值");
         private static readonly GUIContent SourceValueMinLabel = new GUIContent("输入下限");
         private static readonly GUIContent SourceValueMaxLabel = new GUIContent("输入上限");
-        private static readonly GUIContent InputAccelerationLabel = new GUIContent("输入加速度", "输入值取满时沿输入轴注入的加速度（m/s²）。");
-        private static readonly GUIContent InputAxisLabel = new GUIContent("输入轴", "输入加速度在锚点本地坐标系中的方向。");
-        private static readonly GUIContent WriteToSharedMaterialLabel = new GUIContent("同时写材质资产", "默认只写 MaterialPropertyBlock；勾选后会额外写入共享材质，会破坏合批，仅在需要兼容旧行为时使用。");
+        private static readonly GUIContent InputAccelerationLabel = new GUIContent("输入加速度", "输入值取满时的加速度（m/s²）。");
+        private static readonly GUIContent InputAxisLabel = new GUIContent("输入轴");
+        private static readonly GUIContent WriteToSharedMaterialLabel = new GUIContent("同时写材质资产", "会破坏合批，仅兼容旧行为时用。");
         private static readonly GUIContent SharedMaterialLabel = new GUIContent("共享材质");
-        private static readonly GUIContent FillAmountInputLabel = new GUIContent("液面高度输入", "0~1，由倒水 / 消耗逻辑写入；组件输出时会按倒置自动翻转。");
+        private static readonly GUIContent FillAmountInputLabel = new GUIContent("液面高度输入", "0~1，倒水逻辑写；输出时按倒置自动翻转。");
 
         private static readonly GUIContent DrawGizmosLabel = new GUIContent("显示 Gizmo");
-        private static readonly GUIContent DrawSwingPlaneLabel = new GUIContent("显示当前液面", "按当前摆角画出倾斜的液面参考圆。");
-        private static readonly GUIContent DrawEquilibriumLabel = new GUIContent("显示平衡液面", "画出振荡器正在追赶的目标液面。和当前液面一起看就能判断滞后与振铃，而不是靠猜。");
-        private static readonly GUIContent DrawAccelerationLabel = new GUIContent("显示加速度箭头", "画出驱动整个系统的锚点加速度：这是因，液面倾斜是果。");
-        private static readonly GUIContent GizmoSizeFromBoundsLabel = new GUIContent("尺寸按物体包围盒", "自动用驱动源（含子物体）渲染器包围盒的最长边作为参考尺寸，物体缩放多大都不会看不见。关掉则用下面的手动尺寸。");
-        private static readonly GUIContent GizmoSizeLabel = new GUIContent("参考尺寸", "米。所有调试绘制尺寸都从这里派生：锚点球 5%、摆锤球 4.5%、液面盘半径 40%、法线长度 50%。与摆长无关。");
-        private static readonly GUIContent GizmoScaleLabel = new GUIContent("整体缩放", "在参考尺寸之上再整体放大缩小。");
-        private static readonly GUIContent AccelerationGizmoScaleLabel = new GUIContent("箭头 1g 长度", "1g 加速度对应的箭头长度，单位为参考尺寸的倍数。箭头上会画一道 1g 刻度，按刻度数就能读出几倍重力。");
-        private static readonly GUIContent AccelerationGizmoMaxScaleLabel = new GUIContent("箭头最大长度", "参考尺寸的倍数。拖拽与急停时加速度本来就有几十 g，箭头会顶到这个长度不再增长；调小可以避免它占满场景。");
+        private static readonly GUIContent DrawSwingPlaneLabel = new GUIContent("显示当前液面");
+        private static readonly GUIContent DrawEquilibriumLabel = new GUIContent("显示平衡液面", "振荡器正在追赶的目标液面。");
+        private static readonly GUIContent DrawAccelerationLabel = new GUIContent("显示加速度箭头");
+        private static readonly GUIContent GizmoSizeFromBoundsLabel = new GUIContent("尺寸按物体包围盒", "取驱动源包围盒最长边作为参考尺寸。");
+        private static readonly GUIContent GizmoSizeLabel = new GUIContent("参考尺寸", "米。所有调试尺寸都由它派生。");
+        private static readonly GUIContent GizmoScaleLabel = new GUIContent("整体缩放");
+        private static readonly GUIContent AccelerationGizmoScaleLabel = new GUIContent("箭头 1g 长度", "参考尺寸的倍数，箭头上有 1g 刻度。");
+        private static readonly GUIContent AccelerationGizmoMaxScaleLabel = new GUIContent("箭头最大长度", "参考尺寸的倍数。");
         private static readonly GUIContent DrawMotionTrailLabel = new GUIContent("显示运动轨迹");
         private static readonly GUIContent MotionTrailLengthLabel = new GUIContent("轨迹长度");
         private static readonly GUIContent GizmoColorLabel = new GUIContent("Gizmo 颜色");
@@ -177,27 +171,27 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             new GUIContent("液面斜率 X"),
             new GUIContent("液面斜率 Z"),
-            new GUIContent("世界斜率 X", "沿世界 X 的斜率。静止时对任何朝向恒为 0，瓶子旋转也正确——驱动液面用这个。"),
-            new GUIContent("世界斜率 Z", "沿世界 Z 的斜率。静止时对任何朝向恒为 0。"),
-            new GUIContent("竖直对齐", "+1 正立 / 0 放平 / -1 倒置。"),
-            new GUIContent("液面倾斜 X°", "液面沿本地 X 的倾斜角（度），直接对应 shader 的 _LiquidTiltX。"),
-            new GUIContent("液面倾斜 Z°", "液面沿本地 Z 的倾斜角（度），直接对应 shader 的 _LiquidTiltZ。"),
-            new GUIContent("是否倒置", "1 = 已翻过 90°。液面平面本身对 ±n 对称，倒转要靠翻转 _LiquidFill，用它判断。"),
-            new GUIContent("液面高度", "已按倒置翻转的液面高度 0~1，直接对应 _LiquidFill。基础值来自组件的「液面高度输入」。"),
+            new GUIContent("世界斜率 X", "静止时对任何朝向恒为 0。"),
+            new GUIContent("世界斜率 Z", "静止时对任何朝向恒为 0。"),
+            new GUIContent("竖直对齐", "+1 正立 / 0 放平 / −1 倒置。"),
+            new GUIContent("液面倾斜 X°", "度。对应 _LiquidTiltX。"),
+            new GUIContent("液面倾斜 Z°", "度。对应 _LiquidTiltZ。"),
+            new GUIContent("是否倒置", "1 = 已翻过 90°，用来翻转 _LiquidFill。"),
+            new GUIContent("液面高度", "已按倒置翻转，对应 _LiquidFill。"),
             new GUIContent("斜率向量"),
             new GUIContent("倾角 X"),
             new GUIContent("倾角 Z"),
             new GUIContent("合倾角"),
-            new GUIContent("旋转欧拉角", "把局部 up 转到液面法线的欧拉角 (AngleZ, 0, -AngleX)，适合让物体随液面倾斜。"),
+            new GUIContent("旋转欧拉角", "让物体随液面倾斜用。"),
             new GUIContent("摆向"),
             new GUIContent("末端偏移"),
             new GUIContent("末端位置"),
-            new GUIContent("振幅"),
+            new GUIContent("振幅", "相对平衡面的摆动幅度 / 最大倾斜角。"),
             new GUIContent("相位"),
             new GUIContent("归一化读数"),
-            new GUIContent("有效重力", "相对参考重力的倍率：静止 1，自由落体趋近 0，过载大于 1。"),
-            new GUIContent("伸长量", "径向弹簧伸长（米）：静止 0，过载为正，失重为负。"),
-            new GUIContent("伸长量 ±1", "伸长量按静止伸长归一化并夹取到 ±1：静止 0、过载 +1、失重 -1，适合驱动归一化高度的液面参数。"),
+            new GUIContent("有效重力", "相对参考重力的倍率：静止 1，失重趋近 0。"),
+            new GUIContent("伸长量", "米。静止 0，过载正、失重负。"),
+            new GUIContent("伸长量 ±1", "静止 0、过载 +1、失重 −1。"),
             new GUIContent("锚点速度"),
             new GUIContent("锚点角速度"),
             new GUIContent("锚点加速度")
@@ -377,8 +371,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 {
                     EditorGUILayout.FloatField(FrequencyLabel, ResolveFrequency());
                 }
-
-                EditorGUILayout.LabelField("频率由摆长决定，可在高级里关掉", EditorStyles.miniLabel);
             }
             else
             {
@@ -427,18 +419,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 if (restElongation.floatValue > 0.0f)
                 {
                     EditorGUILayout.LabelField(
-                        "径向弹簧频率 " + ResolveRadialFrequency().ToString("0.###") + " Hz（周期 " +
-                        (1.0f / Mathf.Max(0.0001f, ResolveRadialFrequency())).ToString("0.###") + " s）",
+                        "径向频率 " + ResolveRadialFrequency().ToString("0.##") + " Hz",
                         EditorStyles.miniLabel);
                 }
             }
 
             EditorGUILayout.Space(5.0f);
             EditorGUILayout.LabelField("采样", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "加速度由最近「估计窗口」帧位置的二次最小二乘拟合给出，不是逐帧二阶差分。" +
-                "总响应延迟 ≈ (窗口-1)/2 帧 + 加速度平滑 + 平衡角平滑。",
-                EditorStyles.miniLabel);
             EditorGUILayout.PropertyField(estimationWindow, EstimationWindowLabel);
             EditorGUILayout.PropertyField(accelerationSmoothing, AccelerationSmoothingLabel);
             EditorGUILayout.PropertyField(equilibriumSmoothing, EquilibriumSmoothingLabel);
@@ -458,15 +445,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.Space(5.0f);
             EditorGUILayout.LabelField("液面高度", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "倒水 / 消耗逻辑把 0~1 写进组件的 FillAmount（脚本调用或 Inspector 调），" +
-                "组件在容器翻过 90° 时自动输出 1-输入——液面平面本身表达不了液体在哪一侧。",
-                EditorStyles.miniLabel);
             EditorGUILayout.PropertyField(fillAmount, FillAmountInputLabel);
 
             EditorGUILayout.Space(5.0f);
             EditorGUILayout.LabelField("初始变换", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("摆锤约束不写自身 Transform，这里保存的位姿只用于「恢复初始变换」。", EditorStyles.miniLabel);
 
             using (new EditorGUI.DisabledScope(!hasInitialTransform.boolValue))
             {
@@ -530,7 +512,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             if (count == 0)
             {
                 EditorGUILayout.HelpBox(
-                    "还没有绑定。点「+ 添加绑定」或工具栏的「水瓶液面」预设来创建通道到材质属性的连接。",
+                    "还没有绑定。用「+ 添加绑定」或工具栏的「水瓶液面」预设创建。",
                     MessageType.Info);
             }
 
@@ -577,11 +559,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.Space(3.0f);
-            EditorGUILayout.LabelField(
-                "写入走 MaterialPropertyBlock：值存在 Renderer 上，不改材质资产，" +
-                "所以材质面板的滑条不会跟着动。组件禁用/移除时会自动还原，" +
-                "如果你手动改过绑定、想立刻清掉残留值，点下面这个按钮。",
-                EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("写入 MaterialPropertyBlock，不改材质资产；禁用/移除时自动还原。", EditorStyles.miniLabel);
 
             if (GUILayout.Button("清除已写入的材质属性"))
             {
@@ -644,7 +622,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         EditorGUILayout.PropertyField(element.FindPropertyRelative("renderers"), new GUIContent("渲染器"), true);
                         EditorGUILayout.PropertyField(
                             element.FindPropertyRelative("includeChildRenderers"),
-                            new GUIContent("包含子物体", "渲染器列表为空时，是否连同子物体的渲染器一起写入。"));
+                            new GUIContent("包含子物体", "渲染器列表为空时生效。"));
                         break;
                     case HoPendulumBindingTarget.ShaderGlobal:
                         EditorGUILayout.PropertyField(element.FindPropertyRelative("globalName"), new GUIContent("全局名"));
@@ -721,8 +699,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 if (gizmoSizeFromBounds.boolValue && serializedObject.targetObject is HoPendulumConstraint probe)
                 {
                     EditorGUILayout.LabelField(
-                        "  包围盒测得",
-                        probe.GizmoReferenceSize.ToString("0.###") + " m（含整体缩放）",
+                        "测得",
+                        probe.GizmoReferenceSize.ToString("0.###") + " m",
                         EditorStyles.miniLabel);
                 }
 
