@@ -52,6 +52,12 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>径向弹簧伸长量（米）。静止为 0，过载为正，失重为负。</summary>
         Stretch,
 
+        /// <summary>
+        /// 径向弹簧伸长量按静止伸长归一化并夹取到 ±1 的斜坡：静止 0、过载 +1、失重 -1。
+        /// 用于驱动需要 -1~1 归一化高度的液面参数。
+        /// </summary>
+        StretchNormalized,
+
         /// <summary>锚点线速度大小（m/s）。</summary>
         AnchorSpeed,
 

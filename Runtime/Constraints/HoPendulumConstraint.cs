@@ -231,6 +231,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float totalAngle;
         private float angularSpeed;
         private float bobDistance;
+        private float normalizedStretch;
         private float normalizedValue = 0.5f;
         private double lastUpdateTime;
         private double motionTime;
@@ -304,6 +305,9 @@ namespace Hollow.HoUnityTools.Constraints
         public float EffectiveGravity => solverOutput.effectiveGravity;
 
         public float Stretch => solverOutput.radialOffset;
+
+        /// <summary>伸长量的 ±1 归一化斜坡：静止 0，过载 +1，失重 -1。</summary>
+        public float NormalizedStretch => normalizedStretch;
 
         public float BobDistance => bobDistance;
 
@@ -429,6 +433,7 @@ namespace Hollow.HoUnityTools.Constraints
             totalAngle = 0.0f;
             angularSpeed = 0.0f;
             bobDistance = length;
+            normalizedStretch = 0.0f;
 
             if (drive != null)
             {
@@ -511,6 +516,8 @@ namespace Hollow.HoUnityTools.Constraints
                     return new Vector3(solverOutput.effectiveGravity, 0.0f, 0.0f);
                 case HoPendulumChannel.Stretch:
                     return new Vector3(solverOutput.radialOffset, 0.0f, 0.0f);
+                case HoPendulumChannel.StretchNormalized:
+                    return new Vector3(normalizedStretch, 0.0f, 0.0f);
                 case HoPendulumChannel.AnchorSpeed:
                     return new Vector3(linearVelocity.magnitude, 0.0f, 0.0f);
                 case HoPendulumChannel.AnchorAngularSpeed:
@@ -699,6 +706,17 @@ namespace Hollow.HoUnityTools.Constraints
             angularSpeed = angularVelocity.magnitude * Mathf.Rad2Deg;
 
             bobDistance = Mathf.Max(0.0f, length + solverOutput.radialOffset);
+
+            // 归一化成 ±1 斜坡：径向弹簧静止时为 0，过载 +1，失重 -1。
+            // 夹取到 ±1 是为了让 shader 侧拿到的一定是约定好的量程内信号（弹簧本身会过冲）。
+            if (radialEnabled && restElongation > 0.000001f)
+            {
+                normalizedStretch = Mathf.Clamp(solverOutput.radialOffset / restElongation, -1.0f, 1.0f);
+            }
+            else
+            {
+                normalizedStretch = 0.0f;
+            }
 
             Vector3 localBobDirection = -solverOutput.localNormal;
             if (localBobDirection.sqrMagnitude < 0.000001f)

@@ -162,6 +162,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             new GUIContent("归一化读数"),
             new GUIContent("有效重力", "相对参考重力的倍率：静止 1，自由落体趋近 0，过载大于 1。"),
             new GUIContent("伸长量", "径向弹簧伸长（米）：静止 0，过载为正，失重为负。"),
+            new GUIContent("伸长量 ±1", "伸长量按静止伸长归一化并夹取到 ±1：静止 0、过载 +1、失重 -1，适合驱动归一化高度的液面参数。"),
             new GUIContent("锚点速度"),
             new GUIContent("锚点角速度"),
             new GUIContent("锚点加速度")
@@ -694,6 +695,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.FloatField("相位", constraint.Phase);
                 EditorGUILayout.FloatField("有效重力 (g)", constraint.EffectiveGravity);
                 EditorGUILayout.FloatField("伸长量 (m)", constraint.Stretch);
+                EditorGUILayout.FloatField("伸长量 ±1", constraint.NormalizedStretch);
                 EditorGUILayout.FloatField("摆锤距离 (m)", constraint.BobDistance);
                 EditorGUILayout.Toggle("已夹取", constraint.Saturated);
             }
@@ -776,10 +778,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     BottleTiltScale,
                     Vector3.zero,
                     "液面倾斜 Z");
+                // 液面高度变化：径向弹簧伸长量的 ±1 归一化斜坡（静止 0、过载 +1、失重 -1），
+                // 缩放 1 就是约定好的量程。幅度由 高级 → 竖直拉伸 → 静止伸长 决定。
+                constraint.AddRendererPropertyBinding(
+                    HoPendulumChannel.StretchNormalized,
+                    "_LiquidOffset",
+                    1.0f,
+                    Vector3.zero,
+                    "液面高度");
                 EditorUtility.SetDirty(constraint);
             }
 
             bindingFoldouts.Clear();
+            bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             serializedObject.Update();

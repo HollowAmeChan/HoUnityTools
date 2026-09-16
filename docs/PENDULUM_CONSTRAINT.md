@@ -150,6 +150,7 @@ x_eq = ΔL * (g_eff / g - 1)              // 静止 0，过载为正，失重为
 | 归一化读数 | 手动输入模式为输入值映射，其余模式为倾角 X 相对最大角的映射 |
 | 有效重力 | `g_eff / g`：静止 1，自由落体趋近 0，过载大于 1 |
 | 伸长量 | 径向弹簧偏移（米）：静止 0，过载为正，失重为负 |
+| 伸长量 ±1 | 上者按静止伸长归一化并夹取到 ±1 的斜坡：静止 0、过载 +1、失重 −1 |
 | 锚点速度 / 角速度 / 加速度 | 诊断用 |
 
 ## 输出绑定
@@ -205,6 +206,11 @@ Scene 视图里会画出：
 | --- | --- | --- |
 | 液面斜率 X | `_LiquidTiltX` | 2.4 |
 | 液面斜率 Z | `_LiquidTiltZ` | 2.4 |
+| 伸长量 ±1 | `_LiquidOffset` | 1 |
+
+前两条是液面倾斜。第三条是**液面高度变化**，接的是「伸长量 ±1」通道：径向弹簧伸长量按静止伸长归一化并夹取到 **±1** 的斜坡——静止 0、过载（向上加速）**+1**、失重（自由落体）**−1**，缩放 1 就是约定量程，shader 侧自己乘想要的高度幅度即可。斜坡的幅度与快慢由 高级 → 竖直拉伸（**静止伸长**、径向阻尼比）决定，预设 0.015m。
+
+> 为什么不直接用「伸长量」（米）：那样归一化要靠「缩放 = 1 / 静止伸长」去凑，你之后一改静止伸长，±1 的量程就悄悄失效了。归一化通道是自洽的。
 
 缩放 1 表示通道值就是液面真实斜率 `tan θ`。2.4 是按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定出来的：
 
@@ -221,12 +227,12 @@ Scene 视图里会画出：
 
 ```hlsl
 // _LiquidTiltX / _LiquidTiltZ = 沿世界 X / 世界 Z 的斜率 tanθ，直接来自 TiltX / TiltZ 通道
-// _LiquidHeightOffset = 液面相对高度偏移，单位是世界单位（米），可接「伸长量」通道
+// _LiquidOffset = 液面高度变化的 ±1 斜坡，直接来自「伸长量 ±1」通道
 float3 worldOffset = WorldPosition - objectOriginWorld;
 float surfaceHeight = worldOffset.y
                     + _LiquidTiltX * worldOffset.x
                     + _LiquidTiltZ * worldOffset.z
-                    + _LiquidHeightOffset;
+                    + _LiquidOffset * liquidHeightScale;   // 自己定 1 单位斜坡对应多少世界高度
 float clipValue = fillRemap + surfaceHeight / objectScale.y + waveTerm;
 clip(clipValue - 0.5);
 ```
@@ -235,7 +241,7 @@ clip(clipValue - 0.5);
 
 1. **高度项要除以物体缩放**（世界米 → 物体空间单位，和原来一致），但**倾斜项不要重复除**：倾斜项本来就乘在世界偏移上，再除一次缩放会让摆动强度小两个数量级——旧 shader 的 `_WobbleX` / `_WobbleZ` 就是因为这个在 98 倍缩放的液面物体上基本失效。
 2. **两个倾斜轴都要取水平方向**：旧 shader 里 `RotateAroundAxis(v, (-1,0,0), 90°)` 得到 `(v.x, v.z, -v.y)`，y 槽落到了高度分量上，所以 `_WobbleZ` 只能整体升降液面、做不出第二个倾斜方向。按上面的世界空间写法就不存在这个问题。
-3. **高度偏移用世界单位（米）**，这样可以直接接「伸长量」通道，缩放填 1。
+3. **高度偏移用归一化斜坡（±1）**，shader 侧自己乘想要的高度幅度：这样"液面升降多少"是 shader 的美术参数，而约束只负责给一个干净的、有物理依据的驱动信号。
 
 > 旧 shader 的改动已经回退，这里只是接法规格：新 shader 按上面写，两条绑定的属性名用 `_LiquidTiltX` / `_LiquidTiltZ` 即可。
 
