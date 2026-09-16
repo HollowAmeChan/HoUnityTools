@@ -98,8 +98,7 @@ namespace Hollow.HoUnityTools.BoneRendering
             set
             {
                 groupJson = value;
-                m_ParsedGroupSet = null;
-                m_ParsedFrom = null;
+                ReleaseParsedGroupSet();
 #if UNITY_EDITOR
                 ExtractBones();
 #endif
@@ -114,13 +113,13 @@ namespace Hollow.HoUnityTools.BoneRendering
         {
             if (groupJson == null)
             {
-                m_ParsedGroupSet = null;
-                m_ParsedFrom = null;
+                ReleaseParsedGroupSet();
                 return null;
             }
 
             if (m_ParsedGroupSet == null || m_ParsedFrom != groupJson)
             {
+                ReleaseParsedGroupSet();
                 m_ParsedGroupSet = HoBoneGroupSet.CreateFromJson(groupJson.text);
                 m_ParsedFrom = groupJson;
             }
@@ -134,11 +133,36 @@ namespace Hollow.HoUnityTools.BoneRendering
         /// </summary>
         public void RefreshGroupJson()
         {
-            m_ParsedGroupSet = null;
-            m_ParsedFrom = null;
+            ReleaseParsedGroupSet();
 #if UNITY_EDITOR
             ExtractBones();
 #endif
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseParsedGroupSet();
+        }
+
+        /// <summary>
+        /// 释放现场解析出的内存态分组模型。它是 HideAndDontSave 的 ScriptableObject,
+        /// 不会被 Unity 当成未使用资源卸载,不显式销毁就会泄漏原生内存。
+        /// </summary>
+        private void ReleaseParsedGroupSet()
+        {
+            if (m_ParsedGroupSet == null)
+            {
+                m_ParsedFrom = null;
+                return;
+            }
+
+            if (Application.isPlaying)
+                Destroy(m_ParsedGroupSet);
+            else
+                DestroyImmediate(m_ParsedGroupSet);
+
+            m_ParsedGroupSet = null;
+            m_ParsedFrom = null;
         }
 
         /// <summary>被关闭显示的集合名称列表。</summary>

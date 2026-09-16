@@ -432,8 +432,33 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
 
         private static void ReleaseRenderResources()
         {
-            s_PyramidMeshRenderer?.Release();
-            s_BoxMeshRenderer?.Release();
+            ReleaseRendererResources(s_PyramidMeshRenderer);
+            s_PyramidMeshRenderer = null;
+
+            ReleaseRendererResources(s_BoxMeshRenderer);
+            s_BoxMeshRenderer = null;
+
+            // Mesh 与 Material 都是原生对象，hideFlags 又禁止 Unity 序列化和卸载它们，
+            // 不在这里显式销毁就会在域重载或退出编辑器时被 Leak Detected 记为泄漏。
+            if (s_Material != null)
+            {
+                UnityEngine.Object.DestroyImmediate(s_Material);
+                s_Material = null;
+            }
+        }
+
+        private static void ReleaseRendererResources(BatchRenderer renderer)
+        {
+            if (renderer == null)
+                return;
+
+            renderer.Release();
+
+            if (renderer.mesh != null)
+            {
+                UnityEngine.Object.DestroyImmediate(renderer.mesh);
+                renderer.mesh = null;
+            }
         }
 
         private static void DoBoneRender(Transform transform, Transform childTransform, BoneShape shape, Color color, float size, bool selectable)
