@@ -54,8 +54,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Transform target;
 
+        // 默认 Update：下游要在同一帧读到本跟点的输出（Animation Rigging 在 Update 采样 IK 目标，物理/布料在 LateUpdate 之后模拟）。
         [SerializeField]
-        private HoFollowConstraintUpdateMode updateMode = HoFollowConstraintUpdateMode.LateUpdate;
+        private HoFollowConstraintUpdateMode updateMode = HoFollowConstraintUpdateMode.Update;
 
         [SerializeField]
         private bool evaluateInEditMode = true;

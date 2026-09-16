@@ -86,6 +86,33 @@ Lowpass_frame(P⁻¹ · desired_world)      现在
 5. 编辑模式拖父级：刚性跟随，无橡皮筋。
 6. 世界模式 + 无父级：与旧版逐位一致。
 
+## 与下游求解器的时序契约
+
+跟随约束的输出经常被**同一帧的下游求解器**读取，这时「更新时机」不是风格问题，是契约问题。以 Animation Rigging + MagicaCloth2 为例，一帧里有三个不同的"读"：
+
+| 谁 | 读什么 | 采样点 |
+| --- | --- | --- |
+| `RigBuilder.Update()` → `SyncLayers()` | 跟随物的**世界位姿**（`ChainIKConstraint.m_Target` 上有 `[SyncSceneToStream]`） | **Update 阶段**（普通 MonoBehaviour） |
+| 动画 / IK | 用这个目标解算，写骨头 | 动画更新里 |
+| MagicaCloth2 | **骨头 Transform**（不读跟随物） | PlayerLoop 插桩：主模拟在 `PreLateUpdate` 的 `before/afterLateUpdate`（默认 after），渲染网格写回在 `PostLateUpdate` |
+
+规则：**会被同一帧下游消费的跟随物，用 `Update`，并排在消费者之前。** 组件默认就是 `Update`；老场景如果存的是 `LateUpdate`，按这条规则改过来。
+
+- `LateUpdate` 意味着下游这一帧只能读到**上一帧**的值。实测（尾巴 IK 与 BoneCloth 覆盖同一条骨链）：`LateUpdate` 时尾巴会"一阵一阵"抽搐，改成 `Update` 立刻消失。
+- 排序契约：`leader 的驱动 < 跟随约束 < 消费者`（如 `RigBuilder`）。Unity 不保证同为默认顺序的脚本谁先谁后，建议在 Project Settings → Script Execution Order 里把 `HoFollowConstraint` 设成 `-100`，把"碰巧对"变成"契约对"。
+- **不要**为了"更早"插到 `Update` 之前：那会早于动画写姿势，读到的是上一帧的 leader，输入反而更旧。`Update` 阶段内、消费者之前就是最优区间。
+- **不要**用 `FixedUpdate` 顶替：它和渲染帧不同步。
+- **不要**去提前 MC2：它读的是骨头而不是跟随物，提前只会让它读不到 `LateUpdate` 里的脚本改动。
+- 这个改动在**本地**坐标系下是零代价的：锚点、目标的相对位姿、轴锁定、旋转过滤、阻尼状态、写回全是本地量，父级的当帧世界位姿只在"世界→本地"那一次换算里出现，且两端在同一次 `Evaluate` 内同刻取用 —— 所以 `Update` 与 `LateUpdate` 算出来的本地值相同，差别只在下游什么时候能看到它。唯一例外是 `offsetMode = World`（要按父级当帧朝向换算）。
+
+### 同一根骨头只留一个"会动"的写者
+
+跟随约束自己不写骨头，但它驱动的下游会。要守住的不变量是：**同一根骨头最终只有一个会驱动它的写者，而且写回顺序稳定。**
+
+- 多个 cloth 的骨头集合重叠**不一定**是问题：MC2 允许在上游 cloth 里把下游 cloth 会动的骨骼用粒子 type 刷成 **Fixed**（检查器里是红色，`FixedPointColor`）。所有约束都以 `attr.IsMove()` 过滤，Fixed 粒子不参与上游模拟，上游只把它们当蒙皮/传递用。
+- 但同一个 Transform 被两个求解器**同时以"会动"的方式**写回时（本例：`ChainIKConstraint` 与 BoneCloth 覆盖同一条尾巴骨链），谁后写谁赢，参数怎么调都只是压制。二选一时，主干给确定性的 IK、布料只做叶子。
+- 顺手检查 MC2 的参数：`移动速度制限 / 本地移动速度制限` 出厂默认是世界 5 m/s、本地关闭，被填成 1 m/s 且勾选时，基准姿势速度在阈值上下浮动会被反复"拽住/松开"；`相机剔除 = AnimatorLinkage` 会在角色被剔除时重置或暂停模拟。
+
 ## 已知取舍
 
 - **`offsetMode = World`**：偏移保持世界方向，父级自转时期望位姿在坐标系里确实会变，因此会被软跟随。要完全刚性请用「本地」。

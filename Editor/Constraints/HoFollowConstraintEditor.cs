@@ -48,12 +48,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty motionTrailLength;
         private SerializedProperty gizmoColor;
 
-        private bool targetExpanded = true;
+        private bool targetExpanded;
         private bool followExpanded = true;
-        private bool axisExpanded = true;
-        private bool rotationExpanded = true;
+        private bool axisExpanded;
+        private bool rotationExpanded;
         private bool limitExpanded;
-        private bool offsetExpanded = true;
+        private bool offsetExpanded;
         private bool debugExpanded;
 
         private static readonly Color TargetColor = new Color(0.28f, 0.62f, 1.0f);
@@ -64,7 +64,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly Color DebugColor = new Color(0.70f, 0.72f, 0.76f);
 
         private static readonly GUIContent TargetLabel = new GUIContent("目标", "被跟随的 Transform。");
-        private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机", "约束求值发生在哪个 Unity 更新阶段。");
+        private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机", "求值阶段。下游要在同一帧读到本跟点（IK/物理/布料）时用 Update。");
         private static readonly GUIContent EvaluateInEditModeLabel = new GUIContent("编辑模式求值", "未进入播放模式时也持续更新。");
         private static readonly GUIContent InitializeOnEnableLabel = new GUIContent("启用时重置锚点", "组件启用时用当前 Transform 作为锁定与跟随的初始锚点。");
         private static readonly GUIContent SpaceLabel = new GUIContent("坐标系", "本地 = 锚点（父级）坐标系，父级运动刚性传递；世界 = 旧行为，父级运动会进入阻尼。");
