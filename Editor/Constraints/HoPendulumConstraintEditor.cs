@@ -742,6 +742,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.Vector3Field("锚点位置", constraint.AnchorPosition);
                 EditorGUILayout.Vector3Field("末端位置", constraint.BobPosition);
                 EditorGUILayout.Vector3Field("锚点加速度", constraint.AnchorAcceleration);
+                // 两个都看：原始值暴露手抖，进入解算的值才是液面真正跟随的驱动量
+                EditorGUILayout.Vector3Field("进入解算的加速度", constraint.EffectiveAcceleration);
                 EditorGUILayout.FloatField("倾角 X", constraint.AngleX);
                 EditorGUILayout.FloatField("倾角 Z", constraint.AngleZ);
                 EditorGUILayout.FloatField("合倾角", constraint.Angle);
