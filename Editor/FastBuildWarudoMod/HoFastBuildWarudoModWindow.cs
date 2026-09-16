@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.Warudo
@@ -935,8 +936,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 temporaryPrefabPath = temporaryPrefabPath,
                 exportSettingsPath = exportSettingsPath,
                 originalModAssetPath = originalModPath,
-                originalStandaloneDefines =
-                    PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone),
+                originalStandaloneDefines = GetStandaloneDefineSymbols(),
                 managesStandaloneDefines = true,
                 activeProfileIndex = activeProfileIndex,
                 cleanupTemporaryAssets = cleanupTemporaryAssets,
@@ -1564,8 +1564,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (!state.managesStandaloneDefines)
                 return;
 
-            string currentDefines =
-                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            string currentDefines = GetStandaloneDefineSymbols();
             if (!string.Equals(currentDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
                 throw new InvalidOperationException("Standalone Define Symbols 在构建准备期间发生变化，请重新开始 FastBuild。");
 
@@ -1575,9 +1574,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (string.Equals(temporaryDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
                 return;
 
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(
-                BuildTargetGroup.Standalone,
-                temporaryDefines);
+            SetStandaloneDefineSymbols(temporaryDefines);
             Debug.Log("[HoUnityTools] FastBuild 构建期间暂时移除 Standalone Define：" + FbxSdkRuntimeDefine);
         }
 
@@ -1589,8 +1586,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             string expectedDefines = RemoveScriptingDefine(
                 state.originalStandaloneDefines,
                 FbxSdkRuntimeDefine);
-            string currentDefines =
-                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            string currentDefines = GetStandaloneDefineSymbols();
             if (!string.Equals(currentDefines, expectedDefines, StringComparison.Ordinal))
                 throw new InvalidOperationException("Standalone Define Symbols 在等待构建期间发生变化，请重新开始 FastBuild。");
         }
@@ -1607,6 +1603,26 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     .Where(value => !string.IsNullOrEmpty(value) &&
                                     !string.Equals(value, defineToRemove, StringComparison.Ordinal))
                     .ToArray());
+        }
+
+        // NamedBuildTarget 版 API 需要 Unity 2021.2+，新版 Unity 会对旧重载报 CS0618，这里统一走新 API。
+        private static string GetStandaloneDefineSymbols()
+        {
+#if UNITY_2021_2_OR_NEWER
+            return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.Standalone);
+#else
+            return PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+#endif
+        }
+
+        private static void SetStandaloneDefineSymbols(string defines)
+        {
+            string value = defines ?? string.Empty;
+#if UNITY_2021_2_OR_NEWER
+            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, value);
+#else
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, value);
+#endif
         }
 
         private static string ValidateBuildResult(object result)
@@ -1812,14 +1828,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (!state.managesStandaloneDefines)
                 return;
 
-            string currentDefines =
-                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+            string currentDefines = GetStandaloneDefineSymbols();
             if (string.Equals(currentDefines, state.originalStandaloneDefines, StringComparison.Ordinal))
                 return;
 
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(
-                BuildTargetGroup.Standalone,
-                state.originalStandaloneDefines ?? string.Empty);
+            SetStandaloneDefineSymbols(state.originalStandaloneDefines ?? string.Empty);
             Debug.Log("[HoUnityTools] 已恢复 Standalone Define Symbols。");
         }
 

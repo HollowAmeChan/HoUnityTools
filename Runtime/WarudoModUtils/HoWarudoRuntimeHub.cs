@@ -96,7 +96,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         public void RefreshModules()
         {
+            // FindObjectsByType 需要 Unity 2022.2+，而 Warudo 宿主仍是 Unity 2021.3，
+            // 运行时源码必须能在两边都编译通过。
+#if UNITY_2022_2_OR_NEWER
+            MonoBehaviour[] behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None);
+#else
             MonoBehaviour[] behaviours = FindObjectsOfType<MonoBehaviour>();
+#endif
             for (int i = 0; i < behaviours.Length; i++)
             {
                 IHoWarudoRuntimeModule module = behaviours[i] as IHoWarudoRuntimeModule;
