@@ -47,11 +47,18 @@ namespace Hollow.HoUnityTools.Constraints
         /// 是否已翻过 90°：1 = 倒置、0 = 正常。
         /// <para>
         /// 液面平面本身对 n 与 -n 对称（<c>tan(180°)=0</c>），所以「液体在哪一侧」结构上
-        /// 无法由倾斜角表达 —— 设计文档 §4.6 的结论是：倒置 = 倾斜角归零 + **`_LiquidFill` 取反**
-        /// （满 → 0，空 → 1）。这个通道就是给那一步用的。
+        /// 无法由倾斜角表达 —— 设计文档 §4.6 的结论是：倒置 = 倾斜角走到 ±180 + **`_LiquidFill` 取反**
+        /// （满 → 0，空 → 1）。这个通道给需要自己判断的场合用。
         /// </para>
         /// </summary>
         Inverted,
+
+        /// <summary>
+        /// 已按倒置翻转的液面高度 0~1，直接对应 shader 的 `_LiquidFill`。
+        /// 基础值由 <see cref="HoPendulumConstraint.FillAmount"/> 提供（倒水 / 消耗逻辑写），
+        /// 组件在翻过 90° 时自动输出 <c>1 - 输入</c>——液面平面本身表达不了液体在哪一侧。
+        /// </summary>
+        FillAmount,
 
         /// <summary>两个轴的斜率合成向量 (TiltX, 0, TiltZ)。</summary>
         Tilt,

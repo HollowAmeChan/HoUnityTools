@@ -362,6 +362,9 @@ namespace Hollow.HoUnityTools.Constraints
             return new Vector3(Mathf.Sin(radiansX), height, Mathf.Sin(radiansZ));
         }
 
+        /// <summary>平衡角只做数值保护：接近与本地 Y 轴垂直时 atan2 会发散。</summary>
+        public const float MaxEquilibriumAngle = 89.5f;
+
         /// <summary>由区域坐标记录的方向还原倾斜角（弧度）。</summary>
         public static void AnglesFromNormal(Vector3 normal, out float radiansX, out float radiansZ)
         {
@@ -402,7 +405,13 @@ namespace Hollow.HoUnityTools.Constraints
             return normal;
         }
 
-        /// <summary>计算经过软饱和限制的平衡倾斜角（弧度）与平衡法线。</summary>
+        /// <summary>
+        /// 计算平衡倾斜角（弧度）与平衡法线。
+        /// <para>
+        /// 平衡角**不按最大倾斜角压缩**：液面必须完整跟随重力方向，瓶子放平或倒过来时也要正确，
+        /// 否则「屈服重力」就无从谈起。最大倾斜角限制的是相对平衡面的摆动幅度，见 <see cref="Step"/>。
+        /// </para>
+        /// </summary>
         public static void ComputeEquilibrium(
             in HoPendulumSolverInput input,
             out float equilibriumX,
@@ -411,26 +420,31 @@ namespace Hollow.HoUnityTools.Constraints
         {
             equilibriumNormal = ComputeEquilibriumNormal(input, out float unusedGravity);
             AnglesFromNormal(equilibriumNormal, out equilibriumX, out equilibriumZ);
-            LimitMagnitude(
-                ref equilibriumX,
-                ref equilibriumZ,
-                input.maxAngle * Mathf.Deg2Rad,
-                input.saturationSoftness);
-            equilibriumNormal = NormalFromAngles(equilibriumX, equilibriumZ);
+
+            float guard = MaxEquilibriumAngle * Mathf.Deg2Rad;
+            equilibriumX = Mathf.Clamp(equilibriumX, -guard, guard);
+            equilibriumZ = Mathf.Clamp(equilibriumZ, -guard, guard);
         }
 
-        private static void LimitMagnitude(ref float radiansX, ref float radiansZ, float limit, float softness)
+        /// <summary>把法线朝给定倾斜向量方向掰过去（倾斜向量会先投影到法线的切平面）。</summary>
+        public static Vector3 ApplyTilt(Vector3 normal, Vector3 tiltVector)
         {
-            float magnitude = Mathf.Sqrt(radiansX * radiansX + radiansZ * radiansZ);
-            if (magnitude <= Epsilon)
+            Vector3 perpendicular = tiltVector - (normal * Vector3.Dot(tiltVector, normal));
+            float angle = perpendicular.magnitude;
+            if (angle < 0.000001f)
             {
-                return;
+                return normal;
             }
 
-            float limited = SoftLimitMagnitude(magnitude, limit, softness);
-            float scale = limited / magnitude;
-            radiansX *= scale;
-            radiansZ *= scale;
+            Vector3 axis = Vector3.Cross(normal, perpendicular / angle);
+            if (axis.sqrMagnitude < Epsilon)
+            {
+                return normal;
+            }
+
+            axis.Normalize();
+            Vector3 tilted = RotateAroundAxis(normal, axis, angle);
+            return tilted.sqrMagnitude < Epsilon ? normal : tilted.normalized;
         }
 
         /// <summary>推进一帧仿真。</summary>
@@ -441,7 +455,9 @@ namespace Hollow.HoUnityTools.Constraints
 
             Vector3 rawNormal = ComputeEquilibriumNormal(input, out float effectiveGravity);
             AnglesFromNormal(rawNormal, out float rawEquilibriumX, out float rawEquilibriumZ);
-            LimitMagnitude(ref rawEquilibriumX, ref rawEquilibriumZ, maxAngleRadians, input.saturationSoftness);
+            float guard = MaxEquilibriumAngle * Mathf.Deg2Rad;
+            rawEquilibriumX = Mathf.Clamp(rawEquilibriumX, -guard, guard);
+            rawEquilibriumZ = Mathf.Clamp(rawEquilibriumZ, -guard, guard);
 
             // 平衡角单级低通：滤波对象是有界的平衡角，直流增益为 1，
             // 所以恒加速度下的稳态倾角不受滤波影响，只是响应延迟了一个时间常数。
@@ -495,7 +511,7 @@ namespace Hollow.HoUnityTools.Constraints
                         radialOffset += radialVelocity * step;
                     }
 
-                    saturated |= ClampTilt(maxAngleRadians);
+                    saturated |= ClampDeviation(equilibriumX, equilibriumZ, maxAngleRadians, input.saturationSoftness);
                 }
             }
 
@@ -522,8 +538,15 @@ namespace Hollow.HoUnityTools.Constraints
             output.angularVelocityZ = angularVelocityZ * Mathf.Rad2Deg;
             output.amplitude = maxAngleRadians > 0.0f ? Mathf.Clamp01(deviation / maxAngleRadians) : 0.0f;
             output.phase = phase;
-            output.localNormal = NormalFromAngles(angleX, angleZ);
-            output.localEquilibriumNormal = NormalFromAngles(equilibriumX, equilibriumZ);
+
+            // 当前法线 = 平衡法线（未折叠，任意朝向都指向真实的重力反方向）再叠加摆动偏移。
+            // 用向量而不是两轴角度还原，瓶子放平/倒过来时方向才不会丢。
+            Vector3 deviationVector = new Vector3(
+                Mathf.Sin(angleX - equilibriumX),
+                0.0f,
+                Mathf.Sin(angleZ - equilibriumZ));
+            output.localNormal = ApplyTilt(rawNormal, deviationVector);
+            output.localEquilibriumNormal = rawNormal;
             output.tiltMagnitude = tiltMagnitude * Mathf.Rad2Deg;
             output.equilibriumTiltMagnitude = equilibriumMagnitude * Mathf.Rad2Deg;
             output.effectiveGravity = effectiveGravity;
@@ -536,21 +559,32 @@ namespace Hollow.HoUnityTools.Constraints
             output.tiltDirection = tilt.sqrMagnitude > Epsilon ? tilt.normalized : Vector2.zero;
         }
 
-        /// <summary>按合成幅值夹取倾斜角，并去掉继续向外的角速度分量，避免在极限处粘住抖动。</summary>
-        private bool ClampTilt(float limit)
+        /// <summary>
+        /// 按摆动幅度夹取：只限制相对平衡面的偏离量，不限制平衡角本身。
+        /// 这样瓶子放平或倒过来时，平衡角该到 90°/180° 就到，液面才能真正屈服于重力。
+        /// </summary>
+        private bool ClampDeviation(float equilibriumX, float equilibriumZ, float limit, float softness)
         {
-            float magnitude = Mathf.Sqrt(angleX * angleX + angleZ * angleZ);
-            if (magnitude <= limit || magnitude <= Epsilon)
+            float deviationX = angleX - equilibriumX;
+            float deviationZ = angleZ - equilibriumZ;
+            float magnitude = Mathf.Sqrt(deviationX * deviationX + deviationZ * deviationZ);
+            if (magnitude <= Epsilon)
             {
                 return false;
             }
 
-            float inverse = limit / magnitude;
-            angleX *= inverse;
-            angleZ *= inverse;
+            float limited = SoftLimitMagnitude(magnitude, limit, softness);
+            if (limited >= magnitude)
+            {
+                return false;
+            }
 
-            float directionX = angleX / limit;
-            float directionZ = angleZ / limit;
+            float scale = limited / magnitude;
+            angleX = equilibriumX + deviationX * scale;
+            angleZ = equilibriumZ + deviationZ * scale;
+
+            float directionX = deviationX / magnitude;
+            float directionZ = deviationZ / magnitude;
             float outward = angularVelocityX * directionX + angularVelocityZ * directionZ;
             if (outward > 0.0f)
             {

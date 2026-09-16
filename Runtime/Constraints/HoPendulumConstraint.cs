@@ -126,11 +126,24 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(HoMotionEstimator.MinWindow, HoMotionEstimator.MaxWindow)]
         private int estimationWindow = HoMotionEstimator.DefaultWindow;
 
+        /// <summary>
+        /// 加速度低通的时间常数（毫秒）。0 = 不滤。
+        /// 手部移动的加速度里带几十 m/s² 的尖峰（走路的 2~3Hz 摆动就能到 5 m/s²，
+        /// 手抖的尖峰更高），1:1 喂进平衡角会让液面跟着抽搐。只滤惯性项、不滤朝向，
+        /// 所以「倾斜容器时液面立刻屈服重力」不受影响。
+        /// </summary>
+        [SerializeField, Range(0.0f, 500.0f)]
+        private float accelerationSmoothing = 60.0f;
+
         [SerializeField, Range(0.0f, 500.0f)]
         private float equilibriumSmoothing = 20.0f;
 
         [SerializeField, Range(1.0f / 2000.0f, 0.5f)]
         private float maxStep = 1.0f / 240.0f;
+
+        [Header("Liquid Fill")]
+        [SerializeField, Range(0.0f, 1.0f)]
+        private float fillAmount = 0.5f;
 
         [Header("Manual Input")]
         [SerializeField]
@@ -228,6 +241,7 @@ namespace Hollow.HoUnityTools.Constraints
         private Quaternion previousRotation = Quaternion.identity;
         private Vector3 linearVelocity;
         private Vector3 linearAcceleration;
+        private Vector3 filteredAcceleration;
         private Vector3 angularVelocity;
         private Vector3 localAcceleration;
         private Vector3 localUp = Vector3.up;
@@ -245,6 +259,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float liquidTiltX;
         private float liquidTiltZ;
         private float inverted;
+        private float fillOutput;
         private float totalAngle;
         private float deviationAngle;
         private float angularSpeed;
@@ -298,6 +313,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         public Vector3 AnchorAcceleration => linearAcceleration;
 
+        /// <summary>实际进入解算的加速度（已过 <see cref="accelerationSmoothing"/> 的低通）。</summary>
+        public Vector3 EffectiveAcceleration => filteredAcceleration;
+
         public Vector3 AnchorAngularVelocity => angularVelocity;
 
         public float AngleX => solverOutput.angleX;
@@ -334,6 +352,19 @@ namespace Hollow.HoUnityTools.Constraints
 
         /// <summary>是否已翻过 90°（1 = 倒置）。倒置时驱动端需要把 `_LiquidFill` 取反。</summary>
         public float Inverted => inverted;
+
+        /// <summary>
+        /// 液面高度输入 0~1，由倒水 / 消耗逻辑写入。组件会按当前朝向自动翻转
+        /// （倒置时输出 1 - 输入），因为液面平面本身表达不了「液体在哪一侧」。
+        /// </summary>
+        public float FillAmount
+        {
+            get => fillAmount;
+            set => fillAmount = Mathf.Clamp01(value);
+        }
+
+        /// <summary>已按倒置翻转的液面高度，直接对应 shader 的 `_LiquidFill`。</summary>
+        public float FillOutput => fillOutput;
 
         public float Amplitude => solverOutput.amplitude;
 
@@ -434,6 +465,7 @@ namespace Hollow.HoUnityTools.Constraints
             restElongation = Mathf.Clamp(HoPendulumSolverInput.SanitizeFloat(restElongation), 0.0f, 100.0f);
             radialDampingRatio = Mathf.Clamp(HoPendulumSolverInput.SanitizeFloat(radialDampingRatio), 0.0f, 2.0f);
             estimationWindow = Mathf.Clamp(estimationWindow, HoMotionEstimator.MinWindow, HoMotionEstimator.MaxWindow);
+            accelerationSmoothing = Mathf.Clamp(HoPendulumSolverInput.SanitizeFloat(accelerationSmoothing), 0.0f, 500.0f);
             equilibriumSmoothing = Mathf.Clamp(HoPendulumSolverInput.SanitizeFloat(equilibriumSmoothing), 0.0f, 500.0f);
             maxStep = Mathf.Clamp(HoPendulumSolverInput.SanitizeFloat(maxStep), 1.0f / 2000.0f, 0.5f);
             inputAcceleration = Mathf.Max(0.0f, HoPendulumSolverInput.SanitizeFloat(inputAcceleration));
@@ -467,6 +499,7 @@ namespace Hollow.HoUnityTools.Constraints
 
             linearVelocity = Vector3.zero;
             linearAcceleration = Vector3.zero;
+            filteredAcceleration = Vector3.zero;
             angularVelocity = Vector3.zero;
             localAcceleration = Vector3.zero;
             localAngularVelocity = Vector3.zero;
@@ -481,6 +514,7 @@ namespace Hollow.HoUnityTools.Constraints
             liquidTiltX = 0.0f;
             liquidTiltZ = 0.0f;
             inverted = 0.0f;
+            fillOutput = fillAmount;
             totalAngle = 0.0f;
             deviationAngle = 0.0f;
             angularSpeed = 0.0f;
@@ -553,6 +587,8 @@ namespace Hollow.HoUnityTools.Constraints
                     return new Vector3(liquidTiltZ, 0.0f, 0.0f);
                 case HoPendulumChannel.Inverted:
                     return new Vector3(inverted, 0.0f, 0.0f);
+                case HoPendulumChannel.FillAmount:
+                    return new Vector3(fillOutput, 0.0f, 0.0f);
                 case HoPendulumChannel.Tilt:
                     return new Vector3(tiltX, 0.0f, tiltZ);
                 case HoPendulumChannel.AngleX:
@@ -614,6 +650,14 @@ namespace Hollow.HoUnityTools.Constraints
             float safeDeltaTime = Mathf.Max(0.0f, HoPendulumSolverInput.SanitizeFloat(deltaTime));
             motionTime += safeDeltaTime;
             SampleMotion(drive, safeDeltaTime);
+
+            // 惯性项低通：作用在世界加速度上，与「采样运动 / 手动输入」无关，语义统一。
+            // 它只影响液面对**加速度**的响应速度，朝向变化（重力项）走的是另一条路，不受影响。
+            Vector3 targetAcceleration = ResolveTargetAcceleration();
+            filteredAcceleration = Vector3.Lerp(
+                filteredAcceleration,
+                targetAcceleration,
+                SmoothingBlend(accelerationSmoothing, safeDeltaTime));
 
             anchorPosition = drive.position;
             anchorRotation = drive.rotation;
@@ -703,16 +747,7 @@ namespace Hollow.HoUnityTools.Constraints
         private HoPendulumSolverInput BuildSolverInput()
         {
             Quaternion inverseRotation = Quaternion.Inverse(anchorRotation);
-            Vector3 acceleration;
-
-            if (driveSource == HoPendulumDriveSource.Manual)
-            {
-                acceleration = manualAcceleration + inputAxis.normalized * (GetNormalizedInput() * inputAcceleration);
-            }
-            else
-            {
-                acceleration = linearAcceleration;
-            }
+            Vector3 acceleration = filteredAcceleration;
 
             localAcceleration = HoPendulumSolverInput.SanitizeVector(inverseRotation * acceleration);
             localUp = HoPendulumSolverInput.SanitizeVector(inverseRotation * Vector3.up);
@@ -738,6 +773,18 @@ namespace Hollow.HoUnityTools.Constraints
             input.radialDampingRatio = radialDampingRatio;
             input.Sanitize();
             return input;
+        }
+
+        /// <summary>本帧希望达到的加速度（世界空间）。手动输入模式下由脚本参数给出。</summary>
+        private Vector3 ResolveTargetAcceleration()
+        {
+            if (driveSource == HoPendulumDriveSource.Manual)
+            {
+                return HoPendulumSolverInput.SanitizeVector(
+                    manualAcceleration + inputAxis.normalized * (GetNormalizedInput() * inputAcceleration));
+            }
+
+            return linearAcceleration;
         }
 
         private float ResolveFrequency()
@@ -784,22 +831,18 @@ namespace Hollow.HoUnityTools.Constraints
             verticalAlignment = Mathf.Clamp(localUp.y, -1.0f, 1.0f);
 
             // lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl:96 / 设计文档 §4.5 §4.6）：
-            //   _LiquidTiltX/_LiquidTiltZ 是**度**，= atan(-n.x / n.y)、atan(-n.z / n.y)，
+            //   _LiquidTiltX/_LiquidTiltZ 是**度**，= atan2(-n.x, n.y)、atan2(-n.z, n.y)，
             //   n 是「世界 up 在容器本地的表示」，也就是这里的液面法线。
-            //   用 atan 而不是 atan2：结果落在 ±90 内，坡度和 atan2 完全等价（tan 以 180° 为周期），
-            //   这样 shader 的 _LiquidTiltScale 取任何值，倒置时都还是 0 坡度。
+            //   必须用 atan2 而不是 atan：容器转一整圈时 atan2 给出 0→±180 的连续单调角度，
+            //   用 atan 会在 n.y 过零（容器放平）时从 -90 跳到 +90 —— 那就是实测到的「倒转跳变」。
             Vector3 liquidNormal = solverOutput.localNormal;
-            float normalY = liquidNormal.y;
-            if (Mathf.Abs(normalY) < 0.0001f)
-            {
-                normalY = normalY >= 0.0f ? 0.0001f : -0.0001f;
-            }
+            liquidTiltX = Mathf.Atan2(-liquidNormal.x, liquidNormal.y) * Mathf.Rad2Deg;
+            liquidTiltZ = Mathf.Atan2(-liquidNormal.z, liquidNormal.y) * Mathf.Rad2Deg;
 
-            liquidTiltX = Mathf.Atan(-liquidNormal.x / normalY) * Mathf.Rad2Deg;
-            liquidTiltZ = Mathf.Atan(-liquidNormal.z / normalY) * Mathf.Rad2Deg;
-            // 翻过 90° 之后平面法线朝本地 −Y：此时倾斜角归零（与正立同一个平面），
-            // 「液体在哪一侧」只能靠驱动端翻转 _LiquidFill 来表达。
+            // 翻过 90° 之后平面法线朝本地 −Y：倾斜角继续走到 ±180，此时 tan(±180°)=0 仍是水平面，
+            // 「液体在哪一侧」由 _LiquidFill 取反表达（见下面的 fillAmount）。
             inverted = liquidNormal.y < 0.0f ? 1.0f : 0.0f;
+            fillOutput = inverted > 0.5f ? 1.0f - fillAmount : fillAmount;
 
             bobDistance = Mathf.Max(0.0f, length + solverOutput.radialOffset);
 

@@ -47,6 +47,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty radialDampingRatio;
         private SerializedProperty maxStep;
         private SerializedProperty estimationWindow;
+        private SerializedProperty accelerationSmoothing;
         private SerializedProperty equilibriumSmoothing;
         private SerializedProperty manualAcceleration;
         private SerializedProperty inputValue;
@@ -54,6 +55,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty sourceValueMax;
         private SerializedProperty inputAcceleration;
         private SerializedProperty inputAxis;
+        private SerializedProperty fillAmount;
         private SerializedProperty sharedMaterial;
         private SerializedProperty writeToSharedMaterial;
         private SerializedProperty bindings;
@@ -98,11 +100,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent AnchorLabel = new GUIContent("锚点", "驱动源为「指定锚点」时采样的 Transform。");
         private static readonly GUIContent LengthLabel = new GUIContent("摆长", "摆锤末端到锚点的静止距离，同时是离心项半径。默认不再决定晃动频率。");
         private static readonly GUIContent FrequencyFromLengthLabel = new GUIContent("摆长决定频率", "勾选后改用物理单摆频率 √(g/L)/2π，摆长越长晃得越慢。");
-        private static readonly GUIContent FrequencyLabel = new GUIContent("液面响应频率", "单位 Hz。液面晃动快慢由容器与液体决定，手持运动一般在 0.5~1.5Hz，建议把响应频率放在 2.5Hz 以上，避免与手的动作共振导致相位滞后。");
-        private static readonly GUIContent DampingRatioLabel = new GUIContent("阻尼比", "1 为临界阻尼不再晃动，0 为无阻尼。液面建议 0.15~0.3。");
-        private static readonly GUIContent MaxAngleLabel = new GUIContent("最大倾斜角", "合成倾角上限（度）。按幅值夹取，对角晃动不会超过这个值。");
+        private static readonly GUIContent FrequencyLabel = new GUIContent("液面响应频率", "单位 Hz。液面晃动快慢由容器与液体决定：手持运动频段在 0.5~2Hz，把响应频率放在 2~3Hz 可以让液面跟得上倾斜、又不会与手的动作共振。");
+        private static readonly GUIContent DampingRatioLabel = new GUIContent("阻尼比", "1 为临界阻尼不再晃动，0 为无阻尼。液面建议 0.5~0.8：液体的黏性本来就大，ζ=0.3 那种来回振铃看起来像果冻。");
+        private static readonly GUIContent MaxAngleLabel = new GUIContent("最大倾斜角", "**相对平衡面**的摆动幅度上限（度），不是液面绝对倾角上限。液面始终完整跟随重力方向（放平、倒过来都对），这个值只限制它相对平衡面还能晃多少。6~10° 已经很明显。");
         private static readonly GUIContent SaturationSoftnessLabel = new GUIContent("饱和柔和度", "0 为硬夹取（到顶就停住），1 为完全 tanh 软饱和。软饱和的大幅晃动更像液体而不是撞墙。");
-        private static readonly GUIContent SensitivityLabel = new GUIContent("加速度灵敏度", "1 为物理值：恒加速度下 tanθ = a/g。");
+        private static readonly GUIContent SensitivityLabel = new GUIContent("加速度灵敏度", "1 为物理值：恒加速度下 tanθ = a/g。它只缩放**惯性项**，不影响「倾斜容器时液面屈服重力」。手的加速度尖峰常到十几 m/s²，1.0 会让液面跟着手抖一起摆，液面预设用 0.5。");
         private static readonly GUIContent GravityInfluenceLabel = new GUIContent("朝向跟随", "1 表示液面始终与 世界水平面 平行，0 表示始终垂直于物体自身轴。");
         private static readonly GUIContent CentrifugalInfluenceLabel = new GUIContent("离心影响", "旋转产生的离心加速度对液面的影响强度。");
         private static readonly GUIContent ReferenceGravityLabel = new GUIContent("参考重力", "用于换算平衡角与径向弹簧的参考重力加速度。");
@@ -111,7 +113,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent RadialDampingRatioLabel = new GUIContent("径向阻尼比", "竖直伸缩的阻尼比。");
         private static readonly GUIContent MaxStepLabel = new GUIContent("最大子步", "单步积分上限。越小越精确，代价是子步更多。");
         private static readonly GUIContent EstimationWindowLabel = new GUIContent("估计窗口", "帧。对最近这么多帧的位置做二次最小二乘拟合来求速度与加速度。窗口越大越抗抖动，但加速度变化时会多出约 (窗口-1)/2 帧的滞后。逐帧二阶差分在 20Hz 采样、位置量化、编辑器拖拽下会产生几十 m/s² 的噪声，所以不建议调到 3。");
-        private static readonly GUIContent EquilibriumSmoothingLabel = new GUIContent("平衡角平滑", "毫秒。对平衡角做一阶低通，直流增益为 1，因此不会影响稳态倾角，只增加这一点延迟。");
+        private static readonly GUIContent AccelerationSmoothingLabel = new GUIContent(
+            "加速度平滑",
+            "毫秒。只对**加速度**做一阶低通，不滤朝向 —— 手抖的几十 m/s² 尖峰会让液面抽搐，" +
+            "而倾斜容器时的重力响应不受影响（那是另一条路）。0 表示不滤。" +
+            "它是「左右移动时液面颤抖」的主开关：实测走路晃动（2Hz / 3cm）下，" +
+            "高频抖动 RMS 从 3.8° 降到 0.9°（120ms + 灵敏度 0.5 + 阻尼 0.7）。");
+        private static readonly GUIContent EquilibriumSmoothingLabel = new GUIContent(
+            "平衡角平滑",
+            "毫秒。对平衡角做一阶低通，直流增益为 1，因此不会影响稳态倾角，只增加这一点延迟。" +
+            "它会同时延迟「倾斜容器」的响应，所以优先用「加速度平滑」压抖动，这里保持 20~30ms。");
         private static readonly GUIContent ManualAccelerationLabel = new GUIContent("手动加速度", "驱动源为「手动输入」时直接注入的加速度（锚点本地坐标系，m/s²）。");
         private static readonly GUIContent InputValueLabel = new GUIContent("输入值", "外部脚本写入的驱动值，会按区间归一化后乘到输入加速度上。");
         private static readonly GUIContent SourceValueMinLabel = new GUIContent("输入下限");
@@ -120,6 +131,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent InputAxisLabel = new GUIContent("输入轴", "输入加速度在锚点本地坐标系中的方向。");
         private static readonly GUIContent WriteToSharedMaterialLabel = new GUIContent("同时写材质资产", "默认只写 MaterialPropertyBlock；勾选后会额外写入共享材质，会破坏合批，仅在需要兼容旧行为时使用。");
         private static readonly GUIContent SharedMaterialLabel = new GUIContent("共享材质");
+        private static readonly GUIContent FillAmountInputLabel = new GUIContent("液面高度输入", "0~1，由倒水 / 消耗逻辑写入；组件输出时会按倒置自动翻转。");
+
         private static readonly GUIContent DrawGizmosLabel = new GUIContent("显示 Gizmo");
         private static readonly GUIContent DrawSwingPlaneLabel = new GUIContent("显示当前液面", "按当前摆角画出倾斜的液面参考圆。");
         private static readonly GUIContent DrawEquilibriumLabel = new GUIContent("显示平衡液面", "画出振荡器正在追赶的目标液面。和当前液面一起看就能判断滞后与振铃，而不是靠猜。");
@@ -162,6 +175,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             new GUIContent("液面倾斜 X°", "液面沿本地 X 的倾斜角（度），直接对应 shader 的 _LiquidTiltX。"),
             new GUIContent("液面倾斜 Z°", "液面沿本地 Z 的倾斜角（度），直接对应 shader 的 _LiquidTiltZ。"),
             new GUIContent("是否倒置", "1 = 已翻过 90°。液面平面本身对 ±n 对称，倒转要靠翻转 _LiquidFill，用它判断。"),
+            new GUIContent("液面高度", "已按倒置翻转的液面高度 0~1，直接对应 _LiquidFill。基础值来自组件的「液面高度输入」。"),
             new GUIContent("斜率向量"),
             new GUIContent("倾角 X"),
             new GUIContent("倾角 Z"),
@@ -225,6 +239,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             radialDampingRatio = Find("radialDampingRatio");
             maxStep = Find("maxStep");
             estimationWindow = Find("estimationWindow");
+            accelerationSmoothing = Find("accelerationSmoothing");
             equilibriumSmoothing = Find("equilibriumSmoothing");
             manualAcceleration = Find("manualAcceleration");
             inputValue = Find("inputValue");
@@ -232,6 +247,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             sourceValueMax = Find("sourceValueMax");
             inputAcceleration = Find("inputAcceleration");
             inputAxis = Find("inputAxis");
+            fillAmount = Find("fillAmount");
             sharedMaterial = Find("sharedMaterial");
             writeToSharedMaterial = Find("writeToSharedMaterial");
             bindings = Find("bindings");
@@ -413,9 +429,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.LabelField("采样", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
                 "加速度由最近「估计窗口」帧位置的二次最小二乘拟合给出，不是逐帧二阶差分。" +
-                "总响应延迟 ≈ (窗口-1)/2 帧 + 平衡角平滑。",
+                "总响应延迟 ≈ (窗口-1)/2 帧 + 加速度平滑 + 平衡角平滑。",
                 EditorStyles.miniLabel);
             EditorGUILayout.PropertyField(estimationWindow, EstimationWindowLabel);
+            EditorGUILayout.PropertyField(accelerationSmoothing, AccelerationSmoothingLabel);
             EditorGUILayout.PropertyField(equilibriumSmoothing, EquilibriumSmoothingLabel);
             EditorGUILayout.PropertyField(maxStep, MaxStepLabel);
 
@@ -430,6 +447,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.PropertyField(inputAcceleration, InputAccelerationLabel);
                 EditorGUILayout.PropertyField(inputAxis, InputAxisLabel);
             }
+
+            EditorGUILayout.Space(5.0f);
+            EditorGUILayout.LabelField("液面高度", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "倒水 / 消耗逻辑把 0~1 写进组件的 FillAmount（脚本调用或 Inspector 调），" +
+                "组件在容器翻过 90° 时自动输出 1-输入——液面平面本身表达不了液体在哪一侧。",
+                EditorStyles.miniLabel);
+            EditorGUILayout.PropertyField(fillAmount, FillAmountInputLabel);
 
             EditorGUILayout.Space(5.0f);
             EditorGUILayout.LabelField("初始变换", EditorStyles.boldLabel);
@@ -730,6 +755,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.FloatField("液面倾斜 X°", constraint.LiquidTiltX);
                 EditorGUILayout.FloatField("液面倾斜 Z°", constraint.LiquidTiltZ);
                 EditorGUILayout.FloatField("是否倒置", constraint.Inverted);
+                EditorGUILayout.Slider("液面高度输入", constraint.FillAmount, 0.0f, 1.0f);
+                EditorGUILayout.FloatField("液面高度输出", constraint.FillOutput);
                 EditorGUILayout.FloatField("振幅", constraint.Amplitude);
                 EditorGUILayout.FloatField("相位", constraint.Phase);
                 EditorGUILayout.FloatField("有效重力 (g)", constraint.EffectiveGravity);
@@ -805,11 +832,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 Undo.RecordObject(constraint, "摆锤约束水瓶液面预设");
                 constraint.ClearBindings();
-                // 按 lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl + 设计文档 §4.5）：
+                // 按 lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl + 设计文档 §4.5 / §4.6）：
                 //   _LiquidTiltX / _LiquidTiltZ = 液面倾斜角（**度**）
                 //   _LiquidOffset              = 液面垂直偏移（**网格本地单位**，晃动惯性）
-                // 倒转不在三个参数里：平面本身对 ±n 对称，倒置时倾斜角归零、
-                // 由驱动端翻转 _LiquidFill（用「是否倒置」通道判断，见文档 §4.6）。
+                // 倒转不在倾斜角里：平面本身对 ±n 对称（tan(180°)=0），所以倒置时倾斜角自动归零。
+                // 需要驱动端配合的只有 _LiquidFill（满 → 0，空 → 1）——
+                // 「液体挂在哪一侧」是半空间属性，shader 会按物体朝向自己翻转内部，
+                // 但那一步必须配合 Fill 反过来量，否则液体仍然从原来那一端开始灌。
                 constraint.AddRendererPropertyBinding(
                     HoPendulumChannel.TiltXDegrees,
                     "_LiquidTiltX",
@@ -828,10 +857,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     LiquidOffsetScale,
                     Vector3.zero,
                     "液面惯性浮动");
+                // 液面高度：倒水逻辑把 0~1 写进组件的 FillAmount，组件在翻过 90° 时自动输出 1-输入。
+                // 不接这条的话，容器倒过来时液体还留在原来那一半（"液面是倒的"就是这么来的）。
+                constraint.AddRendererPropertyBinding(
+                    HoPendulumChannel.FillAmount,
+                    "_LiquidFill",
+                    1.0f,
+                    Vector3.zero,
+                    "液面高度");
                 EditorUtility.SetDirty(constraint);
             }
 
             bindingFoldouts.Clear();
+            bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
@@ -861,6 +899,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetFloat(radialDampingRatio, 0.25f);
             SetFloat(maxStep, 1.0f / 240.0f);
             SetInt(estimationWindow, HoMotionEstimator.DefaultWindow);
+            SetFloat(accelerationSmoothing, 60.0f);
             SetFloat(equilibriumSmoothing, 20.0f);
             SetVector3(manualAcceleration, Vector3.zero);
             SetFloat(inputValue, 0.0f);
@@ -868,6 +907,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetFloat(sourceValueMax, 1.0f);
             SetFloat(inputAcceleration, 9.81f);
             SetVector3(inputAxis, Vector3.right);
+            SetFloat(fillAmount, 0.5f);
             SetBool(gizmoSizeFromBounds, true);
             SetFloat(gizmoSize, 0.5f);
             SetFloat(gizmoScale, 1.0f);
@@ -879,21 +919,31 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             SetDefaultsForAllPresets();
 
-            // 液面晃动由容器与液体决定，和摆长无关：默认给 3Hz，
-            // 手持运动频段在 0.5~1.5Hz，放在 3Hz 可以把相位滞后压到几度，
-            // 也避免手抖落在谐振点上被 Q=1/(2ζ) 放大成来回翻。
+            // 数值来自实测（harness 的 liquid 模式：把「手拿瓶子左右移动」的轨迹喂进
+            // 运动估计器 + 求解器，量液面倾角的峰峰值与 >6Hz 的抖动 RMS）：
+            //   旧预设（灵敏度1 / 最大角10° / 3Hz / ζ0.3 / 40ms）：
+            //     慢速搬运 峰峰 49.8° 抖动 2.49°；走路 48.5° / 3.84°；摇动 98.7° / 12.42°
+            //   新预设：慢速搬运 16.7° / 0.87°；走路 10.3° / 0.88°；摇动 22.9° / 2.69°
+            // 也就是说旧预设的「液面倾角」在左右移动时会摆 ±25°（半个液面翻过去），
+            // 现在的 ±5~11° 才是「瓶子里的水」该有的样子。
             SetBool(frequencyFromLength, false);
-            SetFloat(frequency, 3.0f);
             SetFloat(length, 0.25f);
-            SetFloat(dampingRatio, 0.22f);
-            // 强度：灵敏度 1.5 表示"输出斜率 ≈ 1.5 倍物理值"。
-            SetFloat(maxAngle, 30.0f);
-            SetFloat(saturationSoftness, 0.65f);
-            SetFloat(sensitivity, 1.5f);
+            SetFloat(frequency, 2.2f);
+            // 阻尼 0.7：接近临界阻尼。液体的黏性本来就大，ζ=0.3 那种来回振铃像果冻。
+            SetFloat(dampingRatio, 0.7f);
+            // 灵敏度 0.5：1.0 是物理值，但手的加速度尖峰能到几十 m/s²，1:1 跟随就是 ±25° 的大幅摆动。
+            // 它只缩放**惯性项**，不影响「倾斜容器时液面屈服重力」（那是朝向项，永远满值跟随）。
+            SetFloat(sensitivity, 0.5f);
+            // 最大倾斜角限制的是**相对平衡面的摆动幅度**（不是液面倾角上限）：
+            // 6° 是一眼能看出晃动、又不至于把液面甩出瓶口的上限。
+            SetFloat(maxAngle, 6.0f);
+            SetFloat(saturationSoftness, 0.7f);
             SetFloat(restElongation, 0.015f);
-            // 防抖：估计窗口拉长到 8 帧、平衡角平滑 40ms。强度靠灵敏度，抖动靠这两个压。
+            // 防抖三条：估计窗口 8 帧（拟合，不放大噪声）→ 加速度平滑 120ms（只滤惯性项）
+            // → 平衡角平滑 30ms（兜住剩下的一阶噪声，再大就会让倾斜容器的响应发肉）
             SetInt(estimationWindow, 8);
-            SetFloat(equilibriumSmoothing, 40.0f);
+            SetFloat(accelerationSmoothing, 120.0f);
+            SetFloat(equilibriumSmoothing, 30.0f);
         }
 
         private void SaveInitialTransformForTargets()
