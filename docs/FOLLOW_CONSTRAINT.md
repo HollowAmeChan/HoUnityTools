@@ -99,7 +99,13 @@ Lowpass_frame(P⁻¹ · desired_world)      现在
 规则：**会被同一帧下游消费的跟随物，用 `Update`，并排在消费者之前。** 组件默认就是 `Update`；老场景如果存的是 `LateUpdate`，按这条规则改过来。
 
 - `LateUpdate` 意味着下游这一帧只能读到**上一帧**的值。实测（尾巴 IK 与 BoneCloth 覆盖同一条骨链）：`LateUpdate` 时尾巴会"一阵一阵"抽搐，改成 `Update` 立刻消失。
-- 排序契约：`leader 的驱动 < 跟随约束 < 消费者`（如 `RigBuilder`）。Unity 不保证同为默认顺序的脚本谁先谁后，建议在 Project Settings → Script Execution Order 里把 `HoFollowConstraint` 设成 `-100`，把"碰巧对"变成"契约对"。
+- 排序契约：`leader 的驱动 < 跟随约束 < 消费者`（如 `RigBuilder`）。
+
+⚠️ **只把「更新时机」改成 `Update` 通常就够了，但那是"碰巧排在前"，不是保证。** 实测里改完 `Update` 立刻就顺了、Script Execution Order 一行都没动 —— 说明当前 `HoFollowConstraint` 恰好排在 `RigBuilder.Update()` 之前被调用。Unity 不保证同为默认顺序的脚本谁先谁后（官方文档明确写了不能依赖同一事件函数在不同 GameObject 之间的调用顺序），换机器、加脚本、升级版本都可能翻掉，而翻掉之后的表现又正好是本文开头那种"一阵一阵"。
+
+所以请显式钉住这一步：**Project Settings → Script Execution Order 添加 `Hollow.HoUnityTools.Constraints.HoFollowConstraint`，顺序设成 `-100`**（`RigBuilder` 不在列表里就是默认 0，因此一定排在我们后面）；leader 若由脚本驱动，把那个脚本也加进去排得更前（如 `-200`）。
+
+以后如果又出现抽搐，先按这条检查：跟随约束是不是被调到了消费者之后，或者又退回了 `LateUpdate`。
 - **不要**为了"更早"插到 `Update` 之前：那会早于动画写姿势，读到的是上一帧的 leader，输入反而更旧。`Update` 阶段内、消费者之前就是最优区间。
 - **不要**用 `FixedUpdate` 顶替：它和渲染帧不同步。
 - **不要**去提前 MC2：它读的是骨头而不是跟随物，提前只会让它读不到 `LateUpdate` 里的脚本改动。
