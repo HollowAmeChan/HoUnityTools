@@ -23,6 +23,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         /// </summary>
         private const float LiquidOffsetScale = 0.01f;
 
+        /// <summary>
+        /// 「振幅」通道写进 `_LiquidWaveAmpMul` 的缩放。
+        /// shader 侧最终振幅 = `_LiquidWaveAmp`（美术基准，面板可调）× `_LiquidWaveAmpMul`（脚本每帧写），
+        /// 通道是 0~1 的摆动幅度（静止 0），所以缩放 1 的含义是"晃得最厉害时波纹等于美术给的基准"。
+        /// 实测手持场景该通道峰值 0.53~0.66、RMS 0.41~0.55，不会长期贴着 1，留了调节余量。
+        /// </summary>
+        private const float LiquidWaveAmpMultiplierScale = 1.0f;
+
         private SerializedProperty updateMode;
         private SerializedProperty evaluateInEditMode;
         private SerializedProperty initializeOnEnable;
@@ -837,6 +845,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 // 按 lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl + 设计文档 §4.5 / §4.6）：
                 //   _LiquidTiltX / _LiquidTiltZ = 液面倾斜角（**度**）
                 //   _LiquidOffset              = 液面垂直偏移（**网格本地单位**，晃动惯性）
+                //   _LiquidWaveAmpMul          = 波纹振幅的**乘数**（0~4，静止给 0）
                 // 倒转不在倾斜角里：平面本身对 ±n 对称（tan(180°)=0），所以倒置时倾斜角自动归零。
                 // 需要驱动端配合的只有 _LiquidFill（满 → 0，空 → 1）——
                 // 「液体挂在哪一侧」是半空间属性，shader 会按物体朝向自己翻转内部，
@@ -867,10 +876,22 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     1.0f,
                     Vector3.zero,
                     "液面高度");
+                // 波纹：shader 侧是「手动基准 × 脚本乘数」（_LiquidWaveAmp * _LiquidWaveAmpMul），
+                // 脚本只写乘数那一路 —— 材质上的 _LiquidWaveAmp 保持是美术的闸门（给 0 就整条关掉）。
+                // 「振幅」通道 = 相对平衡面的摆动幅度 / 最大倾斜角（静止 0），实测手持场景峰值 0.53~0.66、
+                // RMS 0.41~0.55，所以缩放 1 的含义是"晃得最厉害时波纹正好等于美术给的基准幅度"。
+                // 想让晃动时波纹更显眼，把这条绑定的缩放调到 1.5~2（量程 0~4 够用）。
+                constraint.AddRendererPropertyBinding(
+                    HoPendulumChannel.Amplitude,
+                    "_LiquidWaveAmpMul",
+                    LiquidWaveAmpMultiplierScale,
+                    Vector3.zero,
+                    "液面波纹");
                 EditorUtility.SetDirty(constraint);
             }
 
             bindingFoldouts.Clear();
+            bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
             bindingFoldouts.Add(false);
