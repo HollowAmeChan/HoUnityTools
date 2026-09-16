@@ -48,6 +48,9 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>角速度低通的时间常数（毫秒）。</summary>
         private const float AngularVelocitySmoothingMilliseconds = 30.0f;
 
+        /// <summary>世界斜率输出的角度上限（度）。液面接近竖直时斜率发散，这里只做量程保护。</summary>
+        private const float MaxWorldTiltDegrees = 80.0f;
+
         [Header("Update")]
         [SerializeField]
         private HoPendulumConstraintUpdateMode updateMode = HoPendulumConstraintUpdateMode.LateUpdate;
@@ -228,7 +231,14 @@ namespace Hollow.HoUnityTools.Constraints
         private Vector3 swingDirection = Vector3.down;
         private float tiltX;
         private float tiltZ;
+        private float worldTiltX;
+        private float worldTiltZ;
+        private float verticalAlignment = 1.0f;
+        private float liquidTiltX;
+        private float liquidTiltZ;
+        private float inverted;
         private float totalAngle;
+        private float deviationAngle;
         private float angularSpeed;
         private float bobDistance;
         private float normalizedStretch;
@@ -288,6 +298,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         public float Angle => totalAngle;
 
+        /// <summary>相对平衡面的摆动幅度（度）。最大倾斜角限制的就是它，而不是平衡角本身。</summary>
+        public float DeviationAngle => deviationAngle;
+
         public float EquilibriumAngleX => solverOutput.equilibriumAngleX;
 
         public float EquilibriumAngleZ => solverOutput.equilibriumAngleZ;
@@ -295,6 +308,24 @@ namespace Hollow.HoUnityTools.Constraints
         public float TiltX => tiltX;
 
         public float TiltZ => tiltZ;
+
+        /// <summary>世界空间倾斜斜率：沿世界 X。静止时对任何朝向都是 0。</summary>
+        public float WorldTiltX => worldTiltX;
+
+        /// <summary>世界空间倾斜斜率：沿世界 Z。静止时对任何朝向都是 0。</summary>
+        public float WorldTiltZ => worldTiltZ;
+
+        /// <summary>锚点「上」与世界「上」的对齐：+1 正立、0 放平、−1 倒置。</summary>
+        public float VerticalAlignment => verticalAlignment;
+
+        /// <summary>液面沿本地 X 的倾斜角（度），直接对应 shader 的 `_LiquidTiltX`。</summary>
+        public float LiquidTiltX => liquidTiltX;
+
+        /// <summary>液面沿本地 Z 的倾斜角（度），直接对应 shader 的 `_LiquidTiltZ`。</summary>
+        public float LiquidTiltZ => liquidTiltZ;
+
+        /// <summary>是否已翻过 90°（1 = 倒置）。倒置时驱动端需要把 `_LiquidFill` 取反。</summary>
+        public float Inverted => inverted;
 
         public float Amplitude => solverOutput.amplitude;
 
@@ -430,7 +461,14 @@ namespace Hollow.HoUnityTools.Constraints
             solverOutput = new HoPendulumSolverOutput();
             tiltX = 0.0f;
             tiltZ = 0.0f;
+            worldTiltX = 0.0f;
+            worldTiltZ = 0.0f;
+            verticalAlignment = 1.0f;
+            liquidTiltX = 0.0f;
+            liquidTiltZ = 0.0f;
+            inverted = 0.0f;
             totalAngle = 0.0f;
+            deviationAngle = 0.0f;
             angularSpeed = 0.0f;
             bobDistance = length;
             normalizedStretch = 0.0f;
@@ -489,6 +527,18 @@ namespace Hollow.HoUnityTools.Constraints
                     return new Vector3(tiltX, 0.0f, 0.0f);
                 case HoPendulumChannel.TiltZ:
                     return new Vector3(tiltZ, 0.0f, 0.0f);
+                case HoPendulumChannel.WorldTiltX:
+                    return new Vector3(worldTiltX, 0.0f, 0.0f);
+                case HoPendulumChannel.WorldTiltZ:
+                    return new Vector3(worldTiltZ, 0.0f, 0.0f);
+                case HoPendulumChannel.VerticalAlignment:
+                    return new Vector3(verticalAlignment, 0.0f, 0.0f);
+                case HoPendulumChannel.TiltXDegrees:
+                    return new Vector3(liquidTiltX, 0.0f, 0.0f);
+                case HoPendulumChannel.TiltZDegrees:
+                    return new Vector3(liquidTiltZ, 0.0f, 0.0f);
+                case HoPendulumChannel.Inverted:
+                    return new Vector3(inverted, 0.0f, 0.0f);
                 case HoPendulumChannel.Tilt:
                     return new Vector3(tiltX, 0.0f, tiltZ);
                 case HoPendulumChannel.AngleX:
@@ -703,7 +753,39 @@ namespace Hollow.HoUnityTools.Constraints
             tiltX = TanDegrees(solverOutput.angleX);
             tiltZ = TanDegrees(solverOutput.angleZ);
             totalAngle = solverOutput.tiltMagnitude;
+            float deviationX = solverOutput.angleX - solverOutput.equilibriumAngleX;
+            float deviationZ = solverOutput.angleZ - solverOutput.equilibriumAngleZ;
+            deviationAngle = Mathf.Sqrt(deviationX * deviationX + deviationZ * deviationZ);
             angularSpeed = angularVelocity.magnitude * Mathf.Rad2Deg;
+
+            // 世界空间倾斜：把当前液面法线转到世界，再取相对世界水平的两个斜率。
+            // 静止时它恒为 0（不管瓶子是立着、放平还是倒过来），加速时按世界方向倾斜，
+            // 这才是「液面屈服重力」该有的输出；本地轴版本在瓶子旋转时会跟着转、放平时还会饱和。
+            Vector3 worldNormal = anchorRotation * solverOutput.localNormal;
+            worldTiltX = WorldSlope(worldNormal.x, worldNormal.y);
+            worldTiltZ = WorldSlope(worldNormal.z, worldNormal.y);
+
+            // 瓶子的「上」与世界「上」的对齐：+1 正立、0 放平、−1 倒置。
+            Vector3 localUp = Quaternion.Inverse(anchorRotation) * Vector3.up;
+            verticalAlignment = Mathf.Clamp(localUp.y, -1.0f, 1.0f);
+
+            // lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl:96 / 设计文档 §4.5 §4.6）：
+            //   _LiquidTiltX/_LiquidTiltZ 是**度**，= atan(-n.x / n.y)、atan(-n.z / n.y)，
+            //   n 是「世界 up 在容器本地的表示」，也就是这里的液面法线。
+            //   用 atan 而不是 atan2：结果落在 ±90 内，坡度和 atan2 完全等价（tan 以 180° 为周期），
+            //   这样 shader 的 _LiquidTiltScale 取任何值，倒置时都还是 0 坡度。
+            Vector3 liquidNormal = solverOutput.localNormal;
+            float normalY = liquidNormal.y;
+            if (Mathf.Abs(normalY) < 0.0001f)
+            {
+                normalY = normalY >= 0.0f ? 0.0001f : -0.0001f;
+            }
+
+            liquidTiltX = Mathf.Atan(-liquidNormal.x / normalY) * Mathf.Rad2Deg;
+            liquidTiltZ = Mathf.Atan(-liquidNormal.z / normalY) * Mathf.Rad2Deg;
+            // 翻过 90° 之后平面法线朝本地 −Y：此时倾斜角归零（与正立同一个平面），
+            // 「液体在哪一侧」只能靠驱动端翻转 _LiquidFill 来表达。
+            inverted = liquidNormal.y < 0.0f ? 1.0f : 0.0f;
 
             bobDistance = Mathf.Max(0.0f, length + solverOutput.radialOffset);
 
@@ -905,6 +987,16 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             return 1.0f - Mathf.Exp(-deltaTime / (milliseconds * 0.001f));
+        }
+
+        /// <summary>
+        /// 世界斜率 = 水平分量 / 竖直分量。接近竖直平面（液面垂直于世界水平）时斜率会发散，
+        /// 这里按 ±80° 夹取，避免驱动 shader 的值飞出量程（瓶子放平时才会碰到）。
+        /// </summary>
+        private static float WorldSlope(float horizontal, float vertical)
+        {
+            float angle = Mathf.Atan2(horizontal, Mathf.Abs(vertical)) * Mathf.Rad2Deg;
+            return TanDegrees(Mathf.Clamp(angle, -MaxWorldTiltDegrees, MaxWorldTiltDegrees));
         }
 
         private static float TanDegrees(float degrees)

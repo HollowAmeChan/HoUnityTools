@@ -13,7 +13,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         /// 晃动强度 ≈ 灵敏度 × 这个缩放，所以它和「加速度灵敏度」一起决定观感强度；
         /// 上限则由「最大倾斜角」压住：输出斜率不会超过 tan(最大倾斜角) × 缩放。
         /// </summary>
-        private const float BottleTiltScale = 3.0f;
+        private const float BottleTiltScale = 1.0f;
+
+        /// <summary>
+        /// 液面惯性浮动（±1 斜坡）写进 `_LiquidOffset` 的量级。
+        /// `_LiquidOffset` 是**网格本地单位**（与 `_LiquidLevelY/H` 同量纲），
+        /// 而斜坡是 ±1，所以这里要缩到网格单位：0.01 = ±1%。
+        /// 或者把 shader 的 `_LiquidOffsetMode` 设成 1（按量程百分比），这个值就直接是百分比。
+        /// </summary>
+        private const float LiquidOffsetScale = 0.01f;
 
         private SerializedProperty updateMode;
         private SerializedProperty evaluateInEditMode;
@@ -148,6 +156,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             new GUIContent("液面斜率 X"),
             new GUIContent("液面斜率 Z"),
+            new GUIContent("世界斜率 X", "沿世界 X 的斜率。静止时对任何朝向恒为 0，瓶子旋转也正确——驱动液面用这个。"),
+            new GUIContent("世界斜率 Z", "沿世界 Z 的斜率。静止时对任何朝向恒为 0。"),
+            new GUIContent("竖直对齐", "+1 正立 / 0 放平 / -1 倒置。"),
+            new GUIContent("液面倾斜 X°", "液面沿本地 X 的倾斜角（度），直接对应 shader 的 _LiquidTiltX。"),
+            new GUIContent("液面倾斜 Z°", "液面沿本地 Z 的倾斜角（度），直接对应 shader 的 _LiquidTiltZ。"),
+            new GUIContent("是否倒置", "1 = 已翻过 90°。液面平面本身对 ±n 对称，倒转要靠翻转 _LiquidFill，用它判断。"),
             new GUIContent("斜率向量"),
             new GUIContent("倾角 X"),
             new GUIContent("倾角 Z"),
@@ -690,6 +704,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.FloatField("平衡倾角 Z", constraint.EquilibriumAngleZ);
                 EditorGUILayout.FloatField("液面斜率 X", constraint.TiltX);
                 EditorGUILayout.FloatField("液面斜率 Z", constraint.TiltZ);
+                EditorGUILayout.FloatField("世界斜率 X", constraint.WorldTiltX);
+                EditorGUILayout.FloatField("世界斜率 Z", constraint.WorldTiltZ);
+                EditorGUILayout.FloatField("竖直对齐", constraint.VerticalAlignment);
+                EditorGUILayout.FloatField("液面倾斜 X°", constraint.LiquidTiltX);
+                EditorGUILayout.FloatField("液面倾斜 Z°", constraint.LiquidTiltZ);
+                EditorGUILayout.FloatField("是否倒置", constraint.Inverted);
                 EditorGUILayout.FloatField("振幅", constraint.Amplitude);
                 EditorGUILayout.FloatField("相位", constraint.Phase);
                 EditorGUILayout.FloatField("有效重力 (g)", constraint.EffectiveGravity);
@@ -765,26 +785,29 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 Undo.RecordObject(constraint, "摆锤约束水瓶液面预设");
                 constraint.ClearBindings();
+                // 按 lilToon 液体 shader 的驱动契约（lil_liquid_level.hlsl + 设计文档 §4.5）：
+                //   _LiquidTiltX / _LiquidTiltZ = 液面倾斜角（**度**）
+                //   _LiquidOffset              = 液面垂直偏移（**网格本地单位**，晃动惯性）
+                // 倒转不在三个参数里：平面本身对 ±n 对称，倒置时倾斜角归零、
+                // 由驱动端翻转 _LiquidFill（用「是否倒置」通道判断，见文档 §4.6）。
                 constraint.AddRendererPropertyBinding(
-                    HoPendulumChannel.TiltX,
+                    HoPendulumChannel.TiltXDegrees,
                     "_LiquidTiltX",
                     BottleTiltScale,
                     Vector3.zero,
                     "液面倾斜 X");
                 constraint.AddRendererPropertyBinding(
-                    HoPendulumChannel.TiltZ,
+                    HoPendulumChannel.TiltZDegrees,
                     "_LiquidTiltZ",
                     BottleTiltScale,
                     Vector3.zero,
                     "液面倾斜 Z");
-                // 液面高度变化：径向弹簧伸长量的 ±1 归一化斜坡（静止 0、过载 +1、失重 -1），
-                // 缩放 1 就是约定好的量程。幅度由 高级 → 竖直拉伸 → 静止伸长 决定。
                 constraint.AddRendererPropertyBinding(
                     HoPendulumChannel.StretchNormalized,
                     "_LiquidOffset",
-                    1.0f,
+                    LiquidOffsetScale,
                     Vector3.zero,
-                    "液面高度");
+                    "液面惯性浮动");
                 EditorUtility.SetDirty(constraint);
             }
 
@@ -843,14 +866,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SetFloat(frequency, 3.0f);
             SetFloat(length, 0.25f);
             SetFloat(dampingRatio, 0.22f);
-            // 强度：灵敏度 2 表示"输出斜率 ≈ 2 倍物理值"，常见手持运动（a≈1~3m/s²）
-            // 就能跑满量程的大部分；30° 上限保证猛甩时不至于把液面翻过去。
+            // 强度：灵敏度 1.5 表示"输出斜率 ≈ 1.5 倍物理值"。
             SetFloat(maxAngle, 30.0f);
             SetFloat(saturationSoftness, 0.65f);
-            SetFloat(sensitivity, 2.0f);
+            SetFloat(sensitivity, 1.5f);
             SetFloat(restElongation, 0.015f);
-            SetInt(estimationWindow, HoMotionEstimator.DefaultWindow);
-            SetFloat(equilibriumSmoothing, 20.0f);
+            // 防抖：估计窗口拉长到 8 帧、平衡角平滑 40ms。强度靠灵敏度，抖动靠这两个压。
+            SetInt(estimationWindow, 8);
+            SetFloat(equilibriumSmoothing, 40.0f);
         }
 
         private void SaveInitialTransformForTargets()

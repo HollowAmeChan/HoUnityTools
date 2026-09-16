@@ -204,15 +204,48 @@ Scene 视图里会画出：
 
 | 通道 | 属性 | 缩放 |
 | --- | --- | --- |
-| 液面斜率 X | `_LiquidTiltX` | 2.4 |
-| 液面斜率 Z | `_LiquidTiltZ` | 2.4 |
-| 伸长量 ±1 | `_LiquidOffset` | 1 |
+| 液面倾斜 X° | `_LiquidTiltX` | 1 |
+| 液面倾斜 Z° | `_LiquidTiltZ` | 1 |
+| 伸长量 ±1 | `_LiquidOffset` | 0.01 |
 
-前两条是液面倾斜。第三条是**液面高度变化**，接的是「伸长量 ±1」通道：径向弹簧伸长量按静止伸长归一化并夹取到 **±1** 的斜坡——静止 0、过载（向上加速）**+1**、失重（自由落体）**−1**，缩放 1 就是约定量程，shader 侧自己乘想要的高度幅度即可。斜坡的幅度与快慢由 高级 → 竖直拉伸（**静止伸长**、径向阻尼比）决定，预设 0.015m。
+量纲按 lilToon 液体 shader（`lil_liquid_level.hlsl`）的契约：
 
-> 为什么不直接用「伸长量」（米）：那样归一化要靠「缩放 = 1 / 静止伸长」去凑，你之后一改静止伸长，±1 的量程就悄悄失效了。归一化通道是自洽的。
+| 属性 | 量纲 | 本约束怎么给 |
+| --- | --- | --- |
+| `_LiquidTiltX` / `_LiquidTiltZ` | **度**（shader 内 `tan(radians(...))`） | `atan(-n.x/n.y)`、`atan(-n.z/n.y)`，n = 世界 up 在锚点本地的表示 |
+| `_LiquidOffset` | **网格本地单位**（与 `_LiquidLevelY/H` 同量纲）；`_LiquidOffsetMode=1` 时是量程百分比 | 径向弹簧伸长量的 ±1 斜坡 × 0.01 |
 
-缩放 1 表示通道值就是液面真实斜率 `tan θ`。2.4 是按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定出来的：
+几个要点：
+
+- **倾斜角不是斜率**。shader 侧自己做 `tan()`，所以驱动端给角度；用 `atan`（而非 `atan2`）保证结果落在 ±90 内，坡度和 `atan2` 完全等价（`tan` 以 180° 为周期），这样 shader 的 `_LiquidTiltScale` 取任何值都不会破坏倒置时的零坡度。
+- **`_LiquidOffset` 的 0.01 不是拍脑袋**：它是网格本地单位，而斜坡是 ±1，所以缩到 ±1%（0.01）。把 shader 的 `_LiquidOffsetMode` 设成 1，这个缩放就直接是"液面量程的百分之几"。
+- 强度由「加速度灵敏度」和这两条绑定的缩放决定；`_LiquidOffset` 的幅度由 高级 → 竖直拉伸 → 静止伸长 决定。
+
+### 倒转（容器翻转）怎么处理
+
+**三个参数结构上做不到倒转**：液面平面本身对 `n` 与 `-n` 对称（`tan(180°) = 0`），倒置时倾斜角归零，和正立是同一个水平面——"液体在哪一侧"这个信息不在平面里。shader 作者在 `lil_liquid_level.hlsl` 里也是这么写的：
+
+> 水平面 y = level 等价于 -y = -level，而 tan(180°)=0，所以 TiltX=0 / TiltZ=0 + `_LiquidFill` 取反 = **精确的倒置解**。
+
+所以驱动端要做的第二件事是**翻转 `_LiquidFill`**（满 → 0，空 → 1）。本约束为此提供了「是否倒置」通道（1 = 已翻过 90°），两种接法：
+
+```csharp
+// A. 倒水逻辑自己判断（推荐：Fill 本来归它管）
+float fill = constraint.Inverted > 0.5f ? 1f - pourFill : pourFill;
+
+// B. 在 shader 里做（加一个 _LiquidInverted 属性，两行）
+float fill = (_LiquidInverted > 0.5) ? 1.0 - _LiquidFill : _LiquidFill;
+```
+
+第三种接法是加一条绑定把「是否倒置」写到 shader 的 `_LiquidInverted`，约束侧不用再改。
+
+> ⚠️ 顺带两个坑：①**别直接喂 `eulerAngles`**，它是旋转角不是坡度，`eulerAngles.x = 180°` 会被 Range 钳到 90°、`tan(90°)` 发散；②倒置时保持 `_LiquidTiltScale = 1`，否则 `tan(180° × scale)` 不再是 0。
+
+### 还可以接的第四个通道
+
+`_LiquidWaveAmp`（液面波纹幅度）可以由「振幅」通道驱动：停住时振幅为 0、晃动时变大，正好是 shader 设计文档 §4.5 说的"运动剧烈程度标量"。加一条绑定、缩放按 `_LiquidWaveAmp` 的量程（0~0.2）取 0.02~0.05 即可。
+
+
 
 | 帧率 | 旧 Wobble RMS | 旧 Wobble 峰值 | 摆锤 `tanθ` RMS | 比值 |
 | --- | --- | --- | --- | --- |

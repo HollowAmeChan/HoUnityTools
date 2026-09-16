@@ -13,6 +13,46 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>液面沿本地 Z 轴方向的斜率（tan 值），可直接喂给液面 shader。</summary>
         TiltZ,
 
+        /// <summary>
+        /// 液面沿**世界 X** 方向的斜率。静止时对任何朝向都恒为 0（液面完全屈服重力），
+        /// 加速时按世界方向倾斜。瓶子会旋转时驱动液面必须用这个，而不是本地轴版本。
+        /// </summary>
+        WorldTiltX,
+
+        /// <summary>液面沿**世界 Z** 方向的斜率，静止恒为 0。</summary>
+        WorldTiltZ,
+
+        /// <summary>
+        /// 锚点的「上」与世界「上」的对齐程度：+1 正立、0 放平（瓶轴水平）、−1 倒置。
+        /// <para>
+        /// 液面要能「倒转」必须靠它：瓶子倒过来时两个倾斜斜率都是 0（液面垂直于瓶轴），
+        /// 方向信息只能由这个分量提供，它和两个局部斜率一起构成局部空间的液面法线
+        /// <c>(TiltX, VerticalAlignment, TiltZ)</c>。
+        /// </para>
+        /// </summary>
+        VerticalAlignment,
+
+        /// <summary>
+        /// 液面沿本地 X 的倾斜**角度（度）**，对应 lilToon 液体 shader 的 `_LiquidTiltX`：
+        /// <c>atan(-n.x / n.y)</c>，n = 世界 up 在锚点本地的表示。
+        /// 用 atan 而不是 atan2，结果落在 ±90 内且坡度完全等价（tan 以 180° 为周期），
+        /// 这样 shader 的 `_LiquidTiltScale` 取任何值，倒置时都仍然是 0 坡度。
+        /// </summary>
+        TiltXDegrees,
+
+        /// <summary>液面沿本地 Z 的倾斜**角度（度）**，对应 `_LiquidTiltZ`：<c>atan(-n.z / n.y)</c>。</summary>
+        TiltZDegrees,
+
+        /// <summary>
+        /// 是否已翻过 90°：1 = 倒置、0 = 正常。
+        /// <para>
+        /// 液面平面本身对 n 与 -n 对称（<c>tan(180°)=0</c>），所以「液体在哪一侧」结构上
+        /// 无法由倾斜角表达 —— 设计文档 §4.6 的结论是：倒置 = 倾斜角归零 + **`_LiquidFill` 取反**
+        /// （满 → 0，空 → 1）。这个通道就是给那一步用的。
+        /// </para>
+        /// </summary>
+        Inverted,
+
         /// <summary>两个轴的斜率合成向量 (TiltX, 0, TiltZ)。</summary>
         Tilt,
 
