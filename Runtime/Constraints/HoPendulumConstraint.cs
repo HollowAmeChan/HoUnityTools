@@ -214,6 +214,14 @@ namespace Hollow.HoUnityTools.Constraints
 
         private readonly HashSet<Renderer> rendererTouched = new HashSet<Renderer>();
 
+        /// <summary>
+        /// 每个渲染器在组件介入**之前**的属性块快照。MaterialPropertyBlock 是写在 Renderer 上的，
+        /// 不清就会一直盖住材质本身的值（组件禁用/移除后依然生效，看起来像"锁死"），
+        /// 所以要在禁用、销毁、重新配置时用它还原。
+        /// </summary>
+        private readonly Dictionary<Renderer, MaterialPropertyBlock> originalRendererBlocks =
+            new Dictionary<Renderer, MaterialPropertyBlock>();
+
         private HoPendulumSolver solver;
         private HoPendulumSolverOutput solverOutput;
         private HoMotionEstimator motionEstimator;
@@ -374,6 +382,12 @@ namespace Hollow.HoUnityTools.Constraints
         private void OnDisable()
         {
             initialized = false;
+            RestoreRendererBlocks();
+        }
+
+        private void OnDestroy()
+        {
+            RestoreRendererBlocks();
         }
 
         private void Update()
@@ -894,6 +908,14 @@ namespace Hollow.HoUnityTools.Constraints
                     // 也避免同一帧内后一条绑定把前一条的值覆盖回旧值。
                     target.GetPropertyBlock(block);
                     rendererOrder.Add(target);
+
+                    // 首次写这个渲染器之前留一份原始快照，供还原使用。
+                    if (!originalRendererBlocks.ContainsKey(target))
+                    {
+                        MaterialPropertyBlock original = new MaterialPropertyBlock();
+                        target.GetPropertyBlock(original);
+                        originalRendererBlocks.Add(target, original);
+                    }
                 }
 
                 binding.ApplyToPropertyBlock(block, value);
@@ -927,8 +949,32 @@ namespace Hollow.HoUnityTools.Constraints
             }
         }
 
+        /// <summary>
+        /// 把写入过的渲染器还原成组件介入之前的样子，并清空快照。
+        /// 组件禁用、销毁、以及绑定被改动时都会调用——否则 MaterialPropertyBlock 会一直留在
+        /// 渲染器上盖住材质的值（组件移除了也还在，表现为"参数锁死"）。
+        /// </summary>
+        public void RestoreRendererBlocks()
+        {
+            foreach (KeyValuePair<Renderer, MaterialPropertyBlock> pair in originalRendererBlocks)
+            {
+                if (pair.Key != null)
+                {
+                    pair.Key.SetPropertyBlock(pair.Value);
+                }
+            }
+
+            originalRendererBlocks.Clear();
+            rendererBlocks.Clear();
+            rendererOrder.Clear();
+            rendererTouched.Clear();
+        }
+
         private void ResetBindingCaches()
         {
+            // 绑定可能被改名/删除，先还原再重新缓存，避免旧属性名永久留在渲染器上。
+            RestoreRendererBlocks();
+
             if (bindings == null)
             {
                 return;
@@ -938,10 +984,6 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 bindings[i]?.ResetRuntimeCache();
             }
-
-            rendererBlocks.Clear();
-            rendererOrder.Clear();
-            rendererTouched.Clear();
         }
 
         /// <summary>编辑器与预设使用：追加一条渲染器属性绑定。</summary>

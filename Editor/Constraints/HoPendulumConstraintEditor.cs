@@ -542,6 +542,26 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 EditorGUILayout.PropertyField(sharedMaterial, SharedMaterialLabel);
             }
+
+            EditorGUILayout.Space(3.0f);
+            EditorGUILayout.LabelField(
+                "写入走 MaterialPropertyBlock：值存在 Renderer 上，不改材质资产，" +
+                "所以材质面板的滑条不会跟着动。组件禁用/移除时会自动还原，" +
+                "如果你手动改过绑定、想立刻清掉残留值，点下面这个按钮。",
+                EditorStyles.miniLabel);
+
+            if (GUILayout.Button("清除已写入的材质属性"))
+            {
+                foreach (Object selectedTarget in targets)
+                {
+                    if (selectedTarget is HoPendulumConstraint constraint)
+                    {
+                        Undo.RecordObject(constraint, "清除摆锤约束写入的材质属性");
+                        constraint.RestoreRendererBlocks();
+                        EditorUtility.SetDirty(constraint);
+                    }
+                }
+            }
         }
 
         private void DrawBindingElement(SerializedProperty element, int index)
