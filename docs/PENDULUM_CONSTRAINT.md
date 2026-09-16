@@ -26,7 +26,6 @@
 | 角速度 | 欧拉角直接相减，±180° 处跳变 | 用四元数增量求角速度，另加物理离心项 |
 | 材质写入 | MPB + `mat.SetFloat`（污染共享材质资产） | 默认只写 MPB；需要兼容旧行为时勾选「同时写材质资产」 |
 | 输出 | 写死 `_WobbleX` / `_WobbleZ` | 18 个通道 × 4 种绑定目标 |
-
 ## 模型
 
 平衡面（全部在锚点本地坐标系）：
@@ -140,7 +139,7 @@ x_eq = ΔL * (g_eff / g - 1)              // 静止 0，过载为正，失重为
 
 | 通道 | 内容 |
 | --- | --- |
-| 液面斜率 X / Z | `tan θ`，可直接喂给液面 shader 的 `_WobbleX` / `_WobbleZ` |
+| 液面倾斜 X / Z | `tan θ`，可直接喂给液面 shader 的 `_LiquidTiltX` / `_LiquidTiltZ` |
 | 斜率向量 | `(TiltX, 0, TiltZ)` |
 | 倾角 X / Z / 合倾角 | 度。合倾角是幅值，受最大倾斜角限制 |
 | 旋转欧拉角 | `(AngleZ, 0, -AngleX)`，把局部 up 转到液面法线，适合让物体随液面倾斜 |
@@ -167,7 +166,7 @@ x_eq = ΔL * (g_eff / g - 1)              // 静止 0，过载为正，失重为
 渲染器写入的两个细节：
 
 - 默认**不写材质资产**。旧 Wobble 的 `mat.SetFloat` 会污染共享材质、破坏合批，Warudo 打包后还会影响所有使用同一材质的人。需要兼容旧行为时勾选「同时写材质资产」。
-- 同一帧内同一个渲染器只 `GetPropertyBlock` 一次，多条绑定写在同一个属性块上再 `SetPropertyBlock`，因此 `_WobbleX` 与 `_WobbleZ` 不会互相覆盖，同时也不会抹掉其他组件写入的属性。
+- 同一帧内同一个渲染器只 `GetPropertyBlock` 一次，多条绑定写在同一个属性块上再 `SetPropertyBlock`，因此 `_LiquidTiltX` 与 `_LiquidTiltZ` 不会互相覆盖，同时也不会抹掉其他组件写入的属性。
 
 ## 调试视图
 
@@ -204,8 +203,8 @@ Scene 视图里会画出：
 
 | 通道 | 属性 | 缩放 |
 | --- | --- | --- |
-| 液面斜率 X | `_WobbleX` | 2.4 |
-| 液面斜率 Z | `_WobbleZ` | 2.4 |
+| 液面斜率 X | `_LiquidTiltX` | 2.4 |
+| 液面斜率 Z | `_LiquidTiltZ` | 2.4 |
 
 缩放 1 表示通道值就是液面真实斜率 `tan θ`。2.4 是按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定出来的：
 
@@ -214,9 +213,33 @@ Scene 视图里会画出：
 | 60fps | 0.16073 | 0.44995 | 0.06631 | 2.42 |
 | 30fps | 0.07804 | 0.22620 | 0.06630 | 1.18 |
 
-旧脚本的比值随帧率变化（因为振幅增量没有乘 `dt`），摆锤约束的比值恒为 1。想要物理量纲就把两条绑定的缩放改成 1，想更夸张就调大「最大倾斜角」或缩放。
+旧脚本的比值随帧率变化（因为振幅增量没有乘 `dt`），摆锤约束的比值恒为 1。**新写的液面 shader 如果把 `_LiquidTiltX` / `_LiquidTiltZ` 直接当斜率用，把两条绑定的缩放改成 1**；2.4 只在 shader 侧沿用旧 shader 那套量纲时才有意义。
 
-预设同时会把参数设成适合液面的组合：
+## 接入 shader
+
+约束输出的是「液面在世界里应该怎么倾斜」，所以 shader 侧最省事的接法是**在世界空间构造液面平面**，而不是像旧 shader 那样拿物体空间的顶点分量去凑：
+
+```hlsl
+// _LiquidTiltX / _LiquidTiltZ = 沿世界 X / 世界 Z 的斜率 tanθ，直接来自 TiltX / TiltZ 通道
+// _LiquidHeightOffset = 液面相对高度偏移，单位是世界单位（米），可接「伸长量」通道
+float3 worldOffset = WorldPosition - objectOriginWorld;
+float surfaceHeight = worldOffset.y
+                    + _LiquidTiltX * worldOffset.x
+                    + _LiquidTiltZ * worldOffset.z
+                    + _LiquidHeightOffset;
+float clipValue = fillRemap + surfaceHeight / objectScale.y + waveTerm;
+clip(clipValue - 0.5);
+```
+
+三个要点：
+
+1. **高度项要除以物体缩放**（世界米 → 物体空间单位，和原来一致），但**倾斜项不要重复除**：倾斜项本来就乘在世界偏移上，再除一次缩放会让摆动强度小两个数量级——旧 shader 的 `_WobbleX` / `_WobbleZ` 就是因为这个在 98 倍缩放的液面物体上基本失效。
+2. **两个倾斜轴都要取水平方向**：旧 shader 里 `RotateAroundAxis(v, (-1,0,0), 90°)` 得到 `(v.x, v.z, -v.y)`，y 槽落到了高度分量上，所以 `_WobbleZ` 只能整体升降液面、做不出第二个倾斜方向。按上面的世界空间写法就不存在这个问题。
+3. **高度偏移用世界单位（米）**，这样可以直接接「伸长量」通道，缩放填 1。
+
+> 旧 shader 的改动已经回退，这里只是接法规格：新 shader 按上面写，两条绑定的属性名用 `_LiquidTiltX` / `_LiquidTiltZ` 即可。
+
+## 水瓶液面预设的其余参数
 
 | 参数 | 值 | 理由 |
 | --- | --- | --- |

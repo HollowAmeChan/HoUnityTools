@@ -151,7 +151,7 @@ namespace Hollow.HoUnityTools.Constraints
         private bool includeChildRenderers = true;
 
         [SerializeField]
-        private string propertyName = "_WobbleX";
+        private string propertyName = "_LiquidTiltX";
 
         [Header("Shader Global")]
         [SerializeField]

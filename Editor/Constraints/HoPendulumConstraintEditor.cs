@@ -9,8 +9,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     internal sealed class HoPendulumConstraintEditor : UnityEditor.Editor
     {
         /// <summary>
-        /// 水瓶液面预设的斜率缩放。缩放 1 表示通道值就是液面真实斜率 tanθ；
-        /// 这里按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定（旧/新 ≈ 2.42）。
+        /// 水瓶液面预设的斜率缩放。1 表示通道值就是液面真实斜率 tanθ；
+        /// 2.4 是按 60fps 下旧 Wobble 脚本在代表手持运动上的 RMS 标定的（旧/新 ≈ 2.42），
+        /// 只有当 shader 侧的摆动项用法与旧 shader 一致时才有意义。
+        /// 新写的液面 shader 如果把 _LiquidTiltX/_LiquidTiltZ 当斜率用，把它改成 1。
         /// </summary>
         private const float BottleTiltScale = 2.4f;
 
@@ -612,7 +614,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             element.FindPropertyRelative("target").enumValueIndex = (int)HoPendulumBindingTarget.RendererProperty;
             element.FindPropertyRelative("scale").floatValue = 1.0f;
             element.FindPropertyRelative("bias").vector3Value = Vector3.zero;
-            element.FindPropertyRelative("propertyName").stringValue = "_WobbleX";
+            element.FindPropertyRelative("propertyName").stringValue = "_LiquidTiltX";
             element.FindPropertyRelative("includeChildRenderers").boolValue = true;
             element.FindPropertyRelative("renderers").arraySize = 0;
         }
@@ -764,16 +766,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 constraint.ClearBindings();
                 constraint.AddRendererPropertyBinding(
                     HoPendulumChannel.TiltX,
-                    "_WobbleX",
+                    "_LiquidTiltX",
                     BottleTiltScale,
                     Vector3.zero,
-                    "液面摆动 X");
+                    "液面倾斜 X");
                 constraint.AddRendererPropertyBinding(
                     HoPendulumChannel.TiltZ,
-                    "_WobbleZ",
+                    "_LiquidTiltZ",
                     BottleTiltScale,
                     Vector3.zero,
-                    "液面摆动 Z");
+                    "液面倾斜 Z");
                 EditorUtility.SetDirty(constraint);
             }
 
