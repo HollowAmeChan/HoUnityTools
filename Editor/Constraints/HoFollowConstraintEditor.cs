@@ -11,6 +11,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty updateMode;
         private SerializedProperty evaluateInEditMode;
         private SerializedProperty initializeOnEnable;
+        private SerializedProperty space;
         private SerializedProperty hasInitialTransform;
         private SerializedProperty initialLocalPosition;
         private SerializedProperty initialLocalRotation;
@@ -66,28 +67,29 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent UpdateModeLabel = new GUIContent("更新时机", "约束求值发生在哪个 Unity 更新阶段。");
         private static readonly GUIContent EvaluateInEditModeLabel = new GUIContent("编辑模式求值", "未进入播放模式时也持续更新。");
         private static readonly GUIContent InitializeOnEnableLabel = new GUIContent("启用时重置锚点", "组件启用时用当前 Transform 作为锁定与跟随的初始锚点。");
+        private static readonly GUIContent SpaceLabel = new GUIContent("坐标系", "本地 = 锚点（父级）坐标系，父级运动刚性传递；世界 = 旧行为，父级运动会进入阻尼。");
         private static readonly GUIContent InitialLocalPositionLabel = new GUIContent("初始位置", "保存的本地初始位置。");
         private static readonly GUIContent InitialLocalRotationLabel = new GUIContent("初始旋转", "保存的本地初始旋转。");
         private static readonly GUIContent InitialLocalScaleLabel = new GUIContent("初始缩放", "保存的本地初始缩放。");
-        private static readonly GUIContent PositionFollowLabel = new GUIContent("位置跟随", "0 为保持锚点，1 为完全贴近目标位置。");
-        private static readonly GUIContent RotationFollowLabel = new GUIContent("旋转跟随", "0 为保持锚点，1 为完全贴近目标旋转。");
-        private static readonly GUIContent ResponseLabel = new GUIContent("响应", "收敛速度。值越大，越快追上目标。");
-        private static readonly GUIContent OvershootLabel = new GUIContent("超调", "增加甩过头再回弹的风格化运动。");
-        private static readonly GUIContent MaxVelocityLabel = new GUIContent("最大速度", "0 表示不限制线速度。");
-        private static readonly GUIContent MaxAngularVelocityLabel = new GUIContent("最大角速度", "0 表示不限制角速度，单位为度/秒。");
+        private static readonly GUIContent PositionFollowLabel = new GUIContent("位置跟随", "0 为保持锚点，1 为完全贴近目标位置，取值在锚点坐标系里。");
+        private static readonly GUIContent RotationFollowLabel = new GUIContent("旋转跟随", "0 为保持锚点，1 为完全贴近目标旋转，取值在锚点坐标系里。");
+        private static readonly GUIContent ResponseLabel = new GUIContent("响应", "收敛速度。值越大，越快追上目标；父级运动不进入这里。");
+        private static readonly GUIContent OvershootLabel = new GUIContent("超调", "增加甩过头再回弹的风格化运动，基于相对速度。");
+        private static readonly GUIContent MaxVelocityLabel = new GUIContent("最大速度", "0 表示不限制。只夹软跟随的修正速度，不夹父级运动。");
+        private static readonly GUIContent MaxAngularVelocityLabel = new GUIContent("最大角速度", "0 表示不限制，单位为度/秒，同样只夹相对转动。");
         private static readonly GUIContent RotationModeLabel = new GUIContent("旋转模式", "目标旋转的解释方式。");
         private static readonly GUIContent KeepHorizonLabel = new GUIContent("保持水平", "忽略目标俯仰和翻滚，适合需要稳定朝向的跟随物。");
         private static readonly GUIContent FollowPitchLabel = new GUIContent("跟随俯仰");
         private static readonly GUIContent FollowYawLabel = new GUIContent("跟随偏航");
         private static readonly GUIContent FollowRollLabel = new GUIContent("跟随翻滚");
         private static readonly GUIContent LimitEnabledLabel = new GUIContent("启用限制");
-        private static readonly GUIContent LimitShapeLabel = new GUIContent("限制形状");
+        private static readonly GUIContent LimitShapeLabel = new GUIContent("限制形状", "形状在锚点坐标系里：球体与坐标系朝向无关，盒体/圆柱跟着坐标系转。");
         private static readonly GUIContent LimitRadiusLabel = new GUIContent("半径");
         private static readonly GUIContent LimitBoxSizeLabel = new GUIContent("盒体尺寸");
         private static readonly GUIContent LimitCylinderHeightLabel = new GUIContent("圆柱高度");
         private static readonly GUIContent LimitSoftnessLabel = new GUIContent("柔和度");
         private static readonly GUIContent LimitClampLabel = new GUIContent("硬夹取");
-        private static readonly GUIContent OffsetModeLabel = new GUIContent("偏移空间");
+        private static readonly GUIContent OffsetModeLabel = new GUIContent("偏移空间", "本地 = 目标自身轴并含目标缩放；世界 = 世界方向的位移。");
         private static readonly GUIContent PositionOffsetLabel = new GUIContent("位置偏移");
         private static readonly GUIContent RotationOffsetLabel = new GUIContent("旋转偏移");
         private static readonly GUIContent DrawGizmosLabel = new GUIContent("显示 Gizmo");
@@ -133,6 +135,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             updateMode = Find("updateMode");
             evaluateInEditMode = Find("evaluateInEditMode");
             initializeOnEnable = Find("initializeOnEnable");
+            space = Find("space");
             hasInitialTransform = Find("hasInitialTransform");
             initialLocalPosition = Find("initialLocalPosition");
             initialLocalRotation = Find("initialLocalRotation");
@@ -263,9 +266,20 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawFollowSection()
         {
             string summary = "位置 " + HoConstraintEditorSectionGui.FloatSummary(positionFollow) + " / 旋转 " + HoConstraintEditorSectionGui.FloatSummary(rotationFollow);
+            if (IsWorldSpace())
+            {
+                summary += " / 世界坐标系";
+            }
+
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref followExpanded, "跟随", summary, FollowColor))
             {
                 return;
+            }
+
+            DrawEnumPopup(space, SpaceLabel, SpaceLabels, TwoEnumValues);
+            if (IsWorldSpace())
+            {
+                EditorGUILayout.HelpBox("世界坐标系是旧行为：解算状态在世界空间，父级运动会进入阻尼，表现为相对父级的滑移。跟点与目标共用父级时请改用「本地」。", MessageType.Warning);
             }
 
             EditorGUILayout.Slider(positionFollow, 0.0f, 1.0f, PositionFollowLabel);
@@ -285,9 +299,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.LabelField("位置锁定", EditorStyles.boldLabel);
-            EditorGUILayout.Slider(lockX, 0.0f, 1.0f, new GUIContent("锁定 X"));
-            EditorGUILayout.Slider(lockY, 0.0f, 1.0f, new GUIContent("锁定 Y"));
-            EditorGUILayout.Slider(lockZ, 0.0f, 1.0f, new GUIContent("锁定 Z"));
+            EditorGUILayout.Slider(lockX, 0.0f, 1.0f, new GUIContent("锁定 X", "锁的是锚点坐标系的 X 轴。"));
+            EditorGUILayout.Slider(lockY, 0.0f, 1.0f, new GUIContent("锁定 Y", "锁的是锚点坐标系的 Y 轴。"));
+            EditorGUILayout.Slider(lockZ, 0.0f, 1.0f, new GUIContent("锁定 Z", "锁的是锚点坐标系的 Z 轴。"));
 
             EditorGUILayout.Space(3.0f);
             EditorGUILayout.LabelField("旋转锁定", EditorStyles.boldLabel);
@@ -404,10 +418,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             using (new EditorGUI.DisabledScope(true))
             {
+                EditorGUILayout.LabelField("解算坐标系", constraint.UsesAnchorSpace ? "父级本地空间" : "世界空间");
                 EditorGUILayout.Vector3Field("当前位置", constraint.CurrentPosition);
-                EditorGUILayout.Vector3Field("速度", constraint.Velocity);
-                EditorGUILayout.Vector3Field("角速度", constraint.AngularVelocity);
+                EditorGUILayout.Vector3Field("相对位置", constraint.CurrentFramePosition);
+                EditorGUILayout.FloatField("相对偏移 (m)", Vector3.Distance(constraint.CurrentFramePosition, constraint.DesiredFramePosition));
+                EditorGUILayout.FloatField("相对角度误差 (°)", Quaternion.Angle(constraint.CurrentFrameRotation, constraint.DesiredFrameRotation));
+                EditorGUILayout.Vector3Field("相对速度", constraint.Velocity);
+                EditorGUILayout.Vector3Field("相对角速度", constraint.AngularVelocity);
             }
+
+            EditorGUILayout.LabelField("父级匀速运动时「相对偏移 / 相对角度误差」应恒为 0；不为 0 说明还在世界空间里软跟随。", EditorStyles.wordWrappedMiniLabel);
         }
 
         private void DrawActionButtons()
@@ -504,6 +524,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private void SetDefaultsForAllPresets()
         {
+            SetEnum(space, HoFollowConstraintSpace.Local);
             SetFloat(positionFollow, 1.0f);
             SetFloat(rotationFollow, 1.0f);
             SetFloat(response, 10.0f);
@@ -594,6 +615,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private string GetOffsetModeSummary()
         {
             return GetPopupSummary(offsetMode, SpaceLabels);
+        }
+
+        private bool IsWorldSpace()
+        {
+            return space != null && (HoFollowConstraintSpace)space.enumValueIndex == HoFollowConstraintSpace.World;
         }
 
         private static string GetPopupSummary(SerializedProperty property, GUIContent[] labels)

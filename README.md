@@ -33,4 +33,5 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 
 - [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
 - [摆锤约束设计与验证](docs/PENDULUM_CONSTRAINT.md)
+- [跟随约束坐标系规则](docs/FOLLOW_CONSTRAINT.md)
 - [旧 Hotools 源码迁移说明](docs/MIGRATION.md)
