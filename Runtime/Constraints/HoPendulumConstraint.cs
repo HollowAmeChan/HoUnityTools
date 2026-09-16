@@ -48,6 +48,13 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>角速度低通的时间常数（毫秒）。</summary>
         private const float AngularVelocitySmoothingMilliseconds = 30.0f;
 
+        /// <summary>
+        /// 超过这个帧间隔就认为中间发生了"暂停"（切出窗口、编辑器卡顿、域重载、GC 长停），
+        /// 运动估计器要丢掉历史重新起步。否则二次拟合会跨过那个大洞，
+        /// 编出一个几十 m/s² 的假加速度，液面会突然抽一下。
+        /// </summary>
+        private const float MaximumSampleDelta = 0.25f;
+
         /// <summary>世界斜率输出的角度上限（度）。液面接近竖直时斜率发散，这里只做量程保护。</summary>
         private const float MaxWorldTiltDegrees = 80.0f;
 
@@ -269,6 +276,7 @@ namespace Hollow.HoUnityTools.Constraints
         private double lastUpdateTime;
         private double motionTime;
         private bool initialized;
+        private bool warnedRecovery;
         private Vector3[] motionTrail;
         private int motionTrailIndex;
         private int motionTrailCount;
@@ -491,6 +499,7 @@ namespace Hollow.HoUnityTools.Constraints
             motionEstimator.EnsureCapacity(estimationWindow);
             motionEstimator.Reset();
             motionTime = 0.0;
+            warnedRecovery = false;
             if (drive != null)
             {
                 motionEstimator.Push(drive.position, motionTime);
@@ -663,6 +672,11 @@ namespace Hollow.HoUnityTools.Constraints
             anchorRotation = drive.rotation;
 
             solver.Step(BuildSolverInput(), safeDeltaTime, out solverOutput);
+            if (solverOutput.recovered)
+            {
+                WarnRecoveredOnce();
+            }
+
             UpdateDerivedPose();
             ApplyBindings(drive);
             AddMotionTrailPoint(bobPosition);
@@ -712,6 +726,14 @@ namespace Hollow.HoUnityTools.Constraints
             // 时间戳用累计的 deltaTime，而不是实时时钟：Evaluate(dt) 被脚本以固定步长驱动时，
             // 两者必须同一个时间基准，否则拟合出来的加速度会被真实帧间隔污染。
             motionEstimator.EnsureCapacity(estimationWindow);
+
+            // 帧间隔大得不像话 = 中间暂停过，历史样本跨过了一个大洞，拟合出来的速度/加速度没有意义。
+            // 丢掉历史、只留当前这一帧，等价于"暂停期间没有运动"。
+            if (deltaTime > MaximumSampleDelta)
+            {
+                motionEstimator.Reset();
+            }
+
             motionEstimator.Push(position, motionTime);
             motionEstimator.Estimate();
 
@@ -839,18 +861,33 @@ namespace Hollow.HoUnityTools.Constraints
             liquidTiltX = Mathf.Atan2(-liquidNormal.x, liquidNormal.y) * Mathf.Rad2Deg;
             liquidTiltZ = Mathf.Atan2(-liquidNormal.z, liquidNormal.y) * Mathf.Rad2Deg;
 
-            // 翻过 90° 之后平面法线朝本地 −Y：倾斜角继续走到 ±180，此时 tan(±180°)=0 仍是水平面，
+            // 液面高度：翻过 90° 之后平面法线朝本地 −Y：倾斜角继续走到 ±180，此时 tan(±180°)=0 仍是水平面，
             // 「液体在哪一侧」由 _LiquidFill 取反表达（见下面的 fillAmount）。
             inverted = liquidNormal.y < 0.0f ? 1.0f : 0.0f;
             fillOutput = inverted > 0.5f ? 1.0f - fillAmount : fillAmount;
+
+            // 兜底：法线非有限时按"正立"处理。解算器已经会自愈（见 HoPendulumSolver.Step 的
+            // recovered 分支），这里是最后一道防线 —— 绝不让 NaN 通过绑定写进材质属性，
+            // 那会让用户看到锁死的 NaN，而且只能重进 Play 才恢复。
+            if (float.IsNaN(liquidNormal.x) || float.IsInfinity(liquidNormal.x) ||
+                float.IsNaN(liquidNormal.y) || float.IsInfinity(liquidNormal.y) ||
+                float.IsNaN(liquidNormal.z) || float.IsInfinity(liquidNormal.z))
+            {
+                WarnRecoveredOnce();
+                liquidNormal = Vector3.up;
+                inverted = 0.0f;
+                fillOutput = fillAmount;
+            }
 
             bobDistance = Mathf.Max(0.0f, length + solverOutput.radialOffset);
 
             // 归一化成 ±1 斜坡：径向弹簧静止时为 0，过载 +1，失重 -1。
             // 夹取到 ±1 是为了让 shader 侧拿到的一定是约定好的量程内信号（弹簧本身会过冲）。
+            // 注意 Mathf.Clamp 对 NaN 是无效的（NaN 比较恒为 false，会原样穿过），所以这里再兜一次。
             if (radialEnabled && restElongation > 0.000001f)
             {
-                normalizedStretch = Mathf.Clamp(solverOutput.radialOffset / restElongation, -1.0f, 1.0f);
+                float stretch = solverOutput.radialOffset / restElongation;
+                normalizedStretch = HoPendulumSolverInput.SanitizeFloat(Mathf.Clamp(stretch, -1.0f, 1.0f));
             }
             else
             {
@@ -1061,6 +1098,24 @@ namespace Hollow.HoUnityTools.Constraints
             rendererBlocks.Clear();
             rendererOrder.Clear();
             rendererTouched.Clear();
+        }
+
+        /// <summary>
+        /// 非有限值只提醒一次，避免每帧刷屏。给用户的信息要能直接指向原因：
+        /// 参数把积分器推到发散（例如静止伸长极小 + 最大子步很大），或者外部直接改了状态。
+        /// </summary>
+        private void WarnRecoveredOnce()
+        {
+            if (warnedRecovery)
+            {
+                return;
+            }
+
+            warnedRecovery = true;
+            Debug.LogWarning(
+                "[HoUnityTools] 摆锤约束检测到非有限值并已就地复位（液面会瞬间回到平衡位姿）。" +
+                "常见原因：静止伸长过小（径向弹簧过硬）而最大子步过大，或脚本直接改了解算状态。",
+                this);
         }
 
         /// <summary>毫秒时间常数的一阶低通系数。</summary>

@@ -178,6 +178,9 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>本帧是否触及最大倾斜角。</summary>
         public bool saturated;
 
+        /// <summary>本帧是否因为状态出现非有限值而被就地复位（NaN 自愈，见 Step）。</summary>
+        public bool recovered;
+
         /// <summary>倾斜方向（锚点本地坐标系，YZ 平面内的单位向量，指向液面抬升的一侧）。</summary>
         public Vector2 tiltDirection;
     }
@@ -204,6 +207,18 @@ namespace Hollow.HoUnityTools.Constraints
         public const float MinMaxAngle = 0.01f;
         public const float MaxMaxAngle = 89.0f;
         public const int MaxSubSteps = 64;
+
+        /// <summary>子步的稳定系数：半隐式欧拉要求 ω·h &lt; 2，这里取 0.5，留 4 倍余量。</summary>
+        private const float SubStepStabilityFactor = 0.5f;
+
+        /// <summary>子步长下限，避免极高频参数把子步数顶爆。</summary>
+        private const float MinEffectiveStep = 0.0001f;
+
+        /// <summary>径向偏移的安全边界 = 静止伸长的这么多倍（再取一个绝对下限）。</summary>
+        private const float MaxRadialOffsetFactor = 12.0f;
+
+        /// <summary>径向偏移安全边界的绝对下限（米）。静止伸长很小时不至于把量程卡得过死。</summary>
+        private const float MaxRadialOffsetMinimum = 0.1f;
 
         private const float TwoPi = 6.28318530718f;
         private const float Epsilon = 0.00000001f;
@@ -491,9 +506,27 @@ namespace Hollow.HoUnityTools.Constraints
             float radialStiffness = radialOmega * radialOmega;
             float radialDamping = 2.0f * input.radialDampingRatio * radialOmega;
             float radialEquilibrium = radialActive ? input.restElongation * (effectiveGravity - 1.0f) : 0.0f;
+            float radialLimit = radialActive
+                ? Mathf.Max(input.restElongation * MaxRadialOffsetFactor, MaxRadialOffsetMinimum)
+                : 0.0f;
 
-            int stepCount = Mathf.Clamp(Mathf.CeilToInt(delta / input.maxStep), 1, MaxSubSteps);
-            float step = delta / stepCount;
+            // 子步上限要同时满足两件事：
+            //   ① 不超过用户给的 maxStep；
+            //   ② 不超过这个刚度的数值稳定边界（半隐式欧拉要求 ω·h < 2）。
+            // 只钳「子步数」是不够的：切出窗口再回来、编辑器卡顿、域重载之后，
+            // 一帧的 delta 可以是几秒，step = delta / 64 会远大于 maxStep，
+            // 径向弹簧（ω_r = √(g/ΔL) ≈ 25.6 rad/s）按 (ω_r·h)² 几何增长，
+            // 64 步就溢出成 Infinity，再靠 Infinity − Infinity 变成 NaN。
+            // 角度那一路有 ClampDeviation 兜着，径向那一路没有 —— 所以先炸的正是 _LiquidOffset。
+            float stiffest = Mathf.Max(omega, radialOmega);
+            float stableStep = stiffest > 0.0f ? SubStepStabilityFactor / stiffest : input.maxStep;
+            float effectiveMaxStep = Mathf.Max(MinEffectiveStep, Mathf.Min(input.maxStep, stableStep));
+
+            // 长帧只模拟这么多：宁可让这一帧的动画慢一点，也不让积分器超步长发散。
+            float simulatedDelta = Mathf.Min(delta, effectiveMaxStep * MaxSubSteps);
+
+            int stepCount = Mathf.Clamp(Mathf.CeilToInt(simulatedDelta / effectiveMaxStep), 1, MaxSubSteps);
+            float step = simulatedDelta / stepCount;
             bool saturated = false;
 
             if (step > 0.0f)
@@ -509,10 +542,27 @@ namespace Hollow.HoUnityTools.Constraints
                     {
                         radialVelocity += (-radialStiffness * (radialOffset - radialEquilibrium) - radialDamping * radialVelocity) * step;
                         radialOffset += radialVelocity * step;
+
+                        // 径向没有 ClampDeviation 那样的物理夹取，必须自己兜住量程
+                        ClampRadialOffset(radialLimit);
                     }
 
                     saturated |= ClampDeviation(equilibriumX, equilibriumZ, maxAngleRadians, input.saturationSoftness);
                 }
+            }
+
+            // 兜底自愈：状态里一旦留下非有限值，之后每帧都会重算出 NaN，用户只能重进 Play
+            // （OnEnable -> ResetState）才恢复。这里就地回到平衡位姿，让这一帧的输出就已经是好的。
+            bool recovered = false;
+            if (!HasFiniteState())
+            {
+                angleX = equilibriumX;
+                angleZ = equilibriumZ;
+                angularVelocityX = 0.0f;
+                angularVelocityZ = 0.0f;
+                radialOffset = radialEquilibrium;
+                radialVelocity = 0.0f;
+                recovered = true;
             }
 
             if (!radialActive)
@@ -554,9 +604,49 @@ namespace Hollow.HoUnityTools.Constraints
             output.radialEquilibrium = radialEquilibrium;
             output.radialVelocity = radialVelocity;
             output.saturated = saturated;
+            output.recovered = recovered;
 
             Vector2 tilt = new Vector2(Mathf.Sin(angleX), Mathf.Sin(angleZ));
             output.tiltDirection = tilt.sqrMagnitude > Epsilon ? tilt.normalized : Vector2.zero;
+        }
+
+        /// <summary>
+        /// 径向偏移的物理量程夹取。角度那一路有 <see cref="ClampDeviation"/>（按最大倾斜角软饱和），
+        /// 径向没有对应的物理上限，于是一旦数值发散就会一路涨到 Infinity —— 这里补上边界，
+        /// 并把继续朝外的速度清零（否则会贴在边界上继续加速，形成"钉住还在抖"）。
+        /// </summary>
+        private void ClampRadialOffset(float limit)
+        {
+            if (radialOffset > limit)
+            {
+                radialOffset = limit;
+                if (radialVelocity > 0.0f)
+                {
+                    radialVelocity = 0.0f;
+                }
+            }
+            else if (radialOffset < -limit)
+            {
+                radialOffset = -limit;
+                if (radialVelocity < 0.0f)
+                {
+                    radialVelocity = 0.0f;
+                }
+            }
+        }
+
+        /// <summary>状态是否全部有限。NaN / Infinity 一旦进入状态就会自我复制，必须在源头拦。</summary>
+        private bool HasFiniteState()
+        {
+            return IsFinite(angleX) && IsFinite(angleZ) &&
+                   IsFinite(angularVelocityX) && IsFinite(angularVelocityZ) &&
+                   IsFinite(radialOffset) && IsFinite(radialVelocity) &&
+                   IsFinite(phase);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         /// <summary>
