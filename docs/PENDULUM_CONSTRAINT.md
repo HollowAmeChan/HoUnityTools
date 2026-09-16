@@ -273,10 +273,13 @@ Scene 视图里会画出：
 所以 shader 侧按几何量自动翻转：
 
 ```hlsl
-float3 gradient = float3(tx, -1.0, tz);          // ∇d
-float  sign     = dot(gradient, -lilLiquidUpOS()) < 0.0 ? -1.0 : 1.0;
-return d * sign + 波纹 + _LiquidOffset;
+float3 worldDownOS   = -lilLiquidWorldUpOS();                // 物体空间里的世界向下（矩阵第 1 行）
+float3 planeGradient = float3(tx, -1.0, tz);                 // ∇d（物体空间）
+float  sign          = dot(planeGradient, worldDownOS) < 0.0 ? -1.0 : 1.0;
+return d * sign + lilLiquidWave(p) + lilLiquidOffsetValue();
 ```
+
+⚠️ 参与点积的两个向量必须在**同一个坐标系**里。`∇d` 是物体空间的，所以「世界向下」要用 `lilLiquidWorldUpOS()`（物体→世界矩阵的**第 1 行**）取，而**不是** `lilLiquidUpOS()`（第 1 **列**，那是"物体的 up 在世界空间"，只能和世界法线点积）。用错的话点积退化成 `cos(2φ)/cosφ`，它的零点在 **φ = 45°** —— 容器刚转到 45° 液面就提前倒转了（实测症状）。这个错误在 0°/90°/180° 时行与列恰好重合，所以正立和完全倒置都看不出来，只在中间角度暴露。
 
 正立时 `sign` 恒为 `+1`（`∇d · 世界向下 = 1/n.y > 0`），所以对正立材质**完全无影响**；只有 `n.y < 0` 时才翻转，而且翻转发生在液面本身接近竖直的那一瞬间（±90° 附近 `tan` 发散、液面退化成一条线），看不到跳变。
 
@@ -297,7 +300,13 @@ float fill = constraint.Inverted > 0.5f ? 1f - pourFill : pourFill;
 
 > ⚠️ 另外两个坑：①**别直接喂 `eulerAngles`**，它是旋转角不是坡度，`eulerAngles.x = 180°` 会被 Range 钳到 90°、`tan(90°)` 发散；②倒置时保持 `_LiquidTiltScale = 1`，否则 `tan(180° × scale)` 不再是 0。
 
-验证方式（`HoPendulumHarness liquid`）：把容器绕 Z 轴从 0° 逐度转到 180°，对液面模型做网格采样，检查四个不变式——倾角连续、平面始终世界水平、液体始终在世界向下的一侧、液体占比连续。修正前的代码会从 91° 起挂错边（复现实测 bug），修正后 181 个角度全部通过。
+验证方式（`HoPendulumHarness liquid`）：把容器绕 Z 轴从 0° 逐度转到 180°，对液面模型做网格采样，检查四个不变式——倾角连续、平面始终世界水平、液体始终在世界向下的一侧、液体占比连续。两个"对照"把两类错误各自的症状钉住了：
+
+| 版本 | 内部换边 | 症状 |
+| --- | --- | --- |
+| 正确 | `dot(∇d, 第 1 行)` | 181 个角度全部通过，90° 处翻转 |
+| 不做内部换边 | 恒取 `d > 0` | **从 91° 起挂错边**（"倒转时液面是倒过来的"） |
+| 坐标系混用 | `dot(∇d, 第 1 列)` | **45° 就提前翻转**（"45 度就开始倒转了"） |
 
 ### 还可以接的第四个通道
 
