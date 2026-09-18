@@ -15,6 +15,39 @@ FastBuild 面向一个已经在 Unity 中完成配置的角色 Prefab。它只�
 - Unity 2021.3.45f2
 - 角色输出目录：Warudo 数据目录下的 `StreamingAssets/Characters`
 
+## 安装方式会改变构建结果（重要）
+
+依赖列表里的默认勾选取决于“这段脚本源码是否属于本工具”。早期版本把包目录写死成
+`Packages/com.hollow.hounitytools/`，于是**同一个 Prefab、同一份代码，安装方式不同会得到不同结果**：
+
+| 安装方式 | Unity 里的资源路径 | 早期版本是否命中 |
+| --- | --- | --- |
+| `manifest.json` 里 `file:` 指向本地目录 | `Packages/com.hollow.hounitytools/...` | 命中 |
+| Package Manager 里 Add package from git URL | `Packages/com.hollow.hounitytools/...` | 命中 |
+| 下载 GitHub ZIP 解压后放进 `Packages/` | `Packages/HoUnityTools-master/...` | **不命中** |
+
+不命中的后果是**完全静默**的，没有任何报错：
+
+1. 依赖列表里 `HoAuxRig` 这类运行时脚本默认不勾选；
+2. FastBuild 按勾选复制源码，于是一个源码都不复制；
+3. UMod 没有源码可编译，产物里**根本没有 `assemblymodules.dat`**；
+4. 临时 Prefab 没有重绑脚本，每个组件都保留编辑器侧的 `Assembly-CSharp` 引用；
+5. 产出的 Mod 在 Warudo 里全是 Missing Script。
+
+现在改为按包解析出来的**实际根路径**判断：优先 `PackageInfo.FindForAssembly`，失败则按本包
+`Editor/HoUnityTools.Editor.asmdef` 的位置反推包根。三种安装方式结果一致，不再依赖目录名；
+`IsHostProvidedRuntimeScript` 对 Warudo SDK 同样按包名而不是目录名判断。
+
+遇到异常时可以这样自查：
+
+- 依赖面板标题出现 `N 个不编译`、并弹出报错色提示框 → 有组件不会随 Mod 编译。
+- 产物复核报告出现 `缺少条目：assemblymodules.dat` → 这次构建根本没有编译 Mod 脚本。
+- 产物里搜不到 `umod-compiled`，却能搜到大量 `Assembly-CSharp, Version=`。
+
+一个真实的失败样本（手动解压安装、UMod 0.14.5）长这样：产物只有 3 个条目，`umod-compiled`
+出现 0 次，`Assembly-CSharp, Version=` 出现 71 次，而正常产物里 `umod-compiled` 记录正好也是 71 条
+—— Prefab 序列化完全一致，只差程序集解析。
+
 ## Warudo 的打包模型
 
 Warudo 的普通 Mod 是 `Assets` 下的一个 Mod 文件夹。Prefab、材质、贴图、网格和运行时脚本都必须位于这个文件夹内，UMod 扫描该目录并将引用资源写入 `.warudo`。角色 Mod 的根 Prefab 固定命名为 `Character`，构建结果放入 `Characters` 数据目录。
@@ -238,6 +271,8 @@ not in the .csproj file and will not be compiled
 - 用新 GUID 替换 Prefab 的 `m_Script`：破坏 UMod 按完整类型名链接的契约。
 - 依赖额外 asmdef 隔离临时脚本：多 Mod 项目中可能被 UMod 选入错误的 `.csproj`。
 - 把脚本复制闭包假设为自动完成：当前预览只保证直接挂载脚本，辅助源码必须人工审查。
+- 用固定目录名判断脚本是否属于本工具：`file:` 与 git 安装落在 `Packages/<包名>/`，
+  手动解压却落在 `Packages/<仓库名>/`，写死目录名会让默认勾选静默失效并产出 Missing Script 的产物。
 
 ## 构建前检查
 

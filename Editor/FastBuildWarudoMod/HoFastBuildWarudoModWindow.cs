@@ -2103,36 +2103,63 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return "项目运行时脚本：勾选后会生成独立临时副本。";
         }
 
-        /// <summary>本包自己的 PackageInfo；按包名判断归属，避免依赖目录名。</summary>
-        private static bool ownPackageResolved;
-        private static UnityEditor.PackageManager.PackageInfo ownPackageInfo;
+        /// <summary>
+        /// 本包在工程里的资源根路径。file: 依赖、git url 依赖、手动解压到 Packages/ 下改名，
+        /// 三种安装方式解析出来的路径都不一样，所以绝不能写死目录名。
+        /// </summary>
+        private static string ownPackageRoot;
+        private static bool ownPackageRootResolved;
 
-        private static UnityEditor.PackageManager.PackageInfo OwnPackageInfo
+        private static string OwnPackageRoot
         {
             get
             {
-                if (!ownPackageResolved)
+                if (ownPackageRootResolved)
+                    return ownPackageRoot;
+
+                ownPackageRootResolved = true;
+                try
                 {
-                    ownPackageResolved = true;
-                    try
-                    {
-                        ownPackageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                    UnityEditor.PackageManager.PackageInfo info =
+                        UnityEditor.PackageManager.PackageInfo.FindForAssembly(
                             typeof(HoFastBuildWarudoModWindow).Assembly);
-                    }
-                    catch (Exception)
+                    if (info != null && !string.IsNullOrEmpty(info.assetPath))
                     {
-                        ownPackageInfo = null;
+                        ownPackageRoot = NormalizeAssetPath(info.assetPath).TrimEnd('/');
+                        return ownPackageRoot;
                     }
                 }
+                catch (Exception)
+                {
+                    // 落到下面的兜底推断。
+                }
 
-                return ownPackageInfo;
+                // 兜底：按本包 Editor asmdef 的位置反推包根，不依赖 PackageManager。
+                try
+                {
+                    string[] guids = AssetDatabase.FindAssets("HoUnityTools.Editor t:AssemblyDefinitionAsset");
+                    for (int i = 0; i < guids.Length; i++)
+                    {
+                        string asmdefPath = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guids[i]));
+                        int marker = asmdefPath.IndexOf("/Editor/HoUnityTools.Editor.asmdef", StringComparison.OrdinalIgnoreCase);
+                        if (marker > 0)
+                        {
+                            ownPackageRoot = asmdefPath.Substring(0, marker);
+                            break;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    ownPackageRoot = null;
+                }
+
+                return ownPackageRoot;
             }
         }
 
         /// <summary>
-        /// 判断资产是否属于某个包。比较的是 package.json 里的包名，而不是目录名：
-        /// 手动解压到 Packages/ 下的包可以叫任意名字（例如 Packages/HoUnityTools-master），
-        /// 写死目录名会让整套默认勾选静默失效。
+        /// 判断资产是否属于某个包。比较的是 package.json 里的包名，而不是目录名。
         /// </summary>
         private static bool IsAssetInPackage(string assetPath, string packageName)
         {
@@ -2157,15 +2184,20 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private static bool ShouldCopyScriptByDefault(string path)
         {
-            if (path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            string normalized = NormalizeAssetPath(path);
+            if (normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            UnityEditor.PackageManager.PackageInfo own = OwnPackageInfo;
-            if (own != null && !string.IsNullOrEmpty(own.name))
-                return IsAssetInPackage(path, own.name);
+            string root = OwnPackageRoot;
+            if (!string.IsNullOrEmpty(root))
+            {
+                if (normalized.StartsWith(root.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                return false;
+            }
 
-            // 兜底：拿不到自身包信息时退回约定目录名。
-            return path.StartsWith("Packages/com.hollow.hounitytools/", StringComparison.OrdinalIgnoreCase);
+            // 连包根都推断不出来时，才退回约定目录名。
+            return normalized.StartsWith("Packages/com.hollow.hounitytools/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsHostProvidedRuntimeScript(string path, string typeName)

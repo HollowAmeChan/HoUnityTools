@@ -19,6 +19,8 @@
 
 面板的“Warudo 工作区”一栏可以直接列出、切换、新建、删除 `ExportSettings` 里的工作区（Export Profile），并显示活动工作区的 Mod 名称、作者、版本、资产目录、导出目录和 SDK 校验结果；需要编辑完整字段时可以一键打开 uMod 官方设置窗口。
 
+> **注意**：安装方式会影响 FastBuild 依赖列表的默认勾选。把本包下载成 GitHub ZIP 解压到 `Packages/`（目录名变成 `HoUnityTools-master`）与用 `file:`／git URL 安装，早期的包目录判断只认后者，会静默地不复制任何脚本源码，产出没有任何运行时程序集、组件全是 Missing Script 的 Mod。现版本已改为按包的实际解析路径判断，三种安装方式一致。详见 [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md#安装方式会改变构建结果重要)。
+
 ## 组件
 
 在 Inspector 中使用 `Add Component`，组件路径如下：
