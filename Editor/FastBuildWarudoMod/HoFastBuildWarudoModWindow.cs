@@ -505,8 +505,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 selected = GUI.Toggle(radioRect, entry.isActive, new GUIContent(displayName, tooltip), EditorStyles.radioButton);
 
             string shortPath = FormatWorkspaceAssetPath(entry.modAssetPath);
-            GUI.Label(pathRect, new GUIContent(shortPath, entry.modAssetPath), EditorStyles.miniLabel);
-            GUI.Label(statusRect, new GUIContent(statusText, entry.statusNote ?? string.Empty), statusColumnStyle);
+            GUI.Label(
+                pathRect,
+                new GUIContent(TruncateToWidth(shortPath, EditorStyles.miniLabel, pathRect.width), entry.modAssetPath),
+                EditorStyles.miniLabel);
+            GUI.Label(
+                statusRect,
+                new GUIContent(TruncateToWidth(statusText, statusColumnStyle, statusRect.width), entry.statusNote ?? string.Empty),
+                statusColumnStyle);
 
             if (selected && !entry.isActive)
                 return entry.index;
@@ -1352,14 +1358,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             Rect rowRect = EditorGUILayout.GetControlRect(false, RowControlHeight);
 
             Rect nameRect;
-            Rect referenceRect;
             Rect fileRect;
-            ComputeListColumns(
+            Rect referenceRect;
+            ComputeSubRowColumns(
                 rowRect,
                 FoldColumnWidth + ToggleColumnWidth + ToggleColumnWidth,
                 out nameRect,
-                out referenceRect,
-                out fileRect);
+                out fileRect,
+                out referenceRect);
 
             string displayName = item.found ? item.resourceKey : item.resourceKey + "（未找到）";
             string reference = item.componentReferences == null || item.componentReferences.Count == 0
@@ -1367,14 +1373,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 : item.componentReferences[0];
             if (item.componentReferences != null && item.componentReferences.Count > 1)
                 reference += " +" + (item.componentReferences.Count - 1);
+            string fileName = item.found ? Path.GetFileName(item.assetPath) : "缺少资源";
 
-            GUI.Label(nameRect, new GUIContent(displayName, BuildRuntimeAssetTooltip(item)), EditorStyles.miniLabel);
-            GUI.Label(referenceRect, new GUIContent(reference, reference), statusColumnStyle);
+            GUI.Label(
+                nameRect,
+                new GUIContent(TruncateToWidth(displayName, EditorStyles.miniLabel, nameRect.width), BuildRuntimeAssetTooltip(item)),
+                EditorStyles.miniLabel);
             GUI.Label(
                 fileRect,
                 new GUIContent(
-                    item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
+                    TruncateToWidth(fileName, EditorStyles.miniLabel, fileRect.width),
                     item.found ? item.assetPath : "没有在工程的 Resources 目录里找到这个资源"),
+                EditorStyles.miniLabel);
+            GUI.Label(
+                referenceRect,
+                new GUIContent(TruncateToWidth(reference, EditorStyles.miniLabel, referenceRect.width), reference),
                 EditorStyles.miniLabel);
         }
 
@@ -1419,6 +1432,59 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             sourceRect = new Rect(mountRect.xMax, rowRect.y, sourceWidth, rowRect.height);
         }
 
+        /// <summary>
+        /// 子行把最长的“被谁引用”放在最后一列，让它吃掉剩余宽度并贴右边缘截断，
+        /// 而不是挤在中间列里和下一列叠在一起。
+        /// </summary>
+        private static void ComputeSubRowColumns(
+            Rect rowRect,
+            float leftOffset,
+            out Rect nameRect,
+            out Rect fileRect,
+            out Rect referenceRect)
+        {
+            float available = Mathf.Max(120f, rowRect.width - leftOffset);
+            float referenceWidth = Mathf.Min(SourceColumnWidth + MountColumnWidth, available * 0.5f);
+            float fileWidth = Mathf.Min(SourceColumnWidth, available * 0.3f);
+            float nameWidth = Mathf.Max(40f, available - fileWidth - referenceWidth);
+
+            nameRect = new Rect(rowRect.x + leftOffset, rowRect.y, nameWidth, rowRect.height);
+            fileRect = new Rect(nameRect.xMax, rowRect.y, fileWidth, rowRect.height);
+            referenceRect = new Rect(fileRect.xMax, rowRect.y, referenceWidth, rowRect.height);
+        }
+
+        /// <summary>
+        /// 按实际字宽截断并加省略号。用 CalcSize 而不是给 GUIStyle 开 clipping：
+        /// 带裁剪的样式副本在深色主题下会把文字画成黑色。
+        /// </summary>
+        private static string TruncateToWidth(string value, GUIStyle style, float width)
+        {
+            if (string.IsNullOrEmpty(value) || style == null || width <= 0f)
+                return value ?? string.Empty;
+
+            if (style.CalcSize(new GUIContent(value)).x <= width)
+                return value;
+
+            const string ellipsis = "…";
+            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
+            if (ellipsisWidth > width)
+                return string.Empty;
+
+            int low = 0;
+            int high = value.Length;
+            while (low < high)
+            {
+                int mid = (low + high + 1) / 2;
+                float candidate = style.CalcSize(new GUIContent(value.Substring(0, mid))).x;
+                if (candidate + ellipsisWidth <= width)
+                    low = mid;
+                else
+                    high = mid - 1;
+            }
+
+            return low <= 0 ? ellipsis : value.Substring(0, low) + ellipsis;
+        }
+
         private void DrawScriptPreviewRow(ScriptPreview item)
         {
             Rect rowRect = EditorGUILayout.GetControlRect(false, RowControlHeight);
@@ -1446,17 +1512,24 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             string displayName = string.IsNullOrEmpty(item.typeName)
                 ? Path.GetFileNameWithoutExtension(item.sourcePath)
                 : item.typeName;
-            GUI.Label(nameRect, new GUIContent(displayName, tooltip), EditorStyles.boldLabel);
+            GUI.Label(
+                nameRect,
+                new GUIContent(TruncateToWidth(displayName, EditorStyles.boldLabel, nameRect.width), tooltip),
+                EditorStyles.boldLabel);
 
+            string mount = item.referenceCount > 0 ? item.referenceCount + " 处挂载" : "—";
             GUI.Label(
                 mountRect,
-                new GUIContent(item.referenceCount > 0 ? item.referenceCount + " 处挂载" : "—", tooltip),
+                new GUIContent(TruncateToWidth(mount, statusColumnStyle, mountRect.width), tooltip),
                 statusColumnStyle);
 
             string sourceStatus = item.hostProvided
                 ? "宿主 / " + Path.GetFileName(item.sourcePath)
                 : Path.GetFileName(item.sourcePath);
-            GUI.Label(sourceRect, new GUIContent(sourceStatus, item.sourcePath), EditorStyles.miniLabel);
+            GUI.Label(
+                sourceRect,
+                new GUIContent(TruncateToWidth(sourceStatus, EditorStyles.miniLabel, sourceRect.width), item.sourcePath),
+                EditorStyles.miniLabel);
 
             if (item.showReferencedAssets && item.referencedAssets != null)
             {
