@@ -179,6 +179,8 @@ Compile successful!
 - Mod 元数据：`modinfo.dat` 中是否出现当前 ExportProfile 的 Mod 名称。
 - 运行时类型表：解析 `assemblymodules.dat` 里内嵌 PE 的 ECMA-335 TypeDef 表，
   得到 Mod 程序集实际包含的类型全名（等价于文档里“检查类型表”的人工步骤，不需要反编译工具）。
+- 分发程序集集合：以 `assemblymodules.dat` 里列出的模块名为准，判断组件记录的程序集是否会随 Mod 分发。
+  早先的版本用 `umod-compiled-` 前缀硬编码判断，换 UMod 版本或编译程序集改名就会误报。
 - 组件挂载：扫描 `sharedassets.bin` 中 UMod Linker 为每个 MonoBehaviour 写下的
   `[程序集显示名][类型全名]` 记录，与临时 Prefab 上的组件逐一比对。
 
@@ -189,6 +191,16 @@ Compile successful!
 | `OK` | 组件已链接到本次构建的 Mod 程序集（或确认由 Warudo 宿主程序集提供）。 |
 | `缺失` | 产物里没有该组件的程序集记录，运行时会是 Missing Script。 |
 | `待确认` | 组件记录了非 Mod 程序集，或已链接但类型表里没有该类型，需要人工判断。 |
+
+如果 `assemblymodules.dat` 或 `sharedassets.bin` 读不出来，复核会标记为“复核不完整”并按待确认处理，
+不会因为读不到证据就报告成功；报告里会列出每个条目的声明长度与压缩后长度，以及读取失败的具体异常。
+
+组件记录了 `Assembly-CSharp`、`HoUnityTools.Runtime` 这类工程程序集时，通常意味着 UMod 没有把
+FastBuild 复制的脚本编进构建。这时请检查 UMod `Build.log` 是否出现：
+
+```text
+not in the .csproj file and will not be compiled
+```
 
 控制台输出形如：
 

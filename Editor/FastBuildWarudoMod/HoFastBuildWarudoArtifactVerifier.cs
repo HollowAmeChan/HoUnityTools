@@ -42,6 +42,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         public string artifactPath = string.Empty;
         public string error = string.Empty;
         public string modAssemblyName = string.Empty;
+        /// <summary>assemblymodules.dat 里记录的程序集名。这些才是随 Mod 一起分发、运行时能加载的程序集。</summary>
+        public List<string> modAssemblyNames = new List<string>();
+        public List<string> entryInventory = new List<string>();
         public string summary = string.Empty;
         public string report = string.Empty;
         public List<string> missingEntries = new List<string>();
@@ -56,10 +59,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         public int missingCount;
         public int reviewCount;
         public bool usedFallbackScan;
+        /// <summary>关键条目读不出来，本次复核结论不完整，不能当成通过。</summary>
+        public bool incomplete;
 
         public bool HasProblems
         {
-            get { return missingCount > 0 || reviewCount > 0 || !string.IsNullOrEmpty(error); }
+            get { return missingCount > 0 || reviewCount > 0 || incomplete || !string.IsNullOrEmpty(error); }
         }
     }
 
@@ -163,6 +168,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     {
                         if (!entries.ContainsKey(entry.FullName))
                             entries.Add(entry.FullName, entry);
+                        result.entryInventory.Add(entry.FullName + " " + DescribeLength(entry));
                     }
 
                     foreach (string required in RequiredEntries)
@@ -306,7 +312,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             byte[] data = ReadEntry(entries, "assemblymodules.dat", result);
             if (data == null)
             {
-                result.warnings.Add("assemblymodules.dat 无法读取，跳过运行时程序集类型表检查。");
+                result.incomplete = true;
+                result.warnings.Add(
+                    "assemblymodules.dat 无法读取，因此无法确认哪些程序集会随 Mod 分发；" +
+                    "本次复核对“FastBuild 复制过的脚本”只能给出待确认，不能当作通过。");
                 return;
             }
 
@@ -316,14 +325,29 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 int moduleCount = data.Length >= 4 ? ReadInt32(data, offset) : 0;
                 offset += 4;
                 if (moduleCount < 0 || moduleCount > 64)
+                {
+                    result.incomplete = true;
+                    result.warnings.Add(
+                        "assemblymodules.dat 长度 " + data.Length + " 字节，但模块数读出来是 " +
+                        moduleCount + "，格式与预期不符。");
                     return;
+                }
+
+                if (moduleCount == 0)
+                {
+                    result.incomplete = true;
+                    result.warnings.Add(
+                        "assemblymodules.dat 里没有任何运行时程序集（长度 " + data.Length +
+                        " 字节），本次构建很可能没有编译 Mod 脚本。");
+                    return;
+                }
 
                 for (int index = 0; index < moduleCount && offset < data.Length; index++)
                 {
                     string moduleName = ReadSevenBitString(data, ref offset);
                     if (!string.IsNullOrEmpty(moduleName))
                     {
-                        result.artifactAssemblies.Add(moduleName);
+                        result.modAssemblyNames.Add(moduleName);
                         if (string.IsNullOrEmpty(result.modAssemblyName))
                             result.modAssemblyName = moduleName;
                     }
@@ -362,6 +386,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             byte[] data = ReadEntry(entries, "sharedassets.bin", result);
             if (data == null)
             {
+                result.incomplete = true;
                 result.warnings.Add("sharedassets.bin 无法读取，无法确认组件的程序集链接。");
                 return null;
             }
@@ -447,7 +472,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 bool modCompiled = false;
                 for (int index = 0; index < matchedAssemblies.Count; index++)
                 {
-                    if (IsModCompiledAssembly(matchedAssemblies[index]))
+                    if (IsModCompiledAssembly(result, matchedAssemblies[index]))
                         modCompiled = true;
                 }
 
@@ -456,8 +481,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     if (!modCompiled)
                     {
                         verdict.status = VerdictReview;
-                        verdict.note = "组件记录了 " + verdict.recordedAssemblies +
-                                       "，不是本次构建的 Mod 程序集；该程序集不会随 Mod 分发。";
+                        if (result.modAssemblyNames.Count == 0)
+                        {
+                            verdict.note = "组件记录了 " + verdict.recordedAssemblies +
+                                           "；产物里读不到 Mod 程序集清单，无法判断脚本是否被编译，请查看 Build.log 是否出现 " +
+                                           "“not in the .csproj file and will not be compiled”。";
+                        }
+                        else
+                        {
+                            verdict.note = "组件记录了 " + verdict.recordedAssemblies +
+                                           "，不是本次构建产出的 " + string.Join("/", result.modAssemblyNames.ToArray()) +
+                                           "；该程序集不会随 Mod 分发，运行时会是 Missing Script。" +
+                                           "通常意味着 UMod 没有把 FastBuild 复制的脚本编进构建，" +
+                                           "请检查 Build.log 是否出现“not in the .csproj file and will not be compiled”。";
+                        }
+
                         result.reviewCount++;
                     }
                     else if (expected.typeName.IndexOf('+') < 0 &&
@@ -506,10 +544,26 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private static bool IsModCompiledAssembly(string assemblyName)
+        /// <summary>
+        /// 判断一个程序集是否会随本次 Mod 分发。
+        /// 优先用 assemblymodules.dat 里实际列出的模块名，这样换 UMod 版本、编译程序集改名也不会误判；
+        /// 只有读不到模块清单时才退回 umod-compiled 前缀这个约定。
+        /// </summary>
+        private static bool IsModCompiledAssembly(HoFastBuildArtifactVerification result, string assemblyName)
         {
-            return !string.IsNullOrEmpty(assemblyName) &&
-                   assemblyName.StartsWith(ModCompiledAssemblyPrefix, StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(assemblyName))
+                return false;
+
+            for (int index = 0; index < result.modAssemblyNames.Count; index++)
+            {
+                if (string.Equals(result.modAssemblyNames[index], assemblyName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            if (result.modAssemblyNames.Count > 0)
+                return false;
+
+            return assemblyName.StartsWith(ModCompiledAssemblyPrefix, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsUnityProvidedAssembly(string assemblyName)
@@ -531,6 +585,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             var builder = new StringBuilder();
             builder.Append("产物复核：");
+            if (result.incomplete)
+                builder.Append("复核不完整（有关键条目读不出来）；");
+
             int total = result.verdicts.Count;
             if (total == 0)
             {
@@ -569,8 +626,19 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             builder.Append("  条目：").AppendLine(string.Join(", ", RequiredEntries));
             if (result.missingEntries.Count > 0)
                 builder.Append("  缺少条目：").AppendLine(string.Join(", ", result.missingEntries.ToArray()));
-            if (!string.IsNullOrEmpty(result.modAssemblyName))
-                builder.Append("  Mod 程序集：").AppendLine(result.modAssemblyName);
+
+            // 只在这一步出问题时才展开条目明细，正常报告保持简短。
+            if (result.entryInventory.Count > 0 &&
+                (result.missingEntries.Count > 0 || result.warnings.Count > 0))
+            {
+                builder.Append("  条目明细：").AppendLine(string.Join(" | ", result.entryInventory.ToArray()));
+            }
+
+            if (result.modAssemblyNames.Count > 0)
+                builder.Append("  Mod 程序集：").AppendLine(string.Join(", ", result.modAssemblyNames.ToArray()));
+            else
+                builder.AppendLine("  Mod 程序集：(未读取到，见下方警告)");
+
             builder.Append("  编译类型：").Append(result.compiledTypes.Count).AppendLine(" 个");
             builder.Append("  程序集记录：").Append(result.recordCount).AppendLine(" 条");
 
@@ -1187,8 +1255,24 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             catch (Exception exception)
             {
                 if (result != null)
-                    result.warnings.Add(entry.FullName + " 读取失败：" + exception.Message);
+                {
+                    result.warnings.Add(
+                        entry.FullName + " 读取失败：" + exception.GetType().Name + " - " + exception.Message +
+                        "（声明长度 " + DescribeLength(entry) + "）");
+                }
                 return null;
+            }
+        }
+
+        private static string DescribeLength(ZipArchiveEntry entry)
+        {
+            try
+            {
+                return entry.Length + " 字节，压缩后 " + entry.CompressedLength + " 字节";
+            }
+            catch (Exception)
+            {
+                return "未知";
             }
         }
 
