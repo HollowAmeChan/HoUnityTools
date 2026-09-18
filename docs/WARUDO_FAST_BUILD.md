@@ -113,6 +113,10 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 - `HoAuxRig` 是独立运行时脚本，可以复制到临时 Mod。
 - 位于 `Editor` 目录的脚本不作为运行时源码复制。
 - `HoBoneRenderer` 含编辑器可视化逻辑，默认从临时 Prefab 移除。
+- 默认勾选规则按**包名**判断脚本是否属于本工具或本工程，而不是按目录名。把本包解压到
+  `Packages/任意目录名`（例如 `Packages/HoUnityTools-master`）同样能被正确识别；
+  早期版本写死了 `Packages/com.hollow.hounitytools/`，目录名不同就会静默地把所有脚本取消勾选，
+  构建出来的产物里组件仍指向 `Assembly-CSharp`，且不会生成 `assemblymodules.dat`。
 - MC1 (`MagicaCloth`) 与 MC2 (`MagicaCloth2`) 由 Warudo 宿主提供。FastBuild 会保留
   Prefab 上的组件引用，但禁止复制其源码，也不会把其 asmdef 源码闭包加入临时 Mod。
 - 如果工程启用了 `FBXSDK_RUNTIME`，FastBuild 会在 UMod 构建期间临时移除该 Standalone
@@ -121,6 +125,9 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 - 源码会短暂出现在 Unity 的运行时编译列表，构建完成后随临时目录一起清理。
 - FastBuild 会把临时 Prefab 上需要随 Mod 编译的组件重绑到临时脚本副本。不能保留包内
   `MonoScript` 引用，否则 UMod 会记录原 asmdef 程序集名，运行时即使已编译同名类型也会显示 Missing Script。
+- 依赖面板会在构建前统计“既不随 Mod 编译、也不由宿主提供、也不会被移除”的组件，
+  并用报错色的提示框列出数量；这些组件在产物里必然是 Missing Script，面板标题也会显示
+  `N 个不编译`。
 
 ### UMod 运行时安全审查
 
@@ -237,7 +244,7 @@ not in the .csproj file and will not be compiled
 1. 当前工程已导入 Warudo SDK，窗口顶部显示“SDK 已就绪”。
 2. 选中的对象是 Project 中可加载的 Prefab，且没有 Missing Script。
 3. ExportSettings 存在，活动工作区的 Mod 目录位于 `Assets` 下、存在，并且不是 `Assets` 根目录。
-4. 依赖列表中只勾选可在 Warudo 运行时编译的源码。
+4. 依赖列表中只勾选可在 Warudo 运行时编译的源码；面板若提示 `N 个不编译`，说明有组件会变成 Missing Script。
 5. 构建后确认控制台的“产物复核”报告里没有 `缺失`；`待确认` 需要人工判断，再在 Warudo 的 `Characters` 目录验证角色。
 
 ## 恢复和清理

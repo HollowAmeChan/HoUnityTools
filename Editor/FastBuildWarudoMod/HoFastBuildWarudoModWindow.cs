@@ -1304,9 +1304,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 int runtimeAssetCount = runtimeAssetPreview == null ? 0 : runtimeAssetPreview.Count;
+                int uncompiledComponents = CountComponentsWithoutRuntimeSource();
                 string dependencyStatus = scriptPreview.Count + " 个脚本";
                 if (runtimeAssetCount > 0)
                     dependencyStatus += " / " + runtimeAssetCount + " 个脚本资源";
+                if (uncompiledComponents > 0)
+                    dependencyStatus += " / " + uncompiledComponents + " 个不编译";
 
                 DrawPanelHeader(
                     "依赖审查",
@@ -1321,6 +1324,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 if (missingScriptCount > 0)
                     EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
+
+                if (uncompiledComponents > 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        uncompiledComponents + " 个组件的脚本不会随 Mod 编译，构建出来的产物在 Warudo 里会是 Missing Script。" +
+                        "请在下面的列表里勾选它们的源码；如果这些脚本本来就由 Warudo 宿主提供，可以忽略。",
+                        MessageType.Error);
+                }
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -2092,16 +2103,75 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return "项目运行时脚本：勾选后会生成独立临时副本。";
         }
 
+        /// <summary>本包自己的 PackageInfo；按包名判断归属，避免依赖目录名。</summary>
+        private static bool ownPackageResolved;
+        private static UnityEditor.PackageManager.PackageInfo ownPackageInfo;
+
+        private static UnityEditor.PackageManager.PackageInfo OwnPackageInfo
+        {
+            get
+            {
+                if (!ownPackageResolved)
+                {
+                    ownPackageResolved = true;
+                    try
+                    {
+                        ownPackageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                            typeof(HoFastBuildWarudoModWindow).Assembly);
+                    }
+                    catch (Exception)
+                    {
+                        ownPackageInfo = null;
+                    }
+                }
+
+                return ownPackageInfo;
+            }
+        }
+
+        /// <summary>
+        /// 判断资产是否属于某个包。比较的是 package.json 里的包名，而不是目录名：
+        /// 手动解压到 Packages/ 下的包可以叫任意名字（例如 Packages/HoUnityTools-master），
+        /// 写死目录名会让整套默认勾选静默失效。
+        /// </summary>
+        private static bool IsAssetInPackage(string assetPath, string packageName)
+        {
+            if (string.IsNullOrEmpty(assetPath) || string.IsNullOrEmpty(packageName))
+                return false;
+
+            string normalized = NormalizeAssetPath(assetPath);
+            if (!normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            try
+            {
+                UnityEditor.PackageManager.PackageInfo info =
+                    UnityEditor.PackageManager.PackageInfo.FindForAssetPath(normalized);
+                return info != null && string.Equals(info.name, packageName, StringComparison.Ordinal);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private static bool ShouldCopyScriptByDefault(string path)
         {
-            return path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
-                   path.StartsWith("Packages/com.hollow.hounitytools/", StringComparison.OrdinalIgnoreCase);
+            if (path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            UnityEditor.PackageManager.PackageInfo own = OwnPackageInfo;
+            if (own != null && !string.IsNullOrEmpty(own.name))
+                return IsAssetInPackage(path, own.name);
+
+            // 兜底：拿不到自身包信息时退回约定目录名。
+            return path.StartsWith("Packages/com.hollow.hounitytools/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsHostProvidedRuntimeScript(string path, string typeName)
         {
-            string normalized = NormalizeAssetPath(path);
-            return normalized.StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase) ||
+            return IsAssetInPackage(path, "app.warudo.modtool") ||
+                   NormalizeAssetPath(path).StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase) ||
                    IsWarudoSupportedClothType(typeName);
         }
 
@@ -2116,6 +2186,23 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return string.Equals(typeName, namespaceName, StringComparison.Ordinal) ||
                    (!string.IsNullOrEmpty(typeName) &&
                     typeName.StartsWith(namespaceName + ".", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// 统计“既不随 Mod 编译、也不由宿主提供、也不会被移除”的组件数量。
+        /// 这些组件在产物里只会保留工程程序集引用，运行时必然是 Missing Script。
+        /// </summary>
+        private int CountComponentsWithoutRuntimeSource()
+        {
+            int count = 0;
+            foreach (ScriptPreview item in scriptPreview)
+            {
+                if (item == null || item.hostProvided || item.removeWhenExcluded || item.copySource)
+                    continue;
+                count += item.referenceCount;
+            }
+
+            return count;
         }
 
         private void SetRuntimeScriptSelection(bool selected)
