@@ -32,9 +32,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const float RowControlHeight = 18f;
         private const float IconButtonWidth = 22f;
         private const float ToggleColumnWidth = 18f;
+        private const float FoldColumnWidth = 16f;
+        private const float MountColumnWidth = 72f;
         private const float StatusColumnWidth = 58f;
-        private const float PathColumnWidth = 190f;
-        private const float SourceColumnWidth = 150f;
+        private const float PathColumnWidth = 170f;
+        private const float SourceColumnWidth = 190f;
         private const float FormLabelWidth = 88f;
 
         /// <summary>工作区操作反馈是瞬时信息，过一段时间自动消失，避免常驻噪音。</summary>
@@ -473,50 +475,57 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         /// <summary>返回需要切换到的目标下标；不需要切换时返回 -1。</summary>
         private int DrawWorkspaceRow(WorkspaceEntry entry, bool locked)
         {
-            int requested = -1;
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                string displayName = !string.IsNullOrEmpty(entry.modName) ? entry.modName : "<未命名>";
-                string tooltip =
-                    "Mod 名称：" + displayName +
-                    "\nMod 资产目录：" + (string.IsNullOrEmpty(entry.modAssetPath) ? "(未设置)" : entry.modAssetPath) +
-                    "\n导出目录：" + (string.IsNullOrEmpty(entry.modExportPath) ? "(未设置)" : entry.modExportPath) +
-                    "\n版本：" + (string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
-                if (!string.IsNullOrEmpty(entry.statusNote))
-                    tooltip += "\n注意：" + entry.statusNote;
+            Rect rowRect = EditorGUILayout.GetControlRect(false, RowControlHeight);
 
-                var content = new GUIContent(displayName, tooltip);
+            string displayName = !string.IsNullOrEmpty(entry.modName) ? entry.modName : "<未命名>";
+            string tooltip =
+                "Mod 名称：" + displayName +
+                "\nMod 资产目录：" + (string.IsNullOrEmpty(entry.modAssetPath) ? "(未设置)" : entry.modAssetPath) +
+                "\n导出目录：" + (string.IsNullOrEmpty(entry.modExportPath) ? "(未设置)" : entry.modExportPath) +
+                "\n版本：" + (string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
+            if (!string.IsNullOrEmpty(entry.statusNote))
+                tooltip += "\n注意：" + entry.statusNote;
 
-                using (new EditorGUI.DisabledScope(locked))
-                {
-                    bool selected = GUILayout.Toggle(
-                        entry.isActive,
-                        content,
-                        EditorStyles.radioButton);
-                    if (selected && !entry.isActive)
-                        requested = entry.index;
-                }
+            string statusText = !entry.nameValid
+                ? "未命名"
+                : entry.isDuplicateName
+                    ? "重名"
+                    : !entry.assetPathValid
+                        ? "目录无效"
+                        : "就绪";
 
-                // 固定列宽，让每一行的目录列与状态列都能对齐。
-                GUILayout.Label(
-                    new GUIContent(entry.modAssetPath, entry.modAssetPath),
-                    EditorStyles.miniLabel,
-                    GUILayout.Width(PathColumnWidth));
+            float statusWidth = StatusColumnWidth;
+            float pathWidth = Mathf.Min(PathColumnWidth, Mathf.Max(60f, rowRect.width * 0.3f));
+            var radioRect = new Rect(rowRect.x, rowRect.y, Mathf.Max(80f, rowRect.width - statusWidth - pathWidth), rowRect.height);
+            var pathRect = new Rect(radioRect.xMax, rowRect.y, pathWidth, rowRect.height);
+            var statusRect = new Rect(pathRect.xMax, rowRect.y, statusWidth, rowRect.height);
 
-                string statusText = !entry.nameValid
-                    ? "未命名"
-                    : entry.isDuplicateName
-                        ? "重名"
-                        : !entry.assetPathValid
-                            ? "目录无效"
-                            : "就绪";
-                GUILayout.Label(
-                    new GUIContent(statusText, entry.statusNote ?? string.Empty),
-                    statusColumnStyle,
-                    GUILayout.Width(StatusColumnWidth));
-            }
+            bool selected;
+            using (new EditorGUI.DisabledScope(locked))
+                selected = GUI.Toggle(radioRect, entry.isActive, new GUIContent(displayName, tooltip), EditorStyles.radioButton);
 
-            return requested;
+            string shortPath = FormatWorkspaceAssetPath(entry.modAssetPath);
+            GUI.Label(pathRect, new GUIContent(shortPath, entry.modAssetPath), EditorStyles.miniLabel);
+            GUI.Label(statusRect, new GUIContent(statusText, entry.statusNote ?? string.Empty), statusColumnStyle);
+
+            if (selected && !entry.isActive)
+                return entry.index;
+
+            return -1;
+        }
+
+        /// <summary>列表里显示工程内相对路径，完整路径留在 tooltip 里。</summary>
+        private static string FormatWorkspaceAssetPath(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return "—";
+
+            string normalized = assetPath.Replace('\\', '/').TrimEnd('/');
+            string dataPath = Application.dataPath.Replace('\\', '/').TrimEnd('/');
+            if (normalized.StartsWith(dataPath + "/", FileSystemPathComparison))
+                return "Assets/" + normalized.Substring(dataPath.Length + 1);
+
+            return normalized;
         }
 
         private void DrawWorkspaceDetails()
@@ -1340,33 +1349,33 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void DrawRuntimeAssetPreviewInlineRow(RuntimeAssetPreview item)
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                GUILayout.Space(ToggleColumnWidth * 2);
+            Rect rowRect = EditorGUILayout.GetControlRect(false, RowControlHeight);
 
-                string displayName = item.found ? item.resourceKey : item.resourceKey + "（未找到）";
-                string reference = item.componentReferences == null || item.componentReferences.Count == 0
-                    ? "脚本字符串引用"
-                    : item.componentReferences[0];
-                if (item.componentReferences != null && item.componentReferences.Count > 1)
-                    reference += " +" + (item.componentReferences.Count - 1);
+            Rect nameRect;
+            Rect referenceRect;
+            Rect fileRect;
+            ComputeListColumns(
+                rowRect,
+                FoldColumnWidth + ToggleColumnWidth + ToggleColumnWidth,
+                out nameRect,
+                out referenceRect,
+                out fileRect);
 
-                GUILayout.Label(
-                    new GUIContent(displayName, BuildRuntimeAssetTooltip(item)),
-                    EditorStyles.miniLabel,
-                    GUILayout.ExpandWidth(true));
+            string displayName = item.found ? item.resourceKey : item.resourceKey + "（未找到）";
+            string reference = item.componentReferences == null || item.componentReferences.Count == 0
+                ? "脚本字符串引用"
+                : item.componentReferences[0];
+            if (item.componentReferences != null && item.componentReferences.Count > 1)
+                reference += " +" + (item.componentReferences.Count - 1);
 
-                GUILayout.Label(
-                    new GUIContent(reference, reference),
-                    statusColumnStyle,
-                    GUILayout.Width(140f));
-
-                GUILayout.Label(
-                    new GUIContent(item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
-                        item.found ? item.assetPath : "没有在工程的 Resources 目录里找到这个资源"),
-                    EditorStyles.miniLabel,
-                    GUILayout.Width(SourceColumnWidth));
-            }
+            GUI.Label(nameRect, new GUIContent(displayName, BuildRuntimeAssetTooltip(item)), EditorStyles.miniLabel);
+            GUI.Label(referenceRect, new GUIContent(reference, reference), statusColumnStyle);
+            GUI.Label(
+                fileRect,
+                new GUIContent(
+                    item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
+                    item.found ? item.assetPath : "没有在工程的 Resources 目录里找到这个资源"),
+                EditorStyles.miniLabel);
         }
 
         private static string BuildRuntimeAssetTooltip(RuntimeAssetPreview item)
@@ -1389,66 +1398,70 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return builder.ToString();
         }
 
+        /// <summary>
+        /// 列表行的列布局。显式算 rect 而不是靠 GUILayout 的隐式间距：
+        /// 自带 Editor 控件（例如 Foldout）会在布局里吃掉额外宽度，导致列错位。
+        /// </summary>
+        private static void ComputeListColumns(
+            Rect rowRect,
+            float leftOffset,
+            out Rect nameRect,
+            out Rect mountRect,
+            out Rect sourceRect)
+        {
+            float available = Mathf.Max(120f, rowRect.width - leftOffset);
+            float sourceWidth = Mathf.Min(SourceColumnWidth, available * 0.42f);
+            float mountWidth = Mathf.Min(MountColumnWidth, available * 0.18f);
+            float nameWidth = Mathf.Max(40f, available - sourceWidth - mountWidth);
+
+            nameRect = new Rect(rowRect.x + leftOffset, rowRect.y, nameWidth, rowRect.height);
+            mountRect = new Rect(nameRect.xMax, rowRect.y, mountWidth, rowRect.height);
+            sourceRect = new Rect(mountRect.xMax, rowRect.y, sourceWidth, rowRect.height);
+        }
+
         private void DrawScriptPreviewRow(ScriptPreview item)
         {
-            using (new EditorGUILayout.HorizontalScope())
+            Rect rowRect = EditorGUILayout.GetControlRect(false, RowControlHeight);
+            string tooltip = BuildScriptTooltip(item);
+            bool hasReferencedAssets = item.referencedAssets != null && item.referencedAssets.Count > 0;
+
+            float leftOffset = FoldColumnWidth + ToggleColumnWidth;
+            var foldRect = new Rect(rowRect.x, rowRect.y, FoldColumnWidth, rowRect.height);
+            var toggleRect = new Rect(rowRect.x + FoldColumnWidth, rowRect.y, ToggleColumnWidth, rowRect.height);
+
+            Rect nameRect;
+            Rect mountRect;
+            Rect sourceRect;
+            ComputeListColumns(rowRect, leftOffset, out nameRect, out mountRect, out sourceRect);
+
+            if (hasReferencedAssets)
+                item.showReferencedAssets = GUI.Toggle(foldRect, item.showReferencedAssets, GUIContent.none, EditorStyles.foldout);
+
+            using (new EditorGUI.DisabledScope(
+                       !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
             {
-                string tooltip = BuildScriptTooltip(item);
-                bool hasReferencedAssets = item.referencedAssets != null && item.referencedAssets.Count > 0;
-                if (hasReferencedAssets)
-                {
-                    // 用 Unity 自带折叠箭头，避免自造字形在某些字体下渲染成方块。
-                    Rect foldRect = GUILayoutUtility.GetRect(ToggleColumnWidth, RowControlHeight);
-                    bool expanded = EditorGUI.Foldout(foldRect, item.showReferencedAssets, GUIContent.none);
-                    if (expanded != item.showReferencedAssets)
-                        item.showReferencedAssets = expanded;
-                }
-                else
-                {
-                    GUILayout.Space(ToggleColumnWidth);
-                }
-
-                using (new EditorGUI.DisabledScope(
-                           !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
-                {
-                    item.copySource = EditorGUILayout.Toggle(
-                        item.copySource,
-                        GUILayout.Width(ToggleColumnWidth));
-                }
-
-                string displayName = string.IsNullOrEmpty(item.typeName)
-                    ? Path.GetFileNameWithoutExtension(item.sourcePath)
-                    : item.typeName;
-                // 名称列吃掉剩余宽度，右侧两个固定列就能在各行之间对齐。
-                GUILayout.Label(
-                    new GUIContent(displayName, tooltip),
-                    EditorStyles.boldLabel,
-                    GUILayout.ExpandWidth(true));
-
-                string referenceSummary = item.referenceCount > 0
-                    ? item.referenceCount + " 处挂载"
-                    : "—";
-                GUILayout.Label(
-                    new GUIContent(referenceSummary, tooltip),
-                    statusColumnStyle,
-                    GUILayout.Width(64f));
-
-                string sourceStatus = item.hostProvided
-                    ? "宿主 / " + Path.GetFileName(item.sourcePath)
-                    : Path.GetFileName(item.sourcePath);
-                GUILayout.Label(
-                    new GUIContent(sourceStatus, item.sourcePath),
-                    EditorStyles.miniLabel,
-                    GUILayout.Width(SourceColumnWidth));
+                item.copySource = GUI.Toggle(toggleRect, item.copySource, GUIContent.none, EditorStyles.toggle);
             }
+
+            string displayName = string.IsNullOrEmpty(item.typeName)
+                ? Path.GetFileNameWithoutExtension(item.sourcePath)
+                : item.typeName;
+            GUI.Label(nameRect, new GUIContent(displayName, tooltip), EditorStyles.boldLabel);
+
+            GUI.Label(
+                mountRect,
+                new GUIContent(item.referenceCount > 0 ? item.referenceCount + " 处挂载" : "—", tooltip),
+                statusColumnStyle);
+
+            string sourceStatus = item.hostProvided
+                ? "宿主 / " + Path.GetFileName(item.sourcePath)
+                : Path.GetFileName(item.sourcePath);
+            GUI.Label(sourceRect, new GUIContent(sourceStatus, item.sourcePath), EditorStyles.miniLabel);
 
             if (item.showReferencedAssets && item.referencedAssets != null)
             {
-                using (new EditorGUI.IndentLevelScope())
-                {
-                    for (int i = 0; i < item.referencedAssets.Count; i++)
-                        DrawRuntimeAssetPreviewInlineRow(item.referencedAssets[i]);
-                }
+                for (int i = 0; i < item.referencedAssets.Count; i++)
+                    DrawRuntimeAssetPreviewInlineRow(item.referencedAssets[i]);
             }
         }
 
@@ -1724,11 +1737,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (statusColumnStyle == null)
             {
+                // 刻意不设置 clipping：带裁剪的副本在深色主题下会把文字画成黑色，
+                // 列宽已经留足，超出部分由 tooltip 兜底。
                 statusColumnStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     alignment = TextAnchor.MiddleRight,
-                    padding = new RectOffset(0, 4, 0, 0),
-                    clipping = TextClipping.Clip
+                    padding = new RectOffset(0, 2, 0, 0)
                 };
             }
 
@@ -1750,6 +1764,29 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     fontSize = 13
                 };
             }
+
+            // GUIStyle 副本会固定住创建时的文字颜色；换肤或 EditorStyles 重建后副本就会停留在旧颜色
+            // （浅色主题的黑色文字在深色主题里几乎不可见）。这里每帧从当前 EditorStyles 重新同步。
+            SyncStyleTextColor(panelTitleStyle, EditorStyles.boldLabel);
+            SyncStyleTextColor(panelStatusStyle, EditorStyles.miniLabel);
+            SyncStyleTextColor(statusColumnStyle, EditorStyles.miniLabel);
+            SyncStyleTextColor(centeredIconButtonStyle, EditorStyles.miniButton);
+        }
+
+        private static void SyncStyleTextColor(GUIStyle target, GUIStyle source)
+        {
+            if (target == null || source == null)
+                return;
+
+            Color color = source.normal.textColor;
+            target.normal.textColor = color;
+            target.hover.textColor = color;
+            target.active.textColor = color;
+            target.focused.textColor = color;
+            target.onNormal.textColor = color;
+            target.onHover.textColor = color;
+            target.onActive.textColor = color;
+            target.onFocused.textColor = color;
         }
 
         private void SetSourcePrefab(string path)
