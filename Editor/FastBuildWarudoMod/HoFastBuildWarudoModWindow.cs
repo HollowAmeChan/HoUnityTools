@@ -28,6 +28,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const string PendingPhase = "AwaitingCompile";
         private const string BuildingPhase = "Building";
 
+        // 面板统一的行列尺寸：所有列表共用同一组宽度，列才会对齐。
+        private const float RowControlHeight = 18f;
+        private const float IconButtonWidth = 22f;
+        private const float ToggleColumnWidth = 18f;
+        private const float StatusColumnWidth = 58f;
+        private const float PathColumnWidth = 190f;
+        private const float SourceColumnWidth = 150f;
+        private const float FormLabelWidth = 88f;
+
+        /// <summary>工作区操作反馈是瞬时信息，过一段时间自动消失，避免常驻噪音。</summary>
+        private const double StatusMessageLifetime = 10.0;
+
         [Serializable]
         private sealed class ScriptPreview
         {
@@ -120,6 +132,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private List<WorkspaceEntry> workspaceEntries = new List<WorkspaceEntry>();
         [SerializeField] private int activeWorkspaceIndex = -1;
         [SerializeField] private string workspaceStatusMessage = string.Empty;
+        [SerializeField] private double workspaceStatusMessageExpiry;
         [SerializeField] private Vector2 workspaceScroll;
         [SerializeField] private bool showWorkspaceDetails = true;
         [SerializeField] private bool workspaceHasDuplicateNames;
@@ -136,6 +149,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private GUIStyle panelTitleStyle;
         private GUIStyle panelStatusStyle;
         private GUIStyle primaryButtonStyle;
+        private GUIStyle statusColumnStyle;
+        private GUIStyle centeredIconButtonStyle;
+        private string lastStampedWorkspaceStatus;
         private bool sdkAvailable;
         private string sdkError = string.Empty;
 
@@ -227,7 +243,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void OnGUI()
         {
-            EditorGUIUtility.labelWidth = 132f;
+            EditorGUIUtility.labelWidth = FormLabelWidth + 8f;
             EnsureStyles();
             SynchronizeSourcePrefab();
             pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
@@ -270,14 +286,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 DrawPanelHeader(
                     "FastBuild Warudo Mod",
                     sdkAvailable ? "SDK 已就绪" : "SDK 不可用",
-                    sdkAvailable ? new Color(0.20f, 0.68f, 0.57f) : new Color(0.88f, 0.42f, 0.28f));
-                if (sdkAvailable)
-                {
-                    EditorGUILayout.LabelField(
-                        "复制当前 Prefab 为 Character 并调用 UMod 官方构建，源资源不会被修改。",
-                        EditorStyles.miniLabel);
-                }
-                else
+                    sdkAvailable ? new Color(0.20f, 0.68f, 0.57f) : new Color(0.88f, 0.42f, 0.28f),
+                    "Prefab Icon",
+                    "复制当前 Prefab 为 Character 并调用 UMod 官方构建，源资源不会被修改。");
+
+                if (!sdkAvailable)
                 {
                     EditorGUILayout.HelpBox(
                         sdkError + "\n当前仓库未安装 Warudo SDK，FastBuild 面板已禁用。",
@@ -307,7 +320,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 DrawPanelHeader(
                     "源 Prefab",
                     IsPrefab(sourcePrefabPath) ? "已选择" : "未选择",
-                    new Color(0.24f, 0.54f, 0.88f));
+                    new Color(0.24f, 0.54f, 0.88f),
+                    "GameObject Icon",
+                    "FastBuild 会复制这个 Prefab 作为临时 Character 根节点。");
                 GUILayout.Space(5f);
                 EditorGUI.BeginChangeCheck();
                 GameObject nextPrefab = (GameObject)EditorGUILayout.ObjectField(
@@ -324,8 +339,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         EditorUtility.DisplayDialog(WindowTitle, "这里只能选择 Project 中的 Prefab 资源。", "确定");
                 }
 
-                using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(sourcePrefabPath)))
-                    EditorGUILayout.SelectableLabel(sourcePrefabPath, EditorStyles.textField, GUILayout.Height(18f));
+                if (!string.IsNullOrEmpty(sourcePrefabPath))
+                {
+                    GUILayout.Label(
+                        new GUIContent(sourcePrefabPath, sourcePrefabPath),
+                        EditorStyles.miniLabel);
+                }
             }
         }
 
@@ -341,9 +360,19 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 else
                     status = workspaceEntries.Count + " 个工作区";
 
-                DrawPanelHeader("Warudo 工作区", status, new Color(0.20f, 0.68f, 0.57f));
+                DrawPanelHeader(
+                    "Warudo 工作区",
+                    status,
+                    new Color(0.20f, 0.68f, 0.57f),
+                    "Folder Icon",
+                    "工作区就是 UMod ExportSettings 里的 Export Profile，决定 Mod 名称、资产目录和导出目录。",
+                    string.IsNullOrEmpty(exportSettingsPath)
+                        ? "当前工程没有找到 UMod ExportSettings 资源。"
+                        : "ExportSettings：" + exportSettingsPath);
+
                 GUILayout.Space(5f);
 
+                RefreshWorkspaceStatusLifetime();
                 if (string.IsNullOrEmpty(exportSettingsPath))
                 {
                     EditorGUILayout.HelpBox(
@@ -353,10 +382,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 }
 
                 DrawWorkspaceToolbar();
-                using (new EditorGUI.DisabledScope(true))
-                    EditorGUILayout.TextField("ExportSettings", exportSettingsPath);
 
-                if (!string.IsNullOrEmpty(workspaceStatusMessage))
+                if (HasLiveStatusMessage())
                 {
                     EditorGUILayout.HelpBox(workspaceStatusMessage, MessageType.None);
                 }
@@ -371,46 +398,37 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             bool hasPendingBuild = HasPendingBuildState();
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.FlexibleSpace();
-
-                GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
-                refreshContent.tooltip = "重新读取 UMod ExportSettings 与工作区列表";
-                if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
-                {
-                    workspaceStatusMessage = string.Empty;
-                    RefreshExportSettingsPreview();
-                }
-
-                GUIContent windowContent = EditorGUIUtility.IconContent("_Popup");
-                windowContent.tooltip = "打开 uMod 官方设置窗口，编辑工作区的完整字段";
-                if (GUILayout.Button(windowContent, GUILayout.Width(30f), GUILayout.Height(19f)))
-                    OpenOfficialExportSettingsWindow();
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
                 using (new EditorGUI.DisabledScope(hasPendingBuild))
                 {
-                    if (GUILayout.Button("新建工作区", GUILayout.Width(96f)))
+                    if (GUILayout.Button("新建工作区", EditorStyles.miniButton, GUILayout.Width(84f)))
                         CreateWorkspace();
 
                     using (new EditorGUI.DisabledScope(activeWorkspaceIndex < 0 || workspaceEntries.Count <= 1))
                     {
-                        if (GUILayout.Button("删除当前", GUILayout.Width(80f)))
+                        if (GUILayout.Button("删除当前", EditorStyles.miniButton, GUILayout.Width(68f)))
                             DeleteActiveWorkspace();
                     }
 
                     if (workspaceHasDuplicateNames)
                     {
-                        if (GUILayout.Button("清理重名", GUILayout.Width(80f)))
+                        if (GUILayout.Button("清理重名", EditorStyles.miniButton, GUILayout.Width(68f)))
                             RemoveDuplicateWorkspaces();
                     }
                 }
 
                 if (hasPendingBuild)
-                {
                     GUILayout.Label("构建进行中，工作区已锁定", EditorStyles.miniLabel);
+
+                GUILayout.FlexibleSpace();
+
+                if (DrawIconButton("Refresh", "刷新", "重新读取 UMod ExportSettings 与工作区列表"))
+                {
+                    SetWorkspaceStatus(string.Empty);
+                    RefreshExportSettingsPreview();
                 }
+
+                if (DrawIconButton("Settings", "官方设置", "打开 uMod 官方设置窗口，编辑工作区的完整字段"))
+                    OpenOfficialExportSettingsWindow();
             }
 
             RefreshWorkspacePreviewIfDirty();
@@ -438,6 +456,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             int requestedIndex = -1;
             for (int index = 0; index < workspaceEntries.Count; index++)
             {
+                if (index > 0)
+                    DrawRowSeparator();
+
                 int requested = DrawWorkspaceRow(workspaceEntries[index], locked);
                 if (requested >= 0)
                     requestedIndex = requested;
@@ -457,7 +478,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             {
                 string displayName = !string.IsNullOrEmpty(entry.modName) ? entry.modName : "<未命名>";
                 string tooltip =
-                    "Mod 资产目录：" + (string.IsNullOrEmpty(entry.modAssetPath) ? "(未设置)" : entry.modAssetPath) +
+                    "Mod 名称：" + displayName +
+                    "\nMod 资产目录：" + (string.IsNullOrEmpty(entry.modAssetPath) ? "(未设置)" : entry.modAssetPath) +
                     "\n导出目录：" + (string.IsNullOrEmpty(entry.modExportPath) ? "(未设置)" : entry.modExportPath) +
                     "\n版本：" + (string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
                 if (!string.IsNullOrEmpty(entry.statusNote))
@@ -470,22 +492,28 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     bool selected = GUILayout.Toggle(
                         entry.isActive,
                         content,
-                        EditorStyles.radioButton,
-                        GUILayout.MinWidth(170f));
+                        EditorStyles.radioButton);
                     if (selected && !entry.isActive)
                         requested = entry.index;
                 }
 
-                GUILayout.Label(entry.modAssetPath, EditorStyles.miniLabel, GUILayout.MinWidth(140f));
+                // 固定列宽，让每一行的目录列与状态列都能对齐。
+                GUILayout.Label(
+                    new GUIContent(entry.modAssetPath, entry.modAssetPath),
+                    EditorStyles.miniLabel,
+                    GUILayout.Width(PathColumnWidth));
 
-                string statusText = entry.isDuplicateName
-                    ? "重名"
-                    : !entry.nameValid
-                        ? "<未命名>"
+                string statusText = !entry.nameValid
+                    ? "未命名"
+                    : entry.isDuplicateName
+                        ? "重名"
                         : !entry.assetPathValid
                             ? "目录无效"
                             : "就绪";
-                GUILayout.Label(statusText, EditorStyles.miniLabel, GUILayout.Width(58f));
+                GUILayout.Label(
+                    new GUIContent(statusText, entry.statusNote ?? string.Empty),
+                    statusColumnStyle,
+                    GUILayout.Width(StatusColumnWidth));
             }
 
             return requested;
@@ -497,40 +525,41 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return;
 
             WorkspaceEntry entry = workspaceEntries[activeWorkspaceIndex];
-            GUILayout.Space(5f);
+            GUILayout.Space(4f);
             showWorkspaceDetails = EditorGUILayout.Foldout(showWorkspaceDetails, "当前工作区详情");
             if (!showWorkspaceDetails)
                 return;
 
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUI.IndentLevelScope())
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     Texture2D icon = LoadWorkspaceIcon(activeWorkspaceIndex);
-                    Rect iconRect = GUILayoutUtility.GetRect(44f, 44f);
                     if (icon != null)
+                    {
+                        Rect iconRect = GUILayoutUtility.GetRect(40f, 40f);
                         EditorGUI.DrawPreviewTexture(iconRect, icon);
-                    else
-                        EditorGUI.HelpBox(iconRect, "无图标", MessageType.None);
+                    }
 
                     using (new EditorGUILayout.VerticalScope())
                     {
-                        EditorGUILayout.LabelField("Mod 名称", string.IsNullOrEmpty(entry.modName) ? "(未设置)" : entry.modName);
-                        EditorGUILayout.LabelField("作者", string.IsNullOrEmpty(entry.modAuthor) ? "(未设置)" : entry.modAuthor);
-                        EditorGUILayout.LabelField("版本", string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
+                        DrawDetailRow("Mod 名称", entry.modName);
+                        DrawDetailRow("作者", entry.modAuthor);
+                        DrawDetailRow("版本", entry.modVersion);
                     }
                 }
 
                 if (!string.IsNullOrEmpty(entry.modDescription))
-                    EditorGUILayout.LabelField("说明", entry.modDescription, EditorStyles.wordWrappedMiniLabel);
+                    DrawDetailRow("说明", entry.modDescription, entry.modDescription);
 
+                GUILayout.Space(2f);
                 DrawWorkspacePathRow(
-                    "Mod 资产目录",
+                    "资产目录",
                     entry.modAssetPath,
                     DescribeWorkspaceAssetPath(entry),
                     entry.assetPathValid ? MessageType.None : MessageType.Warning,
                     entry.assetPathUnderAssets && !entry.assetPathExists && !entry.assetPathIsAssetsRoot,
-                    "创建目录",
+                    "创建",
                     CreateWorkspaceAssetFolder);
 
                 DrawWorkspacePathRow(
@@ -542,11 +571,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     "定位",
                     RevealWorkspaceExportFolder);
 
-                EditorGUILayout.LabelField("引用 Mod", entry.referencedModCount + " 个");
+                if (entry.referencedModCount > 0)
+                    DrawDetailRow("引用 Mod", entry.referencedModCount + " 个");
 
+                // 只报告不通过的项，全部通过时一句话带过。
                 string validation = DescribeWorkspaceValidation();
                 if (!string.IsNullOrEmpty(validation))
-                    EditorGUILayout.HelpBox(validation, MessageType.None);
+                    EditorGUILayout.LabelField(validation, EditorStyles.miniLabel);
             }
         }
 
@@ -561,10 +592,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField(label, string.IsNullOrEmpty(path) ? "(未设置)" : path);
+                GUILayout.Label(label, EditorStyles.miniLabel, GUILayout.Width(FormLabelWidth));
+                GUILayout.Label(
+                    new GUIContent(string.IsNullOrEmpty(path) ? "—" : path, string.IsNullOrEmpty(path) ? string.Empty : path),
+                    EditorStyles.label);
+                GUILayout.FlexibleSpace();
                 using (new EditorGUI.DisabledScope(!actionEnabled))
                 {
-                    if (GUILayout.Button(actionLabel, GUILayout.Width(72f)))
+                    if (GUILayout.Button(actionLabel, EditorStyles.miniButton, GUILayout.Width(48f)))
                         action();
                 }
             }
@@ -603,13 +638,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return string.Empty;
         }
 
-        /// <summary>
-        /// 直接调用 SDK 自己的校验入口，避免在面板里重复实现版本号格式等规则。
-        /// 这些方法都只校验当前活动工作区。
-        /// </summary>
         private string DescribeWorkspaceValidation()
         {
-            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportSettingsPath);
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
             if (settings == null)
                 return string.Empty;
 
@@ -620,20 +651,20 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (!name.HasValue && !assetPath.HasValue && !version.HasValue)
                 return string.Empty;
 
-            var builder = new StringBuilder("SDK 校验：");
-            builder.Append("名称 ").Append(FormatValidation(name));
-            builder.Append(" / 资产目录 ").Append(FormatValidation(assetPath));
-            builder.Append(" / 版本 ").Append(FormatValidation(version));
-            if (buildAndRun.HasValue)
-                builder.Append(" / 运行配置 ").Append(FormatValidation(buildAndRun));
-            return builder.ToString();
-        }
+            var failed = new List<string>();
+            if (name == false)
+                failed.Add("Mod 名称");
+            if (assetPath == false)
+                failed.Add("Mod 资产目录");
+            if (version == false)
+                failed.Add("版本号");
+            if (buildAndRun == false)
+                failed.Add("运行配置");
 
-        private static string FormatValidation(bool? value)
-        {
-            if (!value.HasValue)
-                return "未校验";
-            return value.Value ? "通过" : "不通过";
+            if (failed.Count == 0)
+                return "SDK 校验：通过";
+
+            return "SDK 校验不通过：" + string.Join("、", failed.ToArray());
         }
 
         private static bool? InvokeSettingsValidation(UnityEngine.Object settings, string methodName)
@@ -1261,40 +1292,31 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string dependencyStatus = scriptPreview.Count + " 个脚本";
                 if (runtimeAssetCount > 0)
                     dependencyStatus += " / " + runtimeAssetCount + " 个脚本资源";
+
                 DrawPanelHeader(
                     "依赖审查",
                     dependencyStatus,
-                    new Color(0.62f, 0.45f, 0.84f));
-                GUILayout.Space(5f);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    GUILayout.FlexibleSpace();
-                    GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
-                    refreshContent.tooltip = "重新扫描 Prefab 依赖";
-                    if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
-                        RefreshDependencyPreview();
-                }
+                    new Color(0.62f, 0.45f, 0.84f),
+                    "FilterByType",
+                    "此处只管理需要单独编译成运行时程序的 C# 源码；" +
+                    "UMod 会自动按 Prefab 引用收集其它资源（本 Prefab 共 " + dependencyCount +
+                    " 项依赖，其中非脚本 " + nonScriptDependencyCount + " 项）。");
 
-                EditorGUILayout.LabelField(
-                    "资源概览",
-                    string.Format("依赖 {0} | 非脚本 {1} | 脚本 {2} | 脚本资源 {3} | Missing {4}",
-                        dependencyCount,
-                        nonScriptDependencyCount,
-                        scriptPreview.Count,
-                        runtimeAssetPreview == null ? 0 : runtimeAssetPreview.Count,
-                        missingScriptCount));
+                GUILayout.Space(5f);
+
                 if (missingScriptCount > 0)
                     EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
-                EditorGUILayout.LabelField(
-                    "普通资源由 UMod 按 Prefab 引用收集；此处只管理需要单独编译的 C# 源码。",
-                    EditorStyles.miniLabel);
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button("全选运行时", GUILayout.Width(92f)))
+                    if (GUILayout.Button("全选运行时", EditorStyles.miniButton, GUILayout.Width(84f)))
                         SetRuntimeScriptSelection(true);
-                    if (GUILayout.Button("全部不复制", GUILayout.Width(92f)))
+                    if (GUILayout.Button("全部不复制", EditorStyles.miniButton, GUILayout.Width(84f)))
                         SetRuntimeScriptSelection(false);
+
+                    GUILayout.FlexibleSpace();
+                    if (DrawIconButton("Refresh", "刷新", "重新扫描 Prefab 依赖"))
+                        RefreshDependencyPreview();
                 }
 
                 GUILayout.Space(4f);
@@ -1305,8 +1327,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 }
                 else
                 {
-                    foreach (ScriptPreview item in scriptPreview)
-                        DrawScriptPreviewRow(item);
+                    for (int index = 0; index < scriptPreview.Count; index++)
+                    {
+                        if (index > 0)
+                            DrawRowSeparator();
+                        DrawScriptPreviewRow(scriptPreview[index]);
+                    }
                 }
                 EditorGUILayout.EndScrollView();
             }
@@ -1314,29 +1340,32 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void DrawRuntimeAssetPreviewInlineRow(RuntimeAssetPreview item)
         {
-            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.Space(34f);
-                using (new EditorGUI.DisabledScope(true))
-                    EditorGUILayout.Toggle(item.found && item.willCopy, GUILayout.Width(18f));
+                GUILayout.Space(ToggleColumnWidth * 2);
 
-                string displayName = item.found
-                    ? item.resourceKey
-                    : item.resourceKey + "（未找到）";
+                string displayName = item.found ? item.resourceKey : item.resourceKey + "（未找到）";
                 string reference = item.componentReferences == null || item.componentReferences.Count == 0
                     ? "脚本字符串引用"
                     : item.componentReferences[0];
                 if (item.componentReferences != null && item.componentReferences.Count > 1)
                     reference += " +" + (item.componentReferences.Count - 1);
 
-                GUIContent content = new GUIContent(
-                    displayName,
-                    BuildRuntimeAssetTooltip(item));
-                EditorGUILayout.LabelField(content, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
-                EditorGUILayout.LabelField(reference, EditorStyles.miniLabel, GUILayout.MinWidth(220f));
-                EditorGUILayout.LabelField(
-                    item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
-                    EditorStyles.miniLabel);
+                GUILayout.Label(
+                    new GUIContent(displayName, BuildRuntimeAssetTooltip(item)),
+                    EditorStyles.miniLabel,
+                    GUILayout.ExpandWidth(true));
+
+                GUILayout.Label(
+                    new GUIContent(reference, reference),
+                    statusColumnStyle,
+                    GUILayout.Width(140f));
+
+                GUILayout.Label(
+                    new GUIContent(item.found ? Path.GetFileName(item.assetPath) : "缺少资源",
+                        item.found ? item.assetPath : "没有在工程的 Resources 目录里找到这个资源"),
+                    EditorStyles.miniLabel,
+                    GUILayout.Width(SourceColumnWidth));
             }
         }
 
@@ -1362,46 +1391,60 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void DrawScriptPreviewRow(ScriptPreview item)
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.HorizontalScope())
+                string tooltip = BuildScriptTooltip(item);
+                bool hasReferencedAssets = item.referencedAssets != null && item.referencedAssets.Count > 0;
+                if (hasReferencedAssets)
                 {
-                    bool hasReferencedAssets = item.referencedAssets != null && item.referencedAssets.Count > 0;
-                    if (hasReferencedAssets)
-                    {
-                        string marker = item.showReferencedAssets ? "-" : "+";
-                        if (GUILayout.Button(marker, EditorStyles.miniButton, GUILayout.Width(18f)))
-                            item.showReferencedAssets = !item.showReferencedAssets;
-                    }
-                    else
-                        GUILayout.Space(18f);
-
-                    using (new EditorGUI.DisabledScope(
-                               !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
-                        item.copySource = EditorGUILayout.Toggle(item.copySource, GUILayout.Width(18f));
-
-                    string displayName = string.IsNullOrEmpty(item.typeName)
-                        ? Path.GetFileNameWithoutExtension(item.sourcePath)
-                        : item.typeName;
-                    GUIContent typeContent = new GUIContent(displayName, BuildScriptTooltip(item));
-                    EditorGUILayout.LabelField(typeContent, EditorStyles.boldLabel, GUILayout.MinWidth(180f));
-                    bool hasComponentReference = item.componentReferences != null && item.componentReferences.Count > 0;
-                    string referenceSummary = !hasComponentReference
-                        ? "组件引用 0"
-                        : "组件引用 " + item.referenceCount + ": " + item.componentReferences[0];
-                    GUIContent referenceContent = new GUIContent(referenceSummary, BuildScriptTooltip(item));
-                    EditorGUILayout.LabelField(
-                        referenceContent,
-                        EditorStyles.miniLabel,
-                        GUILayout.MinWidth(180f),
-                        GUILayout.MaxWidth(320f));
-                    string sourceStatus = item.hostProvided
-                        ? "宿主提供 / " + Path.GetFileName(item.sourcePath)
-                        : Path.GetFileName(item.sourcePath);
-                    EditorGUILayout.LabelField(sourceStatus, EditorStyles.miniLabel);
+                    // 用 Unity 自带折叠箭头，避免自造字形在某些字体下渲染成方块。
+                    Rect foldRect = GUILayoutUtility.GetRect(ToggleColumnWidth, RowControlHeight);
+                    bool expanded = EditorGUI.Foldout(foldRect, item.showReferencedAssets, GUIContent.none);
+                    if (expanded != item.showReferencedAssets)
+                        item.showReferencedAssets = expanded;
+                }
+                else
+                {
+                    GUILayout.Space(ToggleColumnWidth);
                 }
 
-                if (item.showReferencedAssets && item.referencedAssets != null)
+                using (new EditorGUI.DisabledScope(
+                           !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
+                {
+                    item.copySource = EditorGUILayout.Toggle(
+                        item.copySource,
+                        GUILayout.Width(ToggleColumnWidth));
+                }
+
+                string displayName = string.IsNullOrEmpty(item.typeName)
+                    ? Path.GetFileNameWithoutExtension(item.sourcePath)
+                    : item.typeName;
+                // 名称列吃掉剩余宽度，右侧两个固定列就能在各行之间对齐。
+                GUILayout.Label(
+                    new GUIContent(displayName, tooltip),
+                    EditorStyles.boldLabel,
+                    GUILayout.ExpandWidth(true));
+
+                string referenceSummary = item.referenceCount > 0
+                    ? item.referenceCount + " 处挂载"
+                    : "—";
+                GUILayout.Label(
+                    new GUIContent(referenceSummary, tooltip),
+                    statusColumnStyle,
+                    GUILayout.Width(64f));
+
+                string sourceStatus = item.hostProvided
+                    ? "宿主 / " + Path.GetFileName(item.sourcePath)
+                    : Path.GetFileName(item.sourcePath);
+                GUILayout.Label(
+                    new GUIContent(sourceStatus, item.sourcePath),
+                    EditorStyles.miniLabel,
+                    GUILayout.Width(SourceColumnWidth));
+            }
+
+            if (item.showReferencedAssets && item.referencedAssets != null)
+            {
+                using (new EditorGUI.IndentLevelScope())
                 {
                     for (int i = 0; i < item.referencedAssets.Count; i++)
                         DrawRuntimeAssetPreviewInlineRow(item.referencedAssets[i]);
@@ -1442,7 +1485,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 DrawPanelHeader(
                     "构建选项",
                     cleanupTemporaryAssets ? "自动清理" : "保留临时目录",
-                    new Color(0.91f, 0.65f, 0.25f));
+                    new Color(0.91f, 0.65f, 0.25f),
+                    "Settings",
+                    "这些选项只影响 FastBuild 的临时副本和收尾动作，不改变源 Prefab。");
                 GUILayout.Space(5f);
                 GUIContent copyContent = new GUIContent(
                     "复制已勾选脚本",
@@ -1492,39 +1537,35 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         ? (lastVerificationHasProblems
                             ? new Color(0.88f, 0.42f, 0.28f)
                             : new Color(0.20f, 0.68f, 0.57f))
-                        : new Color(0.55f, 0.57f, 0.60f));
+                        : new Color(0.55f, 0.57f, 0.60f),
+                    "TestPassed",
+                    "构建结束后直接读取 .warudo，确认每个组件的程序集链接和运行时类型。",
+                    string.IsNullOrEmpty(lastArtifactPath) ? "还没有可复核的产物。" : "上次产物：" + lastArtifactPath);
+
+                if (!hasResult && string.IsNullOrEmpty(lastArtifactPath))
+                    return;
+
                 GUILayout.Space(5f);
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    GUILayout.FlexibleSpace();
-                    using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(lastArtifactPath)))
+                    if (hasResult)
                     {
-                        GUIContent reverifyContent = EditorGUIUtility.IconContent("Refresh");
-                        reverifyContent.tooltip = "重新读取产物并复核组件挂载";
-                        if (GUILayout.Button(reverifyContent, GUILayout.Width(30f), GUILayout.Height(19f)))
-                            ReverifyLastArtifact();
+                        EditorGUILayout.HelpBox(
+                            lastVerificationSummary,
+                            lastVerificationHasProblems ? MessageType.Warning : MessageType.Info);
                     }
-                }
+                    else
+                    {
+                        GUILayout.Label("上次产物还在，可以重新复核。", EditorStyles.miniLabel);
+                    }
 
-                if (!string.IsNullOrEmpty(lastArtifactPath))
-                {
-                    using (new EditorGUI.DisabledScope(true))
-                        EditorGUILayout.TextField("产物", lastArtifactPath);
+                    if (DrawIconButton("Refresh", "复核", "重新读取产物并复核组件挂载"))
+                        ReverifyLastArtifact();
                 }
 
                 if (!hasResult)
-                {
-                    EditorGUILayout.LabelField(
-                        "构建完成后会直接读取 .warudo，确认每个组件的程序集链接和运行时类型。",
-                        EditorStyles.miniLabel);
                     return;
-                }
-
-                if (lastVerificationHasProblems)
-                    EditorGUILayout.HelpBox(lastVerificationSummary, MessageType.Warning);
-                else
-                    EditorGUILayout.HelpBox(lastVerificationSummary, MessageType.Info);
 
                 showVerificationReport = EditorGUILayout.Foldout(showVerificationReport, "详细复核结果");
                 if (!showVerificationReport)
@@ -1542,19 +1583,123 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private void DrawPanelHeader(string title, string status, Color accent)
+        /// <summary>
+        /// 面板标题栏：左侧色条 + 图标 + 标题，右侧状态。标题与状态都可以带 tooltip，
+        /// 这样面板里就不需要再画常驻的说明文字。
+        /// </summary>
+        private void DrawPanelHeader(
+            string title,
+            string status,
+            Color accent,
+            string iconName = null,
+            string tooltip = null,
+            string statusTooltip = null)
         {
             Rect rect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true));
             Color background = EditorGUIUtility.isProSkin
                 ? new Color(0.17f, 0.18f, 0.20f)
                 : new Color(0.82f, 0.83f, 0.85f);
             EditorGUI.DrawRect(rect, background);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 4f, rect.height), accent);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 3f, rect.height), accent);
 
-            Rect titleRect = new Rect(rect.x + 12f, rect.y, rect.width - 120f, rect.height);
-            Rect statusRect = new Rect(rect.xMax - 104f, rect.y, 94f, rect.height);
-            GUI.Label(titleRect, title, panelTitleStyle);
-            GUI.Label(statusRect, status, panelStatusStyle);
+            float offset = rect.x + 12f;
+            Texture icon = GetEditorIcon(iconName);
+            if (icon != null)
+            {
+                var iconRect = new Rect(offset, rect.y + (rect.height - 16f) * 0.5f, 16f, 16f);
+                GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
+                offset += 20f;
+            }
+
+            float statusWidth = 104f;
+            var titleRect = new Rect(offset, rect.y, rect.width - (offset - rect.x) - statusWidth, rect.height);
+            var statusRect = new Rect(rect.xMax - statusWidth - 6f, rect.y, statusWidth, rect.height);
+            GUI.Label(titleRect, new GUIContent(title, tooltip ?? string.Empty), panelTitleStyle);
+            GUI.Label(statusRect, new GUIContent(status, statusTooltip ?? string.Empty), panelStatusStyle);
+        }
+
+        private static Texture GetEditorIcon(string iconName)
+        {
+            if (string.IsNullOrEmpty(iconName))
+                return null;
+
+            GUIContent content = EditorGUIUtility.IconContent(iconName);
+            return content == null ? null : content.image;
+        }
+
+        /// <summary>统一的方形图标按钮；图标不可用时退回文字，并自动放宽到能放下文字。</summary>
+        private bool DrawIconButton(string iconName, string fallbackText, string tooltip)
+        {
+            GUIContent content = string.IsNullOrEmpty(iconName) ? null : EditorGUIUtility.IconContent(iconName);
+            if (content != null && content.image != null)
+            {
+                content = new GUIContent(content.image, tooltip);
+                return GUILayout.Button(
+                    content,
+                    centeredIconButtonStyle,
+                    GUILayout.Width(IconButtonWidth),
+                    GUILayout.Height(RowControlHeight));
+            }
+
+            var fallback = new GUIContent(fallbackText, tooltip);
+            float width = Mathf.Max(
+                IconButtonWidth,
+                centeredIconButtonStyle.CalcSize(fallback).x + 8f);
+            return GUILayout.Button(
+                fallback,
+                centeredIconButtonStyle,
+                GUILayout.Width(width),
+                GUILayout.Height(RowControlHeight));
+        }
+
+        /// <summary>列表行之间的细分隔线，比给每一行套 HelpBox 更轻。</summary>
+        private static void DrawRowSeparator()
+        {
+            Rect rect = EditorGUILayout.GetControlRect(false, 1f);
+            if (Event.current.type != EventType.Repaint)
+                return;
+
+            Color color = EditorGUIUtility.isProSkin
+                ? new Color(1f, 1f, 1f, 0.07f)
+                : new Color(0f, 0f, 0f, 0.09f);
+            EditorGUI.DrawRect(rect, color);
+        }
+
+        /// <summary>详情区的“标签 : 值”行，标签列固定宽度保证多行对齐。</summary>
+        private static void DrawDetailRow(string label, string value, string tooltip = null)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(label, EditorStyles.miniLabel, GUILayout.Width(FormLabelWidth));
+                GUILayout.Label(
+                    new GUIContent(string.IsNullOrEmpty(value) ? "—" : value, tooltip ?? string.Empty),
+                    EditorStyles.label);
+            }
+        }
+
+        private bool HasLiveStatusMessage()
+        {
+            return !string.IsNullOrEmpty(workspaceStatusMessage) &&
+                   EditorApplication.timeSinceStartup < workspaceStatusMessageExpiry;
+        }
+
+        private void SetWorkspaceStatus(string message)
+        {
+            workspaceStatusMessage = message ?? string.Empty;
+            lastStampedWorkspaceStatus = null;
+            workspaceStatusMessageExpiry = EditorApplication.timeSinceStartup + StatusMessageLifetime;
+        }
+
+        /// <summary>
+        /// 工作区反馈是瞬时信息：消息一变就重新计时，超时后自行消失，不在面板里常驻。
+        /// </summary>
+        private void RefreshWorkspaceStatusLifetime()
+        {
+            if (string.Equals(lastStampedWorkspaceStatus, workspaceStatusMessage, StringComparison.Ordinal))
+                return;
+
+            lastStampedWorkspaceStatus = workspaceStatusMessage;
+            workspaceStatusMessageExpiry = EditorApplication.timeSinceStartup + StatusMessageLifetime;
         }
 
         private void EnsureStyles()
@@ -1574,6 +1719,25 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 {
                     alignment = TextAnchor.MiddleRight,
                     padding = new RectOffset(0, 0, 0, 0)
+                };
+            }
+
+            if (statusColumnStyle == null)
+            {
+                statusColumnStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    alignment = TextAnchor.MiddleRight,
+                    padding = new RectOffset(0, 4, 0, 0),
+                    clipping = TextClipping.Clip
+                };
+            }
+
+            if (centeredIconButtonStyle == null)
+            {
+                centeredIconButtonStyle = new GUIStyle(EditorStyles.miniButton)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    padding = new RectOffset(1, 1, 1, 1)
                 };
             }
 
