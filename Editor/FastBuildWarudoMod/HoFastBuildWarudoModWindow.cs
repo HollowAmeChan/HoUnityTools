@@ -83,6 +83,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private List<RuntimeAssetPreview> runtimeAssetPreview = new List<RuntimeAssetPreview>();
         [SerializeField] private Vector2 pageScroll;
         [SerializeField] private Vector2 scriptScroll;
+        [SerializeField] private Vector2 verificationScroll;
         [SerializeField] private bool copySelectedScripts = true;
         [SerializeField] private bool removeUnsafeComponents = true;
         [SerializeField] private bool cleanupTemporaryAssets = true;
@@ -93,6 +94,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private string activeModAssetPath = string.Empty;
         [SerializeField] private string lastBuildStatus = string.Empty;
         [SerializeField] private string dependencyPreviewHash = string.Empty;
+        [SerializeField] private string lastArtifactPath = string.Empty;
+        [SerializeField] private string lastVerificationSummary = string.Empty;
+        [SerializeField] private string lastVerificationReport = string.Empty;
+        [SerializeField] private bool lastVerificationHasProblems;
+        [SerializeField] private bool showVerificationReport;
+        [SerializeField] private List<HoFastBuildExpectedComponent> lastExpectedComponents =
+            new List<HoFastBuildExpectedComponent>();
 
         private GUIStyle panelTitleStyle;
         private GUIStyle panelStatusStyle;
@@ -213,6 +221,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         DrawBuildOptionsPanel();
                         GUILayout.Space(12f);
                         DrawBuildButton();
+                        GUILayout.Space(8f);
+                        DrawVerificationPanel();
                     }
                 }
                 GUILayout.Space(10f);
@@ -536,6 +546,68 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 EditorGUILayout.HelpBox("已有一个 FastBuild 流程正在等待脚本编译或构建完成。", MessageType.Warning);
             else if (!string.IsNullOrEmpty(lastBuildStatus))
                 EditorGUILayout.HelpBox(lastBuildStatus, MessageType.Info);
+        }
+
+        private void DrawVerificationPanel()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                bool hasResult = !string.IsNullOrEmpty(lastVerificationReport);
+                DrawPanelHeader(
+                    "产物复核",
+                    hasResult ? (lastVerificationHasProblems ? "需要确认" : "已确认") : "未执行",
+                    hasResult
+                        ? (lastVerificationHasProblems
+                            ? new Color(0.88f, 0.42f, 0.28f)
+                            : new Color(0.20f, 0.68f, 0.57f))
+                        : new Color(0.55f, 0.57f, 0.60f));
+                GUILayout.Space(5f);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.FlexibleSpace();
+                    using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(lastArtifactPath)))
+                    {
+                        GUIContent reverifyContent = EditorGUIUtility.IconContent("Refresh");
+                        reverifyContent.tooltip = "重新读取产物并复核组件挂载";
+                        if (GUILayout.Button(reverifyContent, GUILayout.Width(30f), GUILayout.Height(19f)))
+                            ReverifyLastArtifact();
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(lastArtifactPath))
+                {
+                    using (new EditorGUI.DisabledScope(true))
+                        EditorGUILayout.TextField("产物", lastArtifactPath);
+                }
+
+                if (!hasResult)
+                {
+                    EditorGUILayout.LabelField(
+                        "构建完成后会直接读取 .warudo，确认每个组件的程序集链接和运行时类型。",
+                        EditorStyles.miniLabel);
+                    return;
+                }
+
+                if (lastVerificationHasProblems)
+                    EditorGUILayout.HelpBox(lastVerificationSummary, MessageType.Warning);
+                else
+                    EditorGUILayout.HelpBox(lastVerificationSummary, MessageType.Info);
+
+                showVerificationReport = EditorGUILayout.Foldout(showVerificationReport, "详细复核结果");
+                if (!showVerificationReport)
+                    return;
+
+                GUILayout.Space(3f);
+                using (var scroll = new EditorGUILayout.ScrollViewScope(verificationScroll, GUILayout.MinHeight(120f), GUILayout.MaxHeight(280f)))
+                {
+                    verificationScroll = scroll.scrollPosition;
+                    EditorGUILayout.TextArea(
+                        lastVerificationReport,
+                        EditorStyles.wordWrappedMiniLabel,
+                        GUILayout.ExpandHeight(true));
+                }
+            }
         }
 
         private void DrawPanelHeader(string title, string status, Color accent)
@@ -1356,7 +1428,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 object result = InvokeOfficialBuild(state.exportSettingsPath);
                 string resultSummary = ValidateBuildResult(result);
                 Debug.Log("[HoUnityTools] FastBuild Warudo Mod 完成。" + resultSummary);
-                resultMessage = "Warudo Mod 构建成功。\n" + resultSummary;
+
+                // 产物复核必须在清理临时目录之前执行：期望组件来自实际提交给 UMod 的
+                // 临时 Character.prefab，临时目录删除后就无法再取得这份基准。
+                HoFastBuildArtifactVerification verification = RunArtifactVerification(state, result);
+                resultMessage = "Warudo Mod 构建成功。\n" + resultSummary +
+                                (verification == null ? string.Empty : "\n" + verification.summary);
             }
             catch (Exception exception)
             {
@@ -1400,6 +1477,254 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 window.Repaint();
             }
         }
+
+        #region 产物复核
+
+        /// <summary>
+        /// 构建结束后复核产物：从临时 Character.prefab 收集“应当出现”的组件，
+        /// 再直接读 .warudo 字节确认这些组件真的被链接进了 Mod。
+        /// 这里捕获所有异常，避免复核本身破坏恢复和清理流程。
+        /// </summary>
+        private static HoFastBuildArtifactVerification RunArtifactVerification(BuildState state, object buildResult)
+        {
+            try
+            {
+                List<HoFastBuildExpectedComponent> expected = CollectExpectedComponents(state);
+                if (expected == null)
+                    expected = new List<HoFastBuildExpectedComponent>();
+
+                string artifactPath = ResolveArtifactPath(state, buildResult);
+                string modName = ReadActiveModName(state.exportSettingsPath);
+                HoFastBuildArtifactVerification verification =
+                    HoFastBuildArtifactVerifier.Verify(artifactPath, expected, modName);
+
+                PublishVerification(verification, artifactPath, expected);
+                return verification;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[HoUnityTools] FastBuild 产物复核未能执行：" + GetRootMessage(exception));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 期望组件必须来自 UMod 真正打包的那个 Prefab：临时副本已经完成脚本重绑和
+        /// 编辑器组件移除，因此它就是产物内容的准确基准。
+        /// </summary>
+        private static List<HoFastBuildExpectedComponent> CollectExpectedComponents(BuildState state)
+        {
+            var expected = new List<HoFastBuildExpectedComponent>();
+            if (!IsPrefab(state.temporaryPrefabPath))
+            {
+                Debug.LogWarning("[HoUnityTools] 临时 Character.prefab 不存在，本次复核只能检查产物容器结构。");
+                return expected;
+            }
+
+            var stagedToSource = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ScriptMapping mapping in state.scripts ?? Array.Empty<ScriptMapping>())
+            {
+                if (mapping.removeFromPrefab || string.IsNullOrEmpty(mapping.stagedPath))
+                    continue;
+                stagedToSource[NormalizeAssetPath(mapping.stagedPath)] = NormalizeAssetPath(mapping.sourcePath);
+            }
+
+            GameObject root = PrefabUtility.LoadPrefabContents(state.temporaryPrefabPath);
+            try
+            {
+                int missingScripts = 0;
+                foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                {
+                    missingScripts += GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject);
+                    foreach (MonoBehaviour behaviour in child.GetComponents<MonoBehaviour>())
+                    {
+                        if (behaviour == null)
+                            continue;
+
+                        Type behaviourType = behaviour.GetType();
+                        if (behaviourType == null || string.IsNullOrEmpty(behaviourType.FullName))
+                            continue;
+
+                        MonoScript script = MonoScript.FromMonoBehaviour(behaviour);
+                        string scriptPath = script == null
+                            ? string.Empty
+                            : NormalizeAssetPath(AssetDatabase.GetAssetPath(script));
+
+                        string sourcePath = string.Empty;
+                        bool staged = !string.IsNullOrEmpty(scriptPath) &&
+                                      stagedToSource.TryGetValue(scriptPath, out sourcePath);
+                        if (!staged)
+                            sourcePath = scriptPath;
+
+                        expected.Add(new HoFastBuildExpectedComponent
+                        {
+                            transformPath = GetTransformPath(root.transform, child),
+                            typeName = behaviourType.FullName,
+                            sourcePath = sourcePath ?? string.Empty,
+                            sourceAssembly = behaviourType.Assembly == null
+                                ? string.Empty
+                                : behaviourType.Assembly.GetName().Name,
+                            stagedRuntimeScript = staged,
+                            hostProvided = !staged && IsHostProvidedRuntimeScript(sourcePath, behaviourType.FullName),
+                        });
+                    }
+                }
+
+                if (missingScripts > 0)
+                {
+                    Debug.LogWarning(
+                        "[HoUnityTools] 临时 Character.prefab 中有 " + missingScripts +
+                        " 个 Missing Script，复核无法覆盖这些组件。");
+                }
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+
+            return expected;
+        }
+
+        private static string ResolveArtifactPath(BuildState state, object buildResult)
+        {
+            string builtFile = buildResult == null
+                ? string.Empty
+                : Convert.ToString(GetMemberValue(buildResult, "BuiltModFile"));
+            if (!string.IsNullOrEmpty(builtFile) && File.Exists(builtFile))
+                return Path.GetFullPath(builtFile);
+
+            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(state.exportSettingsPath);
+            if (settings == null)
+                return builtFile;
+
+            string modName;
+            string modExportPath;
+            int profileIndex;
+            if (!TryReadActiveExportProfile(settings, out modName, out modExportPath, out profileIndex))
+                return builtFile;
+
+            if (!string.IsNullOrEmpty(modExportPath) && !string.IsNullOrEmpty(modName))
+            {
+                string candidate = Path.Combine(modExportPath, modName + ".warudo");
+                if (File.Exists(candidate))
+                    return Path.GetFullPath(candidate);
+            }
+
+            return FindNewestArtifact(modExportPath);
+        }
+
+        private static string FindNewestArtifact(string exportDirectory)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(exportDirectory) || !Directory.Exists(exportDirectory))
+                    return string.Empty;
+
+                return Directory.GetFiles(exportDirectory, "*.warudo", SearchOption.TopDirectoryOnly)
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .FirstOrDefault() ?? string.Empty;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string ReadActiveModName(string settingsAssetPath)
+        {
+            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(settingsAssetPath);
+            if (settings == null)
+                return string.Empty;
+
+            string modName;
+            string modExportPath;
+            int profileIndex;
+            return TryReadActiveExportProfile(settings, out modName, out modExportPath, out profileIndex)
+                ? modName
+                : string.Empty;
+        }
+
+        private static void PublishVerification(
+            HoFastBuildArtifactVerification verification,
+            string artifactPath,
+            List<HoFastBuildExpectedComponent> expected)
+        {
+            if (verification == null)
+                return;
+
+            Debug.Log(verification.report);
+            if (verification.missingCount > 0)
+            {
+                Debug.LogError(
+                    "[HoUnityTools] FastBuild 产物复核发现 " + verification.missingCount +
+                    " 个组件在产物中缺失，运行时会出现 Missing Script。");
+            }
+            else if (verification.reviewCount > 0)
+            {
+                Debug.LogWarning(
+                    "[HoUnityTools] FastBuild 产物复核有 " + verification.reviewCount +
+                    " 个组件需要人工确认，请查看上面的组件复核列表。");
+            }
+
+            WriteVerificationReport(verification);
+
+            foreach (HoFastBuildWarudoModWindow window in Resources.FindObjectsOfTypeAll<HoFastBuildWarudoModWindow>())
+            {
+                window.lastArtifactPath = artifactPath ?? string.Empty;
+                window.lastVerificationSummary = verification.summary;
+                window.lastVerificationReport = verification.report;
+                window.lastVerificationHasProblems = verification.HasProblems;
+                window.lastExpectedComponents = expected ?? new List<HoFastBuildExpectedComponent>();
+                window.Repaint();
+            }
+        }
+
+        private static void WriteVerificationReport(HoFastBuildArtifactVerification verification)
+        {
+            try
+            {
+                string directory = StateDirectory;
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(
+                    Path.Combine(directory, "last-verification.txt"),
+                    verification.report,
+                    new UTF8Encoding(false));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[HoUnityTools] 无法写入产物复核报告：" + exception.Message);
+            }
+        }
+
+        /// <summary>重新复核上一次产物；期望组件已随窗口序列化，无需重新构建。</summary>
+        private void ReverifyLastArtifact()
+        {
+            if (string.IsNullOrEmpty(lastArtifactPath))
+            {
+                lastVerificationSummary = "还没有可复核的产物，请先执行一次构建。";
+                lastVerificationReport = string.Empty;
+                lastVerificationHasProblems = false;
+                return;
+            }
+
+            RefreshExportSettingsPreview();
+            HoFastBuildArtifactVerification verification = HoFastBuildArtifactVerifier.Verify(
+                lastArtifactPath,
+                lastExpectedComponents,
+                ReadActiveModName(exportSettingsPath));
+
+            lastVerificationSummary = verification.summary;
+            lastVerificationReport = verification.report;
+            lastVerificationHasProblems = verification.HasProblems;
+
+            Debug.Log(verification.report);
+            if (verification.missingCount > 0)
+                Debug.LogError("[HoUnityTools] 复核发现 " + verification.missingCount + " 个组件缺失。");
+            else if (verification.reviewCount > 0)
+                Debug.LogWarning("[HoUnityTools] 复核有 " + verification.reviewCount + " 个组件需要人工确认。");
+        }
+
+        #endregion
 
         private static void PrepareStagedPrefab(BuildState state)
         {
@@ -1732,8 +2057,36 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             out string modAssetPath,
             out int activeProfileIndex)
         {
+            string ignoredName;
+            string ignoredExportPath;
+            return TryReadActiveExportProfile(settings, out ignoredName, out ignoredExportPath, out modAssetPath,
+                out activeProfileIndex);
+        }
+
+        private static bool TryReadActiveExportProfile(
+            UnityEngine.Object settings,
+            out string modName,
+            out string modExportPath,
+            out int activeProfileIndex)
+        {
+            string ignoredAssetPath;
+            return TryReadActiveExportProfile(settings, out modName, out modExportPath, out ignoredAssetPath,
+                out activeProfileIndex);
+        }
+
+        private static bool TryReadActiveExportProfile(
+            UnityEngine.Object settings,
+            out string modName,
+            out string modExportPath,
+            out string modAssetPath,
+            out int activeProfileIndex)
+        {
+            modName = string.Empty;
+            modExportPath = string.Empty;
             modAssetPath = string.Empty;
             activeProfileIndex = 0;
+            if (settings == null)
+                return false;
 
             var serializedSettings = new SerializedObject(settings);
             SerializedProperty activeProfile = serializedSettings.FindProperty("activeProfile");
@@ -1752,6 +2105,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return false;
 
             modAssetPath = pathProperty.stringValue;
+            SerializedProperty nameProperty = profile.FindPropertyRelative("modName");
+            if (nameProperty != null)
+                modName = nameProperty.stringValue;
+            SerializedProperty exportProperty = profile.FindPropertyRelative("modExportPath");
+            if (exportProperty != null)
+                modExportPath = exportProperty.stringValue;
             return true;
         }
 

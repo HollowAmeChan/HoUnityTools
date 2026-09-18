@@ -15,6 +15,8 @@
 
 在 Project 窗口中右键 Prefab，可以使用 `Assets/HoUnityTools/FastBuildWarudoMod` 打开 FastBuild 面板并把该 Prefab 作为源 Prefab。顶栏入口 `HoUnityTools/FastBuildWarudoMod` 在没有选中 Prefab 时也能打开面板，源 Prefab 可以在面板里手动指定；窗口已经有源 Prefab 时，顶栏入口不会覆盖它。
 
+构建结束后 FastBuild 会直接读取 `.warudo` 产物复核组件是否真的挂上：结果打印到控制台，完整报告写入 `Library/HoFastBuildWarudoMod/last-verification.txt`，面板底部也可以展开查看或重新复核。
+
 ## 组件
 
 在 Inspector 中使用 `Add Component`，组件路径如下：

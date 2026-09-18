@@ -37,6 +37,7 @@ Warudo 的 Plugin Mod 也是普通 Mod，但额外要求源码中有继承 `Plug
     -> 按预览复制勾选的源码，移除编辑器专用组件
     -> 临时切换 ExportSettings 的活动 modAssetPath
     -> 等待 Unity 域重载后调用 UMod.ModToolsUtil.StartBuild
+    -> 直接读取 .warudo 复核组件是否真的挂上（控制台输出）
     -> 恢复 ExportSettings，按选项删除临时目录
 ```
 
@@ -122,6 +123,50 @@ Compile successful!
 
 只看到 `BUILD SUCCEEDED` 而没有源码加入和类型产物，不足以证明脚本可用。
 
+### 自动复核（FastBuild 内建）
+
+上面这些检查现在由 FastBuild 在 `StartBuild` 返回后自动执行，结论直接打印到 Unity 控制台；
+临时目录被清理前完成，因此期望基准就是 UMod 实际打包的那份临时 `Character.prefab`。
+
+复核覆盖的内容：
+
+- 容器结构：四个必需条目是否齐全，以及 `sharedassets.meta` 里的打包资源清单。
+- Mod 元数据：`modinfo.dat` 中是否出现当前 ExportProfile 的 Mod 名称。
+- 运行时类型表：解析 `assemblymodules.dat` 里内嵌 PE 的 ECMA-335 TypeDef 表，
+  得到 Mod 程序集实际包含的类型全名（等价于文档里“检查类型表”的人工步骤，不需要反编译工具）。
+- 组件挂载：扫描 `sharedassets.bin` 中 UMod Linker 为每个 MonoBehaviour 写下的
+  `[程序集显示名][类型全名]` 记录，与临时 Prefab 上的组件逐一比对。
+
+每个组件会得到三种结论之一：
+
+| 结论 | 含义 |
+| --- | --- |
+| `OK` | 组件已链接到本次构建的 Mod 程序集（或确认由 Warudo 宿主程序集提供）。 |
+| `缺失` | 产物里没有该组件的程序集记录，运行时会是 Missing Script。 |
+| `待确认` | 组件记录了非 Mod 程序集，或已链接但类型表里没有该类型，需要人工判断。 |
+
+控制台输出形如：
+
+```text
+[HoUnityTools] FastBuild 产物复核
+  产物：.../Characters/MOD_辅助骨测试.warudo
+  条目：modinfo.dat, sharedassets.bin, sharedassets.meta, assemblymodules.dat
+  Mod 程序集：umod-compiled-xxxxxxxx-....
+  编译类型：55 个
+  程序集记录：997 条
+  组件复核（3/3 已确认）：
+    [OK] Character / Hollow.HoUnityTools.RigConstraints.HoAuxRig -> umod-compiled-xxxx（FastBuild 复制的脚本已编译进 Mod 程序集。）
+    [待确认] Character/X / Some.Component -> Assembly-CSharp（该程序集不会随 Mod 分发。）
+```
+
+发现缺失时用 `Debug.LogError` 额外提示，存在 `待确认` 时用 `Debug.LogWarning`。
+完整报告同时写入 `Library/HoFastBuildWarudoMod/last-verification.txt`，窗口的“产物复核”面板
+可以展开查看，也可以在不重新构建的情况下按刷新按钮重新复核。
+
+`sharedassets.bin` 是 UnityFS 打包数据，程序集记录以字节级模式扫描取得。若某次构建的
+压缩设置让记录无法直接读出，复核会退化成长度受限的字节探测，并把结论标成“待确认”而不是
+误报成功或失败。
+
 ## 已排除的尝试
 
 - 把 Mod 工作区放到 Unity 忽略目录：Prefab 无法可靠导入和链接。
@@ -136,7 +181,7 @@ Compile successful!
 2. 选中的对象是 Project 中可加载的 Prefab，且没有 Missing Script。
 3. ExportSettings 存在，活动 Mod 目录位于 `Assets` 下并且不是 `Assets` 根目录。
 4. 依赖列表中只勾选可在 Warudo 运行时编译的源码。
-5. 构建后检查 `Build.log` 和 `assemblymodules.dat`，再在 Warudo 的 `Characters` 目录验证角色。
+5. 构建后确认控制台的“产物复核”报告里没有 `缺失`；`待确认` 需要人工判断，再在 Warudo 的 `Characters` 目录验证角色。
 
 ## 恢复和清理
 
