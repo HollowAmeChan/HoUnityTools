@@ -63,6 +63,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         public bool incomplete;
         /// <summary>有 FastBuild 复制过的脚本没有进入 Mod 程序集。</summary>
         public bool hasUnlinkedStagedComponent;
+        public bool buildLogFound;
+        public string buildLogPath = string.Empty;
+        /// <summary>构建日志里出现了本次产物的临时目录 id，说明它属于这次构建，而不是被后续构建覆盖。</summary>
+        public bool buildLogMatchesArtifact;
+        public int buildLogCompiledSourceCount;
+        public int buildLogExportedScriptCount;
+        public bool buildLogHighlightsTruncated;
+        public List<string> buildLogHighlights = new List<string>();
 
         public bool HasProblems
         {
@@ -88,6 +96,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const int ZipSearchLimit = 64;
         private const long MaxSingleEntryBytes = 512L * 1024L * 1024L;
         private const int MaxRecordStringLength = 4096;
+        private const int MaxBuildLogHighlights = 10;
         private const string ModCompiledAssemblyPrefix = "umod-compiled";
 
         private static readonly string[] RequiredEntries =
@@ -110,6 +119,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             string artifactPath,
             IList<HoFastBuildExpectedComponent> expectedComponents,
             string expectedModName)
+        {
+            return Verify(artifactPath, expectedComponents, expectedModName, null);
+        }
+
+        internal static HoFastBuildArtifactVerification Verify(
+            string artifactPath,
+            IList<HoFastBuildExpectedComponent> expectedComponents,
+            string expectedModName,
+            string buildLogPath)
         {
             var result = new HoFastBuildArtifactVerification
             {
@@ -136,9 +154,125 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 result.warnings.Add("组件比对中断：" + exception.Message);
             }
 
+            try
+            {
+                ReadBuildLog(result, buildLogPath);
+            }
+            catch (Exception exception)
+            {
+                result.warnings.Add("构建日志解析中断：" + exception.Message);
+            }
+
             result.summary = BuildSummary(result);
             result.report = BuildReport(result);
             return result;
+        }
+
+        /// <summary>
+        /// 读取 UMod 自己的 Build.log。它记录“哪些脚本被纳入编译”，
+        /// 是区分“产物里没有程序集是因为 FastBuild 没复制源码”还是“UMod 没编译”的唯一直接证据。
+        /// </summary>
+        private static void ReadBuildLog(HoFastBuildArtifactVerification result, string buildLogPath)
+        {
+            if (string.IsNullOrEmpty(buildLogPath) || !File.Exists(buildLogPath))
+                return;
+
+            string[] lines = File.ReadAllLines(buildLogPath);
+            result.buildLogFound = true;
+            result.buildLogPath = buildLogPath;
+
+            bool truncatedHighlights = false;
+            for (int index = 0; index < lines.Length; index++)
+            {
+                string line = lines[index] ?? string.Empty;
+                if (line.IndexOf("Adding source file to build:", StringComparison.OrdinalIgnoreCase) >= 0)
+                    result.buildLogCompiledSourceCount++;
+                else if (line.IndexOf("will be compiled into a managed assembly for export", StringComparison.OrdinalIgnoreCase) >= 0)
+                    result.buildLogExportedScriptCount++;
+
+                if (!IsBuildLogHighlight(line))
+                    continue;
+
+                if (result.buildLogHighlights.Count < MaxBuildLogHighlights)
+                    result.buildLogHighlights.Add(line.Trim());
+                else
+                    truncatedHighlights = true;
+            }
+
+            result.buildLogHighlightsTruncated = truncatedHighlights;
+
+            // Build.log 每次构建都会被覆盖；用临时目录的 build id 确认它属于本次产物。
+            string buildId = ExtractBuildId(result);
+            if (!string.IsNullOrEmpty(buildId))
+            {
+                for (int index = 0; index < lines.Length; index++)
+                {
+                    if (lines[index] != null &&
+                        lines[index].IndexOf(buildId, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        result.buildLogMatchesArtifact = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private static string ExtractBuildId(HoFastBuildArtifactVerification result)
+        {
+            for (int index = 0; index < result.packedAssets.Count; index++)
+            {
+                string asset = result.packedAssets[index] ?? string.Empty;
+                int marker = asset.IndexOf("/HoFastBuildWarudoModTemp/", StringComparison.OrdinalIgnoreCase);
+                if (marker < 0)
+                    continue;
+
+                string rest = asset.Substring(marker + "/HoFastBuildWarudoModTemp/".Length);
+                int slash = rest.IndexOf('/');
+                return slash < 0 ? rest : rest.Substring(0, slash);
+            }
+
+            return string.Empty;
+        }
+
+        private static bool IsBuildLogHighlight(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+                return false;
+
+            if (line.IndexOf("not in the .csproj", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (line.IndexOf("error CS", StringComparison.Ordinal) >= 0)
+                return true;
+            if (line.IndexOf("Compile failed", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (line.IndexOf("Compilation failed", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (line.IndexOf("BUILD FAILED", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            return HasNonZeroErrorCount(line);
+        }
+
+        private static bool HasNonZeroErrorCount(string line)
+        {
+            int index = line.IndexOf("Errors:", StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+                return false;
+
+            int cursor = index + "Errors:".Length;
+            while (cursor < line.Length && line[cursor] == ' ')
+                cursor++;
+
+            int value = 0;
+            bool any = false;
+            while (cursor < line.Length && char.IsDigit(line[cursor]))
+            {
+                value = value * 10 + (line[cursor] - '0');
+                any = true;
+                cursor++;
+            }
+
+            return any && value > 0;
         }
 
         private static List<ScriptRecord> InspectArtifact(
@@ -622,6 +756,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             builder.Append("  编译类型：").Append(result.compiledTypes.Count).AppendLine(" 个");
             builder.Append("  程序集记录：").Append(result.recordCount).AppendLine(" 条");
 
+            if (result.buildLogFound)
+            {
+                builder.Append("  构建日志：识别 ")
+                    .Append(result.buildLogExportedScriptCount)
+                    .Append(" 个脚本，实际加入编译 ")
+                    .Append(result.buildLogCompiledSourceCount)
+                    .AppendLine(" 个" + (result.buildLogMatchesArtifact ? "（属于本次构建）" : "（可能已被后续构建覆盖）"));
+            }
+
             if (result.metadataStrings.Count > 0)
                 builder.Append("  元数据：").AppendLine(string.Join(" | ", result.metadataStrings.ToArray()));
             if (result.packedAssets.Count > 0)
@@ -654,6 +797,30 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (result.incomplete && result.modAssemblyNames.Count == 0)
                 builder.AppendLine("  提示：产物里没有 assemblymodules.dat，说明这次构建没有产出运行时程序集。");
+
+            if (result.buildLogFound && result.buildLogMatchesArtifact &&
+                result.buildLogCompiledSourceCount == 0)
+            {
+                if (result.buildLogExportedScriptCount > 0)
+                {
+                    builder.Append("  提示：构建日志里扫描到 ")
+                        .Append(result.buildLogExportedScriptCount)
+                        .AppendLine(" 个脚本，但 Compile Scripts 阶段一个都没有加入编译。");
+                }
+                else
+                {
+                    builder.AppendLine("  提示：构建日志里没有找到任何待编译脚本，UMod 没有发现 Mod 里的源码。");
+                }
+            }
+
+            if (result.buildLogHighlights.Count > 0)
+            {
+                builder.AppendLine("  构建日志关键行：");
+                for (int index = 0; index < result.buildLogHighlights.Count; index++)
+                    builder.Append("    ").AppendLine(result.buildLogHighlights[index]);
+                if (result.buildLogHighlightsTruncated)
+                    builder.AppendLine("    …（其余略）");
+            }
 
             for (int index = 0; index < result.warnings.Count; index++)
                 builder.Append("  警告：").AppendLine(result.warnings[index]);

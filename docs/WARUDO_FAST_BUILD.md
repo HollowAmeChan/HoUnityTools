@@ -43,8 +43,16 @@ FastBuild 面向一个已经在 Unity 中完成配置的角色 Prefab。它只�
 - 依赖面板标题出现 `N 个不编译`、并弹出报错色提示框 → 有组件不会随 Mod 编译。
 - 产物复核报告出现 `缺少条目：assemblymodules.dat` → 这次构建根本没有编译 Mod 脚本。
 - 产物里搜不到 `umod-compiled`，却能搜到大量 `Assembly-CSharp, Version=`。
+- 报告里的 `构建日志：识别 N 个脚本，实际加入编译 M 个`：
+  - `N > 0 且 M = 0` → 源码进了 Mod 目录，但 UMod 的 Compile Scripts 阶段没收录，问题在 UMod 侧；
+  - `N = 0` → 连扫描阶段都没发现源码，问题在 FastBuild 侧的脚本勾选。
 
-一个真实的失败样本（手动解压安装、UMod 0.14.5）长这样：产物只有 3 个条目，`umod-compiled`
+注意区分这两类原因：只看到 `Assembly-CSharp` 不能直接断定是脚本没勾选，
+因为临时脚本副本本身也编译进 `Assembly-CSharp`，**勾选正常但 UMod 没编译**时结论完全一样。
+真正能区分的是打包资源清单（有没有暂存的 `Character.prefab` 和 `Resources/HoRuntimeDebugLine.*`）
+和上一条构建日志的计数。
+
+一个真实的失败样本（UMod 0.14.5）长这样：产物只有 3 个条目，`umod-compiled`
 出现 0 次，`Assembly-CSharp, Version=` 出现 71 次，而正常产物里 `umod-compiled` 记录正好也是 71 条
 —— Prefab 序列化完全一致，只差程序集解析。
 
@@ -223,6 +231,10 @@ Compile successful!
   早先的版本用 `umod-compiled-` 前缀硬编码判断，换 UMod 版本或编译程序集改名就会误报。
 - 组件挂载：扫描 `sharedassets.bin` 中 UMod Linker 为每个 MonoBehaviour 写下的
   `[程序集显示名][类型全名]` 记录，与临时 Prefab 上的组件逐一比对。
+- 构建日志：读取 UMod 的 `Build.log`（位于 `persistentDataPath/uMod Exporter 2.0/Build.log`，
+  即 `%USERPROFILE%\AppData\LocalLow\<company>\<product>\uMod Exporter 2.0\Build.log`），
+  统计“被识别为要编译的脚本数”和“真正加入编译的脚本数”，并用产物里的临时目录 id 确认这份日志
+  属于这次构建。它是区分“FastBuild 没复制源码”和“UMod 没编译”的唯一直接证据。
 
 每个组件会得到三种结论之一：
 
@@ -251,9 +263,14 @@ not in the .csproj file and will not be compiled
   Mod 程序集：umod-compiled-xxxxxxxx-....
   编译类型：55 个
   程序集记录：997 条
+  构建日志：识别 16 个脚本，实际加入编译 16 个（属于本次构建）
+  元数据：2.9.9 | 2021.3.45f2 | 0.14.4 | MOD_辅助骨测试 | 1.0.0
+  打包资源：4 项
   组件复核（3/3 已确认）：
-    [OK] Character / Hollow.HoUnityTools.RigConstraints.HoAuxRig -> umod-compiled-xxxx（FastBuild 复制的脚本已编译进 Mod 程序集。）
-    [待确认] Character/X / Some.Component -> Assembly-CSharp（该程序集不会随 Mod 分发。）
+    [OK] Character / Hollow.HoUnityTools.RigConstraints.HoAuxRig -> umod-compiled-xxxx（已编译进 Mod 程序集。）
+    [待确认] Character/X / Some.Component -> Assembly-CSharp（不在 Mod 程序集内）
+  提示：FastBuild 复制过的脚本没有进入 Mod 程序集。检查 Build.log 是否出现
+        “not in the .csproj file and will not be compiled”，以及依赖列表里这些脚本是否已勾选。
 ```
 
 发现缺失时用 `Debug.LogError` 额外提示，存在 `待确认` 时用 `Debug.LogWarning`。

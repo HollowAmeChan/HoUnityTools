@@ -2810,7 +2810,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string artifactPath = ResolveArtifactPath(state, buildResult);
                 string modName = ReadActiveModName(state.exportSettingsPath);
                 HoFastBuildArtifactVerification verification =
-                    HoFastBuildArtifactVerifier.Verify(artifactPath, expected, modName);
+                    HoFastBuildArtifactVerifier.Verify(artifactPath, expected, modName, UModBuildLogPath);
 
                 PublishVerification(verification, artifactPath, expected);
                 return verification;
@@ -2944,8 +2944,26 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
         }
 
-        private static string ReadActiveModName(string settingsAssetPath)
+        /// <summary>
+        /// UMod 每次构建都会把日志写到 persistentDataPath 下的固定位置，用它核对
+        /// “源码有没有真的进入编译”，这是区分 FastBuild 和 UMod 各自责任的关键证据。
+        /// </summary>
+        private static string UModBuildLogPath
         {
+            get
+            {
+                try
+                {
+                    return Path.Combine(Application.persistentDataPath, "uMod Exporter 2.0", "Build.log");
+                }
+                catch (Exception)
+                {
+                    return string.Empty;
+                }
+            }
+        }
+
+        private static string ReadActiveModName(string settingsAssetPath)        {
             UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(settingsAssetPath);
             if (settings == null)
                 return string.Empty;
@@ -3017,7 +3035,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             HoFastBuildArtifactVerification verification = HoFastBuildArtifactVerifier.Verify(
                 lastArtifactPath,
                 lastExpectedComponents,
-                ReadActiveModName(exportSettingsPath));
+                ReadActiveModName(exportSettingsPath),
+                UModBuildLogPath);
 
             lastVerificationSummary = verification.summary;
             lastVerificationReport = verification.report;
