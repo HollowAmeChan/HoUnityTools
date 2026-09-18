@@ -61,6 +61,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         public bool usedFallbackScan;
         /// <summary>关键条目读不出来，本次复核结论不完整，不能当成通过。</summary>
         public bool incomplete;
+        /// <summary>有 FastBuild 复制过的脚本没有进入 Mod 程序集。</summary>
+        public bool hasUnlinkedStagedComponent;
 
         public bool HasProblems
         {
@@ -168,7 +170,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     {
                         if (!entries.ContainsKey(entry.FullName))
                             entries.Add(entry.FullName, entry);
-                        result.entryInventory.Add(entry.FullName + " " + DescribeLength(entry));
+                        result.entryInventory.Add(entry.FullName + " " + DescribeEntrySize(entry));
                     }
 
                     foreach (string required in RequiredEntries)
@@ -312,10 +314,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             byte[] data = ReadEntry(entries, "assemblymodules.dat", result);
             if (data == null)
             {
+                // 缺条目由“缺少条目”行说明，读取失败由 ReadEntry 的警告说明，这里只标记结论不完整。
                 result.incomplete = true;
-                result.warnings.Add(
-                    "assemblymodules.dat 无法读取，因此无法确认哪些程序集会随 Mod 分发；" +
-                    "本次复核对“FastBuild 复制过的脚本”只能给出待确认，不能当作通过。");
                 return;
             }
 
@@ -452,7 +452,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     {
                         result.usedFallbackScan = true;
                         verdict.status = VerdictReview;
-                        verdict.note = "仅在产物字节中匹配到类型名，未能解析程序集记录，请人工确认。";
+                        verdict.note = "只匹配到类型名，未解析出程序集";
                         result.reviewCount++;
                         result.verdicts.Add(verdict);
                         continue;
@@ -462,7 +462,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (matchedAssemblies.Count == 0)
                 {
                     verdict.status = VerdictMissing;
-                    verdict.note = "产物中没有该组件的程序集记录，运行时会是 Missing Script。";
+                    verdict.note = "产物中没有该组件";
                     result.missingCount++;
                     result.verdicts.Add(verdict);
                     continue;
@@ -480,22 +480,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 {
                     if (!modCompiled)
                     {
+                        // 具体原因交给报告末尾的提示统一说明，组件行只留结论。
                         verdict.status = VerdictReview;
-                        if (result.modAssemblyNames.Count == 0)
-                        {
-                            verdict.note = "组件记录了 " + verdict.recordedAssemblies +
-                                           "；产物里读不到 Mod 程序集清单，无法判断脚本是否被编译，请查看 Build.log 是否出现 " +
-                                           "“not in the .csproj file and will not be compiled”。";
-                        }
-                        else
-                        {
-                            verdict.note = "组件记录了 " + verdict.recordedAssemblies +
-                                           "，不是本次构建产出的 " + string.Join("/", result.modAssemblyNames.ToArray()) +
-                                           "；该程序集不会随 Mod 分发，运行时会是 Missing Script。" +
-                                           "通常意味着 UMod 没有把 FastBuild 复制的脚本编进构建，" +
-                                           "请检查 Build.log 是否出现“not in the .csproj file and will not be compiled”。";
-                        }
-
+                        verdict.note = "不在 Mod 程序集内";
+                        result.hasUnlinkedStagedComponent = true;
                         result.reviewCount++;
                     }
                     else if (expected.typeName.IndexOf('+') < 0 &&
@@ -503,13 +491,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                              !result.compiledTypes.Contains(expected.typeName))
                     {
                         verdict.status = VerdictReview;
-                        verdict.note = "组件已链接到 Mod 程序集，但程序集类型表里没有该类型，请查看 Build.log。";
+                        verdict.note = "程序集类型表里没有该类型";
                         result.reviewCount++;
                     }
                     else
                     {
                         verdict.status = VerdictOk;
-                        verdict.note = "FastBuild 复制的脚本已编译进 Mod 程序集。";
+                        verdict.note = "已编译进 Mod 程序集";
                         result.matchedCount++;
                     }
 
@@ -520,7 +508,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (modCompiled)
                 {
                     verdict.status = VerdictOk;
-                    verdict.note = "脚本随本次构建一起编译。";
+                    verdict.note = "随构建一起编译";
                     result.matchedCount++;
                 }
                 else if (!string.IsNullOrEmpty(expected.sourceAssembly) &&
@@ -529,14 +517,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                          !IsUnityProvidedAssembly(matchedAssemblies[0]))
                 {
                     verdict.status = VerdictReview;
-                    verdict.note = "组件保留了原程序集 " + matchedAssemblies[0] +
-                                   "，只有 Warudo 宿主自带该程序集时才能加载。";
+                    verdict.note = "保留原程序集，仅宿主自带时可加载";
                     result.reviewCount++;
                 }
                 else
                 {
                     verdict.status = VerdictOk;
-                    verdict.note = "由宿主程序集 " + verdict.recordedAssemblies + " 提供。";
+                    verdict.note = "宿主提供";
                     result.matchedCount++;
                 }
 
@@ -585,28 +572,27 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             var builder = new StringBuilder();
             builder.Append("产物复核：");
-            if (result.incomplete)
-                builder.Append("复核不完整（有关键条目读不出来）；");
 
             int total = result.verdicts.Count;
             if (total == 0)
             {
-                builder.Append("未提供期望组件，仅检查容器结构。");
+                builder.Append("仅检查容器结构");
             }
             else
             {
                 builder.Append("组件 ").Append(result.matchedCount).Append('/').Append(total).Append(" 已确认");
                 if (result.missingCount > 0)
-                    builder.Append("，").Append(result.missingCount).Append(" 个缺失");
+                    builder.Append("，").Append(result.missingCount).Append(" 缺失");
                 if (result.reviewCount > 0)
-                    builder.Append("，").Append(result.reviewCount).Append(" 个待确认");
-                builder.Append("。");
+                    builder.Append("，").Append(result.reviewCount).Append(" 待确认");
             }
 
+            if (result.incomplete)
+                builder.Append("（结论不完整）");
+            builder.Append("。");
+
             if (result.missingEntries.Count > 0)
-                builder.Append(" 缺少条目：").Append(string.Join(", ", result.missingEntries.ToArray())).Append("。");
-            if (result.usedFallbackScan)
-                builder.Append(" 部分结论来自字节级探测。");
+                builder.Append("缺少 ").Append(string.Join("、", result.missingEntries.ToArray())).Append("。");
 
             return builder.ToString();
         }
@@ -623,21 +609,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return builder.ToString();
             }
 
-            builder.Append("  条目：").AppendLine(string.Join(", ", RequiredEntries));
             if (result.missingEntries.Count > 0)
                 builder.Append("  缺少条目：").AppendLine(string.Join(", ", result.missingEntries.ToArray()));
 
-            // 只在这一步出问题时才展开条目明细，正常报告保持简短。
-            if (result.entryInventory.Count > 0 &&
-                (result.missingEntries.Count > 0 || result.warnings.Count > 0))
-            {
+            // 只在出问题时才展开条目明细，正常报告保持简短。
+            if (result.entryInventory.Count > 0 && result.missingEntries.Count > 0)
                 builder.Append("  条目明细：").AppendLine(string.Join(" | ", result.entryInventory.ToArray()));
-            }
 
             if (result.modAssemblyNames.Count > 0)
                 builder.Append("  Mod 程序集：").AppendLine(string.Join(", ", result.modAssemblyNames.ToArray()));
-            else
-                builder.AppendLine("  Mod 程序集：(未读取到，见下方警告)");
 
             builder.Append("  编译类型：").Append(result.compiledTypes.Count).AppendLine(" 个");
             builder.Append("  程序集记录：").Append(result.recordCount).AppendLine(" 条");
@@ -664,6 +644,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     builder.AppendLine();
                 }
             }
+
+            // 具体原因只在一处说明，避免每个组件重复同一段长文案。
+            if (result.hasUnlinkedStagedComponent)
+            {
+                builder.AppendLine("  提示：FastBuild 复制过的脚本没有进入 Mod 程序集。检查 Build.log 是否出现");
+                builder.AppendLine("        “not in the .csproj file and will not be compiled”，以及依赖列表里这些脚本是否已勾选。");
+            }
+
+            if (result.incomplete && result.modAssemblyNames.Count == 0)
+                builder.AppendLine("  提示：产物里没有 assemblymodules.dat，说明这次构建没有产出运行时程序集。");
 
             for (int index = 0; index < result.warnings.Count; index++)
                 builder.Append("  警告：").AppendLine(result.warnings[index]);
@@ -1273,6 +1263,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             catch (Exception)
             {
                 return "未知";
+            }
+        }
+
+        private static string DescribeEntrySize(ZipArchiveEntry entry)
+        {
+            try
+            {
+                return entry.Length.ToString();
+            }
+            catch (Exception)
+            {
+                return "?";
             }
         }
 

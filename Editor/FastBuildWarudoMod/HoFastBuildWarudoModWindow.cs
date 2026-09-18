@@ -441,8 +441,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (workspaceEntries.Count == 0)
             {
                 EditorGUILayout.HelpBox(
-                    "当前 ExportSettings 还没有工作区。工作区决定 Mod 名称、资产目录和导出目录；" +
-                    "至少需要一个工作区才能构建。",
+                    "当前 ExportSettings 还没有工作区。工作区决定 Mod 名称、资产目录和导出目录，至少需要一个才能构建。",
                     MessageType.Warning);
                 return;
             }
@@ -1328,8 +1327,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (uncompiledComponents > 0)
                 {
                     EditorGUILayout.HelpBox(
-                        uncompiledComponents + " 个组件的脚本不会随 Mod 编译，构建出来的产物在 Warudo 里会是 Missing Script。" +
-                        "请在下面的列表里勾选它们的源码；如果这些脚本本来就由 Warudo 宿主提供，可以忽略。",
+                        uncompiledComponents + " 个组件不会随 Mod 编译，产物里会是 Missing Script；请在下方列表勾选它们的源码。",
                         MessageType.Error);
                 }
 
@@ -2970,17 +2968,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             Debug.Log(verification.report);
             if (verification.missingCount > 0)
-            {
-                Debug.LogError(
-                    "[HoUnityTools] FastBuild 产物复核发现 " + verification.missingCount +
-                    " 个组件在产物中缺失，运行时会出现 Missing Script。");
-            }
+                Debug.LogError("[HoUnityTools] 产物复核：" + verification.missingCount + " 个组件在产物中缺失。");
             else if (verification.reviewCount > 0)
-            {
-                Debug.LogWarning(
-                    "[HoUnityTools] FastBuild 产物复核有 " + verification.reviewCount +
-                    " 个组件需要人工确认，请查看上面的组件复核列表。");
-            }
+                Debug.LogWarning("[HoUnityTools] 产物复核：" + verification.reviewCount + " 个组件待确认。");
 
             WriteVerificationReport(verification);
 
@@ -3035,9 +3025,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             Debug.Log(verification.report);
             if (verification.missingCount > 0)
-                Debug.LogError("[HoUnityTools] 复核发现 " + verification.missingCount + " 个组件缺失。");
+                Debug.LogError("[HoUnityTools] 产物复核：" + verification.missingCount + " 个组件在产物中缺失。");
             else if (verification.reviewCount > 0)
-                Debug.LogWarning("[HoUnityTools] 复核有 " + verification.reviewCount + " 个组件需要人工确认。");
+                Debug.LogWarning("[HoUnityTools] 产物复核：" + verification.reviewCount + " 个组件待确认。");
         }
 
         #endregion
