@@ -17,6 +17,8 @@
 
 构建结束后 FastBuild 会直接读取 `.warudo` 产物复核组件是否真的挂上：结果打印到控制台，完整报告写入 `Library/HoFastBuildWarudoMod/last-verification.txt`，面板底部也可以展开查看或重新复核。
 
+面板的“Warudo 工作区”一栏可以直接列出、切换、新建、删除 `ExportSettings` 里的工作区（Export Profile），并显示活动工作区的 Mod 名称、作者、版本、资产目录、导出目录和 SDK 校验结果；需要编辑完整字段时可以一键打开 uMod 官方设置窗口。
+
 ## 组件
 
 在 Inspector 中使用 `Add Component`，组件路径如下：

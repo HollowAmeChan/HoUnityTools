@@ -61,6 +61,32 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public bool removeFromPrefab;
         }
 
+        /// <summary>
+        /// 一个 Warudo 工作区就是 ExportSettings.exportProfiles 里的一项（官方称 Export Profile）。
+        /// 这里保存复核后的只读快照，供面板直接绘制。
+        /// </summary>
+        [Serializable]
+        private sealed class WorkspaceEntry
+        {
+            public int index;
+            public string modName = string.Empty;
+            public string modAuthor = string.Empty;
+            public string modVersion = string.Empty;
+            public string modDescription = string.Empty;
+            public string modAssetPath = string.Empty;
+            public string modExportPath = string.Empty;
+            public int referencedModCount;
+            public bool isActive;
+            public bool isDuplicateName;
+            public bool nameValid;
+            public bool assetPathValid;
+            public bool assetPathExists;
+            public bool assetPathUnderAssets;
+            public bool assetPathIsAssetsRoot;
+            public bool exportPathExists;
+            public string statusNote = string.Empty;
+        }
+
         [Serializable]
         private sealed class BuildState
         {
@@ -91,7 +117,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private int nonScriptDependencyCount;
         [SerializeField] private int missingScriptCount;
         [SerializeField] private string exportSettingsPath = string.Empty;
-        [SerializeField] private string activeModAssetPath = string.Empty;
+        [SerializeField] private List<WorkspaceEntry> workspaceEntries = new List<WorkspaceEntry>();
+        [SerializeField] private int activeWorkspaceIndex = -1;
+        [SerializeField] private string workspaceStatusMessage = string.Empty;
+        [SerializeField] private Vector2 workspaceScroll;
+        [SerializeField] private bool showWorkspaceDetails = true;
+        [SerializeField] private bool workspaceHasDuplicateNames;
         [SerializeField] private string lastBuildStatus = string.Empty;
         [SerializeField] private string dependencyPreviewHash = string.Empty;
         [SerializeField] private string lastArtifactPath = string.Empty;
@@ -265,7 +296,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             else
             {
                 exportSettingsPath = string.Empty;
-                activeModAssetPath = string.Empty;
+                RefreshWorkspacePreview();
             }
         }
 
@@ -302,24 +333,925 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                DrawPanelHeader(
-                    "Warudo 工作区",
-                    string.IsNullOrEmpty(exportSettingsPath) ? "未找到" : "已连接",
-                    new Color(0.20f, 0.68f, 0.57f));
+                string status;
+                if (string.IsNullOrEmpty(exportSettingsPath))
+                    status = "未找到";
+                else if (workspaceEntries.Count == 0)
+                    status = "无工作区";
+                else
+                    status = workspaceEntries.Count + " 个工作区";
+
+                DrawPanelHeader("Warudo 工作区", status, new Color(0.20f, 0.68f, 0.57f));
                 GUILayout.Space(5f);
-                using (new EditorGUILayout.HorizontalScope())
+
+                if (string.IsNullOrEmpty(exportSettingsPath))
                 {
-                    GUILayout.FlexibleSpace();
-                    GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
-                    refreshContent.tooltip = "重新读取 UMod ExportSettings";
-                    if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
-                        RefreshExportSettingsPreview();
+                    EditorGUILayout.HelpBox(
+                        "当前工程没有找到 UMod ExportSettings 资源，无法管理工作区。",
+                        MessageType.Warning);
+                    return;
                 }
 
-                EditorGUILayout.LabelField("ExportSettings", string.IsNullOrEmpty(exportSettingsPath) ? "未找到" : exportSettingsPath);
-                EditorGUILayout.LabelField("Mod 目录", string.IsNullOrEmpty(activeModAssetPath) ? "未读取" : activeModAssetPath);
+                DrawWorkspaceToolbar();
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.TextField("ExportSettings", exportSettingsPath);
+
+                if (!string.IsNullOrEmpty(workspaceStatusMessage))
+                {
+                    EditorGUILayout.HelpBox(workspaceStatusMessage, MessageType.None);
+                }
+
+                DrawWorkspaceList();
+                DrawWorkspaceDetails();
             }
         }
+
+        private void DrawWorkspaceToolbar()
+        {
+            bool hasPendingBuild = HasPendingBuildState();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+
+                GUIContent refreshContent = EditorGUIUtility.IconContent("Refresh");
+                refreshContent.tooltip = "重新读取 UMod ExportSettings 与工作区列表";
+                if (GUILayout.Button(refreshContent, GUILayout.Width(30f), GUILayout.Height(19f)))
+                {
+                    workspaceStatusMessage = string.Empty;
+                    RefreshExportSettingsPreview();
+                }
+
+                GUIContent windowContent = EditorGUIUtility.IconContent("_Popup");
+                windowContent.tooltip = "打开 uMod 官方设置窗口，编辑工作区的完整字段";
+                if (GUILayout.Button(windowContent, GUILayout.Width(30f), GUILayout.Height(19f)))
+                    OpenOfficialExportSettingsWindow();
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(hasPendingBuild))
+                {
+                    if (GUILayout.Button("新建工作区", GUILayout.Width(96f)))
+                        CreateWorkspace();
+
+                    using (new EditorGUI.DisabledScope(activeWorkspaceIndex < 0 || workspaceEntries.Count <= 1))
+                    {
+                        if (GUILayout.Button("删除当前", GUILayout.Width(80f)))
+                            DeleteActiveWorkspace();
+                    }
+
+                    if (workspaceHasDuplicateNames)
+                    {
+                        if (GUILayout.Button("清理重名", GUILayout.Width(80f)))
+                            RemoveDuplicateWorkspaces();
+                    }
+                }
+
+                if (hasPendingBuild)
+                {
+                    GUILayout.Label("构建进行中，工作区已锁定", EditorStyles.miniLabel);
+                }
+            }
+
+            RefreshWorkspacePreviewIfDirty();
+        }
+
+        private void DrawWorkspaceList()
+        {
+            if (workspaceEntries.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "当前 ExportSettings 还没有工作区。工作区决定 Mod 名称、资产目录和导出目录；" +
+                    "至少需要一个工作区才能构建。",
+                    MessageType.Warning);
+                return;
+            }
+
+            GUILayout.Space(3f);
+            workspaceScroll = EditorGUILayout.BeginScrollView(
+                workspaceScroll,
+                GUILayout.MinHeight(Mathf.Min(150f, 26f * workspaceEntries.Count)),
+                GUILayout.MaxHeight(150f));
+
+            // 先画完整个列表再切换，避免在布局过程中改变控件数量。
+            bool locked = HasPendingBuildState();
+            int requestedIndex = -1;
+            for (int index = 0; index < workspaceEntries.Count; index++)
+            {
+                int requested = DrawWorkspaceRow(workspaceEntries[index], locked);
+                if (requested >= 0)
+                    requestedIndex = requested;
+            }
+
+            EditorGUILayout.EndScrollView();
+
+            if (requestedIndex >= 0)
+                SetActiveWorkspace(requestedIndex);
+        }
+
+        /// <summary>返回需要切换到的目标下标；不需要切换时返回 -1。</summary>
+        private int DrawWorkspaceRow(WorkspaceEntry entry, bool locked)
+        {
+            int requested = -1;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                string displayName = !string.IsNullOrEmpty(entry.modName) ? entry.modName : "<未命名>";
+                string tooltip =
+                    "Mod 资产目录：" + (string.IsNullOrEmpty(entry.modAssetPath) ? "(未设置)" : entry.modAssetPath) +
+                    "\n导出目录：" + (string.IsNullOrEmpty(entry.modExportPath) ? "(未设置)" : entry.modExportPath) +
+                    "\n版本：" + (string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
+                if (!string.IsNullOrEmpty(entry.statusNote))
+                    tooltip += "\n注意：" + entry.statusNote;
+
+                var content = new GUIContent(displayName, tooltip);
+
+                using (new EditorGUI.DisabledScope(locked))
+                {
+                    bool selected = GUILayout.Toggle(
+                        entry.isActive,
+                        content,
+                        EditorStyles.radioButton,
+                        GUILayout.MinWidth(170f));
+                    if (selected && !entry.isActive)
+                        requested = entry.index;
+                }
+
+                GUILayout.Label(entry.modAssetPath, EditorStyles.miniLabel, GUILayout.MinWidth(140f));
+
+                string statusText = entry.isDuplicateName
+                    ? "重名"
+                    : !entry.nameValid
+                        ? "<未命名>"
+                        : !entry.assetPathValid
+                            ? "目录无效"
+                            : "就绪";
+                GUILayout.Label(statusText, EditorStyles.miniLabel, GUILayout.Width(58f));
+            }
+
+            return requested;
+        }
+
+        private void DrawWorkspaceDetails()
+        {
+            if (activeWorkspaceIndex < 0 || activeWorkspaceIndex >= workspaceEntries.Count)
+                return;
+
+            WorkspaceEntry entry = workspaceEntries[activeWorkspaceIndex];
+            GUILayout.Space(5f);
+            showWorkspaceDetails = EditorGUILayout.Foldout(showWorkspaceDetails, "当前工作区详情");
+            if (!showWorkspaceDetails)
+                return;
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    Texture2D icon = LoadWorkspaceIcon(activeWorkspaceIndex);
+                    Rect iconRect = GUILayoutUtility.GetRect(44f, 44f);
+                    if (icon != null)
+                        EditorGUI.DrawPreviewTexture(iconRect, icon);
+                    else
+                        EditorGUI.HelpBox(iconRect, "无图标", MessageType.None);
+
+                    using (new EditorGUILayout.VerticalScope())
+                    {
+                        EditorGUILayout.LabelField("Mod 名称", string.IsNullOrEmpty(entry.modName) ? "(未设置)" : entry.modName);
+                        EditorGUILayout.LabelField("作者", string.IsNullOrEmpty(entry.modAuthor) ? "(未设置)" : entry.modAuthor);
+                        EditorGUILayout.LabelField("版本", string.IsNullOrEmpty(entry.modVersion) ? "(未设置)" : entry.modVersion);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(entry.modDescription))
+                    EditorGUILayout.LabelField("说明", entry.modDescription, EditorStyles.wordWrappedMiniLabel);
+
+                DrawWorkspacePathRow(
+                    "Mod 资产目录",
+                    entry.modAssetPath,
+                    DescribeWorkspaceAssetPath(entry),
+                    entry.assetPathValid ? MessageType.None : MessageType.Warning,
+                    entry.assetPathUnderAssets && !entry.assetPathExists && !entry.assetPathIsAssetsRoot,
+                    "创建目录",
+                    CreateWorkspaceAssetFolder);
+
+                DrawWorkspacePathRow(
+                    "导出目录",
+                    entry.modExportPath,
+                    DescribeWorkspaceExportPath(entry),
+                    entry.exportPathExists ? MessageType.None : MessageType.Warning,
+                    entry.exportPathExists,
+                    "定位",
+                    RevealWorkspaceExportFolder);
+
+                EditorGUILayout.LabelField("引用 Mod", entry.referencedModCount + " 个");
+
+                string validation = DescribeWorkspaceValidation();
+                if (!string.IsNullOrEmpty(validation))
+                    EditorGUILayout.HelpBox(validation, MessageType.None);
+            }
+        }
+
+        private void DrawWorkspacePathRow(
+            string label,
+            string path,
+            string description,
+            MessageType messageType,
+            bool actionEnabled,
+            string actionLabel,
+            Action action)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(label, string.IsNullOrEmpty(path) ? "(未设置)" : path);
+                using (new EditorGUI.DisabledScope(!actionEnabled))
+                {
+                    if (GUILayout.Button(actionLabel, GUILayout.Width(72f)))
+                        action();
+                }
+            }
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    if (messageType == MessageType.None)
+                        EditorGUILayout.LabelField(description, EditorStyles.miniLabel);
+                    else
+                        EditorGUILayout.HelpBox(description, messageType);
+                }
+            }
+        }
+
+        private static string DescribeWorkspaceAssetPath(WorkspaceEntry entry)
+        {
+            if (string.IsNullOrEmpty(entry.modAssetPath))
+                return "未设置 Mod 资产目录。";
+            if (!entry.assetPathExists)
+                return "目录不存在：" + entry.modAssetPath;
+            if (entry.assetPathIsAssetsRoot)
+                return "不能直接使用 Assets 根目录，请为这个工作区建一个子目录。";
+            if (!entry.assetPathUnderAssets)
+                return "目录不在 Assets 下，UMod 无法把它作为 Mod 工作区。";
+            return string.Empty;
+        }
+
+        private static string DescribeWorkspaceExportPath(WorkspaceEntry entry)
+        {
+            if (string.IsNullOrEmpty(entry.modExportPath))
+                return "未设置导出目录，构建时不知道要把 .warudo 写到哪里。";
+            if (!entry.exportPathExists)
+                return "导出目录不存在：" + entry.modExportPath;
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// 直接调用 SDK 自己的校验入口，避免在面板里重复实现版本号格式等规则。
+        /// 这些方法都只校验当前活动工作区。
+        /// </summary>
+        private string DescribeWorkspaceValidation()
+        {
+            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportSettingsPath);
+            if (settings == null)
+                return string.Empty;
+
+            bool? name = InvokeSettingsValidation(settings, "ValidateName");
+            bool? assetPath = InvokeSettingsValidation(settings, "ValidateAssetPath");
+            bool? version = InvokeSettingsValidation(settings, "ValidateVersion");
+            bool? buildAndRun = InvokeSettingsValidation(settings, "ValidateBuildAndRun");
+            if (!name.HasValue && !assetPath.HasValue && !version.HasValue)
+                return string.Empty;
+
+            var builder = new StringBuilder("SDK 校验：");
+            builder.Append("名称 ").Append(FormatValidation(name));
+            builder.Append(" / 资产目录 ").Append(FormatValidation(assetPath));
+            builder.Append(" / 版本 ").Append(FormatValidation(version));
+            if (buildAndRun.HasValue)
+                builder.Append(" / 运行配置 ").Append(FormatValidation(buildAndRun));
+            return builder.ToString();
+        }
+
+        private static string FormatValidation(bool? value)
+        {
+            if (!value.HasValue)
+                return "未校验";
+            return value.Value ? "通过" : "不通过";
+        }
+
+        private static bool? InvokeSettingsValidation(UnityEngine.Object settings, string methodName)
+        {
+            try
+            {
+                MethodInfo method = settings.GetType().GetMethod(
+                    methodName,
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (method == null || method.ReturnType != typeof(bool))
+                    return null;
+                return (bool)method.Invoke(settings, null);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        #region 工作区读写
+
+        /// <summary>
+        /// 检测工作区列表是否被外部改动（例如在 uMod 官方设置窗口里增删或切换）。
+        /// 这里只比较数组长度和活动下标，逐帧读全部字段代价太高；字段内容的改动请用刷新按钮。
+        /// </summary>
+        private void RefreshWorkspacePreviewIfDirty()
+        {
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
+            if (settings == null)
+                return;
+
+            var serializedSettings = new SerializedObject(settings);
+            SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
+            if (profiles == null || !profiles.isArray)
+                return;
+
+            SerializedProperty activeProperty = serializedSettings.FindProperty("activeProfile");
+            int activeValue = activeProperty == null ? -1 : activeProperty.intValue;
+
+            if (profiles.arraySize != workspaceEntries.Count ||
+                (workspaceEntries.Count > 0 && activeValue != activeWorkspaceIndex))
+            {
+                RefreshWorkspacePreview();
+            }
+        }
+
+        private void RefreshWorkspacePreview()
+        {
+            workspaceEntries.Clear();
+            activeWorkspaceIndex = -1;
+            workspaceHasDuplicateNames = false;
+
+            if (string.IsNullOrEmpty(exportSettingsPath))
+                return;
+
+            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportSettingsPath);
+            if (settings == null)
+                return;
+
+            var serializedSettings = new SerializedObject(settings);
+            SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
+            if (profiles == null || !profiles.isArray || profiles.arraySize == 0)
+                return;
+
+            SerializedProperty activeProperty = serializedSettings.FindProperty("activeProfile");
+            int rawActive = activeProperty == null ? 0 : activeProperty.intValue;
+            if (rawActive < 0 || rawActive >= profiles.arraySize)
+                rawActive = 0;
+
+            var seenNames = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int index = 0; index < profiles.arraySize; index++)
+            {
+                SerializedProperty profile = profiles.GetArrayElementAtIndex(index);
+                var entry = new WorkspaceEntry
+                {
+                    index = index,
+                    modName = ReadRelativeString(profile, "modName"),
+                    modAuthor = ReadRelativeString(profile, "modAuthor"),
+                    modVersion = ReadRelativeString(profile, "modVersion"),
+                    modDescription = ReadRelativeString(profile, "modDescription"),
+                    modAssetPath = ReadRelativeString(profile, "modAssetPath"),
+                    modExportPath = ReadRelativeString(profile, "modExportPath"),
+                    isActive = index == rawActive,
+                };
+
+                SerializedProperty references = profile.FindPropertyRelative("referencePaths");
+                entry.referencedModCount = references != null && references.isArray ? references.arraySize : 0;
+
+                entry.nameValid = !string.IsNullOrEmpty(entry.modName);
+                entry.assetPathIsAssetsRoot = IsAssetsRootPath(entry.modAssetPath);
+                entry.assetPathExists = !string.IsNullOrEmpty(entry.modAssetPath) &&
+                                        Directory.Exists(entry.modAssetPath);
+                entry.assetPathUnderAssets = IsPathUnderAssets(entry.modAssetPath);
+                entry.assetPathValid = entry.nameValid &&
+                                       entry.assetPathExists &&
+                                       entry.assetPathUnderAssets &&
+                                       !entry.assetPathIsAssetsRoot;
+                entry.exportPathExists = !string.IsNullOrEmpty(entry.modExportPath) &&
+                                         Directory.Exists(entry.modExportPath);
+
+                if (entry.nameValid)
+                {
+                    int existingIndex;
+                    if (seenNames.TryGetValue(entry.modName, out existingIndex))
+                    {
+                        entry.isDuplicateName = true;
+                        workspaceEntries[existingIndex].isDuplicateName = true;
+                        workspaceHasDuplicateNames = true;
+                    }
+                    else
+                    {
+                        seenNames.Add(entry.modName, index);
+                    }
+                }
+
+                entry.statusNote = BuildWorkspaceStatusNote(entry);
+                workspaceEntries.Add(entry);
+            }
+
+            activeWorkspaceIndex = rawActive;
+        }
+
+        /// <summary>行内状态只描述“能不能直接拿去构建”，完整原因放在详情区。</summary>
+        private static string BuildWorkspaceStatusNote(WorkspaceEntry entry)
+        {
+            if (entry.isDuplicateName)
+                return "有多个工作区使用同一个 Mod 名称。";
+            if (!entry.nameValid)
+                return "工作区还没有 Mod 名称。";
+            if (!entry.assetPathExists)
+                return "Mod 资产目录不存在。";
+            if (entry.assetPathIsAssetsRoot)
+                return "Mod 资产目录不能是 Assets 根目录。";
+            if (!entry.assetPathUnderAssets)
+                return "Mod 资产目录不在 Assets 下。";
+            return string.Empty;
+        }
+
+        private static bool IsAssetsRootPath(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return false;
+
+            string normalized = assetPath.Replace('\\', '/').TrimEnd('/');
+            return string.Equals(normalized, "Assets", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(normalized, Application.dataPath.Replace('\\', '/').TrimEnd('/'),
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPathUnderAssets(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return false;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(assetPath);
+                string dataPath = Path.GetFullPath(Application.dataPath);
+                return fullPath.StartsWith(dataPath, FileSystemPathComparison);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static string ReadRelativeString(SerializedProperty parent, string name)
+        {
+            SerializedProperty property = parent.FindPropertyRelative(name);
+            return property == null || property.propertyType != SerializedPropertyType.String
+                ? string.Empty
+                : property.stringValue;
+        }
+
+        private static void WriteRelativeString(SerializedProperty parent, string name, string value)
+        {
+            SerializedProperty property = parent.FindPropertyRelative(name);
+            if (property != null && property.propertyType == SerializedPropertyType.String)
+                property.stringValue = value ?? string.Empty;
+        }
+
+        private Texture2D LoadWorkspaceIcon(int index)
+        {
+            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportSettingsPath);
+            if (settings == null)
+                return null;
+
+            var serializedSettings = new SerializedObject(settings);
+            SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
+            if (profiles == null || !profiles.isArray || index < 0 || index >= profiles.arraySize)
+                return null;
+
+            SerializedProperty icon = profiles.GetArrayElementAtIndex(index).FindPropertyRelative("modIcon");
+            return icon == null ? null : icon.objectReferenceValue as Texture2D;
+        }
+
+        private static UnityEngine.Object LoadExportSettingsAsset(string path)
+        {
+            return string.IsNullOrEmpty(path)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+        }
+
+        #endregion
+
+        #region 工作区操作
+
+        private void SetActiveWorkspace(int index)
+        {
+            if (HasPendingBuildState())
+            {
+                workspaceStatusMessage = "已有 FastBuild 流程在进行中，暂不能切换工作区。";
+                return;
+            }
+
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
+            if (settings == null)
+            {
+                workspaceStatusMessage = "找不到 ExportSettings，无法切换工作区。";
+                return;
+            }
+
+            try
+            {
+                Undo.RecordObject(settings, "切换 Warudo 工作区");
+                if (!TryInvokeExportSettingsMethod(settings, "SetActiveExportProfile", new object[] { index }))
+                {
+                    var serializedSettings = new SerializedObject(settings);
+                    SerializedProperty activeProperty = serializedSettings.FindProperty("activeProfile");
+                    if (activeProperty == null)
+                        throw new InvalidOperationException("ExportSettings 缺少 activeProfile 字段。");
+                    activeProperty.intValue = index;
+                    serializedSettings.ApplyModifiedProperties();
+                }
+
+                CommitExportSettingsChange(settings);
+                workspaceStatusMessage = "已切换到工作区：" + DescribeWorkspaceName(index);
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "切换工作区失败：" + GetRootMessage(exception);
+                Debug.LogError("[HoUnityTools] 切换 Warudo 工作区失败：" + exception);
+            }
+
+            RefreshExportSettingsPreview();
+            Repaint();
+        }
+
+        private void CreateWorkspace()
+        {
+            if (HasPendingBuildState())
+            {
+                workspaceStatusMessage = "已有 FastBuild 流程在进行中，暂不能新建工作区。";
+                return;
+            }
+
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
+            if (settings == null)
+            {
+                workspaceStatusMessage = "找不到 ExportSettings，无法新建工作区。";
+                return;
+            }
+
+            // 生成唯一名称、继承导出目录都依赖当前列表，先同步一次避免用到过期快照。
+            RefreshWorkspacePreview();
+
+            try
+            {
+                // 新建的工作区继承当前工作区的导出目录与作者：这两项通常与工程环境相关，
+                // 而 Mod 名称和资产目录必须由用户为新 Mod 重新指定。
+                string inheritedExportPath = string.Empty;
+                string inheritedAuthor = string.Empty;
+                if (activeWorkspaceIndex >= 0 && activeWorkspaceIndex < workspaceEntries.Count)
+                {
+                    WorkspaceEntry current = workspaceEntries[activeWorkspaceIndex];
+                    inheritedExportPath = current.modExportPath;
+                    inheritedAuthor = current.modAuthor;
+                }
+
+                Undo.RecordObject(settings, "新建 Warudo 工作区");
+                if (!TryInvokeExportSettingsMethod(settings, "CreateNewExportProfile", new object[] { true }))
+                {
+                    // 回退路径：SDK 未提供或调用失败时直接扩展序列化数组。
+                    var serializedSettings = new SerializedObject(settings);
+                    SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
+                    SerializedProperty activeProperty = serializedSettings.FindProperty("activeProfile");
+                    if (profiles == null || !profiles.isArray || activeProperty == null)
+                        throw new InvalidOperationException("ExportSettings 缺少 exportProfiles 或 activeProfile 字段。");
+
+                    profiles.arraySize++;
+                    activeProperty.intValue = profiles.arraySize - 1;
+                    serializedSettings.ApplyModifiedProperties();
+                }
+
+                string newName = BuildUniqueWorkspaceName();
+                var seedSettings = new SerializedObject(settings);
+                SerializedProperty seedProfiles = seedSettings.FindProperty("exportProfiles");
+                SerializedProperty seedActive = seedSettings.FindProperty("activeProfile");
+                if (seedProfiles == null || !seedProfiles.isArray || seedProfiles.arraySize == 0)
+                    throw new InvalidOperationException("新建工作区后 exportProfiles 为空。");
+
+                int newIndex = seedActive == null ? seedProfiles.arraySize - 1 : seedActive.intValue;
+                if (newIndex < 0 || newIndex >= seedProfiles.arraySize)
+                    newIndex = seedProfiles.arraySize - 1;
+
+                SerializedProperty profile = seedProfiles.GetArrayElementAtIndex(newIndex);
+                WriteRelativeString(profile, "modName", newName);
+                WriteRelativeString(profile, "modExportPath", inheritedExportPath);
+                if (!string.IsNullOrEmpty(inheritedAuthor))
+                    WriteRelativeString(profile, "modAuthor", inheritedAuthor);
+                WriteRelativeString(profile, "modAssetPath", "Assets/" + newName);
+                seedSettings.ApplyModifiedProperties();
+
+                CommitExportSettingsChange(settings);
+                workspaceStatusMessage =
+                    "已新建并切换到工作区“" + newName + "”。" +
+                    "请设置 Mod 资产目录；目录不存在时可以在此面板直接创建。";
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "新建工作区失败：" + GetRootMessage(exception);
+                Debug.LogError("[HoUnityTools] 新建 Warudo 工作区失败：" + exception);
+            }
+
+            RefreshExportSettingsPreview();
+        }
+
+        private void DeleteActiveWorkspace()
+        {
+            if (HasPendingBuildState())
+            {
+                workspaceStatusMessage = "已有 FastBuild 流程在进行中，暂不能删除工作区。";
+                return;
+            }
+
+            // 删除操作依赖活动下标，先用磁盘上的真实状态同步一次。
+            RefreshWorkspacePreview();
+            if (activeWorkspaceIndex < 0 || activeWorkspaceIndex >= workspaceEntries.Count)
+                return;
+
+            if (workspaceEntries.Count <= 1)
+            {
+                workspaceStatusMessage = "至少要保留一个工作区；如果确实要清空，请使用 uMod 官方设置窗口。";
+                return;
+            }
+
+            WorkspaceEntry entry = workspaceEntries[activeWorkspaceIndex];
+            string displayName = string.IsNullOrEmpty(entry.modName) ? "<未命名>" : entry.modName;
+            if (!EditorUtility.DisplayDialog(
+                    WindowTitle,
+                    "删除工作区“" + displayName + "”？\n\n只会从 ExportSettings 里移除这条配置，" +
+                    "不会删除磁盘上的 Mod 资产目录或已构建的 .warudo。",
+                    "删除",
+                    "取消"))
+            {
+                return;
+            }
+
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
+            if (settings == null)
+            {
+                workspaceStatusMessage = "找不到 ExportSettings，无法删除工作区。";
+                return;
+            }
+
+            try
+            {
+                Undo.RecordObject(settings, "删除 Warudo 工作区");
+                if (!TryInvokeExportSettingsMethod(settings, "DeleteExportProfile", new object[] { entry.index }))
+                {
+                    var serializedSettings = new SerializedObject(settings);
+                    SerializedProperty profiles = serializedSettings.FindProperty("exportProfiles");
+                    SerializedProperty activeProperty = serializedSettings.FindProperty("activeProfile");
+                    if (profiles == null || !profiles.isArray || activeProperty == null)
+                        throw new InvalidOperationException("ExportSettings 缺少 exportProfiles 或 activeProfile 字段。");
+
+                    profiles.DeleteArrayElementAtIndex(entry.index);
+                    // SDK 在删除后会把活动工作区复位到第一项，这里保持一致。
+                    activeProperty.intValue = 0;
+                    serializedSettings.ApplyModifiedProperties();
+                }
+
+                CommitExportSettingsChange(settings);
+                workspaceStatusMessage = "已删除工作区：“" + displayName + "”。";
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "删除工作区失败：" + GetRootMessage(exception);
+                Debug.LogError("[HoUnityTools] 删除 Warudo 工作区失败：" + exception);
+            }
+
+            RefreshExportSettingsPreview();
+        }
+
+        private void RemoveDuplicateWorkspaces()
+        {
+            if (HasPendingBuildState())
+            {
+                workspaceStatusMessage = "已有 FastBuild 流程在进行中，暂不能修改工作区。";
+                return;
+            }
+
+            UnityEngine.Object settings = LoadExportSettingsAsset(exportSettingsPath);
+            if (settings == null)
+            {
+                workspaceStatusMessage = "找不到 ExportSettings。";
+                return;
+            }
+
+            try
+            {
+                Undo.RecordObject(settings, "清理重复 Warudo 工作区");
+                if (!TryInvokeExportSettingsMethod(settings, "RemoveDuplicateProfiles", null))
+                    throw new NotSupportedException("当前 SDK 未提供 RemoveDuplicateProfiles。");
+
+                CommitExportSettingsChange(settings);
+                workspaceStatusMessage = "已按 Mod 名称去重，保留每组的第一项。";
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "清理重复工作区失败：" + GetRootMessage(exception);
+                Debug.LogError("[HoUnityTools] 清理重复 Warudo 工作区失败：" + exception);
+            }
+
+            RefreshExportSettingsPreview();
+        }
+
+        private void CreateWorkspaceAssetFolder()
+        {
+            if (activeWorkspaceIndex < 0 || activeWorkspaceIndex >= workspaceEntries.Count)
+                return;
+
+            WorkspaceEntry entry = workspaceEntries[activeWorkspaceIndex];
+            if (string.IsNullOrEmpty(entry.modAssetPath))
+            {
+                workspaceStatusMessage = "请先填写 Mod 资产目录。";
+                return;
+            }
+
+            try
+            {
+                EnsureAssetFolder(ToAssetRelativePath(entry.modAssetPath));
+                AssetDatabase.Refresh();
+                workspaceStatusMessage = "已创建目录：" + entry.modAssetPath;
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "创建目录失败：" + GetRootMessage(exception);
+            }
+
+            RefreshExportSettingsPreview();
+        }
+
+        /// <summary>把 Assets 下的绝对路径折叠回 "Assets/..." 形式，便于走 AssetDatabase 创建。</summary>
+        private static string ToAssetRelativePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            string normalized = path.Replace('\\', '/').TrimEnd('/');
+            string dataPath = Application.dataPath.Replace('\\', '/').TrimEnd('/');
+            if (normalized.StartsWith(dataPath, FileSystemPathComparison))
+            {
+                string relative = normalized.Substring(dataPath.Length).TrimStart('/');
+                return string.IsNullOrEmpty(relative) ? "Assets" : "Assets/" + relative;
+            }
+
+            return normalized;
+        }
+
+        private void RevealWorkspaceExportFolder()
+        {
+            if (activeWorkspaceIndex < 0 || activeWorkspaceIndex >= workspaceEntries.Count)
+                return;
+
+            WorkspaceEntry entry = workspaceEntries[activeWorkspaceIndex];
+            if (string.IsNullOrEmpty(entry.modExportPath) || !Directory.Exists(entry.modExportPath))
+            {
+                workspaceStatusMessage = "导出目录不存在，无法定位。";
+                return;
+            }
+
+            EditorUtility.RevealInFinder(entry.modExportPath);
+        }
+
+        private void OpenOfficialExportSettingsWindow()
+        {
+            try
+            {
+                Type windowType = FindLoadedType("UMod.Exporter.SettingsWindow");
+                MethodInfo method = windowType == null
+                    ? null
+                    : windowType.GetMethod(
+                        "ShowWindow",
+                        BindingFlags.Public | BindingFlags.Static,
+                        null,
+                        new[] { typeof(bool), typeof(int) },
+                        null);
+                if (method == null)
+                {
+                    workspaceStatusMessage = "当前 SDK 未提供官方设置窗口入口。";
+                    return;
+                }
+
+                // openTab 0 = Mod 页，工作区切换和新建都在这里。
+                method.Invoke(null, new object[] { false, 0 });
+            }
+            catch (Exception exception)
+            {
+                workspaceStatusMessage = "打开官方设置窗口失败：" + GetRootMessage(exception);
+                Debug.LogWarning("[HoUnityTools] 打开 uMod 官方设置窗口失败：" + exception);
+            }
+        }
+
+        /// <summary>调用 SDK 公开的 ExportSettings 方法；不可用时返回 false 让调用方走序列化回退。</summary>
+        private static bool TryInvokeExportSettingsMethod(
+            UnityEngine.Object settings,
+            string methodName,
+            object[] arguments)
+        {
+            MethodInfo method = settings.GetType()
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(candidate =>
+                {
+                    if (!string.Equals(candidate.Name, methodName, StringComparison.Ordinal))
+                        return false;
+                    ParameterInfo[] parameters = candidate.GetParameters();
+                    if (parameters.Length != (arguments == null ? 0 : arguments.Length))
+                        return false;
+                    for (int index = 0; index < parameters.Length; index++)
+                    {
+                        if (arguments[index] == null ||
+                            !parameters[index].ParameterType.IsInstanceOfType(arguments[index]))
+                            return false;
+                    }
+
+                    return true;
+                });
+
+            if (method == null)
+                return false;
+
+            try
+            {
+                method.Invoke(settings, arguments);
+                return true;
+            }
+            catch (TargetInvocationException exception)
+            {
+                throw exception.InnerException ?? exception;
+            }
+        }
+
+        /// <summary>
+        /// 落盘并让 UMod 重新加载引用程序集。官方设置窗口在切换工作区后也会调用
+        /// ReferenceAssemblyLoader.LoadReferencedAssemblies(false)，这里保持一致。
+        /// </summary>
+        private static void CommitExportSettingsChange(UnityEngine.Object settings)
+        {
+            EditorUtility.SetDirty(settings);
+            AssetDatabase.SaveAssets();
+
+            try
+            {
+                Type loaderType = FindLoadedType("UMod.BuildEngine.ReferenceAssemblyLoader");
+                MethodInfo method = loaderType == null
+                    ? null
+                    : loaderType.GetMethod(
+                        "LoadReferencedAssemblies",
+                        BindingFlags.Public | BindingFlags.Static,
+                        null,
+                        new[] { typeof(bool) },
+                        null);
+                if (method != null)
+                    method.Invoke(null, new object[] { false });
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[HoUnityTools] 重新加载引用程序集失败：" + GetRootMessage(exception));
+            }
+        }
+
+        private string BuildUniqueWorkspaceName()
+        {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (WorkspaceEntry entry in workspaceEntries)
+            {
+                if (!string.IsNullOrEmpty(entry.modName))
+                    used.Add(entry.modName);
+            }
+
+            const string baseName = "MOD_New";
+            if (!used.Contains(baseName))
+                return baseName;
+
+            for (int suffix = 2; suffix < 1000; suffix++)
+            {
+                string candidate = baseName + suffix;
+                if (!used.Contains(candidate))
+                    return candidate;
+            }
+
+            return baseName + "_" + DateTime.Now.ToString("HHmmss");
+        }
+
+        private string DescribeWorkspaceName(int index)
+        {
+            if (index < 0 || index >= workspaceEntries.Count)
+                return "(未知)";
+
+            string name = workspaceEntries[index].modName;
+            return string.IsNullOrEmpty(name) ? "<未命名>" : name;
+        }
+
+        #endregion
 
         private void DrawDependencyPanel()
         {
@@ -924,16 +1856,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private void RefreshExportSettingsPreview()
         {
             exportSettingsPath = FindExportSettingsAssetPath();
-            activeModAssetPath = string.Empty;
-            if (string.IsNullOrEmpty(exportSettingsPath))
-                return;
-
-            UnityEngine.Object settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(exportSettingsPath);
-            if (settings == null)
-                return;
-
-            int ignoredIndex;
-            TryReadActiveModAssetPath(settings, out activeModAssetPath, out ignoredIndex);
+            RefreshWorkspacePreview();
         }
 
         private void BeginBuild()

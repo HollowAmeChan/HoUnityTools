@@ -27,6 +27,51 @@ Warudo 的 Plugin Mod 也是普通 Mod，但额外要求源码中有继承 `Plug
 - [角色 Mod](https://docs.warudo.app/zh/docs/modding/character-mod)
 - [Plugin Mod](https://docs.warudo.app/zh/docs/scripting/plugin-mod)
 
+## 工作区（Export Profile）
+
+Warudo 用一个 `ExportSettings` 资源保存全部导出配置，其中 `exportProfiles` 数组的每一项就是一个
+“工作区”，官方文档里叫 Export Profile。工作区决定这次构建的 Mod 名称、作者、版本、Mod 资产目录、
+导出目录、图标和引用的其它 Mod。FastBuild 构建时读取的 `modAssetPath` 就是活动工作区的那一份。
+
+面板的“Warudo 工作区”一栏就是围绕这份数据做管理，能力与 `UMod.ModTools.Export.ExportSettings`
+公开 API（0.14.4.8 实测）一一对应：
+
+| 面板操作 | 调用的 SDK 入口 | 说明 |
+| --- | --- | --- |
+| 点列表切换活动工作区 | `SetActiveExportProfile(int)` | 切换后写入 `activeProfile` 并保存资源 |
+| 新建工作区 | `CreateNewExportProfile(bool makeActive)` | 追加一项并立即设为活动工作区 |
+| 删除当前 | `DeleteExportProfile(int)` | 仅移除配置项，不动磁盘文件 |
+| 清理重名 | `RemoveDuplicateProfiles()` | 按 Mod 名称去重，保留每组第一项 |
+| 打开官方设置窗口 | `UMod.Exporter.SettingsWindow.ShowWindow(false, 0)` | 打开 uMod 设置窗口的 Mod 页 |
+| 校验显示 | `ValidateName` / `ValidateAssetPath` / `ValidateVersion` / `ValidateBuildAndRun` | 直接显示 SDK 自己的校验结果 |
+
+这些入口都通过反射调用，和 `ModToolsUtil.StartBuild` 一样，HoUnityTools 仍然不强依赖 Warudo DLL。
+
+面板显示与校验的规则：
+
+- 列表逐项显示 Mod 名称、Mod 资产目录和状态（`就绪` / `<未命名>` / `目录无效` / `重名`）。
+- 详情区显示活动工作区的图标、名称、作者、版本、说明、两个目录、引用 Mod 数量，以及 SDK 校验结果。
+- Mod 资产目录必须存在、位于 `Assets` 下，并且不能是 `Assets` 根目录。这一条比 SDK 的
+  `ValidateAssetPath()` 更严格，因为把整个 `Assets` 当 Mod 工作区会让 UMod 把所有资源都打进产物。
+- 导出目录不存在或未设置时会给出提示，目录存在时可以直接在访达/资源管理器里定位。
+
+新建工作区时的默认值：
+
+- `modExportPath` 和 `modAuthor` 从当前工作区继承——这两项通常跟随工程环境，不必重复填写。
+- `modName` 取一个不重名的默认名（`MOD_New`、`MOD_New2`……）。
+- `modAssetPath` 取 `Assets/<modName>`。该目录一开始并不存在，详情区会提示并可以直接点“创建目录”建好。
+- 版本沿用 SDK 构造函数的默认值 `1.0.0`。
+
+删除工作区只会从 `ExportSettings` 移除配置项，不会删除 Mod 资产目录或已经构建出来的 `.warudo`。
+面板在只剩一个工作区时会拒绝删除，避免落到无法构建的空状态；确实要清空请用官方设置窗口。
+
+工作区列表会在数组长度或活动下标被外部改动时自动重新读取（例如在官方窗口里切换），字段内容的改动
+用面板的刷新按钮同步。存在未完成的 FastBuild 流程时，所有会改动 `ExportSettings` 的操作都会被禁用，
+避免和 `ApplyTemporaryExportSettings` 的临时改写冲突。
+
+切换活动工作区之后会调用 `UMod.BuildEngine.ReferenceAssemblyLoader.LoadReferencedAssemblies(false)`，
+与官方设置窗口保持一致，确保引用程序集列表跟着工作区一起切换。
+
 ## FastBuild 流程
 
 ```text
@@ -179,7 +224,7 @@ Compile successful!
 
 1. 当前工程已导入 Warudo SDK，窗口顶部显示“SDK 已就绪”。
 2. 选中的对象是 Project 中可加载的 Prefab，且没有 Missing Script。
-3. ExportSettings 存在，活动 Mod 目录位于 `Assets` 下并且不是 `Assets` 根目录。
+3. ExportSettings 存在，活动工作区的 Mod 目录位于 `Assets` 下、存在，并且不是 `Assets` 根目录。
 4. 依赖列表中只勾选可在 Warudo 运行时编译的源码。
 5. 构建后确认控制台的“产物复核”报告里没有 `缺失`；`待确认` 需要人工判断，再在 Warudo 的 `Characters` 目录验证角色。
 
