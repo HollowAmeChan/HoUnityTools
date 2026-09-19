@@ -108,6 +108,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private GUIStyle panelTitleStyle;
         private GUIStyle panelStatusStyle;
         private GUIStyle primaryButtonStyle;
+        private bool stylesBuiltForProSkin;
 
         // Unity's Inspector Activate button calls the internal
         // IConstraintInternal.ActivateAndPreserveOffset method. Cache the
@@ -1392,26 +1393,30 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private void EnsureStyles()
         {
-            if (panelTitleStyle == null)
+            // 缓存的 GUIStyle 副本会把创建时的皮肤整个固定下来。编辑器启动、域重载后恢复窗口，
+            // 或者切换明暗主题时，EditorStyles/GUI.skin 已经重建，副本却还停在旧皮肤上：
+            // 面板标题、状态和主按钮就是这样变成浅色皮肤的黑字的（深色主题下几乎看不见），
+            // 按钮背景也会整个丢掉。副本不会自愈，只能在发现皮肤变了时整体重建。
+            bool proSkin = EditorGUIUtility.isProSkin;
+            if (stylesBuiltForProSkin != proSkin ||
+                !HoEditorStyles.MatchesSource(panelTitleStyle, EditorStyles.boldLabel) ||
+                !HoEditorStyles.MatchesSource(panelStatusStyle, EditorStyles.miniLabel) ||
+                !HoEditorStyles.MatchesSource(primaryButtonStyle, GUI.skin.button))
             {
+                stylesBuiltForProSkin = proSkin;
+
                 panelTitleStyle = new GUIStyle(EditorStyles.boldLabel)
                 {
                     alignment = TextAnchor.MiddleLeft,
                     padding = new RectOffset(0, 0, 0, 0)
                 };
-            }
 
-            if (panelStatusStyle == null)
-            {
                 panelStatusStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     alignment = TextAnchor.MiddleRight,
                     padding = new RectOffset(0, 0, 0, 0)
                 };
-            }
 
-            if (primaryButtonStyle == null)
-            {
                 primaryButtonStyle = new GUIStyle(GUI.skin.button)
                 {
                     fixedHeight = 36f,
@@ -1419,6 +1424,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     fontSize = 13
                 };
             }
+
+            // 双保险：来源样式实例没换、只是重建过颜色时，也每帧把文字颜色对齐一次。
+            HoEditorStyles.SyncTextColor(panelTitleStyle, EditorStyles.boldLabel);
+            HoEditorStyles.SyncTextColor(panelStatusStyle, EditorStyles.miniLabel);
         }
 
         private void ScanAdjacentMetadata()

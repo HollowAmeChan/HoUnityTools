@@ -1799,6 +1799,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void EnsureStyles()
         {
+            // 缓存的 GUIStyle 副本会把创建时的皮肤整个固定下来：编辑器启动、域重载后恢复窗口，
+            // 或者切换明暗主题时，EditorStyles/GUI.skin 已经重建，副本却还停在旧皮肤上
+            // （浅色皮肤的黑色文字在深色主题里几乎不可见，背景贴图也会一起失效）。
+            // 副本不会自愈，发现皮肤变了就丢掉重建。
+            if (!HoEditorStyles.MatchesSource(panelTitleStyle, EditorStyles.boldLabel))
+                panelTitleStyle = null;
+            if (!HoEditorStyles.MatchesSource(panelStatusStyle, EditorStyles.miniLabel))
+                panelStatusStyle = null;
+            if (!HoEditorStyles.MatchesSource(statusColumnStyle, EditorStyles.miniLabel))
+                statusColumnStyle = null;
+            if (!HoEditorStyles.MatchesSource(centeredIconButtonStyle, EditorStyles.miniButton))
+                centeredIconButtonStyle = null;
+            if (!HoEditorStyles.MatchesSource(primaryButtonStyle, GUI.skin.button))
+                primaryButtonStyle = null;
+
             if (panelTitleStyle == null)
             {
                 panelTitleStyle = new GUIStyle(EditorStyles.boldLabel)
@@ -1849,26 +1864,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             // GUIStyle 副本会固定住创建时的文字颜色；换肤或 EditorStyles 重建后副本就会停留在旧颜色
             // （浅色主题的黑色文字在深色主题里几乎不可见）。这里每帧从当前 EditorStyles 重新同步。
-            SyncStyleTextColor(panelTitleStyle, EditorStyles.boldLabel);
-            SyncStyleTextColor(panelStatusStyle, EditorStyles.miniLabel);
-            SyncStyleTextColor(statusColumnStyle, EditorStyles.miniLabel);
-            SyncStyleTextColor(centeredIconButtonStyle, EditorStyles.miniButton);
-        }
-
-        private static void SyncStyleTextColor(GUIStyle target, GUIStyle source)
-        {
-            if (target == null || source == null)
-                return;
-
-            Color color = source.normal.textColor;
-            target.normal.textColor = color;
-            target.hover.textColor = color;
-            target.active.textColor = color;
-            target.focused.textColor = color;
-            target.onNormal.textColor = color;
-            target.onHover.textColor = color;
-            target.onActive.textColor = color;
-            target.onFocused.textColor = color;
+            HoEditorStyles.SyncTextColor(panelTitleStyle, EditorStyles.boldLabel);
+            HoEditorStyles.SyncTextColor(panelStatusStyle, EditorStyles.miniLabel);
+            HoEditorStyles.SyncTextColor(statusColumnStyle, EditorStyles.miniLabel);
+            HoEditorStyles.SyncTextColor(centeredIconButtonStyle, EditorStyles.miniButton);
         }
 
         private void SetSourcePrefab(string path)
