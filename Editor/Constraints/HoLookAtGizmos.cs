@@ -13,8 +13,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     ///   蓝箭头 = 参考系上方
     ///   白色线框 = 头部限位框（左右 ±yaw、上下 ±pitch，投影到 1 米处）
     ///   黄线   = 总角度方向（目标），黄球 = 目标点
-    ///   青线   = 头部**实际**方向（Unity IK 的结果，不是我们命令的值）
-    ///   紫线   = 头实际 + 眼睛残余 = 实际目光；它和黄色目标线重合就说明"指哪看哪"
+    ///   青线   = 头部**估计**方向（我们让 Unity 看哪 × 它施加的比例 + 模型偏差 trim）
+    ///   紫线   = 头估计 + 眼睛残余 = 实际目光；它和黄色目标线重合就说明"指哪看哪"
     /// </summary>
     internal static class HoLookAtGizmos
     {
@@ -59,8 +59,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             bool inside = Mathf.Abs(debug.targetYaw) <= constraint.HeadLimitYaw + 0.01f
                           && Mathf.Abs(debug.targetPitch) <= constraint.HeadLimitPitch + 0.01f;
 
-            Vector3 headDirection = HoLookAtSolver.DirectionFromAngles(forward, up, debug.actualHeadYaw, debug.actualHeadPitch);
-            Vector3 gazeDirection = HoLookAtSolver.DirectionFromAngles(forward, up, debug.actualHeadYaw + debug.eyeYaw, debug.actualHeadPitch + debug.eyePitch);
+            Vector3 headDirection = HoLookAtSolver.DirectionFromAngles(forward, up, debug.headEstimateYaw, debug.headEstimatePitch);
+            Vector3 gazeDirection = HoLookAtSolver.DirectionFromAngles(forward, up, debug.headEstimateYaw + debug.eyeYaw, debug.headEstimatePitch + debug.eyePitch);
             Vector3 targetDirection = HoLookAtSolver.DirectionFromAngles(forward, up, debug.targetYaw, debug.targetPitch);
 
             // 目标方向：超出限位就变红，"头转不过去"一眼可见
@@ -76,7 +76,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             Handles.DrawLine(pivot, pivot + headDirection * AimLength * 0.92f);
             Handles.Label(
                 pivot + headDirection * AimLength * 0.92f + up * 0.04f,
-                new GUIContent("头实际 " + debug.actualHeadYaw.ToString("0") + "° / " + debug.actualHeadPitch.ToString("0") + "°"),
+                new GUIContent("头 " + debug.headEstimateYaw.ToString("0") + "° / " + debug.headEstimatePitch.ToString("0") + "°"),
                 LabelStyle(HeadColor));
 
             // 目光 = 头部实际 + 眼睛残余。误差大时它和黄色目标线会明显分开
@@ -84,7 +84,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             Handles.DrawLine(pivot, pivot + gazeDirection * AimLength * 1.05f);
             Handles.Label(
                 pivot + gazeDirection * AimLength * 1.05f - up * 0.05f,
-                new GUIContent("目光 " + (debug.actualHeadYaw + debug.eyeYaw).ToString("0") + "° / " + (debug.actualHeadPitch + debug.eyePitch).ToString("0") + "°"),
+                new GUIContent("目光 " + (debug.headEstimateYaw + debug.eyeYaw).ToString("0") + "° / " + (debug.headEstimatePitch + debug.eyePitch).ToString("0") + "°"),
                 LabelStyle(GazeColor));
 
             // 目标点（跟随物体 / 场景点模式）

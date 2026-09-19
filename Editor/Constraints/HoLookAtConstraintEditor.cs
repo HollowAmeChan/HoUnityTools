@@ -26,6 +26,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty headShare;
         private SerializedProperty headLimitYaw;
         private SerializedProperty headLimitPitch;
+        private SerializedProperty headDirectionTrim;
         private SerializedProperty aimSmoothing;
         private SerializedProperty aimMaxSpeed;
         private SerializedProperty eyesEnabled;
@@ -114,6 +115,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             headShare = Find("headShare");
             headLimitYaw = Find("headLimitYaw");
             headLimitPitch = Find("headLimitPitch");
+            headDirectionTrim = Find("headDirectionTrim");
             aimSmoothing = Find("aimSmoothing");
             aimMaxSpeed = Find("aimMaxSpeed");
             eyesEnabled = Find("eyesEnabled");
@@ -383,6 +385,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与的比例。1 = 完全对准（在下面的限位之内），0.5 = 只转一半。"));
                 EditorGUILayout.Slider(deadZone, 0.0f, 89.0f, L("起始死区（度）", "目标离正前方这么近的时候头完全不动，只让眼睛动。避免小幅目标让头一直微抖。"));
                 EditorGUILayout.Slider(headShare, 0.0f, 1.0f, L("头部承担", "超出死区之后，头承担多少（剩下的留给眼睛）。\n0.7 = 头吃七成、眼睛补三成。"));
+                EditorGUILayout.PropertyField(headDirectionTrim, L("头朝向偏差（度）", "模型静止姿势的头部朝向跟「角色正前方」不重合时，这里是那个固定差值（yaw/pitch）。\n症状：不管目标怎么动，头和眼睛都固定偏那么多 → 用 Gizmo 对着调这两个数，眼睛会一起补正。\n正常模型应该是 0。"));
                 using (NarrowLabels(74.0f))
                 {
                     EditorGUILayout.BeginHorizontal();
@@ -680,16 +683,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.LabelField("提示：鼠标在 Scene 视图里也能调试（上面那个开关），Gizmo 与鼠标操作就在同一个视图里了。", EditorStyles.miniLabel);
 
             EditorGUILayout.LabelField("左右（yaw，正 = 角色右侧）", EditorStyles.miniBoldLabel);
-            DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.actualHeadYaw, debug.eyeYaw);
+            DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.headEstimateYaw, debug.eyeYaw);
             EditorGUILayout.LabelField("上下（pitch，正 = 抬头）", EditorStyles.miniBoldLabel);
-            DrawAngleBar(constraint.HeadLimitPitch, debug.targetPitch, debug.actualHeadPitch, debug.eyePitch);
+            DrawAngleBar(constraint.HeadLimitPitch, debug.targetPitch, debug.headEstimatePitch, debug.eyePitch);
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("状态：总角度 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
-                + "　头命令 " + debug.headYaw.ToString("0.0") + "° / " + debug.headPitch.ToString("0.0") + "°"
-                + "　头实际 " + debug.actualHeadYaw.ToString("0.0") + "° / " + debug.actualHeadPitch.ToString("0.0") + "°",
+                + "　头（估计） " + debug.headEstimateYaw.ToString("0.0") + "° / " + debug.headEstimatePitch.ToString("0.0") + "°"
+                + "　头增量 " + debug.headDeltaYaw.ToString("0.0") + "° / " + debug.headDeltaPitch.ToString("0.0") + "°",
                 EditorStyles.miniLabel);
-            EditorGUILayout.LabelField("眼睛残余 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°"
+            EditorGUILayout.LabelField("目标 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
+                + "　眼睛残余 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°"
                 + "　目光误差 " + constraint.GazeErrorYaw.ToString("0.0") + "° / " + constraint.GazeErrorPitch.ToString("0.0") + "°"
                 + (Mathf.Abs(constraint.GazeErrorYaw) + Mathf.Abs(constraint.GazeErrorPitch) < 1.0f ? "（精确）" : "（有偏差，见下）"),
                 EditorStyles.miniLabel);

@@ -150,6 +150,14 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 90.0f)]
         private float spineMinAngle;
 
+        /// <summary>
+        /// 头朝向偏差（度，yaw/pitch）：模型静止姿势的头部朝向跟"角色正前方"不一定重合，
+        /// 那是模型常数 —— 眼睛看不到、也算不出来，只能在这里补。
+        /// 症状：看着总是固定偏一点（怎么移动目标都偏那么多）时，用 Gizmo 对着调这个数。
+        /// </summary>
+        [SerializeField]
+        private Vector2 headDirectionTrim;
+
         [SerializeField, Min(0.0f)]
         private float aimSmoothing = 0.06f;
 
@@ -210,6 +218,7 @@ namespace Hollow.HoUnityTools.Constraints
         private Quaternion headPoseBeforeIk = Quaternion.identity;
         private bool headHasPoseBeforeIk;
         private bool headMeasuredThisFrame;
+        private float headAppliedFactor;
         private Vector2 lastPointerScreen;
         private bool hasPointerScreen;
 
@@ -339,18 +348,23 @@ namespace Hollow.HoUnityTools.Constraints
 
         public float EyeBoneLimitPitch => eyeBoneLimitPitch;
 
-        /// <summary>头部实际转到的角（从骨骼姿势量出来的）。</summary>
-        public float ActualHeadYaw => state.headActualYaw;
+        /// <summary>头部估计朝向（我们让 Unity 看哪 × 它施加的比例 + 模型偏差 trim）。</summary>
+        public float HeadEstimateYaw => state.headEstimateYaw;
 
-        public float ActualHeadPitch => state.headActualPitch;
+        public float HeadEstimatePitch => state.headEstimatePitch;
+
+        /// <summary>本帧头部实际转过的量（旋转增量），只作信息用。</summary>
+        public float HeadDeltaYaw => state.headDeltaYaw;
+
+        public float HeadDeltaPitch => state.headDeltaPitch;
 
         /// <summary>
         /// 目光落点误差（度）：目标角 −（头部实际 + 眼睛实际）。
         /// 强度拉满、没被限位夹住、平滑跟得上时应该接近 0 —— 这个数就是"指哪看哪"的自检。
         /// </summary>
-        public float GazeErrorYaw => Mathf.DeltaAngle(state.headActualYaw + state.smoothedEyeYaw, TotalAngles.yaw);
+        public float GazeErrorYaw => Mathf.DeltaAngle(state.headEstimateYaw + state.smoothedEyeYaw, TotalAngles.yaw);
 
-        public float GazeErrorPitch => Mathf.DeltaAngle(state.headActualPitch + state.smoothedEyePitch, TotalAngles.pitch);
+        public float GazeErrorPitch => Mathf.DeltaAngle(state.headEstimatePitch + state.smoothedEyePitch, TotalAngles.pitch);
 
         /// <summary>形态键模式用：有没有可写的网格/绑定。</summary>
         public bool ShapeKeyEyesActive => eyeDriver == HoLookAtEyeDriver.ShapeKeys && MeshCount > 0;
@@ -438,8 +452,10 @@ namespace Hollow.HoUnityTools.Constraints
                 targetPitch = state.smoothedPitch,
                 headYaw = HeadAngles.yaw,
                 headPitch = HeadAngles.pitch,
-                actualHeadYaw = state.headActualYaw,
-                actualHeadPitch = state.headActualPitch,
+                headEstimateYaw = state.headEstimateYaw,
+                headEstimatePitch = state.headEstimatePitch,
+                headDeltaYaw = state.headDeltaYaw,
+                headDeltaPitch = state.headDeltaPitch,
                 eyeYaw = state.smoothedEyeYaw,
                 eyePitch = state.smoothedEyePitch,
                 hasTarget = state.hasTarget,
@@ -466,8 +482,8 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             // 实际目光方向与落点：落点取"和目标同样距离"处，方便屏幕上对比两个点
-            debug.gazeYaw = debug.actualHeadYaw + debug.eyeYaw;
-            debug.gazePitch = debug.actualHeadPitch + debug.eyePitch;
+            debug.gazeYaw = debug.headEstimateYaw + debug.eyeYaw;
+            debug.gazePitch = debug.headEstimatePitch + debug.eyePitch;
             Vector3 gazeDirection = HoLookAtSolver.DirectionFromAngles(
                 GetReferenceForward(),
                 GetReferenceUp(),
@@ -623,15 +639,25 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             float totalWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
+            float headFactor = 0.0f;
             if (headEnabled && externalHeadWeight > 0.0f && state.applyLookAt)
             {
                 float headPart = Mathf.Clamp01(headWeight * externalHeadWeight);
                 animator.SetLookAtWeight(totalWeight, spine, headPart, 0.0f, UnityClampWeight);
+                headFactor = totalWeight * headPart;
             }
             else
             {
                 animator.SetLookAtWeight(0.0f, 0.0f, 0.0f, 0.0f, UnityClampWeight);
             }
+
+            // 头部**估计**朝向 = 我们让它看的方向 × Unity 实际施加的比例（totalWeight × headWeight）。
+            // Unity 的 LookAt 契约就是"把头朝向我们给的点"，所以这个估计比"量骨骼旋转增量"可靠得多 ——
+            // 后者丢掉了动画/静止姿势本身那一份头部角度，会固定偏几度（骨骼局部坐标系里也确实算不出绝对朝向）。
+            headAppliedFactor = Mathf.Clamp01(headFactor);
+            state.headCommanded = headFactor > 0.0f;
+            state.headEstimateYaw = head.yaw * headAppliedFactor + headDirectionTrim.x;
+            state.headEstimatePitch = head.pitch * headAppliedFactor + headDirectionTrim.y;
         }
 
         private void OnValidate()
@@ -770,8 +796,9 @@ namespace Hollow.HoUnityTools.Constraints
             };
             head.Sanitize();
 
-            float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
-            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, effectiveWeight, ref state);
+            // 注意：这里**不乘总强度** —— 总强度由 Unity 的 SetLookAtWeight(weight) 施加一次，
+            // 眼睛那边自己也乘一次（各一次）。以前两处都乘，weight = 0.5 时实际只剩 0.25。
+            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, 1.0f, ref state);
             HeadAngles = headAngles;
             return headAngles;
         }
@@ -1066,19 +1093,22 @@ namespace Hollow.HoUnityTools.Constraints
             float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             float eyes = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) * effectiveWeight : 0.0f;
 
-            // 眼睛要补的残余 = 目标角 − **头部实际转到的角**（不是我们命令头部转的角）。
-            // 这样"头 + 眼"始终等于目标方向，头没转到位、头被限位夹住、只看眼睛，三种情况都精确。
-            float headYaw = 0.0f;
-            float headPitch = 0.0f;
+            // 眼睛补的是"目标 − 头部估计朝向"。
+            // 头部估计 = 我们让 Unity 看的方向 × 它实际施加的比例，所以：
+            //   · 头没转到位（headWeight < 1、IK 上限）时眼睛自动补齐；
+            //   · 「只看眼睛」时 headEnabled = false → 估计为 0 → 眼睛吃全部；
+            //   · 模型静止姿势的固定偏差用 headDirectionTrim 修。
+            float headYaw = state.headEstimateYaw;
+            float headPitch = state.headEstimatePitch;
+
             if (headMeasuredThisFrame)
             {
-                MeasureActualHead(out headYaw, out headPitch);
-                headMeasuredThisFrame = false;   // 一次测量只消费一次（下一帧的 IK 会重新记姿势）
+                // 顺带量一下"这一帧头实际转了多少"，给调试区看 IK 有没有偷懒
+                MeasureActualHead(out float deltaYaw, out float deltaPitch);
+                state.headDeltaYaw = deltaYaw;
+                state.headDeltaPitch = deltaPitch;
+                headMeasuredThisFrame = false;
             }
-
-            state.headActualYaw = headYaw;
-            state.headActualPitch = headPitch;
-            state.headMeasured = headMeasuredThisFrame;
 
             float yaw = (TotalAngles.yaw - headYaw) * eyes;
             float pitch = (TotalAngles.pitch - headPitch) * eyes;
@@ -1148,13 +1178,11 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         /// <summary>
-        /// 量出头部**实际**转了多少（度）。
+        /// 量出头部本帧**实际转过多少**（度）—— 只是信息：和"我们让它转多少"对比可以看出 IK 有没有做到。
         ///
-        /// Unity 的 LookAt IK 是近似解：`headWeight`、肌肉范围、脖子分摊都会让它到不了我们要求的那个方向。
-        /// 如果眼睛补的是"命令值 − 头部分工"，头没转到位时眼睛就跟着偏；
-        /// 「只看眼睛」时更明显 —— 头根本没动，眼睛却只补了三成。
-        /// 所以这里用"IK 后的姿势 ÷ IK 前的姿势"这个**旋转增量**去量真实贡献：
-        /// 它跟骨骼自身轴向无关（不用猜 head 的 forward 是哪根轴），也不会被动画姿势干扰。
+        /// 注意它**不能**当绝对朝向用：这是"IK 前→后"的旋转增量，不含动画/静止姿势本身那一份头部角度。
+        /// 而头骨骼的局部坐标系里根本不存在"绝对前方"（差一个模型常数），所以绝对朝向只能按
+        /// Unity 的瞄准约定去估计（见 HandleAnimatorIK 里的 headEstimate）。
         /// </summary>
         private void MeasureActualHead(out float yaw, out float pitch)
         {
@@ -1433,8 +1461,9 @@ namespace Hollow.HoUnityTools.Constraints
             string text =
                 "Ho 注视　" + (targetMode == HoLookAtMode.Mouse ? "鼠标" : "物体")
                 + "　总 " + TotalAngles.yaw.ToString("0.0") + "°/" + TotalAngles.pitch.ToString("0.0") + "°"
-                + "　头实际 " + state.headActualYaw.ToString("0.0") + "°/" + state.headActualPitch.ToString("0.0") + "°"
+                + "　头估计 " + state.headEstimateYaw.ToString("0.0") + "°/" + state.headEstimatePitch.ToString("0.0") + "°"
                 + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
+                + "　头增量 " + state.headDeltaYaw.ToString("0.0") + "°/" + state.headDeltaPitch.ToString("0.0") + "°"
                 + "　误差 " + GazeErrorYaw.ToString("0.0") + "°/" + GazeErrorPitch.ToString("0.0") + "°"
                 + (error < 1.0f ? "（精确）" : "（偏了）")
                 + (eyeDriver == HoLookAtEyeDriver.EyeBones ? "　骨骼" : "　形态键");

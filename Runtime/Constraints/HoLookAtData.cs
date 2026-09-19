@@ -210,12 +210,16 @@ namespace Hollow.HoUnityTools.Constraints
         public float smoothedEyeYaw;
         public float smoothedEyePitch;
 
-        /// <summary>头部**实际**转了多少（从骨骼姿势量出来的，不是我们命令它转的）。</summary>
-        public float headActualYaw;
-        public float headActualPitch;
+        /// <summary>头部**估计**朝向（我们让 Unity 看哪 × 权重）：眼睛残余与调试都按它算。</summary>
+        public float headEstimateYaw;
+        public float headEstimatePitch;
 
-        /// <summary>本帧 OnAnimatorIK 跑过、并且量到了头部实际姿势。</summary>
-        public bool headMeasured;
+        /// <summary>本帧头部实际转过的量（IK 前→后的旋转增量），只作信息用。</summary>
+        public float headDeltaYaw;
+        public float headDeltaPitch;
+
+        /// <summary>本帧是否把头部交给了 Unity 的 IK（量增量的前提）。</summary>
+        public bool headCommanded;
 
         /// <summary>本帧是否要把头部交给 Unity 的 IK（丢失且设为 Disable 时为 false）。</summary>
         public bool applyLookAt;
@@ -252,9 +256,16 @@ namespace Hollow.HoUnityTools.Constraints
         public float headYaw;
         public float headPitch;
 
-        /// <summary>头部实际转到的角（Unity IK 的结果，跟上面命令值可能有差）。</summary>
-        public float actualHeadYaw;
-        public float actualHeadPitch;
+        /// <summary>
+        /// 头部**估计**朝向（我们让 Unity 看哪、它就朝哪，再按权重打折）—— 眼睛残余与调试都按它算。
+        /// 头骨骼的绝对朝向在骨骼坐标系里无法唯一确定（含一个模型常数），所以不能用"旋转增量"当绝对朝向。
+        /// </summary>
+        public float headEstimateYaw;
+        public float headEstimatePitch;
+
+        /// <summary>本帧头部**实际转过的量**（IK 前→后的旋转增量）。只是信息：看出 IK 有没有偷懒。</summary>
+        public float headDeltaYaw;
+        public float headDeltaPitch;
 
         /// <summary>眼睛要补的残余角。</summary>
         public float eyeYaw;
