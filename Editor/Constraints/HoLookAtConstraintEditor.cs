@@ -161,7 +161,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             DrawToolbar(constraint);
             EditorGUILayout.Space(4.0f);
             DrawChecks(constraint);
-            DrawTargetSection();
+            DrawTargetSection(constraint);
             DrawSpineSection();
             DrawHeadSection();
             DrawEyesSection(constraint);
@@ -245,7 +245,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 MessageType.Warning);
         }
 
-        private void DrawTargetSection()
+        private void DrawTargetSection(HoLookAtConstraint constraint)
         {
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref targetExpanded, "目标", GetModeSummary(), TargetColor))
             {
@@ -287,6 +287,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.PropertyField(mouseSensitivity, new GUIContent("灵敏度（度）"));
                 EditorGUILayout.PropertyField(mouseDeadZone, new GUIContent("鼠标死区"));
                 EditorGUILayout.PropertyField(mouseHoldOffscreen, new GUIContent("离屏保持"));
+
+                if (!constraint.MouseCameraResolved)
+                {
+                    EditorGUILayout.HelpBox(
+                        "找不到可用相机：把场景里的主相机拖到上面的「相机」字段，或给它打上 MainCamera 标签。"
+                        + "在此之前屏幕相对坐标系退回角色相对，正面机位下左右是反的。",
+                        MessageType.Warning);
+                }
+                else
+                {
+                    EditorGUILayout.LabelField("实际使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
+                }
             }
 
             EditorGUILayout.Space(2.0f);

@@ -184,6 +184,8 @@ namespace Hollow.HoUnityTools.Constraints
 
         private HoLookAtState state;
         private HoLookAtIkRelay relay;
+        private Camera resolvedCamera;
+        private bool cameraWarned;
         private bool built;
         private float externalWeight = 1.0f;
         private float externalSpineWeight = 1.0f;
@@ -291,6 +293,11 @@ namespace Hollow.HoUnityTools.Constraints
         public bool IkRelayActive => relay != null;
 
         public string AnimatorName => animator != null ? animator.gameObject.name : "（未找到）";
+
+        /// <summary>实际使用的相机名（鼠标角度映射的屏幕换算用）；空表示没找到。</summary>
+        public string ResolvedCameraName => GetMouseCamera() != null ? GetMouseCamera().name : "（未找到）";
+
+        public bool MouseCameraResolved => GetMouseCamera() != null;
 
         public int MeshCount => writer.MeshCount;
 
@@ -716,7 +723,7 @@ namespace Hollow.HoUnityTools.Constraints
 
                 if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap)
                 {
-                    Camera camera = mouseCamera != null ? mouseCamera : Camera.main;
+                    Camera camera = GetMouseCamera();
                     Vector2 offset = HoMousePointer.ScreenToAngleOffset(camera, sample.screenPosition, mouseDeadZone);
                     mouseAngleYaw = offset.x * mouseSensitivity.x;
                     mouseAnglePitch = offset.y * mouseSensitivity.y;
@@ -732,7 +739,7 @@ namespace Hollow.HoUnityTools.Constraints
                     }
                     else
                     {
-                        // 角色相对：把鼠标当成角色自己的注视摇杆
+                        // 角色相对（或找不到相机时的兜底）：把鼠标当成角色自己的注视摇杆
                         direction = HoLookAtSolver.DirectionFromAngles(forward, up, mouseAngleYaw, mouseAnglePitch);
                     }
 
@@ -765,8 +772,28 @@ namespace Hollow.HoUnityTools.Constraints
             return direction.sqrMagnitude > 1e-6f;
         }
 
-        private Vector3 GetPivot()
+        /// <summary>解析用于屏幕换算的相机（结果缓存；失效时重新找）。</summary>
+        private Camera GetMouseCamera()
         {
+            if (resolvedCamera != null && resolvedCamera.gameObject.activeInHierarchy)
+            {
+                return resolvedCamera;
+            }
+
+            resolvedCamera = HoMousePointer.ResolveCamera(mouseCamera);
+            if (resolvedCamera == null && !cameraWarned)
+            {
+                cameraWarned = true;
+                Debug.LogWarning(
+                    "[HoLookAtConstraint] 找不到可用相机：指定「相机」字段，或给主相机打上 MainCamera 标签。"
+                    + "在此之前鼠标角度映射会退回角色相对坐标系（正面机位下看起来是左右反的）。",
+                    this);
+            }
+
+            return resolvedCamera;
+        }
+
+        private Vector3 GetPivot()        {
             if (animator != null && animator.isHuman)
             {
                 Transform head = animator.GetBoneTransform(HumanBodyBones.Head);

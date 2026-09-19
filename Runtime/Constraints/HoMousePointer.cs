@@ -13,6 +13,56 @@ namespace Hollow.HoUnityTools.Constraints
     /// </summary>
     public static class HoMousePointer
     {
+        /// <summary>
+        /// 解析"用来做屏幕→世界换算的相机"：指定 > Camera.main > 第一个渲染到屏幕的启用相机（取像素面积最大的）。
+        /// 场景里没有 MainCamera 标签是常见情况（MMD 测试场景就是），所以不能只靠 Camera.main。
+        /// </summary>
+        public static Camera ResolveCamera(Camera preferred)
+        {
+            if (preferred != null)
+            {
+                return preferred;
+            }
+
+            Camera main = Camera.main;
+            if (main != null)
+            {
+                return main;
+            }
+
+#if UNITY_2023_1_OR_NEWER
+            Camera[] cameras = Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+#else
+            Camera[] cameras = Object.FindObjectsOfType<Camera>();
+#endif
+            Camera best = null;
+            float bestArea = -1.0f;
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                Camera camera = cameras[i];
+                if (camera == null || !camera.enabled || !camera.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                // 只考虑渲染到屏幕的（targetTexture 非空的是 RT / 反射相机）
+                if (camera.targetTexture != null)
+                {
+                    continue;
+                }
+
+                Rect pixelRect = camera.pixelRect;
+                float area = pixelRect.width * pixelRect.height;
+                if (area > bestArea)
+                {
+                    best = camera;
+                    bestArea = area;
+                }
+            }
+
+            return best;
+        }
+
         public static bool TryReadPointer(HoLookAtInputSource source, out Vector2 screenPosition)
         {
             screenPosition = Vector2.zero;
@@ -71,7 +121,7 @@ namespace Hollow.HoUnityTools.Constraints
             sample.valid = true;
             sample.screenPosition = screenPosition;
 
-            Camera camera = settings.camera != null ? settings.camera : Camera.main;
+            Camera camera = ResolveCamera(settings.camera);
             if (settings.sampleMode != HoLookAtMouseSampleMode.AngleMap && camera != null)
             {
                 Ray ray = camera.ScreenPointToRay(screenPosition);

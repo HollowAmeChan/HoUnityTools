@@ -30,6 +30,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 serializedObject.FindProperty("reference").objectReferenceValue = constraint.transform;
             }
 
+            SerializedProperty cameraProperty = serializedObject.FindProperty("mouseCamera");
+            if (cameraProperty.objectReferenceValue == null)
+            {
+                Camera camera = HoMousePointer.ResolveCamera(null);
+                if (camera != null)
+                {
+                    cameraProperty.objectReferenceValue = camera;
+                }
+            }
+
             SerializedProperty renderers = serializedObject.FindProperty("renderers");
             if (renderers.arraySize == 0)
             {
