@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.Constraints
@@ -22,10 +21,7 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>鼠标屏幕位置 → 角度偏移。跟相机距离无关，最可控。</summary>
         AngleMap,
 
-        /// <summary>从相机沿鼠标射线取固定距离的点（或投到角色脚下的水平面）。</summary>
-        WorldPoint,
-
-        /// <summary>相机 → 鼠标射线打到指定层。</summary>
+        /// <summary>相机 → 鼠标射线打到指定层；没打中时取射线上固定距离的点。</summary>
         Raycast
     }
 
@@ -63,8 +59,51 @@ namespace Hollow.HoUnityTools.Constraints
     }
 
     /// <summary>
-    /// 一条眼睛通道：左右眼各一个输出映射（键名 + ramp/增益/范围）。
-    /// 通道的"量"由注视解算给出，这里只负责映射。
+    /// 单只眼睛的一个键。刻意做得极简：只存键名和增益。
+    /// 眼睛通道的映射规律固定（量 → 曲线 → 增益），不需要每条通道单独配 ramp/范围。
+    /// </summary>
+    [Serializable]
+    public sealed class HoLookAtEyeKey
+    {
+        [SerializeField]
+        private bool enabled = true;
+
+        [SerializeField]
+        private string keyName = string.Empty;
+
+        [SerializeField]
+        private float gain = 1.0f;
+
+        public bool Enabled
+        {
+            get => enabled;
+            set => enabled = value;
+        }
+
+        public string KeyName
+        {
+            get => keyName ?? string.Empty;
+            set => keyName = value ?? string.Empty;
+        }
+
+        /// <summary>增益：通道量（0..1）乘上它再写出去，1 = 曲线拉满时输出 100。</summary>
+        public float Gain
+        {
+            get => gain;
+            set => gain = value;
+        }
+
+        public bool HasKey => enabled && !string.IsNullOrWhiteSpace(keyName);
+
+        public void Sanitize()
+        {
+            gain = Mathf.Max(0.0f, gain);
+            keyName = keyName ?? string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 一条眼睛通道：左右眼各一个键。通道的"量"由注视解算给出，这里只负责映射。
     /// </summary>
     [Serializable]
     public sealed class HoLookAtEyeEntry
@@ -76,10 +115,10 @@ namespace Hollow.HoUnityTools.Constraints
         private HoLookAtEyeChannel channel = HoLookAtEyeChannel.Inner;
 
         [SerializeField]
-        private HoShapeKeyTarget leftEye = new HoShapeKeyTarget();
+        private HoLookAtEyeKey leftEye = new HoLookAtEyeKey();
 
         [SerializeField]
-        private HoShapeKeyTarget rightEye = new HoShapeKeyTarget();
+        private HoLookAtEyeKey rightEye = new HoLookAtEyeKey();
 
         public bool Enabled
         {
@@ -93,9 +132,9 @@ namespace Hollow.HoUnityTools.Constraints
             set => channel = value;
         }
 
-        public HoShapeKeyTarget LeftEye => leftEye;
+        public HoLookAtEyeKey LeftEye => leftEye;
 
-        public HoShapeKeyTarget RightEye => rightEye;
+        public HoLookAtEyeKey RightEye => rightEye;
 
         public void Sanitize()
         {
@@ -146,6 +185,38 @@ namespace Hollow.HoUnityTools.Constraints
         public Vector3 worldPoint;
     }
 
+    /// <summary>
+    /// 调试快照：Gizmo 和面板条形读数共用同一份数据，避免两处各算一遍。
+    /// 角度单位为度，全部相对参考系（正 yaw = 右侧，正 pitch = 上）。
+    /// </summary>
+    public struct HoLookAtDebug
+    {
+        /// <summary>平滑后的目标角（头部会去追的总角）。</summary>
+        public float targetYaw;
+        public float targetPitch;
+
+        /// <summary>头部限位内的角（限位裁剪后）。</summary>
+        public float headYaw;
+        public float headPitch;
+
+        /// <summary>眼睛要补的残余角。</summary>
+        public float eyeYaw;
+        public float eyePitch;
+
+        /// <summary>六条通道各自的量（0..1，未乘增益）。</summary>
+        public float inner;
+        public float outer;
+        public float lookLeft;
+        public float lookRight;
+        public float up;
+        public float down;
+
+        public bool hasTarget;
+        public bool targetValid;
+        public Vector3 targetPoint;
+        public bool hasTargetPoint;
+    }
+
     /// <summary>注视约束的鼠标参数（采样器输入）。</summary>
     public struct HoMouseSettings
     {
@@ -155,9 +226,10 @@ namespace Hollow.HoUnityTools.Constraints
         public HoLookAtMouseSpace angleSpace;
         public Vector2 sensitivity;
         public float deadZone;
+
+        /// <summary>射线没打中任何东西时，取射线上的这个距离（米）。</summary>
         public float distance;
-        public bool projectToPlane;
-        public float planeHeight;
+
         public LayerMask raycastMask;
         public bool holdOffscreen;
     }
@@ -169,7 +241,6 @@ namespace Hollow.HoUnityTools.Constraints
         public float angleLimitOuter;
         public float angleLimitUp;
         public float angleLimitDown;
-        public bool ellipseClamp;
 
         public void Sanitize()
         {
@@ -180,22 +251,20 @@ namespace Hollow.HoUnityTools.Constraints
         }
     }
 
-    /// <summary>注视约束的头部参数（求解器输入）。</summary>
+    /// <summary>注视约束的头部参数（求解器输入）。俯仰限位左右对称，够用且好调。</summary>
     public struct HoHeadSettings
     {
         public float deadZone;
         public float headShare;
         public float yawLimit;
-        public float pitchLimitUp;
-        public float pitchLimitDown;
+        public float pitchLimit;
 
         public void Sanitize()
         {
             deadZone = Mathf.Clamp(deadZone, 0.0f, 89.0f);
             headShare = Mathf.Clamp01(headShare);
             yawLimit = Mathf.Clamp(yawLimit, 0.0f, 179.0f);
-            pitchLimitUp = Mathf.Clamp(pitchLimitUp, 0.0f, 179.0f);
-            pitchLimitDown = Mathf.Clamp(pitchLimitDown, 0.0f, 179.0f);
+            pitchLimit = Mathf.Clamp(pitchLimit, 0.0f, 179.0f);
         }
     }
 }

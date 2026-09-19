@@ -109,7 +109,7 @@ namespace Hollow.HoUnityTools.Constraints
             return false;
         }
 
-        /// <summary>采样鼠标：角度映射模式只需要屏幕位置；世界点/射线模式再算世界点。</summary>
+        /// <summary>采样鼠标：角度映射模式只需要屏幕位置；射线模式再算世界点（没打中就打射线上的固定距离）。</summary>
         public static HoPointerSample Sample(in HoMouseSettings settings)
         {
             HoPointerSample sample = default;
@@ -121,43 +121,13 @@ namespace Hollow.HoUnityTools.Constraints
             sample.valid = true;
             sample.screenPosition = screenPosition;
 
-            Camera camera = settings.camera;
-            if (settings.sampleMode != HoLookAtMouseSampleMode.AngleMap && camera != null)
+            if (settings.sampleMode == HoLookAtMouseSampleMode.Raycast && settings.camera != null)
             {
-                Ray ray = camera.ScreenPointToRay(screenPosition);
-                switch (settings.sampleMode)
-                {
-                    case HoLookAtMouseSampleMode.Raycast:
-                    {
-                        if (Physics.Raycast(ray, out RaycastHit hit, 1000.0f, settings.raycastMask))
-                        {
-                            sample.hasWorldPoint = true;
-                            sample.worldPoint = hit.point;
-                        }
-
-                        break;
-                    }
-
-                    default:
-                    {
-                        if (settings.projectToPlane)
-                        {
-                            Plane plane = new Plane(Vector3.up, new Vector3(0.0f, settings.planeHeight, 0.0f));
-                            if (plane.Raycast(ray, out float enter))
-                            {
-                                sample.hasWorldPoint = true;
-                                sample.worldPoint = ray.GetPoint(enter);
-                            }
-                        }
-                        else
-                        {
-                            sample.hasWorldPoint = true;
-                            sample.worldPoint = ray.GetPoint(settings.distance);
-                        }
-
-                        break;
-                    }
-                }
+                Ray ray = settings.camera.ScreenPointToRay(screenPosition);
+                sample.hasWorldPoint = true;
+                sample.worldPoint = Physics.Raycast(ray, out RaycastHit hit, 1000.0f, settings.raycastMask)
+                    ? hit.point
+                    : ray.GetPoint(Mathf.Max(0.1f, settings.distance));
             }
 
             return sample;

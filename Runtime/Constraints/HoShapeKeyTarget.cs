@@ -148,5 +148,27 @@ namespace Hollow.HoUnityTools.Constraints
                 rampCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
             }
         }
+
+        /// <summary>
+        /// 运行期构造（不序列化）。给"宿主只存键名 + 增益"的场合用 ——
+        /// 例如注视约束的眼睛通道，避免每个通道都序列化 16 个字段。
+        /// </summary>
+        public static HoShapeKeyTarget CreateRuntime(string keyName, float gain, HoShapeKeyRampPreset rampPreset = HoShapeKeyRampPreset.Direct)
+        {
+            HoShapeKeyTarget target = new HoShapeKeyTarget
+            {
+                keyName = keyName ?? string.Empty,
+                gain = gain,
+                rampPreset = rampPreset,
+                rampIntensity = 1.0f,
+                blendMode = HoShapeKeyBlendMode.Additive,
+                weight = 1.0f,
+                meshScope = HoShapeKeyMeshScope.All,
+                outputMin = 0.0f,
+                outputMax = 100.0f,
+                clampToRange = true
+            };
+            return target;
+        }
     }
 }

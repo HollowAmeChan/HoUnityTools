@@ -25,14 +25,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 }
             }
 
-            if (serializedObject.FindProperty("reference").objectReferenceValue == null)
-            {
-                // 参考系要的是"角色的面向"，所以优先用 Animator 所在物体，而不是组件自己所在的骨骼/空物体
-                SerializedProperty animatorProperty = serializedObject.FindProperty("animator");
-                Animator resolvedAnimator = animatorProperty.objectReferenceValue as Animator;
-                Transform frame = resolvedAnimator != null ? resolvedAnimator.transform : constraint.transform;
-                serializedObject.FindProperty("reference").objectReferenceValue = frame;
-            }
+            // 参考系留空 = 自动用 Animator 所在物体的朝向（那才是角色的面向）。
+            // 一键装配直接清掉：以前这里会填"组件自己"，很容易填成一根骨骼/空物体，轴向随机，
+            // 结果总角度读数、限位、鼠标左右全部失准。
+            serializedObject.FindProperty("reference").objectReferenceValue = null;
 
             SerializedProperty cameraProperty = serializedObject.FindProperty("mouseCamera");
             if (cameraProperty.objectReferenceValue == null)
@@ -125,26 +121,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             entry.FindPropertyRelative("enabled").boolValue = true;
             entry.FindPropertyRelative("channel").enumValueIndex = (int)channel;
 
-            SerializedProperty left = entry.FindPropertyRelative("leftEye");
-            SerializedProperty right = entry.FindPropertyRelative("rightEye");
-            ResetMapping(left, leftKey);
-            ResetMapping(right, rightKey);
+            SetKey(entry.FindPropertyRelative("leftEye"), leftKey);
+            SetKey(entry.FindPropertyRelative("rightEye"), rightKey);
         }
 
-        private static void ResetMapping(SerializedProperty mapping, string keyName)
+        private static void SetKey(SerializedProperty key, string keyName)
         {
-            mapping.FindPropertyRelative("meshScope").enumValueIndex = (int)HoShapeKeyMeshScope.All;
-            mapping.FindPropertyRelative("meshIndex").intValue = 0;
-            mapping.FindPropertyRelative("keyName").stringValue = keyName ?? string.Empty;
-            mapping.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Additive;
-            mapping.FindPropertyRelative("weight").floatValue = 1.0f;
-            mapping.FindPropertyRelative("gain").floatValue = 1.0f;
-            mapping.FindPropertyRelative("offset").floatValue = 0.0f;
-            mapping.FindPropertyRelative("outputMin").floatValue = 0.0f;
-            mapping.FindPropertyRelative("outputMax").floatValue = 100.0f;
-            mapping.FindPropertyRelative("clampToRange").boolValue = true;
-            mapping.FindPropertyRelative("rampPreset").enumValueIndex = (int)HoShapeKeyRampPreset.Direct;
-            mapping.FindPropertyRelative("rampIntensity").floatValue = 1.0f;
+            key.FindPropertyRelative("enabled").boolValue = true;
+            key.FindPropertyRelative("keyName").stringValue = keyName ?? string.Empty;
+            key.FindPropertyRelative("gain").floatValue = 1.0f;
         }
 
         /// <summary>优先"双眼共用"的键（VRM/Meta 的 LookLeft 之类）。</summary>

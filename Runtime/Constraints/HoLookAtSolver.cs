@@ -55,9 +55,13 @@ namespace Hollow.HoUnityTools.Constraints
             float headYaw = yaw * scale;
             float headPitch = pitch * scale;
 
-            // 限位（按各自上限夹取，再按椭圆比例整体缩放，避免对角方向超限）
+            // 限位（俯仰对称，对角线方向按椭圆比例整体缩放，避免对角超限）
             headYaw = Mathf.Clamp(headYaw, -head.yawLimit, head.yawLimit);
-            headPitch = Mathf.Clamp(headPitch, -head.pitchLimitDown, head.pitchLimitUp);
+            headPitch = Mathf.Clamp(headPitch, -head.pitchLimit, head.pitchLimit);
+            if (head.yawLimit > 0.0f && head.pitchLimit > 0.0f)
+            {
+                ClampToEllipse(ref headYaw, ref headPitch, head.yawLimit, head.pitchLimit);
+            }
 
             state.eyeYaw = yaw - headYaw;
             state.eyePitch = pitch - headPitch;

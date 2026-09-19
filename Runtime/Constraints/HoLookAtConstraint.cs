@@ -11,6 +11,9 @@ namespace Hollow.HoUnityTools.Constraints
     ///   OnAnimatorIK  —— 算目标方向、死区/分工/限位，把"头部承担方向"交给 Unity 的 LookAt IK，缓存眼睛残余角；
     ///   LateUpdate    —— 用残余角写眼睛（形态键与眼球骨骼），必须晚于头部 IK 的结果。
     /// 只支持 humanoid（Avatar + 图层 IK Pass）；眼睛形态键部分不依赖 humanoid。
+    ///
+    /// 参数刻意收得很紧：面板上只留"每天会调的"，其余都在「高级」里；
+    /// 眼球通道只存"键名 + 增益"，不再让每个通道各配一套 ramp/范围。
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
@@ -19,7 +22,10 @@ namespace Hollow.HoUnityTools.Constraints
     {
         private const int ChannelCount = 6;
 
-        [Header("Target")]
+        /// <summary>交给 Unity 的 clampWeight 固定 0：限位由本组件的角度上限负责，避免二次夹取让读数对不上。</summary>
+        private const float UnityClampWeight = 0.0f;
+
+        [Header("目标")]
         [SerializeField]
         private HoLookAtMode targetMode = HoLookAtMode.Transform;
 
@@ -30,16 +36,7 @@ namespace Hollow.HoUnityTools.Constraints
         private Vector3 targetOffset;
 
         [SerializeField]
-        private HoLookAtInputSource inputSource = HoLookAtInputSource.Auto;
-
-        [SerializeField]
         private Camera mouseCamera;
-
-        [SerializeField]
-        private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.AngleMap;
-
-        [SerializeField]
-        private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
 
         [SerializeField]
         private Vector2 mouseSensitivity = new Vector2(30.0f, 20.0f);
@@ -47,22 +44,7 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 0.45f)]
         private float mouseDeadZone = 0.05f;
 
-        [SerializeField, Min(0.1f)]
-        private float mouseDistance = 3.0f;
-
-        [SerializeField]
-        private bool mouseProjectToPlane;
-
-        [SerializeField]
-        private float mousePlaneHeight;
-
-        [SerializeField]
-        private LayerMask mouseRaycastMask = ~0;
-
-        [SerializeField]
-        private bool mouseHoldOffscreen = true;
-
-        [Header("Common")]
+        [Header("角色")]
         [SerializeField]
         private Animator animator;
 
@@ -75,25 +57,19 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool evaluateInEditMode = false;
 
-        [Header("Spine")]
+        [Header("① 脊椎跟随")]
         [SerializeField]
         private bool spineEnabled = true;
 
         [SerializeField, Range(0.0f, 1.0f)]
         private float bodyWeight = 0.3f;
 
-        [SerializeField, Range(0.0f, 90.0f)]
-        private float spineMinAngle;
-
-        [Header("Head")]
+        [Header("② 头颈跟随")]
         [SerializeField]
         private bool headEnabled = true;
 
         [SerializeField, Range(0.0f, 1.0f)]
         private float headWeight = 1.0f;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float clampWeight = 0.6f;
 
         [SerializeField, Range(0.0f, 89.0f)]
         private float deadZone = 8.0f;
@@ -102,21 +78,12 @@ namespace Hollow.HoUnityTools.Constraints
         private float headShare = 0.7f;
 
         [SerializeField, Range(0.0f, 179.0f)]
-        private float yawLimit = 70.0f;
+        private float headLimitYaw = 70.0f;
 
         [SerializeField, Range(0.0f, 179.0f)]
-        private float pitchLimitUp = 40.0f;
+        private float headLimitPitch = 40.0f;
 
-        [SerializeField, Range(0.0f, 179.0f)]
-        private float pitchLimitDown = 30.0f;
-
-        [SerializeField, Min(0.0f)]
-        private float aimSmoothing = 0.06f;
-
-        [SerializeField, Min(0.0f)]
-        private float aimMaxSpeed = 360.0f;
-
-        [Header("Eyes")]
+        [Header("③ 眼睛跟随")]
         [SerializeField]
         private bool eyesEnabled = true;
 
@@ -130,10 +97,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float eyeSmoothing = 0.04f;
 
         [SerializeField]
-        private bool eyeEllipseClamp = true;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float eyesWeightToUnity;
+        private Vector4 eyeAngleLimit = new Vector4(30.0f, 30.0f, 20.0f, 25.0f);
 
         [SerializeField]
         private AnimationCurve horizontalInner = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
@@ -148,23 +112,42 @@ namespace Hollow.HoUnityTools.Constraints
         private AnimationCurve verticalDown = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
 
         [SerializeField]
-        private Vector4 eyeAngleLimit = new Vector4(30.0f, 30.0f, 20.0f, 25.0f);
-
-        [SerializeField]
         private List<HoLookAtEyeEntry> eyeEntries = new List<HoLookAtEyeEntry>();
 
-        [SerializeField]
-        private bool driveEyeBones = true;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float eyeBoneWeight = 1.0f;
-
-        [SerializeField]
-        private bool eyeBoneUseCurve = true;
-
-        [Header("Lost")]
+        [Header("丢失与瞬移")]
         [SerializeField]
         private HoLookAtLostBehavior lostBehavior = HoLookAtLostBehavior.Return;
+
+        // ── 高级（面板默认折起，改起来才知道自己在干什么的才会进来）──────────
+
+        [Header("高级")]
+        [SerializeField]
+        private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.AngleMap;
+
+        [SerializeField]
+        private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
+
+        [SerializeField, Min(0.1f)]
+        private float mouseDistance = 3.0f;
+
+        [SerializeField]
+        private LayerMask mouseRaycastMask = ~0;
+
+        [SerializeField]
+        private bool mouseHoldOffscreen = true;
+
+        [SerializeField, Range(0.0f, 90.0f)]
+        private float spineMinAngle;
+
+        [SerializeField, Min(0.0f)]
+        private float aimSmoothing = 0.06f;
+
+        [SerializeField, Min(0.0f)]
+        private float aimMaxSpeed = 360.0f;
+
+        /// <summary>眼球骨骼权重：0 = 完全不动眼球骨骼（只写形态键）。</summary>
+        [SerializeField, Range(0.0f, 1.0f)]
+        private float eyeBoneWeight;
 
         [SerializeField, Min(0.0f)]
         private float returnDelay = 0.4f;
@@ -175,12 +158,16 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.0f)]
         private float teleportAngleThreshold = 120.0f;
 
-        [Header("Write")]
         [SerializeField, Min(0.0f)]
         private float writeThreshold = 0.01f;
 
+        [Header("调试")]
+        [SerializeField]
+        private bool drawGizmos = true;
+
         private readonly HoShapeKeyWriter writer = new HoShapeKeyWriter();
         private readonly int[,] eyeTargetIds = new int[ChannelCount, 2];
+        private readonly List<HoShapeKeyTarget> eyeTargets = new List<HoShapeKeyTarget>();
 
         private HoLookAtState state;
         private HoLookAtIkRelay relay;
@@ -198,6 +185,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float mouseAngleYaw;
         private float mouseAnglePitch;
         private bool hasMouseAngles;
+        private Vector3 lastDirection = Vector3.forward;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -281,6 +269,27 @@ namespace Hollow.HoUnityTools.Constraints
 
         public bool HasTarget => state.hasTarget;
 
+        /// <summary>解算用的支点（humanoid 是头骨，否则是本物体）。</summary>
+        public Vector3 Pivot => GetPivot();
+
+        /// <summary>本帧解算出来的目标方向（世界空间）。</summary>
+        public Vector3 LastDirection => lastDirection;
+
+        /// <summary>目标点（跟随物体 / 场景点模式才有；否则是支点前方 1 米）。</summary>
+        public bool HasTargetPoint => hasLastKnownPoint;
+
+        public Vector3 LastTargetPoint => lastKnownTargetPoint;
+
+        public Vector3 ReferenceForward => GetReferenceForward();
+
+        public Vector3 ReferenceUp => GetReferenceUp();
+
+        public float HeadLimitYaw => headLimitYaw;
+
+        public float HeadLimitPitch => headLimitPitch;
+
+        public bool DrawGizmosEnabled => drawGizmos;
+
         public bool IkRecentlyCalled => Application.isPlaying && Time.timeAsDouble - state.lastIkTime < 0.5;
 
         public bool AnimatorIsHuman => animator != null && animator.isHuman;
@@ -335,13 +344,7 @@ namespace Hollow.HoUnityTools.Constraints
             built = false;
         }
 
-        /// <summary>本帧某个通道的量（0..1，已过曲线）；给调试读数用。</summary>
-        public float GetChannelAmount(HoLookAtEyeChannel channel)
-        {
-            GetChannelAmounts(channel, out float left, out float right);
-            return Mathf.Max(left, right);
-        }
-
+        /// <summary>某个通道这一帧实际写出去的形态键值（0..100）。</summary>
         public float GetChannelTargetOutput(HoLookAtEyeChannel channel, bool rightEye)
         {
             int index = (int)channel;
@@ -353,6 +356,45 @@ namespace Hollow.HoUnityTools.Constraints
             // 同一个通道只注册第一条条目（左右眼各一个键），多余条目会被忽略
             int id = eyeTargetIds[index, rightEye ? 1 : 0];
             return id < 0 ? 0.0f : writer.GetTargetOutput(id);
+        }
+
+        /// <summary>调试快照：面板条形读数与场景 Gizmo 共用。</summary>
+        public HoLookAtDebug GetDebug()
+        {
+            HoLookAtDebug debug = new HoLookAtDebug
+            {
+                targetYaw = state.smoothedYaw,
+                targetPitch = state.smoothedPitch,
+                headYaw = HeadAngles.yaw,
+                headPitch = HeadAngles.pitch,
+                eyeYaw = state.smoothedEyeYaw,
+                eyePitch = state.smoothedEyePitch,
+                hasTarget = state.hasTarget,
+                targetValid = state.applyLookAt
+            };
+
+            GetEyeSettings(out HoEyeSettings settings, out AnimationCurve inner, out AnimationCurve outer, out AnimationCurve up, out AnimationCurve down);
+
+            // 六条通道的量 = 和写形态键时同一套算法（角度 → 按上限归一化 → 过曲线）。
+            // 内/外 与 看右/看左 共用同一条曲线与上限，所以四个独立值撑起六个通道。
+            debug.inner = ShapeAmount(Mathf.Max(state.smoothedEyeYaw, 0.0f), settings.angleLimitInner, inner);
+            debug.lookRight = debug.inner;
+            debug.outer = ShapeAmount(Mathf.Max(-state.smoothedEyeYaw, 0.0f), settings.angleLimitOuter, outer);
+            debug.lookLeft = debug.outer;
+            debug.up = ShapeAmount(Mathf.Max(state.smoothedEyePitch, 0.0f), settings.angleLimitUp, up);
+            debug.down = ShapeAmount(Mathf.Max(-state.smoothedEyePitch, 0.0f), settings.angleLimitDown, down);
+
+            if (hasLastKnownPoint)
+            {
+                debug.hasTargetPoint = true;
+                debug.targetPoint = lastKnownTargetPoint;
+            }
+            else
+            {
+                debug.targetPoint = Pivot + lastDirection * GetTargetDistance();
+            }
+
+            return debug;
         }
 
         // ── 生命周期 ────────────────────────────────────────────────────────
@@ -494,17 +536,23 @@ namespace Hollow.HoUnityTools.Constraints
             if (headEnabled && externalHeadWeight > 0.0f && state.applyLookAt)
             {
                 float headPart = Mathf.Clamp01(headWeight * externalHeadWeight);
-                animator.SetLookAtWeight(totalWeight, spine, headPart, eyesWeightToUnity, clampWeight);
+                animator.SetLookAtWeight(totalWeight, spine, headPart, 0.0f, UnityClampWeight);
             }
             else
             {
-                animator.SetLookAtWeight(0.0f, 0.0f, 0.0f, 0.0f, clampWeight);
+                animator.SetLookAtWeight(0.0f, 0.0f, 0.0f, 0.0f, UnityClampWeight);
             }
         }
 
         private void OnValidate()
         {
-            cameraCullingGuard();
+            mouseDeadZone = Mathf.Clamp(mouseDeadZone, 0.0f, 0.45f);
+            mouseDistance = Mathf.Max(0.1f, mouseDistance);
+            eyeAngleLimit = new Vector4(
+                Mathf.Max(1.0f, eyeAngleLimit.x),
+                Mathf.Max(1.0f, eyeAngleLimit.y),
+                Mathf.Max(1.0f, eyeAngleLimit.z),
+                Mathf.Max(1.0f, eyeAngleLimit.w));
             writer.WriteThreshold = writeThreshold;
             if (eyeEntries != null)
             {
@@ -515,18 +563,6 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             built = false;
-        }
-
-        private void cameraCullingGuard()
-        {
-            // 面板上的数值保护（名字保留以免 OnValidate 里出现魔法表达式）
-            mouseDeadZone = Mathf.Clamp(mouseDeadZone, 0.0f, 0.45f);
-            mouseDistance = Mathf.Max(0.1f, mouseDistance);
-            eyeAngleLimit = new Vector4(
-                Mathf.Max(1.0f, eyeAngleLimit.x),
-                Mathf.Max(1.0f, eyeAngleLimit.y),
-                Mathf.Max(1.0f, eyeAngleLimit.z),
-                Mathf.Max(1.0f, eyeAngleLimit.w));
         }
 
         private bool ShouldEvaluate()
@@ -559,6 +595,7 @@ namespace Hollow.HoUnityTools.Constraints
         {
             writer.WriteThreshold = writeThreshold;
             writer.BeginBuild(renderers);
+            eyeTargets.Clear();
 
             for (int c = 0; c < ChannelCount; c++)
             {
@@ -577,15 +614,33 @@ namespace Hollow.HoUnityTools.Constraints
                     }
 
                     int index = Mathf.Clamp((int)entry.Channel, 0, ChannelCount - 1);
-                    if (eyeTargetIds[index, 0] < 0)
+                    if (eyeTargetIds[index, 0] >= 0)
                     {
-                        eyeTargetIds[index, 0] = writer.RegisterTarget(entry.LeftEye);
-                        eyeTargetIds[index, 1] = writer.RegisterTarget(entry.RightEye);
+                        continue;
                     }
+
+                    eyeTargetIds[index, 0] = RegisterEyeKey(entry.LeftEye);
+                    eyeTargetIds[index, 1] = RegisterEyeKey(entry.RightEye);
                 }
             }
 
             writer.EndBuild();
+        }
+
+        /// <summary>
+        /// 面板上只存"键名 + 增益"，这里现造一个运行期目标交给写入器
+        /// （瞬发 ramp：眼睛的平滑由 eyeSmoothing 统一负责，通道不再各配一套）。
+        /// </summary>
+        private int RegisterEyeKey(HoLookAtEyeKey key)
+        {
+            if (key == null || !key.HasKey)
+            {
+                return -1;
+            }
+
+            HoShapeKeyTarget runtime = HoShapeKeyTarget.CreateRuntime(key.KeyName, key.Gain);
+            eyeTargets.Add(runtime);
+            return writer.RegisterTarget(runtime);
         }
 
         public void ResetState()
@@ -607,9 +662,8 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 deadZone = deadZone,
                 headShare = headShare,
-                yawLimit = yawLimit,
-                pitchLimitUp = pitchLimitUp,
-                pitchLimitDown = pitchLimitDown
+                yawLimit = headLimitYaw,
+                pitchLimit = headLimitPitch
             };
             head.Sanitize();
 
@@ -663,6 +717,7 @@ namespace Hollow.HoUnityTools.Constraints
 
             if (isDirection)
             {
+                lastDirection = direction;
                 target = HoLookAtSolver.Decompose(forward, up, direction);
             }
 
@@ -710,15 +765,13 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 HoMouseSettings settings = new HoMouseSettings
                 {
-                    inputSource = inputSource,
+                    inputSource = HoLookAtInputSource.Auto,
                     camera = mouseCamera,
                     sampleMode = mouseSampleMode,
                     angleSpace = mouseAngleSpace,
                     sensitivity = mouseSensitivity,
                     deadZone = mouseDeadZone,
                     distance = mouseDistance,
-                    projectToPlane = mouseProjectToPlane,
-                    planeHeight = mousePlaneHeight,
                     raycastMask = mouseRaycastMask,
                     holdOffscreen = mouseHoldOffscreen
                 };
@@ -830,7 +883,8 @@ namespace Hollow.HoUnityTools.Constraints
             return null;
         }
 
-        private Vector3 GetPivot()        {
+        private Vector3 GetPivot()
+        {
             if (animator != null && animator.isHuman)
             {
                 Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
@@ -850,7 +904,7 @@ namespace Hollow.HoUnityTools.Constraints
                 return Mathf.Max(0.1f, Vector3.Distance(GetPivot(), target.position));
             }
 
-            return 1.0f;
+            return Mathf.Max(0.1f, mouseDistance);
         }
 
         private Vector3 GetReferenceForward()
@@ -894,10 +948,9 @@ namespace Hollow.HoUnityTools.Constraints
 
             float yaw = state.eyeYaw * eyes;
             float pitch = state.eyePitch * eyes;
-            if (eyeEllipseClamp)
-            {
-                HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
-            }
+
+            // 斜向看时按椭圆夹取，避免"过转"（外圈比内圈小的时候特别明显）
+            HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
 
             state.smoothedEyeYaw = HoLookAtSolver.SmoothAngle(state.smoothedEyeYaw, yaw, deltaTime, eyeSmoothing, 0.0f);
             state.smoothedEyePitch = HoLookAtSolver.SmoothAngle(state.smoothedEyePitch, pitch, deltaTime, eyeSmoothing, 0.0f);
@@ -942,10 +995,19 @@ namespace Hollow.HoUnityTools.Constraints
             AnimationCurve curve;
             float limit;
             GetCurveAndLimit(channel, inner, outer, up, down, settings, out curve, out limit);
+            writer.Apply(id, ShapeAmount(angle, limit, curve), deltaTime);
+        }
 
-            float normalized = limit > 0.0f ? Mathf.Clamp01(angle / limit) : 0.0f;
-            float shaped = curve != null && curve.length > 0 ? Mathf.Clamp01(curve.Evaluate(normalized)) : normalized;
-            writer.Apply(id, shaped, deltaTime);
+        /// <summary>角度 →（按上限归一化）→ 过曲线。写形态键、转眼球骨骼、调试读数共用同一套。</summary>
+        private static float ShapeAmount(float angle, float limit, AnimationCurve curve)
+        {
+            if (limit <= 0.0f)
+            {
+                return 0.0f;
+            }
+
+            float normalized = Mathf.Clamp01(angle / limit);
+            return curve != null && curve.length > 0 ? Mathf.Clamp01(curve.Evaluate(normalized)) : normalized;
         }
 
         private static void GetCurveAndLimit(
@@ -1040,8 +1102,7 @@ namespace Hollow.HoUnityTools.Constraints
                 angleLimitInner = eyeAngleLimit.x,
                 angleLimitOuter = eyeAngleLimit.y,
                 angleLimitUp = eyeAngleLimit.z,
-                angleLimitDown = eyeAngleLimit.w,
-                ellipseClamp = eyeEllipseClamp
+                angleLimitDown = eyeAngleLimit.w
             };
             settings.Sanitize();
             inner = horizontalInner;
@@ -1059,7 +1120,7 @@ namespace Hollow.HoUnityTools.Constraints
             AnimationCurve up,
             AnimationCurve down)
         {
-            if (!driveEyeBones || animator == null || !animator.isHuman || eyeBoneWeight <= 0.0f)
+            if (eyeBoneWeight <= 0.0f || animator == null || !animator.isHuman)
             {
                 return;
             }
@@ -1071,12 +1132,8 @@ namespace Hollow.HoUnityTools.Constraints
                 return;
             }
 
-            float shapedYaw = eyeBoneUseCurve
-                ? ShapeBoneAngle(yaw, settings.angleLimitInner, settings.angleLimitOuter, inner, outer)
-                : yaw;
-            float shapedPitch = eyeBoneUseCurve
-                ? ShapeBoneAngle(pitch, settings.angleLimitUp, settings.angleLimitDown, up, down)
-                : pitch;
+            float shapedYaw = ShapeBoneAngle(yaw, settings.angleLimitInner, settings.angleLimitOuter, inner, outer);
+            float shapedPitch = ShapeBoneAngle(pitch, settings.angleLimitUp, settings.angleLimitDown, up, down);
 
             Vector3 upAxis = GetReferenceUp();
             Vector3 rightAxis = Vector3.Cross(upAxis, GetReferenceForward()).normalized;
@@ -1105,9 +1162,7 @@ namespace Hollow.HoUnityTools.Constraints
                 return 0.0f;
             }
 
-            float normalized = Mathf.Clamp01(Mathf.Abs(angle) / limit);
-            float shaped = curve != null && curve.length > 0 ? Mathf.Clamp01(curve.Evaluate(normalized)) : normalized;
-            return Mathf.Sign(angle) * limit * shaped;
+            return Mathf.Sign(angle) * limit * ShapeAmount(Mathf.Abs(angle), limit, curve);
         }
     }
 }
