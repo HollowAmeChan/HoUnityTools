@@ -436,7 +436,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 EditorGUILayout.PropertyField(eyeDriver, L("驱动方式", "眼球骨骼（默认）：残余角直接转到 LeftEye/RightEye，指哪看哪、不用标定。\n形态键：残余角过四条曲线写成凝视键，给没有眼球骨骼的模型。\n切换时旧的形态键会自动交还回基准值。"));
 
-                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛愿意出多少力（优先级分工的第一层）：1 = 在眼球限位内尽量先吃，头颈只补剩下的；0.3 = 眼睛只吃三成，剩下的交给头颈（眼睛看着更含蓄）。\n想让「眼睛先动、头再跟」就调大它。"));
+                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛愿意出多少力（优先级分工的第一层）：1 = 在眼球限位内尽量先吃，头颈只补剩下的；0.5 = 眼睛先吃一半的角度，剩下交给头颈（默认，眼睛看着含蓄些）。\n想让「眼睛先动、头再跟」就调大它。"));
                 EditorGUILayout.PropertyField(eyeSmoothing, L("平滑（秒）", "眼睛角度的一阶平滑（比头部快，0.04 左右）。0 = 不平滑、最跟手。"));
 
                 if (bones)

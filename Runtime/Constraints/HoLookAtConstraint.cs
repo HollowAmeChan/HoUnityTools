@@ -79,9 +79,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private HoLookAtEyeDriver eyeDriver = HoLookAtEyeDriver.EyeBones;
 
-        /// <summary>眼球强度：实测 0.3 左右最自然（眼睛全量跟上反而"瞪"得凶）。</summary>
+        /// <summary>眼球强度：优先级第一层愿意出多少力，实测 0.5 左右最自然。</summary>
         [SerializeField, Range(0.0f, 1.0f)]
-        private float eyeWeight = 0.3f;
+        private float eyeWeight = 0.5f;
 
         [SerializeField, Min(0.0f)]
         private float eyeSmoothing = 0.04f;
