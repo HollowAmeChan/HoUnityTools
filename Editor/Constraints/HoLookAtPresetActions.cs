@@ -52,6 +52,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             bool bones = constraint.EyeBonesAvailable;
             driver.enumValueIndex = (int)(bones ? HoLookAtEyeDriver.EyeBones : HoLookAtEyeDriver.ShapeKeys);
 
+            // 眼球活动范围也一并填成推荐值：老场景里这些字段是序列化过的，
+            // 改代码里的默认值不会影响它们，一键装配是唯一能让用户吃到新默认的入口。
+            serializedObject.FindProperty("eyeBoneLimitYaw").floatValue = 15.0f;
+            serializedObject.FindProperty("eyeBoneLimitPitch").floatValue = 10.0f;
+            SerializedProperty angleLimit = serializedObject.FindProperty("eyeAngleLimit");
+            angleLimit.vector4Value = new Vector4(15.0f, 15.0f, 10.0f, 10.0f);
+
             if (bones)
             {
                 serializedObject.ApplyModifiedProperties();
