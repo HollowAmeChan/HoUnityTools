@@ -730,12 +730,18 @@ namespace Hollow.HoUnityTools.Constraints
 
                     if (mouseAngleSpace == HoLookAtMouseSpace.ScreenRelative && camera != null)
                     {
-                        // 屏幕相对：鼠标右 = 看向画面右侧。
-                        // 不能在角色坐标系里直接转 yaw —— 相机在角色正面时那等于看向它的左边（看着就是反的）。
+                        // 观众视角（第三人称，我面对角色）：
+                        //   鼠标在屏幕中心 → 角色看向观察者（也就是看向镜头方向的反向）；
+                        //   鼠标在右上     → 角色看向观察者的右上方。
+                        // 在观察者坐标系里就是 (-Z 朝向观察者, +X 观察者右, +Y 上)，
+                        // 所以直接用 (tan(yaw), tan(pitch), -1) 构造方向。
+                        // 注意：不能用相机 forward 当基准 —— 那是射进屏幕里的方向，
+                        // 对"面对相机"的角色来说等于让它看自己背后（平转角会变成 ±150° 以上）。
                         Transform view = camera.transform;
-                        Quaternion rotation = Quaternion.AngleAxis(mouseAngleYaw, view.up)
-                                              * Quaternion.AngleAxis(-mouseAnglePitch, view.right);
-                        direction = rotation * view.forward;
+                        float yawRadians = mouseAngleYaw * Mathf.Deg2Rad;
+                        float pitchRadians = mouseAnglePitch * Mathf.Deg2Rad;
+                        Vector3 local = new Vector3(Mathf.Tan(yawRadians), Mathf.Tan(pitchRadians), -1.0f);
+                        direction = view.TransformDirection(local.normalized);
                     }
                     else
                     {
@@ -833,6 +839,14 @@ namespace Hollow.HoUnityTools.Constraints
             if (reference != null)
             {
                 return reference;
+            }
+
+            // 默认用 Animator 所在物体（角色根）的朝向：那才是角色的面向。
+            // 退回到组件自己的 transform 往往是个骨骼/空物体，轴向是随机的，
+            // 会让"总角度"读数与限位全部失准。
+            if (animator != null)
+            {
+                return animator.transform;
             }
 
             return transform;

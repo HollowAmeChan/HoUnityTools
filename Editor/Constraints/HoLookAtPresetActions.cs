@@ -27,7 +27,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (serializedObject.FindProperty("reference").objectReferenceValue == null)
             {
-                serializedObject.FindProperty("reference").objectReferenceValue = constraint.transform;
+                // 参考系要的是"角色的面向"，所以优先用 Animator 所在物体，而不是组件自己所在的骨骼/空物体
+                SerializedProperty animatorProperty = serializedObject.FindProperty("animator");
+                Animator resolvedAnimator = animatorProperty.objectReferenceValue as Animator;
+                Transform frame = resolvedAnimator != null ? resolvedAnimator.transform : constraint.transform;
+                serializedObject.FindProperty("reference").objectReferenceValue = frame;
             }
 
             SerializedProperty cameraProperty = serializedObject.FindProperty("mouseCamera");
