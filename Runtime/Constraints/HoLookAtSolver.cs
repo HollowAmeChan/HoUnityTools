@@ -27,10 +27,15 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>
         /// 按"死区 → 头部承担 → 限位"分工，返回头部要用的角度，残余部分写进 <paramref name="state"/> 供眼睛使用。
         /// 与设计文档的不变量一致：先判死区、再分工、最后把头部那部分夹到限位内，剩下的全给眼睛。
+        ///
+        /// **眼睛范围的溢出会还给头**：残余超过眼球能转的范围时，把超出的部分加回头部（再受头部限位约束），
+        /// 然后重算残余。否则就会出现"总角 18°、头只转 7°、眼睛限位 10°" → 目光永远差 1° 的情况
+        /// （实测非常显眼）。头部也没余量时才真的到不了，那时调试区会显示还差多少。
         /// </summary>
         public static HoLookAtAngles Split(
             HoLookAtAngles total,
             in HoHeadSettings head,
+            in HoEyeSettings eye,
             float weight,
             ref HoLookAtState state)
         {
@@ -44,6 +49,8 @@ namespace Hollow.HoUnityTools.Constraints
                 // 死区内：头部不动，眼睛全吃
                 state.eyeYaw = yaw;
                 state.eyePitch = pitch;
+                state.eyeOverflowYaw = 0.0f;
+                state.eyeOverflowPitch = 0.0f;
                 return default;
             }
 
@@ -60,13 +67,57 @@ namespace Hollow.HoUnityTools.Constraints
             headYaw = Mathf.Clamp(headYaw, -head.yawLimit, head.yawLimit);
             headPitch = Mathf.Clamp(headPitch, -head.pitchLimit, head.pitchLimit);
 
+            // 眼球转不过来的部分交回头部（头部还有余量时，总方向仍然指得到目标）
+            float overflowYaw = Overflow(yaw - headYaw, eye.angleLimitInner, eye.angleLimitOuter);
+            float overflowPitch = Overflow(pitch - headPitch, eye.angleLimitUp, eye.angleLimitDown);
+            if (overflowYaw != 0.0f || overflowPitch != 0.0f)
+            {
+                headYaw = Mathf.Clamp(headYaw + overflowYaw, -head.yawLimit, head.yawLimit);
+                headPitch = Mathf.Clamp(headPitch + overflowPitch, -head.pitchLimit, head.pitchLimit);
+            }
+
             state.eyeYaw = yaw - headYaw;
             state.eyePitch = pitch - headPitch;
+            state.eyeOverflowYaw = overflowYaw;
+            state.eyeOverflowPitch = overflowPitch;
 
             HoLookAtAngles headAngles;
             headAngles.yaw = headYaw;
             headAngles.pitch = headPitch;
             return headAngles;
+        }
+
+        /// <summary>超出眼睛范围的量（带符号）：正数表示往正方向超了，负数表示往负方向超了。</summary>
+        private static float Overflow(float value, float positiveLimit, float negativeLimit)
+        {
+            if (value > positiveLimit)
+            {
+                return value - positiveLimit;
+            }
+
+            if (value < -negativeLimit)
+            {
+                return value + negativeLimit;
+            }
+
+            return 0.0f;
+        }
+
+        /// <summary>兼容旧签名：不把眼睛溢出还给头（等价于眼睛范围无限）。</summary>
+        public static HoLookAtAngles Split(
+            HoLookAtAngles total,
+            in HoHeadSettings head,
+            float weight,
+            ref HoLookAtState state)
+        {
+            HoEyeSettings unlimited = new HoEyeSettings
+            {
+                angleLimitInner = 180.0f,
+                angleLimitOuter = 180.0f,
+                angleLimitUp = 180.0f,
+                angleLimitDown = 180.0f
+            };
+            return Split(total, head, unlimited, weight, ref state);
         }
 
         /// <summary>

@@ -229,6 +229,10 @@ namespace Hollow.HoUnityTools.Constraints
         public float eyeYaw;
         public float eyePitch;
 
+        /// <summary>残余超过眼球范围、已经还给头部的那部分（度）。非零 = "眼睛转不过来，头多担了"。</summary>
+        public float eyeOverflowYaw;
+        public float eyeOverflowPitch;
+
         /// <summary>眼睛平滑后的角度（LateUpdate 里的状态）。</summary>
         public float smoothedEyeYaw;
         public float smoothedEyePitch;
@@ -293,6 +297,10 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>眼睛要补的残余角。</summary>
         public float eyeYaw;
         public float eyePitch;
+
+        /// <summary>残余超过眼球范围、已经还给头部的那部分（度）。</summary>
+        public float eyeOverflowYaw;
+        public float eyeOverflowPitch;
 
         /// <summary>四条通道各自的量（0..1，未乘增益）。</summary>
         public float lookLeft;

@@ -450,6 +450,8 @@ namespace Hollow.HoUnityTools.Constraints
                 headDeltaPitch = state.headDeltaPitch,
                 eyeYaw = state.smoothedEyeYaw,
                 eyePitch = state.smoothedEyePitch,
+                eyeOverflowYaw = state.eyeOverflowYaw,
+                eyeOverflowPitch = state.eyeOverflowPitch,
                 hasTarget = state.hasTarget,
                 targetValid = state.applyLookAt
             };
@@ -616,8 +618,10 @@ namespace Hollow.HoUnityTools.Constraints
             // 就知道头部**实际**转了多少（不是我们命令它转多少）。
             CacheHeadPoseBeforeIk();
 
+            // 角度是从两眼中点解出来的，但交给 Unity 的瞄准点必须从**头骨原点**出发：
+            // Unity 转的是头骨，从眼睛出发的点会让头的朝向差那么一点。
             animator.SetLookAtPosition(HoLookAtSolver.PointFromAngles(
-                GetPivot(),
+                GetHeadOrigin(),
                 GetReferenceForward(),
                 GetReferenceUp(),
                 head,
@@ -790,9 +794,34 @@ namespace Hollow.HoUnityTools.Constraints
 
             // 注意：这里**不乘总强度** —— 总强度由 Unity 的 SetLookAtWeight(weight) 施加一次，
             // 眼睛那边自己也乘一次（各一次）。以前两处都乘，weight = 0.5 时实际只剩 0.25。
-            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, 1.0f, ref state);
+            // 眼睛范围一起传进去：残余超过眼球能转的范围时，超出的部分还给头，
+            // 否则就会出现"总角 18°、头 7°、眼球限位 10°"→ 目光永远差 1° 的情况。
+            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, GetEyeRangeSettings(), 1.0f, ref state);
             HeadAngles = headAngles;
             return headAngles;
+        }
+
+        /// <summary>
+        /// 当前模式下的眼球活动范围（给分工用：残余超出它的部分还给头）。
+        /// 骨骼模式就是那两个限位（左右对称），形态键模式是四个角度上限。
+        /// </summary>
+        private HoEyeSettings GetEyeRangeSettings()
+        {
+            if (eyeDriver == HoLookAtEyeDriver.EyeBones)
+            {
+                HoEyeSettings bones = new HoEyeSettings
+                {
+                    angleLimitInner = eyeBoneLimitYaw,
+                    angleLimitOuter = eyeBoneLimitYaw,
+                    angleLimitUp = eyeBoneLimitPitch,
+                    angleLimitDown = eyeBoneLimitPitch
+                };
+                bones.Sanitize();
+                return bones;
+            }
+
+            GetEyeSettings(out HoEyeSettings settings, out _, out _, out _, out _);
+            return settings;
         }
 
         /// <summary>算出"总角度"：目标方向 → 参考系 yaw/pitch → 平滑/瞬移处理 → 丢失行为。</summary>
@@ -1018,7 +1047,46 @@ namespace Hollow.HoUnityTools.Constraints
             return null;
         }
 
+        /// <summary>
+        /// 解算用的支点 = **两眼的中点**（没有眼球骨骼时退回 Head）。
+        ///
+        /// 为什么不直接用头骨原点：眼睛在头骨前面约 10cm，从头骨算出来的方向，
+        /// 眼睛那条视线会整体偏一点点（2~4°，在脸上非常显眼）。
+        /// 从眼睛出发算方向，视线才正好落在目标上；交给 Unity 的瞄准点仍以头骨原点为起点（见 HandleAnimatorIK）。
+        /// </summary>
         private Vector3 GetPivot()
+        {
+            if (animator != null && animator.isHuman)
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftEye);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightEye);
+                if (left != null && right != null)
+                {
+                    return (left.position + right.position) * 0.5f;
+                }
+
+                if (left != null)
+                {
+                    return left.position;
+                }
+
+                if (right != null)
+                {
+                    return right.position;
+                }
+
+                Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+                if (head != null)
+                {
+                    return head.position;
+                }
+            }
+
+            return transform.position;
+        }
+
+        /// <summary>头骨原点：SetLookAtPosition 用它当射线起点（Unity 的 IK 转的是头骨，瞄准点要从头骨出发）。</summary>
+        private Vector3 GetHeadOrigin()
         {
             if (animator != null && animator.isHuman)
             {
@@ -1029,7 +1097,7 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
-            return transform.position;
+            return GetPivot();
         }
 
         private float GetTargetDistance()
@@ -1456,6 +1524,9 @@ namespace Hollow.HoUnityTools.Constraints
                 + "　头估计 " + state.headEstimateYaw.ToString("0.0") + "°/" + state.headEstimatePitch.ToString("0.0") + "°"
                 + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
                 + "　头增量 " + state.headDeltaYaw.ToString("0.0") + "°/" + state.headDeltaPitch.ToString("0.0") + "°"
+                + (Mathf.Abs(state.eyeOverflowYaw) + Mathf.Abs(state.eyeOverflowPitch) > 0.5f
+                    ? "　眼球超范围 " + state.eyeOverflowYaw.ToString("0.0") + "°/" + state.eyeOverflowPitch.ToString("0.0") + "°（已还给头）"
+                    : string.Empty)
                 + "　误差 " + GazeErrorYaw.ToString("0.0") + "°/" + GazeErrorPitch.ToString("0.0") + "°"
                 + (error < 1.0f ? "（精确）" : "（偏了）")
                 + (eyeDriver == HoLookAtEyeDriver.EyeBones ? "　骨骼" : "　形态键");

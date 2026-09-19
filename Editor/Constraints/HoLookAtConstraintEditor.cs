@@ -699,7 +699,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.LabelField("目标 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
                 + "　眼睛残余 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°"
                 + "　目光误差 " + constraint.GazeErrorYaw.ToString("0.0") + "° / " + constraint.GazeErrorPitch.ToString("0.0") + "°"
-                + (Mathf.Abs(constraint.GazeErrorYaw) + Mathf.Abs(constraint.GazeErrorPitch) < 1.0f ? "（精确）" : "（有偏差，见下）"),
+                + (Mathf.Abs(constraint.GazeErrorYaw) + Mathf.Abs(constraint.GazeErrorPitch) < 1.0f ? "（精确）" : "（有偏差，见下）")
+                + (Mathf.Abs(debug.eyeOverflowYaw) + Mathf.Abs(debug.eyeOverflowPitch) > 0.5f
+                    ? "　眼球超范围 " + debug.eyeOverflowYaw.ToString("0.0") + "° / " + debug.eyeOverflowPitch.ToString("0.0") + "°（已还给头）"
+                    : string.Empty),
                 EditorStyles.miniLabel);
 
             bool bones = constraint.EyeDriver == HoLookAtEyeDriver.EyeBones;
