@@ -393,7 +393,8 @@ namespace Hollow.HoUnityTools.Constraints
 
                 float requested = baseValue + sum;
                 bindings[i].LastRequest = requested;
-                bindings[i].LastClipped = !bindings[i].HasOverride && merged < sum - 0.001f;
+                bindings[i].LastClipped = !bindings[i].HasOverride
+                                          && (merged < sum - 0.001f || requested > 100.0f || requested < 0.0f);
 
                 final = Mathf.Clamp(final, 0.0f, 100.0f);
                 bindings[i].LastFinal = final;
