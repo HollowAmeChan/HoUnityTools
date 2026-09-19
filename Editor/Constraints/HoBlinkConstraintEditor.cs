@@ -317,9 +317,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 HoBlinkConstraint constraint = (HoBlinkConstraint)target;
 
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PropertyField(driverKind, new GUIContent("驱动"), GUILayout.Width(150.0f));
-                EditorGUILayout.PropertyField(driverRange, new GUIContent("值域"), GUILayout.Width(140.0f));
-                invert.boolValue = EditorGUILayout.ToggleLeft("反相", invert.boolValue, GUILayout.Width(56.0f));
+                using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
+                {
+                    EditorGUILayout.PropertyField(driverKind, new GUIContent("驱动"));
+                    EditorGUILayout.PropertyField(driverRange, new GUIContent("值域"));
+                }
+
+                invert.boolValue = EditorGUILayout.ToggleLeft("反相", invert.boolValue, GUILayout.Width(52.0f));
                 EditorGUILayout.EndHorizontal();
 
                 using (new EditorGUI.DisabledScope((HoBlinkDriverKind)driverKind.enumValueIndex != HoBlinkDriverKind.ShapeKey))
@@ -329,8 +333,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 }
 
                 EditorGUILayout.BeginHorizontal();
-                jellyEnabled.boolValue = EditorGUILayout.ToggleLeft("果冻", jellyEnabled.boolValue, GUILayout.Width(56.0f));
+                jellyEnabled.boolValue = EditorGUILayout.ToggleLeft("果冻", jellyEnabled.boolValue, GUILayout.Width(52.0f));
                 using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
+                using (HoConstraintEditorSectionGui.NarrowLabels(52.0f))
                 {
                     frequency.floatValue = EditorGUILayout.FloatField(new GUIContent("频率 Hz"), frequency.floatValue);
                     dampingRatio.floatValue = EditorGUILayout.FloatField(new GUIContent("阻尼比"), dampingRatio.floatValue);
@@ -338,6 +343,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 EditorGUILayout.EndHorizontal();
                 using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
+                using (HoConstraintEditorSectionGui.NarrowLabels(62.0f))
                 {
                     EditorGUILayout.BeginHorizontal();
                     inputSmoothing.floatValue = EditorGUILayout.FloatField(new GUIContent("输入平滑 s"), inputSmoothing.floatValue);
@@ -445,46 +451,62 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(meshScope, new GUIContent("范围"), GUILayout.Width(120.0f));
-            using (new EditorGUI.DisabledScope((HoShapeKeyMeshScope)meshScope.enumValueIndex != HoShapeKeyMeshScope.Index))
+            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
             {
-                EditorGUILayout.PropertyField(meshIndex, new GUIContent("序号"), GUILayout.Width(90.0f));
+                EditorGUILayout.PropertyField(meshScope, new GUIContent("范围"));
+                using (new EditorGUI.DisabledScope((HoShapeKeyMeshScope)meshScope.enumValueIndex != HoShapeKeyMeshScope.Index))
+                {
+                    EditorGUILayout.PropertyField(meshIndex, new GUIContent("序号"));
+                }
+
+                EditorGUILayout.PropertyField(blendMode, new GUIContent("混合"));
+                EditorGUILayout.PropertyField(side, SideLabel);
             }
 
-            EditorGUILayout.PropertyField(blendMode, new GUIContent("混合"), GUILayout.Width(120.0f));
-            EditorGUILayout.PropertyField(side, SideLabel, GUILayout.Width(120.0f));
             EditorGUILayout.EndHorizontal();
 
+            // 增益 / ramp 预设 / 强度：原来一行三个定宽（160+150+140=450px）在窄面板会被裁掉，
+            // 而且 label 会按默认 labelWidth 把定宽格子吃满 → 数字框 0 宽、调不动。现在三等分 + 收窄 label。
             EditorGUILayout.BeginHorizontal();
-            gain.floatValue = EditorGUILayout.FloatField(GainLabel, gain.floatValue, GUILayout.Width(160.0f));
-            rampPreset.enumValueIndex = EditorGUILayout.IntPopup(
-                RampLabel,
-                rampPreset.enumValueIndex,
-                RampPresetLabels,
-                RampPresetValues,
-                GUILayout.Width(150.0f));            rampIntensity.floatValue = EditorGUILayout.FloatField(IntensityLabel, rampIntensity.floatValue, GUILayout.Width(140.0f));
+            using (HoConstraintEditorSectionGui.NarrowLabels(32.0f))
+            {
+                gain.floatValue = EditorGUILayout.FloatField(GainLabel, gain.floatValue);
+                rampPreset.enumValueIndex = EditorGUILayout.IntPopup(
+                    RampLabel,
+                    rampPreset.enumValueIndex,
+                    RampPresetLabels,
+                    RampPresetValues);
+                rampIntensity.floatValue = EditorGUILayout.FloatField(IntensityLabel, rampIntensity.floatValue);
+            }
+
             EditorGUILayout.EndHorizontal();
 
             if (targetDetails[detailIndex])
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.BeginHorizontal();
-                offset.floatValue = EditorGUILayout.FloatField(new GUIContent("偏移"), offset.floatValue);
-                weight.floatValue = EditorGUILayout.Slider(new GUIContent("权重"), weight.floatValue, 0.0f, 1.0f);
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.BeginHorizontal();
-                outputMin.floatValue = EditorGUILayout.FloatField(new GUIContent("输出下限"), outputMin.floatValue);
-                outputMax.floatValue = EditorGUILayout.FloatField(new GUIContent("输出上限"), outputMax.floatValue);
-                clampToRange.boolValue = EditorGUILayout.ToggleLeft("钳制", clampToRange.boolValue, GUILayout.Width(56.0f));
-                EditorGUILayout.EndHorizontal();
+                using (HoConstraintEditorSectionGui.NarrowLabels(48.0f))
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    offset.floatValue = EditorGUILayout.FloatField(new GUIContent("偏移"), offset.floatValue);
+                    weight.floatValue = EditorGUILayout.Slider(new GUIContent("权重"), weight.floatValue, 0.0f, 1.0f);
+                    EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.BeginHorizontal();
+                    outputMin.floatValue = EditorGUILayout.FloatField(new GUIContent("输出下限"), outputMin.floatValue);
+                    outputMax.floatValue = EditorGUILayout.FloatField(new GUIContent("输出上限"), outputMax.floatValue);
+                    clampToRange.boolValue = EditorGUILayout.ToggleLeft("钳制", clampToRange.boolValue, GUILayout.Width(52.0f));
+                    EditorGUILayout.EndHorizontal();
+                }
 
                 if ((HoShapeKeyRampPreset)rampPreset.enumValueIndex == HoShapeKeyRampPreset.Custom)
                 {
                     EditorGUILayout.PropertyField(rampCurve, new GUIContent("自定义曲线"));
-                    EditorGUILayout.BeginHorizontal();
-                    rampAttack.floatValue = EditorGUILayout.FloatField(new GUIContent("attack s"), rampAttack.floatValue);
-                    rampRelease.floatValue = EditorGUILayout.FloatField(new GUIContent("release s"), rampRelease.floatValue);
-                    EditorGUILayout.EndHorizontal();
+                    using (HoConstraintEditorSectionGui.NarrowLabels(58.0f))
+                    {
+                        EditorGUILayout.BeginHorizontal();
+                        rampAttack.floatValue = EditorGUILayout.FloatField(new GUIContent("attack s"), rampAttack.floatValue);
+                        rampRelease.floatValue = EditorGUILayout.FloatField(new GUIContent("release s"), rampRelease.floatValue);
+                        EditorGUILayout.EndHorizontal();
+                    }
                 }
 
                 EditorGUI.indentLevel--;

@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 
@@ -90,6 +91,33 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             int index = Mathf.Clamp(property.enumValueIndex, 0, property.enumDisplayNames.Length - 1);
             return property.enumDisplayNames[index];
+        }
+
+        /// <summary>
+        /// 临时收窄 label 宽度。**并排或者固定小宽度的字段必须套这个**：
+        /// `EditorGUIUtility.labelWidth` 默认是面板宽度的 40%，一个 `FloatField(label, value, Width(160))`
+        /// 在宽面板下 160px 会被 label 全部吃掉，数字框变成 0 宽 ——
+        /// 表现就是"只有文字、点不动也调不了"。
+        /// </summary>
+        public static IDisposable NarrowLabels(float width)
+        {
+            return new LabelWidthScope(width);
+        }
+
+        private sealed class LabelWidthScope : IDisposable
+        {
+            private readonly float previous;
+
+            public LabelWidthScope(float width)
+            {
+                previous = EditorGUIUtility.labelWidth;
+                EditorGUIUtility.labelWidth = width;
+            }
+
+            public void Dispose()
+            {
+                EditorGUIUtility.labelWidth = previous;
+            }
         }
 
         private static Color GetSectionColor(Color baseColor, bool hover)

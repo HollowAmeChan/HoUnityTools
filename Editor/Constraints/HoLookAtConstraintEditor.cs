@@ -148,6 +148,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             return new GUIContent(label, tooltip);
         }
 
+        /// <summary>
+        /// 并排两个字段时必须临时收窄 labelWidth：默认值是面板宽度的 40%，
+        /// 半宽的一格里 label 就能把数字框挤成 0 宽（症状：只有文字、点不动）。
+        /// </summary>
+        private static System.IDisposable NarrowLabels(float width)
+        {
+            return HoConstraintEditorSectionGui.NarrowLabels(width);
+        }
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -350,10 +359,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与的比例。1 = 完全对准（在下面的限位之内），0.5 = 只转一半。"));
                 EditorGUILayout.Slider(deadZone, 0.0f, 89.0f, L("起始死区（度）", "目标离正前方这么近的时候头完全不动，只让眼睛动。避免小幅目标让头一直微抖。"));
                 EditorGUILayout.Slider(headShare, 0.0f, 1.0f, L("头部承担", "超出死区之后，头承担多少（剩下的留给眼睛）。\n0.7 = 头吃七成、眼睛补三成。"));
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PropertyField(headLimitYaw, L("左右限位（度）", "头最多往左右各转多少。超过的部分全部交给眼睛。"));
-                EditorGUILayout.PropertyField(headLimitPitch, L("上下限位（度）", "头最多往上/往下各转多少，对称。"));
-                EditorGUILayout.EndHorizontal();
+                using (NarrowLabels(74.0f))
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.PropertyField(headLimitYaw, L("左右限位", "头最多往左右各转多少度。超过的部分全部交给眼睛。"));
+                    EditorGUILayout.PropertyField(headLimitPitch, L("上下限位", "头最多往上/往下各转多少度，对称。"));
+                    EditorGUILayout.EndHorizontal();
+                }
             }
         }
 
@@ -484,28 +496,47 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndVertical();
         }
 
+        /// <summary>
+        /// 一只眼的一行：`[✓ 左眼] [键名 ………] [▾] 增益 [ 1.0 ]`。
+        /// 全部手摆矩形：并排的小方框不能用带 label 的 *Layout 控件 ——
+        /// label 会按 EditorGUIUtility.labelWidth（面板宽度的 40%）吃掉整格，
+        /// 数字框被压成 0 宽，看起来就是"只有文字、点不动"。
+        /// </summary>
         private void DrawEyeKey(string label, SerializedProperty key, HoLookAtConstraint constraint)
         {
             SerializedProperty enabled = key.FindPropertyRelative("enabled");
             SerializedProperty keyName = key.FindPropertyRelative("keyName");
             SerializedProperty gain = key.FindPropertyRelative("gain");
 
-            EditorGUILayout.BeginHorizontal();
-            enabled.boolValue = EditorGUILayout.ToggleLeft(label, enabled.boolValue, GUILayout.Width(36.0f));
+            const float ToggleWidth = 46.0f;
+            const float GainFieldWidth = 56.0f;
+            const float GainLabelWidth = 30.0f;
+            const float DropdownWidth = 22.0f;
+
+            Rect row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+            Rect toggleRect = new Rect(row.x, row.y, ToggleWidth, row.height);
+            Rect gainFieldRect = new Rect(row.xMax - GainFieldWidth, row.y, GainFieldWidth, row.height);
+            Rect gainLabelRect = new Rect(gainFieldRect.x - GainLabelWidth - 2.0f, row.y, GainLabelWidth, row.height);
+            Rect dropdownRect = new Rect(gainLabelRect.x - DropdownWidth - 2.0f, row.y, DropdownWidth, row.height);
+            Rect keyRect = new Rect(
+                toggleRect.xMax,
+                row.y,
+                Mathf.Max(40.0f, dropdownRect.x - toggleRect.xMax - 4.0f),
+                row.height);
+
+            enabled.boolValue = EditorGUI.ToggleLeft(toggleRect, label, enabled.boolValue);
             using (new EditorGUI.DisabledScope(!enabled.boolValue))
             {
-                DrawKeyField(keyName, constraint);
-                gain.floatValue = EditorGUILayout.FloatField(new GUIContent("增益", "通道量乘上它再写出去：1 = 曲线拉满输出 100。个别键太夸张时可以在这里压下去。"), gain.floatValue, GUILayout.Width(70.0f));
+                DrawKeyField(keyRect, keyName, constraint);
+                GUI.Label(gainLabelRect, new GUIContent("增益", "通道量乘上它再写出去：1 = 曲线拉满输出 100。个别键太夸张时可以在这里压下去。"), EditorStyles.miniLabel);
+                gain.floatValue = EditorGUI.FloatField(gainFieldRect, gain.floatValue);
             }
-
-            EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawKeyField(SerializedProperty keyName, HoLookAtConstraint constraint)
+        private void DrawKeyField(Rect rect, SerializedProperty keyName, HoLookAtConstraint constraint)
         {
-            const float ButtonWidth = 24.0f;
-            Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
-            Rect fieldRect = new Rect(rect.x, rect.y, rect.width - ButtonWidth - 2.0f, rect.height);
+            const float ButtonWidth = 22.0f;
+            Rect fieldRect = new Rect(rect.x, rect.y, Mathf.Max(20.0f, rect.width - ButtonWidth - 2.0f), rect.height);
             Rect buttonRect = new Rect(fieldRect.xMax + 2.0f, rect.y, ButtonWidth, rect.height);
 
             bool missing = !string.IsNullOrEmpty(keyName.stringValue) && !constraint.KeyExists(keyName.stringValue);
@@ -548,10 +579,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.LabelField("跟随手感", EditorStyles.miniBoldLabel);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(aimSmoothing, L("方向平滑（秒）", "目标方向的一阶平滑时间常数，0 = 立刻对准（会有点硬）。"));
-            EditorGUILayout.PropertyField(aimMaxSpeed, L("最大角速度（度/秒）", "转头速度上限，防止目标瞬移时头猛地甩过去。0 = 不限。"));
-            EditorGUILayout.EndHorizontal();
+            using (NarrowLabels(96.0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PropertyField(aimSmoothing, L("方向平滑", "目标方向的一阶平滑时间常数（秒），0 = 立刻对准（会有点硬）。"));
+                EditorGUILayout.PropertyField(aimMaxSpeed, L("最大角速度", "转头速度上限（度/秒），防止目标瞬移时头猛地甩过去。0 = 不限。"));
+                EditorGUILayout.EndHorizontal();
+            }
             EditorGUILayout.PropertyField(teleportAngleThreshold, L("瞬移阈值（度）", "目标角度跳变超过它就当瞬移，直接跟上不慢慢转。"));
             using (new EditorGUI.DisabledScope(!spineEnabled.boolValue))
             {
@@ -560,10 +594,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("丢失之后", EditorStyles.miniBoldLabel);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PropertyField(returnDelay, L("回正延迟（秒）", "丢失后先保持这么久再开始回正。"));
-            EditorGUILayout.PropertyField(returnSpeed, L("回正速度（度/秒）", "回正时的角速度。"));
-            EditorGUILayout.EndHorizontal();
+            using (NarrowLabels(88.0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PropertyField(returnDelay, L("回正延迟", "丢失后先保持这么久（秒）再开始回正。"));
+                EditorGUILayout.PropertyField(returnSpeed, L("回正速度", "回正时的角速度（度/秒）。"));
+                EditorGUILayout.EndHorizontal();
+            }
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("眼球骨骼（非形态键方案）", EditorStyles.miniBoldLabel);
