@@ -14,6 +14,23 @@ namespace Hollow.HoUnityTools.Constraints
     public static class HoMousePointer
     {
         /// <summary>
+        /// 编辑器专用：Scene 视图里的鼠标位置与相机，由编辑器程序集每帧写入
+        /// （运行时程序集不能引用 UnityEditor，所以走这个静态口子；构建里恒为 invalid）。
+        /// </summary>
+        public struct HoEditorPointer
+        {
+            public bool valid;
+            public Camera camera;
+            public Vector2 screenPosition;
+            public float timestamp;
+        }
+
+        /// <summary>Scene 视图鼠标（编辑器程序集写入；见 <see cref="HoEditorPointer"/>）。</summary>
+        public static HoEditorPointer EditorPointer;
+
+        /// <summary>Scene 视图鼠标的有效期（秒）：超过就当没有，回落到真实输入。</summary>
+        private const float EditorPointerLifetime = 0.5f;
+        /// <summary>
         /// 编辑器辅助：替用户在场景里挑一个"看起来是观众视角"的相机（渲染到屏幕、启用的、像素面积最大）。
         /// **只在面板按钮/一键装配里调用** —— 运行时不再自动猜相机，一律用组件上手动指定的那个。
         /// </summary>
@@ -117,35 +134,59 @@ namespace Hollow.HoUnityTools.Constraints
         public static HoPointerSample Sample(in HoMouseSettings settings)
         {
             HoPointerSample sample = default;
-            if (!TryReadPointer(settings.inputSource, out Vector2 screenPosition))
+            HoMouseSettings resolved = settings;
+
+            if (!TryResolvePointer(ref resolved, out Vector2 screenPosition))
             {
                 return sample;
             }
 
             sample.valid = true;
+            sample.camera = resolved.camera;
             sample.screenPosition = screenPosition;
 
-            if (settings.sampleMode == HoLookAtMouseSampleMode.AngleMap || settings.camera == null)
+            if (resolved.sampleMode == HoLookAtMouseSampleMode.AngleMap || resolved.camera == null)
             {
                 return sample;
             }
 
-            Ray ray = settings.camera.ScreenPointToRay(screenPosition);
-            if (settings.sampleMode == HoLookAtMouseSampleMode.CursorPoint)
+            Ray ray = resolved.camera.ScreenPointToRay(screenPosition);
+            if (resolved.sampleMode == HoLookAtMouseSampleMode.CursorPoint)
             {
                 // 支点在射线上的投影深度：这个点就是"鼠标指着的、和角色一样远的那个位置"
-                float depth = Vector3.Dot(settings.pivot - ray.origin, ray.direction);
-                depth = Mathf.Max(Mathf.Max(0.1f, settings.distance * 0.1f), depth);
+                float depth = Vector3.Dot(resolved.pivot - ray.origin, ray.direction);
+                depth = Mathf.Max(Mathf.Max(0.1f, resolved.distance * 0.1f), depth);
                 sample.hasWorldPoint = true;
                 sample.worldPoint = ray.GetPoint(depth);
                 return sample;
             }
 
             sample.hasWorldPoint = true;
-            sample.worldPoint = Physics.Raycast(ray, out RaycastHit hit, 1000.0f, settings.raycastMask)
+            sample.worldPoint = Physics.Raycast(ray, out RaycastHit hit, 1000.0f, resolved.raycastMask)
                 ? hit.point
-                : ray.GetPoint(Mathf.Max(0.1f, settings.distance));
+                : ray.GetPoint(Mathf.Max(0.1f, resolved.distance));
             return sample;
+        }
+
+        /// <summary>
+        /// 取这一次要用哪个指针：编辑器里鼠标在 Scene 视图上时优先用它（连相机一起换掉），
+        /// 否则用真实的鼠标/指针输入。相机会写回 <paramref name="settings"/>。
+        /// </summary>
+        private static bool TryResolvePointer(ref HoMouseSettings settings, out Vector2 screenPosition)
+        {
+#if UNITY_EDITOR
+            if (settings.useSceneViewMouse
+                && EditorPointer.valid
+                && EditorPointer.camera != null
+                && Time.realtimeSinceStartup - EditorPointer.timestamp < EditorPointerLifetime)
+            {
+                settings.camera = EditorPointer.camera;
+                screenPosition = EditorPointer.screenPosition;
+                return true;
+            }
+#endif
+
+            return TryReadPointer(settings.inputSource, out screenPosition);
         }
 
         /// <summary>把屏幕位置换算成归一化的角度偏移（-1..1），带中心死区。</summary>

@@ -52,6 +52,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty mouseHoldOffscreen;
         private SerializedProperty writeThreshold;
         private SerializedProperty drawGizmos;
+        private SerializedProperty drawOverlay;
+        private SerializedProperty useSceneViewMouse;
         private SerializedProperty mergeMode;
 
         private bool targetExpanded = true;
@@ -138,6 +140,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             mouseHoldOffscreen = Find("mouseHoldOffscreen");
             writeThreshold = Find("writeThreshold");
             drawGizmos = Find("drawGizmos");
+            drawOverlay = Find("drawOverlay");
+            useSceneViewMouse = Find("useSceneViewMouse");
             mergeMode = Find("mergeMode");
         }
 
@@ -670,7 +674,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(drawGizmos, L("场景 Gizmo", "在 Scene 视图里画出参考朝向、限位框、目标方向、头和眼睛各自的方向（选中本物体即可看到）。"));
+            EditorGUILayout.PropertyField(drawGizmos, L("场景 Gizmo", "在 Scene 视图里画出参考朝向、限位框、目标方向、头实际方向与实际目光（选中本物体即可看到）。"));
+            EditorGUILayout.PropertyField(drawOverlay, L("Game 视图叠加", "在 Game 视图里叠加读数与两个点：青十字 = 鼠标，黄点 = 目标，紫点 = 实际目光落点，两点连线就是偏差。\n只在编辑器里生效（构建里没有这段代码），所以可以一直开着。"));
+            EditorGUILayout.PropertyField(useSceneViewMouse, L("Scene 视图鼠标", "编辑器里鼠标放在 Scene 视图上时，临时把 Scene 视图相机当观众视角来解算 —— 这样就能一边看 Gizmo 一边用鼠标调试，不用来回切窗口。\n鼠标回到 Game 视图时自动切回真正的输入。"));
+            EditorGUILayout.LabelField("提示：鼠标在 Scene 视图里也能调试（上面那个开关），Gizmo 与鼠标操作就在同一个视图里了。", EditorStyles.miniLabel);
 
             EditorGUILayout.LabelField("左右（yaw，正 = 角色右侧）", EditorStyles.miniBoldLabel);
             DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.actualHeadYaw, debug.eyeYaw);

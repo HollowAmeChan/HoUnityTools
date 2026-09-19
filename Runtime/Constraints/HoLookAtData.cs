@@ -229,6 +229,10 @@ namespace Hollow.HoUnityTools.Constraints
     public struct HoPointerSample
     {
         public bool valid;
+
+        /// <summary>这一次采样实际用的相机（可能是 Scene 视图相机 —— 编辑器里鼠标在 Scene 视图上时）。</summary>
+        public Camera camera;
+
         public Vector2 screenPosition;
         public bool hasWorldPoint;
         public Vector3 worldPoint;
@@ -266,6 +270,14 @@ namespace Hollow.HoUnityTools.Constraints
         public bool targetValid;
         public Vector3 targetPoint;
         public bool hasTargetPoint;
+
+        /// <summary>实际目光方向（头实际 + 眼睛残余）。</summary>
+        public float gazeYaw;
+        public float gazePitch;
+
+        /// <summary>目光落点：从支点沿目光方向、走到和目标同样的距离（给屏幕叠加画点用）。</summary>
+        public Vector3 gazePoint;
+        public bool hasGazePoint;
     }
 
     /// <summary>注视约束的鼠标参数（采样器输入）。</summary>
@@ -286,6 +298,12 @@ namespace Hollow.HoUnityTools.Constraints
 
         public LayerMask raycastMask;
         public bool holdOffscreen;
+
+        /// <summary>
+        /// 编辑器专用：鼠标在 Scene 视图上时，改用 Scene 视图的相机与坐标当"观众视角"。
+        /// 这样就能在 Scene 视图里一边看 Gizmo 一边用鼠标调试（构建里这个开关不起作用）。
+        /// </summary>
+        public bool useSceneViewMouse;
     }
 
     /// <summary>注视约束的眼睛参数（求解器输入）。</summary>

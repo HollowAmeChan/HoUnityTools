@@ -175,6 +175,14 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool drawGizmos = true;
 
+        /// <summary>Game 视图里的屏幕叠加（鼠标点 / 目光落点 / 误差读数）。只在编辑器里生效。</summary>
+        [SerializeField]
+        private bool drawOverlay = true;
+
+        /// <summary>编辑器专用：鼠标在 Scene 视图上时，用 Scene 视图的相机当观众视角。</summary>
+        [SerializeField]
+        private bool useSceneViewMouse = true;
+
         private readonly HoShapeKeyWriter writer = new HoShapeKeyWriter();
         private readonly int[,] eyeTargetIds = new int[ChannelCount, 2];
         private readonly List<HoShapeKeyTarget> eyeTargets = new List<HoShapeKeyTarget>();
@@ -202,6 +210,8 @@ namespace Hollow.HoUnityTools.Constraints
         private Quaternion headPoseBeforeIk = Quaternion.identity;
         private bool headHasPoseBeforeIk;
         private bool headMeasuredThisFrame;
+        private Vector2 lastPointerScreen;
+        private bool hasPointerScreen;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -305,6 +315,13 @@ namespace Hollow.HoUnityTools.Constraints
         public float HeadLimitPitch => headLimitPitch;
 
         public bool DrawGizmosEnabled => drawGizmos;
+
+        public bool DrawOverlayEnabled => drawOverlay;
+
+        public bool UseSceneViewMouse => useSceneViewMouse;
+
+        /// <summary>本次鼠标采样实际用的相机（Scene 视图鼠标时就是 Scene 视图相机）；屏幕叠加用它投影。</summary>
+        public Camera PointerCamera { get; private set; }
 
         /// <summary>当前的眼睛驱动模式（骨骼 / 形态键）。</summary>
         public HoLookAtEyeDriver EyeDriver => eyeDriver;
@@ -447,6 +464,18 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 debug.targetPoint = Pivot + lastDirection * GetTargetDistance();
             }
+
+            // 实际目光方向与落点：落点取"和目标同样距离"处，方便屏幕上对比两个点
+            debug.gazeYaw = debug.actualHeadYaw + debug.eyeYaw;
+            debug.gazePitch = debug.actualHeadPitch + debug.eyePitch;
+            Vector3 gazeDirection = HoLookAtSolver.DirectionFromAngles(
+                GetReferenceForward(),
+                GetReferenceUp(),
+                debug.gazeYaw,
+                debug.gazePitch);
+            float gazeDistance = Vector3.Distance(Pivot, debug.targetPoint);
+            debug.gazePoint = Pivot + gazeDirection * Mathf.Max(0.1f, gazeDistance);
+            debug.hasGazePoint = true;
 
             return debug;
         }
@@ -848,10 +877,21 @@ namespace Hollow.HoUnityTools.Constraints
                     pivot = pivot,
                     distance = mouseDistance,
                     raycastMask = mouseRaycastMask,
-                    holdOffscreen = mouseHoldOffscreen
+                    holdOffscreen = mouseHoldOffscreen,
+                    useSceneViewMouse = useSceneViewMouse
                 };
 
                 HoPointerSample sample = HoMousePointer.Sample(settings);
+                if (sample.valid)
+                {
+                    // 记下来给 Game 视图叠加用（那里不能用 UnityEngine.Input：项目可能只开了 Input System）
+                    lastPointerScreen = sample.screenPosition;
+                    hasPointerScreen = true;
+                    if (sample.camera != null)
+                    {
+                        PointerCamera = sample.camera;
+                    }
+                }
                 if (!sample.valid)
                 {
                     // 指针不可用（窗口失焦 / 没有输入设备）：离屏保持时沿用上一次的方向，而不是漂回中立
@@ -879,7 +919,8 @@ namespace Hollow.HoUnityTools.Constraints
 
                 if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap)
                 {
-                    Camera camera = GetMouseCamera();
+                    // 相机会跟采样走：编辑器里鼠标在 Scene 视图上时，这里拿到的是 Scene 视图相机
+                    Camera camera = sample.camera != null ? sample.camera : GetMouseCamera();
                     Vector2 offset = HoMousePointer.ScreenToAngleOffset(camera, sample.screenPosition, mouseDeadZone);
                     mouseAngleYaw = offset.x * mouseSensitivity.x;
                     mouseAnglePitch = offset.y * mouseSensitivity.y;
@@ -1327,5 +1368,175 @@ namespace Hollow.HoUnityTools.Constraints
 
             eyeBonesCaptured = false;
         }
+
+#if UNITY_EDITOR
+        // ── Game 视图屏幕叠加（只在编辑器里编译；构建里这段不存在）────────────
+        //
+        // 为什么需要它：用鼠标调试时人只能待在 Game 视图，而 Gizmo 只在 Scene 视图里画，
+        // 于是"能操作的地方看不到信息"。这里把关键信息直接叠在 Game 视图上：
+        //   青色十字 = 鼠标位置（本次采样用的那个点）
+        //   黄色圆点 = 目标点
+        //   紫色圆点 = 实际目光落点（和目标同距离）
+        //   两点之间的连线 = 偏差；读数里也有度数
+
+        private static Texture2D overlayPixel;
+
+        private void OnGUI()
+        {
+            if (!drawOverlay || !isActiveAndEnabled || !ShouldEvaluate())
+            {
+                return;
+            }
+
+            HoLookAtDebug debug = GetDebug();
+            Camera camera = PointerCamera != null ? PointerCamera : mouseCamera;
+            Texture2D pixel = GetOverlayPixel();
+
+            Vector2 mouseGui = hasPointerScreen
+                ? ToGuiPoint(lastPointerScreen)
+                : new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            Vector2 gazeGui = Vector2.zero;
+            Vector2 targetGui = Vector2.zero;
+            bool hasGaze = false;
+            bool hasTargetDot = false;
+
+            if (camera != null)
+            {
+                hasGaze = TryProject(camera, debug.gazePoint, out gazeGui);
+                hasTargetDot = TryProject(camera, debug.targetPoint, out targetGui);
+            }
+            else
+            {
+                // 没相机时也能用：直接把角度画成横向偏移（至少看得见"在动 / 偏多少"）
+                mouseGui = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            }
+
+            GUI.depth = -1000;
+
+            if (hasTargetDot)
+            {
+                DrawOverlayDot(pixel, targetGui, new Color(1.0f, 0.82f, 0.25f, 0.95f), 5.0f);
+            }
+
+            if (hasGaze)
+            {
+                DrawOverlayDot(pixel, gazeGui, new Color(0.80f, 0.55f, 1.0f, 0.95f), 5.0f);
+                if (hasTargetDot)
+                {
+                    DrawOverlayLine(pixel, gazeGui, targetGui, new Color(1.0f, 1.0f, 1.0f, 0.55f), 1.0f);
+                }
+            }
+
+            DrawOverlayCross(pixel, mouseGui, new Color(0.30f, 0.95f, 0.95f, 0.95f), 9.0f, 1.0f);
+
+            float error = Mathf.Abs(GazeErrorYaw) + Mathf.Abs(GazeErrorPitch);
+            string text =
+                "Ho 注视　" + (targetMode == HoLookAtMode.Mouse ? "鼠标" : "物体")
+                + "　总 " + TotalAngles.yaw.ToString("0.0") + "°/" + TotalAngles.pitch.ToString("0.0") + "°"
+                + "　头实际 " + state.headActualYaw.ToString("0.0") + "°/" + state.headActualPitch.ToString("0.0") + "°"
+                + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
+                + "　误差 " + GazeErrorYaw.ToString("0.0") + "°/" + GazeErrorPitch.ToString("0.0") + "°"
+                + (error < 1.0f ? "（精确）" : "（偏了）")
+                + (eyeDriver == HoLookAtEyeDriver.EyeBones ? "　骨骼" : "　形态键");
+
+            GUIContent content = new GUIContent(text);
+            Vector2 size = EditorOverlayStyle.CalcSize(content);
+            Rect box = new Rect(8.0f, 8.0f, size.x + 12.0f, size.y + 6.0f);
+            GUI.color = new Color(0.0f, 0.0f, 0.0f, 0.55f);
+            GUI.DrawTexture(box, pixel);
+            GUI.color = Color.white;
+            GUI.Label(new Rect(box.x + 6.0f, box.y + 3.0f, size.x, size.y), content, EditorOverlayStyle);
+        }
+
+        private static GUIStyle overlayStyle;
+
+        private static GUIStyle EditorOverlayStyle
+        {
+            get
+            {
+                if (overlayStyle == null)
+                {
+                    overlayStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        fontSize = 12,
+                        richText = false
+                    };
+                    overlayStyle.normal.textColor = Color.white;
+                }
+
+                return overlayStyle;
+            }
+        }
+
+        private static Texture2D GetOverlayPixel()
+        {
+            if (overlayPixel == null)
+            {
+                overlayPixel = new Texture2D(1, 1, TextureFormat.RGBA32, false)
+                {
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                overlayPixel.SetPixel(0, 0, Color.white);
+                overlayPixel.Apply();
+            }
+
+            return overlayPixel;
+        }
+
+        private static Vector2 ToGuiPoint(Vector2 screenPoint)
+        {
+            // 屏幕像素（左下原点）→ GUI 坐标（左上原点，并且尊重 Game 视图的缩放）
+            return GUIUtility.ScreenToGUIPoint(new Vector2(screenPoint.x, Screen.height - screenPoint.y));
+        }
+
+        private static bool TryProject(Camera camera, Vector3 worldPoint, out Vector2 guiPoint)
+        {
+            Vector3 screen = camera.WorldToScreenPoint(worldPoint);
+            if (screen.z <= 0.0f)
+            {
+                guiPoint = Vector2.zero;
+                return false;
+            }
+
+            guiPoint = ToGuiPoint(new Vector2(screen.x, screen.y));
+            return true;
+        }
+
+        private static void DrawOverlayDot(Texture2D pixel, Vector2 center, Color color, float size)
+        {
+            Color previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size), pixel);
+            GUI.color = previous;
+        }
+
+        private static void DrawOverlayCross(Texture2D pixel, Vector2 center, Color color, float size, float thickness)
+        {
+            Color previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(center.x - size, center.y - thickness * 0.5f, size * 2.0f, thickness), pixel);
+            GUI.DrawTexture(new Rect(center.x - thickness * 0.5f, center.y - size, thickness, size * 2.0f), pixel);
+            GUI.color = previous;
+        }
+
+        private static void DrawOverlayLine(Texture2D pixel, Vector2 from, Vector2 to, Color color, float thickness)
+        {
+            Vector2 delta = to - from;
+            float length = delta.magnitude;
+            if (length < 0.5f)
+            {
+                return;
+            }
+
+            float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            Matrix4x4 previous = GUI.matrix;
+            Color previousColor = GUI.color;
+            GUI.color = color;
+            GUIUtility.RotateAroundPivot(angle, from);
+            GUI.DrawTexture(new Rect(from.x, from.y - thickness * 0.5f, length, thickness), pixel);
+            GUI.matrix = previous;
+            GUI.color = previousColor;
+        }
+#endif
     }
 }
