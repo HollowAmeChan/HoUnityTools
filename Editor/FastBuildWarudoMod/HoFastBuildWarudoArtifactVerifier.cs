@@ -241,6 +241,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (line.IndexOf("not in the .csproj", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
+            // UMod 定位不到 Unity 生成的 .csproj 时会直接跳过脚本编译，这是产物没有程序集最常见的原因。
+            if (line.IndexOf("Failed to locate script project file", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (line.IndexOf("Scripts cannot be compiled", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (line.IndexOf("Scripts will not be compiled", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
             if (line.IndexOf("error CS", StringComparison.Ordinal) >= 0)
                 return true;
             if (line.IndexOf("Compile failed", StringComparison.OrdinalIgnoreCase) >= 0)

@@ -1324,6 +1324,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (missingScriptCount > 0)
                     EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
 
+                if (scriptPreview.Count > 0 && !HasGeneratedProjectFiles())
+                {
+                    EditorGUILayout.HelpBox(
+                        "工程根目录没有 Unity 生成的 .csproj。UMod 靠它定位脚本工程，缺失时会跳过全部脚本编译，" +
+                        "产物不会有运行时程序集。请在 Edit > Preferences > External Tools 里重新生成工程文件。",
+                        MessageType.Error);
+                }
+
                 if (uncompiledComponents > 0)
                 {
                     EditorGUILayout.HelpBox(
@@ -2734,6 +2742,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 PrepareStagedPrefab(state);
                 ValidateTemporaryPlayerSettings(state);
+                ValidateStagedScriptsAreInProjects(state);
                 state.phase = BuildingPhase;
                 WriteBuildState(state);
                 ApplyTemporaryExportSettings(state);
@@ -3756,8 +3765,171 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return Path.GetFullPath(Path.Combine(ProjectRoot, normalized.Replace('/', Path.DirectorySeparatorChar)));
         }
 
-        private static string ProjectRoot
+        #region 脚本工程文件检查
+
+        private static bool projectFilesCached;
+        private static bool projectFilesExist;
+        private static double projectFilesCacheExpiry;
+
+        /// <summary>
+        /// 工程根目录是否存在 Unity 生成的 .csproj。UMod 靠它定位“脚本工程文件”，
+        /// 找不到时会在 Build.log 里写下
+        /// “Failed to locate script project file. Scripts cannot be compiled for the mod export.”
+        /// 并直接跳过全部脚本编译，产物因此没有 assemblymodules.dat。
+        /// </summary>
+        private static bool HasGeneratedProjectFiles()
         {
+            if (projectFilesCached && EditorApplication.timeSinceStartup < projectFilesCacheExpiry)
+                return projectFilesExist;
+
+            projectFilesCached = true;
+            projectFilesCacheExpiry = EditorApplication.timeSinceStartup + 5.0;
+            try
+            {
+                projectFilesExist = Directory.GetFiles(ProjectRoot, "*.csproj", SearchOption.TopDirectoryOnly).Length > 0;
+            }
+            catch (Exception)
+            {
+                // 读不到时不要误报，交给构建前的实际检查。
+                projectFilesExist = true;
+            }
+
+            return projectFilesExist;
+        }
+
+        private static bool HasStagedRuntimeScripts(BuildState state)
+        {
+            foreach (ScriptMapping mapping in state.scripts ?? Array.Empty<ScriptMapping>())
+            {
+                if (!mapping.removeFromPrefab && !string.IsNullOrEmpty(mapping.stagedPath))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 调用官方构建前的最后一道闸：确认暂存的脚本真的被 Unity 生成的 .csproj 收录。
+        /// 用与 UMod 相同的判据，宁可当场报错，也不要产出组件全是 Missing Script 的 Mod。
+        /// </summary>
+        private static void ValidateStagedScriptsAreInProjects(BuildState state)
+        {
+            if (!HasStagedRuntimeScripts(state))
+                return;
+
+            string error;
+            if (TryFindProjectContainingStagedScripts(state, out error))
+                return;
+
+            // 工程文件常常只是没刷新，先请 Unity 重新生成一次再复查。
+            if (TrySyncEditorProjects())
+            {
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                if (TryFindProjectContainingStagedScripts(state, out error))
+                {
+                    Debug.Log("[HoUnityTools] 已重新生成工程文件，暂存脚本已被 .csproj 收录。");
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException(error);
+        }
+
+        private static bool TryFindProjectContainingStagedScripts(BuildState state, out string error)
+        {
+            string[] projects;
+            try
+            {
+                projects = Directory.GetFiles(ProjectRoot, "*.csproj", SearchOption.TopDirectoryOnly);
+            }
+            catch (Exception exception)
+            {
+                error = "无法扫描工程根目录的 .csproj：" + GetRootMessage(exception);
+                return false;
+            }
+
+            if (projects.Length == 0)
+            {
+                error = "工程根目录没有任何 Unity 生成的 .csproj，UMod 会跳过全部脚本编译，" +
+                        "产物不会包含运行时程序集，组件在 Warudo 里会是 Missing Script。\n" +
+                        "请在 Edit > Preferences > External Tools 里选择有效的代码编辑器，" +
+                        "执行 Regenerate project files，确认工程根目录出现 Assembly-CSharp.csproj 后重试。";
+                return false;
+            }
+
+            // .csproj 里用的是 "Assets\..." 形式，先统一成斜杠再比对。
+            string marker = NormalizeAssetPath(state.temporaryAssetRoot).TrimEnd('/') + "/";
+            for (int index = 0; index < projects.Length; index++)
+            {
+                string text;
+                try
+                {
+                    text = File.ReadAllText(projects[index], Encoding.UTF8).Replace('\\', '/');
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (text.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    error = string.Empty;
+                    return true;
+                }
+            }
+
+            error = "工程根目录的 .csproj 都没有收录本次暂存目录 " + marker + "，" +
+                    "UMod 会跳过脚本编译，产物不会包含运行时程序集。\n" +
+                    "请在 Edit > Preferences > External Tools 里重新生成工程文件后重试。";
+            return false;
+        }
+
+        /// <summary>
+        /// Unity 没有公开的“重新生成工程文件”API，这里反射调用内部入口。
+        /// 它不保证同步完成，所以调用方必须自己复查结果。
+        /// </summary>
+        private static bool TrySyncEditorProjects()
+        {
+            string[] typeNames = { "UnityEditor.CodeEditorProjectSync", "UnityEditor.SyncVS" };
+            string[] methodNames = { "SyncEditorProject", "SyncSolution" };
+
+            for (int typeIndex = 0; typeIndex < typeNames.Length; typeIndex++)
+            {
+                Type type = FindLoadedType(typeNames[typeIndex]);
+                if (type == null)
+                    continue;
+
+                for (int methodIndex = 0; methodIndex < methodNames.Length; methodIndex++)
+                {
+                    MethodInfo method = type.GetMethod(
+                        methodNames[methodIndex],
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                        null,
+                        Type.EmptyTypes,
+                        null);
+                    if (method == null)
+                        continue;
+
+                    try
+                    {
+                        method.Invoke(null, null);
+                        return true;
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning(
+                            "[HoUnityTools] 调用 " + typeNames[typeIndex] + "." + methodNames[methodIndex] +
+                            " 失败：" + GetRootMessage(exception));
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        private static string ProjectRoot        {
             get { return Directory.GetParent(Application.dataPath).FullName; }
         }
 

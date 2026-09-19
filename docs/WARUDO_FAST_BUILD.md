@@ -15,46 +15,67 @@ FastBuild 面向一个已经在 Unity 中完成配置的角色 Prefab。它只�
 - Unity 2021.3.45f2
 - 角色输出目录：Warudo 数据目录下的 `StreamingAssets/Characters`
 
-## 安装方式会改变构建结果（重要）
+## UMod 需要 Unity 生成的 .csproj（重要）
 
-依赖列表里的默认勾选取决于“这段脚本源码是否属于本工具”。早期版本把包目录写死成
-`Packages/com.hollow.hounitytools/`，于是**同一个 Prefab、同一份代码，安装方式不同会得到不同结果**：
+**这是“产物里没有 `assemblymodules.dat`、组件全是 Missing Script”最常见的原因。**
 
-| 安装方式 | Unity 里的资源路径 | 早期版本是否命中 |
-| --- | --- | --- |
-| `manifest.json` 里 `file:` 指向本地目录 | `Packages/com.hollow.hounitytools/...` | 命中 |
-| Package Manager 里 Add package from git URL | `Packages/com.hollow.hounitytools/...` | 命中 |
-| 下载 GitHub ZIP 解压后放进 `Packages/` | `Packages/HoUnityTools-master/...` | **不命中** |
+UMod 不在 Mod 目录里直接枚举 `.cs`，而是先用 `ScriptCompiler.Project.ProjectLocator` 去工程根目录
+定位 Unity 生成的 `.csproj`（`<Compile Include="Assets\...">` 列表），据此决定哪些源码进入编译。
+找不到时的日志原文是：
 
-不命中的后果是**完全静默**的，没有任何报错：
+```text
+[Compile Scripts]
+WARNING: Failed to locate script project file.
+Scripts cannot be compiled for the mod export.
+Make sure the .csproj file exists
+```
 
-1. 依赖列表里 `HoAuxRig` 这类运行时脚本默认不勾选；
-2. FastBuild 按勾选复制源码，于是一个源码都不复制；
-3. UMod 没有源码可编译，产物里**根本没有 `assemblymodules.dat`**；
-4. 临时 Prefab 没有重绑脚本，每个组件都保留编辑器侧的 `Assembly-CSharp` 引用；
+于是整条失败链是**完全静默**的：
+
+1. FastBuild 正常暂存源码、正常重绑临时 Prefab；
+2. UMod 也正常扫到了这些脚本（日志里有 `will be compiled into a managed assembly for export`）；
+3. 但 Compile Scripts 阶段找不到 `.csproj`，一个脚本都没加入编译；
+4. 产物里没有 `assemblymodules.dat`，组件的程序集引用停在编辑器侧的 `Assembly-CSharp`；
 5. 产出的 Mod 在 Warudo 里全是 Missing Script。
 
-现在改为按包解析出来的**实际根路径**判断：优先 `PackageInfo.FindForAssembly`，失败则按本包
-`Editor/HoUnityTools.Editor.asmdef` 的位置反推包根。三种安装方式结果一致，不再依赖目录名；
-`IsHostProvidedRuntimeScript` 对 Warudo SDK 同样按包名而不是目录名判断。
+工程根目录**没有** `Assembly-CSharp.csproj`（`.sln` 也可能是空壳）通常意味着 Unity 这边根本没在
+生成工程文件：`Edit > Preferences > External Tools` 里没有选中有效的代码编辑器，或者机器上没装
+Visual Studio / Rider。修复方式是选中编辑器并执行 **Regenerate project files**，确认工程根目录
+出现 `Assembly-CSharp.csproj` 且 `.sln` 里真的有 Project 条目。
+
+FastBuild 现在有三道防线：
+
+- **构建前提示**：依赖面板发现工程根目录一个 `.csproj` 都没有时报错。
+- **构建前拦截**：调用官方构建 API 之前，检查暂存目录是否被某个 `.csproj` 收录（与 UMod 同一判据）；
+  没收录就先反射调用 Unity 内部的 `CodeEditorProjectSync.SyncEditorProject` / `SyncVS.SyncSolution`
+  重新生成一次，仍然没有则当场报错，不产出坏 Mod。
+- **构建后复核**：读 UMod 的 `Build.log`，把上面的原文摘进报告，并给出
+  `构建日志：识别 N 个脚本，实际加入编译 M 个` 的计数。
 
 遇到异常时可以这样自查：
 
-- 依赖面板标题出现 `N 个不编译`、并弹出报错色提示框 → 有组件不会随 Mod 编译。
 - 产物复核报告出现 `缺少条目：assemblymodules.dat` → 这次构建根本没有编译 Mod 脚本。
-- 产物里搜不到 `umod-compiled`，却能搜到大量 `Assembly-CSharp, Version=`。
 - 报告里的 `构建日志：识别 N 个脚本，实际加入编译 M 个`：
-  - `N > 0 且 M = 0` → 源码进了 Mod 目录，但 UMod 的 Compile Scripts 阶段没收录，问题在 UMod 侧；
-  - `N = 0` → 连扫描阶段都没发现源码，问题在 FastBuild 侧的脚本勾选。
+  - `N > 0 且 M = 0` → 源码进了 Mod 目录，但 UMod 没收录，查 `.csproj`（本节）；
+  - `N = 0` → 连扫描阶段都没发现源码，查 FastBuild 侧的脚本勾选。
+- 构建日志关键行里出现 `Failed to locate script project file` → 就是本节这个问题。
+- 产物里搜不到 `umod-compiled`，却能搜到大量 `Assembly-CSharp, Version=`。
 
-注意区分这两类原因：只看到 `Assembly-CSharp` 不能直接断定是脚本没勾选，
-因为临时脚本副本本身也编译进 `Assembly-CSharp`，**勾选正常但 UMod 没编译**时结论完全一样。
-真正能区分的是打包资源清单（有没有暂存的 `Character.prefab` 和 `Resources/HoRuntimeDebugLine.*`）
-和上一条构建日志的计数。
+注意：**只看 `Assembly-CSharp` 分不出原因**。暂存副本本身就编译进 `Assembly-CSharp`，
+“脚本没勾选”和“勾选了但 UMod 没编译”表现完全一样。真正的区分点是打包资源清单里
+有没有暂存的 `Character.prefab` 和 `Resources/HoRuntimeDebugLine.*`，以及构建日志的计数。
 
-一个真实的失败样本（UMod 0.14.5）长这样：产物只有 3 个条目，`umod-compiled`
-出现 0 次，`Assembly-CSharp, Version=` 出现 71 次，而正常产物里 `umod-compiled` 记录正好也是 71 条
-—— Prefab 序列化完全一致，只差程序集解析。
+一个真实的失败样本（UMod 0.14.5，工程缺 `Assembly-CSharp.csproj`）长这样：产物只有 3 个条目，
+`umod-compiled` 出现 0 次，`Assembly-CSharp, Version=` 出现 71 次，而正常产物里 `umod-compiled`
+记录正好也是 71 条 —— Prefab 序列化完全一致，只差程序集解析。
+
+### 相关：包目录名也曾影响脚本默认勾选
+
+依赖列表的默认勾选取决于“这段脚本是否属于本工具”。早期版本把包目录写死成
+`Packages/com.hollow.hounitytools/`，把包下载成 GitHub ZIP 解压到 `Packages/HoUnityTools-master`
+时该判断恒为 false，于是所有脚本默认不勾选、一个源码都不复制，得到和上面一样的坏产物。
+现已改为按包解析出来的实际根路径判断（`PackageInfo.FindForAssembly` 优先，失败则按
+`Editor/HoUnityTools.Editor.asmdef` 反推包根），`file:`、git URL、手动解压三种安装方式结果一致。
 
 ## Warudo 的打包模型
 
@@ -296,6 +317,7 @@ not in the .csproj file and will not be compiled
 1. 当前工程已导入 Warudo SDK，窗口顶部显示“SDK 已就绪”。
 2. 选中的对象是 Project 中可加载的 Prefab，且没有 Missing Script。
 3. ExportSettings 存在，活动工作区的 Mod 目录位于 `Assets` 下、存在，并且不是 `Assets` 根目录。
+4. 工程根目录存在 Unity 生成的 `.csproj`；FastBuild 会在构建前检查暂存脚本是否被它收录。
 4. 依赖列表中只勾选可在 Warudo 运行时编译的源码；面板若提示 `N 个不编译`，说明有组件会变成 Missing Script。
 5. 构建后确认控制台的“产物复核”报告里没有 `缺失`；`待确认` 需要人工判断，再在 Warudo 的 `Characters` 目录验证角色。
 
