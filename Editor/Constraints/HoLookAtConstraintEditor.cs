@@ -78,17 +78,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private static readonly string[] ChannelLabels =
         {
-            "水平内 In", "水平外 Out", "看左 LookLeft", "看右 LookRight", "看上 Up", "看下 Down"
+            "看左 LookLeft", "看右 LookRight", "看上 Up", "看下 Down"
         };
 
         private static readonly string[] ChannelTooltips =
         {
-            "向内看（相对眼球）：往右看时右眼用这条",
-            "向外看（相对眼球）：往右看时左眼用这条",
-            "看左（相对头）：两只眼通常共用同一个键",
-            "看右（相对头）：两只眼通常共用同一个键",
-            "看上：两只眼通常共用同一个键",
-            "看下：两只眼通常共用同一个键"
+            "往角色左边看。往左 = 左眼的外侧键（Out）+ 右眼的内侧键（In）—— 所以每只眼各填一个键就够了。",
+            "往角色右边看。往右 = 左眼的内侧键（In）+ 右眼的外侧键（Out）。",
+            "往上看（双眼共用键就两格填同一个名字，只写一次）。",
+            "往下看（双眼共用键就两格填同一个名字，只写一次）。"
         };
 
         private void OnEnable()
@@ -401,10 +399,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与的比例。头转不到位的部分由眼睛补，这里可以再打个折。"));
                 EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
-                EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 内/外/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
+                EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 往右/往左/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
                 EditorGUILayout.LabelField("四条方向曲线（横轴 = 上面角度上限的比例，纵轴 = 输出）", EditorStyles.miniLabel);
-                EditorGUILayout.PropertyField(horizontalInner, L("水平内曲线", "往里看这条通道的映射形状，直线 = 线性。"));
-                EditorGUILayout.PropertyField(horizontalOuter, L("水平外曲线", "往外看这条通道的映射形状。"));
+                EditorGUILayout.PropertyField(horizontalInner, L("往右曲线（内）", "往右看这条通道的映射形状，直线 = 线性。"));
+                EditorGUILayout.PropertyField(horizontalOuter, L("往左曲线（外）", "往左看这条通道的映射形状。"));
                 EditorGUILayout.PropertyField(verticalUp, L("看上曲线", "往上看这条通道的映射形状。"));
                 EditorGUILayout.PropertyField(verticalDown, L("看下曲线", "往下看这条通道的映射形状。"));
 
@@ -440,16 +438,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         /// <summary>通道列表表头 + 两个族别预设按钮。返回 true 表示这一帧刚按了预设、列表已重建。</summary>
         private bool DrawChannelHeader()
         {
-            EditorGUILayout.LabelField("通道 → 键名（左右眼各一个）", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("四条通道 → 键名（左右眼各一个；两格填同一个键就只写一次）", EditorStyles.miniLabel);
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label(new GUIContent("按模型上的键自动填：", "会在网格上找内置表里收录的凝视键，找不到就留空。"), EditorStyles.miniLabel);
             GUILayout.FlexibleSpace();
             bool clickedLeftRight = GUILayout.Button(
-                new GUIContent("左右族", "VRM/Meta 那种「看左/看右」的键名，一左一右两只眼共用。"),
+                new GUIContent("左右族", "VRM/Meta 那种「看左/看右」的键名（双眼共用一个键，或左右眼各一个）。"),
                 EditorStyles.miniButton,
                 GUILayout.Width(58.0f));
             bool clickedInnerOuter = GUILayout.Button(
-                new GUIContent("内外族", "ARKit/PICO 那种相对眼球的「内/外」键名，左右眼各一个。"),
+                new GUIContent("内外族", "ARKit/PICO 那种相对眼球的 In/Out 键名 —— 会拆成「往左 = 左眼 Out + 右眼 In、往右 = 左眼 In + 右眼 Out」填进左右眼两格。"),
                 EditorStyles.miniButton,
                 GUILayout.Width(58.0f));
             EditorGUILayout.EndHorizontal();
@@ -682,12 +680,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             switch (channel)
             {
-                case HoLookAtEyeChannel.Inner:
-                    return debug.inner;
-
-                case HoLookAtEyeChannel.Outer:
-                    return debug.outer;
-
                 case HoLookAtEyeChannel.LookLeft:
                     return debug.lookLeft;
 

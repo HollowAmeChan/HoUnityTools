@@ -10,7 +10,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     /// </summary>
     internal static class HoLookAtPresetActions
     {
-        private const int ChannelCount = 6;
+        private const int ChannelCount = 4;
 
         public static void AutoRig(HoLookAtConstraint constraint, SerializedObject serializedObject)
         {
@@ -47,13 +47,32 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 serializedObject.Update();
             }
 
-            // 监视键的族别：优先"相对头"的左右族，没有就退回"相对眼球"的内外族
-            bool hasHeadRelative = FindBothKey(constraint, HoBlinkKeySemantic.GazeLeft) != null
-                                   || FindBothKey(constraint, HoBlinkKeySemantic.GazeRight) != null;
+            // 监视键的族别：模型上有"看左/看右"就用左右族，只有 In/Out 才用内外族
+            bool hasHeadRelative = HasAny(constraint, HoBlinkKeySemantic.GazeLeft) || HasAny(constraint, HoBlinkKeySemantic.GazeRight);
             ApplyFamily(constraint, serializedObject, !hasHeadRelative);
         }
 
-        /// <summary>按族别填横向通道；纵向通道两族共用。</summary>
+        /// <summary>网格上是否存在这个语义的任意键（不分左右/双眼）。</summary>
+        private static bool HasAny(IHoShapeKeyMeshProvider host, HoBlinkKeySemantic semantic)
+        {
+            for (int i = 0; i < HoBlinkKeyTable.Entries.Length; i++)
+            {
+                HoBlinkKeyEntry entry = HoBlinkKeyTable.Entries[i];
+                if (entry.Semantic == semantic && host.KeyExists(entry.Name))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 按族别填四条通道。两族其实是同一件事的两种键名：
+        ///   往右 = 左眼的内侧键（In）+ 右眼的外侧键（Out）
+        ///   往左 = 左眼的外侧键（Out）+ 右眼的内侧键（In）
+        /// 左右族（VRM/Meta）则是"双眼共用一个键"，两格填同一个名字（写入器会自动只写一次）。
+        /// </summary>
         public static void ApplyFamily(HoLookAtConstraint constraint, SerializedObject serializedObject, bool eyeRelative)
         {
             serializedObject.ApplyModifiedProperties();
@@ -68,28 +87,45 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (eyeRelative)
             {
-                AddEntry(entries, HoLookAtEyeChannel.Inner,
+                // 内外族（ARKit/PICO/OpenXR）：四向里每一向都拆到左右眼
+                AddEntry(entries, HoLookAtEyeChannel.LookRight,
                     FindKey(host, HoBlinkKeySemantic.GazeIn, HoBlinkSide.Left),
-                    FindKey(host, HoBlinkKeySemantic.GazeIn, HoBlinkSide.Right));
-                AddEntry(entries, HoLookAtEyeChannel.Outer,
-                    FindKey(host, HoBlinkKeySemantic.GazeOut, HoBlinkSide.Left),
                     FindKey(host, HoBlinkKeySemantic.GazeOut, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.LookLeft,
+                    FindKey(host, HoBlinkKeySemantic.GazeOut, HoBlinkSide.Left),
+                    FindKey(host, HoBlinkKeySemantic.GazeIn, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.Up,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.Down,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Right));
             }
             else
             {
-                string left = FirstNotEmpty(FindBothKey(host, HoBlinkKeySemantic.GazeLeft), FindKey(host, HoBlinkKeySemantic.GazeLeft, HoBlinkSide.Left));
-                string right = FirstNotEmpty(FindBothKey(host, HoBlinkKeySemantic.GazeRight), FindKey(host, HoBlinkKeySemantic.GazeRight, HoBlinkSide.Right));
-                AddEntry(entries, HoLookAtEyeChannel.LookLeft, left, left);
-                AddEntry(entries, HoLookAtEyeChannel.LookRight, right, right);
+                // 左右族：优先双眼共用的键（两格同名 → 只写一次），没有就退回左右眼各一个
+                AddEntry(entries, HoLookAtEyeChannel.LookLeft,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeLeft, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeLeft, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.LookRight,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeRight, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeRight, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.Up,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Right));
+                AddEntry(entries, HoLookAtEyeChannel.Down,
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left),
+                    FindGazeSide(host, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Right));
             }
-
-            string up = FirstNotEmpty(FindBothKey(host, HoBlinkKeySemantic.GazeUp), FindKey(host, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Left));
-            string down = FirstNotEmpty(FindBothKey(host, HoBlinkKeySemantic.GazeDown), FindKey(host, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left));
-            AddEntry(entries, HoLookAtEyeChannel.Up, up, up);
-            AddEntry(entries, HoLookAtEyeChannel.Down, down, down);
 
             serializedObject.ApplyModifiedProperties();
             host.Rebuild();
+        }
+
+        /// <summary>先找"双眼共用"的键，再退回指定眼别的键。都没有就返回空串。</summary>
+        private static string FindGazeSide(IHoShapeKeyMeshProvider host, HoBlinkKeySemantic semantic, HoBlinkSide side)
+        {
+            return FirstNotEmpty(FindBothKey(host, semantic), FindKey(host, semantic, side));
         }
 
         public static void EyesOnly(SerializedObject serializedObject)

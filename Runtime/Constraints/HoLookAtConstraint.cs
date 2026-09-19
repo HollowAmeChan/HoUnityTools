@@ -20,7 +20,7 @@ namespace Hollow.HoUnityTools.Constraints
     [AddComponentMenu("HoUnityTools/Constraints/Ho Look At Constraint")]
     public sealed class HoLookAtConstraint : MonoBehaviour, IHoShapeKeyMeshProvider
     {
-        private const int ChannelCount = 6;
+        private const int ChannelCount = 4;
 
         /// <summary>交给 Unity 的 clampWeight 固定 0：限位由本组件的角度上限负责，避免二次夹取让读数对不上。</summary>
         private const float UnityClampWeight = 0.0f;
@@ -384,12 +384,10 @@ namespace Hollow.HoUnityTools.Constraints
 
             GetEyeSettings(out HoEyeSettings settings, out AnimationCurve inner, out AnimationCurve outer, out AnimationCurve up, out AnimationCurve down);
 
-            // 六条通道的量 = 和写形态键时同一套算法（角度 → 按上限归一化 → 过曲线）。
-            // 内/外 与 看右/看左 共用同一条曲线与上限，所以四个独立值撑起六个通道。
-            debug.inner = ShapeAmount(Mathf.Max(state.smoothedEyeYaw, 0.0f), settings.angleLimitInner, inner);
-            debug.lookRight = debug.inner;
-            debug.outer = ShapeAmount(Mathf.Max(-state.smoothedEyeYaw, 0.0f), settings.angleLimitOuter, outer);
-            debug.lookLeft = debug.outer;
+            // 四条通道的量 = 和写形态键时同一套算法（角度 → 按上限归一化 → 过曲线）。
+            // 往左/往右/看上/看下各一条曲线与上限，两只眼共用同一个量。
+            debug.lookRight = ShapeAmount(Mathf.Max(state.smoothedEyeYaw, 0.0f), settings.angleLimitInner, inner);
+            debug.lookLeft = ShapeAmount(Mathf.Max(-state.smoothedEyeYaw, 0.0f), settings.angleLimitOuter, outer);
             debug.up = ShapeAmount(Mathf.Max(state.smoothedEyePitch, 0.0f), settings.angleLimitUp, up);
             debug.down = ShapeAmount(Mathf.Max(-state.smoothedEyePitch, 0.0f), settings.angleLimitDown, down);
 
@@ -632,8 +630,16 @@ namespace Hollow.HoUnityTools.Constraints
                         continue;
                     }
 
-                    eyeTargetIds[index, 0] = RegisterEyeKey(entry.LeftEye);
-                    eyeTargetIds[index, 1] = RegisterEyeKey(entry.RightEye);
+                    int leftId = RegisterEyeKey(entry.LeftEye);
+
+                    // 两只眼填同一个键（VRM/Meta 的 LookLeft 这种双眼共用的键）时只注册一次：
+                    // 注册两遍会让同一个键被写两遍、和翻倍直接顶到 100。
+                    int rightId = HoLookAtEyeKey.SameKeyName(entry.LeftEye, entry.RightEye)
+                        ? leftId
+                        : RegisterEyeKey(entry.RightEye);
+
+                    eyeTargetIds[index, 0] = leftId;
+                    eyeTargetIds[index, 1] = rightId;
                 }
             }
 
@@ -1036,8 +1042,8 @@ namespace Hollow.HoUnityTools.Constraints
         {
             switch (channel)
             {
-                case HoLookAtEyeChannel.Inner:
                 case HoLookAtEyeChannel.LookRight:
+                    // 往右 = 左眼的内侧（In）；曲线与上限沿用原来的"内"
                     curve = inner;
                     limit = settings.angleLimitInner;
                     break;
@@ -1053,6 +1059,7 @@ namespace Hollow.HoUnityTools.Constraints
                     break;
 
                 default:
+                    // 往左 = 外侧（Out），沿用原来的"外"
                     curve = outer;
                     limit = settings.angleLimitOuter;
                     break;
@@ -1061,47 +1068,30 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void GetChannelAmounts(HoLookAtEyeChannel channel, out float leftEye, out float rightEye)
         {
-            float yaw = state.eyeYaw;
-            float pitch = state.eyePitch;
-            float positiveYaw = Mathf.Max(yaw, 0.0f);
-            float negativeYaw = Mathf.Max(-yaw, 0.0f);
-            float positivePitch = Mathf.Max(pitch, 0.0f);
-            float negativePitch = Mathf.Max(-pitch, 0.0f);
-
+            // 四条通道都是"两只眼同一个量"：横向的 In/Out 差异已经由"哪只眼填哪个键"表达掉了
+            // （往右 = 左眼 In + 右眼 Out），所以这里不再按眼别分叉。
+            float amount;
             switch (channel)
             {
-                case HoLookAtEyeChannel.Inner:
-                    // 内/外是相对眼球的：左眼的"内"= 往右看，右眼的"内"= 往左看
-                    leftEye = positiveYaw;
-                    rightEye = negativeYaw;
-                    break;
-
-                case HoLookAtEyeChannel.Outer:
-                    leftEye = negativeYaw;
-                    rightEye = positiveYaw;
-                    break;
-
                 case HoLookAtEyeChannel.LookLeft:
-                    // 左右族是相对头的：两只眼同一个键、同一个量
-                    leftEye = negativeYaw;
-                    rightEye = negativeYaw;
+                    amount = Mathf.Max(-state.eyeYaw, 0.0f);
                     break;
 
                 case HoLookAtEyeChannel.LookRight:
-                    leftEye = positiveYaw;
-                    rightEye = positiveYaw;
+                    amount = Mathf.Max(state.eyeYaw, 0.0f);
                     break;
 
                 case HoLookAtEyeChannel.Up:
-                    leftEye = positivePitch;
-                    rightEye = positivePitch;
+                    amount = Mathf.Max(state.eyePitch, 0.0f);
                     break;
 
                 default:
-                    leftEye = negativePitch;
-                    rightEye = negativePitch;
+                    amount = Mathf.Max(-state.eyePitch, 0.0f);
                     break;
             }
+
+            leftEye = amount;
+            rightEye = amount;
         }
 
         private void GetEyeSettings(

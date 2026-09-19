@@ -44,14 +44,14 @@ namespace Hollow.HoUnityTools.Constraints
     }
 
     /// <summary>
-    /// 眼睛形态键的通道。横向有两种族，必须分开：
-    /// `Inner/Outer` 是**相对眼球**的（UniVRM 的正统表达，ARKit/PICO 用），
-    /// `LookLeft/LookRight` 是**相对头**的（VRM/Meta/SRanipal 用）。
+    /// 眼睛形态键的通道。**只有四条**：
+    /// 横向只留「看左 / 看右」一套 —— 往里/往外（In/Out）与看左/看右本来就是同一件事的两种键名约定：
+    /// 往右看 = 左眼的 In 键 + 右眼的 Out 键，往左看 = 左眼的 Out 键 + 右眼的 In 键。
+    /// 所以每条通道的左右眼各填一个键就能表达两族；两只眼填同一个键时（VRM/Meta 那种双眼共用的 LookLeft）
+    /// 写入器只注册一次，不会把同一个键写两遍。
     /// </summary>
     public enum HoLookAtEyeChannel
     {
-        Inner,
-        Outer,
         LookLeft,
         LookRight,
         Up,
@@ -95,6 +95,21 @@ namespace Hollow.HoUnityTools.Constraints
 
         public bool HasKey => enabled && !string.IsNullOrWhiteSpace(keyName);
 
+        /// <summary>
+        /// 两个槽是不是同一个键（含同名同增益）。双眼共用键名的模型（VRM/Meta 的 LookLeft）用它来去重，
+        /// 免得同一个键被写两遍。
+        /// </summary>
+        public static bool SameKeyName(HoLookAtEyeKey a, HoLookAtEyeKey b)
+        {
+            if (a == null || b == null || !a.HasKey || !b.HasKey)
+            {
+                return false;
+            }
+
+            return string.Equals(a.KeyName.Trim(), b.KeyName.Trim(), StringComparison.OrdinalIgnoreCase)
+                   && Mathf.Abs(a.Gain - b.Gain) < 0.0001f;
+        }
+
         public void Sanitize()
         {
             gain = Mathf.Max(0.0f, gain);
@@ -112,7 +127,7 @@ namespace Hollow.HoUnityTools.Constraints
         private bool enabled = true;
 
         [SerializeField]
-        private HoLookAtEyeChannel channel = HoLookAtEyeChannel.Inner;
+        private HoLookAtEyeChannel channel = HoLookAtEyeChannel.LookLeft;
 
         [SerializeField]
         private HoLookAtEyeKey leftEye = new HoLookAtEyeKey();
@@ -203,9 +218,7 @@ namespace Hollow.HoUnityTools.Constraints
         public float eyeYaw;
         public float eyePitch;
 
-        /// <summary>六条通道各自的量（0..1，未乘增益）。</summary>
-        public float inner;
-        public float outer;
+        /// <summary>四条通道各自的量（0..1，未乘增益）。</summary>
         public float lookLeft;
         public float lookRight;
         public float up;
