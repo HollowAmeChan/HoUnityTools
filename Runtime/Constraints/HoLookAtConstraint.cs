@@ -135,6 +135,17 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
 
+        /// <summary>
+        /// 「跟随鼠标」的灵敏度：1 = 鼠标推到画面边缘时视线转到相机视角的边缘（屏幕上 1:1 跟手）。
+        /// 调大更"甩"、调小更"稳"；角度上限由相机 FOV 决定，不会像射线交点那样在角色附近失控。
+        /// </summary>
+        [SerializeField, Range(0.1f, 3.0f)]
+        private float mouseAimGain = 1.0f;
+
+        /// <summary>「跟随鼠标」的映射原点：true = 角色在屏幕上的位置（鼠标指着角色 = 看镜头）。</summary>
+        [SerializeField]
+        private bool mouseAimFromCharacter = true;
+
         [SerializeField, Min(0.1f)]
         private float mouseDistance = 3.0f;
 
@@ -330,8 +341,22 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>本次鼠标采样实际用的相机（Scene 视图鼠标时就是 Scene 视图相机）；屏幕叠加用它投影。</summary>
         public Camera PointerCamera { get; private set; }
 
-        /// <summary>本次用的鼠标射线（世界点模式才有）：调试时能直接看出"鼠标指的那条线"对不对。</summary>
-        public bool HasPointerRay => hasPointerRay;
+        /// <summary>本次用的鼠标射线（只有"射线命中"模式才画：那时它才是指向的定义本身）。</summary>
+        public bool HasPointerRay => hasPointerRay && mouseSampleMode == HoLookAtMouseSampleMode.Raycast;
+
+        /// <summary>当前鼠标取法（面板/调试用）。</summary>
+        public HoLookAtMouseSampleMode MouseSampleMode => mouseSampleMode;
+
+        /// <summary>「跟随鼠标」当前的角度上限（度）：屏幕边缘对应的角度 = 半 FOV × 灵敏度。</summary>
+        public Vector2 MouseAimHalfAngles
+        {
+            get
+            {
+                Camera aimCamera = PointerCamera != null ? PointerCamera : mouseCamera;
+                HoMousePointer.GetHalfFov(aimCamera, GetPivot(), out float halfYaw, out float halfPitch);
+                return new Vector2(halfYaw * mouseAimGain, halfPitch * mouseAimGain);
+            }
+        }
 
         public Ray LastPointerRay => lastPointerRay;
 
@@ -998,6 +1023,53 @@ namespace Hollow.HoUnityTools.Constraints
                     }
 
                     return state.hasTarget;
+                }
+
+                if (mouseSampleMode == HoLookAtMouseSampleMode.CursorPoint)
+                {
+                    // 「跟随鼠标」：归一化偏移 × 相机半 FOV × 灵敏度，基准方向 = 看镜头。
+                    // 这是 VRM 生态的做法（three-vrm 的 LookAtRangeMap：input × outputScale 度），
+                    // 也是"角色面对镜头"这一类唯一稳的做法：
+                    //   · 鼠标指着角色（屏幕上的两眼中点）→ 视线正对镜头；
+                    //   · 鼠标到画面边缘 → 视线转到相机视角的边缘（跟手、大致 1:1）；
+                    //   · 角度天然被 FOV 限制，没有"射线交点"在角色附近半径趋零、方向乱摆的问题。
+                    Camera aimCamera = sample.camera != null ? sample.camera : GetMouseCamera();
+                    if (aimCamera != null)
+                    {
+                        Rect pixelRect = aimCamera.pixelRect;
+                        float halfWidth = Mathf.Max(1.0f, pixelRect.width * 0.5f);
+                        float halfHeight = Mathf.Max(1.0f, pixelRect.height * 0.5f);
+
+                        Vector2 origin = new Vector2(pixelRect.x + halfWidth, pixelRect.y + halfHeight);
+                        if (mouseAimFromCharacter)
+                        {
+                            Vector3 pivotScreen = aimCamera.WorldToScreenPoint(pivot);
+                            if (pivotScreen.z > 0.0f)
+                            {
+                                origin = new Vector2(pivotScreen.x, pivotScreen.y);
+                            }
+                        }
+
+                        float nx = Mathf.Clamp((sample.screenPosition.x - origin.x) / halfWidth, -2.0f, 2.0f);
+                        float ny = Mathf.Clamp((sample.screenPosition.y - origin.y) / halfHeight, -2.0f, 2.0f);
+
+                        HoMousePointer.GetHalfFov(aimCamera, pivot, out float halfYaw, out float halfPitch);
+                        mouseAngleYaw = nx * halfYaw * mouseAimGain;
+                        mouseAnglePitch = ny * halfPitch * mouseAimGain;
+                        hasMouseAngles = true;
+
+                        // 观察者坐标系构造方向（+X 观众右、+Y 上、−Z 朝向观众 = 看镜头）
+                        Transform view = aimCamera.transform;
+                        Vector3 local = new Vector3(
+                            Mathf.Tan(mouseAngleYaw * Mathf.Deg2Rad),
+                            Mathf.Tan(mouseAnglePitch * Mathf.Deg2Rad),
+                            -1.0f);
+                        direction = view.TransformDirection(local.normalized);
+                        isDirection = true;
+                        return true;
+                    }
+
+                    // 没相机就退回"以屏幕中心为原点的角度摇杆"，至少还能动
                 }
 
                 if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap)

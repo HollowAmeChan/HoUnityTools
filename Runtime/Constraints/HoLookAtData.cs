@@ -29,10 +29,12 @@ namespace Hollow.HoUnityTools.Constraints
         AngleMap,
 
         /// <summary>
-        /// 准星：取鼠标射线上"角色所在深度"的那个点当目标点 —— 眼睛正好落在鼠标指的位置。
-        /// 想要"看着鼠标"的精确感就用这个（默认）。
+        /// 跟随鼠标（默认）：把鼠标相对"角色在屏幕上的位置"的偏移，按相机 FOV 换算成角度，
+        /// 基准方向是"看镜头"。屏幕边缘 ≈ 相机视角边缘，所以跟手；
+        /// 角度天然有界，不会像"射线交点"那样在角色附近半径趋零、方向乱摆。
+        /// 灵敏度由 mouseAimGain 调（1 = 屏幕 1:1）。
         /// </summary>
-        [InspectorName("准星")]
+        [InspectorName("跟随鼠标")]
         CursorPoint,
 
         /// <summary>相机 → 鼠标射线打到指定层（没打中时取射线上固定距离的点）。</summary>

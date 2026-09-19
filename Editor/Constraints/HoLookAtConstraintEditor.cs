@@ -12,6 +12,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty targetOffset;
         private SerializedProperty mouseCamera;
         private SerializedProperty mouseSensitivity;
+        private SerializedProperty mouseAimGain;
+        private SerializedProperty mouseAimFromCharacter;
         private SerializedProperty mouseDeadZone;
         private SerializedProperty animator;
         private SerializedProperty reference;
@@ -102,6 +104,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             targetOffset = Find("targetOffset");
             mouseCamera = Find("mouseCamera");
             mouseSensitivity = Find("mouseSensitivity");
+            mouseAimGain = Find("mouseAimGain");
+            mouseAimFromCharacter = Find("mouseAimFromCharacter");
             mouseDeadZone = Find("mouseDeadZone");
             animator = Find("animator");
             reference = Find("reference");
@@ -297,10 +301,23 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.LabelField("使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
                 }
 
-                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：把鼠标像素反算成相机射线，取射线上**离眼睛最近**的点（正好在角色所在深度）当目标 —— 眼睛的视线正好穿过鼠标那个像素，不用调灵敏度。\n角度摇杆：鼠标位置线性换算成角度（灵敏度是人定的），跟相机 FOV、角色在画面里的位置都无关，所以视线不会落在鼠标上。\n射线命中：用鼠标射线打到的场景物体当目标。"));
+                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "跟随鼠标（推荐）：鼠标相对角色屏幕位置的偏移 × 相机 FOV × 灵敏度 = 视线角度，鼠标指着角色就是看镜头。跟 VRM 生态的做法一致（three-vrm 的 LookAtRangeMap），屏幕边缘 ≈ 视角边缘，跟手且不会乱摆。\n角度摇杆：老式做法，鼠标位置线性换算成角度（灵敏度人为定），跟相机 FOV 无关。\n射线命中：用鼠标射线打到的场景物体当目标（相机在角色身后的第三人称瞄准式）。"));
 
+                bool cursorPoint = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.CursorPoint;
                 bool angleMap = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap;
                 bool raycast = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.Raycast;
+
+                using (new EditorGUI.DisabledScope(!cursorPoint))
+                {
+                    EditorGUILayout.Slider(mouseAimGain, 0.1f, 3.0f, L("指向灵敏度", "1 = 鼠标推到画面边缘时，视线转到相机视角的边缘（屏幕上大致 1:1 跟手）。\n调大更\u201c甩\u201d、调小更\u201c稳\u201d。角度上限由相机 FOV 决定，所以不会在角色附近失控。"));
+                    EditorGUILayout.PropertyField(mouseAimFromCharacter, L("以角色为原点", "开：鼠标指着角色在屏幕上的位置 = 看镜头，偏移从那里算（推荐）。\n关：偏移从屏幕中心算，适合相机永远盯着角色正中的机位。"));
+
+                    Vector2 half = constraint.MouseAimHalfAngles;
+                    EditorGUILayout.LabelField(
+                        "当前：鼠标到画面边缘 ≈ 左右 " + half.x.ToString("0") + "° / 上下 " + half.y.ToString("0") + "°"
+                        + (constraint.MouseCameraAssigned ? string.Empty : "（没指定相机，先按默认视角估算）"),
+                        EditorStyles.miniLabel);
+                }
 
                 using (new EditorGUI.DisabledScope(!angleMap))
                 {

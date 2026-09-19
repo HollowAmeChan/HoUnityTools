@@ -191,6 +191,34 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         /// <summary>
+        /// 相机的半视角（度）：屏幕边缘对应的角度。
+        /// 透视相机直接用 fieldOfView（Unity 里它是垂直 FOV）+ aspect 换算水平；
+        /// 正交相机没有 FOV，用"正交半高 ÷ 到角色的距离"折算等效半角。
+        /// 「跟随鼠标」模式用它把归一化偏移换算成角度，这样屏幕边缘 ≈ 视角边缘，跟手。
+        /// </summary>
+        public static void GetHalfFov(Camera camera, Vector3 pivot, out float halfYawDegrees, out float halfPitchDegrees)
+        {
+            if (camera == null)
+            {
+                halfYawDegrees = 30.0f;
+                halfPitchDegrees = 20.0f;
+                return;
+            }
+
+            if (!camera.orthographic)
+            {
+                halfPitchDegrees = camera.fieldOfView * 0.5f;
+                halfYawDegrees = Mathf.Atan(Mathf.Tan(halfPitchDegrees * Mathf.Deg2Rad) * camera.aspect) * Mathf.Rad2Deg;
+                return;
+            }
+
+            Transform view = camera.transform;
+            float depth = Mathf.Max(0.1f, Mathf.Abs(Vector3.Dot(pivot - view.position, view.forward)));
+            halfPitchDegrees = Mathf.Atan(camera.orthographicSize / depth) * Mathf.Rad2Deg;
+            halfYawDegrees = Mathf.Atan(camera.orthographicSize * camera.aspect / depth) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>
         /// 取这一次要用哪个指针：编辑器里鼠标在 Scene 视图上时优先用它（连相机与射线一起换掉），
         /// 否则用真实的鼠标/指针输入。相机会写回 <paramref name="settings"/>。
         /// </summary>
