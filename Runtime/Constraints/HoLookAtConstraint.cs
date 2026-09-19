@@ -180,6 +180,7 @@ namespace Hollow.HoUnityTools.Constraints
         private readonly int[,] eyeTargetIds = new int[ChannelCount, 2];
 
         private HoLookAtState state;
+        private HoLookAtIkRelay relay;
         private bool built;
         private float externalWeight = 1.0f;
         private float externalSpineWeight = 1.0f;
@@ -280,6 +281,14 @@ namespace Hollow.HoUnityTools.Constraints
 
         public bool AnimatorHasAvatar => animator != null && animator.avatar != null;
 
+        /// <summary>组件是否就在 Animator 所在物体上（否则靠转发器收 OnAnimatorIK）。</summary>
+        public bool AnimatorOnSameObject => animator != null && animator.gameObject == gameObject;
+
+        /// <summary>转发器是否已经挂上（组件不在 Animator 物体上时才有意义）。</summary>
+        public bool IkRelayActive => relay != null;
+
+        public string AnimatorName => animator != null ? animator.gameObject.name : "（未找到）";
+
         public int MeshCount => writer.MeshCount;
 
         public int BindingCount => writer.BindingCount;
@@ -340,13 +349,87 @@ namespace Hollow.HoUnityTools.Constraints
         private void OnEnable()
         {
             built = false;
+            ResolveAnimator();
             EnsureBuilt();
+            EnsureIkRelay();
             ResetState();
         }
 
         private void OnDisable()
         {
             built = false;
+            ReleaseIkRelay();
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseIkRelay();
+        }
+
+        /// <summary>Animator 为空时按 自己 → 父级 → 子级 找。</summary>
+        private void ResolveAnimator()
+        {
+            if (animator != null)
+            {
+                return;
+            }
+
+            animator = GetComponent<Animator>();
+            if (animator == null)
+            {
+                animator = GetComponentInParent<Animator>();
+            }
+
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>();
+            }
+        }
+
+        /// <summary>
+        /// 组件不在 Animator 物体上时，在 Animator 物体上挂一个转发器（只在播放模式添加）。
+        /// </summary>
+        private void EnsureIkRelay()
+        {
+            if (animator == null || animator.gameObject == gameObject)
+            {
+                ReleaseIkRelay();
+                return;
+            }
+
+            if (!Application.isPlaying)
+            {
+                // 编辑模式不往别的物体上加组件（会把场景标脏），只用已有的
+                relay = animator.gameObject.GetComponent<HoLookAtIkRelay>();
+                if (relay != null)
+                {
+                    relay.Owner = this;
+                }
+
+                return;
+            }
+
+            if (relay == null || relay.gameObject != animator.gameObject)
+            {
+                ReleaseIkRelay();
+                relay = animator.gameObject.GetComponent<HoLookAtIkRelay>();
+                if (relay == null)
+                {
+                    relay = animator.gameObject.AddComponent<HoLookAtIkRelay>();
+                }
+            }
+
+            relay.Owner = this;
+        }
+
+        private void ReleaseIkRelay()
+        {
+            if (relay != null && relay.Owner == this)
+            {
+                relay.Owner = null;
+            }
+
+            relay = null;
         }
 
         private void LateUpdate()
@@ -361,6 +444,12 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         private void OnAnimatorIK(int layerIndex)
+        {
+            HandleAnimatorIK(layerIndex);
+        }
+
+        /// <summary>IK 回调本体：自己就在 Animator 物体上时由 OnAnimatorIK 调用，否则由 <see cref="HoLookAtIkRelay"/> 转发。</summary>
+        public void HandleAnimatorIK(int layerIndex)
         {
             if (!ShouldEvaluate())
             {

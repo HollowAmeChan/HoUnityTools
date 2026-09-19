@@ -212,18 +212,35 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             if (!Application.isPlaying)
             {
-                EditorGUILayout.HelpBox("进入播放模式后会检查 humanoid / 图层 IK Pass / Avatar；头部与脊椎走 Unity 的 LookAt IK。", MessageType.Info);
+                EditorGUILayout.HelpBox(
+                    "播放后检查：Animator 是 humanoid + 动画图层勾了 IK Pass。组件不必放在 Animator 物体上（播放时会自动在 Animator 物体上挂转发器）。",
+                    MessageType.Info);
                 return;
             }
 
             if (!constraint.AnimatorIsHuman || !constraint.AnimatorHasAvatar)
             {
-                EditorGUILayout.HelpBox("头部与脊椎不生效：Animator 必须有 Avatar 且是 humanoid。眼睛形态键不受影响。", MessageType.Error);
+                EditorGUILayout.HelpBox(
+                    "头部与脊椎不生效：Animator（" + constraint.AnimatorName + "）必须有 Avatar 且是 humanoid。眼睛形态键不受影响。",
+                    MessageType.Error);
+                return;
             }
-            else if (!constraint.IkRecentlyCalled)
+
+            if (constraint.IkRecentlyCalled)
             {
-                EditorGUILayout.HelpBox("OnAnimatorIK 没有被调用：检查动画图层是否勾了 IK Pass。", MessageType.Warning);
+                string via = constraint.AnimatorOnSameObject ? "同物体" : "转发器";
+                EditorGUILayout.HelpBox("OnAnimatorIK 正常（" + via + "）。", MessageType.Info);
+                return;
             }
+
+            string detail = constraint.AnimatorOnSameObject
+                ? "组件就在 Animator 物体上，回调仍然没来。"
+                : "组件在别的物体上，转发器" + (constraint.IkRelayActive ? "已挂上" : "没挂上") + "。";
+            EditorGUILayout.HelpBox(
+                "OnAnimatorIK 没有被调用。" + detail
+                + "\n① Animator 窗口 → Layers → 图层行右侧齿轮 ⚙ → 勾 IK Pass（Unity 6 里选中图层后 Inspector 也会显示这个勾）。"
+                + "\n② Animator 组件的 Culling Mode 若是 Cull Update Transforms / Cull Completely，角色离屏时 IK 不更新。",
+                MessageType.Warning);
         }
 
         private void DrawTargetSection()

@@ -223,8 +223,10 @@ PostLateUpdate
 | 条件 | 说明 |
 | --- | --- |
 | `Animator` 有 Avatar 且 `isHuman` | 否则**头部不生效**（面板报错），眼睛形态键部分照常工作 |
-| 动画图层的 **IK Pass** 勾上 | 不勾的话 `OnAnimatorIK` 根本不会被调用 —— 这是"头一动不动"最常见的原因 |
-| `Animator` 与组件在同一物体上，或显式指定 Animator | 默认取同物体 / 父级 / 子级的第一个 Animator |
+| 动画图层的 **IK Pass** 勾上 | 不勾的话 `OnAnimatorIK` 根本不会被调用 —— 这是"头一动不动"最常见的原因。位置：**Animator 窗口 → Layers → 图层行右侧齿轮 ⚙ → IK Pass**（Unity 6 里选中图层后 Inspector 也会显示这个勾）。有多个图层时，每个想参与 IK 的图层都要勾 |
+| 组件与 Animator 的**物体关系** | ⚠️ Unity 只把 `OnAnimatorIK` 发给**Animator 所在的那个 GameObject**（和 `OnAnimatorMove` 一样）。约束挂在子物体（约束层 / 骨骼）上是常态，所以组件会在播放时自动往 Animator 物体上挂一个 `HoLookAtIkRelay` 转发器；编辑模式不会加组件（避免标脏场景），那时要么把组件放在 Animator 物体上，要么手动挂一个转发器 |
+| `Animator.Culling Mode` | 若是 `Cull Update Transforms` / `Cull Completely`，角色离屏时动画与 IK 都不更新 —— 离屏测试时头不动是正常的 |
+| `Animator` 与组件在同一物体上，或显式指定 Animator | 空时按 自己 → 父级 → 子级 找 |
 
 ### 选项与代价
 
