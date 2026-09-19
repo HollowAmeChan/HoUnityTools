@@ -359,7 +359,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private void DrawSpineSection()
         {
-            string summary = spineEnabled.boolValue ? HoConstraintEditorSectionGui.FloatSummary(bodyWeight) : "关";
+            string summary = spineEnabled.boolValue ? "身体 " + bodyWeight.floatValue.ToString("0.##") : "关";
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref spineExpanded, "脊椎跟随", summary, SpineColor))
             {
                 return;
@@ -374,7 +374,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private void DrawHeadSection()
         {
-            string summary = headEnabled.boolValue ? HoConstraintEditorSectionGui.FloatSummary(headWeight) : "关";
+            string summary = headEnabled.boolValue ? "头部 " + headWeight.floatValue.ToString("0.##") : "关";
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref headExpanded, "头颈跟随", summary, HeadColor))
             {
                 return;
@@ -672,7 +672,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawDebugSection(HoLookAtConstraint constraint)
         {
             HoLookAtDebug debug = constraint.GetDebug();
-            string summary = debug.hasTarget ? "有目标" : "无目标";
+            // 折叠状态下摘要就是唯一可见的信息，所以这里直接把"目光误差"报出来
+            float errorSum = Mathf.Abs(constraint.GazeErrorYaw) + Mathf.Abs(constraint.GazeErrorPitch);
+            string summary = !debug.hasTarget
+                ? "无目标"
+                : (errorSum < 1.0f ? "误差 " + errorSum.ToString("0.0") + "°（精确）" : "误差 " + errorSum.ToString("0.0") + "°");
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref debugExpanded, "调试", summary, DebugColor))
             {
                 return;
