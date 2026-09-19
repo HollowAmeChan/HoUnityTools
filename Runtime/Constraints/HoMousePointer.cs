@@ -106,13 +106,23 @@ namespace Hollow.HoUnityTools.Constraints
             if (useInputSystem)
             {
                 Pointer pointer = Pointer.current;
-                if (pointer != null)
+                if (pointer != null && pointer.enabled)
                 {
-                    screenPosition = pointer.position.ReadValue();
-                    return true;
-                }
+                    Vector2 position = pointer.position.ReadValue();
+                    if (IsUsablePointerPosition(position))
+                    {
+                        screenPosition = position;
+                        return true;
+                    }
 
-                if (!useLegacy)
+                    // 位置是 (0,0) 时当作"没有指针数据"：Input System 在窗口失焦 / 设备没数据时就是这么报的，
+                    // 以前直接采信，表现是"丢失跟踪后视线突然跳到画面角落"，而且丢失判定永远不触发。
+                    if (!useLegacy)
+                    {
+                        return false;
+                    }
+                }
+                else if (!useLegacy)
                 {
                     return false;
                 }
@@ -122,12 +132,25 @@ namespace Hollow.HoUnityTools.Constraints
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (useLegacy)
             {
-                screenPosition = Input.mousePosition;
-                return true;
+                Vector2 position = Input.mousePosition;
+                if (IsUsablePointerPosition(position))
+                {
+                    screenPosition = position;
+                    return true;
+                }
             }
 #endif
 
             return false;
+        }
+
+        /// <summary>
+        /// 这个位置能不能用。(0,0) 被视为"没有数据" —— 鼠标真的停在窗口左下角像素上是个极小概率事件，
+        /// 而失焦/无设备时 Input System 恰好报 (0,0)，两者混在一起会让"丢失跟踪"完全失效。
+        /// </summary>
+        private static bool IsUsablePointerPosition(Vector2 position)
+        {
+            return position.x != 0.0f || position.y != 0.0f;
         }
 
         /// <summary>

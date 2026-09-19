@@ -85,8 +85,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private HoLookAtEyeDriver eyeDriver = HoLookAtEyeDriver.EyeBones;
 
+        /// <summary>眼球强度：实测 0.3 左右最自然（眼睛全量跟上反而"瞪"得凶）。</summary>
         [SerializeField, Range(0.0f, 1.0f)]
-        private float eyeWeight = 1.0f;
+        private float eyeWeight = 0.3f;
 
         [SerializeField, Min(0.0f)]
         private float eyeSmoothing = 0.04f;
@@ -1002,7 +1003,9 @@ namespace Hollow.HoUnityTools.Constraints
                 }
                 if (!sample.valid)
                 {
-                    // 指针不可用（窗口失焦 / 没有输入设备）：离屏保持时沿用上一次的方向，而不是漂回中立
+                    // 指针不可用（窗口失焦 / 设备没数据 / 位置被报成 (0,0)）：
+                    // 离屏保持时沿用上一次的方向，否则按 lostBehavior 处理（回中立 / 松开）。
+                    hasPointerScreen = false;
                     if (!mouseHoldOffscreen)
                     {
                         return false;
@@ -1627,6 +1630,7 @@ namespace Hollow.HoUnityTools.Constraints
             float error = Mathf.Abs(GazeErrorYaw) + Mathf.Abs(GazeErrorPitch);
             string text =
                 "Ho 注视　" + (targetMode == HoLookAtMode.Mouse ? "鼠标" : "物体")
+                + (targetMode == HoLookAtMode.Mouse && !hasPointerScreen ? "（指针不可用→按丢失处理）" : string.Empty)
                 + "　总 " + TotalAngles.yaw.ToString("0.0") + "°/" + TotalAngles.pitch.ToString("0.0") + "°"
                 + "　头估计 " + state.headEstimateYaw.ToString("0.0") + "°/" + state.headEstimatePitch.ToString("0.0") + "°"
                 + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
@@ -1684,8 +1688,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         private static Vector2 ToGuiPoint(Vector2 screenPoint)
         {
-            // 屏幕像素（左下原点）→ GUI 坐标（左上原点，并且尊重 Game 视图的缩放）
-            return GUIUtility.ScreenToGUIPoint(new Vector2(screenPoint.x, Screen.height - screenPoint.y));
+            // 屏幕像素（左下原点）→ GUI 坐标（左上原点，并尊重 Game 视图缩放）。
+            // 注意不要再自己翻一次 Y：ScreenToGUIPoint 已经翻过了。
+            return GUIUtility.ScreenToGUIPoint(screenPoint);
         }
 
         private static bool TryProject(Camera camera, Vector3 worldPoint, out Vector2 guiPoint)
