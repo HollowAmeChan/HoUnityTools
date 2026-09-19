@@ -28,7 +28,6 @@ namespace Hollow.HoUnityTools.Constraints
     [AddComponentMenu("HoUnityTools/Constraints/Ho Floating Constraint")]
     public sealed class HoFloatingConstraint : MonoBehaviour
     {
-        [Header("Update")]
         [SerializeField]
         private HoFloatingConstraintUpdateMode updateMode = HoFloatingConstraintUpdateMode.LateUpdate;
 
@@ -38,7 +37,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool initializeOnEnable = true;
 
-        [Header("Initial Transform")]
         [SerializeField]
         private bool hasInitialTransform;
 
@@ -51,7 +49,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 initialLocalScale = Vector3.one;
 
-        [Header("Offset")]
         [SerializeField]
         private HoFloatingConstraintSpace offsetSpace = HoFloatingConstraintSpace.World;
 
@@ -64,7 +61,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 scaleOffset = Vector3.zero;
 
-        [Header("Oscillation")]
         [SerializeField]
         private bool oscillationEnabled = true;
 
@@ -98,7 +94,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 oscillationAxisWeight = Vector3.one;
 
-        [Header("Noise")]
         [SerializeField]
         private bool noiseEnabled = false;
 
@@ -123,7 +118,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 noiseScaleAmplitude = Vector3.zero;
 
-        [Header("Debug")]
         [SerializeField]
         private bool drawGizmos = true;
 

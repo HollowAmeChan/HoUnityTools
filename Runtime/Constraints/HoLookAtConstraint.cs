@@ -25,7 +25,6 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>交给 Unity 的 clampWeight 固定 0：限位由本组件的角度上限负责，避免二次夹取让读数对不上。</summary>
         private const float UnityClampWeight = 0.0f;
 
-        [Header("目标")]
         [SerializeField]
         private HoLookAtMode targetMode = HoLookAtMode.Transform;
 
@@ -44,7 +43,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 0.45f)]
         private float mouseDeadZone = 0.05f;
 
-        [Header("角色")]
         [SerializeField]
         private Animator animator;
 
@@ -57,14 +55,12 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool evaluateInEditMode = false;
 
-        [Header("① 脊椎跟随")]
         [SerializeField]
         private bool spineEnabled = true;
 
         [SerializeField, Range(0.0f, 1.0f)]
         private float bodyWeight = 0.3f;
 
-        [Header("② 头颈跟随")]
         [SerializeField]
         private bool headEnabled = true;
 
@@ -83,7 +79,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 179.0f)]
         private float headLimitPitch = 40.0f;
 
-        [Header("③ 眼睛跟随")]
         [SerializeField]
         private bool eyesEnabled = true;
 
@@ -125,13 +120,11 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private List<HoLookAtEyeEntry> eyeEntries = new List<HoLookAtEyeEntry>();
 
-        [Header("丢失与瞬移")]
         [SerializeField]
         private HoLookAtLostBehavior lostBehavior = HoLookAtLostBehavior.Return;
 
         // ── 高级（面板默认折起，改起来才知道自己在干什么的才会进来）──────────
 
-        [Header("高级")]
         [SerializeField]
         private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.CursorPoint;
 
@@ -179,7 +172,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private HoShapeKeyMergeMode mergeMode = HoShapeKeyMergeMode.Saturate;
 
-        [Header("调试")]
         [SerializeField]
         private bool drawGizmos = true;
 

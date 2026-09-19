@@ -360,7 +360,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawSpineSection()
         {
             string summary = spineEnabled.boolValue ? HoConstraintEditorSectionGui.FloatSummary(bodyWeight) : "关";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref spineExpanded, "① 脊椎跟随", summary, SpineColor))
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref spineExpanded, "脊椎跟随", summary, SpineColor))
             {
                 return;
             }
@@ -375,7 +375,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawHeadSection()
         {
             string summary = headEnabled.boolValue ? HoConstraintEditorSectionGui.FloatSummary(headWeight) : "关";
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref headExpanded, "② 头颈跟随", summary, HeadColor))
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref headExpanded, "头颈跟随", summary, HeadColor))
             {
                 return;
             }
@@ -401,7 +401,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             bool bones = (HoLookAtEyeDriver)eyeDriver.enumValueIndex == HoLookAtEyeDriver.EyeBones;
             string summary = !eyesEnabled.boolValue ? "关" : (bones ? "眼球骨骼" : "形态键");
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref eyesExpanded, "③ 眼睛跟随", summary, EyeColor))
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref eyesExpanded, "眼睛跟随", summary, EyeColor))
             {
                 return;
             }
@@ -429,7 +429,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.PropertyField(eyeBoneLimitPitch, L("上下限位（度）", "眼球最多往上/下各转多少度（默认 10，对称）。"));
                     EditorGUILayout.EndHorizontal();
                     EditorGUILayout.LabelField(
-                        "实际转动：yaw " + constraint.AppliedEyeYaw.ToString("0.0") + "°　pitch " + constraint.AppliedEyePitch.ToString("0.0") + "°",
+                        "眼球转动 左右 " + constraint.AppliedEyeYaw.ToString("0.0") + "°　上下 " + constraint.AppliedEyePitch.ToString("0.0") + "°",
                         EditorStyles.miniLabel);
                 }
                 else

@@ -16,7 +16,6 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>被外部驱动多久之后暂停自动眨眼。</summary>
         private const float DrivenThresholdTime = 0.5f;
 
-        [Header("Update")]
         [SerializeField]
         private HoBlinkUpdateMode updateMode = HoBlinkUpdateMode.LateUpdate;
 
@@ -24,11 +23,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool evaluateInEditMode = false;
 
-        [Header("Meshes")]
         [SerializeField]
         private List<Renderer> renderers = new List<Renderer>();
 
-        [Header("Blink")]
         [SerializeField]
         private bool blinkEnabled = true;
 
@@ -77,11 +74,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private List<HoShapeKeyTarget> blinkTargets = new List<HoShapeKeyTarget>();
 
-        [Header("Rules")]
         [SerializeField]
         private List<HoBlinkRule> rules = new List<HoBlinkRule>();
 
-        [Header("Write")]
         [SerializeField, Min(0.0f)]
         private float writeThreshold = 0.01f;
 

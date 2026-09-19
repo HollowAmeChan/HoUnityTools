@@ -58,7 +58,6 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>世界斜率输出的角度上限（度）。液面接近竖直时斜率发散，这里只做量程保护。</summary>
         private const float MaxWorldTiltDegrees = 80.0f;
 
-        [Header("Update")]
         [SerializeField]
         private HoPendulumConstraintUpdateMode updateMode = HoPendulumConstraintUpdateMode.LateUpdate;
 
@@ -68,7 +67,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool initializeOnEnable = true;
 
-        [Header("Initial Transform")]
         [SerializeField]
         private bool hasInitialTransform;
 
@@ -81,14 +79,12 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 initialLocalScale = Vector3.one;
 
-        [Header("Anchor")]
         [SerializeField]
         private HoPendulumDriveSource driveSource = HoPendulumDriveSource.SelfMotion;
 
         [SerializeField]
         private Transform anchor;
 
-        [Header("Pendulum")]
         [SerializeField, Min(0.0f)]
         private float length = 0.25f;
 
@@ -119,7 +115,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.001f)]
         private float referenceGravity = 9.81f;
 
-        [Header("Stretch")]
         [SerializeField]
         private bool radialEnabled = true;
 
@@ -129,7 +124,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 2.0f)]
         private float radialDampingRatio = 0.25f;
 
-        [Header("Sampling")]
         [SerializeField, Range(HoMotionEstimator.MinWindow, HoMotionEstimator.MaxWindow)]
         private int estimationWindow = HoMotionEstimator.DefaultWindow;
 
@@ -148,11 +142,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(1.0f / 2000.0f, 0.5f)]
         private float maxStep = 1.0f / 240.0f;
 
-        [Header("Liquid Fill")]
         [SerializeField, Range(0.0f, 1.0f)]
         private float fillAmount = 0.5f;
 
-        [Header("Manual Input")]
         [SerializeField]
         private Vector3 manualAcceleration = Vector3.zero;
 
@@ -171,7 +163,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 inputAxis = Vector3.right;
 
-        [Header("Output")]
         [SerializeField]
         private Material sharedMaterial;
 
@@ -181,7 +172,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private List<HoPendulumBinding> bindings = new List<HoPendulumBinding>();
 
-        [Header("Debug")]
         [SerializeField]
         private bool drawGizmos = true;
 

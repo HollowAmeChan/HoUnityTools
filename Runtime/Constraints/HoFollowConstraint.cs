@@ -50,7 +50,6 @@ namespace Hollow.HoUnityTools.Constraints
     [AddComponentMenu("HoUnityTools/Constraints/Ho Follow Constraint")]
     public sealed class HoFollowConstraint : MonoBehaviour
     {
-        [Header("Target")]
         [SerializeField]
         private Transform target;
 
@@ -64,12 +63,10 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool initializeOnEnable = true;
 
-        [Header("Space")]
         // 新字段带初始化器：老场景反序列化时缺这个键，会拿到 Local（修复后的行为），需要旧行为的实例再手动切回 World。
         [SerializeField]
         private HoFollowConstraintSpace space = HoFollowConstraintSpace.Local;
 
-        [Header("Initial Transform")]
         [SerializeField]
         private bool hasInitialTransform;
 
@@ -82,7 +79,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 initialLocalScale = Vector3.one;
 
-        [Header("Follow")]
         [SerializeField, Range(0.0f, 1.0f)]
         private float positionFollow = 0.9f;
 
@@ -101,7 +97,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.0f)]
         private float maxAngularVelocity;
 
-        [Header("Axis Constraint")]
         [SerializeField, Range(0.0f, 1.0f)]
         private float lockX = 0.0f;
 
@@ -120,7 +115,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 1.0f)]
         private float lockRoll = 0.0f;
 
-        [Header("Rotation")]
         [SerializeField]
         private HoFollowConstraintRotationMode rotationMode = HoFollowConstraintRotationMode.World;
 
@@ -136,7 +130,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool followRoll = true;
 
-        [Header("Limit")]
         [SerializeField]
         private bool limitEnabled = false;
 
@@ -158,7 +151,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool limitClamp = true;
 
-        [Header("Offset")]
         [SerializeField]
         private HoFollowConstraintOffsetMode offsetMode = HoFollowConstraintOffsetMode.Local;
 
@@ -168,7 +160,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private Vector3 rotationOffset = Vector3.zero;
 
-        [Header("Debug")]
         [SerializeField]
         private bool drawGizmos = true;
 
