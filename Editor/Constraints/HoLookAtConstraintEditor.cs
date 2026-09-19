@@ -14,6 +14,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty inputSource;
         private SerializedProperty mouseCamera;
         private SerializedProperty mouseSampleMode;
+        private SerializedProperty mouseAngleSpace;
         private SerializedProperty mouseSensitivity;
         private SerializedProperty mouseDeadZone;
         private SerializedProperty mouseDistance;
@@ -100,6 +101,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             inputSource = Find("inputSource");
             mouseCamera = Find("mouseCamera");
             mouseSampleMode = Find("mouseSampleMode");
+            mouseAngleSpace = Find("mouseAngleSpace");
             mouseSensitivity = Find("mouseSensitivity");
             mouseDeadZone = Find("mouseDeadZone");
             mouseDistance = Find("mouseDistance");
@@ -277,6 +279,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 }
 
                 EditorGUILayout.PropertyField(inputSource, new GUIContent("输入来源"));
+                using (new EditorGUI.DisabledScope((HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex != HoLookAtMouseSampleMode.AngleMap))
+                {
+                    EditorGUILayout.PropertyField(mouseAngleSpace, new GUIContent("角度坐标系", "屏幕相对：鼠标右 = 看向画面右（正面机位的直觉）；角色相对：鼠标右 = 看向角色右。"));
+                }
+
                 EditorGUILayout.PropertyField(mouseSensitivity, new GUIContent("灵敏度（度）"));
                 EditorGUILayout.PropertyField(mouseDeadZone, new GUIContent("鼠标死区"));
                 EditorGUILayout.PropertyField(mouseHoldOffscreen, new GUIContent("离屏保持"));

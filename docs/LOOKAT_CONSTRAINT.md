@@ -270,6 +270,13 @@ PostLateUpdate
 | `WorldPoint` | 从相机沿鼠标射线取固定距离的点（或投到角色脚下的水平面） | 想要"看向房间里的某个位置"的物理感 |
 | `Raycast` | 相机 → 鼠标射线打到 `mouseRaycastMask` 的物体 | 有场景几何、想让角色盯着墙上的东西 |
 
+⚠️ **`AngleMap` 的坐标系**（`mouseSpace`）：
+
+- **屏幕相对（默认）**：鼠标右 = 看向**画面**右侧。相机在角色正面时（VTuber/直播机位），"画面右"在角色坐标系里是**它的左边** —— 这正是观众要的直觉。实现上先把鼠标偏移转成相机坐标系里的方向，再交给正常的分解流程。
+- **角色相对**：鼠标右 = 看向**角色**右侧，相当于把鼠标当成角色自己的注视摇杆；正面机位下看起来是"反的"（第一版就是这个行为，已改成默认屏幕相对）。
+
+`WorldPoint / Raycast` 是物理目标点，不存在这个歧义。
+
 - **输入读取**：`#if ENABLE_INPUT_SYSTEM` 用 `Mouse.current.position.ReadValue()` / `Pointer.current`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。面板给「输入来源：自动 / Input System / 旧 Input」的手动覆盖。
 - 鼠标屏幕坐标换算用 `mouseCamera`（默认 `Camera.main`，允许指定），支持 `Screen.width/height` 与相机的 `pixelRect`（多相机/画中画时不至于错位）。
 

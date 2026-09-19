@@ -39,6 +39,9 @@ namespace Hollow.HoUnityTools.Constraints
         private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.AngleMap;
 
         [SerializeField]
+        private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
+
+        [SerializeField]
         private Vector2 mouseSensitivity = new Vector2(30.0f, 20.0f);
 
         [SerializeField, Range(0.0f, 0.45f)]
@@ -695,6 +698,7 @@ namespace Hollow.HoUnityTools.Constraints
                     inputSource = inputSource,
                     camera = mouseCamera,
                     sampleMode = mouseSampleMode,
+                    angleSpace = mouseAngleSpace,
                     sensitivity = mouseSensitivity,
                     deadZone = mouseDeadZone,
                     distance = mouseDistance,
@@ -716,7 +720,22 @@ namespace Hollow.HoUnityTools.Constraints
                     Vector2 offset = HoMousePointer.ScreenToAngleOffset(camera, sample.screenPosition, mouseDeadZone);
                     mouseAngleYaw = offset.x * mouseSensitivity.x;
                     mouseAnglePitch = offset.y * mouseSensitivity.y;
-                    direction = HoLookAtSolver.DirectionFromAngles(forward, up, mouseAngleYaw, mouseAnglePitch);
+
+                    if (mouseAngleSpace == HoLookAtMouseSpace.ScreenRelative && camera != null)
+                    {
+                        // 屏幕相对：鼠标右 = 看向画面右侧。
+                        // 不能在角色坐标系里直接转 yaw —— 相机在角色正面时那等于看向它的左边（看着就是反的）。
+                        Transform view = camera.transform;
+                        Quaternion rotation = Quaternion.AngleAxis(mouseAngleYaw, view.up)
+                                              * Quaternion.AngleAxis(-mouseAnglePitch, view.right);
+                        direction = rotation * view.forward;
+                    }
+                    else
+                    {
+                        // 角色相对：把鼠标当成角色自己的注视摇杆
+                        direction = HoLookAtSolver.DirectionFromAngles(forward, up, mouseAngleYaw, mouseAnglePitch);
+                    }
+
                     isDirection = true;
                     return true;
                 }

@@ -37,6 +37,17 @@ namespace Hollow.HoUnityTools.Constraints
     }
 
     /// <summary>
+    /// 鼠标角度映射的坐标系。
+    /// `ScreenRelative`：鼠标右 = 看向**画面**右侧（相机在角色正面时，等于看向角色的左边 —— 观众视角的直觉）。
+    /// `CharacterRelative`：鼠标右 = 看向**角色**右侧（把鼠标当成角色自己的注视摇杆，正面机位下会看着相反）。
+    /// </summary>
+    public enum HoLookAtMouseSpace
+    {
+        ScreenRelative,
+        CharacterRelative
+    }
+
+    /// <summary>
     /// 眼睛形态键的通道。横向有两种族，必须分开：
     /// `Inner/Outer` 是**相对眼球**的（UniVRM 的正统表达，ARKit/PICO 用），
     /// `LookLeft/LookRight` 是**相对头**的（VRM/Meta/SRanipal 用）。
@@ -141,6 +152,7 @@ namespace Hollow.HoUnityTools.Constraints
         public HoLookAtInputSource inputSource;
         public Camera camera;
         public HoLookAtMouseSampleMode sampleMode;
+        public HoLookAtMouseSpace angleSpace;
         public Vector2 sensitivity;
         public float deadZone;
         public float distance;
