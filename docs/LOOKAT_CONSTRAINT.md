@@ -3,7 +3,7 @@
 `HoUnityTools/Constraints/Ho Look At Constraint`。让角色的**眼睛形态键**和**头部骨骼**尽量朝向一个目标，两种目标模式：
 
 - **跟随物体**：看向一个 `Transform`（可带偏移、可指定"看得更远一点"的前瞻）。
-- **跟随鼠标**：看向鼠标位置（角度映射 / 世界点 / 射线命中三种取法）。
+- **跟随鼠标**：看向鼠标位置（角度映射 / 射线命中两种取法）。
 
 ## 业内成熟方案调查
 
@@ -63,7 +63,7 @@
 
 ```
 物体模式: target.position (+offset)  ┐
-鼠标模式: 角度映射 / 世界点 / 射线   ┘─→ 目标点（或直接角度）
+鼠标模式: 角度映射 / 射线      ┘─→ 目标点（或直接角度）
                                           │
                      参考系（角色根）分解 yaw / pitch
                                           │
@@ -84,51 +84,57 @@
 | `Runtime/Constraints/HoLookAtConstraint.cs` | 组件本体：目标解算、分工、写头、写形态键 |
 | `Runtime/Constraints/HoLookAtData.cs` | 枚举与可序列化数据：目标模式、鼠标取法、眼睛条目 |
 | `Runtime/Constraints/HoLookAtSolver.cs` | 纯数学：目标方向 → yaw/pitch → 分工；角度限位与平滑 |
-| `Runtime/Constraints/HoMousePointer.cs` | 鼠标/指针采样：Input System 优先，旧 Input 兜底，三种取法 |
-| `Runtime/Constraints/HoLookAtAutoRig.cs` | 一键装配：`GetBoneTransform` 取 Head/LeftEye/RightEye、检查 humanoid + IK Pass、按语义挑网格上存在的凝视键、判断左右族/内外族 |
+| `Runtime/Constraints/HoMousePointer.cs` | 鼠标/指针采样：Input System 优先，旧 Input 兜底，两种取法 |
+| `Editor/Constraints/HoLookAtPresetActions.cs` | 一键装配：检查 humanoid、按语义挑网格上存在的凝视键、判断左右族/内外族、收集网格、填相机 |
 | `Runtime/Constraints/HoShapeKeyTarget.cs` | **从眨眼约束抽出的共享映射结构**（键、范围、增益、ramp 预设…） |
 | `Runtime/Constraints/HoShapeKeyWriter.cs` | **抽出的共享写入器**：绑定表、外部基准快照、合并、阈值写 |
-| `Editor/Constraints/HoLookAtConstraintEditor.cs` | 面板：目标、眼睛、头部、调试 |
+| `Editor/Constraints/HoLookAtConstraintEditor.cs` | 面板：看哪里 / 角色 / 三块 / 丢失 / 高级 / 调试（全部带中文 Tooltip） |
+| `Editor/Constraints/HoLookAtGizmos.cs` | Scene 视图可视化：参考系、限位框、目标方向、头/眼分工，带角度标签 |
 | `Editor/Constraints/HoLookAtPresetActions.cs` | 预设：双眼四向/左右眼四向（左右族、内外族）、"只看眼睛"、"头眼并用" |
 
 ## 数据模型
 
 ### 目标来源
 
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `targetMode` | `Transform / Mouse` | Transform | 跟随物体 / 跟随鼠标 |
-| `target` | `Transform` | — | 物体模式的目标 |
-| `targetOffset` | `Vector3` | 0 | 物体模式的位置偏移（在目标自身空间） |
-| `mouseSampleMode` | `AngleMap / WorldPoint / Raycast` | AngleMap | 鼠标取法（见「鼠标模式」） |
-| `mouseCamera` | `Camera` | 空 = `Camera.main` | 用来做屏幕→世界的换算 |
-| `mouseSensitivity` | `Vector2` | (30°, 20°) | 角度映射模式下鼠标走满屏幕对应多少度 |
-| `mouseDeadZone` | `float` | 0 | 鼠标中心死区（屏幕比例） |
-| `mouseDistance` | `float` | 3 m | 世界点模式的投影距离 |
-| `mousePlaneHeight` | `float` | 0 | 世界点模式可改为投到水平面（角色脚下平面） |
-| `mouseRaycastMask` | `LayerMask` | 空 | 射线模式下命中的层 |
-| `mouseOffscreenBehavior` | `Hold / Return` | Hold | 鼠标移出窗口/无输入时保持还是回中立 |
+| 字段 | 类型 | 默认 | 面板位置 | 说明 |
+| --- | --- | --- | --- | --- |
+| `targetMode` | `Transform / Mouse` | Transform | 看哪里 | 跟随物体 / 跟随鼠标 |
+| `target` | `Transform` | — | 看哪里 | 物体模式的目标 |
+| `targetOffset` | `Vector3` | 0 | 看哪里 | 物体模式的位置偏移（在目标自身空间） |
+| `mouseCamera` | `Camera` | 空 | 看哪里 | 用来做屏幕→世界的换算。**只用手动指定的那台，运行时不再自动猜**（自动猜过一次，猜错的表现是"左右是反的"）；空的时候面板给按钮「填入场景里的相机」并警告一次 |
+| `mouseSensitivity` | `Vector2` | (30°, 20°) | 看哪里 | 角度映射模式下鼠标走满屏幕对应多少度 |
+| `mouseDeadZone` | `float` | 0.05 | 看哪里 | 鼠标中心死区（屏幕比例），避免鼠标微动带着眼睛抖 |
+| `mouseHoldOffscreen` | `bool` | true | 看哪里 | 鼠标移出窗口/无输入时保持最后方向，而不是回中立 |
+| `mouseSampleMode` | `AngleMap / Raycast` | AngleMap | 高级 | 鼠标取法（见「鼠标模式」）。**v2 去掉了 `WorldPoint`**：它的"投到水平面"与"固定距离"两种花活，实际用起来和 `Raycast` 的兜底重复 |
+| `mouseDistance` | `float` | 3 m | 高级 | 射线模式的兜底距离：射线什么都没打中时取射线上这个距离的点 |
+| `mouseRaycastMask` | `LayerMask` | 全 | 高级 | 射线模式命中的层 |
+
+> `inputSource`（Auto / InputSystem / LegacyInput）**已删除**：包已经硬依赖 Input System，采样固定走 Input System，旧 `Input` 只在宿主（Warudo 之类）里作为兜底存在。
 
 ### 眼睛输出（两个应用层 + 四条方向曲线）
 
 照 UniVRM 的分层：**解算层**算出目标相对参考系的 yaw/pitch，**应用层**把角度落到眼睛上。应用层两种，可以同时开：
 
-**A. 形态键**（每条 = 一个方向 + 一个键）
+**A. 形态键**（一条通道 = 一个方向，左右眼各一个键）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `direction` | `HorizontalInner / HorizontalOuter / VerticalUp / VerticalDown` | 照 UniVRM 的四向命名：**横向用内外**，不是左右 |
-| `mapping` | `HoShapeKeyTarget` | 共享映射结构：网格范围、键名、混合模式、增益、偏移、输出范围、钳制、权重、ramp 预设 + 强度 |
-| `enabled` | bool | 这条是否参与 |
+| `channel` | `Inner / Outer / LookLeft / LookRight / Up / Down` | 六条通道（`HoLookAtEyeChannel`）。横向两族必须分开：`In/Out` 相对眼球、`LookLeft/LookRight` 相对头 |
+| `leftEye` / `rightEye` | `HoLookAtEyeKey` | **只有三个字段**：`enabled` / `keyName` / `gain` |
+| `enabled` | bool | 这条通道是否参与 |
+
+- **v2 的关键简化**：通道不再复用 `HoShapeKeyTarget`。v1 每条通道左右眼各挂一个 16 字段的完整映射（网格范围、混合模式、偏移、输出范围、钳制、权重、ramp 预设 + 强度、曲线…），四条通道就是 128 个序列化字段，面板上全是看不懂的旋钮，而且实际用到的只有"键名"和"要不要压一点增益"。
+- 现在通道只存 `keyName` + `gain`；运行期由 `HoShapeKeyTarget.CreateRuntime(键名, 增益)` 现造一个瞬发（Direct）目标交给共享写入器。眼睛的平滑统一由 `eyeSmoothing` 负责，通道不再各配一套 ramp —— **一套平滑参数比六套 ramp 好懂也好调**。
+- 中间的角度→输出映射仍然在四条方向曲线上（见下），所以"标定"能力一点没少。
 
 **B. 眼球骨骼**
 
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `driveEyeBones` | bool | 自动 | 角色有 `LeftEye`/`RightEye`（humanoid）时默认开 |
-| `leftEyeBone` / `rightEyeBone` | `Transform` | 自动取 `HumanBodyBones.LeftEye/RightEye` | 眼球骨骼；用"世界空间叠加旋转"驱动（不猜轴向，和头部那条世界叠加同一个思路） |
-| `eyeBoneWeight` | `0..1` | 1 | 眼球旋转权重 |
-| `eyeBoneUseCurve` | bool | true | 眼球角度也过四向曲线（关掉就是线性） |
+| `eyeBoneWeight` | `0..1` | 0（关） | humanoid 的 `LeftEye`/`RightEye` 用"世界空间叠加旋转"驱动（不猜轴向）；**0 = 完全不动骨骼** |
+
+- v2 把 `driveEyeBones`（开关）与 `eyeBoneUseCurve`（是否过曲线）合并进 `eyeBoneWeight`：`0` 就是关，非 0 就按四条曲线成形 —— 三个旋钮表达一件事，现在就一个数。
+- 骨骼和形态键可以同时用：有些模型既有凝视形态键又有眼球骨骼，两边一起给会更有神；只想要一种就把另一边设 0。
 
 **四条方向曲线（两种应用层共用）** —— 这就是 UniVRM 的 DegreeMapping：
 
@@ -140,9 +146,9 @@
 | `verticalDown` | 默认 25° | 同上 |
 
 - 曲线的横轴是**归一化后的 |角度| / 上限**，纵轴是 0..1 的输出比例 —— 所以"角度上限"和"满值输出"是分开的两个数，模型差异（有的 100 对应 15°、有的对应 35°）靠这两处标定，而不是靠一个笼统的"强度"。
-- 默认曲线给线性（`y = x`）；预设会给一组"轻微缓入"的曲线，避免小角度时眼睛就动得很明显。
+- **斜向的椭圆夹紧不再是开关**（v1 的 `eyeEllipseClamp`）：永远开着。它的作用是斜着看时不让 h 和 v 同时吃满（"过转"），没有哪种模型是希望它关掉的。
 - ⚠️ **内外族的符号**：`In/Out` 是相对眼球的。左眼 `In` = 往鼻侧 = 往右看；左眼 `Out` = 往左看，右眼镜像。所以用内外族时**左右眼各填一组键**（ARKit/PICO 本来也只有左右眼键），预设按眼别把 `HorizontalInner`/`HorizontalOuter` 落到正确的键和符号上。
-- **左右族是等价表达**：VRM 的 `LookLeft/LookRight`、Meta 的 `EYES_LOOK_LEFT_L` 这类"相对头"的命名，填进 `HorizontalOuter`（往左看 = 外侧）/ `HorizontalInner`（往右看 = 内侧）即可，语义完全对得上。预设会自动判断该网格上存在哪一族。
+- **左右族是等价表达**：VRM 的 `LookLeft/LookRight`、Meta 的 `EYES_LOOK_LEFT_L` 这类"相对头"的命名，填进 `LookLeft/LookRight`（= v1 的 `HorizontalOuter`/`HorizontalInner`）即可，语义完全对得上。面板上有「左右族 / 内外族」两个按钮，会读网格上的键自动填。
 
 ### 三大块（UI 与数据都按这个分）
 
@@ -150,48 +156,49 @@
 
 | 块 | 对应 | 权重 | 这一块自己的细节 |
 | --- | --- | --- | --- |
-| **① 脊椎跟随** | Unity `bodyWeight`（沿脊柱分摊） | 启用 + 权重 | 分摊强度、只在超过某角度才参与（可选） |
-| **② 头颈跟随** | Unity `headWeight` | 启用 + 权重 | 死区、偏航/俯仰限位、`clampWeight`、方向平滑与角速度上限、果冻 |
-| **③ 眼睛跟随** | 我们的四条方向曲线（+ 可选 `eyesWeight` 交给 Unity） | 启用 + 权重 | 四条曲线与角度上限、椭圆夹紧、眼球骨骼、左右族/内外族键名 |
+| **① 脊椎跟随** | Unity `bodyWeight`（沿脊柱分摊） | 启用 + 身体强度 | 只在超过某角度才参与（`spineMinAngle`，高级） |
+| **② 头颈跟随** | Unity `headWeight` | 启用 + 头部强度 | 起始死区、头部承担、左右/上下限位 |
+| **③ 眼睛跟随** | 我们的四条方向曲线 | 启用 + 眼球强度 | 四条曲线与角度上限、六条通道的键名与增益、眼球骨骼权重 |
 
-这样"多个效果混合"时一眼能看出谁在出力：调试区按三块分别给读数（总角度、每块的承担量、是否吃满），谁关掉、谁调权重互不影响。共享的部分（目标来源、参考系、总权重 `weight`、Animator 检查）放在顶部的「目标」区。
+这样"多个效果混合"时一眼能看出谁在出力：调试区按三块分别给读数（总角度、每块的承担量、是否吃满），谁关掉、谁调权重互不影响。共享的部分（目标来源、参考系、总强度、Animator 检查）放在顶部的「看哪里 / 角色」两区。
 
 ### ① 脊椎跟随 / ② 头颈跟随
 
 参数直接用 Unity 内置 LookAt IK 的语义，加上我们自己算"目标方向"时用的死区、分工与限位：
 
-| 字段 | 类型 | 默认 | 归属 | 说明 |
+| 字段 | 类型 | 默认 | 面板位置 | 说明 |
 | --- | --- | --- | --- | --- |
-| `animator` | `Animator` | 空 = 自动找 | 共用 | 必须是 humanoid（有 Avatar）；空时按同物体 → 父级 → 子级找 |
-| `weight` | `0..1` | 1 | 共用 | **= Unity 的 `weight`**：整个 LookAt 的总权重 |
-| `reference` | `Transform` | 空 = 角色根 | 共用 | 算 yaw/pitch 用的参考系（只影响我们的解算与限位，不影响 Unity 的 IK） |
 | `spineEnabled` | bool | true | ① | 是否让身体参与 |
-| `bodyWeight` | `0..1` | 0.3 | ① | **= Unity 的 `bodyWeight`**：身体参与度（Unity 沿脊柱分摊）—— 这就是"带着身子动" |
-| `spineMinAngle` | `float` | 0° | ① | 只在总角度超过它之后才开始分摊（0 = 一直参与） |
+| `bodyWeight` | `0..1` | 0.3 | ① | 面板叫「身体强度」。**= Unity 的 `bodyWeight`**：身体参与度（Unity 沿脊柱分摊）—— 这就是"带着身子动" |
+| `spineMinAngle` | `float` | 0° | 高级 | 只在总角度超过它之后才开始分摊（0 = 一直参与） |
 | `headEnabled` | bool | true | ② | 是否转头/颈 |
-| `headWeight` | `0..1` | 1 | ② | **= Unity 的 `headWeight`**：头部参与度（0 = 只做眼睛） |
-| `clampWeight` | `0..1` | 0.6 | ② | **= Unity 的 `clampWeight`**：0 不受限、1 完全夹死、0.5 = 只能在可能范围（180°）的一半内转。作为限位之外的最后一道保险 |
-| `yawLimit` | `float` | 70° | ② | 头部最大偏航（作用在传进去的目标方向上） |
-| `pitchLimitUp` | `float` | 40° | ② | 头部最大抬头 |
-| `pitchLimitDown` | `float` | 30° | ② | 头部最大低头 |
-| `headShare` | `0..1` | 0.7 | ② | 超过死区之后头部承担的比例（剩下的给眼睛） |
-| `deadZone` | `float` | 8° | ② | 死区：这么小的角度只用眼睛 |
-| `aimSmoothing` | `float` | 0.06 s | ② | 目标方向的一阶平滑（不是骨骼旋转平滑） |
-| `aimMaxSpeed` | `float` | 360°/s | ② | 目标方向的角速度上限（防瞬移） |
-| `aimJelly` | `bool` + `f/ζ` | 关 | ② | 可选：目标方向过弹簧（复用果冻求解器，带轻微超调） |
+| `headWeight` | `0..1` | 1 | ② | 面板叫「头部强度」。**= Unity 的 `headWeight`**：头部参与度（0 = 只做眼睛） |
+| `headLimitYaw` | `float` | 70° | ② | 面板叫「左右限位」：头部最大偏航（作用在传进去的目标方向上） |
+| `headLimitPitch` | `float` | 40° | ② | 面板叫「上下限位」：抬头/低头各这么多，**上下对称** |
+| `headShare` | `0..1` | 0.7 | ② | 面板叫「头部承担」：超过死区之后头部承担的比例（剩下的给眼睛） |
+| `deadZone` | `float` | 8° | ② | 面板叫「起始死区」：这么小的角度只用眼睛 |
+| `aimSmoothing` | `float` | 0.06 s | 高级 | 目标方向的一阶平滑（不是骨骼旋转平滑） |
+| `aimMaxSpeed` | `float` | 360°/s | 高级 | 目标方向的角速度上限（防瞬移） |
+| `clampWeight` | — | — | — | **已删除**：Unity 的 `clampWeight` 现在固定传 0。理由：限位已经由我们自己的 `headLimitYaw/Pitch` 按角度做掉了，再让 Unity 二次夹取会让"面板读出的头部角度"和实际转出来的对不上；调试 Gizmo 画的就是真实角度，所以这里必须只留一个夹取者 |
 
 - **不再需要"颈骨"字段**：颈部参与由 Unity 的 `bodyWeight` 沿脊柱分摊，比我们自己分两段更自然。
+- **`pitchLimitUp/Down` 合并成 `headLimitPitch`**：上下不对称在真实头部是有意义的（抬头比低头难），但用起来要同时理解两个数；现在一个数 + Gizmo 里一眼能看到框，比两个数字好懂。真要不对称时改成 head 骨骼叠加是后续（本版不做）。
 - **后续（本版不做）**：多目标（Multi-Aim 式的权重求和）。
 
 ### ③ 眼睛参数
 
-| 字段 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `eyesWeight` | `0..1` | 0 | 传给 Unity 的 `eyesWeight`：**默认 0**，因为眼球由我们自己的四条曲线驱动（要标定角度→输出）。若你想让 Unity 顺手把眼球骨骼也带上，可以调大它（但就绕过了曲线） |
-| `eyeSmoothing` | `float` | 0.04 s | 眼睛角度的一阶平滑（比头部快） |
-| `eyeEllipseClamp` | `bool` | true | 把 (h, v) 按椭圆夹取，避免斜向看时"过转" |
-| `horizontalInner/Outer`、`verticalUp/Down` | `AnimationCurve` × 4 | 线性 | 四条方向曲线（见上） |
-| `eyeAngleLimit` | `Vector4` | (30°, 30°, 20°, 25°) | 四条曲线横轴对应的角度上限（内/外/上/下） |
+| 字段 | 类型 | 默认 | 面板位置 | 说明 |
+| --- | --- | --- | --- | --- |
+| `eyesEnabled` | bool | true | ③ | 是否做眼动 |
+| `renderers` | `List<Renderer>` | 空 | ③ | 哪些网格上有凝视形态键（「收集子级网格」按钮） |
+| `eyeWeight` | `0..1` | 1 | ③ | 面板叫「眼球强度」 |
+| `eyeSmoothing` | `float` | 0.04 s | ③ | 眼睛角度的一阶平滑（比头部快）。**通道级的 ramp 已经删掉**，平滑只在这里 |
+| `eyeAngleLimit` | `Vector4` | (30°, 30°, 20°, 25°) | ③ | 四条曲线横轴对应的角度上限（内/外/上/下） |
+| `horizontalInner/Outer`、`verticalUp/Down` | `AnimationCurve` × 4 | 线性 | ③ | 四条方向曲线（见上） |
+| `eyeEntries` | `List<HoLookAtEyeEntry>` | 空 | ③ | 六条通道（键名 + 增益） |
+| `eyeBoneWeight` | `0..1` | 0 | 高级 | 眼球骨骼权重，0 = 不动骨骼 |
+| `eyesWeight`（给 Unity 的） | — | — | — | **已删除**：眼球一律由我们的四条曲线驱动。留一个"绕过曲线交给 Unity"的旋钮只会让人怀疑自己该用哪个 |
+
 
 ## 每帧流程与时序契约（重点）
 
@@ -267,8 +274,9 @@ PostLateUpdate
 | 取法 | 做法 | 什么时候用 |
 | --- | --- | --- |
 | `AngleMap`（默认） | 鼠标屏幕位置 → 归一化 (−1..1) → 乘 `mouseSensitivity` 得到 yaw/pitch 偏移（中心死区可调） | 观众视角、VRChat 式"看向鼠标"，最可控，不依赖相机距离 |
-| `WorldPoint` | 从相机沿鼠标射线取固定距离的点（或投到角色脚下的水平面） | 想要"看向房间里的某个位置"的物理感 |
-| `Raycast` | 相机 → 鼠标射线打到 `mouseRaycastMask` 的物体 | 有场景几何、想让角色盯着墙上的东西 |
+| `Raycast` | 相机 → 鼠标射线打到 `mouseRaycastMask` 的物体；**没打中时取射线上 `mouseDistance` 处的点** | 有场景几何、想让角色盯着墙上的东西 |
+
+> v1 的 `WorldPoint`（固定距离 / 投到水平面）已删除：固定距离那半就是 `Raycast` 的兜底，投平面那半实际没人用。
 
 ⚠️ **`AngleMap` 的坐标系**（`mouseSpace`）：
 
@@ -276,76 +284,128 @@ PostLateUpdate
   - ⚠️ 基准方向**不能用相机的 `forward`**：那是射进屏幕里的方向，而角色是面对相机的，用它等于让角色"看向自己背后" —— 平转角会一路顶到 ±150° 以上，头部被限位卡住、眼睛吃满。这是第一版踩过的坑。
 - **角色相对**：鼠标右 = 看向**角色**右侧，相当于把鼠标当成角色自己的注视摇杆；正面机位下看起来是"反的"。
 
-`WorldPoint / Raycast` 是物理目标点，不存在这个歧义。
+`Raycast` 是物理目标点，不存在这个歧义。
 
 **参考系（`reference`）**：空时默认取 **Animator 所在物体**（角色根）的朝向 —— 那才是角色的面向。退回到组件自己的 transform 往往是骨骼/空物体，轴向随机，会让"总角度"读数与限位全部失准（看起来像"平转 150° 以上"）。
 
-- **输入读取**：`#if ENABLE_INPUT_SYSTEM` 用 `Mouse.current.position.ReadValue()` / `Pointer.current`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。面板给「输入来源：自动 / Input System / 旧 Input」的手动覆盖。
+- **输入读取**：`#if ENABLE_INPUT_SYSTEM` 用 `Mouse.current.position.ReadValue()` / `Pointer.current`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。v2 删掉了面板上的「输入来源」选择（包已硬依赖 Input System，采样固定走 Auto：有 Input System 就用它，否则退回旧 Input）。
 - **相机必须手动指定**（`mouseCamera`）：运行时**不自动猜相机**（`Camera.main` 依赖 MainCamera 标签，很多测试场景没有；按"像素面积最大"猜也会挑错）。空的时候只警告一次，角度映射退回角色相对坐标系。面板上没填时会显示一个「填入场景里的相机」按钮（编辑器里挑第一个渲染到屏幕的启用相机填进去，仍然是你显式点的那一下）；「一键装配」也会顺手填。
 - 鼠标屏幕坐标换算用 `mouseCamera`，支持 `Screen.width/height` 与相机的 `pixelRect`（多相机/画中画时不至于错位）。
 
 ## 参数总表（控制参数预算）
 
-| 分组 | 数量 | 说明 |
-| --- | --- | --- |
-| 目标 | 11 | 模式、物体、偏移、鼠标取法/相机/灵敏度/死区/距离/平面/层/离屏行为 |
-| 眼睛 | 8 | `eyesWeight`、平滑、椭圆夹紧、四条方向曲线 + 四个角度上限、眼球骨骼（左/右/权重/是否过曲线） |
-| 眼睛形态键条目 | 4 条 × 2 列 | 内/外/上/下各一条，每条**左右眼各一个键**（内外族必须分眼；左右族也允许分眼或同键）；每条含共享映射结构的 16 项 |
-| 头部 | 12 | `animator`、`weight`/`bodyWeight`/`headWeight`/`clampWeight`、`reference`、`deadZone`、`headShare`、偏航/俯仰限位、`aimSmoothing`/`aimMaxSpeed`、`aimJelly` |
-| 丢失与瞬移 | 5 | `lostBehavior`、`returnDelay`、`returnSpeed`、`teleportAngleThreshold` |
-| 全局 | 5 | 更新时机（两段是固定的，这里只留调试相关）、编辑模式求值、锁定/暂停、调试绘制、写入阈值 |
+v2 的账（面板上"一眼能看到"的 vs 折进「高级」的）：
 
-合计约 **36 个全局字段 + 4 条方向条目**。日常只动四处：**一键装配**、`bodyWeight`/`headWeight`、四条曲线的角度上限、（鼠标模式的）灵敏度。
+| 分组 | 面板可见 | 高级里 | 说明 |
+| --- | --- | --- | --- |
+| 看哪里 | 4~6 | 3 | 模式、目标+偏移 / 相机+灵敏度+死区+离屏保持；高级：取法、距离、射线层 |
+| 角色 | 1（总强度） | 3 | 只留「总强度」+ 两行自动检测的信息（Animator / 参考系）；高级：Animator 覆盖、参考系覆盖、编辑模式求值 |
+| ① 脊椎 | 2 | 1 | 启用、身体强度；高级：脊椎起始角 |
+| ② 头颈 | 6 | 2 | 启用、头部强度、起始死区、头部承担、左右限位、上下限位；高级：方向平滑、最大角速度 |
+| ③ 眼睛 | 5 + 4 曲线 + 6 通道 | 1 | 启用、网格、眼球强度、角度上限、四条曲线；高级：眼球骨骼权重 |
+| 丢失与瞬移 | 1 | 3 | 丢失行为；高级：回正延迟/速度、瞬移阈值 |
+| 调试 | 1 | 1 | 场景 Gizmo 开关；高级：写入阈值 |
+| **眼睛通道（每只眼）** | **2** | — | `keyName` + `gain`（v1 是 16 项：网格范围/混合模式/偏移/输出范围/钳制/权重/ramp 预设+强度/曲线…） |
+
+合计 **约 30 个序列化字段 + 6 条通道 × 2 只眼 × 2 项**（v1 是 40+ 字段 + 通道 192 项）。日常只动四处：**一键装配**、`bodyWeight`/`headWeight`、四条曲线的角度上限、（鼠标模式的）灵敏度。
+
+### v2 砍掉的字段与理由
+
+| 砍掉 | 理由 |
+| --- | --- |
+| `clampWeight` | 限位由我们自己的 `headLimitYaw/Pitch` 按角度做；Unity 再夹一次会让面板读数与实际不一致。固定传 0，**只留一个夹取者** |
+| `pitchLimitUp` / `pitchLimitDown` | 合并成 `headLimitPitch`（对称）。上下不对称的收益远小于"两个数要一起理解"的成本 |
+| `eyesWeightToUnity` | 眼球一律走四条曲线。留一个"绕过曲线交给 Unity"的旋钮只会让人怀疑该用哪个 |
+| `eyeEllipseClamp` | 椭圆夹紧永远开：没有哪种模型希望斜看时 h/v 同时吃满 |
+| `driveEyeBones` / `eyeBoneUseCurve` | 合并进 `eyeBoneWeight`（0 = 不动骨骼，非 0 = 过曲线）。三个旋钮表达一件事 |
+| `mouseSampleMode = WorldPoint`、`projectToPlane`、`planeHeight` | 与 `Raycast` 的兜底距离重复；`Raycast` 没打中时就用固定距离的点，一个兜底数就够 |
+| `inputSource` | 包已硬依赖 Input System；旧 `Input` 只在宿主里兜底，不需要用户选 |
+| 通道里的 `HoShapeKeyTarget`（16 项 × 12） | 实际只用得到键名和增益。运行期用 `CreateRuntime(键名, 增益)` 现造瞬发目标，平滑交给 `eyeSmoothing` 一套管 |
 
 ## 面板结构
 
 ```
 Ho 注视约束
-[ 一键装配 ] [ 只看眼睛 | 头眼并用 | 鼠标模式 ] [ 清空 ]
-⚠ Animator 检查: [✓ humanoid] [✓ 图层 IK Pass] [✓ Avatar]
-▸ 目标                              跟随物体 / 鼠标·角度映射
-    模式 [跟随物体 ▾]  目标 [HeadTarget ▾]  偏移 [0,0,0]
-    总权重 weight 1.0   参考系 [角色根 ▾]
-    (鼠标模式) 取法 [角度映射 ▾] 灵敏度 [30°/20°] 死区 0.05  相机 [Main Camera ▾]
-▾ ① 脊椎跟随                        body 0.3
-    [✓] 启用   身体权重 bodyWeight 0.3   起始角 0°
-▾ ② 头颈跟随                        head 1.0
-    [✓] 启用   头部权重 headWeight 1.0   clampWeight 0.6
-    死区 8°  头部承担 0.7  偏航 ±70°  俯仰 +40/−30°
-    方向平滑 0.06 s  方向角速度 360°/s  果冻 [ ]
-▾ ③ 眼睛跟随                        eyes 曲线 · 内外族
-    [✓] 启用   眼球权重 eyeWeight 1.0   平滑 0.04 s   椭圆夹紧 [✓]
-    水平内 [30°] [曲线▾]  [eyeLookInLeft ▾ (ARKit)]  [eyeLookInRight ▾]   细节 ▾
-    水平外 [30°] [曲线▾]  [eyeLookOutLeft ▾]          [eyeLookOutRight ▾]  细节 ▾
-    垂直上 [20°] [曲线▾]  [eyeLookUpLeft ▾]           [eyeLookUpRight ▾]   细节 ▾
-    垂直下 [25°] [曲线▾]  [eyeLookDownLeft ▾]         [eyeLookDownRight ▾] 细节 ▾
-    眼球骨骼: [✓ 驱动] 左 humanoid LeftEye / 右 humanoid RightEye  过曲线 [✓]
-▸ 丢失与瞬移                        目标消失时回正
-    丢失行为 [Return ▾]  回正延迟 0.4 s  回正速度 90°/s  瞬移阈值 120°
-▸ 调试
-    三块分别读数: 总角度 / 脊椎承担 / 头颈承担 / 眼睛残余
-    四条曲线输出 / 最终键值 / [手动目标 ✓] 拖动虚拟目标调参   [重置]
+[ 一键装配 ] [ 清空通道 ]
+⚠ 播放时的检查（humanoid / IK Pass / 转发器）显示在这里
+▸ 看哪里（目标）                    跟随物体 / 鼠标·角度
+    目标来源 [跟随物体 ▾]
+    目标物体 [HeadTarget ▾]   偏移 [0,0,0]
+    (鼠标) 相机 [Main Camera ▾]  灵敏度 [30,20]  鼠标死区 0.05  离屏保持 [✓]
+▾ 角色（接口）                      强度 1
+    总强度 1.0
+    Animator：HIRO（humanoid ✓）         ← 只读
+    参考系：HIRO（自动）                  ← 只读
+    [ 只看眼睛 ] [ 头眼并用 ]
+▸ ① 脊椎跟随                        body 0.3
+    [✓] 启用   身体强度 0.3
+▾ ② 头颈跟随                        head 1
+    [✓] 启用   头部强度 1.0   起始死区 8°   头部承担 0.7
+    左右限位 70°   上下限位 40°
+▾ ③ 眼睛跟随                        开
+    [✓] 启用   目标网格 [▾]  [收集子级网格] [重新解析键]
+    眼球强度 1.0   四个角度上限 内/外/上/下 (30,30,20,25)
+    四条方向曲线：水平内 / 水平外 / 看上 / 看下
+    通道 → 键名（左右眼各一个）         [ 左右族 ] [ 内外族 ]
+      ▾ 水平内 In    [启用] [✕]
+          左眼 [eyeLookInLeft  ▾] 增益 1.0
+          右眼 [eyeLookInRight ▾] 增益 1.0
+      …（六条）
+▸ 丢失与瞬移                        回中立
+▸ 高级                              少动
+    跟随手感 / 丢失之后 / 眼球骨骼 / 鼠标细节 / 组件 / 写入
+▾ 调试                              有目标
+    场景 Gizmo [✓]
+    左右（yaw，正 = 角色右侧）  ▮▮▮▮│▮▮▮  总 32.4° 限 70°
+    上下（pitch，正 = 抬头）    ▮▮│▮▮▮▮  总 12.0° 限 40°
+    六个通道条形（写入比例 + 左右眼实际键值）
 ```
 
-- **一键装配**：用 `Animator.GetBoneTransform` 取 `Head` / `LeftEye` / `RightEye`（**不需要猜名字**），再在各网格上找该模型实际存在的凝视键、自动判断左右族还是内外族，最后把四条曲线与键名填好；找不到的项在面板里列出来让用户手填。
-- **预设**（保持你确认的形态）：`左右族（VRM/Meta/SRanipal）`、`内外族（ARKit/PICO）`、`只看眼睛`（headWeight = 0）、`鼠标模式`、`Unity 内置 IK 同参`（body 0 / head 1 / eyes 0 / clamp 0.5，和 `SetLookAtWeight` 默认值对齐，方便对照）。
-- **键名格**复用眨眼约束的 `HoKeyNameDropdown`（内置表 + 网格上实际存在的键 + 缺失标黄）。
-- **调试**：Gizmo 画参考系前/上、目标点、总角度扇形、头部承担与眼睛残余的分界（两个不同颜色的扇形），一眼能看出"是头没转够还是眼睛没吃饱"；读数给出每个方向的曲线输出与最终写入值。
-- **手动目标**：编辑器和播放模式都能用一个虚拟目标（场景里的一个点或滑杆）驱动，不用真鼠标也能调参。
+- **每个字段都带中文 Tooltip**：鼠标悬停即可看到"它是干什么的、大概填多少"。面板上的名字用大白话（身体强度 / 头部承担 / 起始死区），文档里保留 Unity 的原始字段名，两边能对上。
+- **只显示当前模式用得上的**：跟随物体时看不到鼠标那几项；角度映射时看不到射线层与距离。
+- **一键装配**：自动找 Animator、把参考系清空（= 自动用角色根）、收集网格、按模型上实际存在的凝视键判断左右族还是内外族、填相机；找不到的项在面板里列出来让用户手填。
+- **族别按钮**（`左右族` / `内外族`）放在通道表头，按下去就按网格上的键重填六条通道。
+- **键名格**复用眨眼约束的 `HoKeyNameDropdown`（内置表 + 网格上实际存在的键 + 缺失标黄 + 规范名提示）。
+
+## 可视化调试
+
+"纯数值不直观"是上一版最直接的抱怨，所以 v2 把调试做成**两处可视化**，共用同一份数据（`HoLookAtConstraint.GetDebug()` 返回 `HoLookAtDebug`，面板条形与 Gizmo 都读它）：
+
+**面板条形读数**（`调试` 区，播放或编辑模式求值时实时刷新）
+
+- 左右（yaw）/ 上下（pitch）各一条**以正前方为中心的刻度条**，左端右端就是限位边界：
+  黄标 = 总角度（目标在哪），青条 = 头部承担到哪，紫标 = 头 + 眼睛 = 实际目光落在哪。
+  三者分开画，一眼能看出"是头没转够、还是眼睛没吃饱、还是目标已经超出限位"。
+- 六条通道各一条**比例条**：条形 = 这一帧真正写出去的比例（和写形态键用的是同一套"角度 → 归一化 → 过曲线"算法），括号里是左右眼实际写出的形态键值。
+
+**Scene 视图 Gizmo**（选中组件即可见，可在面板上关掉；画在编辑器程序集里所以能带文字标签）
+
+| 画的东西 | 颜色 | 看什么 |
+| --- | --- | --- |
+| 参考系前方 / 上方 | 绿 / 蓝 | 所有角度都相对它；参考系填错（比如填了骨骼）在这里一眼可见 |
+| 头部限位框 | 白线框 | 左右 ±`headLimitYaw`、上下 ±`headLimitPitch` 投到 1 米处的椭圆框；目标出框就是"头转不过去、全靠眼睛" |
+| 总角度方向 + 目标点 | 黄（**出框变红**） | 目标在哪；变红即超出限位，同时画一条虚线连回限位方向 |
+| 头部承担方向 | 青 | 头部实际转到哪，带 "头 xx° / xx°" 标签 |
+| 实际目光方向 | 紫 | 头 + 眼睛残余，带 "眼残余 xx° / xx°" 标签 |
+
+- 无目标 / 丢失时目标点画成灰色圆球，方向线仍按当前解算结果画，方便确认回正行为。
+- 目标点**超出限位**时用红色：飞线、贴身近战这些"角色其实看不过来"的场景，不需要读数字就能看出来。
+
 
 ## 调试工作流
 
 | 现象 | 先看什么 | 常见原因 |
 | --- | --- | --- |
 | 头完全不动 | 面板顶部的 Animator 检查三项 | 不是 humanoid / 图层没勾 **IK Pass** / Avatar 为空 —— 这三条是"头一动不动"的头号原因 |
-| 头动了但眼睛不动 | 四条曲线的输出值、缺失键 | 键名不对（网格上没有）；或角度没超过曲线横轴上限太多（输出被曲线压小了） |
+| 头动了但眼睛不动 | 通道条形 + 缺失键 | 键名不对（网格上没有，键名格会标黄）；或角度没超过曲线横轴上限（输出被曲线压小了） |
 | 眼睛动得太猛 / 幅度不对 | 曲线横轴上限与纵轴满值 | 角度上限填小了（比如 100 键值实际只对应 15°，却按 30° 标定）；这正是 UniVRM 把两个量分开的原因 |
-| 眼睛方向反了 | 内外族符号 | 用了 `In/Out` 键却按左右族配（面板会提示）；或左右眼列填反 |
+| 眼睛方向反了 | 通道条形里哪条在涨 | 用了 `In/Out` 键却按左右族配（或反之）；看「水平内 / 水平外」哪条在亮就知道族别有没有选错 |
+| 左右和鼠标反了 | Gizmo 的黄色方向线 | 相机填错（不是观众视角那台）；或相机没填（退回角色相对坐标系） |
 | 身体跟着转得太多 | `bodyWeight` | 它沿脊柱分摊，0.3~0.5 比较自然；1 会整个人转过来 |
 | 头和 Animation Rigging 抢 | rig 里是否也有 head/neck 约束 | 两边都写 → 二选一（见共存表） |
-| 斜着看时"过转" | `eyeEllipseClamp` | 关掉了椭圆夹紧，h 和 v 同时接近满值 |
+| 目标明明在身边却总在看别处 | Gizmo 里参考系的前方箭头 | 参考系填成了骨骼（轴向随机）—— 清空它，让组件自动用角色根 |
 | 眼球骨骼转起来像"翻白眼" | 眼球骨骼的 pivot 是否在眼球中心 | 我们走世界叠加旋转，轴向不影响；但骨骼 pivot 偏了就会绕错点转 |
-| 头在抖 / 一顿一顿 | 目标是否被动画或物理推着走、`headSmoothing` | 目标抖动（加平滑或换角速度映射）；或 MC2 布料在和头部抢骨头 |
+| 头在抖 / 一顿一顿 | 目标是否被动画或物理推着走、`aimSmoothing` | 目标抖动（加平滑或换角速度上限）；或 MC2 布料在和头部抢骨头 |
 | 头和动画打架 | 动画是否也驱动 head（或 Animation Rigging） | 两边都写 → 按「和别的系统共存」二选一 |
 | 眨眼约束失效了 | 眨眼输出键 | 注视约束不该写眼睑键；检查预设有没有误填 |
 | 切换动作时头"弹"一下 | 是否缓存了基准姿势 | 违反"每帧读动画后姿势"的不变量 |
@@ -387,10 +447,19 @@ Warudo 侧的对应物是 **Blueprint / 节点图**（Ports & Triggers）与脚�
 1. **抽公共件**（`HoShapeKeyTarget` + `HoShapeKeyWriter`）：眨眼约束改用它，行为与数值不变（用同一套调试读数回归）。
 2. **三块骨架 + 面板 + 外部接口**：①/②/③ 三块的启用与权重、目标区、Animator 三项检查，以及 `Weight` / `SetTarget` / `SetTargetPoint` / `SetMode` / `SetEnabled` 这组公开接口（本版就留）。此时可以先只让眼睛块工作。
 3. **② 头颈 + ① 脊椎 · humanoid IK 路线**：`OnAnimatorIK` 里算方向、限位、分工并调用 `SetLookAtPosition/SetLookAtWeight`。验收：`bodyWeight` 从 0 调到 0.6 时上半身参与可见；目标移到身后时头部按限位停住而眼睛吃满；关掉组件姿势立刻回动画。
-4. **③ 眼睛 · 形态键**：四条方向曲线 → 内/外/上/下四向键输出；左右族与内外族两套预设。验收：左右移动时"内/外"互斥切换、垂直不受影响；斜向时椭圆夹紧生效；把某条曲线横轴上限 30°→15°，输出幅值随之翻倍。
+4. **③ 眼睛 · 形态键**：四条方向曲线 → 内/外/上/下四向键输出；左右族与内外族两套预设。验收：左右移动时"内/外"互斥切换、垂直不受影响；把某条曲线横轴上限 30°→15°，输出幅值随之翻倍。
 5. **③ 眼睛 · 眼球骨骼 + 一键装配**：`GetBoneTransform(LeftEye/RightEye)` + 世界空间叠加 + 可选过曲线。验收：眼球骨骼自身轴向任意旋转 90° 后看向方向不变；新模型点一次"一键装配"即可用。
-6. **鼠标模式三取法 + 输入系统兼容 + 外部接口**（`Weight`/`SetTarget`/`SetMode`）。验收：Input System 项目里不报错；旧 Input 分支在 `#if` 下能编译；外部脚本能在运行时切目标而不跳变。
-7. **调试视图 + 文档回填**：三块分别读数；把实测手感（死区/承担比例/曲线形状/`bodyWeight`）写回本文档。
+6. **鼠标模式 + 输入系统兼容 + 外部接口**（`Weight`/`SetTarget`/`SetMode`）。验收：Input System 项目里不报错；旧 Input 分支在 `#if` 下能编译；外部脚本能在运行时切目标而不跳变。
+7. **调试视图 + 文档回填**（v2 完成）：面板条形 + Scene Gizmo 两处可视化，全部字段带中文 Tooltip；把实测手感（死区/承担比例/曲线形状/`bodyWeight`）写回本文档。
+
+## 待确认
+
+1. **v2 简化后的主观感受**：面板是不是"看着就懂"了？还有哪些字段你看了不知道干嘛 / 从来没动过 —— 下一轮继续砍。
+2. **头部默认参数**：`bodyWeight` 0.3、`headWeight` 1、死区 8°、头部承担 0.7、左右限位 70°、上下限位 40° —— 这组是"看起来自然"的起点，要不要更保守（比如死区 10°、承担 0.6）？
+3. **四条曲线的角度上限默认值**：内/外/上/下 = 30°/30°/20°/25°。要不要在调试区加一个**标定**按钮（拖动虚拟目标把某个方向推到形态键满值，记录当时的实际角度并回填上限）？
+4. **鼠标角度映射的坐标**：用"屏幕比例 → 角度"（跟相机无关，适合观众视角），还是"相对角色朝向的偏移"（转身时鼠标也要跟着动）？倾向前者，`mouseAngleSpace` 的「角色相对」已经作为开关提供。
+
+已定：三块划分（① 脊椎 / ② 头颈 / ③ 眼睛）够用；外部接口本版就留；烘焙不做；humanoid Avatar 由使用侧保证（用成熟模型测试，面板只做检查与报错，不做非 humanoid 回退）。
 
 ## 后续规划（本版不做）
 
@@ -399,10 +468,3 @@ Warudo 侧的对应物是 **Blueprint / 节点图**（Ports & Triggers）与脚�
 - **TextureUV 应用层**：UniVRM 的第三种眼睛驱动方式（贴图 UV 偏移），遇到既不支持形态键也不支持眼球骨骼的模型再补。
 - **手/上半身联动**：真正的"整个人转向"（`bodyWeight = 1` 只让脊柱跟着转，手臂不会跟随）。
 
-## 待确认
-
-1. **头部默认参数**：`bodyWeight` 0.3、`headWeight` 1、`clampWeight` 0.6、死区 8°、头部承担 0.7、偏航 ±70°、俯仰 +40/−30° —— 这组是"看起来自然"的起点，要不要更保守（比如死区 10°、承担 0.6）？
-2. **四条曲线的角度上限默认值**：内/外/上/下 = 30°/30°/20°/25°。要不要在调试区加一个**标定**按钮（拖动虚拟目标把某个方向推到形态键满值，记录当时的实际角度并回填上限）？
-3. **鼠标角度映射的坐标**：用"屏幕比例 → 角度"（跟相机无关，适合观众视角），还是"相对角色朝向的偏移"（转身时鼠标也要跟着动）？我倾向前者 + 一个"忽略屏幕左右相反"的开关。
-
-已定：三块划分（① 脊椎 / ② 头颈 / ③ 眼睛）够用；外部接口本版就留；烘焙不做；humanoid Avatar 由使用侧保证（用成熟模型测试，面板只做检查与报错，不做非 humanoid 回退）。
