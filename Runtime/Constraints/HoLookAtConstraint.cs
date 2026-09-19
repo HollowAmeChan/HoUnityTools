@@ -176,6 +176,14 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.0f)]
         private float returnSpeed = 90.0f;
 
+        /// <summary>回正柔和（秒）：0 = 匀速直线回正（旧行为，到头会"顿"一下）；越大越软（指数收尾）。</summary>
+        [SerializeField, Min(0.0f)]
+        private float returnSmoothing = 0.25f;
+
+        /// <summary>"立刻松开"的松开时长（秒）：0 = 一帧交还动画；大于 0 = 在这么多秒内把权重淡到 0。</summary>
+        [SerializeField, Min(0.0f)]
+        private float releaseDuration = 0.2f;
+
         [SerializeField, Min(0.0f)]
         private float teleportAngleThreshold = 120.0f;
 
@@ -689,6 +697,12 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             float totalWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
+            if (state.applyLookAt)
+            {
+                // 松开淡出：头（以及身体）跟着权重一起回到动画
+                totalWeight *= Mathf.Clamp01(state.releaseBlend);
+            }
+
             float headFactor = 0.0f;
             if (headEnabled && externalHeadWeight > 0.0f && state.applyLookAt)
             {
@@ -824,6 +838,7 @@ namespace Hollow.HoUnityTools.Constraints
         public void ResetState()
         {
             state = default;
+            state.releaseBlend = 1.0f;
             writer.RestoreWritten();
             writer.Reset();
             hasLastKnownPoint = false;
@@ -892,10 +907,22 @@ namespace Hollow.HoUnityTools.Constraints
                 state.lostTime += deltaTime;
                 if (lostBehavior == HoLookAtLostBehavior.Disable)
                 {
-                    state.eyeYaw = 0.0f;
-                    state.eyePitch = 0.0f;
-                    state.applyLookAt = false;
-                    return default;
+                    // 「立刻松开」也可以软：松开时长 > 0 时按它把权重淡到 0（头眼一起交还动画），
+                    // 淡出期间仍然瞄准最后的方向，所以看不出"跳"。
+                    if (releaseDuration <= 0.0f)
+                    {
+                        state.releaseBlend = 0.0f;
+                        state.eyeYaw = 0.0f;
+                        state.eyePitch = 0.0f;
+                        state.applyLookAt = false;
+                        return default;
+                    }
+
+                    state.releaseBlend = Mathf.Max(0.0f, state.releaseBlend - deltaTime / releaseDuration);
+                    state.applyLookAt = state.releaseBlend > 0.0f;
+                    target.yaw = state.smoothedYaw;
+                    target.pitch = state.smoothedPitch;
+                    return target;
                 }
 
                 state.applyLookAt = true;
@@ -906,10 +933,9 @@ namespace Hollow.HoUnityTools.Constraints
                     return target;
                 }
 
-                // 回中立
-                float t = returnSpeed > 0.0f ? returnSpeed * deltaTime : 999.0f;
-                state.smoothedYaw = Mathf.MoveTowards(state.smoothedYaw, 0.0f, t);
-                state.smoothedPitch = Mathf.MoveTowards(state.smoothedPitch, 0.0f, t);
+                // 回中立：回正柔和 > 0 时改用指数收尾（先快后慢、落到 0 不"顿"），回正速度仍是速度上限
+                state.smoothedYaw = HoLookAtSolver.SmoothAngle(state.smoothedYaw, 0.0f, deltaTime, returnSmoothing, returnSpeed);
+                state.smoothedPitch = HoLookAtSolver.SmoothAngle(state.smoothedPitch, 0.0f, deltaTime, returnSmoothing, returnSpeed);
                 target.yaw = state.smoothedYaw;
                 target.pitch = state.smoothedPitch;
                 return target;
@@ -918,6 +944,7 @@ namespace Hollow.HoUnityTools.Constraints
             state.hasTarget = true;
             state.applyLookAt = true;
             state.lostTime = 0.0f;
+            state.releaseBlend = 1.0f;
 
             if (isDirection)
             {
@@ -1236,6 +1263,7 @@ namespace Hollow.HoUnityTools.Constraints
         {
             float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             float eyes = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) * effectiveWeight : 0.0f;
+            eyes *= Mathf.Clamp01(state.releaseBlend);
 
             // 眼睛补的是"目标 − 头部估计朝向"。
             // 头部估计 = 我们让 Unity 看的方向 × 它实际施加的比例，所以：

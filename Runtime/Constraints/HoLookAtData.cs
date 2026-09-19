@@ -253,6 +253,12 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>本帧是否要把头部交给 Unity 的 IK（丢失且设为 Disable 时为 false）。</summary>
         public bool applyLookAt;
 
+        /// <summary>
+        /// "立刻松开"的柔化混合（1 = 全额参与，0 = 完全交还动画）。
+        /// 松开时长 &gt; 0 时，丢失后按它把权重淡到 0，而不是一帧到位。
+        /// </summary>
+        public float releaseBlend;
+
         public bool hasTarget;
         public float lostTime;
         public double lastIkTime;

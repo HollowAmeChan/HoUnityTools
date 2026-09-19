@@ -47,6 +47,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty lostBehavior;
         private SerializedProperty returnDelay;
         private SerializedProperty returnSpeed;
+        private SerializedProperty returnSmoothing;
+        private SerializedProperty releaseDuration;
         private SerializedProperty teleportAngleThreshold;
         private SerializedProperty mouseSampleMode;
         private SerializedProperty mouseAngleSpace;
@@ -138,6 +140,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             lostBehavior = Find("lostBehavior");
             returnDelay = Find("returnDelay");
             returnSpeed = Find("returnSpeed");
+            returnSmoothing = Find("returnSmoothing");
+            releaseDuration = Find("releaseDuration");
             teleportAngleThreshold = Find("teleportAngleThreshold");
             mouseSampleMode = Find("mouseSampleMode");
             mouseAngleSpace = Find("mouseAngleSpace");
@@ -650,7 +654,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了怎么办（物体被删 / 鼠标指针不可用：失焦、移出画面、没数据）：\n停在最后方向：保持最后的视线\n回中立：等「回正延迟」后按「回正速度」转回正前方\n立刻松开：头眼都交还动画"));
+            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了怎么办（物体被删 / 鼠标指针不可用：失焦、移出画面、没数据）：\n停在最后方向：保持最后的视线\n回中立：等「回正延迟」后按「回正速度」转回正前方（柔和度看「回正柔和」）\n立刻松开：头眼交还动画（柔和度看「松开时长」，0 = 一帧到位）\n三个软硬参数都在「高级 → 丢失之后」。"));
         }
 
         // ── 高级 ────────────────────────────────────────────────────────────
@@ -682,8 +686,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PropertyField(returnDelay, L("回正延迟", "丢失后先保持这么久（秒）再回正。"));
-                EditorGUILayout.PropertyField(returnSpeed, L("回正速度", "回正时的角速度（度/秒）。"));
+                EditorGUILayout.PropertyField(returnSpeed, L("回正速度", "回正时的角速度上限（度/秒）。"));
                 EditorGUILayout.EndHorizontal();
+                using (NarrowLabels(104.0f))
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.PropertyField(returnSmoothing, L("回正柔和（秒）", "0 = 匀速直线回正（到头会\u201c顿\u201d一下）；越大越软（指数收尾、先快后慢）。"));
+                    EditorGUILayout.PropertyField(releaseDuration, L("松开时长（秒）", "\u201c立刻松开\u201d用：0 = 一帧交还动画；大于 0 = 在这么多秒内把权重淡到 0，头眼一起软下去。"));
+                    EditorGUILayout.EndHorizontal();
+                }
             }
 
             EditorGUILayout.Space(2.0f);
