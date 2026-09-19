@@ -109,7 +109,11 @@ namespace Hollow.HoUnityTools.Constraints
             return false;
         }
 
-        /// <summary>采样鼠标：角度映射模式只需要屏幕位置；射线模式再算世界点（没打中就打射线上的固定距离）。</summary>
+        /// <summary>
+        /// 采样鼠标：角度摇杆模式只需要屏幕位置；准星/射线模式再算世界点。
+        /// 准星模式取的是"鼠标射线上离角色支点最近的那个点"（也就是角色所在深度的那一点），
+        /// 于是从支点看向它就正好落在鼠标指的位置上 —— 这是"精确指向鼠标"的关键。
+        /// </summary>
         public static HoPointerSample Sample(in HoMouseSettings settings)
         {
             HoPointerSample sample = default;
@@ -121,15 +125,26 @@ namespace Hollow.HoUnityTools.Constraints
             sample.valid = true;
             sample.screenPosition = screenPosition;
 
-            if (settings.sampleMode == HoLookAtMouseSampleMode.Raycast && settings.camera != null)
+            if (settings.sampleMode == HoLookAtMouseSampleMode.AngleMap || settings.camera == null)
             {
-                Ray ray = settings.camera.ScreenPointToRay(screenPosition);
-                sample.hasWorldPoint = true;
-                sample.worldPoint = Physics.Raycast(ray, out RaycastHit hit, 1000.0f, settings.raycastMask)
-                    ? hit.point
-                    : ray.GetPoint(Mathf.Max(0.1f, settings.distance));
+                return sample;
             }
 
+            Ray ray = settings.camera.ScreenPointToRay(screenPosition);
+            if (settings.sampleMode == HoLookAtMouseSampleMode.CursorPoint)
+            {
+                // 支点在射线上的投影深度：这个点就是"鼠标指着的、和角色一样远的那个位置"
+                float depth = Vector3.Dot(settings.pivot - ray.origin, ray.direction);
+                depth = Mathf.Max(Mathf.Max(0.1f, settings.distance * 0.1f), depth);
+                sample.hasWorldPoint = true;
+                sample.worldPoint = ray.GetPoint(depth);
+                return sample;
+            }
+
+            sample.hasWorldPoint = true;
+            sample.worldPoint = Physics.Raycast(ray, out RaycastHit hit, 1000.0f, settings.raycastMask)
+                ? hit.point
+                : ray.GetPoint(Mathf.Max(0.1f, settings.distance));
             return sample;
         }
 

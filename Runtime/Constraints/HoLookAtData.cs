@@ -18,10 +18,19 @@ namespace Hollow.HoUnityTools.Constraints
 
     public enum HoLookAtMouseSampleMode
     {
-        /// <summary>鼠标屏幕位置 → 角度偏移。跟相机距离无关，最可控。</summary>
+        /// <summary>
+        /// 鼠标屏幕位置 → 角度偏移（把鼠标当摇杆）。跟相机无关，但**不是**"看向鼠标指的那个点"：
+        /// 灵敏度是人为定的线性映射，跟相机 FOV 无关，角色不在画面中心时还有视差。
+        /// </summary>
         AngleMap,
 
-        /// <summary>相机 → 鼠标射线打到指定层；没打中时取射线上固定距离的点。</summary>
+        /// <summary>
+        /// 准星：取鼠标射线上"角色所在深度"的那个点当目标点 —— 眼睛正好落在鼠标指的位置。
+        /// 想要"看着鼠标"的精确感就用这个（默认）。
+        /// </summary>
+        CursorPoint,
+
+        /// <summary>相机 → 鼠标射线打到指定层（没打中时取射线上固定距离的点）。</summary>
         Raycast
     }
 
@@ -201,6 +210,13 @@ namespace Hollow.HoUnityTools.Constraints
         public float smoothedEyeYaw;
         public float smoothedEyePitch;
 
+        /// <summary>头部**实际**转了多少（从骨骼姿势量出来的，不是我们命令它转的）。</summary>
+        public float headActualYaw;
+        public float headActualPitch;
+
+        /// <summary>本帧 OnAnimatorIK 跑过、并且量到了头部实际姿势。</summary>
+        public bool headMeasured;
+
         /// <summary>本帧是否要把头部交给 Unity 的 IK（丢失且设为 Disable 时为 false）。</summary>
         public bool applyLookAt;
 
@@ -232,6 +248,10 @@ namespace Hollow.HoUnityTools.Constraints
         public float headYaw;
         public float headPitch;
 
+        /// <summary>头部实际转到的角（Unity IK 的结果，跟上面命令值可能有差）。</summary>
+        public float actualHeadYaw;
+        public float actualHeadPitch;
+
         /// <summary>眼睛要补的残余角。</summary>
         public float eyeYaw;
         public float eyePitch;
@@ -257,6 +277,9 @@ namespace Hollow.HoUnityTools.Constraints
         public HoLookAtMouseSpace angleSpace;
         public Vector2 sensitivity;
         public float deadZone;
+
+        /// <summary>准星模式用：角色的注视支点（取"鼠标射线上这个深度"的那个点）。</summary>
+        public Vector3 pivot;
 
         /// <summary>射线没打中任何东西时，取射线上的这个距离（米）。</summary>
         public float distance;

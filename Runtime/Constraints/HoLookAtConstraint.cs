@@ -133,7 +133,7 @@ namespace Hollow.HoUnityTools.Constraints
 
         [Header("高级")]
         [SerializeField]
-        private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.AngleMap;
+        private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.CursorPoint;
 
         [SerializeField]
         private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
@@ -199,6 +199,9 @@ namespace Hollow.HoUnityTools.Constraints
         private Quaternion leftEyeRest = Quaternion.identity;
         private Quaternion rightEyeRest = Quaternion.identity;
         private bool eyeBonesCaptured;
+        private Quaternion headPoseBeforeIk = Quaternion.identity;
+        private bool headHasPoseBeforeIk;
+        private bool headMeasuredThisFrame;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -319,6 +322,19 @@ namespace Hollow.HoUnityTools.Constraints
 
         public float EyeBoneLimitPitch => eyeBoneLimitPitch;
 
+        /// <summary>头部实际转到的角（从骨骼姿势量出来的）。</summary>
+        public float ActualHeadYaw => state.headActualYaw;
+
+        public float ActualHeadPitch => state.headActualPitch;
+
+        /// <summary>
+        /// 目光落点误差（度）：目标角 −（头部实际 + 眼睛实际）。
+        /// 强度拉满、没被限位夹住、平滑跟得上时应该接近 0 —— 这个数就是"指哪看哪"的自检。
+        /// </summary>
+        public float GazeErrorYaw => Mathf.DeltaAngle(state.headActualYaw + state.smoothedEyeYaw, TotalAngles.yaw);
+
+        public float GazeErrorPitch => Mathf.DeltaAngle(state.headActualPitch + state.smoothedEyePitch, TotalAngles.pitch);
+
         /// <summary>形态键模式用：有没有可写的网格/绑定。</summary>
         public bool ShapeKeyEyesActive => eyeDriver == HoLookAtEyeDriver.ShapeKeys && MeshCount > 0;
 
@@ -405,6 +421,8 @@ namespace Hollow.HoUnityTools.Constraints
                 targetPitch = state.smoothedPitch,
                 headYaw = HeadAngles.yaw,
                 headPitch = HeadAngles.pitch,
+                actualHeadYaw = state.headActualYaw,
+                actualHeadPitch = state.headActualPitch,
                 eyeYaw = state.smoothedEyeYaw,
                 eyePitch = state.smoothedEyePitch,
                 hasTarget = state.hasTarget,
@@ -556,6 +574,10 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 return;
             }
+
+            // 记下"交给 Unity 之前"的头部姿势：LateUpdate 里拿它和 IK 之后的姿势一比，
+            // 就知道头部**实际**转了多少（不是我们命令它转多少）。
+            CacheHeadPoseBeforeIk();
 
             animator.SetLookAtPosition(HoLookAtSolver.PointFromAngles(
                 GetPivot(),
@@ -823,6 +845,7 @@ namespace Hollow.HoUnityTools.Constraints
                     angleSpace = mouseAngleSpace,
                     sensitivity = mouseSensitivity,
                     deadZone = mouseDeadZone,
+                    pivot = pivot,
                     distance = mouseDistance,
                     raycastMask = mouseRaycastMask,
                     holdOffscreen = mouseHoldOffscreen
@@ -1002,20 +1025,35 @@ namespace Hollow.HoUnityTools.Constraints
             float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             float eyes = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) * effectiveWeight : 0.0f;
 
-            float yaw = state.eyeYaw * eyes;
-            float pitch = state.eyePitch * eyes;
+            // 眼睛要补的残余 = 目标角 − **头部实际转到的角**（不是我们命令头部转的角）。
+            // 这样"头 + 眼"始终等于目标方向，头没转到位、头被限位夹住、只看眼睛，三种情况都精确。
+            float headYaw = 0.0f;
+            float headPitch = 0.0f;
+            if (headMeasuredThisFrame)
+            {
+                MeasureActualHead(out headYaw, out headPitch);
+                headMeasuredThisFrame = false;   // 一次测量只消费一次（下一帧的 IK 会重新记姿势）
+            }
+
+            state.headActualYaw = headYaw;
+            state.headActualPitch = headPitch;
+            state.headMeasured = headMeasuredThisFrame;
+
+            float yaw = (TotalAngles.yaw - headYaw) * eyes;
+            float pitch = (TotalAngles.pitch - headPitch) * eyes;
+            state.eyeYaw = yaw;
+            state.eyePitch = pitch;
 
             if (eyeDriver == HoLookAtEyeDriver.EyeBones)
             {
-                // 斜向看时按椭圆夹取，避免左右和上下同时吃满
-                HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, eyeBoneLimitYaw, eyeBoneLimitPitch);
+                HoLookAtSolver.ClampAxes(ref yaw, ref pitch, eyeBoneLimitYaw, eyeBoneLimitPitch);
                 SmoothEyes(ref yaw, ref pitch, deltaTime);
                 ApplyEyeBones(yaw, pitch);
                 return;
             }
 
             GetEyeSettings(out HoEyeSettings settings, out AnimationCurve inner, out AnimationCurve outer, out AnimationCurve up, out AnimationCurve down);
-            HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
+            HoLookAtSolver.ClampAxes(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
             SmoothEyes(ref yaw, ref pitch, deltaTime);
 
             if (writer.IsBuilt && writer.MeshCount > 0)
@@ -1040,6 +1078,65 @@ namespace Hollow.HoUnityTools.Constraints
             state.smoothedEyePitch = HoLookAtSolver.SmoothAngle(state.smoothedEyePitch, pitch, deltaTime, eyeSmoothing, 0.0f);
             yaw = state.smoothedEyeYaw;
             pitch = state.smoothedEyePitch;
+        }
+
+        /// <summary>OnAnimatorIK 里、调用 SetLookAtWeight **之前**记下头部姿态（这时候还是动画姿势）。</summary>
+        private void CacheHeadPoseBeforeIk()
+        {
+            if (headMeasuredThisFrame)
+            {
+                // 本帧已经记过（多个图层勾了 IK Pass 时会回调多次）：只在第一次记，
+                // 否则第二次记到的是"已经被第一层 IK 转过"的姿势，量出来的贡献就少了一截。
+                return;
+            }
+
+            if (animator == null || !animator.isHuman)
+            {
+                return;
+            }
+
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head == null)
+            {
+                return;
+            }
+
+            headPoseBeforeIk = head.rotation;
+            headHasPoseBeforeIk = true;
+            headMeasuredThisFrame = true;
+        }
+
+        /// <summary>
+        /// 量出头部**实际**转了多少（度）。
+        ///
+        /// Unity 的 LookAt IK 是近似解：`headWeight`、肌肉范围、脖子分摊都会让它到不了我们要求的那个方向。
+        /// 如果眼睛补的是"命令值 − 头部分工"，头没转到位时眼睛就跟着偏；
+        /// 「只看眼睛」时更明显 —— 头根本没动，眼睛却只补了三成。
+        /// 所以这里用"IK 后的姿势 ÷ IK 前的姿势"这个**旋转增量**去量真实贡献：
+        /// 它跟骨骼自身轴向无关（不用猜 head 的 forward 是哪根轴），也不会被动画姿势干扰。
+        /// </summary>
+        private void MeasureActualHead(out float yaw, out float pitch)
+        {
+            yaw = 0.0f;
+            pitch = 0.0f;
+
+            if (!headHasPoseBeforeIk || animator == null || !animator.isHuman)
+            {
+                return;
+            }
+
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head == null)
+            {
+                return;
+            }
+
+            Vector3 forward = GetReferenceForward();
+            Vector3 up = GetReferenceUp();
+            Quaternion delta = head.rotation * Quaternion.Inverse(headPoseBeforeIk);
+            HoLookAtAngles angles = HoLookAtSolver.Decompose(forward, up, delta * forward);
+            yaw = angles.yaw;
+            pitch = angles.pitch;
         }
 
         private void ApplyEyeChannel(

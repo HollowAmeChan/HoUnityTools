@@ -55,13 +55,10 @@ namespace Hollow.HoUnityTools.Constraints
             float headYaw = yaw * scale;
             float headPitch = pitch * scale;
 
-            // 限位（俯仰对称，对角线方向按椭圆比例整体缩放，避免对角超限）
+            // 限位：按轴独立夹取。
+            // 不用"椭圆整体缩放" —— 那会把斜向目标按比例拉回中心，眼睛就精确指不到目标了（实测能偏 5~7°）。
             headYaw = Mathf.Clamp(headYaw, -head.yawLimit, head.yawLimit);
             headPitch = Mathf.Clamp(headPitch, -head.pitchLimit, head.pitchLimit);
-            if (head.yawLimit > 0.0f && head.pitchLimit > 0.0f)
-            {
-                ClampToEllipse(ref headYaw, ref headPitch, head.yawLimit, head.pitchLimit);
-            }
 
             state.eyeYaw = yaw - headYaw;
             state.eyePitch = pitch - headPitch;
@@ -72,25 +69,15 @@ namespace Hollow.HoUnityTools.Constraints
             return headAngles;
         }
 
-        /// <summary>椭圆夹取：把 (x, y) 缩到 (x/maxX)² + (y/maxY)² ≤ 1 之内。</summary>
-        public static void ClampToEllipse(ref float x, ref float y, float maxX, float maxY)
+        /// <summary>
+        /// 按轴独立夹取（yaw 一个上限、pitch 一个上限）。
+        /// 注意**不要**改用"椭圆整体缩放"：那会让斜向目标被按比例拉回中心，
+        /// 眼睛就精确指不到目标了（斜 30°/24° 配 35/25 的限位会偏 6° 以上）。
+        /// </summary>
+        public static void ClampAxes(ref float yaw, ref float pitch, float yawLimit, float pitchLimit)
         {
-            if (maxX <= 0.0f || maxY <= 0.0f)
-            {
-                x = 0.0f;
-                y = 0.0f;
-                return;
-            }
-
-            float nx = x / maxX;
-            float ny = y / maxY;
-            float length = Mathf.Sqrt(nx * nx + ny * ny);
-            if (length > 1.0f)
-            {
-                float scale = 1.0f / length;
-                x *= scale;
-                y *= scale;
-            }
+            yaw = Mathf.Clamp(yaw, -yawLimit, yawLimit);
+            pitch = Mathf.Clamp(pitch, -pitchLimit, pitchLimit);
         }
 
         /// <summary>由参考系的前/上 + yaw/pitch 生成一个方向。</summary>

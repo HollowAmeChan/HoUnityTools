@@ -275,8 +275,24 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.LabelField("使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
                 }
 
-                EditorGUILayout.PropertyField(mouseSensitivity, L("灵敏度（度）", "鼠标从画面中心推到边缘时，横向/纵向各转多少度。\n30/20 = 推到画面边缘大约左右 30°、上下 20°。"));
-                EditorGUILayout.Slider(mouseDeadZone, 0.0f, 0.45f, L("鼠标死区", "画面正中间这一圈内不转，避免鼠标抖动带着眼睛一直动。0.05 = 中心 5%。"));
+                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：眼睛正好落在鼠标指的那个位置 —— 取鼠标射线上「和角色一样远」的那个点当目标，指哪看哪。\n角度摇杆：鼠标位置线性换算成角度，跟相机 FOV 无关、把鼠标当摇杆用（灵敏度要自己配，角色不在画面中心时会有视差）。\n射线命中：真的打到场景物体上，适合「盯着墙上的东西」。"));
+
+                bool angleMap = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap;
+                bool raycast = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.Raycast;
+
+                using (new EditorGUI.DisabledScope(!angleMap))
+                {
+                    EditorGUILayout.PropertyField(mouseSensitivity, L("灵敏度（度）", "摇杆模式：鼠标从画面中心推到边缘时，横向/纵向各转多少度。\n30/20 = 推到画面边缘大约左右 30°、上下 20°。"));
+                    EditorGUILayout.Slider(mouseDeadZone, 0.0f, 0.45f, L("鼠标死区", "摇杆模式：画面正中间这一圈内不转，避免鼠标抖动带着眼睛一直动。0.05 = 中心 5%。"));
+                    EditorGUILayout.PropertyField(mouseAngleSpace, L("角度坐标系", "摇杆模式：屏幕相对 = 鼠标往右看向画面右侧（第三人称面对角色的直觉）；角色相对 = 鼠标往右看向角色自己的右侧。"));
+                }
+
+                using (new EditorGUI.DisabledScope(!raycast))
+                {
+                    EditorGUILayout.PropertyField(mouseRaycastMask, L("射线层", "射线命中模式打哪些层。"));
+                    EditorGUILayout.PropertyField(mouseDistance, L("兜底距离（米）", "射线什么都没打中时，取射线上这个距离的点。"));
+                }
+
                 EditorGUILayout.PropertyField(mouseHoldOffscreen, L("离屏保持", "鼠标移出窗口 / 失焦时，保持最后一次的方向，而不是回中立。"));
             }
         }
@@ -634,20 +650,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.Space(2.0f);
-            EditorGUILayout.LabelField("鼠标细节", EditorStyles.miniBoldLabel);
-            EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "角度映射：鼠标位置直接换算成角度（推荐，跟相机距离无关）。\n场景点：从相机沿鼠标打一条射线，用打到的位置当目标点。"));
-            using (new EditorGUI.DisabledScope((HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex != HoLookAtMouseSampleMode.AngleMap))
-            {
-                EditorGUILayout.PropertyField(mouseAngleSpace, L("角度坐标系", "屏幕相对：鼠标往右 = 角色看向画面右侧（第三人称面对角色的直觉）。\n角色相对：鼠标往右 = 角色看向它自己的右侧（当摇杆用）。"));
-            }
-
-            using (new EditorGUI.DisabledScope((HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex != HoLookAtMouseSampleMode.Raycast))
-            {
-                EditorGUILayout.PropertyField(mouseRaycastMask, L("射线层", "场景点模式打哪些层。"));
-                EditorGUILayout.PropertyField(mouseDistance, L("兜底距离（米）", "射线什么都没打中时，取射线上这个距离的点。"));
-            }
-
-            EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("组件", EditorStyles.miniBoldLabel);
             EditorGUILayout.PropertyField(animator, L("Animator", "留空 = 自己/父级/子级里自动找。只有自动找错时才需要填。"));
             EditorGUILayout.PropertyField(reference, L("参考系", "算 yaw/pitch 和限位用的朝向。\n留空 = 用 Animator 所在物体（角色根，推荐）。\n自己指定时一定要用角色的根物体，别填骨骼，否则角度全部失准。"));
@@ -671,14 +673,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(drawGizmos, L("场景 Gizmo", "在 Scene 视图里画出参考朝向、限位框、目标方向、头和眼睛各自的方向（选中本物体即可看到）。"));
 
             EditorGUILayout.LabelField("左右（yaw，正 = 角色右侧）", EditorStyles.miniBoldLabel);
-            DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.headYaw, debug.eyeYaw);
+            DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.actualHeadYaw, debug.eyeYaw);
             EditorGUILayout.LabelField("上下（pitch，正 = 抬头）", EditorStyles.miniBoldLabel);
-            DrawAngleBar(constraint.HeadLimitPitch, debug.targetPitch, debug.headPitch, debug.eyePitch);
+            DrawAngleBar(constraint.HeadLimitPitch, debug.targetPitch, debug.actualHeadPitch, debug.eyePitch);
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("状态：总角度 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
-                + "　头 " + debug.headYaw.ToString("0.0") + "° / " + debug.headPitch.ToString("0.0") + "°"
-                + "　眼 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°",
+                + "　头命令 " + debug.headYaw.ToString("0.0") + "° / " + debug.headPitch.ToString("0.0") + "°"
+                + "　头实际 " + debug.actualHeadYaw.ToString("0.0") + "° / " + debug.actualHeadPitch.ToString("0.0") + "°",
+                EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("眼睛残余 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°"
+                + "　目光误差 " + constraint.GazeErrorYaw.ToString("0.0") + "° / " + constraint.GazeErrorPitch.ToString("0.0") + "°"
+                + (Mathf.Abs(constraint.GazeErrorYaw) + Mathf.Abs(constraint.GazeErrorPitch) < 1.0f ? "（精确）" : "（有偏差，见下）"),
                 EditorStyles.miniLabel);
 
             bool bones = constraint.EyeDriver == HoLookAtEyeDriver.EyeBones;
