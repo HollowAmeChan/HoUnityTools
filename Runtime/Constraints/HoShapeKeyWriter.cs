@@ -49,7 +49,6 @@ namespace Hollow.HoUnityTools.Constraints
         private CompiledTarget[] compiled;
         private int[] bindingIds;
         private int lastRendererCount = -1;
-        private bool building;
 
         /// <summary>变化小于该值就不写，减少 mesh dirty。</summary>
         public float WriteThreshold { get; set; } = 0.01f;
@@ -162,7 +161,6 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             lastRendererCount = renderers != null ? renderers.Count : 0;
-            building = true;
         }
 
         /// <summary>注册一个输出目标，返回 targetId（按注册顺序递增）。</summary>
@@ -250,7 +248,6 @@ namespace Hollow.HoUnityTools.Constraints
             bindings = bindingList.ToArray();
             bindingIds = flatBindingIds.ToArray();
             compiled = compiledTargets.ToArray();
-            building = false;
         }
 
         /// <summary>清掉"我们写过"的记账与包络状态（重建、启用、重置时调用）。</summary>

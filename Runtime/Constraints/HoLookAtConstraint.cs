@@ -198,6 +198,7 @@ namespace Hollow.HoUnityTools.Constraints
         private bool hasLastKnownPoint;
         private float mouseAngleYaw;
         private float mouseAnglePitch;
+        private bool hasMouseAngles;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -254,6 +255,7 @@ namespace Hollow.HoUnityTools.Constraints
             target = value;
             externalPointValid = false;
             hasLastKnownPoint = false;
+            hasMouseAngles = false;
         }
 
         /// <summary>用世界坐标当目标（覆盖面板设置，直到 SetTarget 或 ClearExternalTarget）。</summary>
@@ -483,6 +485,12 @@ namespace Hollow.HoUnityTools.Constraints
                 GetTargetDistance()));
 
             float spine = spineEnabled ? bodyWeight * externalSpineWeight : 0.0f;
+            if (spine > 0.0f && spineMinAngle > 0.0f && TotalAngles.Magnitude < spineMinAngle)
+            {
+                // 起始角：总角度还小的时候不让身体参与，避免小幅度注视也带着上半身一起动
+                spine = 0.0f;
+            }
+
             float totalWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             if (headEnabled && externalHeadWeight > 0.0f && state.applyLookAt)
             {
@@ -586,6 +594,7 @@ namespace Hollow.HoUnityTools.Constraints
             state = default;
             writer.Reset();
             hasLastKnownPoint = false;
+            hasMouseAngles = false;
         }
 
         // ── 第一段：目标解算 + 头部 ─────────────────────────────────────────
@@ -718,7 +727,27 @@ namespace Hollow.HoUnityTools.Constraints
                 HoPointerSample sample = HoMousePointer.Sample(settings);
                 if (!sample.valid)
                 {
-                    return mouseHoldOffscreen && state.hasTarget;
+                    // 指针不可用（窗口失焦 / 没有输入设备）：离屏保持时沿用上一次的方向，而不是漂回中立
+                    if (!mouseHoldOffscreen)
+                    {
+                        return false;
+                    }
+
+                    if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap && hasMouseAngles)
+                    {
+                        direction = HoLookAtSolver.DirectionFromAngles(forward, up, mouseAngleYaw, mouseAnglePitch);
+                        isDirection = true;
+                        return true;
+                    }
+
+                    if (hasLastKnownPoint)
+                    {
+                        direction = lastKnownTargetPoint - pivot;
+                        isDirection = true;
+                        return direction.sqrMagnitude > 1e-6f;
+                    }
+
+                    return state.hasTarget;
                 }
 
                 if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap)
@@ -727,6 +756,7 @@ namespace Hollow.HoUnityTools.Constraints
                     Vector2 offset = HoMousePointer.ScreenToAngleOffset(camera, sample.screenPosition, mouseDeadZone);
                     mouseAngleYaw = offset.x * mouseSensitivity.x;
                     mouseAnglePitch = offset.y * mouseSensitivity.y;
+                    hasMouseAngles = true;
 
                     if (mouseAngleSpace == HoLookAtMouseSpace.ScreenRelative && camera != null)
                     {
