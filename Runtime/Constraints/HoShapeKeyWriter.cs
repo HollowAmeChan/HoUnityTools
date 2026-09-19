@@ -1,0 +1,454 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Hollow.HoUnityTools.Constraints
+{
+    /// <summary>
+    /// 形态键写入器：绑定表 + 外部基准快照 + 目标求值/合并 + 阈值写。
+    /// 眨眼约束与注视约束共用 —— 宿主只负责"算出驱动值"，这里负责"怎么写进网格"。
+    ///
+    /// 两条踩过的坑固化在这里：
+    /// 1) 外部基准检测：网格上的值若等于我们上次写入的值，就认为没有外部写者动过，沿用上次的基准；
+    ///    否则叠加模式会把自己写进去的值再加一遍（眨眼闭住不睁开就是这么来的）。
+    /// 2) 写回值夹到 0..100，让 LastWritten 与实际读回值一致，避免污染上面的判定。
+    /// </summary>
+    public sealed class HoShapeKeyWriter
+    {
+        private struct Binding
+        {
+            public int MeshIndex;
+            public int KeyIndex;
+            public float BaseValue;
+            public float ExternalBase;
+            public float LastWritten;
+            public float Sum;
+            public float OverrideValue;
+            public bool HasOverride;
+            public bool EverWritten;
+        }
+
+        private struct CompiledTarget
+        {
+            public int BindingStart;
+            public int BindingCount;
+            public float Envelope;
+            public float Output;
+        }
+
+        private readonly List<Binding> bindingList = new List<Binding>();
+        private readonly List<int> flatBindingIds = new List<int>();
+        private readonly List<CompiledTarget> compiledTargets = new List<CompiledTarget>();
+        private readonly List<HoShapeKeyTarget> sources = new List<HoShapeKeyTarget>();
+        private readonly List<string> missingKeys = new List<string>();
+        private readonly Dictionary<long, int> bindingMap = new Dictionary<long, int>();
+
+        private SkinnedMeshRenderer[] meshes;
+        private Mesh[] meshRefs;
+        private Dictionary<string, int>[] meshLookups;
+        private Binding[] bindings;
+        private CompiledTarget[] compiled;
+        private int[] bindingIds;
+        private int lastRendererCount = -1;
+        private bool building;
+
+        /// <summary>变化小于该值就不写，减少 mesh dirty。</summary>
+        public float WriteThreshold { get; set; } = 0.01f;
+
+        public bool WriteEnabled { get; set; } = true;
+
+        public int MeshCount => meshes != null ? meshes.Length : 0;
+
+        public int BindingCount => bindings != null ? bindings.Length : 0;
+
+        public int TargetCount => compiled != null ? compiled.Length : 0;
+
+        public IReadOnlyList<string> MissingKeys => missingKeys;
+
+        public bool IsBuilt => compiled != null;
+
+        public SkinnedMeshRenderer GetMesh(int index)
+        {
+            if (meshes == null || index < 0 || index >= meshes.Length)
+            {
+                return null;
+            }
+
+            return meshes[index];
+        }
+
+        /// <summary>键名是否在任意一个网格上存在（面板用它标黄缺失项）。</summary>
+        public bool KeyExists(string keyName)
+        {
+            if (meshLookups == null || string.IsNullOrEmpty(keyName))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < meshLookups.Length; i++)
+            {
+                if (HoShapeKeyResolver.TryResolve(meshLookups[i], keyName, out _))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>网格列表或 mesh 变了（换装 / mesh 重建）——宿主每帧问一次，用来触发重建。</summary>
+        public bool MeshesChanged()
+        {
+            if (meshes == null || meshRefs == null || meshes.Length != meshRefs.Length)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < meshes.Length; i++)
+            {
+                if (meshes[i] == null || meshRefs[i] != meshes[i].sharedMesh)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // ── 构建期 ────────────────────────────────────────────────────────
+
+        /// <summary>开始重建：缓存网格与键名索引，清空上一轮的绑定与目标。</summary>
+        public void BeginBuild(List<Renderer> renderers)
+        {
+            bindingList.Clear();
+            flatBindingIds.Clear();
+            compiledTargets.Clear();
+            sources.Clear();
+            missingKeys.Clear();
+            bindingMap.Clear();
+
+            List<SkinnedMeshRenderer> found = new List<SkinnedMeshRenderer>();
+            if (renderers != null)
+            {
+                for (int i = 0; i < renderers.Count; i++)
+                {
+                    Renderer renderer = renderers[i];
+                    if (renderer == null)
+                    {
+                        continue;
+                    }
+
+                    SkinnedMeshRenderer skinned = renderer as SkinnedMeshRenderer;
+                    if (skinned == null)
+                    {
+                        skinned = renderer.GetComponent<SkinnedMeshRenderer>();
+                    }
+
+                    if (skinned == null || skinned.sharedMesh == null || found.Contains(skinned))
+                    {
+                        continue;
+                    }
+
+                    found.Add(skinned);
+                }
+            }
+
+            meshes = found.ToArray();
+            meshRefs = new Mesh[meshes.Length];
+            meshLookups = new Dictionary<string, int>[meshes.Length];
+            for (int i = 0; i < meshes.Length; i++)
+            {
+                meshRefs[i] = meshes[i].sharedMesh;
+                meshLookups[i] = HoShapeKeyResolver.BuildLookup(meshRefs[i]);
+            }
+
+            lastRendererCount = renderers != null ? renderers.Count : 0;
+            building = true;
+        }
+
+        /// <summary>注册一个输出目标，返回 targetId（按注册顺序递增）。</summary>
+        public int RegisterTarget(HoShapeKeyTarget target)
+        {
+            int start = flatBindingIds.Count;
+            int resolved = 0;
+            if (target != null && !string.IsNullOrEmpty(target.KeyName))
+            {
+                int from = 0;
+                int to = meshes.Length;
+                if (target.MeshScope == HoShapeKeyMeshScope.Index)
+                {
+                    from = Mathf.Clamp(target.MeshIndex, 0, Mathf.Max(0, meshes.Length - 1));
+                    to = Mathf.Min(from + 1, meshes.Length);
+                }
+
+                for (int m = from; m < to; m++)
+                {
+                    if (!HoShapeKeyResolver.TryResolve(meshLookups[m], target.KeyName, out int keyIndex))
+                    {
+                        continue;
+                    }
+
+                    flatBindingIds.Add(GetOrAddBinding(m, keyIndex));
+                }
+
+                resolved = flatBindingIds.Count - start;
+                if (resolved == 0)
+                {
+                    AddMissing(target.KeyName);
+                }
+            }
+
+            sources.Add(target);
+            compiledTargets.Add(new CompiledTarget
+            {
+                BindingStart = start,
+                BindingCount = resolved
+            });
+            return compiledTargets.Count - 1;
+        }
+
+        /// <summary>
+        /// 注册一个"读"键（驱动来源）。同一个键名可能出现在多个网格上，全部追加进 <paramref name="results"/>；
+        /// 一个都没解析到时记进缺失清单。
+        /// </summary>
+        public void RegisterReadKey(string keyName, List<int> results)
+        {
+            if (results == null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(keyName) || meshes.Length == 0)
+            {
+                if (!string.IsNullOrEmpty(keyName))
+                {
+                    AddMissing(keyName);
+                }
+
+                return;
+            }
+
+            int found = 0;
+            for (int m = 0; m < meshes.Length; m++)
+            {
+                if (!HoShapeKeyResolver.TryResolve(meshLookups[m], keyName, out int keyIndex))
+                {
+                    continue;
+                }
+
+                results.Add(GetOrAddBinding(m, keyIndex));
+                found++;
+            }
+
+            if (found == 0)
+            {
+                AddMissing(keyName);
+            }
+        }
+
+        public void EndBuild()
+        {
+            bindings = bindingList.ToArray();
+            bindingIds = flatBindingIds.ToArray();
+            compiled = compiledTargets.ToArray();
+            building = false;
+        }
+
+        /// <summary>清掉"我们写过"的记账与包络状态（重建、启用、重置时调用）。</summary>
+        public void Reset()
+        {
+            if (bindings != null)
+            {
+                for (int i = 0; i < bindings.Length; i++)
+                {
+                    bindings[i].EverWritten = false;
+                    bindings[i].Sum = 0.0f;
+                    bindings[i].HasOverride = false;
+                    bindings[i].OverrideValue = 0.0f;
+                }
+            }
+
+            if (compiled != null)
+            {
+                for (int i = 0; i < compiled.Length; i++)
+                {
+                    compiled[i].Envelope = 0.0f;
+                    compiled[i].Output = 0.0f;
+                }
+            }
+        }
+
+        // ── 每帧 ──────────────────────────────────────────────────────────
+
+        /// <summary>读一遍所有涉及的键，确定本帧的外部基准并清空累加。</summary>
+        public void Snapshot()
+        {
+            if (bindings == null || meshes == null)
+            {
+                return;
+            }
+
+            float tolerance = Mathf.Max(WriteThreshold, 0.0001f);
+            for (int i = 0; i < bindings.Length; i++)
+            {
+                float current = meshes[bindings[i].MeshIndex].GetBlendShapeWeight(bindings[i].KeyIndex);
+
+                if (!bindings[i].EverWritten || Mathf.Abs(current - bindings[i].LastWritten) > tolerance)
+                {
+                    bindings[i].ExternalBase = current;
+                }
+
+                bindings[i].BaseValue = bindings[i].ExternalBase;
+                bindings[i].Sum = 0.0f;
+                bindings[i].HasOverride = false;
+                bindings[i].OverrideValue = 0.0f;
+            }
+        }
+
+        /// <summary>把一个驱动值（归一化）按目标的映射写进累加器。</summary>
+        public void Apply(int targetId, float driverValue, float deltaTime)
+        {
+            if (compiled == null || targetId < 0 || targetId >= compiled.Length)
+            {
+                return;
+            }
+
+            HoShapeKeyTarget target = sources[targetId];
+            if (target == null)
+            {
+                return;
+            }
+
+            float x = driverValue * target.Gain + target.Offset;
+            float shaped = HoShapeKeyRampPresets.Shape(target.RampPreset, target.RampIntensity, target.RampCurve, x);
+            HoShapeKeyRampPresets.Times(
+                target.RampPreset,
+                target.RampIntensity,
+                target.RampAttack,
+                target.RampRelease,
+                out float attack,
+                out float release);
+
+            compiled[targetId].Envelope = HoShapeKeyRampPresets.Envelope(
+                compiled[targetId].Envelope,
+                shaped,
+                deltaTime,
+                attack,
+                release);
+
+            float output = compiled[targetId].Envelope * 100.0f;
+            if (target.ClampToRange)
+            {
+                float min = Mathf.Min(target.OutputMin, target.OutputMax);
+                float max = Mathf.Max(target.OutputMin, target.OutputMax);
+                output = Mathf.Clamp(output, min, max);
+            }
+
+            compiled[targetId].Output = output;
+            if (target.Weight <= 0.0f || compiled[targetId].BindingCount == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < compiled[targetId].BindingCount; i++)
+            {
+                int id = bindingIds[compiled[targetId].BindingStart + i];
+                if (target.BlendMode == HoShapeKeyBlendMode.Override)
+                {
+                    bindings[id].HasOverride = true;
+                    bindings[id].OverrideValue = Mathf.Lerp(bindings[id].BaseValue, output, target.Weight);
+                }
+                else
+                {
+                    bindings[id].Sum += output * target.Weight;
+                }
+            }
+        }
+
+        /// <summary>合并并写回（阈值写、同键只写一次）。</summary>
+        public void Write()
+        {
+            if (!WriteEnabled || bindings == null || meshes == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < bindings.Length; i++)
+            {
+                float final = bindings[i].HasOverride
+                    ? bindings[i].OverrideValue
+                    : bindings[i].BaseValue + bindings[i].Sum;
+
+                final = Mathf.Clamp(final, 0.0f, 100.0f);
+
+                if (bindings[i].EverWritten && Mathf.Abs(final - bindings[i].LastWritten) <= WriteThreshold)
+                {
+                    continue;
+                }
+
+                SkinnedMeshRenderer mesh = meshes[bindings[i].MeshIndex];
+                if (mesh == null)
+                {
+                    continue;
+                }
+
+                mesh.SetBlendShapeWeight(bindings[i].KeyIndex, final);
+                bindings[i].LastWritten = final;
+                bindings[i].EverWritten = true;
+            }
+        }
+
+        /// <summary>
+        /// 读一个绑定。writePending = true 时读"本帧到目前为止这一路会写出的值"，
+        /// 供宿主实现"读本帧已写值"的链式联动；false 时读外部基准（切断自反馈）。
+        /// </summary>
+        public float ReadBinding(int bindingId, bool writePending)
+        {
+            if (bindings == null || bindingId < 0 || bindingId >= bindings.Length)
+            {
+                return 0.0f;
+            }
+
+            Binding binding = bindings[bindingId];
+            if (!writePending)
+            {
+                return binding.BaseValue;
+            }
+
+            return binding.HasOverride ? binding.OverrideValue : binding.BaseValue + binding.Sum;
+        }
+
+        public float GetTargetOutput(int targetId)
+        {
+            if (compiled == null || targetId < 0 || targetId >= compiled.Length)
+            {
+                return 0.0f;
+            }
+
+            return compiled[targetId].Output;
+        }
+
+        private int GetOrAddBinding(int meshIndex, int keyIndex)
+        {
+            long key = ((long)meshIndex << 32) | (uint)keyIndex;
+            if (bindingMap.TryGetValue(key, out int id))
+            {
+                return id;
+            }
+
+            id = bindingList.Count;
+            bindingList.Add(new Binding { MeshIndex = meshIndex, KeyIndex = keyIndex });
+            bindingMap.Add(key, id);
+            return id;
+        }
+
+        private void AddMissing(string keyName)
+        {
+            if (string.IsNullOrEmpty(keyName) || missingKeys.Contains(keyName))
+            {
+                return;
+            }
+
+            missingKeys.Add(keyName);
+        }
+    }
+}

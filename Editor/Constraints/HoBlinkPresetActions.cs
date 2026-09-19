@@ -99,7 +99,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         public static void ApplyGazeJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
             ApplyGazeRules(constraint, serializedObject, true);
-            AddEmptyTargetsToLastRules(serializedObject, 2, HoBlinkRampPreset.Direct, 1.0f, HoBlinkBlendMode.Additive);
+            AddEmptyTargetsToLastRules(serializedObject, 2, HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive);
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
         }
@@ -110,7 +110,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             ApplyGazeRules(constraint, serializedObject, true);
             SerializedProperty rules = serializedObject.FindProperty("rules");
             SetJellyOnLastRules(rules, 2, 3.0f, 0.35f, 0.05f);
-            AddEmptyTargetsToLastRules(serializedObject, 2, HoBlinkRampPreset.EaseIn, 0.8f, HoBlinkBlendMode.Additive);
+            AddEmptyTargetsToLastRules(serializedObject, 2, HoShapeKeyRampPreset.EaseIn, 0.8f, HoShapeKeyBlendMode.Additive);
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
         }
@@ -123,8 +123,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SerializedProperty rule = rules.GetArrayElementAtIndex(rules.arraySize - 1);
             SerializedProperty targets = rule.FindPropertyRelative("targets");
             SerializedProperty target = AddTarget(targets, string.Empty, HoBlinkSide.Both);
-            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)HoBlinkRampPreset.Amplify;
-            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoBlinkBlendMode.Override;
+            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)HoShapeKeyRampPreset.Amplify;
+            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Override;
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
         }
@@ -144,9 +144,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static void AddEmptyTargetsToLastRules(
             SerializedObject serializedObject,
             int count,
-            HoBlinkRampPreset rampPreset,
+            HoShapeKeyRampPreset rampPreset,
             float intensity,
-            HoBlinkBlendMode blendMode)
+            HoShapeKeyBlendMode blendMode)
         {
             SerializedProperty rules = serializedObject.FindProperty("rules");
             int from = Mathf.Max(0, rules.arraySize - count);
@@ -197,18 +197,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             list.InsertArrayElementAtIndex(list.arraySize);
             SerializedProperty target = list.GetArrayElementAtIndex(list.arraySize - 1);
-            target.FindPropertyRelative("meshScope").enumValueIndex = (int)HoBlinkMeshScope.All;
+            target.FindPropertyRelative("meshScope").enumValueIndex = (int)HoShapeKeyMeshScope.All;
             target.FindPropertyRelative("meshIndex").intValue = 0;
             target.FindPropertyRelative("keyName").stringValue = keyName ?? string.Empty;
             target.FindPropertyRelative("side").enumValueIndex = (int)side;
-            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoBlinkBlendMode.Additive;
+            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Additive;
             target.FindPropertyRelative("weight").floatValue = 1.0f;
             target.FindPropertyRelative("gain").floatValue = 1.0f;
             target.FindPropertyRelative("offset").floatValue = 0.0f;
             target.FindPropertyRelative("outputMin").floatValue = 0.0f;
             target.FindPropertyRelative("outputMax").floatValue = 100.0f;
             target.FindPropertyRelative("clampToRange").boolValue = true;
-            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)HoBlinkRampPreset.Direct;
+            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)HoShapeKeyRampPreset.Direct;
             target.FindPropertyRelative("rampIntensity").floatValue = 1.0f;
             target.FindPropertyRelative("rampAttack").floatValue = 0.0f;
             target.FindPropertyRelative("rampRelease").floatValue = 0.0f;

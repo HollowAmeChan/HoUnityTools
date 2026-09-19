@@ -446,7 +446,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(meshScope, new GUIContent("范围"), GUILayout.Width(120.0f));
-            using (new EditorGUI.DisabledScope((HoBlinkMeshScope)meshScope.enumValueIndex != HoBlinkMeshScope.Index))
+            using (new EditorGUI.DisabledScope((HoShapeKeyMeshScope)meshScope.enumValueIndex != HoShapeKeyMeshScope.Index))
             {
                 EditorGUILayout.PropertyField(meshIndex, new GUIContent("序号"), GUILayout.Width(90.0f));
             }
@@ -478,7 +478,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 clampToRange.boolValue = EditorGUILayout.ToggleLeft("钳制", clampToRange.boolValue, GUILayout.Width(56.0f));
                 EditorGUILayout.EndHorizontal();
 
-                if ((HoBlinkRampPreset)rampPreset.enumValueIndex == HoBlinkRampPreset.Custom)
+                if ((HoShapeKeyRampPreset)rampPreset.enumValueIndex == HoShapeKeyRampPreset.Custom)
                 {
                     EditorGUILayout.PropertyField(rampCurve, new GUIContent("自定义曲线"));
                     EditorGUILayout.BeginHorizontal();

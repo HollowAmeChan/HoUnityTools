@@ -38,18 +38,6 @@ namespace Hollow.HoUnityTools.Constraints
         Error
     }
 
-    public enum HoBlinkBlendMode
-    {
-        Additive,
-        Override
-    }
-
-    public enum HoBlinkMeshScope
-    {
-        All,
-        Index
-    }
-
     /// <summary>自动眨眼输出的左右通道选择。正常眨眼两个通道相同，只有脚本 wink 才会分开。</summary>
     public enum HoBlinkSide
     {
@@ -58,135 +46,7 @@ namespace Hollow.HoUnityTools.Constraints
         Right
     }
 
-    /// <summary>
-    /// 目标级 ramp 预设。动态超调（甩过头再回来）只由规则级弹簧负责，
-    /// ramp 只做幅度形状与一阶时间包络，避免同一路出现两个弹簧互相打架。
-    /// </summary>
-    public enum HoBlinkRampPreset
-    {
-        /// <summary>直接通过（y = x × 强度），果冻感交给弹簧。</summary>
-        Direct,
-
-        /// <summary>时间上的柔跟：形状线性，上升/回落都有一阶跟随。</summary>
-        SoftFollow,
-
-        /// <summary>幅度放大（1 + 0.25 × 强度 倍），可以超出目标范围。</summary>
-        Amplify,
-
-        /// <summary>幅度缓入（x²），起步慢后段快。</summary>
-        EaseIn,
-
-        /// <summary>松得慢：上升快、回落慢。</summary>
-        SlowRelease,
-
-        /// <summary>阶梯：驱动大于 0 就满值，立即切换。离散形变用。</summary>
-        Step,
-
-        /// <summary>自定义曲线与时间常数。</summary>
-        Custom
-    }
-
-    /// <summary>一条规则里的一个输出映射项。</summary>
-    [Serializable]
-    public sealed class HoBlinkTarget
-    {
-        [SerializeField]
-        private HoBlinkMeshScope meshScope = HoBlinkMeshScope.All;
-
-        [SerializeField]
-        private int meshIndex;
-
-        [SerializeField]
-        private string keyName = string.Empty;
-
-        [SerializeField]
-        private HoBlinkSide side = HoBlinkSide.Both;
-
-        [SerializeField]
-        private HoBlinkBlendMode blendMode = HoBlinkBlendMode.Additive;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float weight = 1.0f;
-
-        [SerializeField]
-        private float gain = 1.0f;
-
-        [SerializeField]
-        private float offset;
-
-        [SerializeField]
-        private float outputMin;
-
-        [SerializeField]
-        private float outputMax = 100.0f;
-
-        [SerializeField]
-        private bool clampToRange = true;
-
-        [SerializeField]
-        private HoBlinkRampPreset rampPreset = HoBlinkRampPreset.Direct;
-
-        [SerializeField, Range(0.0f, 2.0f)]
-        private float rampIntensity = 1.0f;
-
-        [SerializeField]
-        private AnimationCurve rampCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
-
-        [SerializeField, Min(0.0f)]
-        private float rampAttack;
-
-        [SerializeField, Min(0.0f)]
-        private float rampRelease;
-
-        public HoBlinkMeshScope MeshScope => meshScope;
-
-        public int MeshIndex => meshIndex;
-
-        public string KeyName => keyName;
-
-        public HoBlinkSide Side => side;
-
-        public HoBlinkBlendMode BlendMode => blendMode;
-
-        public float Weight => weight;
-
-        /// <summary>归一化增益：1.0 约等于满量程（100 键值）。</summary>
-        public float Gain => gain;
-
-        /// <summary>归一化偏置：0.5 约等于 50 键值。</summary>
-        public float Offset => offset;
-
-        public float OutputMin => outputMin;
-
-        public float OutputMax => outputMax;
-
-        public bool ClampToRange => clampToRange;
-
-        public HoBlinkRampPreset RampPreset => rampPreset;
-
-        public float RampIntensity => rampIntensity;
-
-        public AnimationCurve RampCurve => rampCurve;
-
-        public float RampAttack => rampAttack;
-
-        public float RampRelease => rampRelease;
-
-        public void Sanitize()
-        {
-            meshIndex = Mathf.Max(0, meshIndex);
-            weight = Mathf.Clamp01(weight);
-            rampIntensity = Mathf.Clamp(rampIntensity, 0.0f, 2.0f);
-            rampAttack = Mathf.Max(0.0f, rampAttack);
-            rampRelease = Mathf.Max(0.0f, rampRelease);
-            if (rampCurve == null || rampCurve.length == 0)
-            {
-                rampCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
-            }
-        }
-    }
-
-    /// <summary>以"读哪个键"为主体的一条映射规则。</summary>
+    /// <summary>以"读哪个键"为主体的一条映射规则。输出映射项用共享的 <see cref="HoShapeKeyTarget"/>。</summary>
     [Serializable]
     public sealed class HoBlinkRule
     {
@@ -237,7 +97,7 @@ namespace Hollow.HoUnityTools.Constraints
         private bool resetOnEnable = true;
 
         [SerializeField]
-        private List<HoBlinkTarget> targets = new List<HoBlinkTarget>();
+        private List<HoShapeKeyTarget> targets = new List<HoShapeKeyTarget>();
 
         public string Label
         {
@@ -329,7 +189,7 @@ namespace Hollow.HoUnityTools.Constraints
             set => resetOnEnable = value;
         }
 
-        public List<HoBlinkTarget> Targets => targets;
+        public List<HoShapeKeyTarget> Targets => targets;
 
         public void Sanitize()
         {
@@ -339,7 +199,7 @@ namespace Hollow.HoUnityTools.Constraints
             maxStep = Mathf.Clamp(maxStep, 0.002f, 0.05f);
             if (targets == null)
             {
-                targets = new List<HoBlinkTarget>();
+                targets = new List<HoShapeKeyTarget>();
             }
 
             for (int i = 0; i < targets.Count; i++)

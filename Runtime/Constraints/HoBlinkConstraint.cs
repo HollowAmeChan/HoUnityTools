@@ -6,6 +6,7 @@ namespace Hollow.HoUnityTools.Constraints
     /// <summary>
     /// 眨眼约束：自动眨眼（程序化眨眼写到眼睑键）+ 果冻眼（读形态键，过弹簧-阻尼，映射到别的键）。
     /// 只写形态键，不碰 Transform / 材质；键名以 string 存储，内置表只提供候选与规范标签。
+    /// 形态键的绑定、基准快照、合并与写回交给共享的 <see cref="HoShapeKeyWriter"/>。
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
@@ -74,7 +75,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float pauseDuration = 2.0f;
 
         [SerializeField]
-        private List<HoBlinkTarget> blinkTargets = new List<HoBlinkTarget>();
+        private List<HoShapeKeyTarget> blinkTargets = new List<HoShapeKeyTarget>();
 
         [Header("Rules")]
         [SerializeField]
@@ -87,41 +88,14 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool writingEnabled = true;
 
-        private struct Binding
-        {
-            public int MeshIndex;
-            public int KeyIndex;
-            public float BaseValue;
-            public float ExternalBase;
-            public float LastWritten;
-            public float Sum;
-            public float OverrideValue;
-            public bool HasOverride;
-            public bool EverWritten;
-        }
+        private readonly HoShapeKeyWriter writer = new HoShapeKeyWriter();
+        private readonly List<int> scratchDriverIds = new List<int>();
 
-        private struct CompiledTarget
-        {
-            public int BindingStart;
-            public int BindingCount;
-            public float Envelope;
-            public float Output;
-        }
-
-        private SkinnedMeshRenderer[] meshCache;
-        private Mesh[] meshRefs;
-        private Dictionary<string, int>[] meshLookups;
-        private int lastRendererCount = -1;
-
-        private Binding[] bindings;
-        private int[] bindingIds;
-
-        private CompiledTarget[] blinkCompiled;
-        private CompiledTarget[] ruleCompiled;
+        private int[] blinkTargetIds;
+        private int[] ruleTargetIds;
         private int[] ruleTargetStart;
         private int[] ruleTargetCount;
-
-        private int[] driverBindingIds;
+        private int[] driverIds;
         private int[] driverPositiveStart;
         private int[] driverPositiveCount;
         private int[] driverNegativeStart;
@@ -142,20 +116,12 @@ namespace Hollow.HoUnityTools.Constraints
         private double lastUpdateTime;
         private bool built;
         private bool manualDriveEnabled;
-        private readonly List<string> missingKeys = new List<string>();
 
         /// <summary>调试用：打开后所有规则都读手动滑杆值（不进序列化）。</summary>
         public bool ManualDriveEnabled
         {
             get => manualDriveEnabled;
             set => manualDriveEnabled = value;
-        }
-
-        /// <summary>编辑器用：丢弃缓存并重新解析网格与键。</summary>
-        public void Rebuild()
-        {
-            built = false;
-            EnsureBuilt();
         }
 
         public HoBlinkUpdateMode UpdateMode
@@ -167,7 +133,11 @@ namespace Hollow.HoUnityTools.Constraints
         public bool WritingEnabled
         {
             get => writingEnabled;
-            set => writingEnabled = value;
+            set
+            {
+                writingEnabled = value;
+                writer.WriteEnabled = value;
+            }
         }
 
         public bool BlinkEnabled
@@ -176,11 +146,11 @@ namespace Hollow.HoUnityTools.Constraints
             set => blinkEnabled = value;
         }
 
-        public IReadOnlyList<string> MissingKeys => missingKeys;
+        public IReadOnlyList<string> MissingKeys => writer.MissingKeys;
 
-        public int MeshCount => meshCache != null ? meshCache.Length : 0;
+        public int MeshCount => writer.MeshCount;
 
-        public int BindingCount => bindings != null ? bindings.Length : 0;
+        public int BindingCount => writer.BindingCount;
 
         public int RuleCount => rules != null ? rules.Count : 0;
 
@@ -192,12 +162,7 @@ namespace Hollow.HoUnityTools.Constraints
 
         public SkinnedMeshRenderer GetMesh(int index)
         {
-            if (meshCache == null || index < 0 || index >= meshCache.Length)
-            {
-                return null;
-            }
-
-            return meshCache[index];
+            return writer.GetMesh(index);
         }
 
         public HoBlinkRule GetRule(int index)
@@ -243,41 +208,30 @@ namespace Hollow.HoUnityTools.Constraints
         public float GetRuleTargetOutput(int ruleIndex, int targetIndex)
         {
             int flat = FlatRuleTarget(ruleIndex, targetIndex);
-            if (flat < 0)
-            {
-                return 0.0f;
-            }
-
-            return ruleCompiled[flat].Output;
+            return flat < 0 ? 0.0f : writer.GetTargetOutput(ruleTargetIds[flat]);
         }
 
         public float GetBlinkTargetOutput(int targetIndex)
         {
-            if (blinkCompiled == null || targetIndex < 0 || targetIndex >= blinkCompiled.Length)
+            if (blinkTargetIds == null || targetIndex < 0 || targetIndex >= blinkTargetIds.Length)
             {
                 return 0.0f;
             }
 
-            return blinkCompiled[targetIndex].Output;
+            return writer.GetTargetOutput(blinkTargetIds[targetIndex]);
         }
 
         /// <summary>键名是否在任意一个网格上存在（面板用它标黄缺失项）。</summary>
         public bool KeyExists(string keyName)
         {
-            if (meshLookups == null || string.IsNullOrEmpty(keyName))
-            {
-                return false;
-            }
+            return writer.KeyExists(keyName);
+        }
 
-            for (int i = 0; i < meshLookups.Length; i++)
-            {
-                if (HoShapeKeyResolver.TryResolve(meshLookups[i], keyName, out _))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+        /// <summary>编辑器用：丢弃缓存并重新解析网格与键。</summary>
+        public void Rebuild()
+        {
+            built = false;
+            EnsureBuilt();
         }
 
         /// <summary>把子级里所有 SkinnedMeshRenderer 收进网格列表（面板按钮用）。</summary>
@@ -345,16 +299,7 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
-            if (bindings != null)
-            {
-                for (int i = 0; i < bindings.Length; i++)
-                {
-                    bindings[i].EverWritten = false;
-                    bindings[i].Sum = 0.0f;
-                    bindings[i].HasOverride = false;
-                }
-            }
-
+            writer.Reset();
             lastUpdateTime = GetTime();
         }
 
@@ -416,6 +361,8 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
+            writer.WriteThreshold = writeThreshold;
+            writer.WriteEnabled = writingEnabled;
             built = false;
         }
 
@@ -427,34 +374,37 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             EnsureBuilt();
-            if (!writingEnabled || meshCache == null || meshCache.Length == 0)
+            writer.WriteThreshold = writeThreshold;
+            writer.WriteEnabled = writingEnabled;
+
+            if (!writingEnabled || !writer.IsBuilt || writer.MeshCount == 0)
             {
                 return;
             }
 
-            if (MeshesChanged())
+            if (writer.MeshesChanged())
             {
                 built = false;
                 EnsureBuilt();
-                if (meshCache.Length == 0)
+                if (!writer.IsBuilt || writer.MeshCount == 0)
                 {
                     return;
                 }
             }
 
             float dt = Mathf.Max(0.0f, deltaTime);
-            Snapshot();
+            writer.Snapshot();
             StepBlink(dt);
 
-            for (int i = 0; i < blinkCompiled.Length; i++)
+            for (int i = 0; i < blinkTargetIds.Length; i++)
             {
-                HoBlinkTarget target = blinkTargets[i];
+                HoShapeKeyTarget target = blinkTargets[i];
                 if (target == null)
                 {
                     continue;
                 }
 
-                ApplyTarget(ref blinkCompiled[i], target, SelectChannel(target.Side), dt);
+                writer.Apply(blinkTargetIds[i], SelectChannel(target.Side), dt);
             }
 
             for (int i = 0; i < rules.Count; i++)
@@ -493,17 +443,17 @@ namespace Hollow.HoUnityTools.Constraints
                 int count = ruleTargetCount[i];
                 for (int t = 0; t < count; t++)
                 {
-                    HoBlinkTarget target = rule.Targets[t];
+                    HoShapeKeyTarget target = rule.Targets[t];
                     if (target == null)
                     {
                         continue;
                     }
 
-                    ApplyTarget(ref ruleCompiled[start + t], target, driverValues[i], dt);
+                    writer.Apply(ruleTargetIds[start + t], driverValues[i], dt);
                 }
             }
 
-            WriteBindings();
+            writer.Write();
         }
 
         private void EvaluateWithCurrentDelta()
@@ -526,7 +476,7 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void EnsureBuilt()
         {
-            if (built && !MeshesChanged() && lastRendererCount == (renderers != null ? renderers.Count : 0))
+            if (built && !writer.MeshesChanged())
             {
                 return;
             }
@@ -538,56 +488,27 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void Build()
         {
-            missingKeys.Clear();
+            writer.BeginBuild(renderers);
 
-            List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
-            if (renderers != null)
+            blinkTargetIds = new int[blinkTargets != null ? blinkTargets.Count : 0];
+            for (int i = 0; i < blinkTargetIds.Length; i++)
             {
-                for (int i = 0; i < renderers.Count; i++)
+                blinkTargetIds[i] = writer.RegisterTarget(blinkTargets[i]);
+            }
+
+            takeOverBinding = -1;
+            if (blinkTargetIds.Length > 0 && blinkTargets[0] != null)
+            {
+                // 接管判定读的是"第一个眨眼输出键"的外部基准（别人写的值，不是我们自己的输出）
+                scratchDriverIds.Clear();
+                writer.RegisterReadKey(blinkTargets[0].KeyName, scratchDriverIds);
+                if (scratchDriverIds.Count > 0)
                 {
-                    Renderer renderer = renderers[i];
-                    if (renderer == null)
-                    {
-                        continue;
-                    }
-
-                    SkinnedMeshRenderer skinned = renderer as SkinnedMeshRenderer;
-                    if (skinned == null)
-                    {
-                        skinned = renderer.GetComponent<SkinnedMeshRenderer>();
-                    }
-
-                    if (skinned == null || skinned.sharedMesh == null || meshes.Contains(skinned))
-                    {
-                        continue;
-                    }
-
-                    meshes.Add(skinned);
+                    takeOverBinding = scratchDriverIds[0];
                 }
             }
 
-            meshCache = meshes.ToArray();
-            meshRefs = new Mesh[meshCache.Length];
-            meshLookups = new Dictionary<string, int>[meshCache.Length];
-            for (int i = 0; i < meshCache.Length; i++)
-            {
-                meshRefs[i] = meshCache[i].sharedMesh;
-                meshLookups[i] = HoShapeKeyResolver.BuildLookup(meshRefs[i]);
-            }
-
-            lastRendererCount = renderers != null ? renderers.Count : 0;
-
-            Dictionary<long, int> bindingMap = new Dictionary<long, int>();
-            List<Binding> bindingList = new List<Binding>();
-            List<int> flatIds = new List<int>();
-
-            blinkCompiled = CompileTargets(blinkTargets, bindingMap, bindingList, flatIds, true);
-            takeOverBinding = blinkCompiled.Length > 0 && blinkCompiled[0].BindingCount > 0
-                ? flatIds[blinkCompiled[0].BindingStart]
-                : -1;
-
             int ruleCount = rules != null ? rules.Count : 0;
-            ruleCompiled = new CompiledTarget[0];
             ruleTargetStart = new int[ruleCount];
             ruleTargetCount = new int[ruleCount];
             driverPositiveStart = new int[ruleCount];
@@ -598,8 +519,8 @@ namespace Hollow.HoUnityTools.Constraints
             manualValues = new float[ruleCount];
             driverValues = new float[ruleCount];
 
-            List<CompiledTarget> ruleTargets = new List<CompiledTarget>();
-            List<int> driverIds = new List<int>();
+            List<int> ruleTargets = new List<int>();
+            List<int> driverBindings = new List<int>();
 
             for (int i = 0; i < ruleCount; i++)
             {
@@ -609,170 +530,34 @@ namespace Hollow.HoUnityTools.Constraints
                     continue;
                 }
 
-                CompiledTarget[] compiled = CompileTargets(rule.Targets, bindingMap, bindingList, flatIds, true);
                 ruleTargetStart[i] = ruleTargets.Count;
-                ruleTargetCount[i] = compiled.Length;
-                ruleTargets.AddRange(compiled);
+                int targetCount = rule.Targets != null ? rule.Targets.Count : 0;
+                for (int t = 0; t < targetCount; t++)
+                {
+                    ruleTargets.Add(writer.RegisterTarget(rule.Targets[t]));
+                }
+
+                ruleTargetCount[i] = targetCount;
 
                 if (rule.DriverKind == HoBlinkDriverKind.ShapeKey)
                 {
-                    driverPositiveStart[i] = driverIds.Count;
-                    driverPositiveCount[i] = ResolveKeyBindings(rule.PositiveKey, bindingMap, bindingList, driverIds, true);
-                    driverNegativeStart[i] = driverIds.Count;
-                    driverNegativeCount[i] = ResolveKeyBindings(rule.NegativeKey, bindingMap, bindingList, driverIds, false);
+                    scratchDriverIds.Clear();
+                    writer.RegisterReadKey(rule.PositiveKey, scratchDriverIds);
+                    driverPositiveStart[i] = driverBindings.Count;
+                    driverPositiveCount[i] = scratchDriverIds.Count;
+                    driverBindings.AddRange(scratchDriverIds);
+
+                    scratchDriverIds.Clear();
+                    writer.RegisterReadKey(rule.NegativeKey, scratchDriverIds);
+                    driverNegativeStart[i] = driverBindings.Count;
+                    driverNegativeCount[i] = scratchDriverIds.Count;
+                    driverBindings.AddRange(scratchDriverIds);
                 }
             }
 
-            ruleCompiled = ruleTargets.ToArray();
-            driverBindingIds = driverIds.ToArray();
-            bindings = bindingList.ToArray();
-            bindingIds = flatIds.ToArray();
-        }
-
-        private CompiledTarget[] CompileTargets(
-            List<HoBlinkTarget> list,
-            Dictionary<long, int> bindingMap,
-            List<Binding> bindingList,
-            List<int> flatIds,
-            bool collectMissing)
-        {
-            int count = list != null ? list.Count : 0;
-            CompiledTarget[] result = new CompiledTarget[count];
-            for (int i = 0; i < count; i++)
-            {
-                HoBlinkTarget target = list[i];
-                int start = flatIds.Count;
-                int resolved = 0;
-                if (target != null && !string.IsNullOrEmpty(target.KeyName))
-                {
-                    int from = 0;
-                    int to = meshCache.Length;
-                    if (target.MeshScope == HoBlinkMeshScope.Index)
-                    {
-                        from = Mathf.Clamp(target.MeshIndex, 0, Mathf.Max(0, meshCache.Length - 1));
-                        to = Mathf.Min(from + 1, meshCache.Length);
-                    }
-
-                    for (int m = from; m < to; m++)
-                    {
-                        if (!HoShapeKeyResolver.TryResolve(meshLookups[m], target.KeyName, out int keyIndex))
-                        {
-                            continue;
-                        }
-
-                        flatIds.Add(GetOrAddBinding(bindingMap, bindingList, m, keyIndex));
-                    }
-
-                    resolved = flatIds.Count - start;
-                    if (resolved == 0 && collectMissing)
-                    {
-                        AddMissing(target.KeyName);
-                    }
-                }
-
-                result[i] = new CompiledTarget
-                {
-                    BindingStart = start,
-                    BindingCount = resolved
-                };
-            }
-
-            return result;
-        }
-
-        private int ResolveKeyBindings(
-            string keyName,
-            Dictionary<long, int> bindingMap,
-            List<Binding> bindingList,
-            List<int> ids,
-            bool collectMissing)
-        {
-            if (string.IsNullOrEmpty(keyName))
-            {
-                return 0;
-            }
-
-            int start = ids.Count;
-            for (int m = 0; m < meshCache.Length; m++)
-            {
-                if (!HoShapeKeyResolver.TryResolve(meshLookups[m], keyName, out int keyIndex))
-                {
-                    continue;
-                }
-
-                ids.Add(GetOrAddBinding(bindingMap, bindingList, m, keyIndex));
-            }
-
-            int resolved = ids.Count - start;
-            if (resolved == 0 && collectMissing)
-            {
-                AddMissing(keyName);
-            }
-
-            return resolved;
-        }
-
-        private static int GetOrAddBinding(Dictionary<long, int> map, List<Binding> list, int meshIndex, int keyIndex)
-        {
-            long key = ((long)meshIndex << 32) | (uint)keyIndex;
-            if (map.TryGetValue(key, out int id))
-            {
-                return id;
-            }
-
-            id = list.Count;
-            list.Add(new Binding { MeshIndex = meshIndex, KeyIndex = keyIndex });
-            map.Add(key, id);
-            return id;
-        }
-
-        private void AddMissing(string keyName)
-        {
-            if (string.IsNullOrEmpty(keyName) || missingKeys.Contains(keyName))
-            {
-                return;
-            }
-
-            missingKeys.Add(keyName);
-        }
-
-        private bool MeshesChanged()
-        {
-            if (meshCache == null || meshRefs == null || meshCache.Length != meshRefs.Length)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < meshCache.Length; i++)
-            {
-                if (meshCache[i] == null || meshRefs[i] != meshCache[i].sharedMesh)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private void Snapshot()
-        {
-            float tolerance = Mathf.Max(writeThreshold, 0.0001f);
-            for (int i = 0; i < bindings.Length; i++)
-            {
-                float current = meshCache[bindings[i].MeshIndex].GetBlendShapeWeight(bindings[i].KeyIndex);
-
-                // 只有"别人改了值"才更新外部基准。否则我们上一帧自己写进去的值会被当成基准，
-                // 叠加模式就变成每帧累加（眼睛闭上之后一直不睁开的那个 bug）。
-                if (!bindings[i].EverWritten || Mathf.Abs(current - bindings[i].LastWritten) > tolerance)
-                {
-                    bindings[i].ExternalBase = current;
-                }
-
-                bindings[i].BaseValue = bindings[i].ExternalBase;
-                bindings[i].Sum = 0.0f;
-                bindings[i].HasOverride = false;
-                bindings[i].OverrideValue = 0.0f;
-            }
+            ruleTargetIds = ruleTargets.ToArray();
+            driverIds = driverBindings.ToArray();
+            writer.EndBuild();
         }
 
         private void StepBlink(float deltaTime)
@@ -799,7 +584,7 @@ namespace Hollow.HoUnityTools.Constraints
 
             if (pauseWhenDriven && takeOverBinding >= 0)
             {
-                float driven = bindings[takeOverBinding].BaseValue;
+                float driven = writer.ReadBinding(takeOverBinding, false);
                 if (driven > pauseThreshold)
                 {
                     blinkState.drivenTime += deltaTime;
@@ -896,8 +681,7 @@ namespace Hollow.HoUnityTools.Constraints
             float value = 0.0f;
             for (int i = 0; i < count; i++)
             {
-                int id = driverBindingIds[start + i];
-                float current = readWrittenThisFrame ? PendingValue(id) : bindings[id].BaseValue;
+                float current = writer.ReadBinding(driverIds[start + i], readWrittenThisFrame);
                 if (i == 0 || current > value)
                 {
                     value = current;
@@ -905,102 +689,6 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             return value;
-        }
-
-        /// <summary>本帧到目前为止这一路会写出的值（供 readWrittenThisFrame 的链式联动）。</summary>
-        private float PendingValue(int bindingId)
-        {
-            Binding binding = bindings[bindingId];
-            return binding.HasOverride ? binding.OverrideValue : binding.BaseValue + binding.Sum;
-        }
-
-        private void ApplyTarget(ref CompiledTarget compiled, HoBlinkTarget target, float driverValue, float deltaTime)
-        {
-            float x = driverValue * target.Gain + target.Offset;
-            float shaped = HoBlinkRampPresets.Shape(target.RampPreset, target.RampIntensity, target.RampCurve, x);
-            HoBlinkRampPresets.Times(
-                target.RampPreset,
-                target.RampIntensity,
-                target.RampAttack,
-                target.RampRelease,
-                out float attack,
-                out float release);
-
-            compiled.Envelope = Envelope(compiled.Envelope, shaped, deltaTime, attack, release);
-
-            float output = compiled.Envelope * 100.0f;
-            if (target.ClampToRange)
-            {
-                float min = Mathf.Min(target.OutputMin, target.OutputMax);
-                float max = Mathf.Max(target.OutputMin, target.OutputMax);
-                output = Mathf.Clamp(output, min, max);
-            }
-
-            compiled.Output = output;
-            if (target.Weight <= 0.0f || compiled.BindingCount == 0)
-            {
-                return;
-            }
-
-            for (int i = 0; i < compiled.BindingCount; i++)
-            {
-                int id = bindingIds[compiled.BindingStart + i];
-                if (target.BlendMode == HoBlinkBlendMode.Override)
-                {
-                    bindings[id].HasOverride = true;
-                    bindings[id].OverrideValue = Mathf.Lerp(bindings[id].BaseValue, output, target.Weight);
-                }
-                else
-                {
-                    bindings[id].Sum += output * target.Weight;
-                }
-            }
-        }
-
-        private static float Envelope(float current, float target, float deltaTime, float attack, float release)
-        {
-            if (deltaTime <= 0.0f)
-            {
-                return target;
-            }
-
-            float timeConstant = target > current ? attack : release;
-            if (timeConstant <= 0.0f)
-            {
-                return target;
-            }
-
-            float t = 1.0f - Mathf.Exp(-deltaTime / timeConstant);
-            return Mathf.Lerp(current, target, t);
-        }
-
-        private void WriteBindings()
-        {
-            for (int i = 0; i < bindings.Length; i++)
-            {
-                float final = bindings[i].HasOverride
-                    ? bindings[i].OverrideValue
-                    : bindings[i].BaseValue + bindings[i].Sum;
-
-                // Unity 的形态键权重就是 0..100；夹一下，顺便让 LastWritten 与实际读回的值一致，
-                // 否则下一帧的"外部基准判定"会误判成别人改过。
-                final = Mathf.Clamp(final, 0.0f, 100.0f);
-
-                if (bindings[i].EverWritten && Mathf.Abs(final - bindings[i].LastWritten) <= writeThreshold)
-                {
-                    continue;
-                }
-
-                SkinnedMeshRenderer mesh = meshCache[bindings[i].MeshIndex];
-                if (mesh == null)
-                {
-                    continue;
-                }
-
-                mesh.SetBlendShapeWeight(bindings[i].KeyIndex, final);
-                bindings[i].LastWritten = final;
-                bindings[i].EverWritten = true;
-            }
         }
 
         private int FlatRuleTarget(int ruleIndex, int targetIndex)
@@ -1023,7 +711,7 @@ namespace Hollow.HoUnityTools.Constraints
             return ruleTargetStart[ruleIndex] + targetIndex;
         }
 
-        private static void SanitizeList(List<HoBlinkTarget> list)
+        private static void SanitizeList(List<HoShapeKeyTarget> list)
         {
             if (list == null)
             {
