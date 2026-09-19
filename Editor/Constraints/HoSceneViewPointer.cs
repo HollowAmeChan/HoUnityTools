@@ -69,6 +69,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 camera = inside ? sceneView.camera : null,
                 // GUI 坐标（左上原点）→ 屏幕像素（左下原点），ScreenPointToRay 要的是后者
                 screenPosition = inside ? HandleUtility.GUIPointToScreenPixelCoordinate(guiPoint) : Vector2.zero,
+                // 射线直接算好：GUI → 世界的换算（视口偏移 / DPI / 正交）交给 Unity，最可靠
+                ray = inside ? HandleUtility.GUIPointToWorldRay(guiPoint) : default,
+                hasRay = inside,
                 timestamp = Time.realtimeSinceStartup
             };
         }

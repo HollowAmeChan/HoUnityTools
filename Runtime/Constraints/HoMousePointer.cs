@@ -14,14 +14,18 @@ namespace Hollow.HoUnityTools.Constraints
     public static class HoMousePointer
     {
         /// <summary>
-        /// 编辑器专用：Scene 视图里的鼠标位置与相机，由编辑器程序集每帧写入
+        /// 编辑器专用：Scene 视图里的鼠标位置、相机与**射线**，由编辑器程序集每帧写入
         /// （运行时程序集不能引用 UnityEditor，所以走这个静态口子；构建里恒为 invalid）。
+        /// 射线用 HandleUtility.GUIPointToWorldRay 算好再传进来 —— 它把 Scene 视图的
+        /// 视口偏移、DPI 缩放、正交/透视都处理掉了，比"自己拿 ScreenPointToRay 反算"可靠。
         /// </summary>
         public struct HoEditorPointer
         {
             public bool valid;
             public Camera camera;
             public Vector2 screenPosition;
+            public Ray ray;
+            public bool hasRay;
             public float timestamp;
         }
 
@@ -136,7 +140,7 @@ namespace Hollow.HoUnityTools.Constraints
             HoPointerSample sample = default;
             HoMouseSettings resolved = settings;
 
-            if (!TryResolvePointer(ref resolved, out Vector2 screenPosition))
+            if (!TryResolvePointer(ref resolved, out Vector2 screenPosition, out Ray pointerRay, out bool hasPointerRay))
             {
                 return sample;
             }
@@ -145,15 +149,33 @@ namespace Hollow.HoUnityTools.Constraints
             sample.camera = resolved.camera;
             sample.screenPosition = screenPosition;
 
-            if (resolved.sampleMode == HoLookAtMouseSampleMode.AngleMap || resolved.camera == null)
+            if (resolved.sampleMode == HoLookAtMouseSampleMode.AngleMap)
             {
                 return sample;
             }
 
-            Ray ray = resolved.camera.ScreenPointToRay(screenPosition);
+            // 鼠标位置 → 世界：用相机射线（投影矩阵的逆；Scene 视图那边由编辑器直接给射线）
+            Ray ray;
+            if (hasPointerRay)
+            {
+                ray = pointerRay;
+            }
+            else if (resolved.camera != null)
+            {
+                ray = resolved.camera.ScreenPointToRay(screenPosition);
+            }
+            else
+            {
+                return sample;
+            }
+
+            sample.ray = ray;
+            sample.hasRay = true;
+
             if (resolved.sampleMode == HoLookAtMouseSampleMode.CursorPoint)
             {
-                // 支点在射线上的投影深度：这个点就是"鼠标指着的、和角色一样远的那个位置"
+                // 准星：取射线上**离眼睛最近**的那个点（正好在角色所在的深度上）。
+                // 从两眼中点看向它，视线就会穿过鼠标所在的那个像素 —— 这就是"鼠标指哪看哪"的定义。
                 float depth = Vector3.Dot(resolved.pivot - ray.origin, ray.direction);
                 depth = Mathf.Max(Mathf.Max(0.1f, resolved.distance * 0.1f), depth);
                 sample.hasWorldPoint = true;
@@ -169,19 +191,27 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         /// <summary>
-        /// 取这一次要用哪个指针：编辑器里鼠标在 Scene 视图上时优先用它（连相机一起换掉），
+        /// 取这一次要用哪个指针：编辑器里鼠标在 Scene 视图上时优先用它（连相机与射线一起换掉），
         /// 否则用真实的鼠标/指针输入。相机会写回 <paramref name="settings"/>。
         /// </summary>
-        private static bool TryResolvePointer(ref HoMouseSettings settings, out Vector2 screenPosition)
+        private static bool TryResolvePointer(
+            ref HoMouseSettings settings,
+            out Vector2 screenPosition,
+            out Ray ray,
+            out bool hasRay)
         {
+            ray = default;
+            hasRay = false;
+
 #if UNITY_EDITOR
             if (settings.useSceneViewMouse
                 && EditorPointer.valid
-                && EditorPointer.camera != null
                 && Time.realtimeSinceStartup - EditorPointer.timestamp < EditorPointerLifetime)
             {
                 settings.camera = EditorPointer.camera;
                 screenPosition = EditorPointer.screenPosition;
+                ray = EditorPointer.ray;
+                hasRay = EditorPointer.hasRay;
                 return true;
             }
 #endif

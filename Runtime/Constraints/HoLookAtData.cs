@@ -267,6 +267,10 @@ namespace Hollow.HoUnityTools.Constraints
         public Vector2 screenPosition;
         public bool hasWorldPoint;
         public Vector3 worldPoint;
+
+        /// <summary>这一次用的鼠标射线（世界点模式才有）：给调试画"鼠标那条射线"用。</summary>
+        public Ray ray;
+        public bool hasRay;
     }
 
     /// <summary>

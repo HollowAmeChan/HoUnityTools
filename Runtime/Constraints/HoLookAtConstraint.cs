@@ -128,6 +128,10 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private HoLookAtMouseSampleMode mouseSampleMode = HoLookAtMouseSampleMode.CursorPoint;
 
+        /// <summary>一次性迁移标记：老场景的默认是"角度摇杆"，那时还没有准星模式。</summary>
+        [SerializeField, HideInInspector]
+        private bool mouseModeMigrated;
+
         [SerializeField]
         private HoLookAtMouseSpace mouseAngleSpace = HoLookAtMouseSpace.ScreenRelative;
 
@@ -213,6 +217,8 @@ namespace Hollow.HoUnityTools.Constraints
         private float headAppliedFactor;
         private Vector2 lastPointerScreen;
         private bool hasPointerScreen;
+        private Ray lastPointerRay;
+        private bool hasPointerRay;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -323,6 +329,13 @@ namespace Hollow.HoUnityTools.Constraints
 
         /// <summary>本次鼠标采样实际用的相机（Scene 视图鼠标时就是 Scene 视图相机）；屏幕叠加用它投影。</summary>
         public Camera PointerCamera { get; private set; }
+
+        /// <summary>本次用的鼠标射线（世界点模式才有）：调试时能直接看出"鼠标指的那条线"对不对。</summary>
+        public bool HasPointerRay => hasPointerRay;
+
+        public Ray LastPointerRay => lastPointerRay;
+
+        public Vector2 LastPointerScreen => lastPointerScreen;
 
         /// <summary>当前的眼睛驱动模式（骨骼 / 形态键）。</summary>
         public HoLookAtEyeDriver EyeDriver => eyeDriver;
@@ -494,6 +507,7 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void OnEnable()
         {
+            MigrateMouseMode();
             built = false;
             ResolveAnimator();
             EnsureBuilt();
@@ -513,6 +527,25 @@ namespace Hollow.HoUnityTools.Constraints
         private void OnDestroy()
         {
             ReleaseIkRelay();
+        }
+
+        /// <summary>
+         /// 一次性迁移：老的默认值是"角度摇杆"，它跟鼠标位置没有几何关系（灵敏度是人为定的），
+         /// 所以"鼠标指哪看哪"在那套映射下永远对不上。装过这个版本之后自动切成"准星"，
+         /// 想用摇杆手感再手动切回去（标记已经置位，不会再被改）。
+         /// </summary>
+        private void MigrateMouseMode()
+        {
+            if (mouseModeMigrated)
+            {
+                return;
+            }
+
+            mouseModeMigrated = true;
+            if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap)
+            {
+                mouseSampleMode = HoLookAtMouseSampleMode.CursorPoint;
+            }
         }
 
         /// <summary>Animator 为空时按 自己 → 父级 → 子级 找。</summary>
@@ -932,9 +965,11 @@ namespace Hollow.HoUnityTools.Constraints
                 HoPointerSample sample = HoMousePointer.Sample(settings);
                 if (sample.valid)
                 {
-                    // 记下来给 Game 视图叠加用（那里不能用 UnityEngine.Input：项目可能只开了 Input System）
+                    // 记下来给 Game 视图叠加/调试用（那里不能用 UnityEngine.Input：项目可能只开了 Input System）
                     lastPointerScreen = sample.screenPosition;
                     hasPointerScreen = true;
+                    lastPointerRay = sample.ray;
+                    hasPointerRay = sample.hasRay;
                     if (sample.camera != null)
                     {
                         PointerCamera = sample.camera;

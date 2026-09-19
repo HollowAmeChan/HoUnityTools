@@ -15,6 +15,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     ///   黄线   = 总角度方向（目标），黄球 = 目标点
     ///   青线   = 头部**估计**方向（我们让 Unity 看哪 × 它施加的比例 + 模型偏差 trim）
     ///   紫线   = 头估计 + 眼睛残余 = 实际目光；它和黄色目标线重合就说明"指哪看哪"
+    ///   青虚线 = 鼠标射线（从相机原点穿过鼠标像素）：黄球必须落在这条线上
     /// </summary>
     internal static class HoLookAtGizmos
     {
@@ -25,6 +26,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly Color TargetOutsideColor = new Color(1.0f, 0.40f, 0.30f, 1.0f);
         private static readonly Color HeadColor = new Color(0.25f, 0.95f, 0.70f, 1.0f);
         private static readonly Color GazeColor = new Color(0.80f, 0.55f, 1.0f, 1.0f);
+        private static readonly Color PointerColor = new Color(0.35f, 0.90f, 0.95f, 1.0f);
 
         [DrawGizmo(GizmoType.Selected | GizmoType.Active)]
         private static void Draw(HoLookAtConstraint constraint, GizmoType gizmoType)
@@ -98,6 +100,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     Handles.color = TargetOutsideColor;
                     Handles.DrawDottedLine(debug.targetPoint, pivot + targetDirection * AimLength, 4.0f);
                 }
+            }
+
+            // 鼠标射线：目标点必须落在这条线上，否则就是"屏幕→世界"的换算错了
+            if (constraint.HasPointerRay)
+            {
+                Ray pointerRay = constraint.LastPointerRay;
+                Vector3 rayEnd = debug.hasTargetPoint ? debug.targetPoint : pointerRay.origin + pointerRay.direction * 5.0f;
+                Handles.color = PointerColor;
+                Handles.DrawDottedLine(pointerRay.origin, rayEnd, 4.0f);
+                Handles.SphereHandleCap(0, pointerRay.origin, Quaternion.identity, HandleUtility.GetHandleSize(pointerRay.origin) * 0.08f, EventType.Repaint);
+                Handles.Label(pointerRay.origin, new GUIContent("鼠标射线"), LabelStyle(PointerColor));
             }
 
             Handles.color = new Color(1.0f, 1.0f, 1.0f, 0.2f);

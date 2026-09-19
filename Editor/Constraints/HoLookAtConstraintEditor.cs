@@ -145,6 +145,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             drawGizmos = Find("drawGizmos");
             drawOverlay = Find("drawOverlay");
             useSceneViewMouse = Find("useSceneViewMouse");
+
+            // 一次性迁移：老场景里是"角度摇杆"（跟鼠标位置没有几何关系，视线永远对不上鼠标），
+            // 打开面板时自动切到"准星"并落到场景里；想用摇杆手感再切回来即可（标记已置位）。
+            SerializedProperty migrated = Find("mouseModeMigrated");
+            if (migrated != null && !migrated.boolValue)
+            {
+                migrated.boolValue = true;
+                if ((HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap)
+                {
+                    mouseSampleMode.enumValueIndex = (int)HoLookAtMouseSampleMode.CursorPoint;
+                }
+
+                serializedObject.ApplyModifiedProperties();
+                EditorUtility.SetDirty(serializedObject.targetObject);
+            }
             mergeMode = Find("mergeMode");
         }
 
@@ -282,7 +297,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.LabelField("使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
                 }
 
-                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：眼睛正好落在鼠标指的位置 —— 取鼠标射线上和角色一样远的点当目标。\n角度摇杆：鼠标位置线性换算成角度，不看相机 FOV；角色不在画面中心时有视差。\n射线命中：用鼠标射线打到的场景物体当目标。"));
+                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：把鼠标像素反算成相机射线，取射线上**离眼睛最近**的点（正好在角色所在深度）当目标 —— 眼睛的视线正好穿过鼠标那个像素，不用调灵敏度。\n角度摇杆：鼠标位置线性换算成角度（灵敏度是人定的），跟相机 FOV、角色在画面里的位置都无关，所以视线不会落在鼠标上。\n射线命中：用鼠标射线打到的场景物体当目标。"));
 
                 bool angleMap = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap;
                 bool raycast = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.Raycast;
