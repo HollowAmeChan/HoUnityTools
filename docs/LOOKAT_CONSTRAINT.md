@@ -281,7 +281,8 @@ PostLateUpdate
 **参考系（`reference`）**：空时默认取 **Animator 所在物体**（角色根）的朝向 —— 那才是角色的面向。退回到组件自己的 transform 往往是骨骼/空物体，轴向随机，会让"总角度"读数与限位全部失准（看起来像"平转 150° 以上"）。
 
 - **输入读取**：`#if ENABLE_INPUT_SYSTEM` 用 `Mouse.current.position.ReadValue()` / `Pointer.current`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。面板给「输入来源：自动 / Input System / 旧 Input」的手动覆盖。
-- 鼠标屏幕坐标换算用 `mouseCamera`（默认 `Camera.main`，允许指定），支持 `Screen.width/height` 与相机的 `pixelRect`（多相机/画中画时不至于错位）。
+- **相机必须手动指定**（`mouseCamera`）：运行时**不自动猜相机**（`Camera.main` 依赖 MainCamera 标签，很多测试场景没有；按"像素面积最大"猜也会挑错）。空的时候只警告一次，角度映射退回角色相对坐标系。面板上没填时会显示一个「填入场景里的相机」按钮（编辑器里挑第一个渲染到屏幕的启用相机填进去，仍然是你显式点的那一下）；「一键装配」也会顺手填。
+- 鼠标屏幕坐标换算用 `mouseCamera`，支持 `Screen.width/height` 与相机的 `pixelRect`（多相机/画中画时不至于错位）。
 
 ## 参数总表（控制参数预算）
 

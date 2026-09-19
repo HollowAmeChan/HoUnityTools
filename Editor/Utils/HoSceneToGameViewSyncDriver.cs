@@ -54,6 +54,76 @@ namespace Hollow.HoUnityTools.Editor
             return SyncResult.Synced;
         }
 
+        /// <summary>反向吸附：把目标 Camera 的视角搬到最近活动的 Scene 视图上。</summary>
+        internal static SyncResult SnapSceneViewToCamera(HoSceneToGameViewSync sync)
+        {
+            if (sync == null)
+                return SyncResult.MissingComponent;
+
+            SceneView sceneView = SceneView.lastActiveSceneView;
+            if (sceneView == null || sceneView.camera == null)
+                return SyncResult.MissingSceneView;
+
+            Camera sourceCamera = sync.AttachedCamera;
+            if (sourceCamera == null)
+                return SyncResult.MissingCamera;
+
+            if (!HasAnySyncChannel(sync))
+                return SyncResult.NoChannelsSelected;
+
+            ApplyCameraToSceneView(sync, sourceCamera, sceneView);
+
+            sceneView.Repaint();
+            return SyncResult.Synced;
+        }
+
+        private static void ApplyCameraToSceneView(HoSceneToGameViewSync sync, Camera sourceCamera, SceneView sceneView)
+        {
+            Transform sourceTransform = sourceCamera.transform;
+
+            if (sync.syncPosition || sync.syncRotation)
+            {
+                // Scene 视图相机落在 pivot 沿视线后退 cameraDistance 的位置，
+                // 所以先把 pivot 推到相机前方，最终取景相机正好压在相机 Transform 上。
+                float distance = Mathf.Max(0.01f, sceneView.cameraDistance);
+                if (sync.syncPosition)
+                    sceneView.pivot = sourceTransform.position + sourceTransform.forward * distance;
+
+                if (sync.syncRotation)
+                    sceneView.rotation = sourceTransform.rotation;
+            }
+
+            SceneView.CameraSettings settings = sceneView.cameraSettings;
+            bool settingsChanged = false;
+
+            if (sync.syncFOV)
+            {
+                // 透视/正交属于"视野"本身，不跟着切换的话取景对不上。
+                sceneView.orthographic = sourceCamera.orthographic;
+                if (sourceCamera.orthographic)
+                {
+                    sceneView.size = Mathf.Max(0.01f, sourceCamera.orthographicSize);
+                }
+                else
+                {
+                    settings.fieldOfView = Mathf.Clamp(sourceCamera.fieldOfView, 1f, 179f);
+                    settingsChanged = true;
+                }
+            }
+
+            if (sync.syncClippingPlanes)
+            {
+                // dynamicClip 打开时会覆盖 near/far，必须先关掉才写得进去。
+                settings.dynamicClip = false;
+                settings.nearClip = Mathf.Max(0.01f, sourceCamera.nearClipPlane);
+                settings.farClip = Mathf.Max(0.02f, sourceCamera.farClipPlane);
+                settingsChanged = true;
+            }
+
+            if (settingsChanged)
+                sceneView.cameraSettings = settings;
+        }
+
         private static void OnEditorUpdate()
         {
             if (s_SyncComponents.Count == 0)

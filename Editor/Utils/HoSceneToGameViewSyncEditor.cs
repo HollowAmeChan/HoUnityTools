@@ -8,8 +8,11 @@ namespace Hollow.HoUnityTools.Editor
     internal sealed class HoSceneToGameViewSyncEditor : UnityEditor.Editor
     {
         private GUIStyle _primaryButtonStyle;
+        private GUIStyle _secondaryButtonStyle;
         private string _lastSyncMessage;
         private MessageType _lastSyncMessageType = MessageType.Info;
+        private string _lastReverseMessage;
+        private MessageType _lastReverseMessageType = MessageType.Info;
 
         public override void OnInspectorGUI()
         {
@@ -100,7 +103,7 @@ namespace Hollow.HoUnityTools.Editor
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 EditorGUILayout.LabelField("手动吸附", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("把最近活动的 Scene 视图相机应用到此 Camera。", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("两个方向：把 Scene 视图搬到此 Camera，或让 Scene 视图看向此 Camera。反向吸附没有等价的官方入口（Align View to Selected 不含 FOV 与裁切）。", EditorStyles.wordWrappedMiniLabel);
                 EditorGUILayout.Space(4f);
 
                 if (GUILayout.Button(new GUIContent("吸附当前 Scene 视图", "将当前 Scene 视图相机的位置、旋转、FOV 和裁切平面按下方选项应用到此 Camera。"), PrimaryButtonStyle))
@@ -108,6 +111,14 @@ namespace Hollow.HoUnityTools.Editor
 
                 if (!string.IsNullOrEmpty(_lastSyncMessage))
                     EditorGUILayout.HelpBox(_lastSyncMessage, _lastSyncMessageType);
+
+                EditorGUILayout.Space(6f);
+
+                if (GUILayout.Button(new GUIContent("Scene 视图看向此 Camera", "按下方选项把此 Camera 的位置、旋转、视野和裁切平面应用到最近活动的 Scene 视图。视野通道会同时切换 Scene 视图的透视/正交模式；同步裁切平面会关闭 Scene 视图的动态裁切。"), SecondaryButtonStyle))
+                    SnapSceneViewToTargets();
+
+                if (!string.IsNullOrEmpty(_lastReverseMessage))
+                    EditorGUILayout.HelpBox(_lastReverseMessage, _lastReverseMessageType);
             }
         }
 
@@ -185,6 +196,41 @@ namespace Hollow.HoUnityTools.Editor
             Repaint();
         }
 
+        private void SnapSceneViewToTargets()
+        {
+            serializedObject.ApplyModifiedProperties();
+
+            HoSceneToGameViewSyncDriver.SyncResult result = HoSceneToGameViewSyncDriver.SyncResult.MissingComponent;
+            HoSceneToGameViewSync syncedSync = null;
+
+            // 一个 Scene 视图只能看向一台相机，多选时取第一个吸附成功的目标。
+            foreach (Object selectedTarget in targets)
+            {
+                if (!(selectedTarget is HoSceneToGameViewSync sync))
+                    continue;
+
+                result = HoSceneToGameViewSyncDriver.SnapSceneViewToCamera(sync);
+                if (result == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+                {
+                    syncedSync = sync;
+                    break;
+                }
+            }
+
+            if (syncedSync != null)
+            {
+                _lastReverseMessage = $"已让 Scene 视图看向 {syncedSync.AttachedCamera.name}。";
+                _lastReverseMessageType = MessageType.Info;
+            }
+            else
+            {
+                _lastReverseMessage = GetResultText(result);
+                _lastReverseMessageType = MessageType.Warning;
+            }
+
+            Repaint();
+        }
+
         private static string GetResultText(HoSceneToGameViewSyncDriver.SyncResult result)
         {
             switch (result)
@@ -226,6 +272,22 @@ namespace Hollow.HoUnityTools.Editor
                 }
 
                 return _primaryButtonStyle;
+            }
+        }
+
+        private GUIStyle SecondaryButtonStyle
+        {
+            get
+            {
+                if (_secondaryButtonStyle == null)
+                {
+                    _secondaryButtonStyle = new GUIStyle(GUI.skin.button)
+                    {
+                        fixedHeight = 30f
+                    };
+                }
+
+                return _secondaryButtonStyle;
             }
         }
     }

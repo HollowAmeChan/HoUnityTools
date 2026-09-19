@@ -184,7 +184,6 @@ namespace Hollow.HoUnityTools.Constraints
 
         private HoLookAtState state;
         private HoLookAtIkRelay relay;
-        private Camera resolvedCamera;
         private bool cameraWarned;
         private bool built;
         private float externalWeight = 1.0f;
@@ -296,10 +295,10 @@ namespace Hollow.HoUnityTools.Constraints
 
         public string AnimatorName => animator != null ? animator.gameObject.name : "（未找到）";
 
-        /// <summary>实际使用的相机名（鼠标角度映射的屏幕换算用）；空表示没找到。</summary>
-        public string ResolvedCameraName => GetMouseCamera() != null ? GetMouseCamera().name : "（未找到）";
+        /// <summary>鼠标换算用的相机名（手动指定）；"（未指定）"表示面板上还没填。</summary>
+        public string ResolvedCameraName => mouseCamera != null ? mouseCamera.name : "（未指定）";
 
-        public bool MouseCameraResolved => GetMouseCamera() != null;
+        public bool MouseCameraAssigned => mouseCamera != null;
 
         public int MeshCount => writer.MeshCount;
 
@@ -808,25 +807,27 @@ namespace Hollow.HoUnityTools.Constraints
             return direction.sqrMagnitude > 1e-6f;
         }
 
-        /// <summary>解析用于屏幕换算的相机（结果缓存；失效时重新找）。</summary>
+        /// <summary>
+        /// 鼠标换算用的相机：**只用手动指定的那个**（不自动猜）。
+        /// 空的时候警告一次，角度映射会退回角色相对坐标系（正面机位下左右是反的）。
+        /// </summary>
         private Camera GetMouseCamera()
         {
-            if (resolvedCamera != null && resolvedCamera.gameObject.activeInHierarchy)
+            if (mouseCamera != null && mouseCamera.gameObject.activeInHierarchy)
             {
-                return resolvedCamera;
+                return mouseCamera;
             }
 
-            resolvedCamera = HoMousePointer.ResolveCamera(mouseCamera);
-            if (resolvedCamera == null && !cameraWarned)
+            if (!cameraWarned && targetMode == HoLookAtMode.Mouse && Application.isPlaying)
             {
                 cameraWarned = true;
                 Debug.LogWarning(
-                    "[HoLookAtConstraint] 找不到可用相机：指定「相机」字段，或给主相机打上 MainCamera 标签。"
-                    + "在此之前鼠标角度映射会退回角色相对坐标系（正面机位下看起来是左右反的）。",
+                    "[HoLookAtConstraint] 鼠标模式没有指定「相机」：请在面板上把观众视角的相机拖进「相机」字段"
+                    + "（也可以用「填入场景里的相机」按钮）。在此之前角度映射会退回角色相对坐标系，正面机位下看起来是左右反的。",
                     this);
             }
 
-            return resolvedCamera;
+            return null;
         }
 
         private Vector3 GetPivot()        {

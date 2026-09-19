@@ -14,10 +14,10 @@ namespace Hollow.HoUnityTools.Constraints
     public static class HoMousePointer
     {
         /// <summary>
-        /// 解析"用来做屏幕→世界换算的相机"：指定 > Camera.main > 第一个渲染到屏幕的启用相机（取像素面积最大的）。
-        /// 场景里没有 MainCamera 标签是常见情况（MMD 测试场景就是），所以不能只靠 Camera.main。
+        /// 编辑器辅助：替用户在场景里挑一个"看起来是观众视角"的相机（渲染到屏幕、启用的、像素面积最大）。
+        /// **只在面板按钮/一键装配里调用** —— 运行时不再自动猜相机，一律用组件上手动指定的那个。
         /// </summary>
-        public static Camera ResolveCamera(Camera preferred)
+        public static Camera FindSceneCamera(Camera preferred)
         {
             if (preferred != null)
             {
@@ -121,7 +121,7 @@ namespace Hollow.HoUnityTools.Constraints
             sample.valid = true;
             sample.screenPosition = screenPosition;
 
-            Camera camera = ResolveCamera(settings.camera);
+            Camera camera = settings.camera;
             if (settings.sampleMode != HoLookAtMouseSampleMode.AngleMap && camera != null)
             {
                 Ray ray = camera.ScreenPointToRay(screenPosition);

@@ -288,16 +288,29 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.PropertyField(mouseDeadZone, new GUIContent("鼠标死区"));
                 EditorGUILayout.PropertyField(mouseHoldOffscreen, new GUIContent("离屏保持"));
 
-                if (!constraint.MouseCameraResolved)
+                if (!constraint.MouseCameraAssigned)
                 {
                     EditorGUILayout.HelpBox(
-                        "找不到可用相机：把场景里的主相机拖到上面的「相机」字段，或给它打上 MainCamera 标签。"
-                        + "在此之前屏幕相对坐标系退回角色相对，正面机位下左右是反的。",
+                        "鼠标模式必须手动指定「相机」（运行时不会自动猜）。点下面的按钮可以填入场景里第一个"
+                        + "渲染到屏幕的相机，再确认它是不是你要的观众视角。未指定时角度映射会退回角色相对坐标系。",
                         MessageType.Warning);
+                    if (GUILayout.Button("填入场景里的相机"))
+                    {
+                        Camera found = HoMousePointer.FindSceneCamera(null);
+                        if (found != null)
+                        {
+                            mouseCamera.objectReferenceValue = found;
+                            serializedObject.ApplyModifiedProperties();
+                        }
+                        else
+                        {
+                            Debug.LogWarning("场景里没有找到渲染到屏幕的启用相机。");
+                        }
+                    }
                 }
                 else
                 {
-                    EditorGUILayout.LabelField("实际使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField("使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
                 }
             }
 
