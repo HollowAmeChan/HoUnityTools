@@ -92,6 +92,7 @@ namespace Hollow.HoUnityTools.Constraints
             public int MeshIndex;
             public int KeyIndex;
             public float BaseValue;
+            public float ExternalBase;
             public float LastWritten;
             public float Sum;
             public float OverrideValue;
@@ -755,9 +756,19 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void Snapshot()
         {
+            float tolerance = Mathf.Max(writeThreshold, 0.0001f);
             for (int i = 0; i < bindings.Length; i++)
             {
-                bindings[i].BaseValue = meshCache[bindings[i].MeshIndex].GetBlendShapeWeight(bindings[i].KeyIndex);
+                float current = meshCache[bindings[i].MeshIndex].GetBlendShapeWeight(bindings[i].KeyIndex);
+
+                // 只有"别人改了值"才更新外部基准。否则我们上一帧自己写进去的值会被当成基准，
+                // 叠加模式就变成每帧累加（眼睛闭上之后一直不睁开的那个 bug）。
+                if (!bindings[i].EverWritten || Mathf.Abs(current - bindings[i].LastWritten) > tolerance)
+                {
+                    bindings[i].ExternalBase = current;
+                }
+
+                bindings[i].BaseValue = bindings[i].ExternalBase;
                 bindings[i].Sum = 0.0f;
                 bindings[i].HasOverride = false;
                 bindings[i].OverrideValue = 0.0f;
@@ -970,6 +981,10 @@ namespace Hollow.HoUnityTools.Constraints
                 float final = bindings[i].HasOverride
                     ? bindings[i].OverrideValue
                     : bindings[i].BaseValue + bindings[i].Sum;
+
+                // Unity 的形态键权重就是 0..100；夹一下，顺便让 LastWritten 与实际读回的值一致，
+                // 否则下一帧的"外部基准判定"会误判成别人改过。
+                final = Mathf.Clamp(final, 0.0f, 100.0f);
 
                 if (bindings[i].EverWritten && Mathf.Abs(final - bindings[i].LastWritten) <= writeThreshold)
                 {
