@@ -30,6 +30,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty rules;
         private SerializedProperty writeThreshold;
         private SerializedProperty writingEnabled;
+        private SerializedProperty mergeMode;
 
         private bool meshExpanded = true;
         private bool blinkExpanded = true;
@@ -39,6 +40,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private readonly List<bool> ruleFoldouts = new List<bool>();
         private readonly List<bool> targetDetails = new List<bool>();
+        private readonly List<HoShapeKeySaturation> saturationBuffer = new List<HoShapeKeySaturation>();
 
         private static readonly Color MeshColor = new Color(0.28f, 0.62f, 1.0f);
         private static readonly Color BlinkColor = new Color(0.24f, 0.86f, 0.58f);
@@ -93,6 +95,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             rules = Find("rules");
             writeThreshold = Find("writeThreshold");
             writingEnabled = Find("writingEnabled");
+            mergeMode = Find("mergeMode");
             ruleFoldouts.Clear();
             targetDetails.Clear();
         }
@@ -203,6 +206,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(evaluateInEditMode, EvaluateInEditModeLabel);
             EditorGUILayout.PropertyField(writingEnabled, WritingEnabledLabel);
             EditorGUILayout.PropertyField(writeThreshold, WriteThresholdLabel);
+            EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
 
             if (constraint.MissingKeys.Count > 0)
             {
@@ -569,6 +573,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.LabelField(
                 "眨眼相位 " + constraint.BlinkPhase + "   输出 " + constraint.BlinkValue.ToString("0.###"),
                 EditorStyles.miniLabel);
+
+            constraint.CollectSaturatedKeys(saturationBuffer);
+            HoConstraintEditorSectionGui.DrawSaturationReport(saturationBuffer);
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("立即眨一次"))

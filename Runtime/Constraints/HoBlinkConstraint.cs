@@ -88,6 +88,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private bool writingEnabled = true;
 
+        [SerializeField]
+        private HoShapeKeyMergeMode mergeMode = HoShapeKeyMergeMode.Saturate;
+
         private readonly HoShapeKeyWriter writer = new HoShapeKeyWriter();
         private readonly List<int> scratchDriverIds = new List<int>();
 
@@ -147,6 +150,12 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         public IReadOnlyList<string> MissingKeys => writer.MissingKeys;
+
+        /// <summary>本帧写满（或我们这一路被合并策略削过）的键，面板用。</summary>
+        public void CollectSaturatedKeys(List<HoShapeKeySaturation> results)
+        {
+            writer.CollectSaturated(results);
+        }
 
         public int MeshCount => writer.MeshCount;
 
@@ -363,6 +372,7 @@ namespace Hollow.HoUnityTools.Constraints
 
             writer.WriteThreshold = writeThreshold;
             writer.WriteEnabled = writingEnabled;
+            writer.MergeMode = mergeMode;
             built = false;
         }
 
@@ -376,6 +386,7 @@ namespace Hollow.HoUnityTools.Constraints
             EnsureBuilt();
             writer.WriteThreshold = writeThreshold;
             writer.WriteEnabled = writingEnabled;
+            writer.MergeMode = mergeMode;
 
             if (!writingEnabled || !writer.IsBuilt || writer.MeshCount == 0)
             {

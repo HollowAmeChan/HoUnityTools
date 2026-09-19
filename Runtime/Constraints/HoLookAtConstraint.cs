@@ -161,6 +161,9 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.0f)]
         private float writeThreshold = 0.01f;
 
+        [SerializeField]
+        private HoShapeKeyMergeMode mergeMode = HoShapeKeyMergeMode.Saturate;
+
         [Header("调试")]
         [SerializeField]
         private bool drawGizmos = true;
@@ -314,6 +317,12 @@ namespace Hollow.HoUnityTools.Constraints
         public int BindingCount => writer.BindingCount;
 
         public IReadOnlyList<string> MissingKeys => writer.MissingKeys;
+
+        /// <summary>本帧写满（或我们这一路被合并策略削过）的键，面板用。</summary>
+        public void CollectSaturatedKeys(List<HoShapeKeySaturation> results)
+        {
+            writer.CollectSaturated(results);
+        }
 
         public SkinnedMeshRenderer GetMesh(int index)
         {
@@ -554,6 +563,7 @@ namespace Hollow.HoUnityTools.Constraints
                 Mathf.Max(1.0f, eyeAngleLimit.z),
                 Mathf.Max(1.0f, eyeAngleLimit.w));
             writer.WriteThreshold = writeThreshold;
+            writer.MergeMode = mergeMode;
             if (eyeEntries != null)
             {
                 for (int i = 0; i < eyeEntries.Count; i++)
@@ -594,6 +604,7 @@ namespace Hollow.HoUnityTools.Constraints
         private void Build()
         {
             writer.WriteThreshold = writeThreshold;
+            writer.MergeMode = mergeMode;
             writer.BeginBuild(renderers);
             eyeTargets.Clear();
 

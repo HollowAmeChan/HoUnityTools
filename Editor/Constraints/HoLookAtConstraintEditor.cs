@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using Hollow.HoUnityTools.Constraints;
 using UnityEditor;
 using UnityEngine;
-
 namespace Hollow.HoUnityTools.Editor.Constraints
 {
     [CustomEditor(typeof(HoLookAtConstraint))]
@@ -51,6 +50,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty mouseHoldOffscreen;
         private SerializedProperty writeThreshold;
         private SerializedProperty drawGizmos;
+        private SerializedProperty mergeMode;
 
         private bool targetExpanded = true;
         private bool roleExpanded = true;
@@ -61,6 +61,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private bool advancedExpanded;
         private bool debugExpanded = true;
         private readonly List<bool> entryFoldouts = new List<bool>();
+        private readonly List<HoShapeKeySaturation> saturationBuffer = new List<HoShapeKeySaturation>();
 
         private static readonly Color TargetColor = new Color(0.28f, 0.62f, 1.0f);
         private static readonly Color RoleColor = new Color(0.62f, 0.66f, 0.72f);
@@ -135,6 +136,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             mouseHoldOffscreen = Find("mouseHoldOffscreen");
             writeThreshold = Find("writeThreshold");
             drawGizmos = Find("drawGizmos");
+            mergeMode = Find("mergeMode");
         }
 
         private SerializedProperty Find(string name)
@@ -398,6 +400,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与的比例。头转不到位的部分由眼睛补，这里可以再打个折。"));
+                EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
                 EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 内/外/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
                 EditorGUILayout.LabelField("四条方向曲线（横轴 = 上面角度上限的比例，纵轴 = 输出）", EditorStyles.miniLabel);
                 EditorGUILayout.PropertyField(horizontalInner, L("水平内曲线", "往里看这条通道的映射形状，直线 = 线性。"));
@@ -667,6 +670,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     constraint.GetChannelTargetOutput(channel, false),
                     constraint.GetChannelTargetOutput(channel, true));
             }
+
+            constraint.CollectSaturatedKeys(saturationBuffer);
+            HoConstraintEditorSectionGui.DrawSaturationReport(saturationBuffer);
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("图例：黄 = 总角度（目标）　青 = 头承担　紫 = 头 + 眼睛（实际目光）", EditorStyles.miniLabel);

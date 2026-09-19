@@ -25,6 +25,15 @@ namespace Hollow.HoUnityTools.Constraints
             public float OverrideValue;
             public bool HasOverride;
             public bool EverWritten;
+
+            /// <summary>本帧"基准 + 原始求和"（合并之前），给饱和诊断用。</summary>
+            public float LastRequest;
+
+            /// <summary>本帧最终写出去的值（即使因为阈值没写，也是算出来的值）。</summary>
+            public float LastFinal;
+
+            /// <summary>本帧我们这一路被合并策略削过。</summary>
+            public bool LastClipped;
         }
 
         private struct CompiledTarget
@@ -54,6 +63,9 @@ namespace Hollow.HoUnityTools.Constraints
         public float WriteThreshold { get; set; } = 0.01f;
 
         public bool WriteEnabled { get; set; } = true;
+
+        /// <summary>求和超过 100 时怎么处理（见 <see cref="HoShapeKeyMergeMode"/>）。默认夹断。</summary>
+        public HoShapeKeyMergeMode MergeMode { get; set; } = HoShapeKeyMergeMode.Saturate;
 
         public int MeshCount => meshes != null ? meshes.Length : 0;
 
@@ -371,11 +383,20 @@ namespace Hollow.HoUnityTools.Constraints
 
             for (int i = 0; i < bindings.Length; i++)
             {
+                float baseValue = bindings[i].BaseValue;
+                float sum = bindings[i].Sum;
+                float merged = MergeContribution(sum, baseValue);
+
                 float final = bindings[i].HasOverride
                     ? bindings[i].OverrideValue
-                    : bindings[i].BaseValue + bindings[i].Sum;
+                    : baseValue + merged;
+
+                float requested = baseValue + sum;
+                bindings[i].LastRequest = requested;
+                bindings[i].LastClipped = !bindings[i].HasOverride && merged < sum - 0.001f;
 
                 final = Mathf.Clamp(final, 0.0f, 100.0f);
+                bindings[i].LastFinal = final;
 
                 if (bindings[i].EverWritten && Mathf.Abs(final - bindings[i].LastWritten) <= WriteThreshold)
                 {
@@ -391,6 +412,101 @@ namespace Hollow.HoUnityTools.Constraints
                 mesh.SetBlendShapeWeight(bindings[i].KeyIndex, final);
                 bindings[i].LastWritten = final;
                 bindings[i].EverWritten = true;
+            }
+        }
+
+        /// <summary>软压缩的拐点：这个值以上开始压，渐近到 100 但到不了。</summary>
+        private const float SoftClipKnee = 80.0f;
+
+        /// <summary>
+        /// 把"我们这一路求和出来的贡献"合并成一个可以直接加在基准上的值。
+        ///
+        /// 注意这里**只动我们自己的贡献，不动基准** —— 动画/面捕写在键上的值不会被我们改写，
+        /// 我们没出力（sum = 0）时输出恒等于基准。
+        /// </summary>
+        private float MergeContribution(float sum, float baseValue)
+        {
+            if (Mathf.Abs(sum) <= 0.0001f)
+            {
+                return 0.0f;
+            }
+
+            switch (MergeMode)
+            {
+                case HoShapeKeyMergeMode.SoftClip:
+                    return SoftClipValue(sum);
+
+                case HoShapeKeyMergeMode.Normalize:
+                {
+                    float total = baseValue + sum;
+                    if (sum > 0.0f && total > 100.0f)
+                    {
+                        // 剩余空间按比例分给各路，比例关系不变
+                        float room = Mathf.Max(0.0f, 100.0f - baseValue);
+                        return sum * (room / total);
+                    }
+
+                    return sum;
+                }
+
+                default:
+                    return sum;
+            }
+        }
+
+        private static float SoftClipValue(float sum)
+        {
+            float magnitude = Mathf.Abs(sum);
+            if (magnitude <= SoftClipKnee)
+            {
+                return sum;
+            }
+
+            float span = 100.0f - SoftClipKnee;
+            float compressed = SoftClipKnee + span * (1.0f - Mathf.Exp(-(magnitude - SoftClipKnee) / span));
+            return Mathf.Sign(sum) * compressed;
+        }
+
+        /// <summary>
+        /// 收集"已经写满（或我们这一路被削过）"的键，给面板显示用。
+        /// 只有编辑器会调用，所以键名/网格名的字符串开销无所谓。
+        /// </summary>
+        public void CollectSaturated(List<HoShapeKeySaturation> results, float threshold = 99.5f)
+        {
+            if (results == null)
+            {
+                return;
+            }
+
+            results.Clear();
+            if (bindings == null || meshes == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < bindings.Length; i++)
+            {
+                if (!bindings[i].EverWritten)
+                {
+                    continue;
+                }
+
+                if (bindings[i].LastFinal < threshold && !bindings[i].LastClipped)
+                {
+                    continue;
+                }
+
+                SkinnedMeshRenderer mesh = meshes[bindings[i].MeshIndex];
+                Mesh shared = mesh != null ? mesh.sharedMesh : null;
+                results.Add(new HoShapeKeySaturation
+                {
+                    MeshName = shared != null ? shared.name : "（网格丢失）",
+                    KeyName = shared != null ? shared.GetBlendShapeName(bindings[i].KeyIndex) : "?",
+                    Base = bindings[i].ExternalBase,
+                    Request = bindings[i].LastRequest,
+                    Final = bindings[i].LastFinal,
+                    Clipped = bindings[i].LastClipped
+                });
             }
         }
 

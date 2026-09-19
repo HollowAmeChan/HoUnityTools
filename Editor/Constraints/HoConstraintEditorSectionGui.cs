@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Hollow.HoUnityTools.Constraints;
 using UnityEditor;
 using UnityEngine;
 
@@ -102,6 +104,51 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         public static IDisposable NarrowLabels(float width)
         {
             return new LabelWidthScope(width);
+        }
+
+        /// <summary>合并方式下拉的标签（眨眼与注视共用同一套文案）。</summary>
+        public static readonly GUIContent MergeModeLabel = new GUIContent(
+            "合并方式",
+            "一个键上同时有外部写者（动画/面捕/表情）和我们多路目标时，求和超过 100 怎么处理：\n"
+            + "· 夹断（默认）：到 100 就停 —— 单路到顶就该是满值时用这个\n"
+            + "· 软饱和：80 以上软压缩，永远到不了 100（请求 100 时约 93）—— 果冻超调、多路叠加的差别保留下来\n"
+            + "· 按比例分配：超了就各路一起缩、比例不变，谁也不会把谁挤掉\n"
+            + "只影响我们这一路，不会改写动画/面捕写在键上的基准值。");
+
+        /// <summary>
+        /// 列出"已经写满 / 被削过"的键。这是回答"为什么形态键老是 100"的地方：
+        /// 把基准、我们的请求、最终值三个数摆出来，就能看出是外部占满了、还是自己拉满、还是叠加被夹断。
+        /// </summary>
+        public static void DrawSaturationReport(List<HoShapeKeySaturation> buffer, int maxLines = 6)
+        {
+            if (buffer == null || buffer.Count == 0)
+            {
+                return;
+            }
+
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            text.Append("以下形态键已经写满（或我们这一路被合并策略削过）：");
+            int lines = Mathf.Min(buffer.Count, maxLines);
+            for (int i = 0; i < lines; i++)
+            {
+                HoShapeKeySaturation item = buffer[i];
+                text.Append("\n· ").Append(item.KeyName);
+                text.Append("　基准 ").Append(item.Base.ToString("0.#"));
+                text.Append(" + 我们 ").Append((item.Request - item.Base).ToString("0.#"));
+                text.Append(" → ").Append(item.Final.ToString("0.#"));
+                if (item.Clipped)
+                {
+                    text.Append("（被削）");
+                }
+            }
+
+            if (buffer.Count > lines)
+            {
+                text.Append("\n… 还有 ").Append(buffer.Count - lines).Append(" 个");
+            }
+
+            text.Append("\n\n想留出余量：把「合并方式」换成软饱和/按比例分配，或调小对应那一路的「增益 / 强度 / 输出上限」。");
+            EditorGUILayout.HelpBox(text.ToString(), MessageType.Warning);
         }
 
         private sealed class LabelWidthScope : IDisposable
