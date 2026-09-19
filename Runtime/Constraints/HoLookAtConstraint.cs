@@ -88,13 +88,24 @@ namespace Hollow.HoUnityTools.Constraints
         private bool eyesEnabled = true;
 
         [SerializeField]
-        private List<Renderer> renderers = new List<Renderer>();
+        private HoLookAtEyeDriver eyeDriver = HoLookAtEyeDriver.EyeBones;
 
         [SerializeField, Range(0.0f, 1.0f)]
         private float eyeWeight = 1.0f;
 
         [SerializeField, Min(0.0f)]
         private float eyeSmoothing = 0.04f;
+
+        /// <summary>骨骼模式的左右限位（度）：眼球最多往左右各转多少。</summary>
+        [SerializeField, Range(0.0f, 89.0f)]
+        private float eyeBoneLimitYaw = 35.0f;
+
+        /// <summary>骨骼模式的上下限位（度）。</summary>
+        [SerializeField, Range(0.0f, 89.0f)]
+        private float eyeBoneLimitPitch = 25.0f;
+
+        [SerializeField]
+        private List<Renderer> renderers = new List<Renderer>();
 
         [SerializeField]
         private Vector4 eyeAngleLimit = new Vector4(30.0f, 30.0f, 20.0f, 25.0f);
@@ -145,10 +156,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Min(0.0f)]
         private float aimMaxSpeed = 360.0f;
 
-        /// <summary>眼球骨骼权重：0 = 完全不动眼球骨骼（只写形态键）。</summary>
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float eyeBoneWeight;
-
         [SerializeField, Min(0.0f)]
         private float returnDelay = 0.4f;
 
@@ -189,6 +196,9 @@ namespace Hollow.HoUnityTools.Constraints
         private float mouseAnglePitch;
         private bool hasMouseAngles;
         private Vector3 lastDirection = Vector3.forward;
+        private Quaternion leftEyeRest = Quaternion.identity;
+        private Quaternion rightEyeRest = Quaternion.identity;
+        private bool eyeBonesCaptured;
 
         // ── 公开接口（给状态机 / Blueprint / Timeline / 脚本用）────────────────
 
@@ -292,6 +302,25 @@ namespace Hollow.HoUnityTools.Constraints
         public float HeadLimitPitch => headLimitPitch;
 
         public bool DrawGizmosEnabled => drawGizmos;
+
+        /// <summary>当前的眼睛驱动模式（骨骼 / 形态键）。</summary>
+        public HoLookAtEyeDriver EyeDriver => eyeDriver;
+
+        public bool EyeBonesAvailable => animator != null && animator.isHuman
+                                         && (animator.GetBoneTransform(HumanBodyBones.LeftEye) != null
+                                             || animator.GetBoneTransform(HumanBodyBones.RightEye) != null);
+
+        /// <summary>骨骼模式实际转出去的角度（度）。</summary>
+        public float AppliedEyeYaw => state.smoothedEyeYaw;
+
+        public float AppliedEyePitch => state.smoothedEyePitch;
+
+        public float EyeBoneLimitYaw => eyeBoneLimitYaw;
+
+        public float EyeBoneLimitPitch => eyeBoneLimitPitch;
+
+        /// <summary>形态键模式用：有没有可写的网格/绑定。</summary>
+        public bool ShapeKeyEyesActive => eyeDriver == HoLookAtEyeDriver.ShapeKeys && MeshCount > 0;
 
         public bool IkRecentlyCalled => Application.isPlaying && Time.timeAsDouble - state.lastIkTime < 0.5;
 
@@ -417,8 +446,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void OnDisable()
         {
-            // 关掉组件时把我们写过的眼动键交还给基准，别让眼睛停在最后一次的方向上
+            // 关掉组件时把自己动过的东西交还：形态键硬写回基准，眼球骨骼放回叠加前的姿势
             writer.RestoreWritten();
+            RestoreEyeBones();
             built = false;
             ReleaseIkRelay();
         }
@@ -614,7 +644,9 @@ namespace Hollow.HoUnityTools.Constraints
                 eyeTargetIds[c, 1] = -1;
             }
 
-            if (eyeEntries != null)
+            // 骨骼模式不写形态键：一个目标都不注册。
+            // 于是从形态键模式切过来时，写入器会在重建收尾把之前写过的键硬写回基准（自动清场）。
+            if (eyeDriver == HoLookAtEyeDriver.ShapeKeys && eyeEntries != null)
             {
                 for (int i = 0; i < eyeEntries.Count; i++)
                 {
@@ -959,23 +991,32 @@ namespace Hollow.HoUnityTools.Constraints
 
         // ── 第二段：眼睛 ────────────────────────────────────────────────────
 
+        /// <summary>
+        /// 眼睛残余角 → 眼睛。两套驱动**按模式二选一**（不混用）：
+        ///   骨骼模式（默认）：残余角直接转到 humanoid 的 LeftEye/RightEye 上，精确指向，不需要标定；
+        ///   形态键模式：残余角过四条方向曲线写成凝视键，需要按模型标定角度上限。
+        /// 两条路都在 LateUpdate（头部 IK 之后）。
+        /// </summary>
         private void ApplyEyes(float deltaTime)
         {
             float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             float eyes = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) * effectiveWeight : 0.0f;
 
-            GetEyeSettings(out HoEyeSettings settings, out AnimationCurve inner, out AnimationCurve outer, out AnimationCurve up, out AnimationCurve down);
-
             float yaw = state.eyeYaw * eyes;
             float pitch = state.eyePitch * eyes;
 
-            // 斜向看时按椭圆夹取，避免"过转"（外圈比内圈小的时候特别明显）
-            HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
+            if (eyeDriver == HoLookAtEyeDriver.EyeBones)
+            {
+                // 斜向看时按椭圆夹取，避免左右和上下同时吃满
+                HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, eyeBoneLimitYaw, eyeBoneLimitPitch);
+                SmoothEyes(ref yaw, ref pitch, deltaTime);
+                ApplyEyeBones(yaw, pitch);
+                return;
+            }
 
-            state.smoothedEyeYaw = HoLookAtSolver.SmoothAngle(state.smoothedEyeYaw, yaw, deltaTime, eyeSmoothing, 0.0f);
-            state.smoothedEyePitch = HoLookAtSolver.SmoothAngle(state.smoothedEyePitch, pitch, deltaTime, eyeSmoothing, 0.0f);
-            yaw = state.smoothedEyeYaw;
-            pitch = state.smoothedEyePitch;
+            GetEyeSettings(out HoEyeSettings settings, out AnimationCurve inner, out AnimationCurve outer, out AnimationCurve up, out AnimationCurve down);
+            HoLookAtSolver.ClampToEllipse(ref yaw, ref pitch, settings.angleLimitInner, settings.angleLimitUp);
+            SmoothEyes(ref yaw, ref pitch, deltaTime);
 
             if (writer.IsBuilt && writer.MeshCount > 0)
             {
@@ -991,8 +1032,14 @@ namespace Hollow.HoUnityTools.Constraints
 
                 writer.Write();
             }
+        }
 
-            ApplyEyeBones(yaw, pitch, settings, inner, outer, up, down);
+        private void SmoothEyes(ref float yaw, ref float pitch, float deltaTime)
+        {
+            state.smoothedEyeYaw = HoLookAtSolver.SmoothAngle(state.smoothedEyeYaw, yaw, deltaTime, eyeSmoothing, 0.0f);
+            state.smoothedEyePitch = HoLookAtSolver.SmoothAngle(state.smoothedEyePitch, pitch, deltaTime, eyeSmoothing, 0.0f);
+            yaw = state.smoothedEyeYaw;
+            pitch = state.smoothedEyePitch;
         }
 
         private void ApplyEyeChannel(
@@ -1115,16 +1162,13 @@ namespace Hollow.HoUnityTools.Constraints
             down = verticalDown;
         }
 
-        private void ApplyEyeBones(
-            float yaw,
-            float pitch,
-            in HoEyeSettings settings,
-            AnimationCurve inner,
-            AnimationCurve outer,
-            AnimationCurve up,
-            AnimationCurve down)
+        /// <summary>
+        /// 骨骼模式：把残余角（已在外面乘过强度、夹过限位、平滑过）叠加到眼球骨骼上。
+        /// 走世界空间叠加，所以**不猜骨骼轴向**；角是多少就转多少，因此能精确指向目标。
+        /// </summary>
+        private void ApplyEyeBones(float yaw, float pitch)
         {
-            if (eyeBoneWeight <= 0.0f || animator == null || !animator.isHuman)
+            if (animator == null || !animator.isHuman)
             {
                 return;
             }
@@ -1136,37 +1180,55 @@ namespace Hollow.HoUnityTools.Constraints
                 return;
             }
 
-            float shapedYaw = ShapeBoneAngle(yaw, settings.angleLimitInner, settings.angleLimitOuter, inner, outer);
-            float shapedPitch = ShapeBoneAngle(pitch, settings.angleLimitUp, settings.angleLimitDown, up, down);
-
-            Vector3 upAxis = GetReferenceUp();
-            Vector3 rightAxis = Vector3.Cross(upAxis, GetReferenceForward()).normalized;
-            Quaternion delta = Quaternion.AngleAxis(shapedYaw, upAxis) * Quaternion.AngleAxis(-shapedPitch, rightAxis);
-
-            float boneWeight = Mathf.Clamp01(eyeBoneWeight);
-            Quaternion blended = Quaternion.Slerp(Quaternion.identity, delta, boneWeight);
+            // 记下叠加前的姿势：组件被关掉且动画也不写这两根骨头时，用它把眼睛放回去
             if (left != null)
             {
-                left.rotation = blended * left.rotation;
+                leftEyeRest = left.rotation;
             }
 
             if (right != null)
             {
-                right.rotation = blended * right.rotation;
+                rightEyeRest = right.rotation;
+            }
+
+            eyeBonesCaptured = true;
+
+            Vector3 upAxis = GetReferenceUp();
+            Vector3 rightAxis = Vector3.Cross(upAxis, GetReferenceForward()).normalized;
+            Quaternion delta = Quaternion.AngleAxis(yaw, upAxis) * Quaternion.AngleAxis(-pitch, rightAxis);
+
+            if (left != null)
+            {
+                left.rotation = delta * left.rotation;
+            }
+
+            if (right != null)
+            {
+                right.rotation = delta * right.rotation;
             }
         }
 
-        private static float ShapeBoneAngle(float angle, float positiveLimit, float negativeLimit, AnimationCurve positiveCurve, AnimationCurve negativeCurve)
+        /// <summary>把眼球骨骼放回上一次叠加前的姿势（组件被关掉时用）。</summary>
+        private void RestoreEyeBones()
         {
-            bool positive = angle >= 0.0f;
-            float limit = positive ? positiveLimit : negativeLimit;
-            AnimationCurve curve = positive ? positiveCurve : negativeCurve;
-            if (limit <= 0.0f)
+            if (!eyeBonesCaptured || animator == null || !animator.isHuman)
             {
-                return 0.0f;
+                return;
             }
 
-            return Mathf.Sign(angle) * limit * ShapeAmount(Mathf.Abs(angle), limit, curve);
+            Transform left = animator.GetBoneTransform(HumanBodyBones.LeftEye);
+            Transform right = animator.GetBoneTransform(HumanBodyBones.RightEye);
+            if (left != null)
+            {
+                left.rotation = leftEyeRest;
+            }
+
+            if (right != null)
+            {
+                right.rotation = rightEyeRest;
+            }
+
+            eyeBonesCaptured = false;
         }
     }
 }

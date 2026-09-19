@@ -33,6 +33,24 @@ namespace Hollow.HoUnityTools.Constraints
     }
 
     /// <summary>
+    /// 眼睛用哪条路驱动。两套不混用（面板按模式切换）。
+    /// </summary>
+    public enum HoLookAtEyeDriver
+    {
+        /// <summary>
+        /// 直接转 humanoid 的 LeftEye/RightEye 骨骼（世界空间叠加）。**默认**：
+        /// 眼睛残余角是多少就转多少，能精确指向目标，不需要标定。
+        /// </summary>
+        EyeBones,
+
+        /// <summary>
+        /// 写凝视形态键（四条通道 → 键）。没有眼球骨骼的模型用这条，
+        /// 需要按模型标定四个角度上限。
+        /// </summary>
+        ShapeKeys
+    }
+
+    /// <summary>
     /// 鼠标角度映射的坐标系。
     /// `ScreenRelative`：鼠标右 = 看向**画面**右侧（相机在角色正面时，等于看向角色的左边 —— 观众视角的直觉）。
     /// `CharacterRelative`：鼠标右 = 看向**角色**右侧（把鼠标当成角色自己的注视摇杆，正面机位下会看着相反）。

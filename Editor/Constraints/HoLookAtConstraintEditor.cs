@@ -29,16 +29,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty aimSmoothing;
         private SerializedProperty aimMaxSpeed;
         private SerializedProperty eyesEnabled;
+        private SerializedProperty eyeDriver;
         private SerializedProperty renderers;
         private SerializedProperty eyeWeight;
         private SerializedProperty eyeSmoothing;
+        private SerializedProperty eyeBoneLimitYaw;
+        private SerializedProperty eyeBoneLimitPitch;
         private SerializedProperty horizontalInner;
         private SerializedProperty horizontalOuter;
         private SerializedProperty verticalUp;
         private SerializedProperty verticalDown;
         private SerializedProperty eyeAngleLimit;
         private SerializedProperty eyeEntries;
-        private SerializedProperty eyeBoneWeight;
         private SerializedProperty lostBehavior;
         private SerializedProperty returnDelay;
         private SerializedProperty returnSpeed;
@@ -113,16 +115,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             aimSmoothing = Find("aimSmoothing");
             aimMaxSpeed = Find("aimMaxSpeed");
             eyesEnabled = Find("eyesEnabled");
+            eyeDriver = Find("eyeDriver");
             renderers = Find("renderers");
             eyeWeight = Find("eyeWeight");
             eyeSmoothing = Find("eyeSmoothing");
+            eyeBoneLimitYaw = Find("eyeBoneLimitYaw");
+            eyeBoneLimitPitch = Find("eyeBoneLimitPitch");
             horizontalInner = Find("horizontalInner");
             horizontalOuter = Find("horizontalOuter");
             verticalUp = Find("verticalUp");
             verticalDown = Find("verticalDown");
             eyeAngleLimit = Find("eyeAngleLimit");
             eyeEntries = Find("eyeEntries");
-            eyeBoneWeight = Find("eyeBoneWeight");
             lostBehavior = Find("lostBehavior");
             returnDelay = Find("returnDelay");
             returnSpeed = Find("returnSpeed");
@@ -371,66 +375,92 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private void DrawEyesSection(HoLookAtConstraint constraint)
         {
-            string summary = eyesEnabled.boolValue ? "开" : "关";
+            bool bones = (HoLookAtEyeDriver)eyeDriver.enumValueIndex == HoLookAtEyeDriver.EyeBones;
+            string summary = !eyesEnabled.boolValue ? "关" : (bones ? "眼球骨骼" : "形态键");
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref eyesExpanded, "③ 眼睛跟随", summary, EyeColor))
             {
                 return;
             }
 
-            EditorGUILayout.PropertyField(eyesEnabled, L("启用", "用形态键（辅助骨骼也行）让眼珠跟住目标。不依赖 humanoid。"));
+            EditorGUILayout.PropertyField(eyesEnabled, L("启用", "眼睛跟着目标转。骨骼模式用 humanoid 的 LeftEye/RightEye，形态键模式写凝视键。"));
             using (new EditorGUI.DisabledScope(!eyesEnabled.boolValue))
             {
-                EditorGUILayout.PropertyField(renderers, L("目标网格", "哪些网格上有眼睛的形态键。点下面的按钮可以一次收集所有子网格。"), true);
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("收集子级网格"))
-                {
-                    Undo.RecordObject(constraint, "收集注视约束网格");
-                    constraint.CollectChildRenderers();
-                    EditorUtility.SetDirty(constraint);
-                    serializedObject.Update();
-                }
-
-                if (GUILayout.Button(new GUIContent("重新解析键", "改了键名/换了模型之后点一下，重新在网格上找键。")))
-                {
-                    constraint.Rebuild();
-                }
-
-                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.PropertyField(eyeDriver, L("驱动方式", "眼球骨骼（推荐，默认）：直接把残余角转到 LeftEye/RightEye 骨骼上，指哪看哪、不用标定。\n形态键：把残余角过四条曲线写成凝视键，没有眼球骨骼的模型用这条。\n两套不混用，切换时旧的形态键会自动交还回基准值。"));
 
                 EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与的比例。头转不到位的部分由眼睛补，这里可以再打个折。"));
-                EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
-                EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 往右/往左/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
-                EditorGUILayout.LabelField("四条方向曲线（横轴 = 上面角度上限的比例，纵轴 = 输出）", EditorStyles.miniLabel);
-                EditorGUILayout.PropertyField(horizontalInner, L("往右曲线（内）", "往右看这条通道的映射形状，直线 = 线性。"));
-                EditorGUILayout.PropertyField(horizontalOuter, L("往左曲线（外）", "往左看这条通道的映射形状。"));
-                EditorGUILayout.PropertyField(verticalUp, L("看上曲线", "往上看这条通道的映射形状。"));
-                EditorGUILayout.PropertyField(verticalDown, L("看下曲线", "往下看这条通道的映射形状。"));
+                EditorGUILayout.PropertyField(eyeSmoothing, L("平滑（秒）", "眼睛角度的一阶平滑，比头部快一点（0.04 左右）。0 = 不平滑。"));
 
-                EditorGUILayout.Space(2.0f);
-                if (DrawChannelHeader())
+                if (bones)
                 {
-                    // 刚按了「左右族 / 内外族」：通道列表已经换过一轮，本帧就不要再遍历了
-                    return;
+                    if (!constraint.EyeBonesAvailable)
+                    {
+                        EditorGUILayout.HelpBox(
+                            "找不到眼球骨骼：humanoid 的 LeftEye / RightEye 至少要有一根（Avatar 里配好），否则眼睛不会动。"
+                            + "没有眼球骨骼的模型请把「驱动方式」切成「形态键」。",
+                            MessageType.Warning);
+                    }
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.PropertyField(eyeBoneLimitYaw, L("左右限位（度）", "眼球最多往左右各转多少。正常看东西很少超过 30°，超过就夹住避免翻白眼。"));
+                    EditorGUILayout.PropertyField(eyeBoneLimitPitch, L("上下限位（度）", "眼球最多往上/往下各转多少，对称。"));
+                    EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.LabelField(
+                        "实际转动：yaw " + constraint.AppliedEyeYaw.ToString("0.0") + "°　pitch " + constraint.AppliedEyePitch.ToString("0.0") + "°",
+                        EditorStyles.miniLabel);
                 }
-
-                while (entryFoldouts.Count < eyeEntries.arraySize)
+                else
                 {
-                    entryFoldouts.Add(true);
-                }
+                    EditorGUILayout.PropertyField(renderers, L("目标网格", "哪些网格上有眼睛的形态键。点下面的按钮可以一次收集所有子网格。"), true);
+                    EditorGUILayout.BeginHorizontal();
+                    if (GUILayout.Button("收集子级网格"))
+                    {
+                        Undo.RecordObject(constraint, "收集注视约束网格");
+                        constraint.CollectChildRenderers();
+                        EditorUtility.SetDirty(constraint);
+                        serializedObject.Update();
+                    }
 
-                for (int i = 0; i < eyeEntries.arraySize; i++)
-                {
-                    DrawEyeEntry(constraint, i);
-                }
+                    if (GUILayout.Button(new GUIContent("重新解析键", "改了键名/换了模型之后点一下，重新在网格上找键。")))
+                    {
+                        constraint.Rebuild();
+                    }
 
-                if (GUILayout.Button(new GUIContent("+ 通道", "一条通道 = 一种眼动方向（水平内/外、看左/右、看上/下）。"), GUILayout.Width(80.0f)))
-                {
-                    eyeEntries.InsertArrayElementAtIndex(eyeEntries.arraySize);
-                }
+                    EditorGUILayout.EndHorizontal();
 
-                if (constraint.MissingKeys.Count > 0)
-                {
-                    EditorGUILayout.HelpBox("以下键在目标网格上不存在：" + string.Join("、", constraint.MissingKeys), MessageType.Warning);
+                    EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
+                    EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 往右/往左/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
+                    EditorGUILayout.LabelField("四条方向曲线（横轴 = 上面角度上限的比例，纵轴 = 输出）", EditorStyles.miniLabel);
+                    EditorGUILayout.PropertyField(horizontalInner, L("往右曲线（内）", "往右看这条通道的映射形状，直线 = 线性。"));
+                    EditorGUILayout.PropertyField(horizontalOuter, L("往左曲线（外）", "往左看这条通道的映射形状。"));
+                    EditorGUILayout.PropertyField(verticalUp, L("看上曲线", "往上看这条通道的映射形状。"));
+                    EditorGUILayout.PropertyField(verticalDown, L("看下曲线", "往下看这条通道的映射形状。"));
+
+                    EditorGUILayout.Space(2.0f);
+                    if (DrawChannelHeader())
+                    {
+                        // 刚按了「左右族 / 内外族」：通道列表已经换过一轮，本帧就不要再遍历了
+                        return;
+                    }
+
+                    while (entryFoldouts.Count < eyeEntries.arraySize)
+                    {
+                        entryFoldouts.Add(true);
+                    }
+
+                    for (int i = 0; i < eyeEntries.arraySize; i++)
+                    {
+                        DrawEyeEntry(constraint, i);
+                    }
+
+                    if (GUILayout.Button(new GUIContent("+ 通道", "一条通道 = 一种眼动方向（看左/看右/看上/看下）。"), GUILayout.Width(80.0f)))
+                    {
+                        eyeEntries.InsertArrayElementAtIndex(eyeEntries.arraySize);
+                    }
+
+                    if (constraint.MissingKeys.Count > 0)
+                    {
+                        EditorGUILayout.HelpBox("以下键在目标网格上不存在：" + string.Join("、", constraint.MissingKeys), MessageType.Warning);
+                    }
                 }
             }
         }
@@ -604,10 +634,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.Space(2.0f);
-            EditorGUILayout.LabelField("眼球骨骼（非形态键方案）", EditorStyles.miniBoldLabel);
-            EditorGUILayout.Slider(eyeBoneWeight, 0.0f, 1.0f, L("眼球骨骼权重", "humanoid 有 LeftEye/RightEye 时，直接转这两根骨头。\n0 = 完全不动骨骼，只用形态键。"));
-
-            EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("鼠标细节", EditorStyles.miniBoldLabel);
             EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "角度映射：鼠标位置直接换算成角度（推荐，跟相机距离无关）。\n场景点：从相机沿鼠标打一条射线，用打到的位置当目标点。"));
             using (new EditorGUI.DisabledScope((HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex != HoLookAtMouseSampleMode.AngleMap))
@@ -654,23 +680,39 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 + "　头 " + debug.headYaw.ToString("0.0") + "° / " + debug.headPitch.ToString("0.0") + "°"
                 + "　眼 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°",
                 EditorStyles.miniLabel);
-            EditorGUILayout.LabelField("网格 " + constraint.MeshCount + " / 绑定 " + constraint.BindingCount
-                + " / OnAnimatorIK " + (constraint.IkRecentlyCalled ? "在跑" : "未调用"), EditorStyles.miniLabel);
 
-            EditorGUILayout.Space(2.0f);
-            EditorGUILayout.LabelField("六个通道（条形 = 写入比例，括号 = 左右眼实际写出的形态键值）", EditorStyles.miniBoldLabel);
-            for (int c = 0; c < ChannelLabels.Length; c++)
+            bool bones = constraint.EyeDriver == HoLookAtEyeDriver.EyeBones;
+            EditorGUILayout.LabelField(
+                bones
+                    ? "驱动：眼球骨骼" + (constraint.EyeBonesAvailable ? "（LeftEye/RightEye ✓）" : "（找不到眼球骨骼 ✗）")
+                      + "　眼球骨骼实际转 " + constraint.AppliedEyeYaw.ToString("0.0") + "° / " + constraint.AppliedEyePitch.ToString("0.0") + "°"
+                      + "　限位 " + constraint.EyeBoneLimitYaw.ToString("0") + "° / " + constraint.EyeBoneLimitPitch.ToString("0") + "°"
+                    : "驱动：形态键　网格 " + constraint.MeshCount + " / 绑定 " + constraint.BindingCount,
+                EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("OnAnimatorIK " + (constraint.IkRecentlyCalled ? "在跑" : "未调用"), EditorStyles.miniLabel);
+
+            if (bones)
             {
-                HoLookAtEyeChannel channel = (HoLookAtEyeChannel)c;
-                DrawChannelBar(
-                    ChannelLabels[c],
-                    GetChannelAmount(debug, channel),
-                    constraint.GetChannelTargetOutput(channel, false),
-                    constraint.GetChannelTargetOutput(channel, true));
+                EditorGUILayout.Space(2.0f);
+                EditorGUILayout.LabelField("骨骼模式不写形态键，所以没有通道读数；要看通道条形请把「驱动方式」切成「形态键」。", EditorStyles.miniLabel);
             }
+            else
+            {
+                EditorGUILayout.Space(2.0f);
+                EditorGUILayout.LabelField("四条通道（条形 = 写入比例，括号 = 左右眼实际写出的形态键值）", EditorStyles.miniBoldLabel);
+                for (int c = 0; c < ChannelLabels.Length; c++)
+                {
+                    HoLookAtEyeChannel channel = (HoLookAtEyeChannel)c;
+                    DrawChannelBar(
+                        ChannelLabels[c],
+                        GetChannelAmount(debug, channel),
+                        constraint.GetChannelTargetOutput(channel, false),
+                        constraint.GetChannelTargetOutput(channel, true));
+                }
 
-            constraint.CollectSaturatedKeys(saturationBuffer);
-            HoConstraintEditorSectionGui.DrawSaturationReport(saturationBuffer);
+                constraint.CollectSaturatedKeys(saturationBuffer);
+                HoConstraintEditorSectionGui.DrawSaturationReport(saturationBuffer);
+            }
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("图例：黄 = 总角度（目标）　青 = 头承担　紫 = 头 + 眼睛（实际目光）", EditorStyles.miniLabel);

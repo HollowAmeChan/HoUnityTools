@@ -47,6 +47,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 serializedObject.Update();
             }
 
+            // 驱动方式：有眼球骨骼就用骨骼模式（默认，指哪看哪），没有才退回形态键并顺手把通道填好
+            SerializedProperty driver = serializedObject.FindProperty("eyeDriver");
+            bool bones = constraint.EyeBonesAvailable;
+            driver.enumValueIndex = (int)(bones ? HoLookAtEyeDriver.EyeBones : HoLookAtEyeDriver.ShapeKeys);
+
+            if (bones)
+            {
+                serializedObject.ApplyModifiedProperties();
+                constraint.Rebuild();
+                return;
+            }
+
             // 监视键的族别：模型上有"看左/看右"就用左右族，只有 In/Out 才用内外族
             bool hasHeadRelative = HasAny(constraint, HoBlinkKeySemantic.GazeLeft) || HasAny(constraint, HoBlinkKeySemantic.GazeRight);
             ApplyFamily(constraint, serializedObject, !hasHeadRelative);
