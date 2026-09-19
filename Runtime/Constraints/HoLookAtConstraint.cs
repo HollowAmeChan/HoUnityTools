@@ -419,6 +419,8 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void OnDisable()
         {
+            // 关掉组件时把我们写过的眼动键交还给基准，别让眼睛停在最后一次的方向上
+            writer.RestoreWritten();
             built = false;
             ReleaseIkRelay();
         }
@@ -657,6 +659,7 @@ namespace Hollow.HoUnityTools.Constraints
         public void ResetState()
         {
             state = default;
+            writer.RestoreWritten();
             writer.Reset();
             hasLastKnownPoint = false;
             hasMouseAngles = false;

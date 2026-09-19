@@ -118,6 +118,7 @@ namespace Hollow.HoUnityTools.Constraints
         private float winkRight;
         private double lastUpdateTime;
         private bool built;
+        private bool lastWritingEnabled = true;
         private bool manualDriveEnabled;
 
         /// <summary>调试用：打开后所有规则都读手动滑杆值（不进序列化）。</summary>
@@ -308,10 +309,11 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
+            // 「重置」= 把手里的键都交还回去，再清运行状态
+            writer.RestoreWritten();
             writer.Reset();
             lastUpdateTime = GetTime();
         }
-
         private void OnEnable()
         {
             built = false;
@@ -320,6 +322,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         private void OnDisable()
         {
+            // 关掉组件时把我们写过的键交还给基准：不然它们会停在我们最后一次写的值上
+            // （半闭的眼睛、被压扁的高光就这么留在模型上了）。
+            writer.RestoreWritten();
             built = false;
         }
 
@@ -387,6 +392,14 @@ namespace Hollow.HoUnityTools.Constraints
             writer.WriteThreshold = writeThreshold;
             writer.WriteEnabled = writingEnabled;
             writer.MergeMode = mergeMode;
+
+            if (lastWritingEnabled && !writingEnabled)
+            {
+                // 刚被关掉「允许写入」：把我们写过的键硬写回基准，别让模型停在最后一次的表情上
+                writer.RestoreWritten();
+            }
+
+            lastWritingEnabled = writingEnabled;
 
             if (!writingEnabled || !writer.IsBuilt || writer.MeshCount == 0)
             {

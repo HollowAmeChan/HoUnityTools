@@ -44,12 +44,27 @@ namespace Hollow.HoUnityTools.Constraints
             public float Output;
         }
 
+        /// <summary>
+        /// 上一轮"我们写过"的键（跨重建保留）。
+        /// 重建（改规则、换网格、键名变动）会换掉整张绑定表，如果就这么让它重新读网格，
+        /// 它会把我们上一次的输出当成"外部基准"，于是关掉规则也回不去 —— 键就停在最后一次的值上。
+        /// </summary>
+        private struct RememberedKey
+        {
+            public SkinnedMeshRenderer Mesh;
+            public int KeyIndex;
+            public float ExternalBase;
+            public float BaseValue;
+            public float LastWritten;
+        }
+
         private readonly List<Binding> bindingList = new List<Binding>();
         private readonly List<int> flatBindingIds = new List<int>();
         private readonly List<CompiledTarget> compiledTargets = new List<CompiledTarget>();
         private readonly List<HoShapeKeyTarget> sources = new List<HoShapeKeyTarget>();
         private readonly List<string> missingKeys = new List<string>();
         private readonly Dictionary<long, int> bindingMap = new Dictionary<long, int>();
+        private readonly List<RememberedKey> remembered = new List<RememberedKey>();
 
         private SkinnedMeshRenderer[] meshes;
         private Mesh[] meshRefs;
@@ -130,6 +145,28 @@ namespace Hollow.HoUnityTools.Constraints
         /// <summary>开始重建：缓存网格与键名索引，清空上一轮的绑定与目标。</summary>
         public void BeginBuild(List<Renderer> renderers)
         {
+            // 先把"上一轮我们写过的键"记下来：EndBuild 时还在写的继承基准，不再写的硬写清场
+            remembered.Clear();
+            if (bindings != null && meshes != null)
+            {
+                for (int i = 0; i < bindings.Length; i++)
+                {
+                    if (!bindings[i].EverWritten || meshes[bindings[i].MeshIndex] == null)
+                    {
+                        continue;
+                    }
+
+                    remembered.Add(new RememberedKey
+                    {
+                        Mesh = meshes[bindings[i].MeshIndex],
+                        KeyIndex = bindings[i].KeyIndex,
+                        ExternalBase = bindings[i].ExternalBase,
+                        BaseValue = bindings[i].BaseValue,
+                        LastWritten = bindings[i].LastWritten
+                    });
+                }
+            }
+
             bindingList.Clear();
             flatBindingIds.Clear();
             compiledTargets.Clear();
@@ -260,6 +297,85 @@ namespace Hollow.HoUnityTools.Constraints
             bindings = bindingList.ToArray();
             bindingIds = flatBindingIds.ToArray();
             compiled = compiledTargets.ToArray();
+            AdoptRemembered();
+        }
+
+        /// <summary>
+        /// 重建收尾：
+        /// 1) 新一轮还在写的键，继承上一轮的"外部基准 / 上次写入值" —— 不许把我们自己的输出当基准；
+        /// 2) 新一轮不再有人写、但我们上一轮写过的键，**硬写回基准**（不看阈值）—— 关掉规则/删掉目标时清场，
+        ///    否则那根键会永远停在我们最后一次写的值上。
+        /// </summary>
+        private void AdoptRemembered()
+        {
+            if (remembered.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < bindings.Length; i++)
+            {
+                SkinnedMeshRenderer mesh = meshes[bindings[i].MeshIndex];
+                for (int r = 0; r < remembered.Count; r++)
+                {
+                    if (remembered[r].Mesh != mesh || remembered[r].KeyIndex != bindings[i].KeyIndex)
+                    {
+                        continue;
+                    }
+
+                    bindings[i].ExternalBase = remembered[r].ExternalBase;
+                    bindings[i].BaseValue = remembered[r].BaseValue;
+                    bindings[i].LastWritten = remembered[r].LastWritten;
+                    bindings[i].EverWritten = true;
+                    remembered[r] = default;   // 已被认领
+                    break;
+                }
+            }
+
+            for (int r = 0; r < remembered.Count; r++)
+            {
+                SkinnedMeshRenderer mesh = remembered[r].Mesh;
+                if (mesh == null)
+                {
+                    continue;
+                }
+
+                mesh.SetBlendShapeWeight(remembered[r].KeyIndex, Mathf.Clamp(remembered[r].ExternalBase, 0.0f, 100.0f));
+            }
+
+            remembered.Clear();
+        }
+
+        /// <summary>
+        /// 把我们写过的键全部**硬写回基准值**（不看阈值、不管当前值），用于约束被关掉/禁用时清场。
+        /// </summary>
+        public void RestoreWritten()
+        {
+            if (bindings == null || meshes == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < bindings.Length; i++)
+            {
+                if (!bindings[i].EverWritten)
+                {
+                    continue;
+                }
+
+                SkinnedMeshRenderer mesh = meshes[bindings[i].MeshIndex];
+                if (mesh == null)
+                {
+                    continue;
+                }
+
+                float value = Mathf.Clamp(bindings[i].ExternalBase, 0.0f, 100.0f);
+                mesh.SetBlendShapeWeight(bindings[i].KeyIndex, value);
+                bindings[i].LastWritten = value;
+                bindings[i].EverWritten = false;
+                bindings[i].Sum = 0.0f;
+                bindings[i].HasOverride = false;
+            }
         }
 
         /// <summary>清掉"我们写过"的记账与包络状态（重建、启用、重置时调用）。</summary>
