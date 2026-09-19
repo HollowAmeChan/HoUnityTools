@@ -5,7 +5,10 @@ namespace Hollow.HoUnityTools.Constraints
 {
     public enum HoLookAtMode
     {
+        [InspectorName("跟随物体")]
         Transform,
+
+        [InspectorName("跟随鼠标")]
         Mouse
     }
 
@@ -22,22 +25,30 @@ namespace Hollow.HoUnityTools.Constraints
         /// 鼠标屏幕位置 → 角度偏移（把鼠标当摇杆）。跟相机无关，但**不是**"看向鼠标指的那个点"：
         /// 灵敏度是人为定的线性映射，跟相机 FOV 无关，角色不在画面中心时还有视差。
         /// </summary>
+        [InspectorName("角度摇杆")]
         AngleMap,
 
         /// <summary>
         /// 准星：取鼠标射线上"角色所在深度"的那个点当目标点 —— 眼睛正好落在鼠标指的位置。
         /// 想要"看着鼠标"的精确感就用这个（默认）。
         /// </summary>
+        [InspectorName("准星")]
         CursorPoint,
 
         /// <summary>相机 → 鼠标射线打到指定层（没打中时取射线上固定距离的点）。</summary>
+        [InspectorName("射线命中")]
         Raycast
     }
 
     public enum HoLookAtLostBehavior
     {
+        [InspectorName("停在最后方向")]
         Hold,
+
+        [InspectorName("回中立")]
         Return,
+
+        [InspectorName("立刻松开")]
         Disable
     }
 
@@ -50,12 +61,14 @@ namespace Hollow.HoUnityTools.Constraints
         /// 直接转 humanoid 的 LeftEye/RightEye 骨骼（世界空间叠加）。**默认**：
         /// 眼睛残余角是多少就转多少，能精确指向目标，不需要标定。
         /// </summary>
+        [InspectorName("眼球骨骼")]
         EyeBones,
 
         /// <summary>
         /// 写凝视形态键（四条通道 → 键）。没有眼球骨骼的模型用这条，
         /// 需要按模型标定四个角度上限。
         /// </summary>
+        [InspectorName("形态键")]
         ShapeKeys
     }
 
@@ -66,7 +79,10 @@ namespace Hollow.HoUnityTools.Constraints
     /// </summary>
     public enum HoLookAtMouseSpace
     {
+        [InspectorName("屏幕相对")]
         ScreenRelative,
+
+        [InspectorName("角色相对")]
         CharacterRelative
     }
 
@@ -79,9 +95,16 @@ namespace Hollow.HoUnityTools.Constraints
     /// </summary>
     public enum HoLookAtEyeChannel
     {
+        [InspectorName("看左")]
         LookLeft,
+
+        [InspectorName("看右")]
         LookRight,
+
+        [InspectorName("看上")]
         Up,
+
+        [InspectorName("看下")]
         Down
     }
 

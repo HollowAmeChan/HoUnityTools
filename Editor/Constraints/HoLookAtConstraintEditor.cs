@@ -57,14 +57,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty useSceneViewMouse;
         private SerializedProperty mergeMode;
 
-        private bool targetExpanded = true;
-        private bool roleExpanded = true;
+        // 全部默认折叠：面板一打开就是一张"目录"，要看哪块点哪块
+        private bool targetExpanded;
+        private bool roleExpanded;
         private bool spineExpanded;
-        private bool headExpanded = true;
-        private bool eyesExpanded = true;
+        private bool headExpanded;
+        private bool eyesExpanded;
         private bool lostExpanded;
         private bool advancedExpanded;
-        private bool debugExpanded = true;
+        private bool debugExpanded;
         private readonly List<bool> entryFoldouts = new List<bool>();
         private readonly List<HoShapeKeySaturation> saturationBuffer = new List<HoShapeKeySaturation>();
 
@@ -83,15 +84,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private static readonly string[] ChannelLabels =
         {
-            "看左 LookLeft", "看右 LookRight", "看上 Up", "看下 Down"
+            "看左", "看右", "看上", "看下"
         };
 
         private static readonly string[] ChannelTooltips =
         {
-            "往角色左边看。往左 = 左眼的外侧键（Out）+ 右眼的内侧键（In）—— 所以每只眼各填一个键就够了。",
-            "往角色右边看。往右 = 左眼的内侧键（In）+ 右眼的外侧键（Out）。",
-            "往上看（双眼共用键就两格填同一个名字，只写一次）。",
-            "往下看（双眼共用键就两格填同一个名字，只写一次）。"
+            "往角色左边看：左眼填 Out、右眼填 In。",
+            "往角色右边看：左眼填 In、右眼填 Out。",
+            "往上看（双眼共用一个键时两格填同名，只写一次）。",
+            "往下看（双眼共用一个键时两格填同名，只写一次）。"
         };
 
         private void OnEnable()
@@ -190,12 +191,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             EditorGUILayout.LabelField("Ho 注视约束", EditorStyles.boldLabel);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(new GUIContent("一键装配", "自动找 Animator、收集网格、按模型上的键判断该用「左右族」还是「内外族」，并填好相机。"), GUILayout.Height(22.0f)))
+            if (GUILayout.Button(new GUIContent("一键装配", "自动找 Animator、清参考系、收集网格、填相机；有眼球骨骼就用骨骼模式，否则按模型上的键填好形态键通道。"), GUILayout.Height(22.0f)))
             {
                 HoLookAtPresetActions.AutoRig(constraint, serializedObject);
             }
 
-            if (GUILayout.Button(new GUIContent("清空通道", "只清掉眼睛通道的键，不动其他设置。"), GUILayout.Height(22.0f)))
+            if (GUILayout.Button(new GUIContent("清空通道", "只清掉形态键模式的四条通道，其他设置不动。"), GUILayout.Height(22.0f)))
             {
                 HoLookAtPresetActions.Clear(serializedObject);
             }
@@ -256,7 +257,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
             else
             {
-                EditorGUILayout.PropertyField(mouseCamera, L("相机", "观众视角的那台相机，用来把鼠标屏幕位置换算成角度。运行时不会自动猜，必须手动指定。"));
+                EditorGUILayout.PropertyField(mouseCamera, L("相机", "观众视角那台相机，用来把鼠标位置换算成世界方向。必须手动指定（运行时不会自动猜）。"));
                 if (!constraint.MouseCameraAssigned)
                 {
                     EditorGUILayout.HelpBox(
@@ -281,25 +282,25 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.LabelField("使用的相机：" + constraint.ResolvedCameraName, EditorStyles.miniLabel);
                 }
 
-                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：眼睛正好落在鼠标指的那个位置 —— 取鼠标射线上「和角色一样远」的那个点当目标，指哪看哪。\n角度摇杆：鼠标位置线性换算成角度，跟相机 FOV 无关、把鼠标当摇杆用（灵敏度要自己配，角色不在画面中心时会有视差）。\n射线命中：真的打到场景物体上，适合「盯着墙上的东西」。"));
+                EditorGUILayout.PropertyField(mouseSampleMode, L("鼠标取法", "准星（推荐）：眼睛正好落在鼠标指的位置 —— 取鼠标射线上和角色一样远的点当目标。\n角度摇杆：鼠标位置线性换算成角度，不看相机 FOV；角色不在画面中心时有视差。\n射线命中：用鼠标射线打到的场景物体当目标。"));
 
                 bool angleMap = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap;
                 bool raycast = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.Raycast;
 
                 using (new EditorGUI.DisabledScope(!angleMap))
                 {
-                    EditorGUILayout.PropertyField(mouseSensitivity, L("灵敏度（度）", "摇杆模式：鼠标从画面中心推到边缘时，横向/纵向各转多少度。\n30/20 = 推到画面边缘大约左右 30°、上下 20°。"));
-                    EditorGUILayout.Slider(mouseDeadZone, 0.0f, 0.45f, L("鼠标死区", "摇杆模式：画面正中间这一圈内不转，避免鼠标抖动带着眼睛一直动。0.05 = 中心 5%。"));
-                    EditorGUILayout.PropertyField(mouseAngleSpace, L("角度坐标系", "摇杆模式：屏幕相对 = 鼠标往右看向画面右侧（第三人称面对角色的直觉）；角色相对 = 鼠标往右看向角色自己的右侧。"));
+                    EditorGUILayout.PropertyField(mouseSensitivity, L("灵敏度（度）", "摇杆模式：鼠标从画面中心推到边缘，左右/上下各转多少度。"));
+                    EditorGUILayout.Slider(mouseDeadZone, 0.0f, 0.45f, L("鼠标死区", "摇杆模式：画面中心这一圈内不转，避免鼠标微抖带着眼睛动。"));
+                    EditorGUILayout.PropertyField(mouseAngleSpace, L("角度坐标系", "摇杆模式：屏幕相对 = 往右看向画面右侧；角色相对 = 往右看向角色自己的右侧。"));
                 }
 
                 using (new EditorGUI.DisabledScope(!raycast))
                 {
                     EditorGUILayout.PropertyField(mouseRaycastMask, L("射线层", "射线命中模式打哪些层。"));
-                    EditorGUILayout.PropertyField(mouseDistance, L("兜底距离（米）", "射线什么都没打中时，取射线上这个距离的点。"));
+                    EditorGUILayout.PropertyField(mouseDistance, L("兜底距离（米）", "射线没打中时，取射线上这个距离的点。"));
                 }
 
-                EditorGUILayout.PropertyField(mouseHoldOffscreen, L("离屏保持", "鼠标移出窗口 / 失焦时，保持最后一次的方向，而不是回中立。"));
+                EditorGUILayout.PropertyField(mouseHoldOffscreen, L("离屏保持", "鼠标移出窗口/失焦时保持最后一次方向，而不是回中立。"));
             }
         }
 
@@ -313,7 +314,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.Slider(weight, 0.0f, 1.0f, L("总强度", "整个注视的总开关强度：0 = 完全不做注视，1 = 按下面三块的比例全额生效。\n做「看一眼再移开」这类演出时改它就够了。"));
+            EditorGUILayout.Slider(weight, 0.0f, 1.0f, L("总强度", "整个注视的总强度：0 = 不注视，1 = 按三块的比例全额生效。\n做「看一眼再移开」这类演出改它就够。"));
 
             string animatorInfo = constraint.AnimatorName;
             if (constraint.AnimatorIsHuman && constraint.AnimatorHasAvatar)
@@ -329,12 +330,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.LabelField("参考系：" + GetReferenceInfo(constraint), EditorStyles.miniLabel);
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(new GUIContent("只看眼睛", "关掉头颈与脊椎，让眼珠自己跟（近距离对话、镜头特写常用）。"), EditorStyles.miniButton))
+            if (GUILayout.Button(new GUIContent("只看眼睛", "关掉头颈与脊椎，只让眼珠跟（对话、特写常用）。"), EditorStyles.miniButton))
             {
                 HoLookAtPresetActions.EyesOnly(serializedObject);
             }
 
-            if (GUILayout.Button(new GUIContent("头眼并用", "恢复成头 1.0 + 身体 0.3 的默认分工。"), EditorStyles.miniButton))
+            if (GUILayout.Button(new GUIContent("头眼并用", "恢复默认分工：头 1.0 + 身体 0.3。"), EditorStyles.miniButton))
             {
                 HoLookAtPresetActions.HeadAndEyes(serializedObject);
             }
@@ -364,10 +365,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(spineEnabled, L("启用", "身体跟着转一点点。想要「只有头在动」就关掉它。"));
+            EditorGUILayout.PropertyField(spineEnabled, L("启用", "身体跟着转一点。只想让头动就关掉。"));
             using (new EditorGUI.DisabledScope(!spineEnabled.boolValue))
             {
-                EditorGUILayout.Slider(bodyWeight, 0.0f, 1.0f, L("身体强度", "身体参与的比例，Unity 会沿脊椎分摊下去。0.2~0.4 比较自然，越大腰也跟着扭。"));
+                EditorGUILayout.Slider(bodyWeight, 0.0f, 1.0f, L("身体强度", "身体参与比例，Unity 沿脊椎分摊。0.2~0.4 自然，越大腰跟着扭。"));
             }
         }
 
@@ -379,18 +380,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(headEnabled, L("启用", "用 Unity 的 LookAt IK 转头颈。需要 humanoid + 图层 IK Pass。"));
+            EditorGUILayout.PropertyField(headEnabled, L("启用", "用 Unity 的 LookAt IK 转头颈。需要 humanoid + 图层勾 IK Pass。"));
             using (new EditorGUI.DisabledScope(!headEnabled.boolValue))
             {
-                EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与的比例。1 = 完全对准（在下面的限位之内），0.5 = 只转一半。"));
-                EditorGUILayout.Slider(deadZone, 0.0f, 89.0f, L("起始死区（度）", "目标离正前方这么近的时候头完全不动，只让眼睛动。避免小幅目标让头一直微抖。"));
-                EditorGUILayout.Slider(headShare, 0.0f, 1.0f, L("头部承担", "超出死区之后，头承担多少（剩下的留给眼睛）。\n0.7 = 头吃七成、眼睛补三成。"));
-                EditorGUILayout.PropertyField(headDirectionTrim, L("头朝向偏差（度）", "模型静止姿势的头部朝向跟「角色正前方」不重合时，这里是那个固定差值（yaw/pitch）。\n症状：不管目标怎么动，头和眼睛都固定偏那么多 → 用 Gizmo 对着调这两个数，眼睛会一起补正。\n正常模型应该是 0。"));
+                EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与比例：1 = 完全对准（限位内），0.5 = 只转一半。没转到的部分由眼睛补。"));
+                EditorGUILayout.Slider(deadZone, 0.0f, 89.0f, L("起始死区（度）", "目标离正前方这么近时头不动、只让眼睛动，避免小幅目标让头一直微抖。"));
+                EditorGUILayout.Slider(headShare, 0.0f, 1.0f, L("头部承担", "超出死区后头承担的比例，剩下给眼睛（头吃七成 = 0.7）。"));
+                EditorGUILayout.PropertyField(headDirectionTrim, L("头朝向偏差（度）", "模型静止姿势的头不朝正前方时，那个固定差值（左右/上下）。\n症状：目标怎么动，头和眼睛都固定偏同一个方向 → 对着 Gizmo 调这里，眼睛会一起补正。\n正常模型填 0。"));
                 using (NarrowLabels(74.0f))
                 {
                     EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.PropertyField(headLimitYaw, L("左右限位", "头最多往左右各转多少度。超过的部分全部交给眼睛。"));
-                    EditorGUILayout.PropertyField(headLimitPitch, L("上下限位", "头最多往上/往下各转多少度，对称。"));
+                    EditorGUILayout.PropertyField(headLimitYaw, L("左右限位", "头最多往左右各转多少度，超出部分交给眼睛。"));
+                    EditorGUILayout.PropertyField(headLimitPitch, L("上下限位", "头最多往上/下各转多少度（对称）。"));
                     EditorGUILayout.EndHorizontal();
                 }
             }
@@ -405,13 +406,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(eyesEnabled, L("启用", "眼睛跟着目标转。骨骼模式用 humanoid 的 LeftEye/RightEye，形态键模式写凝视键。"));
+            EditorGUILayout.PropertyField(eyesEnabled, L("启用", "眼睛跟着目标。骨骼模式转 humanoid 的 LeftEye/RightEye，形态键模式写凝视键。"));
             using (new EditorGUI.DisabledScope(!eyesEnabled.boolValue))
             {
-                EditorGUILayout.PropertyField(eyeDriver, L("驱动方式", "眼球骨骼（推荐，默认）：直接把残余角转到 LeftEye/RightEye 骨骼上，指哪看哪、不用标定。\n形态键：把残余角过四条曲线写成凝视键，没有眼球骨骼的模型用这条。\n两套不混用，切换时旧的形态键会自动交还回基准值。"));
+                EditorGUILayout.PropertyField(eyeDriver, L("驱动方式", "眼球骨骼（默认）：残余角直接转到 LeftEye/RightEye，指哪看哪、不用标定。\n形态键：残余角过四条曲线写成凝视键，给没有眼球骨骼的模型。\n切换时旧的形态键会自动交还回基准值。"));
 
-                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与的比例。头转不到位的部分由眼睛补，这里可以再打个折。"));
-                EditorGUILayout.PropertyField(eyeSmoothing, L("平滑（秒）", "眼睛角度的一阶平滑，比头部快一点（0.04 左右）。0 = 不平滑。"));
+                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与比例，可再打个折。头没转到的部分由眼睛补。"));
+                EditorGUILayout.PropertyField(eyeSmoothing, L("平滑（秒）", "眼睛角度的一阶平滑（比头部快，0.04 左右）。0 = 不平滑、最跟手。"));
 
                 if (bones)
                 {
@@ -424,8 +425,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     }
 
                     EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.PropertyField(eyeBoneLimitYaw, L("左右限位（度）", "眼球最多往左右各转多少。正常看东西很少超过 30°，超过就夹住避免翻白眼。"));
-                    EditorGUILayout.PropertyField(eyeBoneLimitPitch, L("上下限位（度）", "眼球最多往上/往下各转多少，对称。"));
+                    EditorGUILayout.PropertyField(eyeBoneLimitYaw, L("左右限位（度）", "眼球最多往左右各转多少度（默认 15）。超出就夹住，避免翻白眼。"));
+                    EditorGUILayout.PropertyField(eyeBoneLimitPitch, L("上下限位（度）", "眼球最多往上/下各转多少度（默认 10，对称）。"));
                     EditorGUILayout.EndHorizontal();
                     EditorGUILayout.LabelField(
                         "实际转动：yaw " + constraint.AppliedEyeYaw.ToString("0.0") + "°　pitch " + constraint.AppliedEyePitch.ToString("0.0") + "°",
@@ -433,7 +434,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 }
                 else
                 {
-                    EditorGUILayout.PropertyField(renderers, L("目标网格", "哪些网格上有眼睛的形态键。点下面的按钮可以一次收集所有子网格。"), true);
+                    EditorGUILayout.PropertyField(renderers, L("目标网格", "哪些网格上有凝视形态键。点下面的按钮一次收集所有子网格。"), true);
                     EditorGUILayout.BeginHorizontal();
                     if (GUILayout.Button("收集子级网格"))
                     {
@@ -443,7 +444,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         serializedObject.Update();
                     }
 
-                    if (GUILayout.Button(new GUIContent("重新解析键", "改了键名/换了模型之后点一下，重新在网格上找键。")))
+                    if (GUILayout.Button(new GUIContent("重新解析键", "改了键名或换了模型后点一下，重新在网格上找键。")))
                     {
                         constraint.Rebuild();
                     }
@@ -451,10 +452,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.EndHorizontal();
 
                     EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
-                    EditorGUILayout.PropertyField(eyeAngleLimit, L("四个角度上限 往右/往左/上/下（度）", "在这个角度内眼睛能完全跟上，超过就按曲线开始饱和。\n一般按模型实际能转的范围填（30/30/20/25 是常见值）。"));
+                    EditorGUILayout.PropertyField(eyeAngleLimit, L("角度上限 往右/往左/上/下（度）", "这个角度内眼睛完全跟上，超过就按曲线饱和。\n按模型实际可动范围标定（默认 15/15/10/10）。"));
                     EditorGUILayout.LabelField("四条方向曲线（横轴 = 上面角度上限的比例，纵轴 = 输出）", EditorStyles.miniLabel);
-                    EditorGUILayout.PropertyField(horizontalInner, L("往右曲线（内）", "往右看这条通道的映射形状，直线 = 线性。"));
-                    EditorGUILayout.PropertyField(horizontalOuter, L("往左曲线（外）", "往左看这条通道的映射形状。"));
+                    EditorGUILayout.PropertyField(horizontalInner, L("往右曲线", "往右看这条通道的映射形状，直线 = 线性。"));
+                    EditorGUILayout.PropertyField(horizontalOuter, L("往左曲线", "往左看这条通道的映射形状。"));
                     EditorGUILayout.PropertyField(verticalUp, L("看上曲线", "往上看这条通道的映射形状。"));
                     EditorGUILayout.PropertyField(verticalDown, L("看下曲线", "往下看这条通道的映射形状。"));
 
@@ -467,7 +468,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                     while (entryFoldouts.Count < eyeEntries.arraySize)
                     {
-                        entryFoldouts.Add(true);
+                        entryFoldouts.Add(false);
                     }
 
                     for (int i = 0; i < eyeEntries.arraySize; i++)
@@ -496,11 +497,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             GUILayout.Label(new GUIContent("按模型上的键自动填：", "会在网格上找内置表里收录的凝视键，找不到就留空。"), EditorStyles.miniLabel);
             GUILayout.FlexibleSpace();
             bool clickedLeftRight = GUILayout.Button(
-                new GUIContent("左右族", "VRM/Meta 那种「看左/看右」的键名（双眼共用一个键，或左右眼各一个）。"),
+                new GUIContent("左右族", "VRM/Meta 的「看左/看右」键名：双眼共用一个键，或左右眼各一个。"),
                 EditorStyles.miniButton,
                 GUILayout.Width(58.0f));
             bool clickedInnerOuter = GUILayout.Button(
-                new GUIContent("内外族", "ARKit/PICO 那种相对眼球的 In/Out 键名 —— 会拆成「往左 = 左眼 Out + 右眼 In、往右 = 左眼 In + 右眼 Out」填进左右眼两格。"),
+                new GUIContent("内外族", "ARKit/PICO 的 In/Out 键名，会拆成：往右 = 左眼 In + 右眼 Out，往左 = 左眼 Out + 右眼 In。"),
                 EditorStyles.miniButton,
                 GUILayout.Width(58.0f));
             EditorGUILayout.EndHorizontal();
@@ -582,7 +583,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (new EditorGUI.DisabledScope(!enabled.boolValue))
             {
                 DrawKeyField(keyRect, keyName, constraint);
-                GUI.Label(gainLabelRect, new GUIContent("增益", "通道量乘上它再写出去：1 = 曲线拉满输出 100。个别键太夸张时可以在这里压下去。"), EditorStyles.miniLabel);
+                GUI.Label(gainLabelRect, new GUIContent("增益", "通道量乘上它再写出去：1 = 曲线拉满输出 100。个别键太夸张就压这里。"), EditorStyles.miniLabel);
                 gain.floatValue = EditorGUI.FloatField(gainFieldRect, gain.floatValue);
             }
         }
@@ -620,7 +621,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了（物体被删/鼠标离屏）怎么办：\n保持 = 停在最后的方向\n回中立 = 慢慢转回正前方\n禁用 = 立刻把头松开（交给动画）"));
+            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了（物体被删/鼠标离屏）怎么办：\n停在最后方向 / 慢慢回正前方 / 立刻松开交给动画。"));
         }
 
         // ── 高级 ────────────────────────────────────────────────────────────
@@ -636,14 +637,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (NarrowLabels(96.0f))
             {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PropertyField(aimSmoothing, L("方向平滑", "目标方向的一阶平滑时间常数（秒），0 = 立刻对准（会有点硬）。"));
-                EditorGUILayout.PropertyField(aimMaxSpeed, L("最大角速度", "转头速度上限（度/秒），防止目标瞬移时头猛地甩过去。0 = 不限。"));
+                EditorGUILayout.PropertyField(aimSmoothing, L("方向平滑", "目标方向的一阶平滑时间常数（秒）。0 = 立刻对准，会有点硬。"));
+                EditorGUILayout.PropertyField(aimMaxSpeed, L("最大角速度", "转头速度上限（度/秒），防止目标瞬移时头猛甩。0 = 不限。"));
                 EditorGUILayout.EndHorizontal();
             }
-            EditorGUILayout.PropertyField(teleportAngleThreshold, L("瞬移阈值（度）", "目标角度跳变超过它就当瞬移，直接跟上不慢慢转。"));
+            EditorGUILayout.PropertyField(teleportAngleThreshold, L("瞬移阈值（度）", "角度跳变超过它就当瞬移，直接跟上、不慢慢转。"));
             using (new EditorGUI.DisabledScope(!spineEnabled.boolValue))
             {
-                EditorGUILayout.Slider(spineMinAngle, 0.0f, 90.0f, L("脊椎起始角（度）", "总角度超过它之后身体才开始参与，避免小幅注视也带着上半身动。"));
+                EditorGUILayout.Slider(spineMinAngle, 0.0f, 90.0f, L("脊椎起始角（度）", "总角度超过它身体才参与，避免小幅注视也带着上半身动。"));
             }
 
             EditorGUILayout.Space(2.0f);
@@ -651,19 +652,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (NarrowLabels(88.0f))
             {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PropertyField(returnDelay, L("回正延迟", "丢失后先保持这么久（秒）再开始回正。"));
+                EditorGUILayout.PropertyField(returnDelay, L("回正延迟", "丢失后先保持这么久（秒）再回正。"));
                 EditorGUILayout.PropertyField(returnSpeed, L("回正速度", "回正时的角速度（度/秒）。"));
                 EditorGUILayout.EndHorizontal();
             }
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("组件", EditorStyles.miniBoldLabel);
-            EditorGUILayout.PropertyField(animator, L("Animator", "留空 = 自己/父级/子级里自动找。只有自动找错时才需要填。"));
-            EditorGUILayout.PropertyField(reference, L("参考系", "算 yaw/pitch 和限位用的朝向。\n留空 = 用 Animator 所在物体（角色根，推荐）。\n自己指定时一定要用角色的根物体，别填骨骼，否则角度全部失准。"));
+            EditorGUILayout.PropertyField(animator, L("Animator", "留空 = 自己/父级/子级里自动找；只有自动找错时才需要填。"));
+            EditorGUILayout.PropertyField(reference, L("参考系", "算角度和限位用的朝向。留空 = Animator 所在物体（角色根，推荐）。\n要手动指定时一定用角色根物体，别填骨骼，否则角度全部失准。"));
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("写入", EditorStyles.miniBoldLabel);
-            EditorGUILayout.PropertyField(writeThreshold, L("写入阈值", "形态键变化小于它就不写，减少网格 dirty。调大能省一点性能，代价是细微变化被忽略。"));
-            EditorGUILayout.PropertyField(evaluateInEditMode, L("编辑模式求值", "不播放也在编辑器里跑一遍（调试用，会给场景标脏）。"));
+            EditorGUILayout.PropertyField(writeThreshold, L("写入阈值", "形态键变化小于它就不写，减少网格 dirty。调大省性能，细微变化会被忽略。"));
+            EditorGUILayout.PropertyField(evaluateInEditMode, L("编辑模式求值", "不播放也在编辑器里跑一遍（调试用，会把场景标脏）。"));
         }
 
         // ── 调试（可视化） ──────────────────────────────────────────────────
@@ -677,10 +678,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(drawGizmos, L("场景 Gizmo", "在 Scene 视图里画出参考朝向、限位框、目标方向、头实际方向与实际目光（选中本物体即可看到）。"));
-            EditorGUILayout.PropertyField(drawOverlay, L("Game 视图叠加", "在 Game 视图里叠加读数与两个点：青十字 = 鼠标，黄点 = 目标，紫点 = 实际目光落点，两点连线就是偏差。\n只在编辑器里生效（构建里没有这段代码），所以可以一直开着。"));
-            EditorGUILayout.PropertyField(useSceneViewMouse, L("Scene 视图鼠标", "编辑器里鼠标放在 Scene 视图上时，临时把 Scene 视图相机当观众视角来解算 —— 这样就能一边看 Gizmo 一边用鼠标调试，不用来回切窗口。\n鼠标回到 Game 视图时自动切回真正的输入。"));
-            EditorGUILayout.LabelField("提示：鼠标在 Scene 视图里也能调试（上面那个开关），Gizmo 与鼠标操作就在同一个视图里了。", EditorStyles.miniLabel);
+            EditorGUILayout.PropertyField(drawGizmos, L("场景 Gizmo", "在 Scene 视图画参考朝向、限位框、目标方向、头部朝向与目光（选中本物体可见）。"));
+            EditorGUILayout.PropertyField(drawOverlay, L("Game 视图叠加", "Game 视图里叠读数与三个标记：青十字 = 鼠标，黄点 = 目标，紫点 = 目光落点；连线 = 偏差。\n只在编辑器里生效（构建里没有这段代码），可以一直开着。"));
+            EditorGUILayout.PropertyField(useSceneViewMouse, L("Scene 视图鼠标", "鼠标放在 Scene 视图上时，临时用 Scene 视图相机当观众视角：一边看 Gizmo 一边用鼠标调。\n鼠标回到 Game 视图自动切回真实输入。"));
 
             EditorGUILayout.LabelField("左右（yaw，正 = 角色右侧）", EditorStyles.miniBoldLabel);
             DrawAngleBar(constraint.HeadLimitYaw, debug.targetYaw, debug.headEstimateYaw, debug.eyeYaw);
@@ -821,8 +821,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             if ((HoLookAtMode)targetMode.enumValueIndex == HoLookAtMode.Mouse)
             {
-                string sample = (HoLookAtMouseSampleMode)mouseSampleMode.enumValueIndex == HoLookAtMouseSampleMode.AngleMap ? "角度" : "场景点";
-                return "鼠标 / " + sample;
+                int index = Mathf.Clamp(mouseSampleMode.enumValueIndex, 0, mouseSampleMode.enumDisplayNames.Length - 1);
+                return "鼠标 / " + mouseSampleMode.enumDisplayNames[index];
             }
 
             return "跟随物体";

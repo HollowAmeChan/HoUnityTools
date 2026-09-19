@@ -98,17 +98,17 @@ namespace Hollow.HoUnityTools.Constraints
 
         /// <summary>骨骼模式的左右限位（度）：眼球最多往左右各转多少。</summary>
         [SerializeField, Range(0.0f, 89.0f)]
-        private float eyeBoneLimitYaw = 35.0f;
+        private float eyeBoneLimitYaw = 15.0f;
 
         /// <summary>骨骼模式的上下限位（度）。</summary>
         [SerializeField, Range(0.0f, 89.0f)]
-        private float eyeBoneLimitPitch = 25.0f;
+        private float eyeBoneLimitPitch = 10.0f;
 
         [SerializeField]
         private List<Renderer> renderers = new List<Renderer>();
 
         [SerializeField]
-        private Vector4 eyeAngleLimit = new Vector4(30.0f, 30.0f, 20.0f, 25.0f);
+        private Vector4 eyeAngleLimit = new Vector4(15.0f, 15.0f, 10.0f, 10.0f);
 
         [SerializeField]
         private AnimationCurve horizontalInner = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);

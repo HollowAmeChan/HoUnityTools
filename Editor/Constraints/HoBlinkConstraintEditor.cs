@@ -32,8 +32,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty writingEnabled;
         private SerializedProperty mergeMode;
 
-        private bool meshExpanded = true;
-        private bool blinkExpanded = true;
+        private bool meshExpanded;
+        private bool blinkExpanded;
         private bool rulesExpanded;
         private bool debugExpanded;
         private bool manualDrive;
@@ -269,7 +269,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             if (GUILayout.Button("+ 规则"))
             {
                 rules.InsertArrayElementAtIndex(rules.arraySize);
-                ruleFoldouts.Add(true);
+                ruleFoldouts.Add(false);
             }
         }
 

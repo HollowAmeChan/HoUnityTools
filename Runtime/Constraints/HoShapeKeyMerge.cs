@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace Hollow.HoUnityTools.Constraints
 {
     /// <summary>
@@ -12,18 +14,21 @@ namespace Hollow.HoUnityTools.Constraints
     public enum HoShapeKeyMergeMode
     {
         /// <summary>求和后夹到 0..100。单个驱动到顶就是满值 —— 想要"眨眼就该闭到底"时用这个。</summary>
+        [InspectorName("夹断")]
         Saturate,
 
         /// <summary>
         /// 80 以上做软压缩，永远达不到 100（请求正好 100 时约 93）。
         /// 果冻超调、多路叠加的差别都保留下来了，代价是满值不再是真的 100。
         /// </summary>
+        [InspectorName("软饱和")]
         SoftClip,
 
         /// <summary>
         /// 多路求和超过剩余空间时，各路按同一比例缩小（比例关系不变），不夹断任何一路。
         /// 适合"两路都在出力，谁也别把谁挤掉"的场合（比如眨眼 + 表情同时压同一个键）。
         /// </summary>
+        [InspectorName("按比例分配")]
         Normalize
     }
 
