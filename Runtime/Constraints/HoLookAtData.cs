@@ -231,9 +231,12 @@ namespace Hollow.HoUnityTools.Constraints
         public float eyeYaw;
         public float eyePitch;
 
-        /// <summary>残余超过眼球范围、已经还给头部的那部分（度）。非零 = "眼睛转不过来，头多担了"。</summary>
+        /// <summary>眼睛没吃下、交给头颈的部分（度）。</summary>
         public float eyeOverflowYaw;
         public float eyeOverflowPitch;
+
+        /// <summary>本帧脊椎要承担的权重（0..1）：按头颈的负载算，眼睛与头颈都吃不下时身体才跟。</summary>
+        public float spineWeight;
 
         /// <summary>眼睛平滑后的角度（LateUpdate 里的状态）。</summary>
         public float smoothedEyeYaw;
@@ -310,9 +313,12 @@ namespace Hollow.HoUnityTools.Constraints
         public float eyeYaw;
         public float eyePitch;
 
-        /// <summary>残余超过眼球范围、已经还给头部的那部分（度）。</summary>
+        /// <summary>眼睛没吃下、交给头颈的部分（度）。</summary>
         public float eyeOverflowYaw;
         public float eyeOverflowPitch;
+
+        /// <summary>脊椎本帧承担的权重（0..1）。</summary>
+        public float spineWeight;
 
         /// <summary>四条通道各自的量（0..1，未乘增益）。</summary>
         public float lookLeft;
@@ -376,18 +382,18 @@ namespace Hollow.HoUnityTools.Constraints
         }
     }
 
-    /// <summary>注视约束的头部参数（求解器输入）。俯仰限位左右对称，够用且好调。</summary>
+    /// <summary>
+    /// 注视约束的头部参数（求解器输入）。俯仰限位左右对称，够用且好调。
+    /// 没有"死区 / 头部承担"这类固定比例参数：分工走优先级瀑布（眼睛 → 头颈 → 脊椎），
+    /// 头颈吃的是眼睛吃剩下的部分，最多到这里的限位。
+    /// </summary>
     public struct HoHeadSettings
     {
-        public float deadZone;
-        public float headShare;
         public float yawLimit;
         public float pitchLimit;
 
         public void Sanitize()
         {
-            deadZone = Mathf.Clamp(deadZone, 0.0f, 89.0f);
-            headShare = Mathf.Clamp01(headShare);
             yawLimit = Mathf.Clamp(yawLimit, 0.0f, 179.0f);
             pitchLimit = Mathf.Clamp(pitchLimit, 0.0f, 179.0f);
         }

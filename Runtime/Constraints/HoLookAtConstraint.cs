@@ -67,12 +67,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField, Range(0.0f, 1.0f)]
         private float headWeight = 1.0f;
 
-        [SerializeField, Range(0.0f, 89.0f)]
-        private float deadZone = 8.0f;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        private float headShare = 0.7f;
-
         [SerializeField, Range(0.0f, 179.0f)]
         private float headLimitYaw = 70.0f;
 
@@ -152,9 +146,6 @@ namespace Hollow.HoUnityTools.Constraints
 
         [SerializeField]
         private LayerMask mouseRaycastMask = ~0;
-
-        [SerializeField, Range(0.0f, 90.0f)]
-        private float spineMinAngle;
 
         /// <summary>
         /// 头朝向偏差（度，yaw/pitch）：模型静止姿势的头部朝向跟"角色正前方"不一定重合，
@@ -494,6 +485,7 @@ namespace Hollow.HoUnityTools.Constraints
                 eyePitch = state.smoothedEyePitch,
                 eyeOverflowYaw = state.eyeOverflowYaw,
                 eyeOverflowPitch = state.eyeOverflowPitch,
+                spineWeight = state.spineWeight,
                 hasTarget = state.hasTarget,
                 targetValid = state.applyLookAt
             };
@@ -689,12 +681,9 @@ namespace Hollow.HoUnityTools.Constraints
                 head,
                 GetTargetDistance()));
 
-            float spine = spineEnabled ? bodyWeight * externalSpineWeight : 0.0f;
-            if (spine > 0.0f && spineMinAngle > 0.0f && TotalAngles.Magnitude < spineMinAngle)
-            {
-                // 起始角：总角度还小的时候不让身体参与，避免小幅度注视也带着上半身一起动
-                spine = 0.0f;
-            }
+            // 脊椎的参与度由分工算出来（state.spineWeight）：头颈越接近限位、身体跟得越多，
+            // 目标小的时候身体完全不参与 —— 这就是"眼睛 → 头颈 → 脊椎"的优先级。
+            float spine = Mathf.Clamp01(state.spineWeight);
 
             float totalWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
             if (state.applyLookAt)
@@ -853,18 +842,19 @@ namespace Hollow.HoUnityTools.Constraints
 
             HoHeadSettings head = new HoHeadSettings
             {
-                deadZone = deadZone,
-                headShare = headShare,
                 yawLimit = headLimitYaw,
                 pitchLimit = headLimitPitch
             };
             head.Sanitize();
 
+            // 优先级分工：眼睛 → 头颈 → 脊椎（一层吃不下才交给下一层）。
+            // 眼球强度在这里作为"眼睛愿意出多少力"参与分工；眼球少出的部分由头颈接走，所以目光不会差一截。
+            float eyeStrength = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) : 0.0f;
+            float bodyStrength = spineEnabled ? Mathf.Clamp01(bodyWeight * externalSpineWeight) : 0.0f;
+
             // 注意：这里**不乘总强度** —— 总强度由 Unity 的 SetLookAtWeight(weight) 施加一次，
             // 眼睛那边自己也乘一次（各一次）。以前两处都乘，weight = 0.5 时实际只剩 0.25。
-            // 眼睛范围一起传进去：残余超过眼球能转的范围时，超出的部分还给头，
-            // 否则就会出现"总角 18°、头 7°、眼球限位 10°"→ 目光永远差 1° 的情况。
-            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, GetEyeRangeSettings(), 1.0f, ref state);
+            HoLookAtAngles headAngles = HoLookAtSolver.Split(total, head, GetEyeRangeSettings(), eyeStrength, bodyStrength, ref state);
             HeadAngles = headAngles;
             return headAngles;
         }
@@ -1262,8 +1252,9 @@ namespace Hollow.HoUnityTools.Constraints
         private void ApplyEyes(float deltaTime)
         {
             float effectiveWeight = Mathf.Clamp01(weight * externalWeight) * (externalEnabled ? 1.0f : 0.0f);
-            float eyes = eyesEnabled ? Mathf.Clamp01(eyeWeight * externalEyeWeight) * effectiveWeight : 0.0f;
-            eyes *= Mathf.Clamp01(state.releaseBlend);
+            // 注意：eyeWeight（眼球强度）已经在分工里当作"眼睛愿意出多少力"用掉了，
+            // 这里只乘总强度与松开淡出 —— 再乘一次会把眼睛压成两次方。
+            float eyes = (eyesEnabled ? effectiveWeight : 0.0f) * Mathf.Clamp01(state.releaseBlend);
 
             // 眼睛补的是"目标 − 头部估计朝向"。
             // 头部估计 = 我们让 Unity 看的方向 × 它实际施加的比例，所以：
@@ -1637,9 +1628,8 @@ namespace Hollow.HoUnityTools.Constraints
                 + "　头估计 " + state.headEstimateYaw.ToString("0.0") + "°/" + state.headEstimatePitch.ToString("0.0") + "°"
                 + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
                 + "　头增量 " + state.headDeltaYaw.ToString("0.0") + "°/" + state.headDeltaPitch.ToString("0.0") + "°"
-                + (Mathf.Abs(state.eyeOverflowYaw) + Mathf.Abs(state.eyeOverflowPitch) > 0.5f
-                    ? "　眼球超范围 " + state.eyeOverflowYaw.ToString("0.0") + "°/" + state.eyeOverflowPitch.ToString("0.0") + "°（已还给头）"
-                    : string.Empty)
+                + "　眼让出 " + state.eyeOverflowYaw.ToString("0.0") + "°/" + state.eyeOverflowPitch.ToString("0.0") + "°"
+                + "　脊椎 " + (state.spineWeight * 100.0f).ToString("0") + "%"
                 + "　误差 " + GazeErrorYaw.ToString("0.0") + "°/" + GazeErrorPitch.ToString("0.0") + "°"
                 + (error < 1.0f ? "（精确）" : "（偏了）")
                 + (eyeDriver == HoLookAtEyeDriver.EyeBones ? "　骨骼" : "　形态键");

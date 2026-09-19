@@ -25,61 +25,49 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         /// <summary>
-        /// 按"死区 → 头部承担 → 限位"分工，返回头部要用的角度，残余部分写进 <paramref name="state"/> 供眼睛使用。
-        /// 与设计文档的不变量一致：先判死区、再分工、最后把头部那部分夹到限位内，剩下的全给眼睛。
+        /// 优先级分工：**眼睛 → 头颈 → 脊椎**（一层吃不下才交给下一层）。
         ///
-        /// **眼睛范围的溢出会还给头**：残余超过眼球能转的范围时，把超出的部分加回头部（再受头部限位约束），
-        /// 然后重算残余。否则就会出现"总角 18°、头只转 7°、眼睛限位 10°" → 目光永远差 1° 的情况
-        /// （实测非常显眼）。头部也没余量时才真的到不了，那时调试区会显示还差多少。
+        /// 真实角色的注视是"先转眼珠、再转头脖、最后才带脊椎"，所以这里不用"按固定比例分"：
+        ///   1) 眼睛先吃：能吃多少 = 该方向上的眼球范围 × 眼球强度
+        ///      （眼球强度就是"眼睛愿意出多少力"：1 = 在自己范围内尽量吃，0.3 = 只吃三成，剩下的交给头颈）；
+        ///   2) 头颈再吃：剩下的，最多到头部限位；
+        ///   3) 脊椎最后：按"头颈的负载"参与 —— 头颈越接近自己的限位、身体跟得越多，上限是身体强度。
+        /// 眼球因为强度 &lt; 1 而少吃的那部分会自然落到头颈上，所以目光仍落在目标上（不会"差一点点"）。
+        ///
+        /// 返回值是**头部**要用的角度；眼睛的（最终）角度与脊椎权重写在 <paramref name="state"/> 里。
+        /// 注意总强度不在这里乘：头部由 Unity 的 SetLookAtWeight 施加，眼睛由调用方施加，各一次。
         /// </summary>
         public static HoLookAtAngles Split(
             HoLookAtAngles total,
             in HoHeadSettings head,
             in HoEyeSettings eye,
-            float weight,
+            float eyeStrength,
+            float bodyStrength,
             ref HoLookAtState state)
         {
-            float clampedWeight = Mathf.Clamp01(weight);
-            float yaw = total.yaw * clampedWeight;
-            float pitch = total.pitch * clampedWeight;
+            float eyeScale = Mathf.Clamp01(eyeStrength);
+            float bodyScale = Mathf.Clamp01(bodyStrength);
 
-            float magnitude = Mathf.Sqrt(yaw * yaw + pitch * pitch);
-            if (magnitude <= head.deadZone || magnitude <= 1e-4f)
-            {
-                // 死区内：头部不动，眼睛全吃
-                state.eyeYaw = yaw;
-                state.eyePitch = pitch;
-                state.eyeOverflowYaw = 0.0f;
-                state.eyeOverflowPitch = 0.0f;
-                return default;
-            }
+            // 1) 眼睛先吃
+            float eyeYaw = TakeUpTo(total.yaw, eye.angleLimitInner, eye.angleLimitOuter) * eyeScale;
+            float eyePitch = TakeUpTo(total.pitch, eye.angleLimitUp, eye.angleLimitDown) * eyeScale;
 
-            // 超过死区的部分按 headShare 分给头部
-            float share = Mathf.Clamp01(head.headShare);
-            float headMagnitude = (magnitude - head.deadZone) * share;
-            float scale = headMagnitude / magnitude;
+            // 2) 头颈再吃（吃剩下的，最多到限位）
+            float headYaw = Mathf.Clamp(total.yaw - eyeYaw, -head.yawLimit, head.yawLimit);
+            float headPitch = Mathf.Clamp(total.pitch - eyePitch, -head.pitchLimit, head.pitchLimit);
 
-            float headYaw = yaw * scale;
-            float headPitch = pitch * scale;
+            // 3) 脊椎最后：按头颈的负载参与
+            float loadYaw = head.yawLimit > 0.01f ? Mathf.Abs(total.yaw - eyeYaw) / head.yawLimit : 1.0f;
+            float loadPitch = head.pitchLimit > 0.01f ? Mathf.Abs(total.pitch - eyePitch) / head.pitchLimit : 1.0f;
+            float load = Mathf.Clamp01(Mathf.Max(loadYaw, loadPitch));
 
-            // 限位：按轴独立夹取。
-            // 不用"椭圆整体缩放" —— 那会把斜向目标按比例拉回中心，眼睛就精确指不到目标了（实测能偏 5~7°）。
-            headYaw = Mathf.Clamp(headYaw, -head.yawLimit, head.yawLimit);
-            headPitch = Mathf.Clamp(headPitch, -head.pitchLimit, head.pitchLimit);
+            state.eyeYaw = eyeYaw;
+            state.eyePitch = eyePitch;
+            state.spineWeight = bodyScale * load;
 
-            // 眼球转不过来的部分交回头部（头部还有余量时，总方向仍然指得到目标）
-            float overflowYaw = Overflow(yaw - headYaw, eye.angleLimitInner, eye.angleLimitOuter);
-            float overflowPitch = Overflow(pitch - headPitch, eye.angleLimitUp, eye.angleLimitDown);
-            if (overflowYaw != 0.0f || overflowPitch != 0.0f)
-            {
-                headYaw = Mathf.Clamp(headYaw + overflowYaw, -head.yawLimit, head.yawLimit);
-                headPitch = Mathf.Clamp(headPitch + overflowPitch, -head.pitchLimit, head.pitchLimit);
-            }
-
-            state.eyeYaw = yaw - headYaw;
-            state.eyePitch = pitch - headPitch;
-            state.eyeOverflowYaw = overflowYaw;
-            state.eyeOverflowPitch = overflowPitch;
+            // 诊断用：眼睛没吃下、交给头颈的部分
+            state.eyeOverflowYaw = total.yaw - eyeYaw;
+            state.eyeOverflowPitch = total.pitch - eyePitch;
 
             HoLookAtAngles headAngles;
             headAngles.yaw = headYaw;
@@ -87,37 +75,15 @@ namespace Hollow.HoUnityTools.Constraints
             return headAngles;
         }
 
-        /// <summary>超出眼睛范围的量（带符号）：正数表示往正方向超了，负数表示往负方向超了。</summary>
-        private static float Overflow(float value, float positiveLimit, float negativeLimit)
+        /// <summary>在限位内"能吃多少吃多少"（按方向取限位，正方向用正限位）。</summary>
+        private static float TakeUpTo(float value, float positiveLimit, float negativeLimit)
         {
-            if (value > positiveLimit)
+            if (value >= 0.0f)
             {
-                return value - positiveLimit;
+                return Mathf.Min(value, Mathf.Max(0.0f, positiveLimit));
             }
 
-            if (value < -negativeLimit)
-            {
-                return value + negativeLimit;
-            }
-
-            return 0.0f;
-        }
-
-        /// <summary>兼容旧签名：不把眼睛溢出还给头（等价于眼睛范围无限）。</summary>
-        public static HoLookAtAngles Split(
-            HoLookAtAngles total,
-            in HoHeadSettings head,
-            float weight,
-            ref HoLookAtState state)
-        {
-            HoEyeSettings unlimited = new HoEyeSettings
-            {
-                angleLimitInner = 180.0f,
-                angleLimitOuter = 180.0f,
-                angleLimitUp = 180.0f,
-                angleLimitDown = 180.0f
-            };
-            return Split(total, head, unlimited, weight, ref state);
+            return Mathf.Max(value, -Mathf.Max(0.0f, negativeLimit));
         }
 
         /// <summary>
@@ -144,7 +110,7 @@ namespace Hollow.HoUnityTools.Constraints
             return origin + DirectionFromAngles(forward, up, angles.yaw, angles.pitch) * Mathf.Max(0.01f, distance);
         }
 
-        /// <summary>目标方向在参考系中"前方"一侧的角度（用于 spineMinAngle 之类的门槛判断）。</summary>
+        /// <summary>目标方向与参考系前方的夹角（度）。</summary>
         public static float AngleToDirection(Vector3 forward, Vector3 direction)
         {
             if (forward.sqrMagnitude < 1e-8f || direction.sqrMagnitude < 1e-8f)

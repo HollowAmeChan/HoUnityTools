@@ -21,11 +21,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty evaluateInEditMode;
         private SerializedProperty spineEnabled;
         private SerializedProperty bodyWeight;
-        private SerializedProperty spineMinAngle;
         private SerializedProperty headEnabled;
         private SerializedProperty headWeight;
-        private SerializedProperty deadZone;
-        private SerializedProperty headShare;
         private SerializedProperty headLimitYaw;
         private SerializedProperty headLimitPitch;
         private SerializedProperty headDirectionTrim;
@@ -114,11 +111,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             evaluateInEditMode = Find("evaluateInEditMode");
             spineEnabled = Find("spineEnabled");
             bodyWeight = Find("bodyWeight");
-            spineMinAngle = Find("spineMinAngle");
             headEnabled = Find("headEnabled");
             headWeight = Find("headWeight");
-            deadZone = Find("deadZone");
-            headShare = Find("headShare");
             headLimitYaw = Find("headLimitYaw");
             headLimitPitch = Find("headLimitPitch");
             headDirectionTrim = Find("headDirectionTrim");
@@ -401,7 +395,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(spineEnabled, L("启用", "身体跟着转一点。只想让头动就关掉。"));
             using (new EditorGUI.DisabledScope(!spineEnabled.boolValue))
             {
-                EditorGUILayout.Slider(bodyWeight, 0.0f, 1.0f, L("身体强度", "身体参与比例，Unity 沿脊椎分摊。0.2~0.4 自然，越大腰跟着扭。"));
+                EditorGUILayout.Slider(bodyWeight, 0.0f, 1.0f, L("身体强度", "身体参与的**上限**：身体是最后才动的（优先级最后），只有当头颈接近自己限位时才按这个比例跟上；0 = 身体完全不参与。"));
             }
         }
 
@@ -416,9 +410,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(headEnabled, L("启用", "用 Unity 的 LookAt IK 转头颈。需要 humanoid + 图层勾 IK Pass。"));
             using (new EditorGUI.DisabledScope(!headEnabled.boolValue))
             {
-                EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与比例：1 = 完全对准（限位内），0.5 = 只转一半。没转到的部分由眼睛补。"));
-                EditorGUILayout.Slider(deadZone, 0.0f, 89.0f, L("起始死区（度）", "目标离正前方这么近时头不动、只让眼睛动，避免小幅目标让头一直微抖。"));
-                EditorGUILayout.Slider(headShare, 0.0f, 1.0f, L("头部承担", "超出死区后头承担的比例，剩下给眼睛（头吃七成 = 0.7）。"));
+                EditorGUILayout.Slider(headWeight, 0.0f, 1.0f, L("头部强度", "头颈参与比例：1 = 把眼睛吃剩下的都转到位（限位内），0.5 = 只转一半，剩下由眼睛补。"));
                 EditorGUILayout.PropertyField(headDirectionTrim, L("头朝向偏差（度）", "模型静止姿势的头不朝正前方时，那个固定差值（左右/上下）。\n症状：目标怎么动，头和眼睛都固定偏同一个方向 → 对着 Gizmo 调这里，眼睛会一起补正。\n正常模型填 0。"));
                 using (NarrowLabels(74.0f))
                 {
@@ -444,7 +436,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 EditorGUILayout.PropertyField(eyeDriver, L("驱动方式", "眼球骨骼（默认）：残余角直接转到 LeftEye/RightEye，指哪看哪、不用标定。\n形态键：残余角过四条曲线写成凝视键，给没有眼球骨骼的模型。\n切换时旧的形态键会自动交还回基准值。"));
 
-                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛参与比例，可再打个折。头没转到的部分由眼睛补。"));
+                EditorGUILayout.Slider(eyeWeight, 0.0f, 1.0f, L("眼球强度", "眼睛愿意出多少力（优先级分工的第一层）：1 = 在眼球限位内尽量先吃，头颈只补剩下的；0.3 = 眼睛只吃三成，剩下的交给头颈（眼睛看着更含蓄）。\n想让「眼睛先动、头再跟」就调大它。"));
                 EditorGUILayout.PropertyField(eyeSmoothing, L("平滑（秒）", "眼睛角度的一阶平滑（比头部快，0.04 左右）。0 = 不平滑、最跟手。"));
 
                 if (bones)
@@ -677,8 +669,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.PropertyField(teleportAngleThreshold, L("瞬移阈值（度）", "角度跳变超过它就当瞬移，直接跟上、不慢慢转。"));
             using (new EditorGUI.DisabledScope(!spineEnabled.boolValue))
             {
-                EditorGUILayout.Slider(spineMinAngle, 0.0f, 90.0f, L("脊椎起始角（度）", "总角度超过它身体才参与，避免小幅注视也带着上半身动。"));
-            }
+                }
 
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("丢失之后", EditorStyles.miniBoldLabel);
@@ -734,7 +725,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.Space(2.0f);
             EditorGUILayout.LabelField("状态：总角度 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
                 + "　头（估计） " + debug.headEstimateYaw.ToString("0.0") + "° / " + debug.headEstimatePitch.ToString("0.0") + "°"
-                + "　头增量 " + debug.headDeltaYaw.ToString("0.0") + "° / " + debug.headDeltaPitch.ToString("0.0") + "°",
+                + "　头增量 " + debug.headDeltaYaw.ToString("0.0") + "° / " + debug.headDeltaPitch.ToString("0.0") + "°"
+                + "　脊椎 " + (debug.spineWeight * 100.0f).ToString("0") + "%",
                 EditorStyles.miniLabel);
             EditorGUILayout.LabelField("目标 " + debug.targetYaw.ToString("0.0") + "° / " + debug.targetPitch.ToString("0.0") + "°"
                 + "　眼睛残余 " + debug.eyeYaw.ToString("0.0") + "° / " + debug.eyePitch.ToString("0.0") + "°"
