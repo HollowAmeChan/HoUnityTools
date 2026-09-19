@@ -144,6 +144,11 @@ namespace Hollow.HoUnityTools.Constraints
             return false;
         }
 
+        private static bool ContainsPoint(Rect rect, Vector2 point)
+        {
+            return point.x >= rect.xMin && point.x <= rect.xMax && point.y >= rect.yMin && point.y <= rect.yMax;
+        }
+
         /// <summary>
         /// 这个位置能不能用。(0,0) 被视为"没有数据" —— 鼠标真的停在窗口左下角像素上是个极小概率事件，
         /// 而失焦/无设备时 Input System 恰好报 (0,0)，两者混在一起会让"丢失跟踪"完全失效。
@@ -163,7 +168,7 @@ namespace Hollow.HoUnityTools.Constraints
             HoPointerSample sample = default;
             HoMouseSettings resolved = settings;
 
-            if (!TryResolvePointer(ref resolved, out Vector2 screenPosition, out Ray pointerRay, out bool hasPointerRay))
+            if (!TryResolvePointer(ref resolved, out Vector2 screenPosition, out Ray pointerRay, out bool hasPointerRay, out bool fromEditorPointer))
             {
                 return sample;
             }
@@ -171,6 +176,15 @@ namespace Hollow.HoUnityTools.Constraints
             sample.valid = true;
             sample.camera = resolved.camera;
             sample.screenPosition = screenPosition;
+
+            // 鼠标不在相机画面里（编辑器里跑到别的窗口上、或窗口外）：当作指针不可用，
+            // 交给 lostBehavior 处理。Scene 视图那条路已经自己判过"在不在视图里"，不再重复判。
+            if (!fromEditorPointer
+                && resolved.camera != null
+                && !ContainsPoint(resolved.camera.pixelRect, screenPosition))
+            {
+                return default;
+            }
 
             if (resolved.sampleMode == HoLookAtMouseSampleMode.AngleMap)
             {
@@ -249,10 +263,12 @@ namespace Hollow.HoUnityTools.Constraints
             ref HoMouseSettings settings,
             out Vector2 screenPosition,
             out Ray ray,
-            out bool hasRay)
+            out bool hasRay,
+            out bool fromEditorPointer)
         {
             ray = default;
             hasRay = false;
+            fromEditorPointer = false;
 
 #if UNITY_EDITOR
             if (settings.useSceneViewMouse
@@ -263,6 +279,7 @@ namespace Hollow.HoUnityTools.Constraints
                 screenPosition = EditorPointer.screenPosition;
                 ray = EditorPointer.ray;
                 hasRay = EditorPointer.hasRay;
+                fromEditorPointer = true;
                 return true;
             }
 #endif

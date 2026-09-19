@@ -345,7 +345,6 @@ namespace Hollow.HoUnityTools.Constraints
         public float distance;
 
         public LayerMask raycastMask;
-        public bool holdOffscreen;
 
         /// <summary>
         /// 编辑器专用：鼠标在 Scene 视图上时，改用 Scene 视图的相机与坐标当"观众视角"。

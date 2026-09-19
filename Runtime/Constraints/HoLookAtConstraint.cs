@@ -153,9 +153,6 @@ namespace Hollow.HoUnityTools.Constraints
         [SerializeField]
         private LayerMask mouseRaycastMask = ~0;
 
-        [SerializeField]
-        private bool mouseHoldOffscreen = true;
-
         [SerializeField, Range(0.0f, 90.0f)]
         private float spineMinAngle;
 
@@ -218,7 +215,6 @@ namespace Hollow.HoUnityTools.Constraints
         private bool hasLastKnownPoint;
         private float mouseAngleYaw;
         private float mouseAnglePitch;
-        private bool hasMouseAngles;
         private Vector3 lastDirection = Vector3.forward;
         private Quaternion leftEyeRest = Quaternion.identity;
         private Quaternion rightEyeRest = Quaternion.identity;
@@ -287,7 +283,6 @@ namespace Hollow.HoUnityTools.Constraints
             target = value;
             externalPointValid = false;
             hasLastKnownPoint = false;
-            hasMouseAngles = false;
         }
 
         /// <summary>用世界坐标当目标（覆盖面板设置，直到 SetTarget 或 ClearExternalTarget）。</summary>
@@ -832,7 +827,6 @@ namespace Hollow.HoUnityTools.Constraints
             writer.RestoreWritten();
             writer.Reset();
             hasLastKnownPoint = false;
-            hasMouseAngles = false;
         }
 
         // ── 第一段：目标解算 + 头部 ─────────────────────────────────────────
@@ -984,7 +978,6 @@ namespace Hollow.HoUnityTools.Constraints
                     pivot = pivot,
                     distance = mouseDistance,
                     raycastMask = mouseRaycastMask,
-                    holdOffscreen = mouseHoldOffscreen,
                     useSceneViewMouse = useSceneViewMouse
                 };
 
@@ -1003,29 +996,12 @@ namespace Hollow.HoUnityTools.Constraints
                 }
                 if (!sample.valid)
                 {
-                    // 指针不可用（窗口失焦 / 设备没数据 / 位置被报成 (0,0)）：
-                    // 离屏保持时沿用上一次的方向，否则按 lostBehavior 处理（回中立 / 松开）。
+                    // 指针不可用（窗口失焦 / 鼠标不在相机画面里 / 设备没数据 / 位置被报成 (0,0)）：
+                    // 一律当作"目标丢失"，交给 lostBehavior 决定 —— 停在最后方向 / 回中立 / 立刻松开。
+                    // 以前这里还有一条"离屏保持"分支，它按老映射重建方向（依赖世界点），
+                    // 新映射不产生世界点 → 那条分支实际把方向算成了 0，于是三个丢失行为看起来全都变成"回中立"。
                     hasPointerScreen = false;
-                    if (!mouseHoldOffscreen)
-                    {
-                        return false;
-                    }
-
-                    if (mouseSampleMode == HoLookAtMouseSampleMode.AngleMap && hasMouseAngles)
-                    {
-                        direction = HoLookAtSolver.DirectionFromAngles(forward, up, mouseAngleYaw, mouseAnglePitch);
-                        isDirection = true;
-                        return true;
-                    }
-
-                    if (hasLastKnownPoint)
-                    {
-                        direction = lastKnownTargetPoint - pivot;
-                        isDirection = true;
-                        return direction.sqrMagnitude > 1e-6f;
-                    }
-
-                    return state.hasTarget;
+                    return false;
                 }
 
                 if (mouseSampleMode == HoLookAtMouseSampleMode.CursorPoint)
@@ -1059,7 +1035,6 @@ namespace Hollow.HoUnityTools.Constraints
                         HoMousePointer.GetHalfFov(aimCamera, pivot, out float halfYaw, out float halfPitch);
                         mouseAngleYaw = nx * halfYaw * mouseAimGain;
                         mouseAnglePitch = ny * halfPitch * mouseAimGain;
-                        hasMouseAngles = true;
 
                         // 观察者坐标系构造方向（+X 观众右、+Y 上、−Z 朝向观众 = 看镜头）
                         Transform view = aimCamera.transform;
@@ -1082,7 +1057,6 @@ namespace Hollow.HoUnityTools.Constraints
                     Vector2 offset = HoMousePointer.ScreenToAngleOffset(camera, sample.screenPosition, mouseDeadZone);
                     mouseAngleYaw = offset.x * mouseSensitivity.x;
                     mouseAnglePitch = offset.y * mouseSensitivity.y;
-                    hasMouseAngles = true;
 
                     if (mouseAngleSpace == HoLookAtMouseSpace.ScreenRelative && camera != null)
                     {
@@ -1118,7 +1092,7 @@ namespace Hollow.HoUnityTools.Constraints
                     return direction.sqrMagnitude > 1e-6f;
                 }
 
-                return mouseHoldOffscreen && hasLastKnownPoint;
+                return false;
             }
 
             if (target == null)

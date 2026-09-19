@@ -52,7 +52,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty mouseAngleSpace;
         private SerializedProperty mouseDistance;
         private SerializedProperty mouseRaycastMask;
-        private SerializedProperty mouseHoldOffscreen;
         private SerializedProperty writeThreshold;
         private SerializedProperty drawGizmos;
         private SerializedProperty drawOverlay;
@@ -144,7 +143,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             mouseAngleSpace = Find("mouseAngleSpace");
             mouseDistance = Find("mouseDistance");
             mouseRaycastMask = Find("mouseRaycastMask");
-            mouseHoldOffscreen = Find("mouseHoldOffscreen");
             writeThreshold = Find("writeThreshold");
             drawGizmos = Find("drawGizmos");
             drawOverlay = Find("drawOverlay");
@@ -332,7 +330,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     EditorGUILayout.PropertyField(mouseDistance, L("兜底距离（米）", "射线没打中时，取射线上这个距离的点。"));
                 }
 
-                EditorGUILayout.PropertyField(mouseHoldOffscreen, L("离屏保持", "鼠标移出窗口/失焦时保持最后一次方向，而不是回中立。"));
             }
         }
 
@@ -653,7 +650,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了（物体被删/鼠标离屏）怎么办：\n停在最后方向 / 慢慢回正前方 / 立刻松开交给动画。"));
+            EditorGUILayout.PropertyField(lostBehavior, L("丢失行为", "目标丢了怎么办（物体被删 / 鼠标指针不可用：失焦、移出画面、没数据）：\n停在最后方向：保持最后的视线\n回中立：等「回正延迟」后按「回正速度」转回正前方\n立刻松开：头眼都交还动画"));
         }
 
         // ── 高级 ────────────────────────────────────────────────────────────
