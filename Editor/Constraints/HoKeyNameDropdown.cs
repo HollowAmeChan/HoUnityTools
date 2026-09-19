@@ -23,20 +23,20 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             public string KeyName { get; }
         }
 
-        private readonly HoBlinkConstraint constraint;
+        private readonly IHoShapeKeyMeshProvider meshes;
         private readonly SerializedProperty property;
 
-        private HoKeyNameDropdown(HoBlinkConstraint constraint, SerializedProperty property, AdvancedDropdownState state)
+        private HoKeyNameDropdown(IHoShapeKeyMeshProvider meshes, SerializedProperty property, AdvancedDropdownState state)
             : base(state)
         {
-            this.constraint = constraint;
+            this.meshes = meshes;
             this.property = property;
             minimumSize = new Vector2(280.0f, 420.0f);
         }
 
-        public static void Show(Rect rect, HoBlinkConstraint constraint, SerializedProperty property)
+        public static void Show(Rect rect, IHoShapeKeyMeshProvider meshes, SerializedProperty property)
         {
-            HoKeyNameDropdown dropdown = new HoKeyNameDropdown(constraint, property, new AdvancedDropdownState());
+            HoKeyNameDropdown dropdown = new HoKeyNameDropdown(meshes, property, new AdvancedDropdownState());
             dropdown.Show(rect);
         }
 
@@ -62,9 +62,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 known.Add(HoShapeKeyResolver.Normalize(entries[i].Name));
             }
 
-            for (int i = 0; i < constraint.MeshCount; i++)
+            for (int i = 0; i < meshes.MeshCount; i++)
             {
-                SkinnedMeshRenderer mesh = constraint.GetMesh(i);
+                SkinnedMeshRenderer mesh = meshes.GetMesh(i);
                 Mesh sharedMesh = mesh != null ? mesh.sharedMesh : null;
                 if (sharedMesh == null)
                 {
@@ -115,7 +115,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             for (int i = 0; i < entries.Count; i++)
             {
                 HoBlinkKeyEntry entry = entries[i];
-                bool exists = constraint.KeyExists(entry.Name);
+                bool exists = meshes.KeyExists(entry.Name);
                 string display = entry.Display + (exists ? string.Empty : "   · 网格上没有");
                 group.AddChild(new KeyItem(display, entry.Name));
             }

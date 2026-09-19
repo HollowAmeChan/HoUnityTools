@@ -1,7 +1,9 @@
 {
   "name": "HoUnityTools.Runtime",
   "rootNamespace": "Hollow.HoUnityTools",
-  "references": [],
+  "references": [
+    "Unity.InputSystem"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

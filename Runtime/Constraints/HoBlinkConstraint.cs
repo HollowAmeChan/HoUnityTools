@@ -11,7 +11,7 @@ namespace Hollow.HoUnityTools.Constraints
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Constraints/Ho Blink Constraint")]
-    public sealed class HoBlinkConstraint : MonoBehaviour
+    public sealed class HoBlinkConstraint : MonoBehaviour, IHoShapeKeyMeshProvider
     {
         /// <summary>被外部驱动多久之后暂停自动眨眼。</summary>
         private const float DrivenThresholdTime = 0.5f;

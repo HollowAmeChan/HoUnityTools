@@ -1,0 +1,189 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Hollow.HoUnityTools.Constraints
+{
+    public enum HoLookAtMode
+    {
+        Transform,
+        Mouse
+    }
+
+    public enum HoLookAtInputSource
+    {
+        Auto,
+        InputSystem,
+        LegacyInput
+    }
+
+    public enum HoLookAtMouseSampleMode
+    {
+        /// <summary>鼠标屏幕位置 → 角度偏移。跟相机距离无关，最可控。</summary>
+        AngleMap,
+
+        /// <summary>从相机沿鼠标射线取固定距离的点（或投到角色脚下的水平面）。</summary>
+        WorldPoint,
+
+        /// <summary>相机 → 鼠标射线打到指定层。</summary>
+        Raycast
+    }
+
+    public enum HoLookAtLostBehavior
+    {
+        Hold,
+        Return,
+        Disable
+    }
+
+    /// <summary>
+    /// 眼睛形态键的通道。横向有两种族，必须分开：
+    /// `Inner/Outer` 是**相对眼球**的（UniVRM 的正统表达，ARKit/PICO 用），
+    /// `LookLeft/LookRight` 是**相对头**的（VRM/Meta/SRanipal 用）。
+    /// </summary>
+    public enum HoLookAtEyeChannel
+    {
+        Inner,
+        Outer,
+        LookLeft,
+        LookRight,
+        Up,
+        Down
+    }
+
+    /// <summary>
+    /// 一条眼睛通道：左右眼各一个输出映射（键名 + ramp/增益/范围）。
+    /// 通道的"量"由注视解算给出，这里只负责映射。
+    /// </summary>
+    [Serializable]
+    public sealed class HoLookAtEyeEntry
+    {
+        [SerializeField]
+        private bool enabled = true;
+
+        [SerializeField]
+        private HoLookAtEyeChannel channel = HoLookAtEyeChannel.Inner;
+
+        [SerializeField]
+        private HoShapeKeyTarget leftEye = new HoShapeKeyTarget();
+
+        [SerializeField]
+        private HoShapeKeyTarget rightEye = new HoShapeKeyTarget();
+
+        public bool Enabled
+        {
+            get => enabled;
+            set => enabled = value;
+        }
+
+        public HoLookAtEyeChannel Channel
+        {
+            get => channel;
+            set => channel = value;
+        }
+
+        public HoShapeKeyTarget LeftEye => leftEye;
+
+        public HoShapeKeyTarget RightEye => rightEye;
+
+        public void Sanitize()
+        {
+            leftEye?.Sanitize();
+            rightEye?.Sanitize();
+        }
+    }
+
+    /// <summary>注视解算结果（都相对参考系，单位为度；正 yaw = 角色右侧，正 pitch = 上方）。</summary>
+    public struct HoLookAtAngles
+    {
+        public float yaw;
+        public float pitch;
+
+        /// <summary>总角度（矢量长度，用于死区与"眼睛吃满"的判定）。</summary>
+        public float Magnitude => Mathf.Sqrt(yaw * yaw + pitch * pitch);
+    }
+
+    /// <summary>注视约束的运行时状态。</summary>
+    public struct HoLookAtState
+    {
+        /// <summary>平滑后的目标方向（角空间）。</summary>
+        public float smoothedYaw;
+        public float smoothedPitch;
+
+        /// <summary>本帧分给眼睛的残余角（由头部 IK 那一段算出来，LateUpdate 用）。</summary>
+        public float eyeYaw;
+        public float eyePitch;
+
+        /// <summary>眼睛平滑后的角度（LateUpdate 里的状态）。</summary>
+        public float smoothedEyeYaw;
+        public float smoothedEyePitch;
+
+        /// <summary>本帧是否要把头部交给 Unity 的 IK（丢失且设为 Disable 时为 false）。</summary>
+        public bool applyLookAt;
+
+        public bool hasTarget;
+        public float lostTime;
+        public double lastIkTime;
+    }
+
+    /// <summary>鼠标/指针采样结果。</summary>
+    public struct HoPointerSample
+    {
+        public bool valid;
+        public Vector2 screenPosition;
+        public bool hasWorldPoint;
+        public Vector3 worldPoint;
+    }
+
+    /// <summary>注视约束的鼠标参数（采样器输入）。</summary>
+    public struct HoMouseSettings
+    {
+        public HoLookAtInputSource inputSource;
+        public Camera camera;
+        public HoLookAtMouseSampleMode sampleMode;
+        public Vector2 sensitivity;
+        public float deadZone;
+        public float distance;
+        public bool projectToPlane;
+        public float planeHeight;
+        public LayerMask raycastMask;
+        public bool holdOffscreen;
+    }
+
+    /// <summary>注视约束的眼睛参数（求解器输入）。</summary>
+    public struct HoEyeSettings
+    {
+        public float angleLimitInner;
+        public float angleLimitOuter;
+        public float angleLimitUp;
+        public float angleLimitDown;
+        public bool ellipseClamp;
+
+        public void Sanitize()
+        {
+            angleLimitInner = Mathf.Max(1.0f, angleLimitInner);
+            angleLimitOuter = Mathf.Max(1.0f, angleLimitOuter);
+            angleLimitUp = Mathf.Max(1.0f, angleLimitUp);
+            angleLimitDown = Mathf.Max(1.0f, angleLimitDown);
+        }
+    }
+
+    /// <summary>注视约束的头部参数（求解器输入）。</summary>
+    public struct HoHeadSettings
+    {
+        public float deadZone;
+        public float headShare;
+        public float yawLimit;
+        public float pitchLimitUp;
+        public float pitchLimitDown;
+
+        public void Sanitize()
+        {
+            deadZone = Mathf.Clamp(deadZone, 0.0f, 89.0f);
+            headShare = Mathf.Clamp01(headShare);
+            yawLimit = Mathf.Clamp(yawLimit, 0.0f, 179.0f);
+            pitchLimitUp = Mathf.Clamp(pitchLimitUp, 0.0f, 179.0f);
+            pitchLimitDown = Mathf.Clamp(pitchLimitDown, 0.0f, 179.0f);
+        }
+    }
+}
