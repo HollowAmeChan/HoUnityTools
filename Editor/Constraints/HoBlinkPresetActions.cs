@@ -45,7 +45,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             ApplyGazeRules(constraint, serializedObject, true, inOutFamily);
             Debug.Log(
                 "[HoBlinkConstraint] 左右眼凝视：驱动族 = " + (inOutFamily ? "内外族（In/Out）" : "左右族（Left/Right）")
-                + "；目标键留空，可以点「按名字接目标键」。",
+                + "；目标键按方向自动接。",
                 constraint);
         }
 
@@ -96,11 +96,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             if (!splitEyes)
             {
                 AddRule(rules, "凝视 上", HoBlinkDriverKind.ShapeKey, FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeUp), string.Empty, HoBlinkDriverRange.Unipolar, false, 4.0f, 0.35f, 0.03f);
+                AddLabeledTarget(rules, "往上", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
                 AddRule(rules, "凝视 下", HoBlinkDriverKind.ShapeKey, FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeDown), string.Empty, HoBlinkDriverRange.Unipolar, false, 4.0f, 0.35f, 0.03f);
+                AddLabeledTarget(rules, "往下", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
                 AddRule(rules, "凝视 左", HoBlinkDriverKind.ShapeKey, FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeLeft), string.Empty, HoBlinkDriverRange.Unipolar, false, 4.0f, 0.35f, 0.03f);
+                AddLabeledTarget(rules, "往左", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
                 AddRule(rules, "凝视 右", HoBlinkDriverKind.ShapeKey, FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeRight), string.Empty, HoBlinkDriverRange.Unipolar, false, 4.0f, 0.35f, 0.03f);
+                AddLabeledTarget(rules, "往右", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
                 serializedObject.ApplyModifiedProperties();
                 Rebuild(constraint);
+                Debug.Log("[HoBlinkConstraint] 四向凝视：加了 4 条单极规则（上 / 下 / 左 / 右），目标键按方向自动接。", constraint);
+                AutoMatchTargetKeys(constraint, serializedObject, -1, "追加「四向凝视」后");
                 return;
             }
 
@@ -130,10 +136,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left));
 
             AddRule(rules, "凝视 X（右 − 左）", HoBlinkDriverKind.ShapeKey, positiveX, negativeX, HoBlinkDriverRange.Bipolar, false, 4.0f, 0.35f, 0.03f);
+            AddLabeledTarget(rules, "往右", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
+            AddLabeledTarget(rules, "往左", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, -1.0f, 1.0f);
             AddRule(rules, "凝视 Y（上 − 下）", HoBlinkDriverKind.ShapeKey, positiveY, negativeY, HoBlinkDriverRange.Bipolar, false, 4.0f, 0.35f, 0.03f);
+            AddLabeledTarget(rules, "往上", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
+            AddLabeledTarget(rules, "往下", HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive, -1.0f, 1.0f);
 
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
+            Debug.Log(
+                "[HoBlinkConstraint] 左右眼凝视：加了 2 条双极规则（X / Y），每个方向一个目标（反向用 −增益，负值会被钳成 0）。",
+                constraint);
+            AutoMatchTargetKeys(constraint, serializedObject, -1, "追加「左右眼」后");
         }
 
         /// <summary>
@@ -158,7 +172,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         ///   1「眨眼压高光」= 闭眼量驱动：高光**压扁**（放大 + 覆盖，最显眼的那一下）、
         ///     **拉宽**（同一条驱动、负增益，做出体积感）、**往下带一点**（叠加，位移）；
         ///   2「眨眼速度弹」= 眼皮速度驱动：只在眼皮动的那几帧有值，**眼仁压一下**就回弹，停住时完全不动。
-        /// 目标键一律留空，可以点「按名字接目标键」按角色从网格上自动挑。
+        /// 目标键由「自动接键」按角色从网格上挑（找不到就留空）。
         /// </summary>
         public static void ApplyBlinkJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
@@ -177,23 +191,27 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
             Debug.Log(
-                "[HoBlinkConstraint] 眨眼路径：加了 2 条规则、4 个目标（键名留空）。\n"
+                "[HoBlinkConstraint] 眨眼路径：加了 2 条规则、4 个目标。\n"
                 + "· 眨眼压高光（闭眼量 0..1，8 Hz / ζ0.26）：高光 · 压扁（放大 1.35 + 覆盖）/ 拉宽（增益 −0.5）/ 下移（增益 −0.45）\n"
-                + "· 眨眼速度弹（眼皮速度 0..1，10 Hz / ζ0.20）：眼仁 · 压一下\n"
-                + "· 目标键可以点面板上的「按名字接目标键」按角色自动挑，也可以自己在每条目标里用 ▾ 选。",
+                + "· 眨眼速度弹（眼皮速度 0..1，10 Hz / ζ0.20）：眼仁 · 压一下",
                 constraint);
+            AutoMatchTargetKeys(constraint, serializedObject, -1, "追加「眨眼」后");
         }
 
         /// <summary>
-        /// 「按名字接目标键」：把**键名还空着**的目标按它自己的标签去网格上找最像的形态键。
+        /// 按角色自动接目标键：把**键名还空着**的目标按它自己的「角色」标签去网格上找最像的形态键。
+        /// 预设追加完会自动调它（见各 `Apply*`），所以正常用不到手动触发；
+        /// 手动加了目标之后想重接，走规则右上的 `⋮ → 按名字接目标键`。
         /// 完全不猜语义之外的键名：找不到就留空并回报，绝不硬填一个不存在的名字。
         /// </summary>
-        public static void AutoMatchTargetKeys(HoBlinkConstraint constraint, SerializedObject serializedObject)
+        /// <param name="onlyRuleIndex">只处理这一条规则（-1 = 全部）。</param>
+        /// <param name="reason">日志里的来源说明，例如"追加『跟眼』后"。</param>
+        public static void AutoMatchTargetKeys(HoBlinkConstraint constraint, SerializedObject serializedObject, int onlyRuleIndex = -1, string reason = null)
         {
             List<string> names = CollectKeyNames(constraint);
             if (names.Count == 0)
             {
-                Debug.LogWarning("[HoBlinkConstraint] 没有可用的形态键：先确认「目标网格」里加了对的网格，再点「重新解析」。", constraint);
+                Debug.LogWarning("[HoBlinkConstraint] 自动接键：没有可用的形态键 —— 先确认「目标网格」里加了对的网格。", constraint);
                 return;
             }
 
@@ -205,6 +223,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             for (int r = 0; r < rules.arraySize; r++)
             {
+                if (onlyRuleIndex >= 0 && r != onlyRuleIndex)
+                {
+                    continue;
+                }
+
                 SerializedProperty rule = rules.GetArrayElementAtIndex(r);
                 SerializedProperty targets = rule.FindPropertyRelative("targets");
                 string ruleName = rule.FindPropertyRelative("label").stringValue;
@@ -228,7 +251,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     if (string.IsNullOrEmpty(match))
                     {
                         skipped++;
-                        report.Append("\n· 没找到：").Append(Describe(role));
+                        if (filled == 0 && skipped <= 4)
+                        {
+                            report.Append("\n· 没找到：").Append(Describe(role));
+                        }
+
                         continue;
                     }
 
@@ -241,12 +268,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
 
-            string head = filled > 0
-                ? "[HoBlinkConstraint] 按名字接目标键：填了 " + filled + " 个"
-                : "[HoBlinkConstraint] 按名字接目标键：一个都没配上";
+            string head = "[HoBlinkConstraint] 自动接键" + (string.IsNullOrEmpty(reason) ? string.Empty : "（" + reason + "）") + "：";
+            if (filled == 0 && skipped == 0)
+            {
+                Debug.Log(head + "没有空着键名的目标，没动。", constraint);
+                return;
+            }
+
+            head += filled > 0 ? "接了 " + filled + " 个" : "一个都没配上";
             if (skipped > 0)
             {
-                head += "，另有 " + skipped + " 个角色在网格上找不到对应键（要么手动选，要么改角色标签）";
+                head += "，另有 " + skipped + " 个角色在网格上找不到对应的键（可以手动用 ▾ 选，或改目标的「角色」）";
             }
 
             Debug.Log(head + report, constraint);
@@ -281,7 +313,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         }
 
         /// <summary>
-        /// 角色标签 → 关键词打分。标签里出现"高光/眼仁/眼睛"决定主体，"压扁/拉宽/下移/位移"决定动作与轴。
+        /// 角色标签 → 关键词打分。角色里写的三件事决定打分：
+        ///   **主体**（高光 / 眼仁 / 眼皮，不写就优先高光）；
+        ///   **动作**（压扁 / 拉宽 / 位移，或不写动词只写方向）；
+        ///   **方向**（往右 / 往左 / 往上 / 往下，用来认 `X+` / `X-` / `Z+` / `Z-` 这种单方向键）。
         /// 只做名字匹配，**不做语义推断**：拿不准就返回空串，让用户手选。
         /// </summary>
         private static string FindKeyByRole(List<string> names, string role)
@@ -298,13 +333,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             bool squash = Contains(lower, "压扁", "压", "扁", "squash", "shrink", "press", "compress");
             bool widen = Contains(lower, "拉宽", "宽", "widen", "stretch");
-            bool move = Contains(lower, "位移", "移动", "下移", "上移", "move", "shift", "offset");
+            bool shift = Contains(lower, "位移", "移动", "move", "shift", "offset", "slide");
+
+            bool right = Contains(lower, "往右", "向右", "右移", "right");
+            bool left = Contains(lower, "往左", "向左", "左移", "left");
+            bool up = Contains(lower, "往上", "向上", "上移", "up");
+            bool down = Contains(lower, "往下", "向下", "下移", "down");
+            bool directional = right || left || up || down;
+
+            bool verticalDir = up || down;
+            bool horizontalDir = right || left;
 
             // 拉宽 = 同一类"压缩键"的负向用法（压扁走垂直、拉宽走水平）
             bool shrinkFamily = squash || widen;
-            bool vertical = squash || Contains(lower, "下移", "上移", "垂直", "vertical", "updown");
-            bool horizontal = widen || Contains(lower, "左右", "水平", "horizontal");
-            bool down = Contains(lower, "下移", "向下", "down");
+            bool moveFamily = shift || directional;
+            bool noSubject = !highlight && !eyeball && !lid;
 
             string best = string.Empty;
             int bestScore = 0;
@@ -321,35 +364,66 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 {
                     score += Contains(candidate, "eyeball", "eye_ball", "pupil", "iris") ? 4 : -2;
                 }
-                else if (lid && Contains(candidate, "lid", "lash", "eyelid"))
+                else if (lid)
                 {
-                    score += 3;
+                    score += Contains(candidate, "lid", "lash", "eyelid") ? 3 : -2;
+                }
+                else
+                {
+                    // 没写主体：高光优先（果冻眼最常压的就是高光），但不排除别的
+                    score += Contains(candidate, "highlight", "high_light", "spec") ? 1 : 0;
                 }
 
                 if (shrinkFamily)
                 {
                     score += Contains(candidate, "shrink", "squash", "press", "flat", "compress") ? 4 : -1;
-                    if (vertical)
+                    if (squash && !horizontalDir)
                     {
                         score += Contains(candidate, "z", "y", "v", "vertical") ? 2 : 0;
                         score -= Contains(candidate, "x+", "x-", "x_") ? 2 : 0;
                     }
-                    else if (horizontal)
+                    else if (widen || horizontalDir)
                     {
                         score += Contains(candidate, "x+", "x-", "x_", "x") ? 2 : 0;
                         score -= Contains(candidate, "z+", "z-", "z_") ? 2 : 0;
                     }
                 }
-                else if (move)
+                else if (moveFamily)
                 {
-                    score += Contains(candidate, "move", "shift", "offset") ? 4 : -1;
-                    if (down)
+                    score += Contains(candidate, "move", "shift", "offset", "slide") ? 4 : -1;
+                    if (horizontalDir)
                     {
-                        score += Contains(candidate, "z-", "y-", "down", "-") ? 3 : 0;
-                        score -= Contains(candidate, "z+", "y+", "up", "+") ? 2 : 0;
+                        score += Contains(candidate, "x+", "x-", "x_", "x") ? 3 : -1;
+                        score -= Contains(candidate, "z+", "z-", "z_") ? 3 : 0;
+                    }
+                    else if (verticalDir)
+                    {
+                        score += Contains(candidate, "z+", "z-", "z_", "y+", "y-", "y_") ? 3 : -1;
+                        score -= Contains(candidate, "x+", "x-", "x_") ? 3 : 0;
                     }
                 }
                 else
+                {
+                    continue;
+                }
+
+                if (directional)
+                {
+                    bool positive = Contains(candidate, "+", "pos", "up");
+                    bool negative = Contains(candidate, "-", "neg", "down");
+                    if (right || up)
+                    {
+                        score += positive ? 3 : 0;
+                        score -= negative ? 3 : 0;
+                    }
+                    else
+                    {
+                        score += negative ? 3 : 0;
+                        score -= positive ? 3 : 0;
+                    }
+                }
+
+                if (noSubject && score <= 0)
                 {
                     continue;
                 }
@@ -414,20 +488,22 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left, false));
 
             AddRule(rules, "果冻 X（往右 − 往左）", HoBlinkDriverKind.ShapeKey, positiveX, negativeX, HoBlinkDriverRange.Bipolar, false, frequency, dampingRatio, smoothing);
-            AddEmptyTarget(rules, rampPreset, intensity);
+            AddLabeledTarget(rules, "往右", rampPreset, intensity, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
+            AddLabeledTarget(rules, "往左", rampPreset, intensity, HoShapeKeyBlendMode.Additive, -1.0f, 1.0f);
 
             AddRule(rules, "果冻 Y（上 − 下）", HoBlinkDriverKind.ShapeKey, positiveY, negativeY, HoBlinkDriverRange.Bipolar, false, frequency, dampingRatio, smoothing);
-            AddEmptyTarget(rules, rampPreset, intensity);
+            AddLabeledTarget(rules, "往上", rampPreset, intensity, HoShapeKeyBlendMode.Additive, 1.0f, 1.0f);
+            AddLabeledTarget(rules, "往下", rampPreset, intensity, HoShapeKeyBlendMode.Additive, -1.0f, 1.0f);
 
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
 
             Debug.Log(
-                "[HoBlinkConstraint] " + presetName + "：加了 2 条规则（果冻 X / 果冻 Y）。\n"
+                "[HoBlinkConstraint] " + presetName + "：加了 2 条规则（果冻 X / 果冻 Y），每条两个方向的目标（反向用 −增益，负值会被钳成 0）。\n"
                 + "· 驱动键：往右 = " + Describe(positiveX) + "，往左 = " + Describe(negativeX)
-                + "，上 = " + Describe(positiveY) + "，下 = " + Describe(negativeY) + "\n"
-                + "· 目标键留空 —— 在规则里点 ▾ 选你的高光/眼仁键。",
+                + "，上 = " + Describe(positiveY) + "，下 = " + Describe(negativeY),
                 constraint);
+            AutoMatchTargetKeys(constraint, serializedObject, -1, "追加「" + presetName + "」后");
 
             static string Describe(string keyName)
             {
@@ -435,17 +511,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
         }
 
-        /// <summary>给最后一条规则加一个空目标（键名留空，等用户填）。</summary>
-        private static void AddEmptyTarget(SerializedProperty rules, HoShapeKeyRampPreset rampPreset, float intensity)
-        {
-            SerializedProperty targets = rules.GetArrayElementAtIndex(rules.arraySize - 1).FindPropertyRelative("targets");
-            SerializedProperty target = AddTarget(targets, string.Empty, HoBlinkSide.Both);
-            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)rampPreset;
-            target.FindPropertyRelative("rampIntensity").floatValue = intensity;
-            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Additive;
-        }
-
-        /// <summary>给最后一条规则加一个"带角色"的空目标：标签说明它是干什么的，键名留空。</summary>
+        /// <summary>给最后一条规则加一个"带角色"的空目标：标签说明它是干什么的，键名由自动接键填。</summary>
         private static void AddLabeledTarget(
             SerializedProperty rules,
             string label,

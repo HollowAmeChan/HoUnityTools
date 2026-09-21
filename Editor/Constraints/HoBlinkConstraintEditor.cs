@@ -338,7 +338,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             using (HoConstraintEditorControls.Card())
             {
-                // 一排按钮 = 一排预设：点一下就**追加**一份规则，不重建、不清空。
+                // 一排按钮 = 一排预设：点一下就**追加**一份规则，并立刻按角色自动接上目标键。
                 using (HoConstraintEditorControls.Row())
                 {
                     if (HoConstraintEditorControls.Button(
@@ -368,27 +368,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         HoBlinkPresetActions.ApplyBlinkJelly(constraint, serializedObject);
                         serializedObject.Update();
                     }
-                }
 
-                using (HoConstraintEditorControls.Row())
-                {
+                    HoConstraintEditorControls.Gap(4.0f);
                     if (HoConstraintEditorControls.Button(
-                        "＋ 左右眼凝视",
+                        "＋ 左右眼",
                         "追加「凝视 X（往右 − 往左）」+「凝视 Y（上 − 下）」两条双极规则，用分左右眼的凝视键。\n"
                         + "按模型上的族自动选：有 In/Out（ARKit / PICO）就用内外族，否则用相对头的 Left/Right。"))
                     {
                         HoBlinkPresetActions.ApplyEyeGazeRules(constraint, serializedObject);
-                        serializedObject.Update();
-                    }
-
-                    HoConstraintEditorControls.Flex();
-                    if (HoConstraintEditorControls.Button(
-                        "按名字接目标键",
-                        "把**键名还空着**的目标，按它自己的角色标签（如「高光 · 压扁」）去网格上找最像的键：\n"
-                        + "高光/眼仁/眼皮 → 主体；压扁/拉宽 → 压缩类；位移/下移 → 移动类 + 方向。\n"
-                        + "找不到就留空并在 Console 里说明，绝不硬填。"))
-                    {
-                        HoBlinkPresetActions.AutoMatchTargetKeys(constraint, serializedObject);
                         serializedObject.Update();
                     }
                 }
@@ -590,6 +577,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("按名字重接空目标键"), false, () =>
+            {
+                HoBlinkPresetActions.AutoMatchTargetKeys((HoBlinkConstraint)target, serializedObject, index, "手动重接这条规则");
+                serializedObject.Update();
+                Repaint();
+            });
             menu.AddItem(new GUIContent("删除"), false, () =>
             {
                 rules.DeleteArrayElementAtIndex(index);
@@ -764,7 +757,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 using (HoConstraintEditorControls.Row(true))
                 {
-                    HoConstraintEditorControls.Label("角色", HoConstraintEditorTheme.LabelWidthSm, "这一路是干什么的：显示成目标行的标签，也决定「按名字接目标键」去找哪种键。");
+                    HoConstraintEditorControls.Label("角色", HoConstraintEditorTheme.LabelWidthSm, "这一路是干什么的：显示成目标行的标签，也是「自动接键」找键的依据（预设追加时自动跑，手动重接走规则右上的 ⋮）。");
                     targetLabel.stringValue = EditorGUI.TextField(
                         HoConstraintEditorControls.NextFlexible(80.0f),
                         targetLabel.stringValue,
