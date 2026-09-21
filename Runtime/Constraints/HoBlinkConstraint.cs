@@ -110,6 +110,8 @@ namespace Hollow.HoUnityTools.Constraints
         private float blinkLeft;
         private float blinkRight;
         private float winkRemaining;
+        private float blinkSpeed;
+        private float lastBlinkForSpeed;
         private float winkLeft;
         private float winkRight;
         private double lastUpdateTime;
@@ -189,6 +191,9 @@ namespace Hollow.HoUnityTools.Constraints
         public int BlinkOutputCount => blinkTargets != null ? blinkTargets.Count : 0;
 
         public float BlinkValue => Mathf.Max(blinkLeft, blinkRight);
+
+        /// <summary>眼皮动的速度（0..1）：一整个闭合用 <see cref="closeDuration"/> 秒完成时约等于 1。</summary>
+        public float BlinkSpeed => blinkSpeed;
 
         public HoBlinkPhase BlinkPhase => blinkState.phase;
 
@@ -324,6 +329,8 @@ namespace Hollow.HoUnityTools.Constraints
             winkRemaining = 0.0f;
             winkLeft = 0.0f;
             winkRight = 0.0f;
+            blinkSpeed = 0.0f;
+            lastBlinkForSpeed = 0.0f;
             random = new System.Random(randomSeed != 0 ? randomSeed : GetInstanceID());
 
             if (jellyStates != null)
@@ -452,6 +459,7 @@ namespace Hollow.HoUnityTools.Constraints
             float dt = Mathf.Max(0.0f, deltaTime);
             writer.Snapshot();
             StepBlink(dt);
+            StepBlinkSpeed(dt);
 
             for (int i = 0; i < blinkTargetIds.Length; i++)
             {
@@ -668,8 +676,28 @@ namespace Hollow.HoUnityTools.Constraints
             blinkRight = value;
         }
 
-        private HoBlinkTiming BuildTiming()
+        /// <summary>
+        /// 眼皮速度信号：`|Δ闭眼量| / Δt`，用"一整个闭合耗时 <see cref="closeDuration"/>"当参考速度归一化。
+        /// 只在眼皮动的那几帧有值（停住时为 0），所以它驱动出来的东西天然是"弹一下"。
+        /// </summary>
+        private void StepBlinkSpeed(float deltaTime)
         {
+            float closed = Mathf.Max(blinkLeft, blinkRight);
+            if (deltaTime > 1e-5f)
+            {
+                float rate = Mathf.Abs(closed - lastBlinkForSpeed) / deltaTime;
+                float reference = 1.0f / Mathf.Max(0.01f, closeDuration);
+                blinkSpeed = Mathf.Clamp01(rate / reference);
+            }
+            else
+            {
+                blinkSpeed = 0.0f;
+            }
+
+            lastBlinkForSpeed = closed;
+        }
+
+        private HoBlinkTiming BuildTiming()        {
             HoBlinkTiming timing = new HoBlinkTiming
             {
                 intervalMin = intervalMin,
@@ -719,6 +747,10 @@ namespace Hollow.HoUnityTools.Constraints
 
                 case HoBlinkDriverKind.Manual:
                     value = manualValues[ruleIndex];
+                    break;
+
+                case HoBlinkDriverKind.BlinkSpeed:
+                    value = blinkSpeed;
                     break;
 
                 default:

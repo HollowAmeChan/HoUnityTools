@@ -5,16 +5,21 @@ namespace Hollow.HoUnityTools.Constraints
 {
     public enum HoShapeKeyMeshScope
     {
+        [InspectorName("全部")]
         All,
+
+        [InspectorName("指定")]
         Index
     }
 
     public enum HoShapeKeyBlendMode
     {
         /// <summary>基准 + 映射结果（基准是"别人写的值"，不会把自己上一帧的写入当基准）。</summary>
+        [InspectorName("叠加")]
         Additive,
 
         /// <summary>直接写映射结果（与基准按权重插值）。</summary>
+        [InspectorName("覆盖")]
         Override
     }
 
@@ -58,6 +63,13 @@ namespace Hollow.HoUnityTools.Constraints
 
         [SerializeField]
         private int meshIndex;
+
+        /// <summary>
+        /// 这一路是干什么的（例如「高光 · 压扁」）。只给人和预设看：
+        /// 面板上显示成一个标签，「按名字接目标键」按它决定去找哪种键。
+        /// </summary>
+        [SerializeField]
+        private string label = string.Empty;
 
         [SerializeField]
         private string keyName = string.Empty;
@@ -104,6 +116,9 @@ namespace Hollow.HoUnityTools.Constraints
         public HoShapeKeyMeshScope MeshScope => meshScope;
 
         public int MeshIndex => meshIndex;
+
+        /// <summary>这一路是干什么的（面板标签 / 按名字接键的角色）。</summary>
+        public string Label => label;
 
         public string KeyName => keyName;
 

@@ -14,20 +14,35 @@ namespace Hollow.HoUnityTools.Constraints
 
     public enum HoBlinkIntervalDistribution
     {
+        [InspectorName("均匀")]
         Uniform,
+
+        [InspectorName("指数")]
         Exponential
     }
 
     public enum HoBlinkDriverKind
     {
+        [InspectorName("形态键")]
         ShapeKey,
+
+        [InspectorName("自动眨眼")]
         AutoBlink,
-        Manual
+
+        [InspectorName("手动")]
+        Manual,
+
+        /// <summary>眼皮动的速度（0..1）：闭合/张开那一下才有值，用来做"弹一下"的果冻。</summary>
+        [InspectorName("眼皮速度")]
+        BlinkSpeed
     }
 
     public enum HoBlinkDriverRange
     {
+        [InspectorName("单极")]
         Unipolar,
+
+        [InspectorName("双极")]
         Bipolar
     }
 
@@ -41,8 +56,13 @@ namespace Hollow.HoUnityTools.Constraints
     /// <summary>自动眨眼输出的左右通道选择。正常眨眼两个通道相同，只有脚本 wink 才会分开。</summary>
     public enum HoBlinkSide
     {
+        [InspectorName("双眼")]
         Both,
+
+        [InspectorName("左")]
         Left,
+
+        [InspectorName("右")]
         Right
     }
 

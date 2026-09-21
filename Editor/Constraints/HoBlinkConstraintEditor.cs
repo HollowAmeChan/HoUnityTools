@@ -224,8 +224,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     HoConstraintEditorControls.Gap();
                     if (HoConstraintEditorControls.Button("＋ 键"))
                     {
-                        blinkTargets.InsertArrayElementAtIndex(blinkTargets.arraySize);
-                        targetDetails.Add(false);
+                        AddTarget(blinkTargets);
                     }
                 }
 
@@ -349,11 +348,26 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         HoConstraintEditorControls.Next(HoConstraintEditorControls.SegmentedWidth(RuleTierNames)),
                         ruleTier,
                         RuleTierNames,
-                        "跟眼：2 条双极果冻；跟眼 + 四向：再加 4 条单极凝视；全套：再加眨眼压高光。");
-                    HoConstraintEditorControls.Gap();
+                        "跟眼：2 条双极果冻；跟眼 + 四向：再加 4 条单极凝视；全套：再加眨眼路径（眨眼压高光 + 眨眼速度弹）。");
+                }
+
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Flex();
                     if (HoConstraintEditorControls.Button("重建", "按档位重建规则列表（会清掉现有规则）。"))
                     {
                         HoBlinkPresetActions.ApplyRuleTier(constraint, serializedObject, ruleTier);
+                        serializedObject.Update();
+                    }
+
+                    HoConstraintEditorControls.Gap();
+                    if (HoConstraintEditorControls.Button(
+                        "按名字接目标键",
+                        "把**键名还空着**的目标，按它自己的角色标签（如「高光 · 压扁」）去网格上找最像的键：\n"
+                        + "高光/眼仁/眼皮 → 主体；压扁/拉宽 → 压缩类；位移/下移 → 移动类 + 方向。\n"
+                        + "找不到就留空并在 Console 里说明，绝不硬填。"))
+                    {
+                        HoBlinkPresetActions.AutoMatchTargetKeys(constraint, serializedObject);
                         serializedObject.Update();
                     }
                 }
@@ -523,8 +537,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 HoConstraintEditorControls.Flex();
                 if (HoConstraintEditorControls.Button("＋ 目标"))
                 {
-                    targets.InsertArrayElementAtIndex(targets.arraySize);
-                    targetDetails.Add(false);
+                    AddTarget(targets);
                 }
             }
 
@@ -606,6 +619,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawTarget(SerializedProperty list, int index, int ruleIndex)
         {
             SerializedProperty target = list.GetArrayElementAtIndex(index);
+            SerializedProperty targetLabel = target.FindPropertyRelative("label");
             SerializedProperty meshScope = target.FindPropertyRelative("meshScope");
             SerializedProperty meshIndex = target.FindPropertyRelative("meshIndex");
             SerializedProperty keyName = target.FindPropertyRelative("keyName");
@@ -644,7 +658,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("键", HoConstraintEditorTheme.LabelWidthXs, KeyLabel.tooltip);
+                    // 有角色标签就用它当这一行的标签（「高光 · 压扁 [键] …」），省掉一行说明
+                    bool hasRole = !string.IsNullOrEmpty(targetLabel.stringValue);
+                    HoConstraintEditorControls.Label(
+                        hasRole ? targetLabel.stringValue : "键",
+                        hasRole ? 82.0f : HoConstraintEditorTheme.LabelWidthXs,
+                        hasRole ? "这一路的作用（在「细节」里可以改）；右边是它写的键。" : KeyLabel.tooltip);
                     DrawKeyField(constraint, keyName);
                     HoConstraintEditorControls.Gap(4.0f);
                     HoConstraintEditorControls.MeterRow(
@@ -702,13 +721,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 if (targetDetails[detailIndex])
                 {
-                    DrawTargetDetails(rampPreset, rampCurve, rampAttack, rampRelease, side, offset, clampToRange, outputMin, outputMax);
+                    DrawTargetDetails(targetLabel, rampPreset, rampCurve, rampAttack, rampRelease, side, offset, clampToRange, outputMin, outputMax);
                 }
             }
         }
 
         /// <summary>目标的「细节」区（不常动的项）。</summary>
         private void DrawTargetDetails(
+            SerializedProperty targetLabel,
             SerializedProperty rampPreset,
             SerializedProperty rampCurve,
             SerializedProperty rampAttack,
@@ -721,6 +741,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             using (HoConstraintEditorControls.Indent())
             {
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("角色", HoConstraintEditorTheme.LabelWidthSm, "这一路是干什么的：显示成目标行的标签，也决定「按名字接目标键」去找哪种键。");
+                    targetLabel.stringValue = EditorGUI.TextField(
+                        HoConstraintEditorControls.NextFlexible(80.0f),
+                        targetLabel.stringValue,
+                        HoConstraintEditorTheme.Field);
+                }
+
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Label("通道", HoConstraintEditorTheme.LabelWidthSm, "自动眨眼输出的左右通道；正常眨眼两者相同。");
@@ -754,6 +783,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// 加一个空目标。`InsertArrayElementAtIndex` 会**复制上一个元素**，
+        /// 所以角色标签和键名必须显式清掉，否则新目标会悄悄接着写上一个键。
+        /// </summary>
+        private void AddTarget(SerializedProperty list)
+        {
+            list.InsertArrayElementAtIndex(list.arraySize);
+            SerializedProperty target = list.GetArrayElementAtIndex(list.arraySize - 1);
+            target.FindPropertyRelative("label").stringValue = string.Empty;
+            target.FindPropertyRelative("keyName").stringValue = string.Empty;
+            targetDetails.Add(false);
         }
 
         /// <summary>键名格：文本 + ▾ 菜单 + 解析状态点。</summary>
@@ -837,6 +879,16 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         "闭眼",
                         float.NaN,
                         "自动眨眼算出来的闭眼量（0 = 睁开，1 = 闭合）。");
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.MeterRow(
+                        constraint.BlinkSpeed,
+                        0.0f,
+                        1.0f,
+                        HoConstraintEditorTheme.AccentDriver,
+                        constraint.BlinkSpeed.ToString("0.00"),
+                        "速度",
+                        float.NaN,
+                        "眼皮动的速度：只在闭合/张开那几帧有值，停住时为 0。");
                     HoConstraintEditorControls.Gap();
                     HoConstraintEditorControls.Caption(BlinkPhaseText(constraint.BlinkPhase));
                 }
