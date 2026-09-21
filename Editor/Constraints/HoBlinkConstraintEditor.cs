@@ -124,6 +124,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawToolbar(HoBlinkConstraint constraint)
         {
             EditorGUILayout.LabelField("Ho 眨眼约束", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
             setupTier = (HoBlinkSetupTier)EditorGUILayout.Popup(
                 new GUIContent("精细度", "一档 = 一整套配置。点「应用」按这档重建眼睑键与规则列表（会清掉现有规则）。"),
                 (int)setupTier,
