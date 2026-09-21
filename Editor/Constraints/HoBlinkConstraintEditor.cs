@@ -50,10 +50,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private readonly List<bool> targetDetails = new List<bool>();
         private readonly List<HoShapeKeySaturation> saturationBuffer = new List<HoShapeKeySaturation>();
 
-        private int ruleTier;
-
         // ── 文案（短标签 + tooltip 里说全）───────────────────────────────
-        private static readonly string[] RuleTierNames = { "跟眼", "跟眼 + 四向", "全套" };
         private static readonly string[] RampPresetNames = { "直通", "柔跟", "放大", "缓入", "慢放", "阶梯", "自定义" };
         private static readonly int[] RampPresetValues = { 0, 1, 2, 3, 4, 5, 6 };
 
@@ -341,26 +338,50 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             using (HoConstraintEditorControls.Card())
             {
+                // 一排按钮 = 一排预设：点一下就**追加**一份规则，不重建、不清空。
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("档位", HoConstraintEditorTheme.LabelWidth, "一键铺开果冻/映射规则；只重建规则列表，不动眼睑键。");
-                    ruleTier = HoConstraintEditorControls.Segmented(
-                        HoConstraintEditorControls.Next(HoConstraintEditorControls.SegmentedWidth(RuleTierNames)),
-                        ruleTier,
-                        RuleTierNames,
-                        "跟眼：2 条双极果冻；跟眼 + 四向：再加 4 条单极凝视；全套：再加眨眼路径（眨眼压高光 + 眨眼速度弹）。");
+                    if (HoConstraintEditorControls.Button(
+                        "＋ 跟眼",
+                        "追加「果冻 X（往右 − 往左）」+「果冻 Y（上 − 下）」两条双极规则，驱动键从网格上自动抓。\n"
+                        + "这是果冻眼的主路：高光 / 眼仁跟着视线甩。再点一次会再来一份。"))
+                    {
+                        HoBlinkPresetActions.ApplyGazeJelly(constraint, serializedObject);
+                        serializedObject.Update();
+                    }
+
+                    HoConstraintEditorControls.Gap(4.0f);
+                    if (HoConstraintEditorControls.Button(
+                        "＋ 四向凝视",
+                        "追加「凝视 上 / 下 / 左 / 右」四条单极规则：每个方向有独立键的模型用这个。目标键留空。"))
+                    {
+                        HoBlinkPresetActions.ApplyGazeRules(constraint, serializedObject, false);
+                        serializedObject.Update();
+                    }
+
+                    HoConstraintEditorControls.Gap(4.0f);
+                    if (HoConstraintEditorControls.Button(
+                        "＋ 眨眼",
+                        "追加眨眼路径：「眨眼压高光」（闭眼量驱动：压扁 / 拉宽 / 下移）+「眨眼速度弹」（眼皮速度驱动：眼仁弹一下）。\n"
+                        + "不需要任何驱动键，果冻眼里最出效果的一路。"))
+                    {
+                        HoBlinkPresetActions.ApplyBlinkJelly(constraint, serializedObject);
+                        serializedObject.Update();
+                    }
                 }
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Flex();
-                    if (HoConstraintEditorControls.Button("重建", "按档位重建规则列表（会清掉现有规则）。"))
+                    if (HoConstraintEditorControls.Button(
+                        "＋ 左右眼凝视",
+                        "追加「凝视 X（往右 − 往左）」+「凝视 Y（上 − 下）」两条双极规则，用分左右眼的凝视键。\n"
+                        + "按模型上的族自动选：有 In/Out（ARKit / PICO）就用内外族，否则用相对头的 Left/Right。"))
                     {
-                        HoBlinkPresetActions.ApplyRuleTier(constraint, serializedObject, ruleTier);
+                        HoBlinkPresetActions.ApplyEyeGazeRules(constraint, serializedObject);
                         serializedObject.Update();
                     }
 
-                    HoConstraintEditorControls.Gap();
+                    HoConstraintEditorControls.Flex();
                     if (HoConstraintEditorControls.Button(
                         "按名字接目标键",
                         "把**键名还空着**的目标，按它自己的角色标签（如「高光 · 压扁」）去网格上找最像的键：\n"

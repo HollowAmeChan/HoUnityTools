@@ -33,31 +33,20 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         }
 
         /// <summary>
-        /// 规则的果冻/映射档位（面板上那个下拉调这里，只重建**规则列表**，不动眼睑键）：
-        ///   0 跟眼：果冻 X / Y 两条双极规则（目标键留空）；
-        ///   1 跟眼 + 四向：再加四条单极凝视规则（每个方向可以有独立键）；
-        ///   2 全套：再加一条"眨眼压高光"。
+        /// 左右眼凝视（追加）：两条双极规则（X = 往右 − 往左，Y = 上 − 下），用**分左右眼**的凝视键。
+        /// 按模型上实际存在的族自动选：有 In/Out（ARKit / PICO）就用内外族，否则用相对头的 Left/Right 族。
         /// </summary>
-        public static void ApplyRuleTier(HoBlinkConstraint constraint, SerializedObject serializedObject, int tier)
+        public static void ApplyEyeGazeRules(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
-            serializedObject.FindProperty("rules").ClearArray();
-            serializedObject.ApplyModifiedProperties();
+            bool inOutFamily =
+                !string.IsNullOrEmpty(FindKey(constraint, HoBlinkKeySemantic.GazeIn, HoBlinkSide.Left))
+                || !string.IsNullOrEmpty(FindKey(constraint, HoBlinkKeySemantic.GazeOut, HoBlinkSide.Left));
 
-            ApplyGazeJelly(constraint, serializedObject);
-
-            if (tier <= 0)
-            {
-                return;
-            }
-
-            ApplyGazeRules(constraint, serializedObject, false);
-
-            if (tier <= 1)
-            {
-                return;
-            }
-
-            ApplyBlinkJelly(constraint, serializedObject);
+            ApplyGazeRules(constraint, serializedObject, true, inOutFamily);
+            Debug.Log(
+                "[HoBlinkConstraint] 左右眼凝视：驱动族 = " + (inOutFamily ? "内外族（In/Out）" : "左右族（Left/Right）")
+                + "；目标键留空，可以点「按名字接目标键」。",
+                constraint);
         }
 
         /// <summary>眨眼输出：双眼键版（一个双眼键）或左右键版（左右两个键，值相同）。</summary>
