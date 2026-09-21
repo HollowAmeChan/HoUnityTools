@@ -127,7 +127,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             System.Text.StringBuilder text = new System.Text.StringBuilder();
-            text.Append("以下形态键已经写满（或我们这一路被合并策略削过）：");
+            text.Append("已写满的键：");
             int lines = Mathf.Min(buffer.Count, maxLines);
             for (int i = 0; i < lines; i++)
             {
@@ -147,8 +147,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 text.Append("\n… 还有 ").Append(buffer.Count - lines).Append(" 个");
             }
 
-            text.Append("\n\n想留出余量：把「合并方式」换成软饱和/按比例分配，或调小对应那一路的「增益 / 强度 / 输出上限」。");
-            EditorGUILayout.HelpBox(text.ToString(), MessageType.Warning);
+           EditorGUILayout.HelpBox(text.ToString(), MessageType.Warning);
         }
 
         private sealed class LabelWidthScope : IDisposable
