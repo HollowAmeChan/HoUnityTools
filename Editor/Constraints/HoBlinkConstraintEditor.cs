@@ -71,6 +71,23 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private static readonly int[] RampPresetValues = { 0, 1, 2, 3, 4, 5, 6 };
 
+        /// <summary>规则的果冻/映射档位（只影响规则列表，眼睑键归「自动眨眼」区）。</summary>
+        private enum HoBlinkRuleTier
+        {
+            GazeJelly = 0,
+            GazeJellyFourWay = 1,
+            Full = 2
+        }
+
+        private HoBlinkRuleTier ruleTier = HoBlinkRuleTier.GazeJelly;
+
+        private static readonly GUIContent[] RuleTierLabels =
+        {
+            new GUIContent("跟眼（X / Y 两条）", "果冻 X（往右−往左）、果冻 Y（上−下）两条双极规则，目标键留空由你填。"),
+            new GUIContent("跟眼 + 四向", "再加四条单极凝视规则（上/下/左/右），适合每个方向有独立键的模型。"),
+            new GUIContent("全套", "再加一条「眨眼压高光」（驱动 = 自动眨眼）。")
+        };
+
         private void OnEnable()
         {
             updateMode = Find("updateMode");
@@ -110,7 +127,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.Update();
 
             HoBlinkConstraint constraint = (HoBlinkConstraint)target;
-            DrawToolbar(constraint);
+            DrawTitle();
             EditorGUILayout.Space(4.0f);
 
             DrawMeshSection(constraint);
@@ -121,51 +138,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
         }
 
-        private void DrawToolbar(HoBlinkConstraint constraint)
+        private void DrawTitle()
         {
             EditorGUILayout.LabelField("Ho 眨眼约束", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            setupTier = (HoBlinkSetupTier)EditorGUILayout.Popup(
-                new GUIContent("精细度", "一档 = 一整套配置。点「应用」按这档重建眼睑键与规则列表（会清掉现有规则）。"),
-                (int)setupTier,
-                TierLabels);
-            if (GUILayout.Button(new GUIContent("应用", "按当前档位重建。"), GUILayout.Width(46.0f)))
-            {
-                HoBlinkPresetActions.ApplyTier(constraint, serializedObject, (int)setupTier);
-            }
-
-            if (GUILayout.Button(new GUIContent("清空", "清掉眼睑键与所有规则。"), GUILayout.Width(46.0f)))
-            {
-                HoBlinkPresetActions.ClearAll(serializedObject);
-            }
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField(TierSummaries[(int)setupTier], EditorStyles.miniLabel);
         }
 
-        /// <summary>精细度档位：只眨眼 / 标准（+果冻跟眼）/ 精细（+四向凝视与眨眼压高光）。</summary>
-        private enum HoBlinkSetupTier
-        {
-            OnlyBlink = 0,
-            Standard = 1,
-            Fine = 2
-        }
-
-        private HoBlinkSetupTier setupTier = HoBlinkSetupTier.Standard;
-
-        private static readonly GUIContent[] TierLabels =
-        {
-            new GUIContent("只眨眼"),
-            new GUIContent("标准"),
-            new GUIContent("精细")
-        };
-
-        private static readonly string[] TierSummaries =
-        {
-            "眼睑键（按模型自动选双眼键 / 左右键），不加规则。",
-            "眼睑键 + 2 条果冻规则（X：往右−往左，Y：上−下），目标键留空由你填。",
-            "标准 + 4 条四向凝视规则（每个方向可有独立键）+ 眨眼压高光。"
-        };
         private void DrawMeshSection(HoBlinkConstraint constraint)
         {
             string summary = constraint.MeshCount + " 个蒙皮网格 / " + constraint.BindingCount + " 个绑定";
@@ -207,12 +184,25 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawBlinkSection()
         {
             string summary = blinkEnabled.boolValue ? "开" : "关";
+            if (blinkTargets.arraySize > 0)
+            {
+                string firstKey = blinkTargets.GetArrayElementAtIndex(0).FindPropertyRelative("keyName").stringValue;
+                summary += " · " + (string.IsNullOrEmpty(firstKey) ? "（键未填）" : firstKey)
+                    + (blinkTargets.arraySize > 1 ? " 等 " + blinkTargets.arraySize + " 个键" : string.Empty);
+            }
+
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref blinkExpanded, "自动眨眼", summary, BlinkColor))
             {
                 return;
             }
 
             EditorGUILayout.LabelField("这里配眨眼本身写的键（眼睑）；「规则」区是用信号驱动别的键，不写眼睑。", EditorStyles.miniLabel);
+            if (GUILayout.Button("自动匹配眼睑键", GUILayout.Height(20.0f)))
+            {
+                HoBlinkPresetActions.AutoMatchEyelidKeys((HoBlinkConstraint)target, serializedObject);
+                serializedObject.Update();
+            }
+
             EditorGUILayout.PropertyField(blinkEnabled, new GUIContent("启用"));
             using (new EditorGUI.DisabledScope(!blinkEnabled.boolValue))
             {
@@ -247,6 +237,24 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 return;
             }
+
+            EditorGUILayout.BeginHorizontal();
+            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
+            {
+                ruleTier = (HoBlinkRuleTier)EditorGUILayout.Popup(
+                    new GUIContent("档位", "只重建下面的规则列表，不动「自动眨眼」的眼睑键。目标键一律留空。"),
+                    (int)ruleTier,
+                    RuleTierLabels);
+            }
+
+            if (GUILayout.Button("应用档位", GUILayout.Width(72.0f)))
+            {
+                HoBlinkPresetActions.ApplyRuleTier((HoBlinkConstraint)target, serializedObject, (int)ruleTier);
+                serializedObject.Update();
+            }
+
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Space(2.0f);
 
             EnsureFoldoutCapacity();
 
@@ -609,6 +617,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             if (GUILayout.Button("重置"))
             {
                 constraint.ResetState();
+            }
+
+            if (GUILayout.Button(new GUIContent("清空", "删掉全部眼睑键与规则。"), GUILayout.Width(56.0f)))
+            {
+                HoBlinkPresetActions.ClearAll(serializedObject);
+                serializedObject.Update();
             }
 
             EditorGUILayout.EndHorizontal();

@@ -23,37 +23,38 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
         }
 
-        /// <summary>
-        /// 精细度档位（面板上那一个下拉就调这里）：
-        ///   0 只眨眼：眼睑键，不加规则；
-        ///   1 标准：+ 果冻 X / Y 两条双极规则（目标键留空）；
-        ///   2 精细：+ 四向凝视四条单极规则（每个方向可以有自己的键）+ 眨眼压高光。
-        /// 档位是"重建"语义：先清空再按档位搭，避免越点越乱。
-        /// </summary>
-        public static void ApplyTier(HoBlinkConstraint constraint, SerializedObject serializedObject, int tier)
+        /// <summary>眼睑键自动匹配：模型上有"双眼闭合键"就用一个双眼键，否则用左右两个键。</summary>
+        public static void AutoMatchEyelidKeys(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
-            ClearAll(serializedObject);
-
-            // 眼睑键：模型上有"双眼闭合键"就用双眼键版，否则用左右键版
             bool splitLeftRight = string.IsNullOrEmpty(FindKey(constraint, HoBlinkKeySemantic.EyelidClosed, HoBlinkSide.Both));
             ApplyBlinkOutput(constraint, serializedObject, splitLeftRight);
+        }
+
+        /// <summary>
+        /// 规则的果冻/映射档位（面板上那个下拉调这里，只重建**规则列表**，不动眼睑键）：
+        ///   0 跟眼：果冻 X / Y 两条双极规则（目标键留空）；
+        ///   1 跟眼 + 四向：再加四条单极凝视规则（每个方向可以有独立键）；
+        ///   2 全套：再加一条"眨眼压高光"。
+        /// </summary>
+        public static void ApplyRuleTier(HoBlinkConstraint constraint, SerializedObject serializedObject, int tier)
+        {
+            serializedObject.FindProperty("rules").ClearArray();
+            serializedObject.ApplyModifiedProperties();
+
+            ApplyGazeJelly(constraint, serializedObject);
 
             if (tier <= 0)
             {
-                Debug.Log(
-                    "[HoBlinkConstraint] 精细度「只眨眼」：" + (splitLeftRight ? "左右两个眼睑键" : "一个双眼眼睑键") + "，没有规则。",
-                    constraint);
                 return;
             }
 
-            ApplyGazeJelly(constraint, serializedObject);
+            ApplyGazeRules(constraint, serializedObject, false);
 
             if (tier <= 1)
             {
                 return;
             }
 
-            ApplyGazeRules(constraint, serializedObject, false);
             ApplyBlinkJelly(constraint, serializedObject);
         }
 
@@ -159,20 +160,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 4.0f,
                 0.35f,
                 0.03f);
-        }
-
-        /// <summary>眼仁形变：同上两条规则，慢一点、缓入、幅度小一点。</summary>
-        public static void ApplyPupilJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
-        {
-            AddJellyGazeRules(
-                constraint,
-                serializedObject,
-                "眼仁形变",
-                HoShapeKeyRampPreset.EaseIn,
-                0.8f,
-                3.0f,
-                0.35f,
-                0.05f);
         }
 
         /// <summary>眨眼压高光：AutoBlink 驱动（不需要键）+ 一个空目标（覆盖 + 放大）。</summary>
