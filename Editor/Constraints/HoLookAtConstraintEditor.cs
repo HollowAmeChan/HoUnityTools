@@ -219,21 +219,51 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// 前置检查。顺序有讲究：从"最具体的原因"往"最笼统的现象"排，
+        /// 免得用户看到「OnAnimatorIK 没被调用」却不知道是控制器为空 / 没勾 IK Pass / Avatar 不是 humanoid。
+        /// </summary>
         private void DrawChecks(HoLookAtConstraint constraint)
         {
-            if (!Application.isPlaying)
-            {
-                EditorGUILayout.HelpBox(
-                    "播放后检查：Animator 是 humanoid + 动画图层勾了 IK Pass。组件不必放在 Animator 物体上（播放时会自动在 Animator 物体上挂转发器）。",
-                    MessageType.Info);
-                return;
-            }
-
             if (!constraint.AnimatorIsHuman || !constraint.AnimatorHasAvatar)
             {
                 EditorGUILayout.HelpBox(
-                    "头部与脊椎不生效：Animator（" + constraint.AnimatorName + "）必须有 Avatar 且是 humanoid。眼睛形态键不受影响。",
+                    "头颈与脊椎不生效：Animator（" + constraint.AnimatorName + "）必须挂 **Avatar** 且是 humanoid。\n"
+                    + "注意一个物体上可能有多个 Animator（比如 FBX 自带的 + 手动加的），组件引用的那个才是算数的 —— 点下面的「Animator」字段可以高亮它。\n"
+                    + "眼睛形态键那条路不受影响。",
                     MessageType.Error);
+            }
+            else if (!constraint.EyeBonesAvailable)
+            {
+                EditorGUILayout.HelpBox(
+                    "这个 Avatar 里没有映射 LeftEye / RightEye，所以拿不到眼球骨骼。\n"
+                    + "去模型（FBX）的 Rig → Avatar 配置里把两只眼睛指到骨骼上，或者把「驱动方式」切成「形态键」。",
+                    MessageType.Warning);
+            }
+
+            if (constraint.TargetAnimator != null && constraint.AnimatorControllerMissing)
+            {
+                EditorGUILayout.HelpBox(
+                    "Animator 没有挂 AnimatorController（一个图层都没有）：\n"
+                    + "· 姿势会停在模型的默认（绑定）姿势，看起来「悬空」—— 这是正常的，放一个 idle 之类的 clip 就好；\n"
+                    + "· 头颈与脊椎不会跟：图层 IK Pass 无从勾选、OnAnimatorIK 不会来。\n"
+                    + "眼球骨骼不受影响（那是我们自己转的，只要 Avatar 有眼睛骨骼就行）。",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (constraint.TargetAnimator != null && !HasIkPassLayer(constraint))
+            {
+                EditorGUILayout.HelpBox(
+                    "控制器的图层都没有勾 **IK Pass** → OnAnimatorIK 不会被调用，头颈与脊椎不跟。\n"
+                    + "位置：Animator 窗口 → Layers → 图层行右侧齿轮 ⚙ → IK Pass。眼球骨骼不受影响。",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (!Application.isPlaying)
+            {
+                EditorGUILayout.LabelField("配置看起来没问题；播放后这里会显示 OnAnimatorIK 是否在跑。", EditorStyles.miniLabel);
                 return;
             }
 
@@ -249,9 +279,38 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 : "组件在别的物体上，转发器" + (constraint.IkRelayActive ? "已挂上" : "没挂上") + "。";
             EditorGUILayout.HelpBox(
                 "OnAnimatorIK 没有被调用。" + detail
-                + "\n① Animator 窗口 → Layers → 图层行右侧齿轮 ⚙ → 勾 IK Pass（Unity 6 里选中图层后 Inspector 也会显示这个勾）。"
-                + "\n② Animator 组件的 Culling Mode 若是 Cull Update Transforms / Cull Completely，角色离屏时 IK 不更新。",
+                + "\n① Animator 组件的 Culling Mode 若是 Cull Update Transforms / Cull Completely，角色离屏时 IK 不更新。"
+                + "\n② 控制器里那个图层要有 State（空状态机有时不会走 IK 回调），放个 clip 最稳。",
                 MessageType.Warning);
+        }
+
+        /// <summary>控制器里是否至少有一个图层勾了 IK Pass。</summary>
+        private static bool HasIkPassLayer(HoLookAtConstraint constraint)
+        {
+            Animator animator = constraint.TargetAnimator;
+            if (animator == null)
+            {
+                return false;
+            }
+
+            UnityEditor.Animations.AnimatorController controller =
+                animator.runtimeAnimatorController as UnityEditor.Animations.AnimatorController;
+            if (controller == null)
+            {
+                // 运行时替换的控制器（AnimatorOverrideController 之类）读不到图层，就不误报
+                return true;
+            }
+
+            UnityEditor.Animations.AnimatorControllerLayer[] layers = controller.layers;
+            for (int i = 0; i < layers.Length; i++)
+            {
+                if (layers[i].iKPass)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // ── 目标 ────────────────────────────────────────────────────────────

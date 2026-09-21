@@ -16,6 +16,7 @@ namespace Hollow.HoUnityTools.Constraints
     /// 眼球通道只存"键名 + 增益"，不再让每个通道各配一套 ramp/范围。
     /// </summary>
     [ExecuteAlways]
+    [DefaultExecutionOrder(-5000)]
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Constraints/Ho Look At Constraint")]
     public sealed class HoLookAtConstraint : MonoBehaviour, IHoShapeKeyMeshProvider
@@ -218,6 +219,9 @@ namespace Hollow.HoUnityTools.Constraints
         private Quaternion leftEyeRest = Quaternion.identity;
         private Quaternion rightEyeRest = Quaternion.identity;
         private bool eyeBonesCaptured;
+        private Quaternion leftEyeApplied = Quaternion.identity;
+        private Quaternion rightEyeApplied = Quaternion.identity;
+        private int lastIkFrame = -1;
         private Quaternion headPoseBeforeIk = Quaternion.identity;
         private bool headHasPoseBeforeIk;
         private bool headMeasuredThisFrame;
@@ -253,6 +257,8 @@ namespace Hollow.HoUnityTools.Constraints
             get => externalEyeWeight;
             set => externalEyeWeight = Mathf.Clamp01(value);
         }
+
+        public bool EyeOutputEnabled => isActiveAndEnabled && eyesEnabled && externalEnabled && weight * externalWeight * eyeWeight * externalEyeWeight > 0f;
 
         public bool Enabled
         {
@@ -356,6 +362,12 @@ namespace Hollow.HoUnityTools.Constraints
         public Ray LastPointerRay => lastPointerRay;
 
         public Vector2 LastPointerScreen => lastPointerScreen;
+
+        /// <summary>面板检查用：解析到的 Animator（可能来自面板指定或自动查找）。</summary>
+        public Animator TargetAnimator => animator;
+
+        /// <summary>面板检查用：Animator 上没挂 AnimatorController（一个图层都没有）。</summary>
+        public bool AnimatorControllerMissing => animator != null && animator.runtimeAnimatorController == null;
 
         /// <summary>当前的眼睛驱动模式（骨骼 / 形态键）。</summary>
         public HoLookAtEyeDriver EyeDriver => eyeDriver;
@@ -635,6 +647,13 @@ namespace Hollow.HoUnityTools.Constraints
             relay = null;
         }
 
+        private void Update()
+        {
+            // Remove our previous local eye offset before the next animation evaluation.
+            // Bones without animation curves must not accumulate last frame's LookAt rotation.
+            RestoreEyeBones();
+        }
+
         private void LateUpdate()
         {
             if (!ShouldEvaluate())
@@ -658,6 +677,10 @@ namespace Hollow.HoUnityTools.Constraints
             {
                 return;
             }
+
+            // Several controller layers can have IK Pass enabled in the same graph.
+            if (Application.isPlaying && lastIkFrame == Time.frameCount) return;
+            lastIkFrame = Time.frameCount;
 
             EnsureBuilt();
             HoLookAtAngles head = ApplyHead(Mathf.Max(0.0f, GetDeltaTime()));
@@ -1512,12 +1535,12 @@ namespace Hollow.HoUnityTools.Constraints
             // 记下叠加前的姿势：组件被关掉且动画也不写这两根骨头时，用它把眼睛放回去
             if (left != null)
             {
-                leftEyeRest = left.rotation;
+                leftEyeRest = left.localRotation;
             }
 
             if (right != null)
             {
-                rightEyeRest = right.rotation;
+                rightEyeRest = right.localRotation;
             }
 
             eyeBonesCaptured = true;
@@ -1529,11 +1552,13 @@ namespace Hollow.HoUnityTools.Constraints
             if (left != null)
             {
                 left.rotation = delta * left.rotation;
+                leftEyeApplied = left.localRotation;
             }
 
             if (right != null)
             {
                 right.rotation = delta * right.rotation;
+                rightEyeApplied = right.localRotation;
             }
         }
 
@@ -1547,14 +1572,14 @@ namespace Hollow.HoUnityTools.Constraints
 
             Transform left = animator.GetBoneTransform(HumanBodyBones.LeftEye);
             Transform right = animator.GetBoneTransform(HumanBodyBones.RightEye);
-            if (left != null)
+            if (left != null && Quaternion.Angle(left.localRotation, leftEyeApplied) < 0.001f)
             {
-                left.rotation = leftEyeRest;
+                left.localRotation = leftEyeRest;
             }
 
-            if (right != null)
+            if (right != null && Quaternion.Angle(right.localRotation, rightEyeApplied) < 0.001f)
             {
-                right.rotation = rightEyeRest;
+                right.localRotation = rightEyeRest;
             }
 
             eyeBonesCaptured = false;
