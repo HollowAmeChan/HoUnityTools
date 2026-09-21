@@ -106,6 +106,44 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             return new LabelWidthScope(width);
         }
 
+        /// <summary>
+        /// 紧凑数字格：**标签固定宽 + 数字框固定宽**，一行能排 3~4 个而不挤、也不会一个 `0.35` 占掉半行。
+        /// 面板默认把 40% 宽度给 label，所以这里必须自己收窄（见 `NarrowLabels`）。
+        /// </summary>
+        public static float CompactFloat(GUIContent label, float value, float labelWidth = 26.0f, float boxWidth = 42.0f)
+        {
+            using (NarrowLabels(labelWidth))
+            {
+                return EditorGUILayout.FloatField(label, value, GUILayout.Width(labelWidth + boxWidth));
+            }
+        }
+
+        /// <summary>紧凑整数格，同 `CompactFloat`。</summary>
+        public static int CompactInt(GUIContent label, int value, float labelWidth = 26.0f, float boxWidth = 42.0f)
+        {
+            using (NarrowLabels(labelWidth))
+            {
+                return EditorGUILayout.IntField(label, value, GUILayout.Width(labelWidth + boxWidth));
+            }
+        }
+
+        /// <summary>紧凑下拉，同 `CompactFloat`（默认给下拉多留点宽度）。</summary>
+        public static int CompactPopup(GUIContent label, int index, GUIContent[] options, float labelWidth = 26.0f, float boxWidth = 78.0f)
+        {
+            using (NarrowLabels(labelWidth))
+            {
+                return EditorGUILayout.Popup(label, index, options, GUILayout.Width(labelWidth + boxWidth));
+            }
+        }
+
+        /// <summary>紧凑勾选（`ToggleLeft` 文字在右）：不指定宽度就按内容自适应。</summary>
+        public static bool CompactToggle(GUIContent label, bool value, float width = 0.0f)
+        {
+            return width > 0.0f
+                ? EditorGUILayout.ToggleLeft(label, value, GUILayout.Width(width))
+                : EditorGUILayout.ToggleLeft(label, value);
+        }
+
         /// <summary>合并方式下拉的标签（眨眼与注视共用同一套文案）。</summary>
         public static readonly GUIContent MergeModeLabel = new GUIContent(
             "合并方式",

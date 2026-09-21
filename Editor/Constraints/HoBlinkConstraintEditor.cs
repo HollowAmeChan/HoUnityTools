@@ -39,6 +39,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private bool manualDrive;
 
         private readonly List<bool> ruleFoldouts = new List<bool>();
+        private readonly List<bool> ruleDetails = new List<bool>();
         private readonly List<bool> targetDetails = new List<bool>();
         private readonly List<HoShapeKeySaturation> saturationBuffer = new List<HoShapeKeySaturation>();
 
@@ -64,14 +65,36 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static readonly GUIContent InvertLabel = new GUIContent("反相", "读到的值取负。");
         private static readonly GUIContent ReadWrittenLabel = new GUIContent("读本帧已写值", "默认读基准快照（切断自反馈）；要做链式联动才打开。");
         private static readonly GUIContent JellyLabel = new GUIContent("果冻弹簧", "打开后驱动值过一遍弹簧-阻尼：才有超调与回弹。");
-        private static readonly GUIContent FrequencyLabel = new GUIContent("频率 Hz", "跟得上多快；高光跟眼一般 3–6 Hz。");
-        private static readonly GUIContent DampingLabel = new GUIContent("阻尼比", "0.2–0.35 有明显果冻感，1 是临界阻尼不超调。");
-        private static readonly GUIContent MaxStepLabel = new GUIContent("子步上限 s", "长帧时拆子步，防止弹簧炸掉。");
-        private static readonly GUIContent SmoothingLabel = new GUIContent("输入平滑 s", "先把驱动抹平一点再进弹簧，压抖动。");
+        private static readonly GUIContent FrequencyLabel = new GUIContent("频率", "弹簧频率 Hz：跟得上多快；高光跟眼一般 3–6 Hz。");
+        private static readonly GUIContent DampingLabel = new GUIContent("阻尼", "阻尼比：0.2–0.35 有明显果冻感，1 是临界阻尼不超调。");
+        private static readonly GUIContent MaxStepLabel = new GUIContent("子步", "子步上限（秒）：长帧时拆子步，防止弹簧炸掉。");
+        private static readonly GUIContent SmoothingLabel = new GUIContent("平滑", "输入平滑（秒）：先把驱动抹平一点再进弹簧，压抖动。");
         private static readonly GUIContent MeshScopeLabel = new GUIContent("范围", "这个目标写到哪些网格。");
         private static readonly GUIContent MeshIndexLabel = new GUIContent("序号", "范围 = 指定网格时用。");
         private static readonly GUIContent BlendModeLabel = new GUIContent("混合", "叠加：在动画/面捕的基准上加；覆盖：直接顶掉基准。");
         private static readonly GUIContent WeightLabel = new GUIContent("权重", "这一路输出的总强度（0..1）。");
+        private static readonly GUIContent OffsetLabel = new GUIContent("偏移", "输出加一个常量偏置（键值 0–100）。");
+        private static readonly GUIContent ClampLabel = new GUIContent("钳制", "把输出夹在「输出上下限」里。");
+        private static readonly GUIContent OutputMinLabel = new GUIContent("下限", "输出下限（键值 0–100）。");
+        private static readonly GUIContent OutputMaxLabel = new GUIContent("上限", "输出上限（键值 0–100）。");
+        private static readonly GUIContent RuleDetailLabel = new GUIContent("细节", "不常动的项：读本帧已写值、子步上限。");
+
+        // 自动眨眼区的短标签（完整含义放 tooltip，省掉一行一个字段的浪费）
+        private static readonly GUIContent EnabledLabel = new GUIContent("启用");
+        private static readonly GUIContent IntervalDistributionLabel = new GUIContent("分布", "眨眼间隔的随机分布：指数分布更接近真人，均匀分布更机械。");
+        private static readonly GUIContent IntervalMinLabel = new GUIContent("下限", "间隔下限（秒）。");
+        private static readonly GUIContent IntervalMaxLabel = new GUIContent("上限", "间隔上限（秒）。");
+        private static readonly GUIContent CloseLabel = new GUIContent("闭合", "闭合时长（秒）。");
+        private static readonly GUIContent HoldLabel = new GUIContent("保持", "保持时长（秒）。");
+        private static readonly GUIContent OpenLabel = new GUIContent("张开", "张开时长（秒）。");
+        private static readonly GUIContent StrengthLabel = new GUIContent("强度", "闭眼量整体缩放。");
+        private static readonly GUIContent BlinkCurveLabel = new GUIContent("曲线", "眨眼曲线：横轴为相位，纵轴为闭合量。");
+        private static readonly GUIContent DoubleChanceLabel = new GUIContent("双击", "双击概率（0–1）。");
+        private static readonly GUIContent DoubleGapLabel = new GUIContent("双击隔", "双击之间的间隔（秒）。");
+        private static readonly GUIContent SeedLabel = new GUIContent("种子", "随机种子，0 表示用实例 id。");
+        private static readonly GUIContent PauseWhenDrivenLabel = new GUIContent("被驱动时暂停", "面捕/动画已经在眨这个眼时，程序化眨眼让位。");
+        private static readonly GUIContent PauseThresholdLabel = new GUIContent("阈值", "基准值高于它就算被接管（键值 0–100）。");
+        private static readonly GUIContent PauseDurationLabel = new GUIContent("暂停", "让位时长（秒）。");
 
         private const string DriverMeterTooltip =
             "实时：白刻度 = 键上的原始值（弹簧/平滑之前），色条 = 真正拿去驱动目标的值。";
@@ -198,11 +221,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.PropertyField(updateMode, UpdateModeLabel);
-            EditorGUILayout.PropertyField(evaluateInEditMode, EvaluateInEditModeLabel);
-            EditorGUILayout.PropertyField(writingEnabled, WritingEnabledLabel);
-            EditorGUILayout.PropertyField(writeThreshold, WriteThresholdLabel);
-            EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel);
+            using (HoConstraintEditorSectionGui.NarrowLabels(52.0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PropertyField(updateMode, UpdateModeLabel, GUILayout.Width(136.0f));
+                evaluateInEditMode.boolValue = EditorGUILayout.ToggleLeft(EvaluateInEditModeLabel, evaluateInEditMode.boolValue, GUILayout.Width(112.0f));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                writingEnabled.boolValue = EditorGUILayout.ToggleLeft(WritingEnabledLabel, writingEnabled.boolValue, GUILayout.Width(78.0f));
+                writeThreshold.floatValue = EditorGUILayout.FloatField(WriteThresholdLabel, writeThreshold.floatValue, GUILayout.Width(100.0f));
+                EditorGUILayout.PropertyField(mergeMode, HoConstraintEditorSectionGui.MergeModeLabel, GUILayout.Width(140.0f));
+                EditorGUILayout.EndHorizontal();
+            }
 
             if (constraint.MissingKeys.Count > 0)
             {
@@ -226,37 +257,61 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
-            EditorGUILayout.LabelField("这里配眨眼本身写的键（眼睑）；「规则」区是用信号驱动别的键，不写眼睑。", EditorStyles.miniLabel);
-            if (GUILayout.Button("自动匹配眼睑键", GUILayout.Height(20.0f)))
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("自动匹配眼睑键", GUILayout.Width(126.0f)))
             {
                 HoBlinkPresetActions.AutoMatchEyelidKeys((HoBlinkConstraint)target, serializedObject);
                 serializedObject.Update();
             }
 
-            EditorGUILayout.PropertyField(blinkEnabled, new GUIContent("启用"));
+            blinkEnabled.boolValue = EditorGUILayout.ToggleLeft(EnabledLabel, blinkEnabled.boolValue, GUILayout.Width(58.0f));
+            EditorGUILayout.EndHorizontal();
+
             using (new EditorGUI.DisabledScope(!blinkEnabled.boolValue))
+            using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
             {
-                EditorGUILayout.PropertyField(intervalDistribution, new GUIContent("间隔分布"));
-                EditorGUILayout.PropertyField(intervalMin, new GUIContent("间隔下限（秒）"));
-                EditorGUILayout.PropertyField(intervalMax, new GUIContent("间隔上限（秒）"));
-                EditorGUILayout.PropertyField(closeDuration, new GUIContent("闭合时长（秒）"));
-                EditorGUILayout.PropertyField(holdDuration, new GUIContent("保持时长（秒）"));
-                EditorGUILayout.PropertyField(openDuration, new GUIContent("张开时长（秒）"));
-                EditorGUILayout.PropertyField(blinkCurve, new GUIContent("眨眼曲线", "横轴为相位，纵轴为闭合量。"));
-                EditorGUILayout.PropertyField(strength, new GUIContent("强度"));
-                EditorGUILayout.PropertyField(doubleBlinkChance, new GUIContent("双击概率"));
-                EditorGUILayout.PropertyField(doubleBlinkGap, new GUIContent("双击间隔（秒）"));
-                EditorGUILayout.PropertyField(randomSeed, new GUIContent("随机种子", "0 表示用实例 id。"));
-                EditorGUILayout.PropertyField(pauseWhenDriven, new GUIContent("被驱动时暂停", "面捕/动画在眨眼时让位。"));
+                // 间隔：分布 + 上下限挤一行
+                EditorGUILayout.BeginHorizontal();
+                intervalDistribution.enumValueIndex = EditorGUILayout.Popup(IntervalDistributionLabel, intervalDistribution.enumValueIndex, intervalDistribution.enumDisplayNames, GUILayout.Width(104.0f));
+                intervalMin.floatValue = EditorGUILayout.FloatField(IntervalMinLabel, intervalMin.floatValue, GUILayout.Width(74.0f));
+                intervalMax.floatValue = EditorGUILayout.FloatField(IntervalMaxLabel, intervalMax.floatValue, GUILayout.Width(74.0f));
+                EditorGUILayout.EndHorizontal();
+
+                // 三段时长 + 强度
+                EditorGUILayout.BeginHorizontal();
+                closeDuration.floatValue = EditorGUILayout.FloatField(CloseLabel, closeDuration.floatValue, GUILayout.Width(68.0f));
+                holdDuration.floatValue = EditorGUILayout.FloatField(HoldLabel, holdDuration.floatValue, GUILayout.Width(68.0f));
+                openDuration.floatValue = EditorGUILayout.FloatField(OpenLabel, openDuration.floatValue, GUILayout.Width(68.0f));
+                strength.floatValue = EditorGUILayout.FloatField(StrengthLabel, strength.floatValue, GUILayout.Width(68.0f));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.PropertyField(blinkCurve, BlinkCurveLabel);
+
+                // 双击 + 种子
+                EditorGUILayout.BeginHorizontal();
+                using (HoConstraintEditorSectionGui.NarrowLabels(40.0f))
+                {
+                    doubleBlinkChance.floatValue = EditorGUILayout.FloatField(DoubleChanceLabel, doubleBlinkChance.floatValue, GUILayout.Width(80.0f));
+                    doubleBlinkGap.floatValue = EditorGUILayout.FloatField(DoubleGapLabel, doubleBlinkGap.floatValue, GUILayout.Width(82.0f));
+                    randomSeed.intValue = EditorGUILayout.IntField(SeedLabel, randomSeed.intValue, GUILayout.Width(78.0f));
+                }
+
+                EditorGUILayout.EndHorizontal();
+
+                // 外部接管
+                EditorGUILayout.BeginHorizontal();
+                pauseWhenDriven.boolValue = EditorGUILayout.ToggleLeft(PauseWhenDrivenLabel, pauseWhenDriven.boolValue, GUILayout.Width(108.0f));
                 using (new EditorGUI.DisabledScope(!pauseWhenDriven.boolValue))
                 {
-                    EditorGUILayout.PropertyField(pauseThreshold, new GUIContent("接管阈值"));
-                    EditorGUILayout.PropertyField(pauseDuration, new GUIContent("暂停时长（秒）"));
+                    pauseThreshold.floatValue = EditorGUILayout.FloatField(PauseThresholdLabel, pauseThreshold.floatValue, GUILayout.Width(68.0f));
+                    pauseDuration.floatValue = EditorGUILayout.FloatField(PauseDurationLabel, pauseDuration.floatValue, GUILayout.Width(68.0f));
                 }
+
+                EditorGUILayout.EndHorizontal();
             }
 
-            EditorGUILayout.Space(3.0f);
-            EditorGUILayout.LabelField("眨眼输出", EditorStyles.boldLabel);
+            EditorGUILayout.Space(2.0f);
+            EditorGUILayout.LabelField("眨眼输出 · 自动眨眼写这些键", EditorStyles.miniBoldLabel);
             DrawTargetList(blinkTargets, -1);
         }
 
@@ -352,17 +407,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             HoBlinkConstraint constraint = (HoBlinkConstraint)target;
             EditorGUI.indentLevel++;
 
-            // ── 驱动源：一行两个，别把下拉挤成一条缝
-            EditorGUILayout.BeginHorizontal();
-            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
+            // 一行：驱动 + 值域 + 反相
+            using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
             {
-                EditorGUILayout.PropertyField(driverKind, DriverKindLabel);
-                EditorGUILayout.PropertyField(driverRange, DriverRangeLabel);
+                EditorGUILayout.BeginHorizontal();
+                driverKind.enumValueIndex = EditorGUILayout.Popup(DriverKindLabel, driverKind.enumValueIndex, driverKind.enumDisplayNames, GUILayout.Width(104.0f));
+                driverRange.enumValueIndex = EditorGUILayout.Popup(DriverRangeLabel, driverRange.enumValueIndex, driverRange.enumDisplayNames, GUILayout.Width(88.0f));
+                invert.boolValue = EditorGUILayout.ToggleLeft(InvertLabel, invert.boolValue, GUILayout.Width(58.0f));
+                EditorGUILayout.EndHorizontal();
             }
 
-            EditorGUILayout.EndHorizontal();
-
-            // ── 正 / 负键：并排一行（单极只填「正」）
+            // 一行：正 / 负键（单极只填「正」）
             using (new EditorGUI.DisabledScope((HoBlinkDriverKind)driverKind.enumValueIndex != HoBlinkDriverKind.ShapeKey))
             {
                 EditorGUILayout.BeginHorizontal();
@@ -371,41 +426,43 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 EditorGUILayout.EndHorizontal();
             }
 
-            // ── 实时横条：白刻度是弹簧前的原始值，色条是真正驱动目标的值
+            // 一行：果冻开关 + 三个弹簧参数
+            using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                jellyEnabled.boolValue = EditorGUILayout.ToggleLeft(JellyLabel, jellyEnabled.boolValue, GUILayout.Width(84.0f));
+                using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
+                {
+                    frequency.floatValue = EditorGUILayout.FloatField(FrequencyLabel, frequency.floatValue, GUILayout.Width(68.0f));
+                    dampingRatio.floatValue = EditorGUILayout.FloatField(DampingLabel, dampingRatio.floatValue, GUILayout.Width(68.0f));
+                    inputSmoothing.floatValue = EditorGUILayout.FloatField(SmoothingLabel, inputSmoothing.floatValue, GUILayout.Width(68.0f));
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            // 一行：细节折叠 + 实时驱动横条
+            EditorGUILayout.BeginHorizontal();
+            ruleDetails[index] = EditorGUILayout.Foldout(ruleDetails[index], RuleDetailLabel, true, EditorStyles.foldout);
+            GUILayout.FlexibleSpace();
             DrawDriverMeter(constraint, index, driverRange);
-
-            EditorGUILayout.Space(2.0f);
-            EditorGUILayout.BeginHorizontal();
-            invert.boolValue = EditorGUILayout.ToggleLeft(InvertLabel, invert.boolValue, GUILayout.Width(58.0f));
-            readWritten.boolValue = EditorGUILayout.ToggleLeft(ReadWrittenLabel, readWritten.boolValue);
             EditorGUILayout.EndHorizontal();
 
-            HoConstraintMeterGui.DrawSeparator();
-
-            // ── 果冻弹簧
-            EditorGUILayout.BeginHorizontal();
-            jellyEnabled.boolValue = EditorGUILayout.ToggleLeft(JellyLabel, jellyEnabled.boolValue, GUILayout.Width(84.0f));
-            using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
-            using (HoConstraintEditorSectionGui.NarrowLabels(50.0f))
+            if (ruleDetails[index])
             {
-                frequency.floatValue = EditorGUILayout.FloatField(FrequencyLabel, frequency.floatValue);
+                EditorGUI.indentLevel++;
+                using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    maxStep.floatValue = EditorGUILayout.FloatField(MaxStepLabel, maxStep.floatValue, GUILayout.Width(68.0f));
+                    readWritten.boolValue = EditorGUILayout.ToggleLeft(ReadWrittenLabel, readWritten.boolValue, GUILayout.Width(112.0f));
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                EditorGUI.indentLevel--;
             }
 
-            EditorGUILayout.EndHorizontal();
-
-            using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
-            using (HoConstraintEditorSectionGui.NarrowLabels(50.0f))
-            {
-                EditorGUILayout.BeginHorizontal();
-                dampingRatio.floatValue = EditorGUILayout.FloatField(DampingLabel, dampingRatio.floatValue);
-                maxStep.floatValue = EditorGUILayout.FloatField(MaxStepLabel, maxStep.floatValue);
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.BeginHorizontal();
-                inputSmoothing.floatValue = EditorGUILayout.FloatField(SmoothingLabel, inputSmoothing.floatValue);
-                EditorGUILayout.EndHorizontal();
-            }
-
-            HoConstraintMeterGui.DrawSeparator();
+            HoConstraintMeterGui.DrawSeparator(2.0f, 2.0f);
 
             EditorGUILayout.LabelField("目标 · 这条规则写哪些键", EditorStyles.miniBoldLabel);
             DrawTargetList(targets, index);
@@ -414,14 +471,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndVertical();
         }
 
-        /// <summary>规则的实时横条：色条 = 弹簧后（真正驱动目标的值），白刻度 = 弹簧前的原始值。</summary>
+        /// <summary>紧凑驱动读数（条 + 值，紧跟在本行右端）。</summary>
         private void DrawDriverMeter(HoBlinkConstraint constraint, int index, SerializedProperty driverRange)
         {
             bool bipolar = (HoBlinkDriverRange)driverRange.enumValueIndex == HoBlinkDriverRange.Bipolar;
             float raw = constraint.GetDriverRawValue(index);
             float value = constraint.GetDriverValue(index);
 
-            HoConstraintMeterGui.DrawRow(
+            HoConstraintMeterGui.DrawCompact(
                 "驱动",
                 value,
                 bipolar ? -1.0f : 0.0f,
@@ -507,9 +564,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            // 一行：键 + 解析状态 + 实时输出条 + 细节 + 删除
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(KeyLabel, GUILayout.Width(24.0f));
+            EditorGUILayout.LabelField(KeyLabel, GUILayout.Width(18.0f));
             DrawKeyField(keyName, (HoBlinkConstraint)target.serializedObject.targetObject, 0.0f);
+            DrawTargetMeter((HoBlinkConstraint)target.serializedObject.targetObject, ruleIndex, index, outputMin, outputMax);
             targetDetails[detailIndex] = EditorGUILayout.Foldout(targetDetails[detailIndex], "细节", true);
             if (GUILayout.Button("✕", GUILayout.Width(22.0f)))
             {
@@ -521,81 +581,55 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.EndHorizontal();
 
-            // 实时横条：最终写进键的那个值（含增益 / ramp / 强度 / 权重 / 偏移）
-            DrawTargetMeter((HoBlinkConstraint)target.serializedObject.targetObject, ruleIndex, index, outputMin, outputMax);
-
-            EditorGUILayout.Space(2.0f);
-            EditorGUILayout.BeginHorizontal();
-            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
+            // 一行：范围 / 序号 / 混合（通道比较小众，收进细节）
+            using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
             {
-                EditorGUILayout.PropertyField(meshScope, MeshScopeLabel);
+                EditorGUILayout.BeginHorizontal();
+                meshScope.enumValueIndex = EditorGUILayout.Popup(MeshScopeLabel, meshScope.enumValueIndex, meshScope.enumDisplayNames, GUILayout.Width(88.0f));
                 using (new EditorGUI.DisabledScope((HoShapeKeyMeshScope)meshScope.enumValueIndex != HoShapeKeyMeshScope.Index))
                 {
-                    EditorGUILayout.PropertyField(meshIndex, MeshIndexLabel);
+                    meshIndex.intValue = EditorGUILayout.IntField(MeshIndexLabel, meshIndex.intValue, GUILayout.Width(62.0f));
                 }
+
+                blendMode.enumValueIndex = EditorGUILayout.Popup(BlendModeLabel, blendMode.enumValueIndex, blendMode.enumDisplayNames, GUILayout.Width(88.0f));
+                EditorGUILayout.EndHorizontal();
+
+                // 一行：增益 / ramp / 强度
+                EditorGUILayout.BeginHorizontal();
+                gain.floatValue = EditorGUILayout.FloatField(GainLabel, gain.floatValue, GUILayout.Width(68.0f));
+                rampPreset.enumValueIndex = EditorGUILayout.IntPopup(RampLabel, rampPreset.enumValueIndex, RampPresetLabels, RampPresetValues, GUILayout.Width(96.0f));
+                rampIntensity.floatValue = EditorGUILayout.FloatField(IntensityLabel, rampIntensity.floatValue, GUILayout.Width(68.0f));
+                EditorGUILayout.EndHorizontal();
             }
-
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
-            {
-                EditorGUILayout.PropertyField(blendMode, BlendModeLabel);
-                EditorGUILayout.PropertyField(side, SideLabel);
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            // 一行两个：定宽格子会被 label 吃满 → 数字框变 0 宽，所以并排必须收窄 label。
-            EditorGUILayout.BeginHorizontal();
-            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
-            {
-                gain.floatValue = EditorGUILayout.FloatField(GainLabel, gain.floatValue);
-                rampPreset.enumValueIndex = EditorGUILayout.IntPopup(
-                    RampLabel,
-                    rampPreset.enumValueIndex,
-                    RampPresetLabels,
-                    RampPresetValues);
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
-            {
-                rampIntensity.floatValue = EditorGUILayout.FloatField(IntensityLabel, rampIntensity.floatValue);
-                weight.floatValue = EditorGUILayout.Slider(WeightLabel, weight.floatValue, 0.0f, 1.0f);
-            }
-
-            EditorGUILayout.EndHorizontal();
 
             if (targetDetails[detailIndex])
             {
                 EditorGUI.indentLevel++;
-                HoConstraintMeterGui.DrawSeparator(2.0f, 2.0f);
-                using (HoConstraintEditorSectionGui.NarrowLabels(54.0f))
+                using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
                 {
                     EditorGUILayout.BeginHorizontal();
-                    offset.floatValue = EditorGUILayout.FloatField(new GUIContent("偏移"), offset.floatValue);
-                    clampToRange.boolValue = EditorGUILayout.ToggleLeft(new GUIContent("钳制", "把输出夹在下面的范围里。"), clampToRange.boolValue, GUILayout.Width(58.0f));
+                    weight.floatValue = EditorGUILayout.Slider(WeightLabel, weight.floatValue, 0.0f, 1.0f, GUILayout.Width(126.0f));
+                    offset.floatValue = EditorGUILayout.FloatField(OffsetLabel, offset.floatValue, GUILayout.Width(72.0f));
+                    clampToRange.boolValue = EditorGUILayout.ToggleLeft(ClampLabel, clampToRange.boolValue, GUILayout.Width(58.0f));
                     EditorGUILayout.EndHorizontal();
                     EditorGUILayout.BeginHorizontal();
-                    outputMin.floatValue = EditorGUILayout.FloatField(new GUIContent("输出下限"), outputMin.floatValue);
-                    outputMax.floatValue = EditorGUILayout.FloatField(new GUIContent("输出上限"), outputMax.floatValue);
+                    side.enumValueIndex = EditorGUILayout.Popup(SideLabel, side.enumValueIndex, side.enumDisplayNames, GUILayout.Width(88.0f));
+                    outputMin.floatValue = EditorGUILayout.FloatField(OutputMinLabel, outputMin.floatValue, GUILayout.Width(72.0f));
+                    outputMax.floatValue = EditorGUILayout.FloatField(OutputMaxLabel, outputMax.floatValue, GUILayout.Width(72.0f));
                     EditorGUILayout.EndHorizontal();
                 }
 
                 if ((HoShapeKeyRampPreset)rampPreset.enumValueIndex == HoShapeKeyRampPreset.Custom)
                 {
-                    EditorGUILayout.Space(2.0f);
                     EditorGUILayout.PropertyField(rampCurve, new GUIContent("自定义曲线"));
-                    using (HoConstraintEditorSectionGui.NarrowLabels(58.0f))
+                    EditorGUILayout.BeginHorizontal();
+                    using (HoConstraintEditorSectionGui.NarrowLabels(46.0f))
                     {
-                        EditorGUILayout.BeginHorizontal();
-                        rampAttack.floatValue = EditorGUILayout.FloatField(new GUIContent("attack s"), rampAttack.floatValue);
-                        rampRelease.floatValue = EditorGUILayout.FloatField(new GUIContent("release s"), rampRelease.floatValue);
-                        EditorGUILayout.EndHorizontal();
+                        rampAttack.floatValue = EditorGUILayout.FloatField(new GUIContent("attack", "上升时间常数（秒）。"), rampAttack.floatValue, GUILayout.Width(96.0f));
+                        rampRelease.floatValue = EditorGUILayout.FloatField(new GUIContent("release", "回落时间常数（秒）。"), rampRelease.floatValue, GUILayout.Width(96.0f));
                     }
+
+                    EditorGUILayout.EndHorizontal();
                 }
 
                 EditorGUI.indentLevel--;
@@ -604,7 +638,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndVertical();
         }
 
-        /// <summary>目标的实时横条：这一路最终写进键的值 / 它的输出范围。</summary>
+        /// <summary>紧凑输出读数：这一路最终写进键的值 / 它的输出范围。</summary>
         private void DrawTargetMeter(HoBlinkConstraint constraint, int ruleIndex, int targetIndex, SerializedProperty outputMin, SerializedProperty outputMax)
         {
             float value = ruleIndex < 0
@@ -617,8 +651,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 max = min + 1.0f;
             }
 
-            HoConstraintMeterGui.DrawRow(
-                "输出",
+            HoConstraintMeterGui.DrawCompact(
+                null,
                 value,
                 min,
                 max,
@@ -626,7 +660,10 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 value.ToString("0.0"),
                 float.NaN,
                 OutputMeterTooltip + "\n当前 " + value.ToString("0.##")
-                + " / 输出范围 " + min.ToString("0.#") + "–" + max.ToString("0.#"));
+                + " / 输出范围 " + min.ToString("0.#") + "–" + max.ToString("0.#"),
+                HoConstraintMeterGui.CompactLabelWidth,
+                HoConstraintMeterGui.CompactBarWidth,
+                HoConstraintMeterGui.CompactValueWidth);
         }
 
         /// <summary>
@@ -716,13 +753,15 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private void DrawDebugSection(HoBlinkConstraint constraint)
         {
-            string summary = constraint.BindingCount + " 个绑定";
+            string summary = "网格 " + constraint.MeshCount + " · 绑定 " + constraint.BindingCount + " · 规则 " + constraint.RuleCount;
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref debugExpanded, "调试", summary, DebugColor))
             {
                 return;
             }
 
-            HoConstraintMeterGui.DrawRow(
+            // 顶部一行：闭眼量 + 相位
+            EditorGUILayout.BeginHorizontal();
+            HoConstraintMeterGui.DrawCompact(
                 "闭眼",
                 constraint.BlinkValue,
                 0.0f,
@@ -730,20 +769,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 BlinkColor,
                 constraint.BlinkValue.ToString("0.00"),
                 float.NaN,
-                "自动眨眼算出来的闭眼量（0 = 睁开，1 = 闭合）。",
-                labelWidth: 30.0f);
-
-            HoConstraintMeterGui.DrawCaption(
-                BlinkPhaseText(constraint.BlinkPhase)
-                + " · 网格 " + constraint.MeshCount
-                + " · 绑定 " + constraint.BindingCount
-                + " · 规则 " + constraint.RuleCount
-                + " · 眨眼输出 " + constraint.BlinkOutputCount);
+                "自动眨眼算出来的闭眼量（0 = 睁开，1 = 闭合）。");
+            HoConstraintMeterGui.DrawCaption(BlinkPhaseText(constraint.BlinkPhase));
+            EditorGUILayout.EndHorizontal();
 
             constraint.CollectSaturatedKeys(saturationBuffer);
             HoConstraintEditorSectionGui.DrawSaturationReport(saturationBuffer);
 
-            EditorGUILayout.Space(2.0f);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("立即眨一次"))
             {
@@ -770,18 +802,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             HoConstraintMeterGui.DrawSeparator();
 
+            EditorGUILayout.BeginHorizontal();
             manualDrive = EditorGUILayout.ToggleLeft(
                 new GUIContent("手动驱动", "忽略真实键值，用下面的滑杆直接调这条规则，看输出怎么走。调试用，不进序列化。"),
-                manualDrive);
+                manualDrive,
+                GUILayout.Width(84.0f));
             constraint.ManualDriveEnabled = manualDrive;
 
-            bool live = Application.isPlaying || evaluateInEditMode.boolValue;
-            if (!live)
+            if (!Application.isPlaying && !evaluateInEditMode.boolValue)
             {
-                HoConstraintMeterGui.DrawCaption("编辑模式下要开始播放，或打开「目标网格 · 编辑模式求值」，读数才会动。");
+                HoConstraintMeterGui.DrawCaption("（不播放时读数不动，除非打开「编辑模式求值」）");
             }
 
-            // 每条规则一行实时读数 + 每个目标一条横条：不用展开规则也能看数值怎么流。
+            EditorGUILayout.EndHorizontal();
+
+            // 每条规则一行读数 + 每个目标一条：不用展开规则也能看数值怎么流。
             for (int i = 0; i < constraint.RuleCount; i++)
             {
                 HoBlinkRule rule = constraint.GetRule(i);
@@ -790,13 +825,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     continue;
                 }
 
-                EditorGUILayout.Space(2.0f);
                 EditorGUILayout.LabelField(BuildRuleTitle(constraint, rule, i), EditorStyles.miniBoldLabel);
 
                 bool bipolar = rule.DriverRange == HoBlinkDriverRange.Bipolar;
                 float raw = constraint.GetDriverRawValue(i);
                 float value = constraint.GetDriverValue(i);
-                HoConstraintMeterGui.DrawRow(
+
+                EditorGUILayout.BeginHorizontal();
+                HoConstraintMeterGui.DrawCompact(
                     "驱动",
                     value,
                     bipolar ? -1.0f : 0.0f,
@@ -808,19 +844,22 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
                 if (manualDrive)
                 {
-                    using (HoConstraintEditorSectionGui.NarrowLabels(34.0f))
+                    using (HoConstraintEditorSectionGui.NarrowLabels(26.0f))
                     {
                         float slider = EditorGUILayout.Slider(
                             new GUIContent("滑杆", "手动给这条规则的驱动值。"),
                             value,
                             bipolar ? -1.0f : 0.0f,
-                            1.0f);
+                            1.0f,
+                            GUILayout.Width(120.0f));
                         if (!Mathf.Approximately(slider, value))
                         {
                             constraint.SetManualDriverValue(i, slider);
                         }
                     }
                 }
+
+                EditorGUILayout.EndHorizontal();
 
                 for (int t = 0; t < constraint.GetRuleTargetCount(i) && rule.Targets != null && t < rule.Targets.Count; t++)
                 {
@@ -838,7 +877,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                         max = min + 1.0f;
                     }
 
-                    HoConstraintMeterGui.DrawRow(
+                    HoConstraintMeterGui.DrawCompact(
                         string.IsNullOrEmpty(target.KeyName) ? "（没填键）" : target.KeyName,
                         output,
                         min,
@@ -853,12 +892,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (constraint.BlinkOutputCount > 0)
             {
-                EditorGUILayout.Space(2.0f);
                 EditorGUILayout.LabelField("眨眼输出", EditorStyles.miniBoldLabel);
                 for (int i = 0; i < constraint.BlinkOutputCount; i++)
                 {
                     float output = constraint.GetBlinkTargetOutput(i);
-                    HoConstraintMeterGui.DrawRow(
+                    HoConstraintMeterGui.DrawCompact(
                         constraint.GetBlinkTargetKeyName(i),
                         output,
                         0.0f,
@@ -904,9 +942,19 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 ruleFoldouts.Add(false);
             }
 
+            while (ruleDetails.Count < rules.arraySize)
+            {
+                ruleDetails.Add(false);
+            }
+
             while (ruleFoldouts.Count > rules.arraySize)
             {
                 ruleFoldouts.RemoveAt(ruleFoldouts.Count - 1);
+            }
+
+            while (ruleDetails.Count > rules.arraySize)
+            {
+                ruleDetails.RemoveAt(ruleDetails.Count - 1);
             }
         }
 

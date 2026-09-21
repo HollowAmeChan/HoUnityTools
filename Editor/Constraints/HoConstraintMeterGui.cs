@@ -16,15 +16,20 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     {
         public const float DefaultHeight = 13.0f;
 
-        private const float DefaultLabelWidth = 42.0f;
-        private const float DefaultValueWidth = 54.0f;
+        /// <summary>紧凑档：短标签 + 小条 + 短数值，整块只占 ~130px，能直接塞进别的行。</summary>
+        public const float CompactLabelWidth = 30.0f;
+        public const float CompactBarWidth = 54.0f;
+        public const float CompactValueWidth = 40.0f;
 
         private static GUIStyle labelStyle;
         private static GUIStyle valueStyle;
         private static GUIStyle captionStyle;
 
-        /// <summary>一行：`标签 [横条] 数值`。value/ghost 都按 min..max 映射。</summary>
-        public static void DrawRow(
+        /// <summary>
+        /// 紧凑读数：`标签 [小条] 值`，只占固定宽度（默认 ~128px），**不铺满整行**。
+        /// 放进 `BeginHorizontal` 里给一行参数收尾用；单独一行也行，但不会浪费横向空间。
+        /// </summary>
+        public static void DrawCompact(
             string label,
             float value,
             float min,
@@ -33,27 +38,20 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             string valueText = null,
             float ghost = float.NaN,
             string tooltip = null,
-            float labelWidth = DefaultLabelWidth,
-            float valueWidth = DefaultValueWidth,
+            float labelWidth = CompactLabelWidth,
+            float barWidth = CompactBarWidth,
+            float valueWidth = CompactValueWidth,
             float height = DefaultHeight)
         {
-            DrawRow(
-                label == null ? null : new GUIContent(label, tooltip),
-                value,
-                min,
-                max,
-                color,
-                valueText,
-                ghost,
-                null,
-                labelWidth,
-                valueWidth,
-                height);
+            float width = (string.IsNullOrEmpty(label) ? 0.0f : labelWidth) + barWidth + valueWidth;
+            Rect rect = GUILayoutUtility.GetRect(width, width, height, height);
+            DrawCompactInto(rect, label, value, min, max, color, valueText, ghost, tooltip, labelWidth, barWidth, valueWidth);
         }
 
-        /// <summary>同上，标签自带 tooltip（面板上复用的静态 GUIContent 走这个，不每帧新建）。</summary>
-        public static void DrawRow(
-            GUIContent label,
+        /// <summary>紧凑读数的绘制本体（自己给 rect，比如塞在一行的尾巴上）。</summary>
+        public static void DrawCompactInto(
+            Rect rect,
+            string label,
             float value,
             float min,
             float max,
@@ -61,31 +59,38 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             string valueText = null,
             float ghost = float.NaN,
             string tooltip = null,
-            float labelWidth = DefaultLabelWidth,
-            float valueWidth = DefaultValueWidth,
-            float height = DefaultHeight)
+            float labelWidth = CompactLabelWidth,
+            float barWidth = CompactBarWidth,
+            float valueWidth = CompactValueWidth)
         {
-            Rect rect = EditorGUILayout.GetControlRect(false, height);
-
-            if (label != null)
+            bool hasLabel = !string.IsNullOrEmpty(label);
+            if (hasLabel)
             {
-                // 传了 tooltip 就临时包一层：**不要去改传进来的 GUIContent**（面板上的静态实例会被越写越长）
-                GUIContent content = string.IsNullOrEmpty(tooltip) ? label : new GUIContent(label.text, tooltip);
-                GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), content, LabelStyle);
+                GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), new GUIContent(label, tooltip), LabelStyle);
+            }
+            else
+            {
+                // 没标签就别给它留位置，条直接贴左边
+                labelWidth = 0.0f;
             }
 
-            float barX = rect.x + labelWidth;
-            float barWidth = rect.width - labelWidth - (string.IsNullOrEmpty(valueText) ? 0.0f : valueWidth) - 2.0f;
-            if (barWidth <= 2.0f)
-            {
-                return;
-            }
-
-            DrawBar(new Rect(barX, rect.y + 1.0f, barWidth, rect.height - 2.0f), value, min, max, color, ghost);
+            DrawBar(
+                new Rect(rect.x + labelWidth, rect.y + 1.0f, barWidth, rect.height - 2.0f),
+                value,
+                min,
+                max,
+                color,
+                ghost);
 
             if (!string.IsNullOrEmpty(valueText))
             {
-                GUI.Label(new Rect(rect.xMax - valueWidth, rect.y, valueWidth, rect.height), valueText, ValueStyle);
+                GUI.Label(new Rect(rect.x + labelWidth + barWidth, rect.y, valueWidth, rect.height), valueText, ValueStyle);
+            }
+
+            if (!hasLabel && !string.IsNullOrEmpty(tooltip))
+            {
+                // 没有文字可以挂 tooltip，就给条本身盖一层透明标签，鼠标停上去才看得到说明
+                GUI.Label(new Rect(rect.x, rect.y, barWidth + valueWidth, rect.height), new GUIContent(string.Empty, tooltip));
             }
         }
 
