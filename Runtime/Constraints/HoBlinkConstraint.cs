@@ -102,6 +102,7 @@ namespace Hollow.HoUnityTools.Constraints
         private HoJellyState[] jellyStates;
         private float[] manualValues;
         private float[] driverValues;
+        private float[] driverRawValues;
         private int takeOverBinding = -1;
 
         private HoBlinkState blinkState;
@@ -214,6 +215,17 @@ namespace Hollow.HoUnityTools.Constraints
             }
 
             return driverValues[ruleIndex];
+        }
+
+        /// <summary>弹簧/平滑**之前**的原始驱动值（面板上那个"幽灵刻度"用它）。</summary>
+        public float GetDriverRawValue(int ruleIndex)
+        {
+            if (driverRawValues == null || ruleIndex < 0 || ruleIndex >= driverRawValues.Length)
+            {
+                return 0.0f;
+            }
+
+            return driverRawValues[ruleIndex];
         }
 
         public float GetJellyValue(int ruleIndex)
@@ -460,12 +472,14 @@ namespace Hollow.HoUnityTools.Constraints
                     if (driverValues != null && i < driverValues.Length)
                     {
                         driverValues[i] = 0.0f;
+                        driverRawValues[i] = 0.0f;
                     }
 
                     continue;
                 }
 
                 float raw = ReadDriver(rule, i);
+                driverRawValues[i] = raw;
                 if (rule.JellyEnabled)
                 {
                     HoJellySolver.Step(
@@ -563,6 +577,7 @@ namespace Hollow.HoUnityTools.Constraints
             jellyStates = new HoJellyState[ruleCount];
             manualValues = new float[ruleCount];
             driverValues = new float[ruleCount];
+            driverRawValues = new float[ruleCount];
 
             List<int> ruleTargets = new List<int>();
             List<int> driverBindings = new List<int>();
