@@ -124,59 +124,47 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private void DrawToolbar(HoBlinkConstraint constraint)
         {
             EditorGUILayout.LabelField("Ho 眨眼约束", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("眨眼输出: 双眼键版", GUILayout.Height(22.0f)))
+            setupTier = (HoBlinkSetupTier)EditorGUILayout.Popup(
+                new GUIContent("精细度", "一档 = 一整套配置。点「应用」按这档重建眼睑键与规则列表（会清掉现有规则）。"),
+                (int)setupTier,
+                TierLabels);
+            if (GUILayout.Button(new GUIContent("应用", "按当前档位重建。"), GUILayout.Width(46.0f)))
             {
-                HoBlinkPresetActions.ApplyBlinkOutput(constraint, serializedObject, false);
+                HoBlinkPresetActions.ApplyTier(constraint, serializedObject, (int)setupTier);
             }
 
-            if (GUILayout.Button("左右键版", GUILayout.Height(22.0f)))
-            {
-                HoBlinkPresetActions.ApplyBlinkOutput(constraint, serializedObject, true);
-            }
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("凝视: 双眼四向"))
-            {
-                HoBlinkPresetActions.ApplyGazeRules(constraint, serializedObject, false);
-            }
-
-            if (GUILayout.Button("左右眼 · 左右族"))
-            {
-                HoBlinkPresetActions.ApplyGazeRules(constraint, serializedObject, true);
-            }
-
-            if (GUILayout.Button("左右眼 · 内外族"))
-            {
-                HoBlinkPresetActions.ApplyGazeRules(constraint, serializedObject, true, true);
-            }
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(new GUIContent("高光跟眼", "加 2 条双极规则（果冻 X：往右−往左，Y：上−下），驱动键自动取模型上的凝视键（找不到就留空）。\n目标键留空，由你在规则里点 ▾ 选高光键；参数 X=直通/1.0，Y 同。")) )
-            {
-                HoBlinkPresetActions.ApplyGazeJelly(constraint, serializedObject);
-            }
-
-            if (GUILayout.Button(new GUIContent("眼仁形变", "同上 2 条规则，但更慢更软（3Hz / ζ0.35 / 平滑 0.05），ramp = 缓入 0.8。\n目标键同样留空。")) )
-            {
-                HoBlinkPresetActions.ApplyPupilJelly(constraint, serializedObject);
-            }
-
-            if (GUILayout.Button(new GUIContent("眨眼压高光", "加 1 条规则：驱动 = 自动眨眼（不需要键），目标留空、混合 = 覆盖、ramp = 放大。\n目标键由你选（一般是高光/眼白那类键）。")) )
-            {
-                HoBlinkPresetActions.ApplyBlinkJelly(constraint, serializedObject);
-            }
-
-            if (GUILayout.Button("清空"))
+            if (GUILayout.Button(new GUIContent("清空", "清掉眼睑键与所有规则。"), GUILayout.Width(46.0f)))
             {
                 HoBlinkPresetActions.ClearAll(serializedObject);
             }
 
             EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField(TierSummaries[(int)setupTier], EditorStyles.miniLabel);
         }
 
+        /// <summary>精细度档位：只眨眼 / 标准（+果冻跟眼）/ 精细（+四向凝视与眨眼压高光）。</summary>
+        private enum HoBlinkSetupTier
+        {
+            OnlyBlink = 0,
+            Standard = 1,
+            Fine = 2
+        }
+
+        private HoBlinkSetupTier setupTier = HoBlinkSetupTier.Standard;
+
+        private static readonly GUIContent[] TierLabels =
+        {
+            new GUIContent("只眨眼"),
+            new GUIContent("标准"),
+            new GUIContent("精细")
+        };
+
+        private static readonly string[] TierSummaries =
+        {
+            "眼睑键（按模型自动选双眼键 / 左右键），不加规则。",
+            "眼睑键 + 2 条果冻规则（X：往右−往左，Y：上−下），目标键留空由你填。",
+            "标准 + 4 条四向凝视规则（每个方向可有独立键）+ 眨眼压高光。"
+        };
         private void DrawMeshSection(HoBlinkConstraint constraint)
         {
             string summary = constraint.MeshCount + " 个蒙皮网格 / " + constraint.BindingCount + " 个绑定";
@@ -223,6 +211,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 return;
             }
 
+            EditorGUILayout.LabelField("这里配眨眼本身写的键（眼睑）；「规则」区是用信号驱动别的键，不写眼睑。", EditorStyles.miniLabel);
             EditorGUILayout.PropertyField(blinkEnabled, new GUIContent("启用"));
             using (new EditorGUI.DisabledScope(!blinkEnabled.boolValue))
             {
@@ -527,9 +516,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// 键名格 + 下拉 + **解析状态**：右边那个小标写清"这个键落在谁身上"（✓ 网格名 / ✗ 没找到）。
+        /// 用户在面板上就能看出到底在调用谁的键，而不用等缺失清单。
+        /// </summary>
         private void DrawKeyField(SerializedProperty keyName, HoBlinkConstraint constraint, float labelWidth)
         {
             const float ButtonWidth = 24.0f;
+            const float StatusWidth = 30.0f;
             Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
             if (labelWidth > 0.0f)
             {
@@ -537,10 +531,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 rect.x += labelWidth + 4.0f;
             }
 
-            Rect fieldRect = new Rect(rect.x, rect.y, rect.width - ButtonWidth - 2.0f, rect.height);
+            Rect fieldRect = new Rect(rect.x, rect.y, Mathf.Max(20.0f, rect.width - ButtonWidth - StatusWidth - 4.0f), rect.height);
             Rect buttonRect = new Rect(fieldRect.xMax + 2.0f, rect.y, ButtonWidth, rect.height);
+            Rect statusRect = new Rect(buttonRect.xMax + 2.0f, rect.y, StatusWidth, rect.height);
 
-            bool missing = !string.IsNullOrEmpty(keyName.stringValue) && !constraint.KeyExists(keyName.stringValue);
+            string key = keyName.stringValue;
+            int bindings = string.IsNullOrEmpty(key) ? 0 : constraint.CountKeyBindings(key);
+            bool missing = !string.IsNullOrEmpty(key) && bindings == 0;
             Color previous = GUI.color;
             if (missing)
             {
@@ -557,6 +554,26 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 HoKeyNameDropdown.Show(buttonRect, constraint, keyName);
             }
+
+            string status;
+            string statusTooltip;
+            if (string.IsNullOrEmpty(key))
+            {
+                status = string.Empty;
+                statusTooltip = "还没填键名";
+            }
+            else if (bindings > 0)
+            {
+                status = "✓ " + bindings;
+                statusTooltip = "已写在：" + constraint.DescribeKeyBindings(key);
+            }
+            else
+            {
+                status = "✗";
+                statusTooltip = "这些网格上没有这个键";
+            }
+
+            GUI.Label(statusRect, new GUIContent(status, statusTooltip), EditorStyles.miniLabel);
         }
 
         private void DrawDebugSection(HoBlinkConstraint constraint)

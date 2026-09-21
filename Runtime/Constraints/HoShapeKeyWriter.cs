@@ -121,6 +121,59 @@ namespace Hollow.HoUnityTools.Constraints
             return false;
         }
 
+        /// <summary>这个键名在这批网格上解析到几个绑定（0 = 一个都没找到）。面板用。</summary>
+        public int CountKeyBindings(string keyName)
+        {
+            if (meshLookups == null || string.IsNullOrEmpty(keyName))
+            {
+                return 0;
+            }
+
+            int found = 0;
+            for (int m = 0; m < meshLookups.Length; m++)
+            {
+                if (HoShapeKeyResolver.TryResolve(meshLookups[m], keyName, out _))
+                {
+                    found++;
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>命中的网格名（最多 maxNames 个），给面板显示"这个键落在谁身上"。</summary>
+        public string DescribeKeyBindings(string keyName, int maxNames = 3)
+        {
+            if (meshes == null || string.IsNullOrEmpty(keyName))
+            {
+                return string.Empty;
+            }
+
+            string result = string.Empty;
+            int shown = 0;
+            int total = 0;
+            for (int m = 0; m < meshes.Length; m++)
+            {
+                if (meshLookups == null || !HoShapeKeyResolver.TryResolve(meshLookups[m], keyName, out _))
+                {
+                    continue;
+                }
+
+                total++;
+                if (shown < maxNames)
+                {
+                    result = shown == 0 ? meshes[m].name : result + "、" + meshes[m].name;
+                    shown++;
+                }
+            }
+
+            if (total > shown)
+            {
+                result += " 等 " + total + " 个";
+            }
+
+            return result;
+        }
         /// <summary>网格列表或 mesh 变了（换装 / mesh 重建）——宿主每帧问一次，用来触发重建。</summary>
         public bool MeshesChanged()
         {

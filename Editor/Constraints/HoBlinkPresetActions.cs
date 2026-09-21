@@ -23,6 +23,40 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>
+        /// 精细度档位（面板上那一个下拉就调这里）：
+        ///   0 只眨眼：眼睑键，不加规则；
+        ///   1 标准：+ 果冻 X / Y 两条双极规则（目标键留空）；
+        ///   2 精细：+ 四向凝视四条单极规则（每个方向可以有自己的键）+ 眨眼压高光。
+        /// 档位是"重建"语义：先清空再按档位搭，避免越点越乱。
+        /// </summary>
+        public static void ApplyTier(HoBlinkConstraint constraint, SerializedObject serializedObject, int tier)
+        {
+            ClearAll(serializedObject);
+
+            // 眼睑键：模型上有"双眼闭合键"就用双眼键版，否则用左右键版
+            bool splitLeftRight = string.IsNullOrEmpty(FindKey(constraint, HoBlinkKeySemantic.EyelidClosed, HoBlinkSide.Both));
+            ApplyBlinkOutput(constraint, serializedObject, splitLeftRight);
+
+            if (tier <= 0)
+            {
+                Debug.Log(
+                    "[HoBlinkConstraint] 精细度「只眨眼」：" + (splitLeftRight ? "左右两个眼睑键" : "一个双眼眼睑键") + "，没有规则。",
+                    constraint);
+                return;
+            }
+
+            ApplyGazeJelly(constraint, serializedObject);
+
+            if (tier <= 1)
+            {
+                return;
+            }
+
+            ApplyGazeRules(constraint, serializedObject, false);
+            ApplyBlinkJelly(constraint, serializedObject);
+        }
+
         /// <summary>眨眼输出：双眼键版（一个双眼键）或左右键版（左右两个键，值相同）。</summary>
         public static void ApplyBlinkOutput(HoBlinkConstraint constraint, SerializedObject serializedObject, bool splitLeftRight)
         {
@@ -45,6 +79,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
+
+            string summary = string.Empty;
+            for (int i = 0; i < list.arraySize; i++)
+            {
+                SerializedProperty target = list.GetArrayElementAtIndex(i);
+                string key = target.FindPropertyRelative("keyName").stringValue;
+                string mesh = constraint.DescribeKeyBindings(key);
+                summary += (summary.Length == 0 ? string.Empty : "\n") + "· "
+                    + key + "（" + target.FindPropertyRelative("side").enumDisplayNames[target.FindPropertyRelative("side").enumValueIndex] + "）"
+                    + (string.IsNullOrEmpty(mesh) ? " ← 这些网格上没有这个键！" : " → " + mesh);
+            }
+
+            Debug.Log(
+                "[HoBlinkConstraint] 眨眼输出：" + (splitLeftRight ? "左右键版" : "双眼键版") + "\n" + summary,
+                constraint);
         }
 
         /// <summary>凝视驱动：双眼四向（单极 4 条）或左右眼四向（双极 2 条，可切内外族）。</summary>

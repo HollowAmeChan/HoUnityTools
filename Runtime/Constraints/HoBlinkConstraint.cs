@@ -147,6 +147,32 @@ namespace Hollow.HoUnityTools.Constraints
 
         public IReadOnlyList<string> MissingKeys => writer.MissingKeys;
 
+        /// <summary>面板用：这个键名解析到几个网格（0 = 没找到）。</summary>
+        public int CountKeyBindings(string keyName)
+        {
+            return writer.CountKeyBindings(keyName);
+        }
+
+        /// <summary>面板用：命中的网格名（"这个键落在谁身上"）。</summary>
+        public string DescribeKeyBindings(string keyName)
+        {
+            return writer.DescribeKeyBindings(keyName);
+        }
+
+        /// <summary>面板用：眨眼输出第 index 个目标的键名 / 通道。</summary>
+        public string GetBlinkTargetKeyName(int index)
+        {
+            return blinkTargets != null && index >= 0 && index < blinkTargets.Count && blinkTargets[index] != null
+                ? blinkTargets[index].KeyName
+                : string.Empty;
+        }
+
+        public HoBlinkSide GetBlinkTargetSide(int index)
+        {
+            return blinkTargets != null && index >= 0 && index < blinkTargets.Count && blinkTargets[index] != null
+                ? blinkTargets[index].Side
+                : HoBlinkSide.Both;
+        }
         /// <summary>本帧写满（或我们这一路被合并策略削过）的键，面板用。</summary>
         public void CollectSaturatedKeys(List<HoShapeKeySaturation> results)
         {
