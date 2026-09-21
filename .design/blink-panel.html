@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ho 约束面板 · 视觉规划（IMGUI 可实现范围）</title>
+<style>
+  /* ── 设计令牌：全部换算成 IMGUI 能画的东西（纯色块 + 1px 描边 + 文字）─────────
+     面板底 #383838 / 卡片 #3F3F3F / 描边 #2C2C2C / 分隔 #4A4A4A
+     文字 主 #D4D4D4 次 #A0A0A0 弱 #7C7C7C
+     强调 网格 #4A9BFF 眨眼 #3FD08C 规则 #C58BFF 调试 #9AA0A8
+     行高 20 紧凑行 18 列间距 6 卡片内边距 8 缩进 12 标签列 56 */
+  :root{
+    --panel:#383838; --card:#3F3F3F; --card2:#454545; --line:#2C2C2C; --sep:#4A4A4A;
+    --fg:#D4D4D4; --fg2:#A0A0A0; --fg3:#7C7C7C;
+    --mesh:#4A9BFF; --blink:#3FD08C; --rules:#C58BFF; --debug:#9AA0A8;
+    --driver:#5CB4F5; --out:#6BD68F; --warn:#E8A33D; --err:#E5534B;
+    --row:20px; --rowT:18px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:#2B2B2B;color:var(--fg);
+       font:12px/1.45 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  h1{font-size:15px;margin:0 0 4px}
+  .hint{color:var(--fg3);margin:0 0 20px;font-size:11.5px}
+  .wrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+
+  /* ── 面板容器：Unity Inspector 的宽度感 ───────────────────────── */
+  .inspector{width:372px;background:var(--panel);border:1px solid #262626;padding:6px 6px 10px}
+  .title{font-weight:600;font-size:12.5px;padding:2px 4px 6px;display:flex;align-items:center;gap:8px}
+  .pill{font-size:10px;padding:1px 6px;border:1px solid #555;color:var(--fg2)}
+  .pill.on{border-color:#2F7A57;background:#2A4A3B;color:#9FE7C4}
+
+  /* ── 分区头 28px：左标题 + 右摘要，可点整行折叠 ───────────────── */
+  .sec{height:28px;display:flex;align-items:center;gap:6px;padding:0 8px;margin-top:6px;
+       background:linear-gradient(90deg, rgba(74,155,255,.22), rgba(74,155,255,.06) 60%, rgba(0,0,0,0));
+       border-left:3px solid var(--mesh);cursor:pointer;user-select:none}
+  .sec.blink{background:linear-gradient(90deg, rgba(63,208,140,.22), rgba(63,208,140,.06) 60%, rgba(0,0,0,0));border-left-color:var(--blink)}
+  .sec.rules{background:linear-gradient(90deg, rgba(197,139,255,.22), rgba(197,139,255,.06) 60%, rgba(0,0,0,0));border-left-color:var(--rules)}
+  .sec.debug{background:linear-gradient(90deg, rgba(154,160,168,.20), rgba(154,160,168,.05) 60%, rgba(0,0,0,0));border-left-color:var(--debug)}
+  .caret{width:10px;color:var(--fg2);font-size:9px}
+  .sec .t{font-weight:600;font-size:12px}
+  .sec .s{margin-left:auto;color:var(--fg2);font-size:11px}
+
+  /* ── 卡片：1px 描边，无圆角（IMGUI 只有矩形）─────────────────── */
+  .card{background:var(--card);border:1px solid var(--line);padding:6px 7px;margin:4px 0}
+  .card.sub{background:var(--card2);margin:3px 0 3px 0}
+
+  /* ── 行语法：固定标签列 56 + 控件列，行高 20，全部左对齐 ──────── */
+  .row{display:flex;align-items:center;height:var(--row);gap:6px}
+  .row.tight{height:var(--rowT)}
+  .ind{width:12px;flex:none}
+  .lbl{width:56px;flex:none;color:var(--fg2);overflow:hidden;white-space:nowrap}
+  .lbl.sm{width:30px}
+  .lbl.xs{width:18px}
+
+  .fld{height:18px;background:#2E2E2E;border:1px solid #262626;color:var(--fg);
+       padding:0 5px;display:flex;align-items:center;font-size:11.5px;min-width:34px}
+  .fld.w42{width:42px;justify-content:flex-end}
+  .fld.w52{width:52px;justify-content:flex-end}
+  .fld.w64{width:64px}
+  .fld.w84{width:84px}
+  .fld.w96{width:96px}
+  .fld.grow{flex:1}
+  .fld .unit{color:var(--fg3);margin-left:3px;font-size:10.5px}
+  .caretbtn{width:16px;height:18px;border:1px solid #262626;background:#333;
+            display:flex;align-items:center;justify-content:center;color:var(--fg2);font-size:9px}
+
+  /* ── 勾选：14px 方块 + 勾 ───────────────────────────────────── */
+  .chk{width:14px;height:14px;border:1px solid #555;background:#2E2E2E;flex:none;
+       display:flex;align-items:center;justify-content:center;font-size:10px;color:#0f0}
+  .chk.on{background:#2F6E4F;border-color:#3E8F66;color:#CFF6E2}
+  .chklab{color:var(--fg);white-space:nowrap}
+
+  /* ── 键名格：文本 + ▾ + 解析状态点 ──────────────────────────── */
+  .key{display:flex;align-items:center;gap:3px;flex:1;min-width:0}
+  .key .fld{flex:1;min-width:0;overflow:hidden;white-space:nowrap}
+  .key .fld.miss{color:#F0B25E;border-color:#6A4B1E}
+  .dot{width:14px;flex:none;font-size:10px;text-align:center}
+  .dot.ok{color:var(--out)} .dot.bad{color:var(--err)}
+
+  /* ── 横条：54×10 + 幽灵刻度 + 数值 ─────────────────────────── */
+  .meter{display:flex;align-items:center;gap:4px;flex:none}
+  .bar{position:relative;width:54px;height:10px;background:rgba(0,0,0,.45);
+       border-top:1px solid rgba(255,255,255,.10);border-bottom:1px solid rgba(255,255,255,.10)}
+  .bar i{position:absolute;top:1px;bottom:1px;display:block}
+  .bar i.fill{background:var(--driver)}
+  .bar i.fill.out{background:var(--out)}
+  .bar i.zero{width:1px;background:rgba(255,255,255,.35);top:0;bottom:0}
+  .bar i.ghost{width:2px;background:rgba(255,255,255,.8);top:2px;bottom:2px}
+  .val{width:38px;text-align:right;color:#EDEFF2;font-variant-numeric:tabular-nums}
+
+  /* ── 迷你滑杆（自绘，替代 Unity Slider：更矮更干净）────────── */
+  .slider{position:relative;height:10px;flex:1;background:rgba(0,0,0,.45);
+          border-top:1px solid rgba(255,255,255,.10);border-bottom:1px solid rgba(255,255,255,.10)}
+  .slider i{position:absolute;top:1px;bottom:1px;background:#4C7FB8}
+  .slider b{position:absolute;top:-2px;bottom:-2px;width:2px;background:#DDE6F2}
+
+  /* ── 分段胶囊（少数选项：值域 / 档位 / 合并方式）───────────── */
+  .seg{display:flex;height:18px;border:1px solid #262626}
+  .seg span{padding:0 8px;display:flex;align-items:center;background:#333;color:var(--fg2);
+            border-right:1px solid #262626;font-size:11px;white-space:nowrap}
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:#3E5C7E;color:#E8F1FA}
+
+  .btn{height:18px;padding:0 9px;background:#3C3C3C;border:1px solid #555;color:var(--fg);
+       display:inline-flex;align-items:center;font-size:11px;white-space:nowrap}
+  .btn.pri{background:#37536F;border-color:#4E7BA6;color:#E9F2FA}
+  .btn.danger{color:#EBB0AC;border-color:#6A3B38}
+  .sep{height:1px;background:var(--sep);margin:5px 0}
+  .cap{color:var(--fg3);font-size:10.5px;padding-left:2px}
+  .fold{color:var(--fg2);font-size:11px;display:flex;align-items:center;gap:4px}
+  .grow{flex:1}
+  .tag{font-size:10px;color:var(--fg3);border:1px solid #4A4A4A;padding:0 4px}
+
+  /* ── 说明栏 ───────────────────────────────────────────────── */
+  .notes{width:330px;color:var(--fg2);font-size:11.5px}
+  .notes h2{font-size:12px;color:var(--fg);margin:16px 0 6px}
+  .notes ul{margin:0;padding-left:16px}
+  .notes li{margin:3px 0}
+  .sw{display:flex;align-items:center;gap:6px;margin:3px 0}
+  .sw i{width:14px;height:14px;display:block;border:1px solid #222}
+  .kbd{border:1px solid #4A4A4A;padding:0 4px;color:var(--fg2);font-size:10.5px}
+</style>
+</head>
+<body>
+<h1>Ho 约束面板 · 视觉规划</h1>
+<p class="hint">左：按下面这套规则重画后的样子（IMGUI 全部可实现：纯色矩形 + 1px 描边 + 文字，无圆角无阴影）。右：设计令牌与规则。</p>
+
+<div class="wrap">
+  <!-- ══════════════════ 面板 ══════════════════ -->
+  <div class="inspector">
+    <div class="title">Ho 眨眼约束
+      <span class="pill on">写入 开</span>
+      <span class="pill on">眨眼 开</span>
+      <span class="grow"></span>
+      <span class="tag">3 网格 · 12 绑定</span>
+    </div>
+
+    <!-- 目标网格 -->
+    <div class="sec"><span class="caret">▾</span><span class="t">目标网格</span><span class="s">3 个蒙皮网格 · 12 个绑定</span></div>
+    <div class="card">
+      <div class="row"><span class="lbl">网格</span><span class="fld grow">Face (3)　Body (2)　Brow (1)</span></div>
+      <div class="row"><span class="grow"></span><span class="btn">收集子级</span><span class="btn">重新解析</span></div>
+      <div class="row"><span class="lbl">更新时机</span><div class="seg"><span class="on">LateUpdate</span><span>Update</span><span>Fixed</span></div></div>
+      <div class="row tight">
+        <span class="chk on">✓</span><span class="chklab">允许写入</span>
+        <span class="lbl sm">阈值</span><span class="fld w42">0.1</span>
+        <span class="lbl sm">合并</span><div class="seg"><span class="on">夹断</span><span>软饱和</span><span>按比例</span></div>
+      </div>
+      <div class="row tight"><span class="chk"></span><span class="chklab">编辑模式求值</span><span class="cap">（会把场景标脏）</span></div>
+    </div>
+
+    <!-- 自动眨眼 -->
+    <div class="sec blink"><span class="caret">▾</span><span class="t">眨眼</span><span class="s">开 · Blink_L / Blink_R</span></div>
+    <div class="card">
+      <div class="row"><span class="grow"></span><span class="btn pri">自动匹配眼睑键</span><span class="btn">＋ 键</span></div>
+      <div class="row">
+        <span class="lbl">眼睑键</span>
+        <span class="key"><span class="fld">Blink_L</span><span class="caretbtn">▾</span><span class="dot ok">●2</span></span>
+        <span class="key"><span class="fld">Blink_R</span><span class="caretbtn">▾</span><span class="dot ok">●2</span></span>
+      </div>
+      <div class="row">
+        <span class="lbl sm">间隔</span><div class="seg"><span class="on">指数</span><span>均匀</span></div>
+        <span class="fld w42">2.0</span><span class="cap">–</span><span class="fld w42">6.0</span><span class="cap">s</span>
+      </div>
+      <div class="row tight">
+        <span class="lbl sm">闭合</span><span class="fld w42">0.08</span>
+        <span class="lbl sm">保持</span><span class="fld w42">0.04</span>
+        <span class="lbl sm">张开</span><span class="fld w42">0.14</span>
+        <span class="meter"><span class="bar"><i class="fill" style="left:0;width:38%"></i></span><span class="val">0.42</span></span>
+      </div>
+      <div class="row tight"><span class="fold">▸ 细节</span><span class="cap">曲线 · 强度 · 双击 · 种子 · 接管判定</span></div>
+    </div>
+
+    <!-- 规则 -->
+    <div class="sec rules"><span class="caret">▾</span><span class="t">规则</span><span class="s">2 条 · 驱动别的键</span></div>
+    <div class="card">
+      <div class="row">
+        <span class="lbl">档位</span>
+        <div class="seg"><span class="on">跟眼</span><span>跟眼+四向</span><span>全套</span></div>
+        <span class="btn">重建</span>
+      </div>
+      <div class="sep"></div>
+
+      <!-- 一条规则 -->
+      <div class="card sub">
+        <div class="row">
+          <span class="caret">▾</span><span class="chklab">果冻 X（往右 − 往左）</span>
+          <span class="grow"></span>
+          <span class="chk on">✓</span><span class="caretbtn">⋮</span>
+        </div>
+        <div class="row">
+          <span class="lbl">驱动</span><div class="seg"><span class="on">形态键</span><span>眨眼</span><span>手动</span></div>
+          <span class="lbl sm">值域</span><div class="seg"><span>单极</span><span class="on">双极</span></div>
+        </div>
+        <div class="row">
+          <span class="lbl xs">正</span><span class="key"><span class="fld">eyeLookInLeft</span><span class="caretbtn">▾</span><span class="dot ok">●1</span></span>
+          <span class="lbl xs">负</span><span class="key"><span class="fld">eyeLookOutLeft</span><span class="caretbtn">▾</span><span class="dot ok">●1</span></span>
+        </div>
+        <div class="row tight">
+          <span class="chk on">✓</span><span class="chklab">果冻</span>
+          <span class="lbl sm">频率</span><span class="fld w42">4.0</span>
+          <span class="lbl sm">阻尼</span><span class="fld w42">0.35</span>
+          <span class="lbl sm">平滑</span><span class="fld w42">0.03</span>
+          <span class="meter"><span class="bar"><i class="zero" style="left:50%"></i><i class="ghost" style="left:70%"></i><i class="fill" style="left:50%;width:16%"></i></span><span class="val">0.31</span></span>
+        </div>
+
+        <div class="sep"></div>
+        <div class="row"><span class="cap">目标 · 这条规则写哪些键</span><span class="grow"></span><span class="btn">＋ 目标</span></div>
+
+        <!-- 一个目标 -->
+        <div class="card sub">
+          <div class="row">
+            <span class="lbl xs">键</span><span class="key"><span class="fld">HL_L_Y</span><span class="caretbtn">▾</span><span class="dot ok">●1</span></span>
+            <span class="meter"><span class="bar"><i class="fill out" style="left:0;width:63%"></i></span><span class="val">63.2</span></span>
+            <span class="fold">▸</span><span class="caretbtn">✕</span>
+          </div>
+          <div class="row tight">
+            <span class="lbl sm">范围</span><div class="seg"><span class="on">全部</span><span>指定</span></div>
+            <span class="lbl sm">混合</span><div class="seg"><span class="on">叠加</span><span>覆盖</span></div>
+            <span class="lbl sm">增益</span><span class="fld w42">1.0</span>
+          </div>
+          <div class="row tight">
+            <span class="lbl sm">ramp</span><div class="seg"><span class="on">直通</span><span>柔跟</span><span>放大</span><span>…</span></div>
+            <span class="lbl sm">强度</span><span class="fld w42">1.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card sub">
+        <div class="row"><span class="caret">▸</span><span class="chklab">果冻 Y（上 − 下）</span><span class="grow"></span><span class="chk on">✓</span><span class="caretbtn">⋮</span></div>
+      </div>
+      <div class="row"><span class="grow"></span><span class="btn">＋ 规则</span></div>
+    </div>
+
+    <!-- 调试 -->
+    <div class="sec debug"><span class="caret">▾</span><span class="t">调试</span><span class="s">网格 3 · 规则 2</span></div>
+    <div class="card">
+      <div class="row tight">
+        <span class="lbl sm">闭眼</span><span class="meter"><span class="bar"><i class="fill" style="left:0;width:42%"></i></span><span class="val">0.42</span></span>
+        <span class="cap">相位：保持</span><span class="grow"></span>
+        <span class="btn">眨一次</span><span class="btn">wink 左</span><span class="btn">重置</span>
+      </div>
+      <div class="sep"></div>
+      <div class="row tight"><span class="chk"></span><span class="chklab">手动驱动</span><span class="cap">不播放时读数不动，除非打开「编辑模式求值」</span></div>
+      <div class="row tight">
+        <span class="lbl">果冻 X</span>
+        <span class="meter"><span class="bar"><i class="zero" style="left:50%"></i><i class="ghost" style="left:70%"></i><i class="fill" style="left:50%;width:16%"></i></span><span class="val">0.31</span></span>
+        <span class="slider"><i style="left:50%;width:15%"></i><b style="left:65%"></b></span>
+        <span class="val">0.31</span>
+      </div>
+      <div class="row tight"><span class="lbl xs">　</span><span class="cap">HL_L_Y</span><span class="meter"><span class="bar"><i class="fill out" style="left:0;width:63%"></i></span><span class="val">63.2</span></span>
+        <span class="cap">Pupil_L</span><span class="meter"><span class="bar"><i class="fill out" style="left:0;width:21%"></i></span><span class="val">21.4</span></span></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ 说明 ══════════════════ -->
+  <div class="notes">
+    <h2>为什么之前难看</h2>
+    <ul>
+      <li>用 Unity 默认布局流：<b>每行控件宽度不一致</b> → 左右参差不齐，看着就乱。</li>
+      <li>默认 label 吃 40% 宽度，数字框被拉长；横条又铺满整行 → 一个标量占掉一行。</li>
+      <li>没有视觉层次：标题、参数、读数、说明全是同一号灰字。</li>
+    </ul>
+
+    <h2>这套规则</h2>
+    <ul>
+      <li><b>固定网格</b>：行高 20（紧凑 18），标签列固定 56 / 30 / 18 三档，控件列从同一 x 起算 → 全面板左对齐。</li>
+      <li><b>自绘控件</b>：数字格 42px 定宽带单位后缀；勾选 14px 方块；少数选项用<b>分段胶囊</b>（直接点，不用开下拉）；滑杆 10px 矮条；横条 54×10 带中轴与幽灵刻度。</li>
+      <li><b>层次</b>：分区头 28px 主色淡染 + 左侧 3px 色条；卡片 1px 描边；参数=主字色，单位/说明=弱字色；状态用颜色点而不是文字。</li>
+      <li><b>不浪费</b>：不常用的收进「细节」；每块默认折叠，折叠时只留摘要（摘要里就有键名和开关状态）。</li>
+    </ul>
+
+    <h2>色板</h2>
+    <div class="sw"><i style="background:#4A9BFF"></i>网格 / 分区强调</div>
+    <div class="sw"><i style="background:#3FD08C"></i>眨眼</div>
+    <div class="sw"><i style="background:#C58BFF"></i>规则</div>
+    <div class="sw"><i style="background:#9AA0A8"></i>调试</div>
+    <div class="sw"><i style="background:#5CB4F5"></i>驱动读数</div>
+    <div class="sw"><i style="background:#6BD68F"></i>输出读数</div>
+    <div class="sw"><i style="background:#E8A33D"></i>键缺失 / 提醒</div>
+    <div class="sw"><i style="background:#E5534B"></i>错误</div>
+
+    <h2>实现方式</h2>
+    <ul>
+      <li>新增 <span class="kbd">HoConstraintEditorTheme</span>（令牌：尺寸/颜色/字体样式）。</li>
+      <li>新增 <span class="kbd">HoConstraintEditorLayout</span>（行游标、列计算、卡片、分隔线）。</li>
+      <li>新增自绘控件：<span class="kbd">Segmented</span> <span class="kbd">NumberField</span> <span class="kbd">MiniSlider</span> <span class="kbd">Toggle</span> <span class="kbd">Meter</span> <span class="kbd">KeyField</span> <span class="kbd">Dropdown</span>。</li>
+      <li>眨眼面板整体改写成 rect 驱动；注视 / 摆锤面板后续套同一套组件。</li>
+    </ul>
+    <p class="cap">注：IMGUI 画不了圆角/阴影，上面所有元素都是矩形 + 描边 + 纯色，所见即所得。</p>
+  </div>
+</div>
+</body>
+</html>
