@@ -1648,7 +1648,7 @@ namespace Hollow.HoUnityTools.Constraints
             float error = Mathf.Abs(GazeErrorYaw) + Mathf.Abs(GazeErrorPitch);
             string text =
                 "Ho 注视　" + (targetMode == HoLookAtMode.Mouse ? "鼠标" : "物体")
-                + (targetMode == HoLookAtMode.Mouse && !hasPointerScreen ? "（指针不可用→按丢失处理）" : string.Empty)
+                + (targetMode == HoLookAtMode.Mouse && !hasPointerScreen ? "（指针不可用）" : string.Empty)
                 + "　总 " + TotalAngles.yaw.ToString("0.0") + "°/" + TotalAngles.pitch.ToString("0.0") + "°"
                 + "　头估计 " + state.headEstimateYaw.ToString("0.0") + "°/" + state.headEstimatePitch.ToString("0.0") + "°"
                 + "　眼 " + state.smoothedEyeYaw.ToString("0.0") + "°/" + state.smoothedEyePitch.ToString("0.0") + "°"
