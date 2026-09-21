@@ -154,17 +154,17 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("高光跟眼"))
+            if (GUILayout.Button(new GUIContent("高光跟眼", "加 2 条双极规则（果冻 X：往右−往左，Y：上−下），驱动键自动取模型上的凝视键（找不到就留空）。\n目标键留空，由你在规则里点 ▾ 选高光键；参数 X=直通/1.0，Y 同。")) )
             {
                 HoBlinkPresetActions.ApplyGazeJelly(constraint, serializedObject);
             }
 
-            if (GUILayout.Button("眼仁形变"))
+            if (GUILayout.Button(new GUIContent("眼仁形变", "同上 2 条规则，但更慢更软（3Hz / ζ0.35 / 平滑 0.05），ramp = 缓入 0.8。\n目标键同样留空。")) )
             {
                 HoBlinkPresetActions.ApplyPupilJelly(constraint, serializedObject);
             }
 
-            if (GUILayout.Button("眨眼压高光"))
+            if (GUILayout.Button(new GUIContent("眨眼压高光", "加 1 条规则：驱动 = 自动眨眼（不需要键），目标留空、混合 = 覆盖、ramp = 放大。\n目标键由你选（一般是高光/眼白那类键）。")) )
             {
                 HoBlinkPresetActions.ApplyBlinkJelly(constraint, serializedObject);
             }

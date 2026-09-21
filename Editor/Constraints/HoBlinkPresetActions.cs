@@ -95,27 +95,38 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             Rebuild(constraint);
         }
 
-        /// <summary>高光跟眼：X/Y 两条双极规则 + 一个空目标（用户填高光键）。</summary>
+        /// <summary>
+        /// 高光跟眼：只加 **两条** 双极规则（X：往右 − 往左，Y：上 − 下），驱动键取模型上真实存在的凝视键，
+        /// 目标键**留空**由用户填高光键。找不到凝视键时驱动键留空、不硬填不存在的名字。
+        /// </summary>
         public static void ApplyGazeJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
-            ApplyGazeRules(constraint, serializedObject, true);
-            AddEmptyTargetsToLastRules(serializedObject, 2, HoShapeKeyRampPreset.Direct, 1.0f, HoShapeKeyBlendMode.Additive);
-            serializedObject.ApplyModifiedProperties();
-            Rebuild(constraint);
+            AddJellyGazeRules(
+                constraint,
+                serializedObject,
+                "高光跟眼",
+                HoShapeKeyRampPreset.Direct,
+                1.0f,
+                4.0f,
+                0.35f,
+                0.03f);
         }
 
-        /// <summary>眼仁形变：X/Y 双极规则，慢一点、缓入。</summary>
+        /// <summary>眼仁形变：同上两条规则，慢一点、缓入、幅度小一点。</summary>
         public static void ApplyPupilJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
-            ApplyGazeRules(constraint, serializedObject, true);
-            SerializedProperty rules = serializedObject.FindProperty("rules");
-            SetJellyOnLastRules(rules, 2, 3.0f, 0.35f, 0.05f);
-            AddEmptyTargetsToLastRules(serializedObject, 2, HoShapeKeyRampPreset.EaseIn, 0.8f, HoShapeKeyBlendMode.Additive);
-            serializedObject.ApplyModifiedProperties();
-            Rebuild(constraint);
+            AddJellyGazeRules(
+                constraint,
+                serializedObject,
+                "眼仁形变",
+                HoShapeKeyRampPreset.EaseIn,
+                0.8f,
+                3.0f,
+                0.35f,
+                0.05f);
         }
 
-        /// <summary>眨眼压高光：AutoBlink 驱动 + 放大 ramp 的覆盖目标。</summary>
+        /// <summary>眨眼压高光：AutoBlink 驱动（不需要键）+ 一个空目标（覆盖 + 放大）。</summary>
         public static void ApplyBlinkJelly(HoBlinkConstraint constraint, SerializedObject serializedObject)
         {
             SerializedProperty rules = serializedObject.FindProperty("rules");
@@ -127,37 +138,72 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Override;
             serializedObject.ApplyModifiedProperties();
             Rebuild(constraint);
+            Debug.Log(
+                "[HoBlinkConstraint] 眨眼压高光：加了 1 条规则，驱动 = 自动眨眼（不需要键）；"
+                + "目标键留空 —— 在规则里点 ▾ 选高光键。",
+                constraint);
         }
 
-        private static void SetJellyOnLastRules(SerializedProperty rules, int count, float frequency, float dampingRatio, float smoothing)
-        {
-            int from = Mathf.Max(0, rules.arraySize - count);
-            for (int i = from; i < rules.arraySize; i++)
-            {
-                SerializedProperty rule = rules.GetArrayElementAtIndex(i);
-                rule.FindPropertyRelative("frequency").floatValue = frequency;
-                rule.FindPropertyRelative("dampingRatio").floatValue = dampingRatio;
-                rule.FindPropertyRelative("inputSmoothing").floatValue = smoothing;
-            }
-        }
-
-        private static void AddEmptyTargetsToLastRules(
+        /// <summary>
+        /// 果冻用的两条双极规则。驱动键优先"相对头"的看左/看右，其次"相对眼球"的 In/Out；
+        /// **找不到就留空**（不硬填内置表里的名字），由用户在规则里手填。
+        /// </summary>
+        private static void AddJellyGazeRules(
+            HoBlinkConstraint constraint,
             SerializedObject serializedObject,
-            int count,
+            string presetName,
             HoShapeKeyRampPreset rampPreset,
             float intensity,
-            HoShapeKeyBlendMode blendMode)
+            float frequency,
+            float dampingRatio,
+            float smoothing)
         {
+            serializedObject.ApplyModifiedProperties();
             SerializedProperty rules = serializedObject.FindProperty("rules");
-            int from = Mathf.Max(0, rules.arraySize - count);
-            for (int i = from; i < rules.arraySize; i++)
+
+            string positiveX = FirstNotEmpty(
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeRight, HoBlinkSide.Both, false),
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeIn, HoBlinkSide.Left, false));
+            string negativeX = FirstNotEmpty(
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeLeft, HoBlinkSide.Both, false),
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeOut, HoBlinkSide.Left, false));
+            string positiveY = FirstNotEmpty(
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Both, false),
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeUp, HoBlinkSide.Left, false));
+            string negativeY = FirstNotEmpty(
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Both, false),
+                FindKeyOrPreferred(constraint, HoBlinkKeySemantic.GazeDown, HoBlinkSide.Left, false));
+
+            AddRule(rules, "果冻 X（往右 − 往左）", HoBlinkDriverKind.ShapeKey, positiveX, negativeX, HoBlinkDriverRange.Bipolar, false, frequency, dampingRatio, smoothing);
+            AddEmptyTarget(rules, rampPreset, intensity);
+
+            AddRule(rules, "果冻 Y（上 − 下）", HoBlinkDriverKind.ShapeKey, positiveY, negativeY, HoBlinkDriverRange.Bipolar, false, frequency, dampingRatio, smoothing);
+            AddEmptyTarget(rules, rampPreset, intensity);
+
+            serializedObject.ApplyModifiedProperties();
+            Rebuild(constraint);
+
+            Debug.Log(
+                "[HoBlinkConstraint] " + presetName + "：加了 2 条规则（果冻 X / 果冻 Y）。\n"
+                + "· 驱动键：往右 = " + Describe(positiveX) + "，往左 = " + Describe(negativeX)
+                + "，上 = " + Describe(positiveY) + "，下 = " + Describe(negativeY) + "\n"
+                + "· 目标键留空 —— 在规则里点 ▾ 选你的高光/眼仁键。",
+                constraint);
+
+            static string Describe(string keyName)
             {
-                SerializedProperty targets = rules.GetArrayElementAtIndex(i).FindPropertyRelative("targets");
-                SerializedProperty target = AddTarget(targets, string.Empty, HoBlinkSide.Both);
-                target.FindPropertyRelative("rampPreset").enumValueIndex = (int)rampPreset;
-                target.FindPropertyRelative("rampIntensity").floatValue = intensity;
-                target.FindPropertyRelative("blendMode").enumValueIndex = (int)blendMode;
+                return string.IsNullOrEmpty(keyName) ? "（模型上没有这类键，留空待填）" : keyName;
             }
+        }
+
+        /// <summary>给最后一条规则加一个空目标（键名留空，等用户填）。</summary>
+        private static void AddEmptyTarget(SerializedProperty rules, HoShapeKeyRampPreset rampPreset, float intensity)
+        {
+            SerializedProperty targets = rules.GetArrayElementAtIndex(rules.arraySize - 1).FindPropertyRelative("targets");
+            SerializedProperty target = AddTarget(targets, string.Empty, HoBlinkSide.Both);
+            target.FindPropertyRelative("rampPreset").enumValueIndex = (int)rampPreset;
+            target.FindPropertyRelative("rampIntensity").floatValue = intensity;
+            target.FindPropertyRelative("blendMode").enumValueIndex = (int)HoShapeKeyBlendMode.Additive;
         }
 
         private static SerializedProperty AddRule(
