@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hollow.HoUnityTools.FaceTracking;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.Constraints
@@ -379,7 +380,7 @@ namespace Hollow.HoUnityTools.Constraints
                     bindings[i].ExternalBase = remembered[r].ExternalBase;
                     bindings[i].BaseValue = remembered[r].BaseValue;
                     bindings[i].LastWritten = remembered[r].LastWritten;
-                    bindings[i].EverWritten = true;
+                    bindings[i].EverWritten = !HoFaceOutputOwnership.IsReserved(mesh, bindings[i].KeyIndex);
                     remembered[r] = default;   // 已被认领
                     break;
                 }
@@ -393,7 +394,8 @@ namespace Hollow.HoUnityTools.Constraints
                     continue;
                 }
 
-                mesh.SetBlendShapeWeight(remembered[r].KeyIndex, Mathf.Clamp(remembered[r].ExternalBase, 0.0f, 100.0f));
+                if (!HoFaceOutputOwnership.IsReserved(mesh, remembered[r].KeyIndex))
+                    mesh.SetBlendShapeWeight(remembered[r].KeyIndex, Mathf.Clamp(remembered[r].ExternalBase, 0.0f, 100.0f));
             }
 
             remembered.Clear();
@@ -423,7 +425,8 @@ namespace Hollow.HoUnityTools.Constraints
                 }
 
                 float value = Mathf.Clamp(bindings[i].ExternalBase, 0.0f, 100.0f);
-                mesh.SetBlendShapeWeight(bindings[i].KeyIndex, value);
+                if (!HoFaceOutputOwnership.IsReserved(mesh, bindings[i].KeyIndex))
+                    mesh.SetBlendShapeWeight(bindings[i].KeyIndex, value);
                 bindings[i].LastWritten = value;
                 bindings[i].EverWritten = false;
                 bindings[i].Sum = 0.0f;
@@ -552,6 +555,12 @@ namespace Hollow.HoUnityTools.Constraints
 
             for (int i = 0; i < bindings.Length; i++)
             {
+                if (HoFaceOutputOwnership.IsReserved(meshes[bindings[i].MeshIndex], bindings[i].KeyIndex))
+                {
+                    // Keep read access for jelly/highlight rules, but relinquish writes and cleanup.
+                    bindings[i].EverWritten = false;
+                    continue;
+                }
                 float baseValue = bindings[i].BaseValue;
                 float sum = bindings[i].Sum;
                 float merged = MergeContribution(sum, baseValue);
