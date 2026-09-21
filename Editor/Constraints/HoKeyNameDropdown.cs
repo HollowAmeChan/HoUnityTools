@@ -7,8 +7,10 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.Constraints
 {
     /// <summary>
-    /// 键名下拉：内置键名表（按语义分组，显示 `键名 (规范)`）+ 当前网格上实际存在但表里没有的键。
-    /// 选中后把键名写进目标 SerializedProperty；文本框永远可以直接改。
+    /// 键名下拉。**只列事实，不做猜测**：
+    /// 1. 网格上真实存在的键（按名字排序，标出它出现在几个网格上、有没有被别的目标用着）；
+    /// 2. 内置键名表按语义分组，作为"标准命名"的参考，网格上没有的会标出来。
+    /// 选中后把键名写进 SerializedProperty；文本框永远可以直接改。
     /// </summary>
     internal sealed class HoKeyNameDropdown : AdvancedDropdown
     {
@@ -25,24 +27,77 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private readonly IHoShapeKeyMeshProvider meshes;
         private readonly SerializedProperty property;
+        private readonly HashSet<string> usedElsewhere;
 
-        private HoKeyNameDropdown(IHoShapeKeyMeshProvider meshes, SerializedProperty property, AdvancedDropdownState state)
+        private HoKeyNameDropdown(IHoShapeKeyMeshProvider meshes, SerializedProperty property, HashSet<string> usedElsewhere, AdvancedDropdownState state)
             : base(state)
         {
             this.meshes = meshes;
             this.property = property;
-            minimumSize = new Vector2(280.0f, 420.0f);
+            this.usedElsewhere = usedElsewhere;
+            minimumSize = new Vector2(300.0f, 460.0f);
         }
 
-        public static void Show(Rect rect, IHoShapeKeyMeshProvider meshes, SerializedProperty property)
+        /// <param name="usedElsewhere">别处已经用掉的键（归一化后的名字），用来标「已在用」。</param>
+        public static void Show(Rect rect, IHoShapeKeyMeshProvider meshes, SerializedProperty property, HashSet<string> usedElsewhere = null)
         {
-            HoKeyNameDropdown dropdown = new HoKeyNameDropdown(meshes, property, new AdvancedDropdownState());
+            HoKeyNameDropdown dropdown = new HoKeyNameDropdown(meshes, property, usedElsewhere, new AdvancedDropdownState());
             dropdown.Show(rect);
         }
 
         protected override AdvancedDropdownItem BuildRoot()
         {
             AdvancedDropdownItem root = new AdvancedDropdownItem("形态键");
+
+            // ① 网格上真实存在的键（去重 + 计数），这是用户真正要选的东西
+            List<string> names = new List<string>();
+            Dictionary<string, int> meshCounts = new Dictionary<string, int>();
+            for (int i = 0; i < meshes.MeshCount; i++)
+            {
+                SkinnedMeshRenderer renderer = meshes.GetMesh(i);
+                Mesh mesh = renderer != null ? renderer.sharedMesh : null;
+                if (mesh == null)
+                {
+                    continue;
+                }
+
+                HashSet<string> onThisMesh = new HashSet<string>();
+                for (int k = 0; k < mesh.blendShapeCount; k++)
+                {
+                    string name = mesh.GetBlendShapeName(k);
+                    if (string.IsNullOrEmpty(name) || !onThisMesh.Add(name))
+                    {
+                        continue;
+                    }
+
+                    if (!meshCounts.ContainsKey(name))
+                    {
+                        meshCounts[name] = 0;
+                        names.Add(name);
+                    }
+
+                    meshCounts[name]++;
+                }
+            }
+
+            names.Sort(System.StringComparer.OrdinalIgnoreCase);
+            if (names.Count > 0)
+            {
+                AdvancedDropdownItem group = new AdvancedDropdownItem("网格上的键（" + names.Count + "）");
+                for (int i = 0; i < names.Count; i++)
+                {
+                    string name = names[i];
+                    string suffix = meshCounts[name] > 1 ? "   · " + meshCounts[name] + " 个网格" : string.Empty;
+                    if (usedElsewhere != null && usedElsewhere.Contains(HoShapeKeyResolver.Normalize(name)))
+                    {
+                        suffix += "   · 已在用";
+                    }
+
+                    group.AddChild(new KeyItem(name + suffix, name));
+                }
+
+                root.AddChild(group);
+            }
 
             AddSemanticGroup(root, "眼睑 · 闭合", HoBlinkKeySemantic.EyelidClosed);
             AddSemanticGroup(root, "眼睑 · 眯眼", HoBlinkKeySemantic.EyelidSquint);
@@ -53,47 +108,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             AddSemanticGroup(root, "凝视 · 右", HoBlinkKeySemantic.GazeRight);
             AddSemanticGroup(root, "凝视 · 内（ARkit/PICO 族）", HoBlinkKeySemantic.GazeIn);
             AddSemanticGroup(root, "凝视 · 外（ARkit/PICO 族）", HoBlinkKeySemantic.GazeOut);
-
-            List<HoBlinkKeyEntry> entries = new List<HoBlinkKeyEntry>(HoBlinkKeyTable.Entries);
-            List<string> meshOnly = new List<string>();
-            HashSet<string> known = new HashSet<string>();
-            for (int i = 0; i < entries.Count; i++)
-            {
-                known.Add(HoShapeKeyResolver.Normalize(entries[i].Name));
-            }
-
-            for (int i = 0; i < meshes.MeshCount; i++)
-            {
-                SkinnedMeshRenderer mesh = meshes.GetMesh(i);
-                Mesh sharedMesh = mesh != null ? mesh.sharedMesh : null;
-                if (sharedMesh == null)
-                {
-                    continue;
-                }
-
-                for (int k = 0; k < sharedMesh.blendShapeCount; k++)
-                {
-                    string name = sharedMesh.GetBlendShapeName(k);
-                    if (known.Contains(HoShapeKeyResolver.Normalize(name)) || meshOnly.Contains(name))
-                    {
-                        continue;
-                    }
-
-                    meshOnly.Add(name);
-                }
-            }
-
-            if (meshOnly.Count > 0)
-            {
-                AdvancedDropdownItem group = new AdvancedDropdownItem("网格上的其它键（自定义）");
-                meshOnly.Sort();
-                for (int i = 0; i < meshOnly.Count; i++)
-                {
-                    group.AddChild(new KeyItem(meshOnly[i], meshOnly[i]));
-                }
-
-                root.AddChild(group);
-            }
 
             if (root.children == null || !root.children.GetEnumerator().MoveNext())
             {

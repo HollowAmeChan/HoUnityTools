@@ -330,7 +330,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         // ══════════════════════════════════════════════════════════════
         private void DrawRulesSection(HoBlinkConstraint constraint)
         {
-            string summary = rules.arraySize + " 条 · 驱动别的键";
+            string summary = rules.arraySize + " 条规则" + PendingKeySummary();
             if (!HoConstraintEditorControls.Section(ref rulesExpanded, "规则", summary, HoConstraintEditorTheme.AccentRules))
             {
                 return;
@@ -338,44 +338,24 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             using (HoConstraintEditorControls.Card())
             {
-                // 一排按钮 = 一排预设：点一下就**追加**一份规则，并立刻按角色自动接上目标键。
                 using (HoConstraintEditorControls.Row())
                 {
                     if (HoConstraintEditorControls.Button(
-                        "＋ 跟眼",
-                        "追加「果冻 X（往右 − 往左）」+「果冻 Y（上 − 下）」两条双极规则，驱动键从网格上自动抓。\n"
-                        + "这是果冻眼的主路：高光 / 眼仁跟着视线甩。再点一次会再来一份。"))
+                        "＋ 四向注视",
+                        "追加「注视 上 / 下 / 左 / 右」四条规则：读凝视键，跟随时自带阻尼与回弹。\n"
+                        + "目标键留空 —— 在每条目标的第一格点 ▾，从网格上真实存在的键里选。"))
                     {
-                        HoBlinkPresetActions.ApplyGazeJelly(constraint, serializedObject);
+                        HoBlinkPresetActions.ApplyFourWayGaze(constraint, serializedObject);
                         serializedObject.Update();
                     }
 
-                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Gap(6.0f);
                     if (HoConstraintEditorControls.Button(
-                        "＋ 四向凝视",
-                        "追加「凝视 上 / 下 / 左 / 右」四条单极规则：每个方向有独立键的模型用这个。目标键留空。"))
+                        "＋ 眨眼追踪",
+                        "追加一条「眨眼追踪」规则 + 四个目标（压扁 / 拉宽 / 下移 / 眼仁压一下）。\n"
+                        + "驱动是眨眼加速度：组件自己从眨眼曲线算并归一化，不需要任何键。大部分情况下只开这一条就够。", true))
                     {
-                        HoBlinkPresetActions.ApplyGazeRules(constraint, serializedObject, false);
-                        serializedObject.Update();
-                    }
-
-                    HoConstraintEditorControls.Gap(4.0f);
-                    if (HoConstraintEditorControls.Button(
-                        "＋ 眨眼",
-                        "追加眨眼路径：「眨眼压高光」（闭眼量驱动：压扁 / 拉宽 / 下移）+「眨眼速度弹」（眼皮速度驱动：眼仁弹一下）。\n"
-                        + "不需要任何驱动键，果冻眼里最出效果的一路。"))
-                    {
-                        HoBlinkPresetActions.ApplyBlinkJelly(constraint, serializedObject);
-                        serializedObject.Update();
-                    }
-
-                    HoConstraintEditorControls.Gap(4.0f);
-                    if (HoConstraintEditorControls.Button(
-                        "＋ 左右眼",
-                        "追加「凝视 X（往右 − 往左）」+「凝视 Y（上 − 下）」两条双极规则，用分左右眼的凝视键。\n"
-                        + "按模型上的族自动选：有 In/Out（ARKit / PICO）就用内外族，否则用相对头的 Left/Right。"))
-                    {
-                        HoBlinkPresetActions.ApplyEyeGazeRules(constraint, serializedObject);
+                        HoBlinkPresetActions.ApplyBlinkTrack(constraint, serializedObject);
                         serializedObject.Update();
                     }
                 }
@@ -391,11 +371,9 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Flex();
-                    if (HoConstraintEditorControls.Button("＋ 规则"))
+                    if (HoConstraintEditorControls.Button("＋ 空规则", "加一条空白规则：默认读形态键。"))
                     {
-                        rules.InsertArrayElementAtIndex(rules.arraySize);
-                        ruleFoldouts.Add(true);
-                        ruleDetails.Add(false);
+                        AddEmptyRule();
                     }
                 }
             }
@@ -417,6 +395,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SerializedProperty dampingRatio = rule.FindPropertyRelative("dampingRatio");
             SerializedProperty inputSmoothing = rule.FindPropertyRelative("inputSmoothing");
             SerializedProperty maxStep = rule.FindPropertyRelative("maxStep");
+            SerializedProperty driverGain = rule.FindPropertyRelative("driverGain");
+            SerializedProperty blinkEnvelope = rule.FindPropertyRelative("blinkEnvelope");
             SerializedProperty targets = rule.FindPropertyRelative("targets");
 
             using (HoConstraintEditorControls.Card(true))
@@ -441,7 +421,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 {
                     using (HoConstraintEditorControls.Indent())
                     {
-                        DrawRuleBody(constraint, index, driverKind, positiveKey, negativeKey, driverRange, invert, readWritten, jellyEnabled, frequency, dampingRatio, inputSmoothing, maxStep, targets);
+                        DrawRuleBody(constraint, index, driverKind, positiveKey, negativeKey, driverRange, invert, readWritten, jellyEnabled, frequency, dampingRatio, inputSmoothing, maxStep, driverGain, blinkEnvelope, targets);
                     }
                 }
             }
@@ -461,56 +441,65 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SerializedProperty dampingRatio,
             SerializedProperty inputSmoothing,
             SerializedProperty maxStep,
+            SerializedProperty driverGain,
+            SerializedProperty blinkEnvelope,
             SerializedProperty targets)
         {
+            // 界面上没有"模式"开关：规则是哪种由它创建时决定，这里只显示这个信号真正需要的字段。
+            HoBlinkDriverKind kind = (HoBlinkDriverKind)driverKind.enumValueIndex;
+            bool keyDriven = kind == HoBlinkDriverKind.ShapeKey;
+            bool blinkDriven = kind == HoBlinkDriverKind.BlinkAccel || kind == HoBlinkDriverKind.BlinkSpeed;
+            float driverMin = keyDriven && driverRange.enumValueIndex == (int)HoBlinkDriverRange.Bipolar ? -1.0f : 0.0f;
+
             using (HoConstraintEditorControls.Row())
             {
-                HoConstraintEditorControls.Label("驱动", HoConstraintEditorTheme.LabelWidth, "这条规则的信号从哪来。");
-                driverKind.enumValueIndex = Segment(driverKind, "形态键：读键值；眨眼：用自动眨眼当信号；手动：调试滑杆。");
-                HoConstraintEditorControls.Gap();
-                HoConstraintEditorControls.Label("值域", HoConstraintEditorTheme.LabelWidthSm, "单极 0..1，或双极 −1..1（右−左 这样的合成）。");
-                driverRange.enumValueIndex = Segment(driverRange, "单极 0..1（上/下这类单键），双极 −1..1（右−左、上−下）。");
-            }
+                if (keyDriven)
+                {
+                    HoConstraintEditorControls.Label("键", HoConstraintEditorTheme.LabelWidthXs, "读哪个形态键当信号。");
+                    DrawKeyField(constraint, positiveKey);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("反向键", 46.0f, "想让「往左 − 往右」这样的两根键合成一根双极信号时填这里；留空就是单极。");
+                    DrawKeyField(constraint, negativeKey);
+                    HoConstraintEditorControls.Gap(4.0f);
 
-            using (new EditorGUI.DisabledScope((HoBlinkDriverKind)driverKind.enumValueIndex != HoBlinkDriverKind.ShapeKey))
-            using (HoConstraintEditorControls.Row())
-            {
-                HoConstraintEditorControls.Label("正", HoConstraintEditorTheme.LabelWidthXs, "值 > 0 的一侧读哪个键（单极就是它自己）。");
-                DrawKeyField(constraint, positiveKey);
+                    // 单极 / 双极不给开关：填了反向键就是双极，没填就是单极
+                    driverRange.enumValueIndex = string.IsNullOrEmpty(negativeKey.stringValue)
+                        ? (int)HoBlinkDriverRange.Unipolar
+                        : (int)HoBlinkDriverRange.Bipolar;
+                }
 
-                HoConstraintEditorControls.Gap(4.0f);
-                HoConstraintEditorControls.Label("负", HoConstraintEditorTheme.LabelWidthXs, "值 < 0 的一侧读哪个键；留空就是单极。");
-                DrawKeyField(constraint, negativeKey);
-
-                HoConstraintEditorControls.Gap(4.0f);
                 HoConstraintEditorControls.MeterRow(
                     constraint.GetDriverValue(index),
-                    (HoBlinkDriverRange)driverRange.enumValueIndex == HoBlinkDriverRange.Bipolar ? -1.0f : 0.0f,
+                    keyDriven && driverRange.enumValueIndex == (int)HoBlinkDriverRange.Bipolar ? -1.0f : 0.0f,
                     1.0f,
                     HoConstraintEditorTheme.AccentDriver,
                     constraint.GetDriverValue(index).ToString("0.00"),
-                    null,
+                    blinkDriven ? "信号" : null,
                     constraint.GetDriverRawValue(index),
                     DriverMeterTooltip);
             }
 
             using (HoConstraintEditorControls.Row(true))
             {
-                jellyEnabled.boolValue = HoConstraintEditorControls.Toggle(
-                    "果冻",
-                    jellyEnabled.boolValue,
-                    "打开后驱动值过一遍弹簧-阻尼：才有超调与回弹。");
+                HoConstraintEditorControls.Label("跟随", 40.0f, "弹簧频率 Hz：跟得多快。注视一般 3–6 Hz，眨眼要更快。");
+                frequency.floatValue = HoConstraintEditorControls.NumberField(frequency.floatValue, "Hz");
                 HoConstraintEditorControls.Gap();
-                using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
+                HoConstraintEditorControls.Label("回弹", 40.0f, "阻尼比：0.2–0.35 有明显回弹，1 是临界阻尼完全不超调。");
+                dampingRatio.floatValue = HoConstraintEditorControls.NumberField(dampingRatio.floatValue);
+                HoConstraintEditorControls.Gap();
+
+                if (blinkDriven)
                 {
-                    HoConstraintEditorControls.Label("频率", HoConstraintEditorTheme.LabelWidthSm, "弹簧频率 Hz：高光跟眼一般 3–6 Hz。");
-                    frequency.floatValue = HoConstraintEditorControls.NumberField(frequency.floatValue);
+                    HoConstraintEditorControls.Label("强度", HoConstraintEditorTheme.LabelWidthSm, "信号的整体缩放。");
+                    driverGain.floatValue = HoConstraintEditorControls.NumberField(driverGain.floatValue);
                     HoConstraintEditorControls.Gap();
-                    HoConstraintEditorControls.Label("阻尼", HoConstraintEditorTheme.LabelWidthSm, "0.2–0.35 有明显果冻感，1 是临界阻尼不超调。");
-                    dampingRatio.floatValue = HoConstraintEditorControls.NumberField(dampingRatio.floatValue);
-                    HoConstraintEditorControls.Gap();
-                    HoConstraintEditorControls.Label("平滑", HoConstraintEditorTheme.LabelWidthSm, "输入平滑（秒）：压抖动。");
-                    inputSmoothing.floatValue = HoConstraintEditorControls.NumberField(inputSmoothing.floatValue);
+                    HoConstraintEditorControls.Label("包络", 40.0f, "把眨眼加速度的尖峰摊成「瞬间起峰 + 按这个时长衰减」的小鼓包；太短弹簧吃不到劲，太长会糊。");
+                    blinkEnvelope.floatValue = HoConstraintEditorControls.NumberField(blinkEnvelope.floatValue, "s");
+                }
+                else
+                {
+                    HoConstraintEditorControls.Label("平滑", 40.0f, "输入平滑（秒）：压抖动。");
+                    inputSmoothing.floatValue = HoConstraintEditorControls.NumberField(inputSmoothing.floatValue, "s");
                 }
             }
 
@@ -526,10 +515,14 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 {
                     invert.boolValue = HoConstraintEditorControls.Toggle("反相", invert.boolValue, "读到的值取负。");
                     HoConstraintEditorControls.Gap();
-                    readWritten.boolValue = HoConstraintEditorControls.Toggle(
-                        "读本帧已写值",
-                        readWritten.boolValue,
-                        "默认读基准快照（切断自反馈）；要做链式联动才打开。");
+                    using (new EditorGUI.DisabledScope(!keyDriven))
+                    {
+                        readWritten.boolValue = HoConstraintEditorControls.Toggle(
+                            "读本帧已写值",
+                            readWritten.boolValue,
+                            "默认读基准快照（切断自反馈）；要做链式联动才打开。");
+                    }
+
                     HoConstraintEditorControls.Gap();
                     using (new EditorGUI.DisabledScope(!jellyEnabled.boolValue))
                     {
@@ -577,12 +570,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             }
 
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("按名字重接空目标键"), false, () =>
-            {
-                HoBlinkPresetActions.AutoMatchTargetKeys((HoBlinkConstraint)target, serializedObject, index, "手动重接这条规则");
-                serializedObject.Update();
-                Repaint();
-            });
             menu.AddItem(new GUIContent("删除"), false, () =>
             {
                 rules.DeleteArrayElementAtIndex(index);
@@ -600,6 +587,34 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             Repaint();
         }
 
+        /// <summary>
+        /// 加一条空白规则。`InsertArrayElementAtIndex` 会复制上一个元素，
+        /// 所以标签、驱动、键、目标都必须显式清掉 —— 否则新规则会顶着上一条的名字和四个目标出现。
+        /// </summary>
+        private void AddEmptyRule()
+        {
+            rules.InsertArrayElementAtIndex(rules.arraySize);
+            SerializedProperty rule = rules.GetArrayElementAtIndex(rules.arraySize - 1);
+            rule.FindPropertyRelative("label").stringValue = string.Empty;
+            rule.FindPropertyRelative("enabled").boolValue = true;
+            rule.FindPropertyRelative("driverKind").enumValueIndex = (int)HoBlinkDriverKind.ShapeKey;
+            rule.FindPropertyRelative("positiveKey").stringValue = string.Empty;
+            rule.FindPropertyRelative("negativeKey").stringValue = string.Empty;
+            rule.FindPropertyRelative("driverRange").enumValueIndex = (int)HoBlinkDriverRange.Unipolar;
+            rule.FindPropertyRelative("invert").boolValue = false;
+            rule.FindPropertyRelative("readWrittenThisFrame").boolValue = false;
+            rule.FindPropertyRelative("jellyEnabled").boolValue = true;
+            rule.FindPropertyRelative("frequency").floatValue = 4.0f;
+            rule.FindPropertyRelative("dampingRatio").floatValue = 0.35f;
+            rule.FindPropertyRelative("inputSmoothing").floatValue = 0.03f;
+            rule.FindPropertyRelative("maxStep").floatValue = 0.016f;
+            rule.FindPropertyRelative("driverGain").floatValue = 1.0f;
+            rule.FindPropertyRelative("blinkEnvelope").floatValue = 0.025f;
+            rule.FindPropertyRelative("targets").ClearArray();
+            ruleFoldouts.Add(true);
+            ruleDetails.Add(false);
+        }
+
         private string BuildRuleTitle(SerializedProperty rule)
         {
             SerializedProperty label = rule.FindPropertyRelative("label");
@@ -613,18 +628,40 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             SerializedProperty negativeKey = rule.FindPropertyRelative("negativeKey");
 
             HoBlinkDriverKind kind = (HoBlinkDriverKind)driverKind.enumValueIndex;
-            if (kind == HoBlinkDriverKind.AutoBlink)
+            if (kind != HoBlinkDriverKind.ShapeKey)
             {
-                return "自动眨眼";
+                return driverKind.enumDisplayNames[driverKind.enumValueIndex];
             }
 
-            if (kind == HoBlinkDriverKind.Manual)
-            {
-                return "手动驱动";
-            }
-
-            string positive = string.IsNullOrEmpty(positiveKey.stringValue) ? "（没填驱动键）" : positiveKey.stringValue;
+            string positive = string.IsNullOrEmpty(positiveKey.stringValue) ? "（没选键）" : positiveKey.stringValue;
             return string.IsNullOrEmpty(negativeKey.stringValue) ? positive : positive + " − " + negativeKey.stringValue;
+        }
+
+        /// <summary>还有几个目标没选键 —— 显示在分区摘要里，折叠着也知道该干活了。</summary>
+        private string PendingKeySummary()
+        {
+            int pending = 0;
+            for (int i = 0; i < rules.arraySize; i++)
+            {
+                SerializedProperty targets = rules.GetArrayElementAtIndex(i).FindPropertyRelative("targets");
+                for (int t = 0; t < targets.arraySize; t++)
+                {
+                    if (string.IsNullOrEmpty(targets.GetArrayElementAtIndex(t).FindPropertyRelative("keyName").stringValue))
+                    {
+                        pending++;
+                    }
+                }
+            }
+
+            for (int i = 0; i < blinkTargets.arraySize; i++)
+            {
+                if (string.IsNullOrEmpty(blinkTargets.GetArrayElementAtIndex(i).FindPropertyRelative("keyName").stringValue))
+                {
+                    pending++;
+                }
+            }
+
+            return pending > 0 ? " · " + pending + " 个目标待选键" : string.Empty;
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -832,8 +869,50 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
             if (clicked)
             {
-                HoKeyNameDropdown.Show(dropdownRect, constraint, keyName);
+                HoKeyNameDropdown.Show(dropdownRect, constraint, keyName, CollectUsedKeys(keyName));
             }
+        }
+
+        /// <summary>除了这一格之外，其它目标/眼睑输出已经用掉的键名（归一化）—— 下拉里标「已在用」，避免一个键被两路重复驱动。</summary>
+        private HashSet<string> CollectUsedKeys(SerializedProperty except)
+        {
+            HashSet<string> used = new HashSet<string>();
+            for (int i = 0; i < rules.arraySize; i++)
+            {
+                SerializedProperty rule = rules.GetArrayElementAtIndex(i);
+                if (!rule.FindPropertyRelative("enabled").boolValue)
+                {
+                    continue;
+                }
+
+                SerializedProperty positiveKey = rule.FindPropertyRelative("positiveKey");
+                SerializedProperty negativeKey = rule.FindPropertyRelative("negativeKey");
+                AddUsed(used, positiveKey, except);
+                AddUsed(used, negativeKey, except);
+
+                SerializedProperty targets = rule.FindPropertyRelative("targets");
+                for (int t = 0; t < targets.arraySize; t++)
+                {
+                    AddUsed(used, targets.GetArrayElementAtIndex(t).FindPropertyRelative("keyName"), except);
+                }
+            }
+
+            for (int i = 0; i < blinkTargets.arraySize; i++)
+            {
+                AddUsed(used, blinkTargets.GetArrayElementAtIndex(i).FindPropertyRelative("keyName"), except);
+            }
+
+            return used;
+        }
+
+        private static void AddUsed(HashSet<string> used, SerializedProperty property, SerializedProperty except)
+        {
+            if (property == null || property.propertyPath == except?.propertyPath || string.IsNullOrEmpty(property.stringValue))
+            {
+                return;
+            }
+
+            used.Add(HoShapeKeyResolver.Normalize(property.stringValue));
         }
 
         private int RampDropdown(int enumValueIndex)

@@ -568,8 +568,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         /// <summary>
         /// 键名格：`[键名输入] [▾] [状态点]`。
-        /// 状态点用颜色说话：绿点 + 绑定数 = 解析到了，红点 = 这些网格上没这个键。
-        /// `dropdownRect` 是 ▾ 的位置（点了就把它交给键名下拉）。
+        /// 空着的时候显示「选键…」占位符，并把 ▾ 画成主色按钮 —— 面板上最该点的地方一眼就看出来。
+        /// 状态点用颜色说话：绿点 + 绑定数 = 解析到了，红叉 = 这些网格上没这个键。
         /// </summary>
         public static string KeyField(string key, int bindings, string statusTooltip, string dropdownTooltip, out Rect dropdownRect, out bool dropdownClicked)
         {
@@ -577,16 +577,28 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             const float ButtonWidth = 18.0f;
             const float StatusWidth = 20.0f;
 
+            bool empty = string.IsNullOrEmpty(key);
             Rect fieldRect = new Rect(rect.x, rect.y, Mathf.Max(24.0f, rect.width - ButtonWidth - StatusWidth - 4.0f), rect.height);
             Rect buttonRect = new Rect(fieldRect.xMax + 2.0f, rect.y, ButtonWidth, rect.height);
             Rect statusRect = new Rect(buttonRect.xMax + 2.0f, rect.y, StatusWidth, rect.height);
 
-            bool empty = string.IsNullOrEmpty(key);
             bool missing = !empty && bindings == 0;
             key = EditorGUI.TextField(fieldRect, key, missing ? HoConstraintEditorTheme.FieldMissing : HoConstraintEditorTheme.Field);
 
+            if (empty && Event.current.type == EventType.Repaint)
+            {
+                GUI.Label(
+                    new Rect(fieldRect.x + 5.0f, fieldRect.y, fieldRect.width - 8.0f, fieldRect.height),
+                    new GUIContent("选键…", "还没有选键：点右边的 ▾ 从网格上真实存在的形态键里选。"),
+                    HoConstraintEditorTheme.Caption);
+            }
+
             dropdownRect = buttonRect;
-            dropdownClicked = ButtonInternal(buttonRect, "▾", HoConstraintEditorTheme.IconButton, dropdownTooltip);
+            dropdownClicked = ButtonInternal(
+                buttonRect,
+                "▾",
+                empty ? HoConstraintEditorTheme.ButtonPrimary : HoConstraintEditorTheme.IconButton,
+                dropdownTooltip);
 
             if (Event.current.type == EventType.Repaint)
             {
@@ -594,8 +606,8 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 Color color;
                 if (empty)
                 {
-                    glyph = "–";
-                    color = HoConstraintEditorTheme.TextFaintColor;
+                    glyph = "○";
+                    color = HoConstraintEditorTheme.WarningColor;
                 }
                 else if (missing)
                 {

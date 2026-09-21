@@ -112,6 +112,10 @@ namespace Hollow.HoUnityTools.Constraints
         private float winkRemaining;
         private float blinkSpeed;
         private float lastBlinkForSpeed;
+        private float blinkAccelRaw;
+        private float lastBlinkVelocity;
+        private float blinkCurvature = 1.0f;
+        private float[] blinkEnvelopes;
         private float winkLeft;
         private float winkRight;
         private double lastUpdateTime;
@@ -194,6 +198,17 @@ namespace Hollow.HoUnityTools.Constraints
 
         /// <summary>眼皮动的速度（0..1）：一整个闭合用 <see cref="closeDuration"/> 秒完成时约等于 1。</summary>
         public float BlinkSpeed => blinkSpeed;
+
+        /// <summary>眨眼加速度（0..1，已归一化；含每条规则自己的包络）。</summary>
+        public float GetBlinkAccel(int ruleIndex)
+        {
+            if (blinkEnvelopes == null || ruleIndex < 0 || ruleIndex >= blinkEnvelopes.Length)
+            {
+                return 0.0f;
+            }
+
+            return blinkEnvelopes[ruleIndex];
+        }
 
         public HoBlinkPhase BlinkPhase => blinkState.phase;
 
@@ -331,6 +346,15 @@ namespace Hollow.HoUnityTools.Constraints
             winkRight = 0.0f;
             blinkSpeed = 0.0f;
             lastBlinkForSpeed = 0.0f;
+            lastBlinkVelocity = 0.0f;
+            blinkAccelRaw = 0.0f;
+            if (blinkEnvelopes != null)
+            {
+                for (int i = 0; i < blinkEnvelopes.Length; i++)
+                {
+                    blinkEnvelopes[i] = 0.0f;
+                }
+            }
             random = new System.Random(randomSeed != 0 ? randomSeed : GetInstanceID());
 
             if (jellyStates != null)
@@ -459,7 +483,7 @@ namespace Hollow.HoUnityTools.Constraints
             float dt = Mathf.Max(0.0f, deltaTime);
             writer.Snapshot();
             StepBlink(dt);
-            StepBlinkSpeed(dt);
+            StepBlinkDerived(dt);
 
             for (int i = 0; i < blinkTargetIds.Length; i++)
             {
@@ -586,6 +610,8 @@ namespace Hollow.HoUnityTools.Constraints
             manualValues = new float[ruleCount];
             driverValues = new float[ruleCount];
             driverRawValues = new float[ruleCount];
+            blinkEnvelopes = new float[ruleCount];
+            blinkCurvature = MeasureCurveCurvature(blinkCurve);
 
             List<int> ruleTargets = new List<int>();
             List<int> driverBindings = new List<int>();
@@ -677,24 +703,74 @@ namespace Hollow.HoUnityTools.Constraints
         }
 
         /// <summary>
-        /// 眼皮速度信号：`|Δ闭眼量| / Δt`，用"一整个闭合耗时 <see cref="closeDuration"/>"当参考速度归一化。
-        /// 只在眼皮动的那几帧有值（停住时为 0），所以它驱动出来的东西天然是"弹一下"。
+        /// 眨眼派生的两个信号：
+        /// · **速度** = `|Δ闭眼量| / Δt`，用"一整个闭合耗时 <see cref="closeDuration"/>"归一化，眼皮动的时候是平台；
+        /// · **加速度** = 速度的变化率，按 `闭合时长² / 曲线曲率` 归一化 —— 它在闭合起点和张开起点各是一个几毫秒宽的尖峰，
+        ///   停住时是 0。每条规则再各自把它摊成"瞬间起峰 + 按 <see cref="HoBlinkRule.BlinkEnvelope"/> 衰减"的小鼓包，
+        ///   否则几毫秒的冲量喂给弹簧几乎没响应，参数会变得极难调。
         /// </summary>
-        private void StepBlinkSpeed(float deltaTime)
+        private void StepBlinkDerived(float deltaTime)
         {
             float closed = Mathf.Max(blinkLeft, blinkRight);
             if (deltaTime > 1e-5f)
             {
-                float rate = Mathf.Abs(closed - lastBlinkForSpeed) / deltaTime;
+                float velocity = (closed - lastBlinkForSpeed) / deltaTime;
+                float acceleration = (velocity - lastBlinkVelocity) / deltaTime;
                 float reference = 1.0f / Mathf.Max(0.01f, closeDuration);
-                blinkSpeed = Mathf.Clamp01(rate / reference);
+
+                blinkSpeed = Mathf.Clamp01(Mathf.Abs(velocity) / reference);
+                blinkAccelRaw = Mathf.Clamp01(
+                    Mathf.Abs(acceleration) * closeDuration * closeDuration / Mathf.Max(0.5f, blinkCurvature));
+                lastBlinkVelocity = velocity;
             }
             else
             {
                 blinkSpeed = 0.0f;
+                blinkAccelRaw = 0.0f;
+                lastBlinkVelocity = 0.0f;
             }
 
             lastBlinkForSpeed = closed;
+
+            if (blinkEnvelopes == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < blinkEnvelopes.Length; i++)
+            {
+                float release = rules != null && i < rules.Count ? rules[i].BlinkEnvelope : 0.025f;
+                float current = blinkEnvelopes[i];
+                blinkEnvelopes[i] = blinkAccelRaw >= current
+                    ? blinkAccelRaw
+                    : Mathf.Max(0.0f, current - (deltaTime / Mathf.Max(0.005f, release)));
+            }
+        }
+
+        /// <summary>
+        /// 曲线自身的最大 |二阶导|：用它当加速度的参考刻度，这样不管用户把眨眼曲线改成什么形状、
+        /// 闭合时长调多少，归一化后的加速度峰值都稳定在 1 附近。
+        /// </summary>
+        private float MeasureCurveCurvature(AnimationCurve curve)
+        {
+            const int Samples = 64;
+            if (curve == null || curve.length < 2)
+            {
+                return 1.0f;
+            }
+
+            float step = 1.0f / Samples;
+            float max = 0.0f;
+            for (int i = 1; i < Samples; i++)
+            {
+                float x0 = (i - 1) * step;
+                float x1 = i * step;
+                float x2 = (i + 1) * step;
+                float second = (curve.Evaluate(x2) - (2.0f * curve.Evaluate(x1)) + curve.Evaluate(x0)) / (step * step);
+                max = Mathf.Max(max, Mathf.Abs(second));
+            }
+
+            return Mathf.Max(0.5f, max);
         }
 
         private HoBlinkTiming BuildTiming()        {
@@ -753,6 +829,10 @@ namespace Hollow.HoUnityTools.Constraints
                     value = blinkSpeed;
                     break;
 
+                case HoBlinkDriverKind.BlinkAccel:
+                    value = GetBlinkAccel(ruleIndex);
+                    break;
+
                 default:
                 {
                     float positive = ReadKeyGroup(driverPositiveStart[ruleIndex], driverPositiveCount[ruleIndex], rule.ReadWrittenThisFrame);
@@ -764,6 +844,7 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
+            value *= rule.DriverGain;
             return rule.Invert ? -value : value;
         }
 
