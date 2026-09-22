@@ -741,7 +741,39 @@ public static class HoFaceTrackingValidation
                     + "not against a hard 0 (actual=" + driven + ")");
                 stage++; return;
             }
+            // ── 判别性实验：同一属性被多个子节点写 = 相加还是平均？嵌套门控相乘吗？ ────────
+            // 文档 docs/BLEND_TREE_LIMITS.md 里"能表达什么"那几张配方（乘积 / 加权平均）是
+            // **从参考实现反推的**，这两条量出来之前它们只能算推断。
             if (stage == 14)
+            {
+                probeAnimator.runtimeAnimatorController = BuildSamePropertyProbe(false);
+                probeRenderer.SetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex("mouthSmileRight"), 0f);
+                probeRenderer.SetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex("noseSneerLeft"), 0f);
+                probeAnimator.SetFloat("P/A", 0.6f);
+                probeAnimator.SetFloat("P/B", 0.8f);
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 15)
+            {
+                float same = ProbeWeight("mouthSmileRight");
+                Debug.Log("HO_MATRIX: 同一属性 0.6 + 0.8 → " + same
+                    + "（140→钳 100 = 相加；70 = 平均；80 = 后写者胜）");
+                Check(same > 0f, "same-property Direct children produce a value at all (actual=" + same + ")");
+                probeAnimator.runtimeAnimatorController = BuildSamePropertyProbe(true);
+                probeRenderer.SetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex("noseSneerLeft"), 0f);
+                probeAnimator.SetFloat("P/A", 0.6f);
+                probeAnimator.SetFloat("P/B", 0.8f);
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 16)
+            {
+                float nested = ProbeWeight("noseSneerLeft");
+                Debug.Log("HO_MATRIX: 嵌套门控 0.6 × 0.8 → " + nested
+                    + "（48 = 相乘；100 = 不相乘；60/80 = 只有一层生效）");
+                Check(nested > 0f, "nested Direct gates produce a value at all (actual=" + nested + ")");
+                stage++; return;
+            }
+            if (stage == 17)
             {
                 Send("jawOpen-60|");
                 if (Mathf.Abs(Weight("jawOpen") - 50f) > 0.6f) return;   // 等它被驱动上来
@@ -858,6 +890,62 @@ public static class HoFaceTrackingValidation
     {
         byte[] bytes = Encoding.UTF8.GetBytes(value);
         sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, IFacialMocapReceiver.Port));
+    }
+
+    /// <summary>
+    /// 判别性实验用的最小控制器：两个参数 P/A、P/B 驱动一棵 Direct 树。
+    /// `nested = false` 时两个子节点写**同一个属性**（量"相加还是平均"）；
+    /// `nested = true` 时外层门控 A、里层门控 B 写一个属性（量"门控是否相乘"）。
+    /// </summary>
+    private static AnimatorController BuildSamePropertyProbe(bool nested)
+    {
+        var controller = AnimatorController.CreateAnimatorControllerAtPath(
+            AssetDatabase.GenerateUniqueAssetPath("Assets/HoMatrixProbe.controller"));
+        controller.AddParameter("P/A", AnimatorControllerParameterType.Float);
+        controller.AddParameter("P/B", AnimatorControllerParameterType.Float);
+        var sameBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.mouthSmileRight");
+        var nestBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.noseSneerLeft");
+
+        var root = new BlendTree { name = nested ? "NestOuter" : "SameProperty", blendType = BlendTreeType.Direct };
+        AssetDatabase.AddObjectToAsset(root, controller);
+
+        if (!nested)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                var part = new AnimationClip { name = "same" + i, frameRate = 60f };
+                AnimationUtility.SetEditorCurve(part, sameBinding, AnimationCurve.Constant(0f, 1f / 60f, 100f));
+                AssetDatabase.AddObjectToAsset(part, controller);
+                root.AddChild(part);
+                var kids = root.children;
+                kids[kids.Length - 1].directBlendParameter = i == 0 ? "P/A" : "P/B";
+                root.children = kids;
+            }
+        }
+        else
+        {
+            var inner = new BlendTree { name = "NestInner", blendType = BlendTreeType.Direct };
+            AssetDatabase.AddObjectToAsset(inner, controller);
+            var leaf = new AnimationClip { name = "nestLeaf", frameRate = 60f };
+            AnimationUtility.SetEditorCurve(leaf, nestBinding, AnimationCurve.Constant(0f, 1f / 60f, 100f));
+            AssetDatabase.AddObjectToAsset(leaf, controller);
+            inner.AddChild(leaf);
+            var innerKids = inner.children;
+            innerKids[0].directBlendParameter = "P/B";
+            inner.children = innerKids;
+
+            root.AddChild(inner);
+            var outerKids = root.children;
+            outerKids[0].directBlendParameter = "P/A";
+            root.children = outerKids;
+        }
+
+        var state = controller.layers[0].stateMachine.AddState("矩阵探针");
+        state.writeDefaultValues = true;
+        state.motion = root;
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+        return controller;
     }
 
     private static void ParserTests()

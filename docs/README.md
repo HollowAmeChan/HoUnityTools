@@ -5,6 +5,7 @@
 ## 文档
 
 - [面捕混合树入门与 ARKit 模板使用](FACE_TRACKING_TEMPLATE_GUIDE.md)：解释参数、混合树、动画绑定及 Jerry 模板的使用流程。
+- [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器 + 钳制"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
 - [编辑器面捕调试组件设计](FACE_TRACKING_DEBUGGER_DESIGN.md)：iFacialMocap 直连、全局面板、角色组件、输出门控和 LookAt 协作。P0–P2 已实现并在独立 Unity 工程跑通自动化验收；真机与眼球骨骼验收未做。
 - [面捕控制器结构：Jerry 模板 vs 我们生成的](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：参考实现的三层结构、一棵 Direct 树管整张脸，以及「Direct 树 + 写默认值关闭会发散」的判别性实验。
 - [面捕的层间分工：参数生产层 vs 驱动层](FACE_TRACKING_PIPELINE_SPLIT.md)：解析 5 个商业面捕包（31 个控制器）后的结论 —— 层按功能分段而非逐键分段、果冻眼/修正层的工业做法、以及 VRC 图层与 Warudo 蓝图对应的四段流水线。
