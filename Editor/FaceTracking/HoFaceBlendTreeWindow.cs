@@ -16,7 +16,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// 三件事这个工具替用户兜住，因为它们都是"手搓树时一定会踩、踩了还看不出来"的：
     ///   1. **原点子节点**：没有它，参数在 (0,0) 时脸上挂着四个方向的加权平均；
     ///   2. **每个方向写全部键**：不留"某个键在这个方向没人管"的空洞；
-    ///   3. **键冲突提示**：ARKit 的键已经被驱动树占着，两棵树写同一个属性是**平均**不是相加。
+    ///   3. **键冲突提示**：ARKit 的键已经被驱动树占着，两棵树会互相掺和（具体混法未实测）。
     /// </summary>
     public sealed class HoFaceBlendTreeWindow : EditorWindow
     {
@@ -452,7 +452,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (Conflict(key)) conflicts++;
             if (conflicts > 0)
                 text.Append("。注意：有 ").Append(conflicts)
-                    .Append(" 个键是 ARKit 键，驱动树也在写它们 —— 同一个属性被两棵树写是**平均**不是相加，"
+                    .Append(" 个键是 ARKit 键，驱动树也在写它们 —— 两棵树会互相掺和（不是相加），"
                         + "果冻应该驱动自己的键（例如一个专用的 JellyEye）。");
             return text.ToString();
         }
