@@ -17,7 +17,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private string search = "";
         private string report = "";
         private bool reportIsError;
-        private bool outputExpanded;
+        private bool setupExpanded = true;
+        private bool outputExpanded = true;
+        private bool middleExpanded = true;
         private bool channelsExpanded;
         private bool mappings;
         private double nextRepaint;
@@ -44,11 +46,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 (session != null ? "驱动中" : "待机", session != null),
                 (Application.isPlaying ? "播放中" : "编辑中", Application.isPlaying));
 
-            serializedObject.Update();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("targetAnimator"), new GUIContent("角色 Animator", "角色根上的 Animator。面捕不会接管它，只借用它的绑定根解析路径。"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("faceController"), new GUIContent("面部控制器", "只含形态键曲线的纯 Unity AnimatorController；在影子层级上求值，不驱动角色本体。"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("播放后自动驱动", "进入播放模式就自动开始驱动，不会自动连接手机。"));
-            serializedObject.ApplyModifiedProperties();
+            // ── 接线：这台组件接到哪、以及那几个会写盘的动作 ──────────────────────
+            string setupSummary = rig.faceController != null ? rig.faceController.name : "未指定控制器";
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "接线", setupSummary,
+                HoConstraintEditorTheme.AccentMesh))
+            {
+                serializedObject.Update();
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("targetAnimator"), new GUIContent("角色 Animator", "角色根上的 Animator。面捕不会接管它，只借用它的绑定根解析路径。"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("faceController"), new GUIContent("面部控制器", "只含形态键曲线的纯 Unity AnimatorController；在影子层级上求值，不驱动角色本体。"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("播放后自动驱动", "进入播放模式就自动开始驱动，不会自动连接手机。"));
+                serializedObject.ApplyModifiedProperties();
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -93,6 +100,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     if (session == null) HoFaceInputHub.Start(rig); else HoFaceInputHub.Stop(rig);
                 }
+            }
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
             if (!string.IsNullOrEmpty(report)) EditorGUILayout.HelpBox(report, reportIsError ? MessageType.Warning : MessageType.Info);
@@ -153,6 +161,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
+                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
+                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
+            }
+
+            // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
+            // **这一栏是为长大准备的**：以后新的整形（ramp / 抑制 / 轴合并 / 模式开关）都加在这里，
+            // 别塞回上面那两栏 —— 上面两栏回答"接到哪""写什么"，这里回答"值怎么被加工"。
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "参数生产（中间层）", MiddleSummary(rig),
+                HoConstraintEditorTheme.AccentOutput))
+            using (HoConstraintEditorControls.Card())
+            {
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("分组平滑", HoConstraintEditorTheme.LabelWidth,
@@ -228,13 +247,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                     HoConstraintEditorControls.Caption("左右键各管一只眼的模型不用开");
                 }
-
-                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
-                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
 
             serializedObject.ApplyModifiedProperties();
             DrawChannels(rig, session);
+        }
+
+        /// <summary>
+        /// 中间层摘要：**开着哪几类处理器**。中间层只会越长越多，所以它的摘要不列数值，
+        /// 只报"哪几件在干活"—— 一眼能看出"我现在到底加工了什么"。
+        /// </summary>
+        private static string MiddleSummary(HoFaceTrackingDebugger rig)
+        {
+            var parts = new List<string>();
+            if (rig.smoothEyelids > 0.0f || rig.smoothGaze > 0.0f || rig.smoothMouth > 0.0f || rig.smoothOther > 0.0f)
+                parts.Add("平滑");
+            if (rig.deadZoneEyelids > 0.0f || rig.deadZoneGaze > 0.0f || rig.deadZoneMouth > 0.0f || rig.deadZoneOther > 0.0f)
+                parts.Add("死区");
+            if (rig.eyeSync) parts.Add(rig.eyeSyncSingleKey ? "双眼同步·单键" : "双眼同步");
+
+            // 轴生产是结构性的（控制器里有对应的 2D 树就有），所以只要控制器是这套生成物就报出来。
+            if (rig.faceController != null) parts.Add("眼睑轴");
+            return parts.Count == 0 ? "全部关" : string.Join(" · ", parts);
         }
 
         /// <summary>
