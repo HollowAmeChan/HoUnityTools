@@ -8,23 +8,22 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// 混合树小工具：把"一族形态键 × 一个二维参数"快速落成一棵 2D FreeformCartesian 树。
+    /// 混合树工具：把"一族形态键 × 一个二维参数"快速落成一棵 2D FreeformCartesian 树。
     ///
     /// **它是通用的**，只是默认值填的是果冻那对参数。果冻眼是它的第一个用法 ——
     /// 物理（我们的 C#，每帧写两个 Float）与映射（这棵树，用户自己选键摆位置）在这里正式分开。
     ///
-    /// 三件事这个工具替用户兜住，因为它们都是"手搓树时一定会踩、踩了还看不出来"的：
-    ///   1. **原点子节点**：没有它，参数在 (0,0) 时脸上挂着四个方向的加权平均；
-    ///   2. **每个方向写全部键**：不留"某个键在这个方向没人管"的空洞；
-    ///   3. **键冲突提示**：ARKit 的键已经被驱动树占着，两棵树会互相掺和（具体混法未实测）。
+    /// 面板按**四步**排，四步一律可见、不折叠：这一点是踩过坑的 —— 第一版的入口按钮藏在
+    /// 一个默认折叠的「目标」分区里，于是"打开面板什么也没有、不知道从哪下手"。
+    /// 靠折叠省下的那点高度，换来的是用户找不到入口，不值。
     /// </summary>
     public sealed class HoFaceBlendTreeWindow : EditorWindow
     {
-        [MenuItem("HoUnityTools/面捕混合树", false, 41)]
+        [MenuItem("HoUnityTools/混合树工具", false, 41)]
         private static void Open()
         {
-            var window = GetWindow<HoFaceBlendTreeWindow>("面捕混合树");
-            window.minSize = new Vector2(520f, 460f);
+            var window = GetWindow<HoFaceBlendTreeWindow>("混合树工具");
+            window.minSize = new Vector2(540f, 520f);
         }
 
         [SerializeField] private Animator animator;
@@ -33,11 +32,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         [SerializeField] private List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
         [SerializeField] private List<HoBlendTreeKey> candidates = new List<HoBlendTreeKey>();
         [SerializeField] private HoFaceTrackingDebugger previewRig;
-
-        [SerializeField] private bool showTarget = true;
-        [SerializeField] private bool showKeys = true;
-        [SerializeField] private bool showDirections = true;
-        [SerializeField] private bool showPreview = true;
         [SerializeField] private string search = "";
         [SerializeField] private bool onlySelected;
         [SerializeField] private bool previewOn;
@@ -48,17 +42,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private Vector2 body, keyScroll, directionScroll;
         private string message = "";
         private MessageType messageType = MessageType.None;
+        private static GUIStyle hint;
 
         // ── 数据维护 ──────────────────────────────────────────────────────────
 
         private void PickAnimator(Animator next)
         {
+            bool changed = animator != next;
             animator = next;
             if (animator == null) return;
             // 面捕的控制器挂在组件上、不一定挂在 Animator 上，先问组件。
             var rig = animator.GetComponent<HoFaceTrackingDebugger>();
             if (controller == null && rig != null && rig.faceController is AnimatorController fromRig) controller = fromRig;
             if (controller == null && animator.runtimeAnimatorController is AnimatorController current) controller = current;
+            // 换角色就顺手把键收一遍：面板打开来就该是有东西可选的样子，
+            // 而不是"先点某个按钮才知道能干什么"（第一版就是这么让人找不到入口的）。
+            if (changed && meshes.Count == 0) ScanMeshes();
         }
 
         private void ScanMeshes()
@@ -146,31 +145,58 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             Repaint();
         }
 
+        // ── 版面零件 ──────────────────────────────────────────────────────────
+
+        /// <summary>步骤条：编号 + 标题 + 右侧状态。**不可折叠** —— 折叠过一次，入口就找不到了。</summary>
+        private static void Step(string title, string status)
+        {
+            Rect rect = GUILayoutUtility.GetRect(0f, 4000f, 22f, 22f, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+            {
+                EditorGUI.DrawRect(rect, HoConstraintEditorTheme.CardAltColor);
+                EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), HoConstraintEditorTheme.LineColor);
+            }
+
+            GUI.Label(new Rect(rect.x + 7f, rect.y, rect.width - 14f, rect.height), title, HoConstraintEditorTheme.SectionTitle);
+            if (!string.IsNullOrEmpty(status))
+                GUI.Label(new Rect(rect.xMax - 208f, rect.y, 200f, rect.height), status, HoConstraintEditorTheme.SectionSummary);
+        }
+
+        /// <summary>灰字提示（会换行，所以可以写完整句子）。只用在"这一步缺什么"上。</summary>
+        private static void Hint(string text)
+        {
+            if (hint == null)
+            {
+                hint = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    fontSize = 10,
+                    richText = false,
+                    wordWrap = true
+                };
+                hint.normal.textColor = HoConstraintEditorTheme.TextFaintColor;
+            }
+
+            GUILayout.Label(text, hint);
+        }
+
         // ── 主界面 ────────────────────────────────────────────────────────────
 
         private void OnGUI()
         {
-            HoConstraintEditorControls.Title(
-                "面捕混合树",
-                plan.layerName,
-                (previewOn ? "预览中" : "未预览", previewOn),
-                (plan.keys.Count + " 键", plan.keys.Count > 0),
-                (plan.directions.Count + " 方向", plan.directions.Count > 0));
+            Hint("四步：① 指定角色和控制器　② 把角色身上的形态键勾出来　③ 给每个方向填权重　④ 写入控制器");
+            HoConstraintEditorControls.Separator(3f, 3f);
 
             body = EditorGUILayout.BeginScrollView(body);
             DrawTarget();
             DrawKeys();
             DrawDirections();
-            DrawPreview();
+            DrawWrite();
             EditorGUILayout.EndScrollView();
-
-            if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, messageType);
         }
 
         private void DrawTarget()
         {
-            if (!(showTarget = HoConstraintEditorControls.Section(ref showTarget, "目标", controller != null ? controller.name : "未指定", HoConstraintEditorTheme.AccentMesh)))
-                return;
+            Step("① 目标", animator == null ? "先指定角色" : controller == null ? "再指定控制器" : controller.name);
             using (HoConstraintEditorControls.Indent())
             {
                 using (HoConstraintEditorControls.Row())
@@ -181,13 +207,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("控制器", 40f, "树写进这个控制器资产。通常就是组件上的「面部控制器」。");
+                    HoConstraintEditorControls.Label("控制器", 46f, "树写进这个控制器资产。通常就是「面捕」组件上的面部控制器。");
                     controller = (AnimatorController)EditorGUILayout.ObjectField(controller, typeof(AnimatorController), false);
                 }
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("图层", 40f, "写进这个图层（同名整层重建，位置不变）。别用 Ho/00 Drive 或 Ho/99 (EDIT THIS)。");
+                    HoConstraintEditorControls.Label("图层", 40f, "写进这个图层，同名整层重建（位置不变）。别用 Ho/00 Drive 或 Ho/99 (EDIT THIS)。");
                     plan.layerName = EditorGUILayout.TextField(plan.layerName);
                 }
 
@@ -198,27 +224,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Gap(4f);
                     plan.parameterY = EditorGUILayout.TextField(plan.parameterY);
                 }
-
-                if (GUILayout.Button("收网格 + 扫形态键", HoConstraintEditorTheme.Button))
-                    ScanMeshes();
-                HoConstraintEditorControls.Caption(
-                    "收的是「角色」下所有网格的形态键。手工加网格也可以，直接往下面的列表里拖。");
             }
+
+            HoConstraintEditorControls.Separator(5f, 5f);
         }
 
         private void DrawKeys()
         {
-            string summary = plan.keys.Count + " / " + candidates.Count;
-            showKeys = HoConstraintEditorControls.Section(ref showKeys, "键", summary, HoConstraintEditorTheme.AccentOutput);
-            if (!showKeys) return;
-
+            Step("② 选键", plan.keys.Count + " / " + candidates.Count);
             using (HoConstraintEditorControls.Indent())
             {
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("网格", 40f, "参与扫描的网格列表。");
-                    if (GUILayout.Button("＋", HoConstraintEditorTheme.IconButton, GUILayout.Width(18f))) meshes.Add(null);
-                    HoConstraintEditorControls.Caption(meshes.Count + " 个");
+                    if (HoConstraintEditorControls.Button("从角色收网格并扫描形态键",
+                            "把「角色」下所有 SkinnedMeshRenderer 及其形态键收进来。", true))
+                        ScanMeshes();
+                    if (GUILayout.Button("＋ 手动加网格", HoConstraintEditorTheme.Button)) meshes.Add(null);
                 }
 
                 for (int i = 0; i < meshes.Count; i++)
@@ -230,20 +251,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
                 }
 
-                HoConstraintEditorControls.Separator(3f, 3f);
-                using (HoConstraintEditorControls.Row())
-                {
-                    search = EditorGUILayout.TextField(search);
-                    onlySelected = HoConstraintEditorControls.Toggle("只看已选", onlySelected, null, 76f);
-                }
-
                 if (candidates.Count == 0)
                 {
-                    HoConstraintEditorControls.Caption("还没有候选键 —— 先点上面的「收网格 + 扫形态键」。");
+                    Hint(animator == null
+                        ? "先在①里指定角色，然后点上面的按钮把形态键收进来。"
+                        : "点上面的按钮，把角色身上的网格和形态键收进来。");
                 }
                 else
                 {
-                    keyScroll = EditorGUILayout.BeginScrollView(keyScroll, GUILayout.Height(140f));
+                    using (HoConstraintEditorControls.Row())
+                    {
+                        search = EditorGUILayout.TextField(search);
+                        onlySelected = HoConstraintEditorControls.Toggle("只看已选", onlySelected, null, 76f);
+                    }
+
+                    keyScroll = EditorGUILayout.BeginScrollView(keyScroll, GUILayout.Height(132f));
                     for (int i = 0; i < candidates.Count; i++)
                     {
                         var candidate = candidates[i];
@@ -262,28 +284,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             string meshName = candidate.renderer != null ? candidate.renderer.name : "?";
                             GUILayout.Label(meshName + " / " + candidate.shape, HoConstraintEditorTheme.Label);
                             HoConstraintEditorControls.Flex();
-                            if (Conflict(candidate))
-                            {
-                                HoConstraintEditorControls.Pill("ARKit", false);
-                            }
+                            if (Conflict(candidate)) HoConstraintEditorControls.Pill("ARKit", false);
                         }
                     }
 
                     EditorGUILayout.EndScrollView();
-                }
-
-                if (plan.keys.Count > 0)
-                {
-                    HoConstraintEditorControls.Caption("已选：" + KeyList());
+                    Hint("勾中的键 = 这棵树要驱动的那一族形状。标 ARKit 的是驱动树已经在写的键，两棵树会互相掺和 —— "
+                        + "这类东西（比如果冻）应该驱动自己的键。");
                 }
             }
+
+            HoConstraintEditorControls.Separator(5f, 5f);
         }
 
         private void DrawDirections()
         {
-            showDirections = HoConstraintEditorControls.Section(ref showDirections, "方向", plan.directions.Count + " 个", HoConstraintEditorTheme.AccentRules);
-            if (!showDirections) return;
-
+            Step("③ 摆方向", plan.directions.Count + " 个");
             using (HoConstraintEditorControls.Indent())
             {
                 using (HoConstraintEditorControls.Row())
@@ -297,90 +313,94 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
 
                     HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Label("原点", 30f, "自动补一个位于 (0,0)、全写 0 的子节点。");
-                    plan.originChild = HoConstraintEditorControls.Toggle("", plan.originChild, null, 0f);
+                    plan.originChild = HoConstraintEditorControls.Toggle("补原点", plan.originChild,
+                        "在 (0,0) 自动补一个全写 0 的子节点。没有它，参数归零时脸上挂着各方向的加权平均。");
                 }
 
-                HoConstraintEditorControls.Caption(plan.originChild && plan.HasOrigin
-                    ? "参数空间按 [-1, 1] 摆位置；原点已经有子节点了，不会重复补。"
-                    : "参数空间按 [-1, 1] 摆位置。原点子节点保证参数归零时姿势也归零。");
-
-                if (plan.keys.Count == 0)
+                if (plan.directions.Count == 0)
                 {
-                    HoConstraintEditorControls.Caption("先在上面选键，每个方向才会出现可填的权重。");
-                    return;
+                    Hint("点「四角布局」一次摆好四个方向，或者用「＋ 方向」加一个。");
                 }
-
-                directionScroll = EditorGUILayout.BeginScrollView(directionScroll, GUILayout.Height(190f));
-                for (int d = 0; d < plan.directions.Count; d++)
+                else if (plan.keys.Count == 0)
                 {
-                    var direction = plan.directions[d];
-                    using (HoConstraintEditorControls.Row())
+                    Hint("先去②里选键，每个方向才会有可填的权重。");
+                }
+                else
+                {
+                    Hint("每个方向 = 参数空间里的一个位置。参数走到那里，就按这列权重给姿势。参数 0 由「补原点」兜住。");
+                    directionScroll = EditorGUILayout.BeginScrollView(directionScroll, GUILayout.Height(188f));
+                    for (int d = 0; d < plan.directions.Count; d++)
                     {
-                        direction.name = EditorGUILayout.TextField(direction.name, GUILayout.Width(72f));
-                        direction.position.x = EditorGUILayout.FloatField(direction.position.x, GUILayout.Width(44f));
-                        direction.position.y = EditorGUILayout.FloatField(direction.position.y, GUILayout.Width(44f));
-                        HoConstraintEditorControls.Caption("x / y");
-                        HoConstraintEditorControls.Flex();
-                        if (GUILayout.Button("✕", HoConstraintEditorTheme.IconButton, GUILayout.Width(18f)))
+                        var direction = plan.directions[d];
+                        using (HoConstraintEditorControls.Row())
                         {
-                            plan.directions.RemoveAt(d--);
-                            break;
-                        }
-                    }
-
-                    using (HoConstraintEditorControls.Indent())
-                    {
-                        for (int k = 0; k < plan.keys.Count; k++)
-                        {
-                            using (HoConstraintEditorControls.Row(true))
+                            direction.name = EditorGUILayout.TextField(direction.name, GUILayout.Width(70f));
+                            direction.position.x = EditorGUILayout.FloatField(direction.position.x, GUILayout.Width(42f));
+                            direction.position.y = EditorGUILayout.FloatField(direction.position.y, GUILayout.Width(42f));
+                            HoConstraintEditorControls.Caption("x / y");
+                            HoConstraintEditorControls.Flex();
+                            if (GUILayout.Button("✕", HoConstraintEditorTheme.IconButton, GUILayout.Width(18f)))
                             {
-                                GUILayout.Label(plan.keys[k].shape, HoConstraintEditorTheme.LabelDim);
-                                HoConstraintEditorControls.Flex();
-                                direction.SetWeight(k, EditorGUILayout.FloatField(direction.Weight(k), GUILayout.Width(48f)));
+                                plan.directions.RemoveAt(d--);
+                                break;
+                            }
+                        }
+
+                        using (HoConstraintEditorControls.Indent())
+                        {
+                            for (int k = 0; k < plan.keys.Count; k++)
+                            {
+                                using (HoConstraintEditorControls.Row(true))
+                                {
+                                    GUILayout.Label(plan.keys[k].shape, HoConstraintEditorTheme.LabelDim);
+                                    HoConstraintEditorControls.Flex();
+                                    direction.SetWeight(k, EditorGUILayout.FloatField(direction.Weight(k), GUILayout.Width(48f)));
+                                }
                             }
                         }
                     }
-                }
 
-                EditorGUILayout.EndScrollView();
+                    EditorGUILayout.EndScrollView();
+                }
             }
+
+            HoConstraintEditorControls.Separator(5f, 5f);
         }
 
-        private void DrawPreview()
+        private void DrawWrite()
         {
-            showPreview = HoConstraintEditorControls.Section(ref showPreview, "预览", previewSession ? "走会话" : "未接会话", HoConstraintEditorTheme.AccentDriver);
-            if (!showPreview) return;
-
+            Step("④ 写入", previewOn ? (previewSession ? "预览接上会话" : "预览未接上") : "");
             using (HoConstraintEditorControls.Indent())
             {
                 using (HoConstraintEditorControls.Row())
                 {
                     bool was = previewOn;
-                    previewOn = HoConstraintEditorControls.Toggle("预览", previewOn, "把滑条的值喂给正在跑的面捕会话，走完整条管线再抄到真模型上。");
+                    previewOn = HoConstraintEditorControls.Toggle("预览", previewOn,
+                        "把滑条的值喂给正在跑的面捕会话，走完整条管线再抄到真模型上。");
                     if (was && !previewOn) HoFaceInputHub.Session(previewRig)?.ClearPreviews();
-                    HoConstraintEditorControls.Label(plan.parameterX, 60f, null);
-                    previewX = EditorGUILayout.Slider(previewX, -1f, 1f, GUILayout.Width(150f));
+                    HoConstraintEditorControls.Label(plan.parameterX, 62f, null);
+                    previewX = EditorGUILayout.Slider(previewX, -1f, 1f, GUILayout.Width(140f));
                 }
 
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Label(plan.parameterY, 60f, null);
-                    previewY = EditorGUILayout.Slider(previewY, -1f, 1f, GUILayout.Width(150f));
+                    HoConstraintEditorControls.Label(plan.parameterY, 62f, null);
+                    previewY = EditorGUILayout.Slider(previewY, -1f, 1f, GUILayout.Width(140f));
                 }
 
                 if (previewOn && !previewSession)
-                    HoConstraintEditorControls.Caption("没找到这个 Animator 上正在跑的会话 —— 进播放模式、启动面捕，预览才会走到真模型上。");
+                    Hint("没找到这个 Animator 上正在跑的会话 —— 进播放模式、启动面捕，预览才会走到真模型上。");
 
-                HoConstraintEditorControls.Separator(4f, 4f);
                 using (HoConstraintEditorControls.Row())
                 {
-                    if (HoConstraintEditorControls.Button("写入控制器", "参数 + 图层 + 树 + 每个方向的片段，全部落盘。这是本工具唯一的写盘点。", true))
+                    if (HoConstraintEditorControls.Button("写入控制器",
+                            "参数 + 图层 + 树 + 每个方向的片段，全部落盘。这是本工具唯一的写盘点。", true))
                         Write();
-                    if (HoConstraintEditorControls.Button("看看会写什么"))
-                        Say(Describe(), MessageType.Info);
+                    if (HoConstraintEditorControls.Button("看看会写什么")) Say(Describe(), MessageType.Info);
                 }
+
+                if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, messageType);
             }
         }
 
@@ -417,6 +437,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>
         /// 这个键是不是已经在驱动树手里。驱动树驱动的是 52 个标准 ARKit 键里、模型上真实存在的那些，
         /// 所以"名字是 ARKit 的"就是冲突的充分征兆。
+        ///
+        /// 冲突的后果是两棵树**互相掺和**（具体混法未实测），不是相加 —— 所以果冻这类东西
+        /// 应该驱动自己的键，别蹭 ARKit 的。
         /// </summary>
         private static bool Conflict(HoBlendTreeKey candidate) =>
             HoFaceTrackingChannels.IndexOf(candidate.shape) >= 0;
@@ -446,6 +469,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             text.Append("图层 ").Append(plan.layerName)
                 .Append("；参数 ").Append(plan.parameterX).Append(" / ").Append(plan.parameterY)
                 .Append("；键 ").Append(plan.keys.Count).Append(" 个；方向 ").Append(plan.directions.Count).Append(" 个");
+            if (plan.keys.Count > 0) text.Append("（").Append(KeyList()).Append("）");
             if (plan.originChild && !plan.HasOrigin) text.Append("；自动补原点子节点");
             int conflicts = 0;
             foreach (var key in plan.keys)
@@ -462,7 +486,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             try
             {
                 HoFaceBlendTreeTool.Write(animator, controller, plan);
-                Say("已写入 " + plan.layerName + "（" + plan.keys.Count + " 键 × " + plan.directions.Count + " 方向）。", MessageType.Info);
+                Say("已写入 " + plan.layerName + "（" + plan.keys.Count + " 键 × " + plan.directions.Count + " 方向）。");
             }
             catch (System.Exception exception)
             {
