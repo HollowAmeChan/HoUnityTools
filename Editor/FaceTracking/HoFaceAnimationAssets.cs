@@ -367,9 +367,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int pose = 0; pose < LidPoses.Length; pose++)
                 {
                     var cell = LidPoses[pose];
-                    // 名字由 HoFaceNaming 统一给：<树>_<方阵>X<x>Y<y>，全正、左下为原点。
-                    // 名字里**不带轴语义、格语义、驱动键名** —— 那三样在网格定义表与
-                    // docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §5.2 的对照表里。
+                    // 名字由 HoFaceNaming 统一给：<树>_<x语义>_<y语义>__<方阵>X<x>Y<y>。
+                    // __ 前回答"这棵树在混哪两根轴"，__ 后回答"哪一格"（全正、左下为原点）；
+                    // 具体这一格写哪几个键、各多少值，在文档 §5.2 的对照表里。
                     string clipName = HoFaceNaming.LidCell(side, cell.X, cell.Y);
                     if (!existing.TryGetValue(clipName, out var clip))
                     {

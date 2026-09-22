@@ -219,7 +219,7 @@ public static class HoFaceTrackingValidation
                     string clipName = child.motion != null ? child.motion.name : string.Empty;
                     lidNames.Add(clipName);
                     var match = System.Text.RegularExpressions.Regex.Match(clipName,
-                        "^(LidL|LidR)_A3X([0-9]+(?:\\.[0-9]+)?)Y([0-9]+(?:\\.[0-9]+)?)$");
+                        "^(LidL|LidR)_BlinkWide_Squint__A3X([0-9]+(?:\\.[0-9]+)?)Y([0-9]+(?:\\.[0-9]+)?)$");
                     if (!match.Success) { namesMatchPattern = false; continue; }
                     float x = float.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
                     float y = float.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
@@ -231,7 +231,7 @@ public static class HoFaceTrackingValidation
 
             Check(lidNames.Count == 12 && new System.Collections.Generic.HashSet<string>(lidNames).Count == 12,
                 "both eyes carry six uniquely named grid cells (" + lidNames.Count + ")");
-            Check(namesMatchPattern, "cell names are <tree>_<matrix>X<x>Y<y> ("
+            Check(namesMatchPattern, "cell names are <tree>_<xAxis>_<yAxis>__<matrix>X<x>Y<y> ("
                 + (lidNames.Count > 0 ? lidNames[0] : "none") + ")");
             Check(namesPositive, "grid coordinates are non-negative — the origin is the bottom-left corner");
             Check(namesMatchGrid, "the coordinates inside the name are the position the tree actually uses");
