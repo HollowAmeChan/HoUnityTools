@@ -1000,3 +1000,37 @@ Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回�
    第二种里"到底是只驱动一个键、还是两个键都驱动但都减半"，取决于美术怎么摆的，
    这一条要问清 —— 写错就是过眨眼，而它**不报错**。
 
+### 16.5 Shinano 的层结构：开关是独立层，但实现是 VRC 专有行为
+
+用户指出的两点，核对 `FX_FT_added 2.controller`（`.research/inspect_layers.py`）都成立：
+
+```
+[0] Eye Tracking State    状态: InStation / Eye Tracking Off / AFK / Idle / Eye Tracking On
+[1] Lip Tracking State    状态: Lip Tracking On / Lip Tracking Off / AFK / InStation / Idle
+[2] FacialTracking        一个状态，动作 = Face Tracking Root（那棵巨型树）
+[3] JellyEye              JellyIdle / Step 1 / Step 2
+[4] QPro_Toggle · [5] AFK-FT Control
+[6] _OSCmooth_Binary_Gen（Binary_Root） · [7] _OSCmooth_Smoothing_Gen（OSCm_Local / OSCm_Remote）
+```
+
+**区域开关确实是独立的动画层**（[0] [1]），面捕层 [2] 与果冻层 [3] 也是分开的。
+
+**但那两层开关的"动作"是空的** —— 真正干活的是挂在状态上的 **StateMachineBehaviour**，
+按序列化字段认出来是 VRChat SDK 专有的两个：
+
+| 字段签名 | 是什么 | 干什么 |
+| --- | --- | --- |
+| `trackingHead` … `trackingEyes` / `trackingMouth` / `debugString` | `VRCAnimatorTrackingControl` | 按部位关掉追踪 |
+| `parameters[{type,name,value,localOnly,…}]` / `localOnly` / `debugString` | `VRCAvatarParameterDriver` | 驱动 `EyeTrackingActive` / `LipTrackingActive` |
+
+所以：**开关层的"形状"值得抄**（每个区域一个二状态小开关 + AFK / InStation 守卫；
+区域参数由开关层产出），**但实现抄不了** —— 这两个行为在纯 Unity 里不存在，
+而且我们的 `Compile` 现在明确**拒绝** StateMachineBehaviour（`ValidateMachine`）。
+在我们这边，区域参数由 C# 生产，开关层的职责并进会话。
+
+**顺带一条设计含义**：用户说 Shinano 的树"极其复杂我其实不太敢动"。这句话本身就是信息 ——
+我们的前提里写着"用户面对的最高级东西是混合树"，但如果连看过大量控制器的人都不敢碰它的树，
+那"让用户进树加逻辑"的门槛比我原来估的高。生成的树要**刻意保持浅**（Direct 根 + 一层区域子树 + 叶子），
+用户的编辑面留在组件上；`(EDIT THIS)` 是逃生口，不是主路。
+
+
