@@ -92,20 +92,21 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             EditorGUILayout.LabelField("Ho 弹簧驱动", EditorStyles.boldLabel);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(new GUIContent("果冻眼 ×2",
-                    "加两根：横向 6Hz、纵向 8.5Hz、回弹 0.25。输入键自动匹配眨眼键，目标键留给你接。")))
+            if (GUILayout.Button(new GUIContent("果冻眼 · 横向",
+                    "把这根配成横向：跟随 6Hz、回弹 0.25、输入键自动匹配眨眼键。只改这一根的参数。")))
             {
-                HoSpringPresetActions.AddJellyEye(component);
+                HoSpringPresetActions.ApplyJelly(component, false);
             }
 
-            if (GUILayout.Button(new GUIContent("复制这一根",
-                    "同一套网格和输入键，再加一根，自己去调频率。")))
+            if (GUILayout.Button(new GUIContent("果冻眼 · 纵向",
+                    "把这根配成纵向：跟随 8.5Hz、回弹 0.25。只改这一根的参数。")))
             {
-                HoSpringPresetActions.Duplicate(component);
+                HoSpringPresetActions.ApplyJelly(component, true);
             }
 
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField("一个组件就是一弹簧，所以预设会往这台 GameObject 上加组件。", EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField("预设只改这一根的参数。一个组件就是一弹簧 —— 果冻眼自己挂两根，"
+                + "各点一次（横向 6 / 纵向 8.5），两个频率不同才有 Lissajous。", EditorStyles.wordWrappedMiniLabel);
         }
 
         // ── 网格 ──────────────────────────────────────────────────────────────

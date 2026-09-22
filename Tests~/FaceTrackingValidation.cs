@@ -314,6 +314,24 @@ public static class HoFaceTrackingValidation
             Check(springPeak > 60f, "the component reads a landed key, springs it, and writes its own key (peak=" + springPeak.ToString("F1") + ")");
             UnityEngine.Object.DestroyImmediate(springProbe);
 
+            // 预设只改当前这一根组件的参数：填弹簧值 + 给驱动键 + 目标为空时补两行待填（挤压 / 回弹）。
+            var presetProbe = new GameObject("PresetProbe");
+            var presetMesh = presetProbe.AddComponent<SkinnedMeshRenderer>();
+            presetMesh.sharedMesh = renderer.sharedMesh;
+            var presetSpring = presetProbe.AddComponent<HoSpringConstraint>();
+            presetSpring.Meshes.Add(presetMesh);
+            presetSpring.ApplyJellyPreset(true);
+            Check(Mathf.Abs(presetSpring.Frequency - HoSpringPresets.JellyFrequencyY) < 0.001f
+                && Mathf.Abs(presetSpring.Damping - HoSpringPresets.JellyDamping) < 0.001f,
+                "the jelly preset rewrites this component's spring values (" + presetSpring.Frequency + " Hz)");
+            Check(presetSpring.KeyNames.Contains("eyeBlinkLeft") && presetSpring.Targets.Count == 2
+                && !presetSpring.Targets[0].Reversed && presetSpring.Targets[1].Reversed,
+                "the preset fills the driving keys and leaves two ready rows (squash / rebound)");
+            presetSpring.ApplyJellyPreset(false);
+            Check(Mathf.Abs(presetSpring.Frequency - HoSpringPresets.JellyFrequencyX) < 0.001f && presetSpring.Targets.Count == 2,
+                "applying the other axis keeps the rows that are already there");
+            UnityEngine.Object.DestroyImmediate(presetProbe);
+
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;
             Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);

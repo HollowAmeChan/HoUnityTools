@@ -162,6 +162,34 @@ namespace Hollow.HoUnityTools.Constraints
             Build();
         }
 
+        /// <summary>
+        /// 把**本组件**配成"果冻眼"的某一路：跟随 / 回弹 / 增益 / 输入键；目标为空时补两行（挤压 / 回弹）。
+        ///
+        /// **只改自己 —— 不碰场景里别的组件，也不去加组件。** 预设的语义就是"把这台的参数填成某个样子"；
+        /// 要两个自由度就自己再挂一根（一个组件 = 一根弹簧），那是用户的动作，不是预设的动作。
+        /// </summary>
+        public void ApplyJellyPreset(bool vertical)
+        {
+            frequency = vertical ? HoSpringPresets.JellyFrequencyY : HoSpringPresets.JellyFrequencyX;
+            damping = HoSpringPresets.JellyDamping;
+            gain = 1.0f;
+
+            // 预设的职责之一是"给驱动键"：能匹配到眨眼键就填上，匹配不到就别把用户已经选的清掉。
+            List<string> matched = HoSpringPresets.JellyInputKeys(meshes);
+            if (matched.Count > 0)
+            {
+                keyNames = matched;
+            }
+
+            if (targets.Count == 0)
+            {
+                targets.Add(new HoSpringTarget(string.Empty, 1.0f, false));
+                targets.Add(new HoSpringTarget(string.Empty, 1.0f, true));
+            }
+
+            Rebuild();
+        }
+
         /// <summary>预设/脚本用的整体配置。</summary>
         public void Configure(List<SkinnedMeshRenderer> meshList, List<string> readKeys,
             float frequencyHz, float dampingRatio, float inputGain)
@@ -343,30 +371,6 @@ namespace Hollow.HoUnityTools.Constraints
             AddIfPresent(keys, meshes, "eyeBlinkLeft");
             AddIfPresent(keys, meshes, "eyeBlinkRight");
             return keys;
-        }
-
-        /// <summary>把一个已有的组件配成"果冻眼"的某一路。横向 / 纵向各配一个组件。</summary>
-        public static void ConfigureJelly(HoSpringConstraint component, bool vertical)
-        {
-            if (component == null)
-            {
-                return;
-            }
-
-            component.Configure(
-                component.Meshes,
-                JellyInputKeys(component.Meshes),
-                vertical ? JellyFrequencyY : JellyFrequencyX,
-                JellyDamping,
-                1.0f);
-
-            if (component.Targets.Count == 0)
-            {
-                // 搭结构：挤压一路、回弹一路。键名留空 —— 那是用户自己的键，猜不得。
-                component.Targets.Add(new HoSpringTarget(string.Empty, 1.0f, false));
-                component.Targets.Add(new HoSpringTarget(string.Empty, 1.0f, true));
-                component.Rebuild();
-            }
         }
 
         private static void AddIfPresent(List<string> keys, IEnumerable<SkinnedMeshRenderer> meshes, string keyName)
