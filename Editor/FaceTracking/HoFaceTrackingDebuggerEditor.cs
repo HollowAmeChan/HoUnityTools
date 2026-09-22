@@ -16,6 +16,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private Vector2 scroll;
         private string search = "";
         private string report = "";
+        private bool reportIsError;
         private bool outputExpanded;
         private bool channelsExpanded;
         private bool mappings;
@@ -94,7 +95,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
-            if (!string.IsNullOrEmpty(report)) EditorGUILayout.HelpBox(report, MessageType.Info);
+            if (!string.IsNullOrEmpty(report)) EditorGUILayout.HelpBox(report, reportIsError ? MessageType.Warning : MessageType.Info);
             if (session != null && session.Compiled != null && session.Compiled.warnings.Count > 0)
                 EditorGUILayout.HelpBox(string.Join("\n", session.Compiled.warnings.Take(8)), MessageType.Warning);
 
@@ -318,6 +319,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     if (string.IsNullOrEmpty(path)) return;
                     if (AssetDatabase.LoadMainAssetAtPath(path) != null)
                     {
+                        reportIsError = true;
                         report = "目标已存在，已取消：" + path;
                         return;
                     }
@@ -326,16 +328,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             try
             {
-                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path);
+                // 在**最终路径**上判断要不要覆盖：用户可能刚刚改选了「另存为新文件」。
+                bool overwrite = AssetDatabase.LoadMainAssetAtPath(path) != null;
+                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, overwrite);
                 Undo.RecordObject(rig, "Initialize face controller");
                 rig.faceController = controller;
                 EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
                 EditorUtility.SetDirty(rig);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
-                report = "已初始化 " + path + "：" + controller.parameters.Length + " 路 ARKit 参数（单图层 + 一棵 Direct 混合树）。"
-                    + "之后就改这个文件里的 (EDIT THIS) 段。";
+                reportIsError = false;
+                report = "已初始化 " + path + "：" + controller.parameters.Length + " 路 ARKit 参数（"
+                    + controller.layers.Length + " 层：驱动段 + 扩展点）。之后就改这个文件里的 (EDIT THIS) 段。";
             }
-            catch (Exception e) { report = e.Message; }
+            catch (Exception e) { Fail(e); }
+        }
+
+        /// <summary>失败必须显眼 —— 之前和成功消息共用蓝色 Info 框，结果被用户当提示略过去了。</summary>
+        private void Fail(Exception e)
+        {
+            reportIsError = true;
+            report = e.Message;
         }
 
         /// <summary>
@@ -358,7 +370,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 report = "已应用改动：重写了 " + HoFaceAnimationAssets.DriveLayerName + " 段；"
                     + HoFaceAnimationAssets.EditLayerName + " 段未改动。";
             }
-            catch (Exception e) { report = e.Message; }
+            catch (Exception e) { Fail(e); }
         }
 
         private static bool HasDriveLayer(AnimatorController controller)
@@ -416,7 +428,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (var compiled = HoFaceAnimationAssets.Compile(rig))
                     report = "可绑定输出：" + compiled.bindings.Count + "\n" + string.Join("\n", compiled.warnings.Take(12));
             }
-            catch (Exception e) { report = e.Message; }
+            catch (Exception e) { Fail(e); }
         }
     }
 }

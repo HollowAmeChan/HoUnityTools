@@ -187,10 +187,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// 参考实现（Jerry 的 ARKit 模板）也是这个形状：1 个驱动层 + 一棵 Direct 树。
         /// </summary>
-        public static AnimatorController Generate(Animator animator, string assetPath)
+        public static AnimatorController Generate(Animator animator, string assetPath, bool overwrite = false)
         {
             if (animator == null) throw new InvalidOperationException("请先指定 Animator。");
-            if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null) throw new InvalidOperationException("目标资产已存在，请选择新路径。");
+            if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null)
+            {
+                // 「初始化」是破坏性的，所以覆盖必须由调用方**显式**确认（面板上已经弹过确认框），
+                // 这里再拦一道只是防手滑：默认不允许覆盖。
+                if (!overwrite) throw new InvalidOperationException("目标资产已存在，请选择新路径（或确认覆盖）。");
+                AssetDatabase.DeleteAsset(assetPath);
+            }
             AnimatorController controller = null;
             try
             {

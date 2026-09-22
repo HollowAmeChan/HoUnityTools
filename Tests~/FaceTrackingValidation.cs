@@ -123,6 +123,17 @@ public static class HoFaceTrackingValidation
             try { using (var compiled = HoFaceAnimationAssets.Compile(rig)) { } } catch (InvalidOperationException) { rejected = true; }
             Check(rejected, "reject Direct tree with Write Defaults Off instead of letting it diverge");
             directState.writeDefaultValues = true;
+
+            // 回归：覆盖式「初始化」必须真的把旧文件换掉。
+            // 曾经是个真 bug —— 面板加了覆盖确认框，但 Generate 里"目标资产已存在就报错"的守卫
+            // 忘了删，于是用户点「覆盖并初始化」后文件原封不动（还是旧的 52 层），而报错又和成功
+            // 消息共用蓝色 Info 框，被当提示略过去了。
+            // 注意：这一步会销毁旧控制器与其中的状态对象，所以必须放在所有引用旧状态的断言**之后**。
+            var replaced = HoFaceAnimationAssets.Generate(animator, controllerPath, true);
+            Check(replaced != null && replaced.layers.Length == 2,
+                "re-initializing over an existing file really replaces it (layers=" + (replaced != null ? replaced.layers.Length : -1) + ")");
+            Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
+            rig.faceController = replaced;
             var body = AnimatorController.CreateAnimatorControllerAtPath(AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationBody.controller"));
             var bodyState = body.layers[0].stateMachine.AddState("Idle");
             bodyState.writeDefaultValues = false;
