@@ -29,89 +29,68 @@ namespace Hollow.HoUnityTools.Constraints
         }
     }
 
-    /// <summary>一个自由度：自己的弹簧（频率 / 阻尼）+ 自己的输出映射。</summary>
-    [Serializable]
-    public sealed class HoSpringAxis
-    {
-        [SerializeField] private string label = "横向";
-        [SerializeField, Min(0.01f)] private float frequency = 6.0f;
-        [SerializeField, Range(0.0f, 4.0f)] private float damping = 0.25f;
-        [SerializeField] private float gain = 1.0f;
-        [SerializeField] private List<HoSpringTarget> targets = new List<HoSpringTarget>();
-
-        public string Label => label;
-        public float Frequency => frequency;
-        public float Damping => damping;
-        public float Gain => gain;
-        public List<HoSpringTarget> Targets => targets;
-
-        public HoSpringAxis() { }
-
-        public HoSpringAxis(string label, float frequency, float damping, float gain = 1.0f)
-        {
-            this.label = label;
-            this.frequency = frequency;
-            this.damping = damping;
-            this.gain = gain;
-        }
-    }
-
-    /// <summary>一路输入：读哪些键（**取最大**，这样双眼键 / 左右键两种模型都直接能用）+ 驱动哪几个自由度。</summary>
-    [Serializable]
-    public sealed class HoSpringSource
-    {
-        [SerializeField] private string label = "眨眼";
-        [SerializeField] private List<string> keyNames = new List<string>();
-        [SerializeField] private List<HoSpringAxis> axes = new List<HoSpringAxis>();
-
-        public string Label => label;
-        public List<string> KeyNames => keyNames;
-        public List<HoSpringAxis> Axes => axes;
-
-        public HoSpringSource() { }
-
-        public HoSpringSource(string label)
-        {
-            this.label = label;
-        }
-    }
-
     /// <summary>
     /// <b>弹簧驱动</b>：读形态键 → 过阻尼弹簧 → 写形态键。Live2D 的"物理演算"在我们这边的对应物。
+    ///
+    /// **一个组件 = 一根弹簧。** 需要几个自由度就挂几个组件 —— 果冻眼就是两个（横向 / 纵向，
+    /// 频率不同才有 Lissajous）。这不是为了省代码，是为了让**结构扁平**：组件里只有两层列表
+    /// （读哪些键、写哪些键），没有"规则套自由度套目标"这种三层嵌套。挂组件是 Unity 用户
+    /// 最熟的动作，而三级折叠的 Inspector 是谁都不想碰的。
     ///
     /// **它为什么不是控制器里的东西**（定案 19）：混合树不能输出带物理的参数，而且混合树是状态机里的
     /// 东西 —— 所以物理参数的生产跟状态机没关系；它又是纯值消费，消费场景也不需要待在状态机里。
     /// 两头都不需要状态机，于是这一整件事就是一个独立组件。
     ///
-    /// **输入走"读已经落下来的键"**（而不是去问面捕会话）：
-    /// 于是它跟面捕完全解耦 —— 面捕、基础动画、别人写的键，谁写进去的都行；谁先写谁后写只由
-    /// 执行顺序决定。它读的那一帧值就是它看到的信号。
+    /// **输入走"读已经落下来的键"**：它跟面捕完全解耦 —— 面捕、基础动画、别人写的键，
+    /// 谁写进去的都行；读的那一帧值就是它看到的信号。读的和写的可以是同一批键而不打架：
+    /// 写之前先 `Snapshot()`，读的时候走外部基准，切断自反馈。
     ///
     /// **写入靠 <see cref="HoShapeKeyWriter"/>**：键解析、ramp、增益/偏移、范围钳制、叠加/覆盖、
     /// 饱和合并、恢复原值、以及**占用表检查**（`HoFaceOutputOwnership`）全是现成的 ——
-    /// 面捕正占着的键它不会去抢，这也是"读进去的键"和"写出去的键"可以重合而不打架的原因。
+    /// 面捕正占着的键它不会去抢。
     /// </summary>
     [AddComponentMenu("HoUnityTools/Constraints/Ho Spring Constraint")]
     public sealed class HoSpringConstraint : MonoBehaviour, IHoShapeKeyMeshProvider
     {
         [SerializeField] private List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
-        [SerializeField] private List<HoSpringSource> sources = new List<HoSpringSource>();
+
+        [Tooltip("读哪些形态键做输入（取其中最大的那个）。双眼键模型填一个，左右键模型填两个。")]
+        [SerializeField] private List<string> keyNames = new List<string>();
+
+        [Tooltip("跟进多快。果冻眼横向 6、纵向 8.5 —— 两个自由度频率不同，轨迹才不是一根直线来回。")]
+        [SerializeField, Min(0.01f)] private float frequency = 6.0f;
+
+        [Tooltip("回弹多少。0.25 有明显果冻感；1 是临界阻尼，完全不超调。")]
+        [SerializeField, Range(0.0f, 4.0f)] private float damping = 0.25f;
+
+        [Tooltip("输入增益。1 表示输入满值就驱动到满。")]
+        [SerializeField] private float gain = 1.0f;
+
+        [SerializeField] private List<HoSpringTarget> targets = new List<HoSpringTarget>();
         [SerializeField] private bool writingEnabled = true;
         [SerializeField] private float writeThreshold = 0.01f;
         [SerializeField] private HoShapeKeyMergeMode mergeMode = HoShapeKeyMergeMode.Saturate;
 
         private readonly HoShapeKeyWriter writer = new HoShapeKeyWriter();
-        private readonly List<HoFaceJellyState> springs = new List<HoFaceJellyState>();
-        private readonly List<int> axisTargetStart = new List<int>();
-        private readonly List<int> sourceBindingStart = new List<int>();
-        private readonly List<int> sourceBindingCount = new List<int>();
-        private readonly List<int> scratchBindings = new List<int>();
+        private readonly List<int> readBindings = new List<int>();
         private readonly List<int> targetIds = new List<int>();
+        private HoFaceJellyState spring;
         private bool built;
 
         public List<SkinnedMeshRenderer> Meshes => meshes;
 
-        public List<HoSpringSource> Sources => sources;
+        public List<string> KeyNames => keyNames;
+
+        public List<HoSpringTarget> Targets => targets;
+
+        public float Frequency => frequency;
+
+        public float Damping => damping;
+
+        public float Gain => gain;
+
+        /// <summary>弹簧当前值。0 = 静止，正 = 挤压（会过冲到 1 以上），负 = 回弹。</summary>
+        public float SpringValue { get; private set; }
 
         public bool WritingEnabled
         {
@@ -133,28 +112,58 @@ namespace Hollow.HoUnityTools.Constraints
 
         public int CountKeyBindings(string keyName) => writer.CountKeyBindings(keyName);
 
-        /// <summary>把弹簧按当前输入复位（原地收起来，不从 0 冲一下）。</summary>
-        public void ResetSprings()
+        /// <summary>
+        /// 当前输入值（0~1）。取所有输入键里**最大的那个** —— 双眼键模型只有一个键，
+        /// 左右键模型两个键，两种都不用改配置。
+        /// </summary>
+        public float ReadInput()
         {
-            for (int i = 0; i < springs.Count; i++)
+            if (!built)
             {
-                HoFaceJellyState state = springs[i];
-                HoFaceJelly.Reset(ref state, 0.0f);
-                springs[i] = state;
+                return 0.0f;
             }
+
+            float best = 0.0f;
+            for (int i = 0; i < readBindings.Count; i++)
+            {
+                // 读外部基准（writePending = false）：切断自反馈 —— 这个组件写出去的键，
+                // 下一帧不会被自己当成输入读回来。
+                float value = writer.ReadBinding(readBindings[i], false);
+                if (value > best)
+                {
+                    best = value;
+                }
+            }
+
+            return Mathf.Clamp01(best / 100.0f);
         }
 
-        /// <summary>重建绑定（网格列表或目标变了以后调用）。</summary>
+        /// <summary>把弹簧按当前输入复位（原地收起来，不从 0 冲一下）。</summary>
+        public void ResetSpring()
+        {
+            HoFaceJelly.Reset(ref spring, 0.0f);
+            SpringValue = 0.0f;
+        }
+
+        /// <summary>重建绑定（网格列表、输入键或目标变了以后调用）。</summary>
         public void Rebuild()
         {
             built = false;
             writer.RestoreWritten();
             writer.Reset();
-            springs.Clear();
-            axisTargetStart.Clear();
-            sourceBindingStart.Clear();
-            sourceBindingCount.Clear();
             Build();
+        }
+
+        /// <summary>预设/脚本用的整体配置。</summary>
+        public void Configure(List<SkinnedMeshRenderer> meshList, List<string> readKeys,
+            float frequencyHz, float dampingRatio, float inputGain)
+        {
+            meshes = meshList ?? new List<SkinnedMeshRenderer>();
+            keyNames = readKeys ?? new List<string>();
+            frequency = Mathf.Max(0.01f, frequencyHz);
+            damping = Mathf.Clamp(dampingRatio, 0.0f, 4.0f);
+            gain = inputGain;
+            Rebuild();
         }
 
         private void OnEnable()
@@ -199,7 +208,7 @@ namespace Hollow.HoUnityTools.Constraints
                 Build();
             }
 
-            if (!built || !writingEnabled || sources.Count == 0)
+            if (!built || !writingEnabled)
             {
                 return;
             }
@@ -214,67 +223,39 @@ namespace Hollow.HoUnityTools.Constraints
                 }
             }
 
+            float input = ReadInput();
+            HoFaceJelly.Step(ref spring, input * gain, deltaTime, frequency, damping);
+            SpringValue = spring.value;
+
             writer.Snapshot();
-
-            int axisIndex = 0;
-            for (int s = 0; s < sources.Count; s++)
+            for (int t = 0; t < targets.Count; t++)
             {
-                HoSpringSource source = sources[s];
-                float input = ReadSource(s);
-                for (int a = 0; a < source.Axes.Count; a++, axisIndex++)
+                HoSpringTarget target = targets[t];
+                if (target == null || target.Target == null || t >= targetIds.Count || targetIds[t] < 0)
                 {
-                    HoSpringAxis axis = source.Axes[a];
-                    HoFaceJellyState state = springs[axisIndex];
-                    HoFaceJelly.Step(ref state, input * axis.Gain, deltaTime, axis.Frequency, axis.Damping);
-                    springs[axisIndex] = state;
-
-                    int start = axisTargetStart[axisIndex];
-                    for (int t = 0; t < axis.Targets.Count; t++)
-                    {
-                        HoSpringTarget target = axis.Targets[t];
-                        if (target == null || target.Target == null)
-                        {
-                            continue;
-                        }
-
-                        // 弹簧会过冲到 1 以上、回弹到 0 以下。正反向各取一半，
-                        // 于是"挤压"和"回弹"是两个不同的键，而不是同一路被钳成 0。
-                        writer.Apply(start + t, Driver(state.value, target.Reversed), deltaTime);
-                    }
+                    continue;
                 }
+
+                // 弹簧会过冲到 1 以上、回弹到 0 以下。正反向各取一半，
+                // 于是"挤压"和"回弹"是两个不同的键，而不是同一路被钳成 0。
+                writer.Apply(targetIds[t], Driver(spring.value, target.Reversed), deltaTime);
             }
 
             writer.Write();
         }
 
-        /// <summary>这一路的输入：它的键里**最闭的那个**（双眼键模型只有一个键，左右键模型取较大者）。</summary>
-        private float ReadSource(int sourceIndex)
-        {
-            float best = 0.0f;
-            int start = sourceBindingStart[sourceIndex];
-            int count = sourceBindingCount[sourceIndex];
-            for (int i = 0; i < count; i++)
-            {
-                // 读外部基准（writePending = false）：切断自反馈 —— 这个组件写出去的键，
-                // 下一帧不会被自己当成输入读回来。
-                float value = writer.ReadBinding(start + i, false);
-                if (value > best)
-                {
-                    best = value;
-                }
-            }
-
-            return Mathf.Clamp01(best / 100.0f);
-        }
+        /// <summary>
+        /// 弹簧值 → 驱动值：正向目标吃正半周（挤压，含过冲），反向目标吃负半周（回弹）。
+        /// **纯函数**，所以"回弹真的会被送到别的键上"这条可以直接断言，不用跑动画去肉眼看。
+        /// 过冲（> 1）**不在这里夹掉** —— 它就是果冻那一下，交给目标的 增益 / 输出上限 去处理。
+        /// </summary>
+        public static float Driver(float springValue, bool reversed) =>
+            reversed ? Mathf.Max(0.0f, -springValue) : Mathf.Max(0.0f, springValue);
 
         private void Build()
         {
-            springs.Clear();
-            axisTargetStart.Clear();
-            sourceBindingStart.Clear();
-            sourceBindingCount.Clear();
+            readBindings.Clear();
             targetIds.Clear();
-            scratchBindings.Clear();
 
             var renderers = new List<Renderer>();
             for (int i = 0; i < meshes.Count; i++)
@@ -296,68 +277,27 @@ namespace Hollow.HoUnityTools.Constraints
             writer.MergeMode = mergeMode;
             writer.BeginBuild(renderers);
 
-            for (int s = 0; s < sources.Count; s++)
+            for (int i = 0; i < keyNames.Count; i++)
             {
-                HoSpringSource source = sources[s];
-                int bindingStart = scratchBindings.Count;
-                for (int k = 0; k < source.KeyNames.Count; k++)
-                {
-                    writer.RegisterReadKey(source.KeyNames[k], scratchBindings);
-                }
+                writer.RegisterReadKey(keyNames[i], readBindings);
+            }
 
-                sourceBindingStart.Add(bindingStart);
-                sourceBindingCount.Add(scratchBindings.Count - bindingStart);
-
-                for (int a = 0; a < source.Axes.Count; a++)
-                {
-                    HoSpringAxis axis = source.Axes[a];
-                    int targetStart = targetIds.Count;
-                    for (int t = 0; t < axis.Targets.Count; t++)
-                    {
-                        HoSpringTarget target = axis.Targets[t];
-                        targetIds.Add(target != null && target.Target != null ? writer.RegisterTarget(target.Target) : -1);
-                    }
-
-                    axisTargetStart.Add(targetStart);
-                    springs.Add(default);
-                }
+            for (int i = 0; i < targets.Count; i++)
+            {
+                HoSpringTarget target = targets[i];
+                targetIds.Add(target != null && target.Target != null ? writer.RegisterTarget(target.Target) : -1);
             }
 
             writer.EndBuild();
             built = true;
         }
 
-        /// <summary>
-        /// 弹簧值 → 驱动值：正向目标吃正半周（挤压，含过冲），反向目标吃负半周（回弹）。
-        /// **纯函数**，所以"回弹真的会被送到别的键上"这条可以直接断言，不用跑动画去肉眼看。
-        /// 过冲（> 1）**不在这里夹掉** —— 它就是果冻那一下，交给目标的 增益 / 输出上限 去处理。
-        /// </summary>
-        public static float Driver(float springValue, bool reversed) =>
-            reversed ? Mathf.Max(0.0f, -springValue) : Mathf.Max(0.0f, springValue);
-
-        /// <summary>把果冻预设加进来（结构 + 驱动键；目标键留空由用户接）。</summary>
-        public HoSpringSource AddJellyEyePreset(
-            float frequencyX = HoSpringPresets.JellyFrequencyX,
-            float frequencyY = HoSpringPresets.JellyFrequencyY,
-            float damping = HoSpringPresets.JellyDamping)
+        /// <summary>诊断用：第几个目标的当前输出（面板横条读它）。</summary>
+        public float GetTargetOutput(int targetIndex)
         {
-            HoSpringSource source = HoSpringPresets.JellyEye(meshes, frequencyX, frequencyY, damping);
-            sources.Add(source);
-            return source;
-        }
-
-        /// <summary>诊断用：某个自由度的目标当前输出（面板横条读它）。</summary>
-        public float GetTargetOutput(int axisIndex, int targetIndex)
-        {
-            if (axisIndex < 0 || axisIndex >= axisTargetStart.Count)
-            {
-                return 0.0f;
-            }
-
-            int flat = axisTargetStart[axisIndex] + targetIndex;
-            return flat < 0 || flat >= targetIds.Count || targetIds[flat] < 0
+            return targetIndex < 0 || targetIndex >= targetIds.Count || targetIds[targetIndex] < 0
                 ? 0.0f
-                : writer.GetTargetOutput(targetIds[flat]);
+                : writer.GetTargetOutput(targetIds[targetIndex]);
         }
     }
 
@@ -366,6 +306,7 @@ namespace Hollow.HoUnityTools.Constraints
     ///
     /// **第一个预设是果冻眼**，而且它是唯一一个不需要用户先想清楚"读什么"的预设：
     /// 眼睛的输入键是固定的那一族，两个自由度的频率也是调好的。
+    /// 一个组件 = 一根弹簧，所以果冻眼 = **两个组件**。
     /// </summary>
     public static class HoSpringPresets
     {
@@ -378,37 +319,48 @@ namespace Hollow.HoUnityTools.Constraints
         public const float JellyDamping = 0.25f;
 
         /// <summary>
-        /// 果冻眼：一路输入（眨眼）驱动两个自由度。
-        ///
-        /// 输入键先按 <see cref="HoBlinkKeyTable"/> 的"眼睑闭合"语义找（VRM `Blink`、MMD `まばたき`、
-        /// VRChat `vrc.blink`……），**再补 ARKit 的 `eyeBlinkLeft` / `eyeBlinkRight`** ——
-        /// 面捕落下来的值就是落在模型自己的键上的，但整套 ARKit 命名的模型也很常见，
-        /// 而那张表是按 VRM/MMD 规范命名的，不含 ARKit。
+        /// 果冻眼的输入键：先按 <see cref="HoBlinkKeyTable"/> 的"眼睑闭合"语义找
+        /// （VRM `Blink`、MMD `まばたき`、VRChat `vrc.blink`……），**再补 ARKit 的
+        /// `eyeBlinkLeft` / `eyeBlinkRight`** —— 面捕落下来的值落在模型自己的键上，
+        /// 但整套 ARKit 命名的模型也很常见，而那张表是按 VRM/MMD 规范命名的、不含 ARKit。
         /// </summary>
-        public static HoSpringSource JellyEye(IEnumerable<SkinnedMeshRenderer> meshes,
-            float frequencyX = JellyFrequencyX, float frequencyY = JellyFrequencyY, float damping = JellyDamping)
+        public static List<string> JellyInputKeys(IEnumerable<SkinnedMeshRenderer> meshes)
         {
-            var source = new HoSpringSource("眨眼");
+            var keys = new List<string>();
             foreach (HoBlinkKeyEntry entry in HoBlinkKeyTable.BySemantic(HoBlinkKeySemantic.EyelidClosed))
             {
-                AddIfPresent(source, meshes, entry.Name);
+                AddIfPresent(keys, meshes, entry.Name);
             }
 
-            AddIfPresent(source, meshes, "eyeBlinkLeft");
-            AddIfPresent(source, meshes, "eyeBlinkRight");
-
-            // 两个自由度：频率不同 → 参数在两个方向上不同步 → 轨迹是 Lissajous。
-            source.Axes.Add(new HoSpringAxis("横向", frequencyX, damping));
-            source.Axes.Add(new HoSpringAxis("纵向", frequencyY, damping));
-            return source;
+            AddIfPresent(keys, meshes, "eyeBlinkLeft");
+            AddIfPresent(keys, meshes, "eyeBlinkRight");
+            return keys;
         }
 
-        private static void AddIfPresent(HoSpringSource source, IEnumerable<SkinnedMeshRenderer> meshes, string keyName)
+        /// <summary>把一个已有的组件配成"果冻眼"的某一路。横向 / 纵向各配一个组件。</summary>
+        public static void ConfigureJelly(HoSpringConstraint component, bool vertical)
         {
-            if (Exists(meshes, keyName) && !source.KeyNames.Contains(keyName))
+            if (component == null)
             {
-                source.KeyNames.Add(keyName);
+                return;
             }
+
+            component.Configure(
+                component.Meshes,
+                JellyInputKeys(component.Meshes),
+                vertical ? JellyFrequencyY : JellyFrequencyX,
+                JellyDamping,
+                1.0f);
+        }
+
+        private static void AddIfPresent(List<string> keys, IEnumerable<SkinnedMeshRenderer> meshes, string keyName)
+        {
+            if (keys.Contains(keyName) || !Exists(meshes, keyName))
+            {
+                return;
+            }
+
+            keys.Add(keyName);
         }
 
         private static bool Exists(IEnumerable<SkinnedMeshRenderer> meshes, string keyName)

@@ -284,15 +284,13 @@ public static class HoFaceTrackingValidation
             Near(HoSpringConstraint.Driver(-0.4f, true), 0.4f, "the reversed side takes the rebound half", 0.0001f);
             Near(HoSpringConstraint.Driver(1.44f, true), 0f, "the reversed side ignores the squash half", 0.0001f);
 
-            var jellySource = HoSpringPresets.JellyEye(new[] { renderer });
-            Check(jellySource.Axes.Count == 2 && jellySource.Label == "眨眼",
-                "jelly preset is one input driving two freedoms (" + jellySource.Axes.Count + ")");
-            Check(Mathf.Abs(jellySource.Axes[0].Frequency - 6f) < 0.001f
-                && Mathf.Abs(jellySource.Axes[1].Frequency - 8.5f) < 0.001f
-                && Mathf.Abs(jellySource.Axes[0].Damping - 0.25f) < 0.001f,
-                "the two freedoms keep different frequencies, so the path is not a straight line");
-            Check(jellySource.KeyNames.Contains("eyeBlinkLeft") && jellySource.KeyNames.Contains("eyeBlinkRight"),
-                "the preset finds the blink keys that are actually on the mesh (" + string.Join(",", jellySource.KeyNames) + ")");
+            var jellyKeys = HoSpringPresets.JellyInputKeys(new[] { renderer });
+            Check(jellyKeys.Contains("eyeBlinkLeft") && jellyKeys.Contains("eyeBlinkRight"),
+                "the jelly preset finds the blink keys that are actually on the mesh (" + string.Join(",", jellyKeys) + ")");
+            Check(Mathf.Abs(HoSpringPresets.JellyFrequencyX - 6f) < 0.001f
+                && Mathf.Abs(HoSpringPresets.JellyFrequencyY - 8.5f) < 0.001f
+                && Mathf.Abs(HoSpringPresets.JellyDamping - 0.25f) < 0.001f,
+                "the two jelly freedoms keep different frequencies, so the path is not a straight line");
 
             // 端到端（编辑期直接喂帧，不进播放模式）：读一个**已经落下来的**键 → 弹簧 → 写另一个键。
             var springProbe = new GameObject("SpringProbe");
@@ -302,10 +300,9 @@ public static class HoFaceTrackingValidation
             int jellyKey = renderer.sharedMesh.GetBlendShapeIndex("JellyEye");
             springMesh.SetBlendShapeWeight(blinkIndex, 100f);
             var spring = springProbe.AddComponent<HoSpringConstraint>();
-            spring.Meshes.Add(springMesh);
-            var springSource = spring.AddJellyEyePreset();
-            springSource.Axes[0].Targets.Add(new HoSpringTarget("JellyEye", 1f));
-            springSource.Axes[1].Targets.Add(new HoSpringTarget("JellyEye", 1f));
+            spring.Configure(new System.Collections.Generic.List<SkinnedMeshRenderer> { springMesh }, jellyKeys,
+                HoSpringPresets.JellyFrequencyX, HoSpringPresets.JellyDamping, 1f);
+            spring.Targets.Add(new HoSpringTarget("JellyEye", 1f));
             spring.Rebuild();
             float springPeak = 0f;
             for (int i = 0; i < 90; i++)
