@@ -67,7 +67,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 if (GUILayout.Button("全局连接面板", GUILayout.Height(20))) HoFaceTrackingWindow.ShowWindow();
                 using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
-                    if (GUILayout.Button(new GUIContent("生成 ARKit 控制器", "扫描角色上真实存在的 ARKit 键，生成每个键一个覆盖图层的纯 Unity 控制器。"), GUILayout.Height(20))) Generate(rig);
+                    if (GUILayout.Button(new GUIContent("生成 ARKit 控制器", "扫描角色上真实存在的 ARKit 键，生成一个图层 + 一棵 Direct 混合树的纯 Unity 控制器（每键一个子节点，参数直接当权重）。"), GUILayout.Height(20))) Generate(rig);
             }
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -265,7 +265,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 rig.channels = HoFaceTrackingChannels.CreateDefaults();
                 EditorUtility.SetDirty(rig);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
-                report = "已生成 " + controller.parameters.Length + " 路 ARKit 混合树。凝视输出仍由上面的分组开关控制。";
+                report = "已生成 " + controller.parameters.Length + " 路 ARKit 参数（单图层 + 一棵 Direct 混合树）。凝视输出仍由上面的分组开关控制。";
             }
             catch (Exception e) { report = e.Message; }
         }

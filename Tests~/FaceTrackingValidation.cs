@@ -81,12 +81,28 @@ public static class HoFaceTrackingValidation
                 Check(compiled.bindings.TrueForAll(b => b.path == "Meshes/Face" && b.renderer == alternateMesh), "nested path remap resolves actual renderer");
             rig.pathRemaps.Clear();
             UnityEngine.Object.DestroyImmediate(alternate);
-            var state = controller.layers[0].stateMachine.states[0].state;
-            state.writeDefaultValues = true;
+            // ── 生成器结构：单图层 + 一棵 Direct 树 + Write Defaults 开 ──────────
+            var layers = controller.layers;
+            var directState = layers[0].stateMachine.states[0].state;
+            var directTree = directState.motion as BlendTree;
+            Check(layers.Length == 1, "generator emits a single layer (was 52 layers, one per shape)");
+            Check(layers[0].stateMachine.states.Length == 1, "generator emits a single state");
+            Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "generator emits one Direct blend tree");
+            Check(directTree != null && directTree.children.Length == 52, "Direct tree has one child per shape");
+            Check(directState.writeDefaultValues, "Direct tree uses Write Defaults On");
+            bool ownParameters = true;
+            if (directTree != null)
+                foreach (var child in directTree.children)
+                    if (!child.directBlendParameter.StartsWith("ARKit/", StringComparison.Ordinal)) ownParameters = false;
+            Check(ownParameters, "every Direct child is weighted by its own ARKit parameter");
+
+            // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
+            //（0.6 的输入 → 98.98 → 246.28 → 1059.33），不能靠运气。
+            directState.writeDefaultValues = false;
             bool rejected = false;
             try { using (var compiled = HoFaceAnimationAssets.Compile(rig)) { } } catch (InvalidOperationException) { rejected = true; }
-            Check(rejected, "reject Write Defaults On instead of silently changing semantics");
-            state.writeDefaultValues = false;
+            Check(rejected, "reject Direct tree with Write Defaults Off instead of letting it diverge");
+            directState.writeDefaultValues = true;
             var body = AnimatorController.CreateAnimatorControllerAtPath(AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationBody.controller"));
             var bodyState = body.layers[0].stateMachine.AddState("Idle");
             bodyState.writeDefaultValues = false;
@@ -190,50 +206,10 @@ public static class HoFaceTrackingValidation
                 Check(HoFaceInputHub.Session(rig) != null, "session can restart");
                 HoFaceInputHub.Stop(rig);
 
-                // ── 判别性实验：单个 Direct 混合树能不能替代"一层一个键" ──────────────
-                // 上一轮选"每个形态键一个独立 Override 图层"，理由是"Direct 树会归一化、
-                // 各通道互相削弱"。这条理由决定了 52 个图层的存在是否必要，所以这里直接测：
-                // 同一个 Direct 树里 jawOpen=0.6 与 mouthSmileLeft=0.8 同时给，
-                // 如果两者都拿到 60/80，说明 Direct 不归一化，那 52 层就是纯多余的。
-                var direct = BuildDirectController(rig.targetAnimator, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationDirect.controller"));
-                DumpDirectController(direct);
-                rig.faceController = direct;
-                foreach (var c in rig.channels) c.mode = HoFaceInputMode.Manual;
-                Channel("jawOpen").manual = 0.6f;
-                Channel("mouthSmileLeft").manual = 0.0f;
-                Channel("mouthClose").manual = 0.0f;
-                Channel("eyeLookInLeft").manual = 0.0f;
-                HoFaceInputHub.Start(rig);
-                Check(HoFaceInputHub.Session(rig) != null, "direct-tree session starts: " + HoFaceInputHub.Error(rig));
-                stage++; frame = Time.frameCount + 5; return;
-            }
-            if (stage == 6)
-            {
-                // 只驱动 jawOpen（0.6），先看单路口径下是 60 还是失控。
-                Debug.Log("HO_TRACE1 f=" + Time.frameCount + " jawOpen=" + Weight("jawOpen"));
-                Channel("jawOpen").manual = 0.0f;
-                Channel("mouthSmileLeft").manual = 0.8f;
-                stage++; frame = Time.frameCount + 5; return;
-            }
-            if (stage == 7)
-            {
-                Debug.Log("HO_TRACE2 f=" + Time.frameCount + " jawOpen=" + Weight("jawOpen") + " mouthSmileLeft=" + Weight("mouthSmileLeft"));
-                Channel("jawOpen").manual = 0.6f;
-                stage++; frame = Time.frameCount + 5; return;
-            }
-            if (stage == 8)
-            {
-                float jaw = Weight("jawOpen");
-                float smile = Weight("mouthSmileLeft");
-                Debug.Log("HO_TRACE3 f=" + Time.frameCount + " jawOpen=" + jaw + " mouthSmileLeft=" + smile);
-                Debug.Log("HO_DIRECT_WDOFF: jawOpen=" + jaw + " mouthSmileLeft=" + smile
-                    + " —— 发散，不是归一化削弱；Direct 树在写默认值关闭时不成立");
-                // 这一组只记录不判定：它是"WD Off + Direct"的反面教材。
-                HoFaceInputHub.Stop(rig);
-
-                // ── 决定性实验：同一个 Direct 树，只改 Write Defaults ────────────────
-                // Jerry 的控制器**所有状态都是 WD=1**，而我们的管线全建在 WD Off 上。
-                // 这里绕开我们自己的会话，直接拿一个干净 Animator 驱动，把两种 WD 摆一起比。
+                // ── 判别性实验：同一个 Direct 树，只改 Write Defaults ────────────────
+                // 参考实现（Jerry 的 ARKit 模板）所有状态都是 WD 开，而我们旧的生成器是 WD 关。
+                // 这里绕开我们的会话，直接拿一个干净 Animator 驱动，把两种 WD 摆一起比 ——
+                // 会话路径下 WD Off 会被 Compile 直接拒掉（上面已断言），所以必须独立测。
                 probeRoot = new GameObject("DirectProbe");
                 probeAnimator = probeRoot.AddComponent<Animator>();
                 probeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -248,7 +224,7 @@ public static class HoFaceTrackingValidation
                 probeAnimator.SetFloat("ARKit/mouthSmileLeft", 0.8f);
                 stage++; frame = Time.frameCount + 10; return;
             }
-            if (stage == 9)
+            if (stage == 6)
             {
                 float jaw = ProbeWeight("jawOpen");
                 float smile = ProbeWeight("mouthSmileLeft");
@@ -258,7 +234,7 @@ public static class HoFaceTrackingValidation
                 probeAnimator.runtimeAnimatorController = probeWdOff;
                 stage++; frame = Time.frameCount + 10; return;
             }
-            if (stage == 10)
+            if (stage == 7)
             {
                 float jaw = ProbeWeight("jawOpen");
                 float smile = ProbeWeight("mouthSmileLeft");

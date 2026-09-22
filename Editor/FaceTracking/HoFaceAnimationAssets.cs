@@ -144,12 +144,42 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (machine.behaviours.Length != 0) throw new InvalidOperationException("不支持 StateMachineBehaviour：" + machine.name);
             foreach (var child in machine.states)
             {
-                if (child.state.behaviours.Length != 0 || child.state.writeDefaultValues)
-                    throw new InvalidOperationException("面部状态必须无 Behaviour 且 Write Defaults Off：" + child.state.name);
+                if (child.state.behaviours.Length != 0)
+                    throw new InvalidOperationException("面部状态不能带 Behaviour：" + child.state.name);
+                // Direct 树靠"权重和不足 1 时那部分与基准值混合"工作。写默认值关掉时，那个基准值取的是
+                // "当前值"且永不复位——实测会逐帧发散（0.6 的输入 → 98.98 → 246.28 → 1059.33）。
+                // 这个组合直接拒绝，不留给运气。
+                if (!child.state.writeDefaultValues && HasDirectTree(child.state.motion))
+                    throw new InvalidOperationException(
+                        "Direct 混合树必须把 Write Defaults 打开，否则输出会发散：" + child.state.name
+                        + "（见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md 的判别性实验）");
             }
             foreach (var child in machine.stateMachines) ValidateMachine(child.stateMachine);
         }
 
+        /// <summary>状态的动作里（含嵌套）有没有 Direct 混合树。</summary>
+        private static bool HasDirectTree(Motion motion)
+        {
+            if (!(motion is BlendTree tree)) return false;
+            if (tree.blendType == BlendTreeType.Direct) return true;
+            foreach (var child in tree.children)
+                if (HasDirectTree(child.motion)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// 每个 ARKit 键一个片段、整份控制器只有 **一个图层 + 一棵 Direct 混合树**。
+        ///
+        /// 为什么不是"一层一个键"：那是早期"接管 Animator"时代的绕法，理由是"Direct 树会归一化、
+        /// 各通道互相削弱"——**实测否掉了**。同一个 Direct 树里 jawOpen=0.6 与 mouthSmileLeft=0.8
+        /// 同时给，得到的就是精确的 60 / 80（见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md）。
+        ///
+        /// 唯一的前提是 **Write Defaults 要开**：Direct 树里权重和不足 1 的那部分 (1-Σw) 会和
+        /// 基准值混合；WD 关时基准值取"当前值"且永不复位，实测会发散（98.98 → 246.28 → 1059.33）。
+        /// 面部控制器现在跑在隔离的影子台上，没有别的写入者，所以 WD 开在这里完全无害。
+        ///
+        /// 参考实现（Jerry 的 ARKit 模板）也是这个形状：1 个驱动层 + 一棵 Direct 树。
+        /// </summary>
         public static AnimatorController Generate(Animator animator, string assetPath)
         {
             if (animator == null) throw new InvalidOperationException("请先指定 Animator。");
@@ -171,38 +201,27 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             try
             {
                 controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
-                var initialLayers = controller.layers;
-                initialLayers[0].iKPass = true;
-                controller.layers = initialLayers;
-                var root = controller.layers[0].stateMachine.AddState("Neutral");
-                root.writeDefaultValues = false;
-                var empty = new AnimationClip { name = "Neutral" };
-                AssetDatabase.AddObjectToAsset(empty, controller);
-                root.motion = empty;
-                // Independent Override layers avoid Direct-tree normalization and cross-channel attenuation.
+                var tree = new BlendTree { name = "ARKit Direct", blendType = BlendTreeType.Direct };
+                AssetDatabase.AddObjectToAsset(tree, controller);
                 foreach (var pair in groups)
                 {
                     string parameter = "ARKit/" + pair.Key;
                     controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
-                    controller.AddLayer(pair.Key);
-                    var layers = controller.layers;
-                    var layer = layers[layers.Length - 1];
-                    layer.defaultWeight = 1f;
-                    layers[layers.Length - 1] = layer;
-                    controller.layers = layers;
-                    var state = layer.stateMachine.AddState(pair.Key);
-                    state.writeDefaultValues = false;
-                    var tree = new BlendTree { name = pair.Key, blendType = BlendTreeType.Simple1D, blendParameter = parameter, useAutomaticThresholds = false };
-                    AssetDatabase.AddObjectToAsset(tree, controller);
-                    for (int endpoint = 0; endpoint < 2; endpoint++)
-                    {
-                        var clip = new AnimationClip { name = pair.Key + "_" + endpoint, frameRate = 60f };
-                        foreach (var binding in pair.Value) AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, endpoint * 100f));
-                        AssetDatabase.AddObjectToAsset(clip, controller);
-                        tree.AddChild(clip, endpoint);
-                    }
-                    state.motion = tree;
+                    // 一个键只需要一个"满值"片段：权重由参数给，参数为 0 时它贡献 0。
+                    var clip = new AnimationClip { name = pair.Key, frameRate = 60f };
+                    foreach (var binding in pair.Value)
+                        AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
+                    AssetDatabase.AddObjectToAsset(clip, controller);
+                    tree.AddChild(clip);
+                    var children = tree.children;
+                    children[children.Length - 1].directBlendParameter = parameter;
+                    tree.children = children;
                 }
+
+                var root = controller.layers[0].stateMachine.AddState("ARKit");
+                // 见方法注释：Direct 树必须配 Write Defaults 开，否则 (1-Σw) 会与当前值反复混合。
+                root.writeDefaultValues = true;
+                root.motion = tree;
                 EditorUtility.SetDirty(controller);
                 AssetDatabase.SaveAssets();
                 return controller;

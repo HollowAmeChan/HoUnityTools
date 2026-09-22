@@ -66,16 +66,16 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 
 效果是"两眼要眨一起眨、要半闭一起半闭"，避免一只眼半闭时显得不协调。眼球注视方向也有一份同样的 `EyeSync In/Out`。
 
-## 2. 我们生成的：一层一个形态键
+## 2. 我们原来的生成器：一层一个形态键（已废弃）
 
-`HoFaceAnimationAssets.Generate` 目前生成 **每个形态键一个独立 Override 图层**，每层一棵 Simple1D 树、两个片段（0 / 100）。一个 52 键的模型 ≈ **52 个图层 + 104 个片段**。
+`HoFaceAnimationAssets.Generate` 曾经生成 **每个形态键一个独立 Override 图层**，每层一棵 Simple1D 树、两个片段（0 / 100）。一个 52 键的模型 ≈ **52 个图层 + 104 个片段**。
 
 代码里的理由是：
 
 > Independent Override layers avoid Direct-tree normalization and cross-channel attenuation.
 > （独立 Override 图层避免 Direct 树的归一化与通道间削弱）
 
-**这条理由是错的 —— 实测否掉了。**
+**这条理由是错的 —— 实测否掉了。**（第 5 节记录了替代实现与结果。）
 
 ## 3. 判别性实验：Direct 树到底会不会削弱
 
@@ -108,15 +108,27 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 
 放开它，就能换成 Jerry 那种结构，图层数从 52 降到 **1**。
 
-## 5. 建议
+## 5. 短期改动：已落地
 
-短期（结构性收益最大、风险最低）：
+1. **生成器改成一棵 Direct 树** ✅ 单图层、单状态、每键一个子节点、用自己的 `ARKit/<键>` 当 direct 权重、片段写 100。**图层 52 → 1，片段 104 → 52。**
+2. **放开「必须 WD Off」** ✅ `Compile` 现在只禁止 Behaviour，不再要求 WD Off。同时新增一条**基于实测的守卫**：`Direct 树 + WD Off` 直接拒绝（那个组合会发散），错误信息里指向本文。旧的 `Simple1D + WD Off` 控制器仍然接受。
+3. **保留严格校验** ✅ 只允许形态键曲线、无 Behaviour、无同步图层、无事件/对象曲线。
 
-1. **生成器改成一棵 Direct 树**：单图层、单状态、52 个子节点，每个子节点用自己的 `ARKit/<键>` 当 direct 权重，对应片段写 0 / 100。图层数 52 → 1，片段数少一半（每键一个 100 的片段）。
-2. **放开「面部控制器必须 WD Off」这条限制**，改成：WD 可以开，但要求**同一控制器内一致**；并在校验里说明"WD 开是为了让 Direct 树可用"。
-3. 保留现有的严格校验（只允许形态键曲线、无 Behaviour、无同步图层、无事件/对象曲线）——Jerry 原版模板仍然进不来，但那是另一件事。
+验收（`Tests~/FaceTrackingValidation.cs`，一次性 Unity 工程批处理）：
 
-中期（这才是 Jerry 结构真正的价值，我们目前结构上做不到）：
+| 断言 | 结果 |
+| --- | --- |
+| 生成器只出 1 个图层 / 1 个状态 / 1 棵 Direct 树 / 每键一个子节点 / WD 开 / 子节点各自用自己的参数 | 全部通过 |
+| **Direct 树 + WD Off 被拒绝** | 通过 |
+| `jawOpen` 60、`mouthSmileLeft` 80、`mouthClose` 25、`eyeBlinkLeft` 40 | **与旧实现完全一致** |
+| **同时张嘴与微笑不互相削弱**（旧设计专门为此做的多层，Direct 树同样成立） | 通过 |
+| 凝视排除后基础动画的 33、身体变换的 2 都保留 | 通过 |
+| Ho 写入器与其清理都不覆盖面捕值；交还回基础动画 15 | 通过 |
+| 真实 UDP → 混合树 90；断流回退 17；停止恢复、清空占用、可重启 | 通过 |
+
+**期望值一个都没变** —— 换结构没有改变可见行为，这正是最想要的回归结果。
+
+## 6. 中期方向（还没做，这才是 Jerry 结构真正的价值）
 
 4. **二维区域**：眼睑 `(开合, 眯眼)`、眼球 `(X, Y)` 用 FreeformCartesian2D + 作者摆好的姿势，而不是两条曲线相加。
 5. **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝；`JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间。
@@ -124,9 +136,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 7. **EyeSync 式的左右交叉混合**（4 子 Direct 树 + 一个 mix 参数）。
 8. 参数预处理链（平滑 / 灵敏度 / 上下限）。这一段在 Jerry 那边是 OSCmooth 预制件做的，不在控制器里；我们是否要在自家链路里做，需要单独决定。
 
-不在本文范围内但受影响的：现有用例断言的期望值（60/80/25/40）在改成 Direct 树之后应当**保持不变** —— 这本身就是很好的回归护栏。
-
-## 6. 复现
+## 7. 复现
 
 ```powershell
 # 控制器结构（层 / 状态 / 树骨架 / 参数驱动 / 参数表）
@@ -135,7 +145,7 @@ python .research/inspect_shared_controller.py    # → .research/shared-controll
 
 # 判别性实验（Direct 树 × Write Defaults）
 # 把 Tests~/FaceTrackingValidation.cs 放进一次性 Unity 工程的 Assets/Editor，
-# 跑 HoFaceTrackingValidation.RunBatch，看 HO_WDON / HO_WDOFF / HO_TRACE* 三行
+# 跑 HoFaceTrackingValidation.RunBatch，看 HO_WDON / HO_WDOFF 两行
 ```
 
 踩过的解析坑：Unity YAML 里混合树的子节点字段是 `m_Childs`（不是 `m_Children`）、类型字段是 `m_BlendType`（不是 `m_Type`）；文档 id 在 `--- !u!206 &-123` 里，`&` 后面直接换行，不能用 `split(' ')` 截。

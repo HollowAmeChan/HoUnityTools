@@ -238,7 +238,7 @@ Ho 面捕调试
 
 切换输出拥有者会在帧边界重新准备过滤后的动画配置并重置相关状态；首期允许有提示的重建，不承诺任意原控制器状态无缝迁移。关闭面部输出时，用规定的交还流程恢复该属性，而不是认为删除曲线自然会恢复旧值。
 
-Write Defaults 会影响未显式写入属性。自建受控 Controller 使用一致的 WD Off 和完整的中性/有效姿势定义；未被状态写入的值不应靠隐式复位。原版 Jerry 的 WD On、参数曲线与行为逻辑应保留到兼容后端，不能批量关闭或仅过滤几个 Clip 就承诺隔离成功。
+Write Defaults 会影响未显式写入属性。自建受控 Controller 用 **WD 开**（Direct 树的前提）并给出完整的满值姿势定义；旧的 `Simple1D + WD Off` 控制器也仍然接受，但**「Direct 树 + WD Off」会发散，已在编译期拒绝**（见 9 节与控制器结构对比文档）。原版 Jerry 的 WD On、参数曲线与行为逻辑仍属兼容后端范围，不能批量关闭或仅过滤几个 Clip 就承诺隔离成功。
 
 依据：[AvatarMask](https://docs.unity3d.com/2021.3/Documentation/Manual/class-AvatarMask.html)、[读取动画绑定](https://docs.unity3d.com/2021.3/Documentation/ScriptReference/AnimationUtility.GetCurveBindings.html)、[修改临时曲线](https://docs.unity3d.com/2021.3/Documentation/ScriptReference/AnimationUtility.SetEditorCurve.html)。
 
@@ -391,13 +391,13 @@ Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（约 30
 
 网络接收和调试启动只存在于编辑器流程，组件随角色导出时不自动开端口。由于本仓库还服务 Warudo 构建，添加新 Runtime 组件时需验证 FastBuild 对组件和程序集的收集；正式运行时面捕宿主另定范围。
 
-不要在第一次迭代同时实现任意 Controller 转换器、完整 VRC 模拟器和通用动画框架。面部 Controller 的接受范围是受限的"预览编译"：纯 Unity `AnimatorController`、无 Behaviour、Write Defaults Off、只含形态键 Float 曲线、无同步图层；超出范围时明确报错，不静默丢弃。
+不要在第一次迭代同时实现任意 Controller 转换器、完整 VRC 模拟器和通用动画框架。面部 Controller 的接受范围是受限的"预览编译"：纯 Unity `AnimatorController`、无 Behaviour、只含形态键 Float 曲线、无同步图层；Write Defaults 两种都收，但**「Direct 树 + WD Off」会被拒**（实测会发散）；超出范围时明确报错，不静默丢弃。
 
-一键生成器扫描角色实际存在的 ARKit 键，生成 `ARKit/<键名>` Float 参数，以及 0/100 两个姿势组成的 1D 子树。**当前实现是每个形态键一个独立 Override 图层**（52 键 ≈ 52 层）。
+一键生成器扫描角色实际存在的 ARKit 键，生成 `ARKit/<键名>` Float 参数，以及**一个图层 + 一棵 Direct 混合树**：每个键一个子节点，键的参数直接当子权重，片段写满值 100。**Write Defaults 开**（Direct 树的前提，见下）。
 
-> **这一块已判定要改，理由也已更正。** 当时写下"Direct 树的归一化会让同时张嘴与微笑互相削弱"——**实测否定**：Direct 树不归一化，`jawOpen=0.6` 与 `mouthSmileLeft=0.8` 同时给就是精确的 60 / 80。真正不可用的是**「Direct 树 + 写默认值关闭」**（逐帧拿当前值当基准混合，会发散），而我们的管线恰好强制 WD Off。那条约束来自早期"接管 Animator"的设计，而该设计已改为影子求值 —— 影子是隔离的，WD On 无害，约束已过期。
+> **这一段改过一次，理由也换了。** 原实现是"每个形态键一个独立 Override 图层"（52 键 ≈ 52 层），理由是"Direct 树的归一化会让同时张嘴与微笑互相削弱"——**实测否定**：Direct 树不归一化，`jawOpen=0.6` 与 `mouthSmileLeft=0.8` 同时给就是精确的 60 / 80。真正不可用的是**「Direct 树 + 写默认值关闭」**（逐帧拿当前值当基准混合，会发散），而那条 WD Off 约束来自早期"接管 Animator"的设计 —— 已改成影子求值，影子隔离、没有别的写入者，WD On 无害。
 >
-> 结论：应改成**单图层 + 一棵 Direct 树**（52 层 → 1 层），并放开"面部控制器必须 WD Off"。详见 [面捕控制器结构对比](FACE_TRACKING_CONTROLLER_STRUCTURE.md)（含判别性实验数据）。**本文其余部分仍按当前实现描述，改动落地后一并更新。**
+> 现在：**52 层 → 1 层，104 个片段 → 52 个**；`Compile` 不再要求 WD Off，改为**拒绝「Direct 树 + WD Off」**这个实测会发散的组合（旧的 `Simple1D + WD Off` 控制器仍然接受）。换结构后所有既有断言（60/80/25/40、不互相削弱、凝视排除、交还与断流）**期望值一个没变**。详见 [面捕控制器结构对比](FACE_TRACKING_CONTROLLER_STRUCTURE.md)。
 
 凝视输出默认排除，眼睑保留；自定义额外键通过 Profile 配置。生成资产保存到用户项目的新目录，不覆盖既有控制器；运行预览所需的过滤副本仅保存在内存。
 
