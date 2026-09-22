@@ -359,6 +359,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public string profileStatus = string.Empty;
             public string rootAssetSummary = string.Empty;
             public List<string> scripts = new List<string>();
+            /// <summary>类型是**真的从入口资产探测出来**的。手动指定、或按工作区推断出来的都不算。</summary>
+            public bool kindDetectedFromEntry;
             public readonly List<string> errors = new List<string>();
             public readonly List<string> warnings = new List<string>();
             public bool canBuild;
@@ -374,13 +376,29 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             // 那只有一个会生效 —— 必须当场拦下来，不能等装进 Warudo 才发现没反应。
             List<OtherModKindInfo> detected = DetectOtherModKinds(context);
             context.detectedKinds = detected;
-            context.kindInfo = otherModKindIsAuto || otherModKindOverride == OtherModKind.Unknown
-                ? (detected.Count > 0 ? detected[0] : Info(OtherModKind.Unknown))
-                : Info(otherModKindOverride);
-            if (otherModKindIsAuto)
-                context.kindEvidence = context.kindInfo.kind == OtherModKind.Unknown ? "（未识别）" : "（自动识别）";
-            else
+
+            if (!otherModKindIsAuto && otherModKindOverride != OtherModKind.Unknown)
+            {
+                context.kindInfo = Info(otherModKindOverride);
                 context.kindEvidence = "（手动指定）";
+            }
+            else if (detected.Count > 0)
+            {
+                context.kindInfo = detected[0];
+                context.kindDetectedFromEntry = true;
+                context.kindEvidence = "（自动识别）";
+            }
+            else
+            {
+                // 目录里没有可识别的入口资产。退一步：用**当前活动工作区的导出目录**推断。
+                // 工作区本来就是一个类别一个，导出目录末段就是类别名，这个信息足够可靠，
+                // 不该逼用户去点「手动指定类型」。
+                OtherModKindInfo inferred = InferKindFromActiveWorkspace();
+                context.kindInfo = inferred ?? Info(OtherModKind.Unknown);
+                context.kindEvidence = inferred != null
+                    ? "（按工作区导出目录推断：" + inferred.label + "）"
+                    : "（未识别）";
+            }
 
             context.exportPath = ResolveOtherModExportPath(context.kindInfo);
 
@@ -437,8 +455,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     : Path.GetFileName(found);
                 if (string.IsNullOrEmpty(found))
                 {
-                    // 自动识别时，缺入口资产说明这个目录根本不是这一类，必须拦住。
-                    if (otherModKindIsAuto)
+                    // 类型是真从入口资产探测出来的 -> 现在却找不到它，属于异常，拦住。
+                    // 类型是手动指定或按工作区推断的 -> 允许没有约定名，
+                    // 只警告放行（用户可能正是在验证"入口名到底是不是硬约定"）。
+                    if (context.kindDetectedFromEntry)
                     {
                         context.errors.Add(
                             context.kindInfo.label + " Mod 需要名为 " + context.kindInfo.rootAssetName +
@@ -446,11 +466,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     }
                     else
                     {
-                        // 手动指定类型 = 用户明确知道自己在做什么（例如正在验证
-                        //「入口资产名到底是不是硬约定」），这时只警告、不挡构建。
                         context.warnings.Add(
                             "目录里没有名为 " + context.kindInfo.rootAssetName + " 的入口资产（" +
-                            context.kindInfo.rootAssetType + "）。已按手动指定的类型「" +
+                            context.kindInfo.rootAssetType + "）。已按类型「" +
                             context.kindInfo.label + "」继续构建 —— 如果 Warudo 那边认不出来，" +
                             "就说明这个入口名是硬约定。");
                     }
@@ -976,18 +994,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (!otherModAutoExportPath)
                 return otherModExportPath;
 
-            if (kindInfo == null || string.IsNullOrEmpty(kindInfo.dataFolder))
-                return otherModExportPath;
+            string baseExport = GetActiveWorkspaceExportPath();
+            string dataFolder = kindInfo == null ? string.Empty : kindInfo.dataFolder;
 
-            string baseExport = string.Empty;
-            foreach (WorkspaceEntry entry in workspaceEntries)
-            {
-                if (entry.isActive)
-                {
-                    baseExport = entry.modExportPath;
-                    break;
-                }
-            }
+            // 类别没定下来时，别让「导出目录为空」把构建挡住 ——
+            // 活动工作区自己的导出目录就是最合理的落点。
+            if (string.IsNullOrEmpty(dataFolder))
+                return string.IsNullOrEmpty(baseExport) ? otherModExportPath : baseExport;
 
             if (string.IsNullOrEmpty(baseExport))
                 return string.Empty;
@@ -1002,7 +1015,43 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 ? baseExport.Substring(0, lastSlash)
                 : baseExport;
 
-            return dataRoot + "/" + kindInfo.dataFolder;
+            return dataRoot + "/" + dataFolder;
+        }
+
+        /// <summary>当前活动工作区的导出目录；没有活动工作区时返回空串。</summary>
+        private string GetActiveWorkspaceExportPath()
+        {
+            foreach (WorkspaceEntry entry in workspaceEntries)
+            {
+                if (entry.isActive)
+                    return entry.modExportPath ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// 目录里没有任何可识别的入口资产时，用活动工作区的**导出目录末段**推断类别
+        /// （工作区就是一个类别一个，末段就是类别名）。推断不出来返回 null。
+        /// </summary>
+        private OtherModKindInfo InferKindFromActiveWorkspace()
+        {
+            string baseExport = GetActiveWorkspaceExportPath();
+            if (string.IsNullOrEmpty(baseExport))
+                return null;
+
+            baseExport = baseExport.Replace('\\', '/').TrimEnd('/');
+            int lastSlash = baseExport.LastIndexOf('/');
+            if (lastSlash < 0)
+                return null;
+            string leaf = baseExport.Substring(lastSlash + 1);
+
+            foreach (OtherModKindInfo info in OtherModKinds)
+            {
+                if (!string.IsNullOrEmpty(info.dataFolder) &&
+                    string.Equals(info.dataFolder, leaf, StringComparison.OrdinalIgnoreCase))
+                    return info;
+            }
+            return null;
         }
 
         // ---------------------------------------------------------------------
