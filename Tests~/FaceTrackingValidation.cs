@@ -398,9 +398,9 @@ public static class HoFaceTrackingValidation
             var independent = new float[52];
             independent[blinkLeft] = 0.9f;
             independent[blinkRight] = 0.5f;
-            HoFaceEyeSync.Apply(independent, 0f, 0.5f);
+            HoFaceEyeSync.Apply(independent, false, 0.5f);
             Check(Mathf.Abs(independent[blinkLeft] - 0.9f) < 0.0001f && Mathf.Abs(independent[blinkRight] - 0.5f) < 0.0001f,
-                "eye sync at 0 leaves the two eyes independent (wink still possible)");
+                "eye sync off leaves the two eyes independent (wink still possible)");
 
             var synced = new float[52];
             synced[blinkLeft] = 0.9f;
@@ -409,9 +409,9 @@ public static class HoFaceTrackingValidation
             synced[lookOutRight] = 0.2f;
             synced[lookUpLeft] = 0.9f;
             synced[lookUpRight] = 0.1f;
-            HoFaceEyeSync.Apply(synced, 1f, 0.5f);
+            HoFaceEyeSync.Apply(synced, true, 0.5f);
             Check(Mathf.Abs(synced[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(synced[blinkRight] - 0.7f) < 0.0001f,
-                "eye sync at 1 puts both eyelids on the shared value (got " + synced[blinkLeft].ToString("F2") + ")");
+                "eye sync puts both eyelids on the shared value (got " + synced[blinkLeft].ToString("F2") + ")");
             Check(Mathf.Abs(synced[lookInLeft] - 0.5f) < 0.0001f && Mathf.Abs(synced[lookOutRight] - 0.5f) < 0.0001f,
                 "the horizontal gaze is synced across the pair that means the same world direction");
             Check(Mathf.Abs(synced[lookUpLeft] - 0.9f) < 0.0001f && Mathf.Abs(synced[lookUpRight] - 0.1f) < 0.0001f,
@@ -420,7 +420,7 @@ public static class HoFaceTrackingValidation
             var mixed = new float[52];
             mixed[blinkLeft] = 0.9f;
             mixed[blinkRight] = 0.5f;
-            HoFaceEyeSync.Apply(mixed, 1f, 1f);
+            HoFaceEyeSync.Apply(mixed, true, 1f);
             Check(Mathf.Abs(mixed[blinkLeft] - 0.5f) < 0.0001f && Mathf.Abs(mixed[blinkRight] - 0.5f) < 0.0001f,
                 "the mix chooses whose value wins (1 = 全用右眼)");
 

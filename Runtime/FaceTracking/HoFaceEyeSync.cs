@@ -34,18 +34,12 @@ namespace Hollow.HoUnityTools.FaceTracking
         };
 
         /// <summary>
-        /// 就地把每一对的两个值朝同一个值靠。`sync` 为 0（默认）时**一个字节都不动**。
+        /// 就地把每一对的两个值朝同一个值靠。**关着时一个字节都不动**（默认就是关）。
         /// 纯函数：直接在数组上跑，所以"过眨眼被治住了"这条可以直接断言，不用真机看。
         /// </summary>
-        public static void Apply(float[] values, float sync, float mix)
+        public static void Apply(float[] values, bool sync, float mix)
         {
-            if (values == null)
-            {
-                return;
-            }
-
-            float amount = Mathf.Clamp01(Finite(sync));
-            if (amount <= 0.0001f)
+            if (values == null || !sync)
             {
                 return;
             }
@@ -61,8 +55,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                 }
 
                 float shared = Mathf.Lerp(values[a], values[b], blend);
-                values[a] = Mathf.Lerp(values[a], shared, amount);
-                values[b] = Mathf.Lerp(values[b], shared, amount);
+                values[a] = shared;
+                values[b] = shared;
             }
         }
 

@@ -102,7 +102,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
-                "输出分工",
+                "控制器输出参数设置",
                 RegionSummary(rig.outputRegions),
                 HoConstraintEditorTheme.AccentOutput))
             {
@@ -143,11 +143,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Label("断流等待", HoConstraintEditorTheme.LabelWidth, "多久没有有效帧就算断流。");
                     serializedObject.FindProperty("staleSeconds").floatValue =
-                        HoConstraintEditorControls.NumberField(serializedObject.FindProperty("staleSeconds").floatValue, "秒");
-                    HoConstraintEditorControls.Gap();
-                    HoConstraintEditorControls.Label("回中性", HoConstraintEditorTheme.LabelWidthSm, "断流后淡回中性值用多久。");
+                        HoConstraintEditorControls.NumberField(serializedObject.FindProperty("staleSeconds").floatValue, "秒", null,
+                            HoConstraintEditorTheme.FieldWidthWide + 14.0f);
+                    HoConstraintEditorControls.Gap(8.0f);
+                    HoConstraintEditorControls.Label("回中性", HoConstraintEditorTheme.LabelWidth, "断流后淡回中性值用多久。");
                     serializedObject.FindProperty("neutralFadeSeconds").floatValue =
-                        HoConstraintEditorControls.NumberField(serializedObject.FindProperty("neutralFadeSeconds").floatValue, "秒");
+                        HoConstraintEditorControls.NumberField(serializedObject.FindProperty("neutralFadeSeconds").floatValue, "秒", null,
+                            HoConstraintEditorTheme.FieldWidthWide + 14.0f);
+                    HoConstraintEditorControls.Flex();
                 }
 
                 using (HoConstraintEditorControls.Row())
@@ -192,18 +195,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("双眼同步", HoConstraintEditorTheme.LabelWidth,
+                    SerializedProperty sync = serializedObject.FindProperty("eyeSync");
+                    sync.boolValue = HoConstraintEditorControls.Toggle("双眼同步", sync.boolValue,
                         "把左右眼合成一个值再写回去。\n"
-                        + "有些模型的左右眨眼键**各自都能闭双眼**，左右一起触发就过眨眼 —— 这时把它调到 1。\n"
-                        + "0 = 左右独立（允许 wink）；作用范围照参考实现：眼睑 + 眼球横向，眼球纵向不进去。");
-                    serializedObject.FindProperty("eyeSync").floatValue = HoConstraintEditorControls.NumberField(
-                        serializedObject.FindProperty("eyeSync").floatValue, null,
-                        "0 = 左右独立；1 = 强制两侧同值。", HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("配比", HoConstraintEditorTheme.LabelWidthSm,
-                        "同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。");
-                    serializedObject.FindProperty("eyeSyncMix").floatValue = HoConstraintEditorControls.NumberField(
-                        serializedObject.FindProperty("eyeSyncMix").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                        + "有些模型的左右眨眼键**各自都能闭双眼**，左右一起触发就过眨眼 —— 打开它就强制同眨。\n"
+                        + "关 = 左右独立（允许 wink）。作用范围照参考实现：眼睑 + 眼球横向，眼球纵向不进去。");
+                    HoConstraintEditorControls.Gap(8.0f);
+                    using (new EditorGUI.DisabledScope(!sync.boolValue))
+                    {
+                        HoConstraintEditorControls.Label("配比", HoConstraintEditorTheme.LabelWidthSm,
+                            "同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。");
+                        serializedObject.FindProperty("eyeSyncMix").floatValue = HoConstraintEditorControls.NumberField(
+                            serializedObject.FindProperty("eyeSyncMix").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    }
+
                     HoConstraintEditorControls.Flex();
                 }
 
