@@ -12,6 +12,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private Vector2 scroll;
         private string search = "";
         private string localIps = "";
+        private readonly System.Collections.Generic.List<string> localAddresses = new System.Collections.Generic.List<string>();
         private HoFaceTrackingDebugger rig;
         private double lastRepaint, lastRateTime;
         private long lastPackets;
@@ -27,7 +28,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             try
             {
                 foreach (var address in Dns.GetHostAddresses(Dns.GetHostName()))
-                    if (address.AddressFamily == AddressFamily.InterNetwork) localIps += (localIps.Length == 0 ? "" : " / ") + address;
+                    if (address.AddressFamily == AddressFamily.InterNetwork) localAddresses.Add(address.ToString());
+                localIps = localAddresses.Count == 0 ? "未获取到网卡地址" : string.Join(" / ", localAddresses);
             }
             catch { localIps = "未获取到网卡地址"; }
         }
@@ -68,6 +70,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             EditorGUILayout.LabelField("来源", HoFaceInputHub.Receiver.Sender);
             string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
             if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
+            DrawWaitingDiagnostics(settings.phoneIp);
             EditorGUILayout.HelpBox("手机和电脑需能通过局域网互通，App 保持前台。先看参数，再进入 Play Mode 驱动角色。关闭此窗口不停止连接；退出播放或重编译会断开。", MessageType.Info);
 
             rig = (HoFaceTrackingDebugger)EditorGUILayout.ObjectField("角色组件", rig, typeof(HoFaceTrackingDebugger), true);
@@ -123,6 +126,80 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
             EditorGUILayout.LabelField("无效包 / 其他来源 / 跳过旧帧", HoFaceInputHub.Receiver.Invalid + " / " + HoFaceInputHub.Receiver.Rejected + " / " + HoFaceInputHub.Receiver.Replaced);
             EditorGUILayout.EndScrollView();
+        }
+
+        /// <summary>
+        /// 「等待手机响应」这一句话把三种完全不同的故障混在一起了：手机根本没发、包在路上被丢了、
+        /// 或者包来了但来源 IP 不对被我们拒了。这里按手上的证据分开说，并给出能直接执行的下一步。
+        /// </summary>
+        private void DrawWaitingDiagnostics(string phoneIp)
+        {
+            if (!HoFaceInputHub.Connected || HoFaceInputHub.LastFrameTime != 0) return;
+
+            long rejected = HoFaceInputHub.Receiver.Rejected;
+            string rejectedFrom = HoFaceInputHub.Receiver.RejectedSource;
+            if (rejected > 0 && !string.IsNullOrEmpty(rejectedFrom))
+            {
+                EditorGUILayout.HelpBox(
+                    "收到了 " + rejected + " 个来自 " + rejectedFrom + " 的数据包，但和你填的 " + phoneIp
+                    + " 不一致，已被来源校验拒收。\n把「手机 IPv4」改成 " + rejectedFrom + " 就能连上；"
+                    + "如果那不是你的手机，说明局域网里还有另一台设备在发面捕数据。",
+                    MessageType.Warning);
+                return;
+            }
+
+            double waited = IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt;
+            if (waited < 3)
+            {
+                EditorGUILayout.LabelField("已等待 " + waited.ToString("F1") + " 秒…", EditorStyles.miniLabel);
+                return;
+            }
+
+            var text = new System.Text.StringBuilder();
+            text.AppendLine("UDP 49983 已在监听 " + waited.ToString("F0") + " 秒，一个包都没收到。"
+                + "端口是通的、握手命令也发出去了，所以断点在「手机 → 电脑」这一侧。按可能性排查：");
+            text.AppendLine();
+            text.AppendLine("① Windows 防火墙拦了 Unity 的入站 UDP（网络被标成「公用」时很常见，"
+                + "而且「阻止」规则优先于「允许」）。用**管理员** PowerShell 执行这一条：");
+            text.AppendLine("Get-NetFirewallRule -DisplayName 'Unity " + Application.unityVersion
+                + " Editor' -Direction Inbound | Where-Object Action -eq 'Block' | Disable-NetFirewallRule");
+            text.AppendLine();
+
+            string local = SameSubnetMatch(phoneIp);
+            if (local != null)
+            {
+                text.AppendLine("② 网段对得上（本机 " + local + "，手机 " + phoneIp + "），先跳过。");
+            }
+            else if (localAddresses.Count > 0)
+            {
+                text.AppendLine("② 网段对不上：" + phoneIp + " 和本机 " + string.Join("、", localAddresses)
+                    + " 不在同一个 /24。手机很可能连的不是这个 Wi-Fi。");
+            }
+            else
+            {
+                text.AppendLine("② 拿不到本机网卡地址，跳过网段检查。");
+            }
+            text.AppendLine();
+            text.AppendLine("③ 手机侧：iFacialMocap 要停在前台；App 里如果填了「PC 的 IP」，要填 "
+                + (local ?? localIps) + "，填成别的机器就会发到别处；"
+                + "确认 Wi-Fi 没走蜂窝或 VPN 分流。");
+            text.AppendLine();
+            text.AppendLine("④ 其它程序抢占：如果网段和防火墙都没问题，确认没有别的面捕桥接程序在收同一份数据。");
+            EditorGUILayout.HelpBox(text.ToString(), MessageType.Warning);
+        }
+
+        /// <summary>手机 IP 是否和某个本机地址同 /24；返回那个本机地址，否则 null。</summary>
+        private string SameSubnetMatch(string phoneIp)
+        {
+            if (!IPAddress.TryParse(phoneIp, out var phone) || phone.AddressFamily != AddressFamily.InterNetwork) return null;
+            byte[] target = phone.GetAddressBytes();
+            foreach (string candidate in localAddresses)
+            {
+                if (!IPAddress.TryParse(candidate, out var local)) continue;
+                byte[] bytes = local.GetAddressBytes();
+                if (bytes[0] == target[0] && bytes[1] == target[1] && bytes[2] == target[2]) return candidate;
+            }
+            return null;
         }
 
         private static void DrawPose(string label, float[] values)

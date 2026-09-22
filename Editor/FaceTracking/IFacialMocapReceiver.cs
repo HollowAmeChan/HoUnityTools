@@ -19,6 +19,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private IFacialMocapPacket pending;
         private double pendingTime;
         private string sender = "";
+        private string rejectedSource = "";
         private string error = "";
         private long packets, invalid, replaced, rejected;
 
@@ -26,6 +27,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public bool Running => worker != null && worker.IsAlive && !stopping;
         public string Error { get { lock (sync) return error; } }
         public string Sender { get { lock (sync) return sender; } }
+        /// <summary>最近一个"来源和填的手机 IP 不一致"的包来自哪里。填错 IP 时这是最直接的线索。</summary>
+        public string RejectedSource { get { lock (sync) return rejectedSource; } }
         public long Packets => Interlocked.Read(ref packets);
         public long Invalid => Interlocked.Read(ref invalid);
         public long Replaced => Interlocked.Read(ref replaced);
@@ -38,7 +41,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 throw new ArgumentException("请输入手机的 IPv4 地址。");
             stopping = false;
             packets = invalid = replaced = rejected = 0;
-            lock (sync) { pending = null; error = sender = ""; }
+            lock (sync) { pending = null; error = sender = rejectedSource = ""; }
             try
             {
                 socket = new UdpClient(AddressFamily.InterNetwork);
@@ -71,7 +74,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     var endpoint = new IPEndPoint(IPAddress.Any, 0);
                     byte[] data = socket.Receive(ref endpoint);
-                    if (!endpoint.Address.Equals(phone)) { Interlocked.Increment(ref rejected); continue; }
+                    if (!endpoint.Address.Equals(phone))
+                    {
+                        // 记下来源：填错手机 IP 时，"有包但被来源校验拒了"和"一个包都没来"
+                        // 是两种完全不同的故障，面板必须能分开说。
+                        lock (sync) rejectedSource = endpoint.Address.ToString();
+                        Interlocked.Increment(ref rejected);
+                        continue;
+                    }
                     if (data.Length > 16384 || !IFacialMocapPacket.TryParse(Encoding.UTF8.GetString(data), out var packet))
                     { Interlocked.Increment(ref invalid); continue; }
                     Interlocked.Increment(ref packets);

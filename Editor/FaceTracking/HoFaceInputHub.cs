@@ -24,6 +24,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly HashSet<HoFaceTrackingDebugger> AutoStarted = new HashSet<HoFaceTrackingDebugger>();
         public static IFacialMocapPacket LastPacket { get; private set; }
         public static double LastFrameTime { get; private set; }
+        /// <summary>本机开始监听、并把握手命令发出去的时刻。用来判断"等待响应"是不是等太久了。</summary>
+        public static double ConnectStartedAt { get; private set; }
         public static string ConnectionError { get; private set; } = "";
         public static bool Connected => Receiver.Running;
 
@@ -45,8 +47,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             Array.Clear(ReceivedAt, 0, ReceivedAt.Length);
             LastPacket = null;
             LastFrameTime = 0;
+            ConnectStartedAt = 0;
             ConnectionError = "";
-            try { Receiver.Start(ip); }
+            try { Receiver.Start(ip); ConnectStartedAt = IFacialMocapReceiver.Now; }
             catch (Exception e) { ConnectionError = "连接失败：" + e.Message + "（检查本机 UDP 49983 是否被占用）"; }
         }
 
