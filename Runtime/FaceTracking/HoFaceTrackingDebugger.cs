@@ -18,7 +18,9 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         public Animator targetAnimator;
         public RuntimeAnimatorController faceController;
-        public HoFaceRegion outputRegions = HoFaceRegion.Expression;
+        [Tooltip("面捕驱动哪些区域。凝视键默认也开 —— LookAt 不是一定存在的，"
+            + "要不要把凝视让给 LookAt 由两边的开关各自决定。")]
+        public HoFaceRegion outputRegions = HoFaceRegion.All;
         [Tooltip("仅启用面部形态键；手机头姿与眼骨旋转不会写入角色。")]
         public List<HoFaceChannel> channels = HoFaceTrackingChannels.CreateDefaults();
         public List<HoFacePathRemap> pathRemaps = new List<HoFacePathRemap>();

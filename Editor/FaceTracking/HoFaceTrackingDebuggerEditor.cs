@@ -96,6 +96,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
             if (!string.IsNullOrEmpty(report)) EditorGUILayout.HelpBox(report, reportIsError ? MessageType.Warning : MessageType.Info);
+            if (session != null && !string.IsNullOrEmpty(session.Warning))
+                EditorGUILayout.HelpBox(session.Warning, MessageType.Warning);
             if (session != null && session.Compiled != null && session.Compiled.warnings.Count > 0)
                 EditorGUILayout.HelpBox(string.Join("\n", session.Compiled.warnings.Take(8)), MessageType.Warning);
 
@@ -114,20 +116,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             using (HoConstraintEditorControls.Card())
             {
                 var regions = serializedObject.FindProperty("outputRegions");
+                // 两个闸，对齐参考实现的 EyeTrackingActive / LipTrackingActive。
                 using (HoConstraintEditorControls.Row(true))
                 {
-                    DrawRegion(regions, HoFaceRegion.Mouth, "嘴与舌头");
+                    DrawRegion(regions, HoFaceRegion.Eyelids, "眼（眼皮）",
+                        "面捕驱动这一块：eyeBlink / eyeSquint / eyeWide。断流后交还给自动眨眼。");
                     HoConstraintEditorControls.Gap();
-                    DrawRegion(regions, HoFaceRegion.Brows, "眉毛");
-                    HoConstraintEditorControls.Gap();
-                    DrawRegion(regions, HoFaceRegion.Cheeks, "脸颊与鼻子");
+                    DrawRegion(regions, LipMask, "唇（嘴 / 眉 / 脸颊）",
+                        "面捕驱动这一块：jaw / mouth / tongue / brow / cheek / noseSneer。");
+                    HoConstraintEditorControls.Flex();
                 }
 
+                // 凝视不是第三个闸，只是**面捕这一侧的开关** —— LookAt 那边也有自己的开关，
+                // 怎么分工由用户定，所以这里默认开着，不预设"凝视归 LookAt"。
                 using (HoConstraintEditorControls.Row(true))
                 {
-                    DrawRegion(regions, HoFaceRegion.Eyelids, "眼睑 / 眨眼");
-                    HoConstraintEditorControls.Gap();
-                    DrawRegion(regions, HoFaceRegion.Gaze, "凝视键（用 LookAt 时关）");
+                    DrawRegion(regions, HoFaceRegion.Gaze, "凝视形态键（eyeLook*）",
+                        "面捕这一侧是否驱动 eyeLook* 键。默认开。\n"
+                        + "如果你同时用 HoLookAt 驱动眼球，那边也有一个开关 —— 两边只留一个，\n"
+                        + "否则同一个方向会被写两遍（本面板会提示，但不会拦你）。");
                     HoConstraintEditorControls.Flex();
                 }
 
@@ -190,15 +197,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             DrawChannels(rig, session);
         }
 
+        /// <summary>「唇」这一闸覆盖的区域。两个闸对齐参考实现的 EyeTrackingActive / LipTrackingActive。</summary>
+        private const HoFaceRegion LipMask = HoFaceRegion.Mouth | HoFaceRegion.Brows | HoFaceRegion.Cheeks;
+
         private static string RegionSummary(HoFaceRegion regions)
         {
-            int count = 0;
-            if ((regions & HoFaceRegion.Mouth) != 0) count++;
-            if ((regions & HoFaceRegion.Brows) != 0) count++;
-            if ((regions & HoFaceRegion.Cheeks) != 0) count++;
-            if ((regions & HoFaceRegion.Eyelids) != 0) count++;
-            if ((regions & HoFaceRegion.Gaze) != 0) count++;
-            return count + " / 5 组";
+            bool eyes = (regions & HoFaceRegion.Eyelids) != 0;
+            bool lips = (regions & LipMask) != 0;
+            bool gaze = (regions & HoFaceRegion.Gaze) != 0;
+            return (eyes ? "眼" : "眼 ✕") + " · " + (lips ? "唇" : "唇 ✕") + (gaze ? " · 凝视给面捕" : "");
         }
 
         private void DrawChannels(HoFaceTrackingDebugger rig, HoFaceAnimationSession session)
@@ -282,24 +289,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
-        /// <summary>输出分组开关。调用方负责开一行；这里只管画一个勾选框并回写。</summary>
-        private static void DrawRegion(SerializedProperty property, HoFaceRegion region, string label)
+        /// <summary>输出闸开关。调用方负责开一行；这里只管画一个勾选框并回写。
+        /// mask 可以是多位的组合（「唇」= 嘴|眉|脸颊），任一位为真即视为开，切换时整组一起写。</summary>
+        private static void DrawRegion(SerializedProperty property, HoFaceRegion mask, string label, string tooltip = null)
         {
-            bool enabled = (property.intValue & (int)region) != 0;
-            bool next = HoConstraintEditorControls.Toggle(label, enabled, RegionTooltip(region));
-            if (enabled != next) property.intValue = next ? property.intValue | (int)region : property.intValue & ~(int)region;
-        }
-
-        private static string RegionTooltip(HoFaceRegion region)
-        {
-            switch (region)
-            {
-                case HoFaceRegion.Mouth: return "jawOpen、mouthClose、mouthSmile 等。";
-                case HoFaceRegion.Brows: return "browDown / browInnerUp / browOuterUp 等。";
-                case HoFaceRegion.Cheeks: return "cheekPuff、cheekSquint、noseSneer 等。";
-                case HoFaceRegion.Eyelids: return "eyeBlink / eyeSquint / eyeWide。断流后交还给自动眨眼。";
-                default: return "eyeLook* 凝视形态键。用 HoLookAt 驱动眼球时关掉，否则两个方向会叠起来转两次。";
-            }
+            bool enabled = (property.intValue & (int)mask) != 0;
+            bool next = HoConstraintEditorControls.Toggle(label, enabled, tooltip);
+            if (enabled != next) property.intValue = next ? property.intValue | (int)mask : property.intValue & ~(int)mask;
         }
 
         private static void SetMode(SerializedProperty channels, HoFaceInputMode mode)

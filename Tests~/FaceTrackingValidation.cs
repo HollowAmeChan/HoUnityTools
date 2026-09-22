@@ -62,6 +62,10 @@ public static class HoFaceTrackingValidation
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
             rig.faceController = controller;
+            // 默认是 All（凝视也开 —— LookAt 不是一定存在）。这里**刻意关掉凝视**，
+            // 用来验证"排除凝视"这条路径本身，不能再赖默认值。
+            Check(rig.outputRegions == HoFaceRegion.All, "gaze defaults to ON (LookAt may not exist)");
+            rig.outputRegions = HoFaceRegion.Expression;
             foreach (var c in rig.channels) c.mode = HoFaceInputMode.Manual;
             Channel("jawOpen").manual = 0.6f;
             Channel("mouthClose").manual = 0.25f;
