@@ -1,7 +1,12 @@
 # 面捕控制器结构：Jerry 模板 vs 我们生成的
 
-日期：2026-09-22。本文是**源码实测 + 一次判别性实验**的记录，回答"参考实现怎么搭的""我们那 52 个图层合不合理"。
-数据来自 `.research/VRCFaceTracking-Templates`（本地检出，gitignore）与 `.research/UnityFaceValidation` 的批处理用例。
+日期：2026-09-22（§5/§6 于 2026-09-23 按现状重写）。本文是**源码实测 + 一次判别性实验**的记录：
+参考实现怎么搭的、我们自己的生成物长什么样、以及「Direct 树 + Write Defaults 关闭会发散」这条判别性实验。
+数据来自 `.research/VRCFaceTracking-Templates` 与 `D:\UnityVrcVCC_Projects\VrcMaster`（本地检出，gitignore）
+与 `.research/UnityFaceValidation` 的批处理用例。
+
+> 怎么用 / 中间层做什么 / 什么能进树：见 [面捕工作流](FACE_TRACKING_WORKFLOW.md)、
+> [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)、[混合树的能力边界](BLEND_TREE_LIMITS.md)。
 
 ## 1. 参考实现：Jerry 的 ARKit 控制器长什么样
 
@@ -108,33 +113,58 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 
 放开它，就能换成 Jerry 那种结构，图层数从 52 降到 **1**。
 
-## 5. 短期改动：已落地
+## 5. 我们现在的生成物（2026-09-23 更新）
 
-1. **生成器改成一棵 Direct 树** ✅ 单图层、单状态、每键一个子节点、用自己的 `ARKit/<键>` 当 direct 权重、片段写 100。**图层 52 → 1，片段 104 → 52。**
-2. **放开「必须 WD Off」** ✅ `Compile` 现在只禁止 Behaviour，不再要求 WD Off。同时新增一条**基于实测的守卫**：`Direct 树 + WD Off` 直接拒绝（那个组合会发散），错误信息里指向本文。旧的 `Simple1D + WD Off` 控制器仍然接受。
-3. **保留严格校验** ✅ 只允许形态键曲线、无 Behaviour、无同步图层、无事件/对象曲线。
+`HoFaceAnimationAssets.Generate` 产出**一个** `.controller`：
 
-验收（`Tests~/FaceTrackingValidation.cs`，一次性 Unity 工程批处理）：
+```
+Ho/00 Drive (Direct)                                   ← 驱动层（「应用改动」整段重写）
+  ├ 眼睑左  FreeformCartesian2D(Ho/LidLeft.X, Ho/LidLeft.Y)   权重 = Ho/Gate/Eye
+  │     五格：睁大(-1,0)=wide100 / 中性(0,0)=空 / 闭(1,0)=blink100
+  │           眯(0,1)=blink90+squint100 / 睁大+眯(-1,1)=wide100+squint100
+  ├ 眼睑右  同上
+  ├ 眼 (Direct, 权重 = Ho/Gate/Eye)    眼球 8 + 眉 5（一键一叶子直通）
+  └ 唇 (Direct, 权重 = Ho/Gate/Lip)    嘴 22 + 颊 3 + 鼻 2 + 舌 1
+Ho/99 (EDIT THIS)                                       ← 空层 + 空片段，永不重写
+```
 
-| 断言 | 结果 |
+| 项 | 现状 |
 | --- | --- |
-| 生成器只出 1 个图层 / 1 个状态 / 1 棵 Direct 树 / 每键一个子节点 / WD 开 / 子节点各自用自己的参数 | 全部通过 |
-| **Direct 树 + WD Off 被拒绝** | 通过 |
-| `jawOpen` 60、`mouthSmileLeft` 80、`mouthClose` 25、`eyeBlinkLeft` 40 | **与旧实现完全一致** |
-| **同时张嘴与微笑不互相削弱**（旧设计专门为此做的多层，Direct 树同样成立） | 通过 |
-| 凝视排除后基础动画的 33、身体变换的 2 都保留 | 通过 |
-| Ho 写入器与其清理都不覆盖面捕值；交还回基础动画 15 | 通过 |
-| 真实 UDP → 混合树 90；断流回退 17；停止恢复、清空占用、可重启 | 通过 |
+| 图层 | **2**（驱动层 + 扩展点） |
+| 驱动层根树 | Direct，**4 个子节点**（两棵眼睑 2D 树 + 眼/唇两棵区域子树） |
+| 直通叶子 | **46**（眼 13 = 眼球 8 + 眉 5；唇 33） |
+| 参数 | 52 个 `ARKit/<键名>` + 2 个 `Ho/Gate/*` + 4 个 `Ho/Lid*.X/.Y` = **58** |
+| 门控参数默认值 | **1（开）** —— 单独打开这个资产时不是一片死脸 |
+| Write Defaults | **必须开**（Direct 树的前提；`Direct + WD Off` 会被 `Compile` 直接拒绝） |
 
-**期望值一个都没变** —— 换结构没有改变可见行为，这正是最想要的回归结果。
+**演化路径**（每一步都是被实测推着走的）：
 
-## 6. 中期方向（还没做，这才是 Jerry 结构真正的价值）
+1. 52 个独立 Override 层 → **一棵 Direct 树平铺 52 个键** —— §3 的实验推翻了"Direct 会归一化削弱"。
+2. 平铺 → **两棵区域子树**（眼 / 唇，各挂一个门控参数）—— **分组是为了让"这块算不算数"变成参数**，
+   可以被任何东西驱动（会话、用户自己的层、以后的菜单），而不是只能重新生成控制器。
+3. 眼睑从"三个直通叶子" → **FreeformCartesian2D 五格姿势** —— 治 `blink × squint` 叠加。
+   这正是 §1.2 里参考实现的做法（姿势表数值也是照它实测抄的，见
+   [混合树的能力边界](BLEND_TREE_LIMITS.md) §6）。
 
-4. **二维区域**：眼睑 `(开合, 眯眼)`、眼球 `(X, Y)` 用 FreeformCartesian2D + 作者摆好的姿势，而不是两条曲线相加。
-5. **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝；`JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间。
-6. **门控**：根 Direct 树按 `EyeTrackingActive` / `LipTrackingActive` / `FT/DirectBlend` 分区，这样"眼追踪掉了就只交还眼部"。
-7. **EyeSync 式的左右交叉混合**（4 子 Direct 树 + 一个 mix 参数）。
-8. 参数预处理链（平滑 / 灵敏度 / 上下限）。这一段在 Jerry 那边是 OSCmooth 预制件做的，不在控制器里；我们是否要在自家链路里做，需要单独决定。
+**幂等**：「应用改动」只重写 `Ho/00 Drive`，复用同名片段，并销毁上一版的区域子树、眼睑 2D 树、
+以及已经被 2D 姿势取代的那六个直通片段（`eyeBlink*` / `eyeWide*` / `eyeSquint*`）。
+
+**边界仍在**：只允许形态键曲线；无 Behaviour、无同步图层、无事件/对象曲线（`Compile` 会拦）。
+
+## 6. 参考实现里我们抄了 / 还没抄的
+
+| 参考实现的东西 | 我们 | 落在哪 |
+| --- | --- | --- |
+| **二维区域**（眼睑 `开合 × 眯眼` 五格姿势） | ✅ 抄了 | 生成器（§5） |
+| **区域门控**（`EyeTrackingActive` / `LipTrackingActive`） | ✅ 抄了 | `Ho/Gate/*` 参数 + 两棵区域子树 |
+| **参数预处理链**（平滑 / 灵敏度 / 上下限） | ✅ 抄了，但**在树外面** | 中间层（[面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)） |
+| **EyeSync 式左右交叉混合** | ✅ 抄了语义，**实现放在 C#** | `HoFaceEyeSync`（VRCFT 也在 C#：`Correctors.BlendOpposingParams`） |
+| **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝；`JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间 | ❌ 没抄 | —— |
+| **限制 / 修正**：若干子树外面套 `FaceTrackingLimits` | ❌ 没抄 | 中间层欠账 |
+| **眼球**：SimpleDirectional2D + 四方向（可选四斜向） | ❌ 现在是直通叶子 | —— |
+
+后三条都是同一个处方的更多例子：**会重叠的语义进同一棵树 / 参数算术留在外面**
+（判据见 [混合树的能力边界](BLEND_TREE_LIMITS.md)）。
 
 ## 7. 复现
 
