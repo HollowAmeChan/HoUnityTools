@@ -39,6 +39,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         [SerializeField] private float previewY;
         [SerializeField] private bool previewSession;
         [SerializeField] private bool targetExpanded = true;
+        [SerializeField] private bool meshesExpanded;
         [SerializeField] private bool keysExpanded = true;
         [SerializeField] private bool directionsExpanded = true;
         [SerializeField] private bool writeExpanded = true;
@@ -197,7 +198,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             DrawTitle();
-            Hint("① 指定角色和控制器　→　② 勾出要驱动的形态键　→　③ 填每个方向的权重　→　④ 写入控制器");
+            Hint("① 指定角色和控制器，点「快速获取」　→　② 勾出要驱动的形态键　→　③ 填每个方向的权重　→　④ 写入控制器");
 
             body = EditorGUILayout.BeginScrollView(body);
             DrawTarget();
@@ -213,7 +214,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             bool ready;
             if (animator == null) { pill = "先指定角色"; ready = false; }
             else if (controller == null) { pill = "先指定控制器"; ready = false; }
-            else if (plan.keys.Count == 0) { pill = "还没选键"; ready = false; }
+            else if (plan.keys.Count == 0) { pill = "还没勾形态键"; ready = false; }
             else if (plan.directions.Count == 0) { pill = "还没摆方向"; ready = false; }
             else { pill = "可以写入"; ready = true; }
 
@@ -261,54 +262,72 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
 
                 HoConstraintEditorControls.Caption("参数空间是 [-1, 1]：0 = 静止，正 = 一个方向，负 = 反方向。");
+
+                HoConstraintEditorControls.Separator(4f, 2f);
+                using (HoConstraintEditorControls.Row())
+                {
+                    if (HoConstraintEditorControls.Button("快速获取",
+                            "把「角色」下所有 SkinnedMeshRenderer 和它们身上的形态键一次收进来。", true, 70f))
+                    {
+                        ScanMeshes();
+                        meshesExpanded = true;
+                    }
+
+                    HoConstraintEditorControls.Gap();
+                    HoConstraintEditorControls.Caption("从角色收网格 + 扫形态键");
+                    HoConstraintEditorControls.Flex();
+                    meshesExpanded = HoConstraintEditorControls.InlineFoldout(meshesExpanded,
+                        "网格 · " + meshes.Count + " 个", "参与扫描的网格列表：可以手工加，也可以去掉。");
+                }
+
+                if (!meshesExpanded) return;
+
+                using (HoConstraintEditorControls.Indent())
+                {
+                    for (int i = 0; i < meshes.Count; i++)
+                    {
+                        using (HoConstraintEditorControls.Row())
+                        {
+                            meshes[i] = (SkinnedMeshRenderer)EditorGUI.ObjectField(
+                                HoConstraintEditorControls.NextFlexible(120f), meshes[i], typeof(SkinnedMeshRenderer), true);
+                            if (GUILayout.Button("✕", HoConstraintEditorTheme.IconButton, GUILayout.Width(18f))) meshes.RemoveAt(i--);
+                        }
+                    }
+
+                    using (HoConstraintEditorControls.Row())
+                    {
+                        if (HoConstraintEditorControls.Button("＋ 网格", "手工加一个网格到列表里。", false, 62f)) meshes.Add(null);
+                        HoConstraintEditorControls.Flex();
+                        if (meshes.Count == 0) HoConstraintEditorControls.Caption("列表是空的");
+                    }
+                }
             }
         }
 
-        // ② 选键 ────────────────────────────────────────────────────────────────
+        // ② 形态键 ──────────────────────────────────────────────────────────────
         private void DrawKeys()
         {
             string summary = plan.keys.Count + " / " + candidates.Count;
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref keysExpanded, "② 选键", summary, HoConstraintEditorTheme.AccentOutput))
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref keysExpanded, "② 形态键", summary, HoConstraintEditorTheme.AccentOutput))
             {
                 // 收起也要说：ARKit 键被驱动树占着会互相掺和，这是真会挡路的问题。
                 int conflicts = ConflictCount();
                 if (conflicts > 0)
                     Warn("有 " + conflicts + " 个键是 ARKit 键，驱动树也在写它们 —— 两棵树会互相掺和（不是相加）。");
-                else if (plan.keys.Count == 0) Warn("还没选键。");
+                else if (plan.keys.Count == 0) Warn("还没勾形态键。");
                 return;
             }
 
             using (HoConstraintEditorControls.Card())
             {
-                using (HoConstraintEditorControls.Row())
-                {
-                    if (HoConstraintEditorControls.Button("收网格 + 扫形态键",
-                            "把「角色」下所有 SkinnedMeshRenderer 及其形态键收进来。", true, 132f))
-                        ScanMeshes();
-                    HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("＋ 网格", "手工加一个网格到列表里。", false, 66f)) meshes.Add(null);
-                    HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Caption(meshes.Count + " 个网格");
-                }
-
-                for (int i = 0; i < meshes.Count; i++)
-                {
-                    using (HoConstraintEditorControls.Row())
-                    {
-                        meshes[i] = (SkinnedMeshRenderer)EditorGUI.ObjectField(
-                            HoConstraintEditorControls.NextFlexible(120f), meshes[i], typeof(SkinnedMeshRenderer), true);
-                        if (GUILayout.Button("✕", HoConstraintEditorTheme.IconButton, GUILayout.Width(18f))) meshes.RemoveAt(i--);
-                    }
-                }
-
                 if (candidates.Count == 0)
                 {
-                    HoConstraintEditorControls.Gap(2f);
-                    Hint(animator == null ? "先在①里指定角色。" : "点上面的「收网格 + 扫形态键」。");
+                    Hint(animator == null
+                        ? "先在①里指定角色。"
+                        : "先去①点「快速获取」，把角色身上的网格和形态键收进来。");
                     return;
                 }
 
-                HoConstraintEditorControls.Separator(3f, 2f);
                 using (HoConstraintEditorControls.Row())
                 {
                     search = TextField(search);
@@ -386,7 +405,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 if (plan.keys.Count == 0)
                 {
-                    Hint("先去②里选键，这里才会出现可填的权重。");
+                    Hint("先去②里勾形态键，这里才会出现可填的权重。");
                     return;
                 }
 
