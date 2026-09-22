@@ -162,7 +162,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
-                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("分组死区", HoConstraintEditorTheme.LabelWidth,
+                        "低于它的实时输入按 0 处理，以上重新铺满 —— 压住静止时的抖动。0 = 关。\n"
+                        + "只作用在实时输入上；手动滑杆是调试用的，不受影响。\n"
+                        + "位置对齐参考实现的 OSCm/Sensitivity 分组。");
+                    HoConstraintEditorControls.Label("眼睑", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("deadZoneEyelids").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneEyelids").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("眼球", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("deadZoneGaze").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneGaze").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("嘴", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("deadZoneMouth").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneMouth").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("其它", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("deadZoneOther").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneOther").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Flex();
+                }
+
+                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
+                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
 
             serializedObject.ApplyModifiedProperties();

@@ -31,11 +31,40 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float smoothMouth;
         [Tooltip("眉、脸颊、鼻子等剩下的键。")]
         public float smoothOther;
+        [Tooltip("分组死区：低于它的（实时）输入按 0 处理，以上的部分重新铺满 0..1。用来压住静止时的抖动。0 = 关。\n"
+            + "位置对齐参考实现的 OSCm/Sensitivity 分组，但具体曲线没有逐位复刻 —— 这一版先做死区这个最有用的整形。")]
+        public float deadZoneEyelids;
+        public float deadZoneGaze;
+        public float deadZoneMouth;
+        public float deadZoneOther;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
         /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
         public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
+
+        /// <summary>某一组的死区。只作用在**实时输入**上；手动滑杆是调试用的，不该被它吃掉。</summary>
+        public float DeadZone(HoFaceSmoothGroup group)
+        {
+            switch (group)
+            {
+                case HoFaceSmoothGroup.Eyelids: return deadZoneEyelids;
+                case HoFaceSmoothGroup.Gaze: return deadZoneGaze;
+                case HoFaceSmoothGroup.Mouth: return deadZoneMouth;
+                default: return deadZoneOther;
+            }
+        }
+
+        /// <summary>
+        /// 响应整形（灵敏度）：死区以下归 0，以上重新铺满 0..1。
+        /// 静止时面捕总有几十分之一的抖动，死区是压住它最直接的手段。
+        /// </summary>
+        public float ApplySensitivity(string shape, float value)
+        {
+            float dead = Mathf.Clamp(DeadZone(HoFaceTrackingChannels.SmoothGroup(shape)), 0f, 0.95f);
+            if (dead <= 0f) return value;
+            return value <= dead ? 0f : Mathf.Clamp01((value - dead) / (1f - dead));
+        }
 
         /// <summary>某一组的分组平滑时长（秒）；0 = 直通。</summary>
         public float SmoothSeconds(HoFaceSmoothGroup group)        {

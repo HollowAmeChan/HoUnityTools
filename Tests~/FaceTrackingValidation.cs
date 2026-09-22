@@ -134,6 +134,15 @@ public static class HoFaceTrackingValidation
                 "re-initializing over an existing file really replaces it (layers=" + (replaced != null ? replaced.layers.Length : -1) + ")");
             Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
             rig.faceController = replaced;
+
+            // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
+            rig.deadZoneMouth = 0.2f;
+            Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);
+            Near(rig.ApplySensitivity("jawOpen", 0.60f), 0.5f, "dead zone rescales the rest of the range", 0.001f);
+            Near(rig.ApplySensitivity("eyeLookInLeft", 0.60f), 0.60f, "other groups keep their own (zero) dead zone", 0.001f);
+            Near(rig.ApplySensitivity("jawOpen", 1.00f), 1f, "dead zone keeps the top of the range at 1", 0.001f);
+            // 立刻复位：这几条是纯函数检查，留着会污染后面的实时阶段（raw 0.9 会被整形，等不到 90）。
+            rig.deadZoneMouth = 0f;
             var body = AnimatorController.CreateAnimatorControllerAtPath(AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationBody.controller"));
             var bodyState = body.layers[0].stateMachine.AddState("Idle");
             bodyState.writeDefaultValues = false;
@@ -303,7 +312,23 @@ public static class HoFaceTrackingValidation
             if (stage == 10)
             {
                 Near(Weight("jawOpen"), 100, "smoothing 0 means pass-through (no extra delay by default)");
+
+                // 死区的端到端验证：走实时输入这条路（manual 滑杆本来就不该被死区吃）。
+                rig.deadZoneMouth = 0.2f;   // 纯函数那段已经复位过，这里自己显式设置
+                Channel("jawOpen").mode = HoFaceInputMode.Live;
+                HoFaceInputHub.Connect("127.0.0.2");
+                sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
+                Send("jawOpen-60|");
+                stage++; frame = Time.frameCount + 4; return;
+            }
+            if (stage == 11)
+            {
+                Send("jawOpen-60|");
+                if (Mathf.Abs(Weight("jawOpen") - 50f) > 0.6f) return;   // 等它被驱动上来
+                Check(true, "dead zone reaches the written parameter through live input (raw 0.6 -> 50)");
                 HoFaceInputHub.Stop(rig);
+                HoFaceInputHub.Disconnect();
+                sender.Close(); sender = null;
                 rig.enabled = false;
                 Check(HoFaceInputHub.Session(rig) == null, "disable component disposes session immediately");
                 Debug.Log("HO_FACE_TESTS_ALL_PASSED");

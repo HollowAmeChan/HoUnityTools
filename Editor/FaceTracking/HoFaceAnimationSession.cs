@@ -137,7 +137,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     case HoFaceInputMode.Neutral: Effective[index] = neutral; break;
                     case HoFaceInputMode.Release: break;
                     default:
-                        float target = fresh ? Finite01(HoFaceInputHub.Raw[index] * channel.gain) : neutral;
+                        // 响应整形只作用在实时输入上：手动滑杆是调试用的，不该被死区吃掉。
+                        float live = Finite01(HoFaceInputHub.Raw[index] * channel.gain);
+                        float target = fresh ? Rig.ApplySensitivity(channel.shape, live) : neutral;
                         Effective[index] = fresh ? target : Mathf.MoveTowards(Effective[index], neutral, deltaTime / fade);
                         break;
                 }
