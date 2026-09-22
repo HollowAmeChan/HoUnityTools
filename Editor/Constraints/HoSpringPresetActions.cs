@@ -17,26 +17,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
     /// </summary>
     internal static class HoSpringPresetActions
     {
-        [MenuItem("GameObject/HoUnityTools/果冻眼（弹簧驱动 ×2）", false, 40)]
-        private static void AddJellyEyeMenu(MenuCommand command)
-        {
-            var host = command != null ? command.context as GameObject : null;
-            if (host == null)
-            {
-                return;
-            }
-
-            HoSpringConstraint existing = host.GetComponent<HoSpringConstraint>();
-            var meshes = existing != null && existing.Meshes.Count > 0
-                ? new List<SkinnedMeshRenderer>(existing.Meshes)
-                : CollectMeshes(host);
-            AddJellyEye(host, meshes);
-        }
-
-        [MenuItem("GameObject/HoUnityTools/果冻眼（弹簧驱动 ×2）", true)]
-        private static bool AddJellyEyeMenuValidate(MenuCommand command) =>
-            command != null && command.context is GameObject;
-
         /// <summary>面板按钮用：在这台 GameObject 上加两根弹簧（横向 6Hz、纵向 8.5Hz）。</summary>
         public static void AddJellyEye(HoSpringConstraint component)
         {
