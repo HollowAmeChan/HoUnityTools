@@ -159,10 +159,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             text.AppendLine("UDP 49983 已在监听 " + waited.ToString("F0") + " 秒，一个包都没收到。"
                 + "端口是通的、握手命令也发出去了，所以断点在「手机 → 电脑」这一侧。按可能性排查：");
             text.AppendLine();
-            text.AppendLine("① Windows 防火墙拦了 Unity 的入站 UDP（网络被标成「公用」时很常见，"
-                + "而且「阻止」规则优先于「允许」）。用**管理员** PowerShell 执行这一条：");
-            text.AppendLine("Get-NetFirewallRule -DisplayName 'Unity " + Application.unityVersion
-                + " Editor' -Direction Inbound | Where-Object Action -eq 'Block' | Disable-NetFirewallRule");
+            string rule = "Unity " + Application.unityVersion + " Editor";
+            text.AppendLine("① Windows 防火墙拦了 Unity 的入站 UDP。别的程序（播放器、面捕桥接程序）能直连，"
+                + "是因为它们各自有一条针对自己的入站「允许」规则；而 Unity.exe 的允许规则只覆盖 Domain，"
+                + "在「公用」网络上还额外有一条「阻止」规则，且「阻止」优先于「允许」。");
+            text.AppendLine("用**管理员** PowerShell 执行这两条，缺一不可 —— 只禁掉阻止规则的话，"
+                + "公用网络没有命中任何规则，默认入站仍然是拒绝：");
+            text.AppendLine("Get-NetFirewallRule -DisplayName '" + rule
+                + "' -Direction Inbound | Where-Object Action -eq 'Block' | Disable-NetFirewallRule");
+            text.AppendLine("New-NetFirewallRule -DisplayName 'HoUnityTools FaceTracking UDP 49983'"
+                + " -Direction Inbound -Action Allow -Protocol UDP -LocalPort 49983 -Profile Any"
+                + " -Program '" + EditorApplication.applicationPath + "'");
+            text.AppendLine("改完点一次「断开手机」再「连接手机」，把握手命令重发一遍。");
             text.AppendLine();
 
             string local = SameSubnetMatch(phoneIp);
