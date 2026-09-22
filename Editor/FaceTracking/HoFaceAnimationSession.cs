@@ -195,8 +195,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 shadow.SetFloat(channel.parameter, Smoothed[index]);
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
+            // 双眼同步：必须在"写参数"之前、平滑之后 —— 它作用在最终要被写出去的那组值上。
+            HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix);
+
+            // 区域门控：把"这块驱动算不算数"写成一个**参数**（而不是靠重新生成控制器来切）。
+            // 于是它也能被别的东西驱动 —— 用户自己的层、以后的菜单、AFK 之类。
+            WriteGate(HoFaceAnimationAssets.EyeGateName, (Rig.outputRegions & HoFaceTrackingChannels.EyeRegion) != 0);
+            WriteGate(HoFaceAnimationAssets.LipGateName, (Rig.outputRegions & HoFaceTrackingChannels.LipRegion) != 0);
             foreach (var preview in previews)
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
+        }
+
+        private void WriteGate(string parameter, bool open)
+        {
+            if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
+                shadow.SetFloat(parameter, open ? 1f : 0f);
         }
 
         /// <summary>

@@ -65,8 +65,20 @@ public static class HoFaceTrackingValidation
             foreach (var p in controller.parameters)
                 if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
             Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
-            Check(controller.parameters.Length == 54, "generator adds exactly two extra parameters, the two jelly axes ("
+            Check(controller.parameters.Length == 56, "generator adds exactly two extra parameters, the two jelly axes ("
                 + controller.parameters.Length + ")");
+            int gateParameters = 0;
+            float gateDefault = -1f;
+            foreach (var p in controller.parameters)
+            {
+                if (!p.name.StartsWith("Ho/Gate/", StringComparison.Ordinal)) continue;
+                gateParameters++;
+                gateDefault = p.defaultFloat;
+            }
+
+            Check(gateParameters == 2, "generator emits the two region gates (" + gateParameters + ")");
+            Check(Mathf.Abs(gateDefault - 1f) < 0.001f,
+                "region gates default to OPEN so a freshly generated asset is not a dead face (default=" + gateDefault + ")");
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
             rig.faceController = controller;
@@ -102,13 +114,48 @@ public static class HoFaceTrackingValidation
             Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
             Check(editState != null, "extension point is named " + HoFaceAnimationAssets.EditLayerName);
             Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
-            Check(directTree != null && directTree.children.Length == 52, "Direct tree has one child per shape");
+            // 分组：根树只有两个子节点（眼 / 唇），每个区域子树里才是"一键一叶子"的 ARKit 直通。
+            // 分组的目的是**做开关** —— 区域子树挂在根上，权重就是区域门控参数。
+            Check(directTree != null && directTree.children.Length == 2,
+                "drive tree is grouped into two regions instead of one flat row ("
+                + (directTree != null ? directTree.children.Length : -1) + ")");
             Check(directState != null && directState.writeDefaultValues, "Direct tree uses Write Defaults On");
-            bool ownParameters = true;
+            var gateNames = new System.Collections.Generic.List<string>();
+            int eyeShapes = 0, lipShapes = 0;
+            bool leavesAreArkit = directTree != null;
             if (directTree != null)
-                foreach (var child in directTree.children)
-                    if (!child.directBlendParameter.StartsWith("ARKit/", StringComparison.Ordinal)) ownParameters = false;
-            Check(ownParameters, "every Direct child is weighted by its own ARKit parameter");
+            {
+                foreach (var regionChild in directTree.children)
+                {
+                    gateNames.Add(regionChild.directBlendParameter);
+                    var region = regionChild.motion as BlendTree;
+                    if (region == null || region.blendType != BlendTreeType.Direct)
+                    {
+                        leavesAreArkit = false;
+                        continue;
+                    }
+
+                    foreach (var leaf in region.children)
+                    {
+                        if (!leaf.directBlendParameter.StartsWith("ARKit/", StringComparison.Ordinal))
+                        {
+                            leavesAreArkit = false;
+                            continue;
+                        }
+
+                        string shape = leaf.directBlendParameter.Substring("ARKit/".Length);
+                        if (HoFaceTrackingChannels.Gate(shape) == HoFaceGate.Eye) eyeShapes++;
+                        else lipShapes++;
+                    }
+                }
+            }
+
+            Check(gateNames.Contains(HoFaceAnimationAssets.EyeGateName)
+                && gateNames.Contains(HoFaceAnimationAssets.LipGateName),
+                "the two region subtrees are weighted by the gate parameters");
+            Check(leavesAreArkit, "inside a region, every leaf is still one shape weighted by its own ARKit parameter");
+            Check(eyeShapes == 19 && lipShapes == 33,
+                "regions split 19 / 33 — eye = lids + gaze + brows, lip = mouth + cheeks (got " + eyeShapes + "/" + lipShapes + ")");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
@@ -133,7 +180,12 @@ public static class HoFaceTrackingValidation
             Check(appliedEdit != null && appliedEdit.GetInstanceID() == editStateBefore
                 && ReferenceEquals(appliedEdit.motion, editMotionBefore),
                 "apply leaves the EDIT THIS extension point untouched");
-            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 52, "apply rebuilds the drive tree");
+            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 2, "apply rebuilds the drive tree");
+            int regionTrees = 0;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
+                if (asset is BlendTree region && region.name.StartsWith(HoFaceAnimationAssets.RegionTreePrefix, StringComparison.Ordinal))
+                    regionTrees++;
+            Check(regionTrees == 2, "re-applying does not pile up orphan region trees (" + regionTrees + ")");
             Check(CountClips(controllerPath) == clipsBefore, "apply reuses clips instead of piling up sub-assets (" + clipsBefore + ")");
 
             // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
@@ -176,6 +228,7 @@ public static class HoFaceTrackingValidation
                 plan.directions.Add(direction);
             }
 
+            int parametersBeforeTool = replaced.parameters.Length;
             HoFaceBlendTreeTool.Write(animator, replaced, plan);
             var jellyState = FindState(replaced, plan.layerName);
             var jellyTree = jellyState != null ? jellyState.motion as BlendTree : null;
@@ -185,7 +238,9 @@ public static class HoFaceTrackingValidation
                 "the tree reads the two physics parameters");
             Check(jellyTree != null && jellyTree.children.Length == 5,
                 "four corners plus an auto origin child (" + (jellyTree != null ? jellyTree.children.Length : -1) + ")");
-            Check(replaced.parameters.Length == 54, "the tool reuses the jelly parameters instead of duplicating them");
+            Check(replaced.parameters.Length == parametersBeforeTool,
+                "the tool reuses existing parameters instead of duplicating them ("
+                + parametersBeforeTool + " -> " + replaced.parameters.Length + ")");
             var jellyBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.JellyEye");
             if (jellyTree != null)
             {
@@ -332,6 +387,43 @@ public static class HoFaceTrackingValidation
                 "applying the other axis keeps the rows that are already there");
             UnityEngine.Object.DestroyImmediate(presetProbe);
 
+            // ── 双眼同步（中间层）：把左右合成一个值，压住"左右键各能闭双眼"导致的过眨眼 ──
+            int blinkLeft = HoFaceTrackingChannels.IndexOf("eyeBlinkLeft");
+            int blinkRight = HoFaceTrackingChannels.IndexOf("eyeBlinkRight");
+            int lookInLeft = HoFaceTrackingChannels.IndexOf("eyeLookInLeft");
+            int lookOutRight = HoFaceTrackingChannels.IndexOf("eyeLookOutRight");
+            int lookUpLeft = HoFaceTrackingChannels.IndexOf("eyeLookUpLeft");
+            int lookUpRight = HoFaceTrackingChannels.IndexOf("eyeLookUpRight");
+
+            var independent = new float[52];
+            independent[blinkLeft] = 0.9f;
+            independent[blinkRight] = 0.5f;
+            HoFaceEyeSync.Apply(independent, 0f, 0.5f);
+            Check(Mathf.Abs(independent[blinkLeft] - 0.9f) < 0.0001f && Mathf.Abs(independent[blinkRight] - 0.5f) < 0.0001f,
+                "eye sync at 0 leaves the two eyes independent (wink still possible)");
+
+            var synced = new float[52];
+            synced[blinkLeft] = 0.9f;
+            synced[blinkRight] = 0.5f;
+            synced[lookInLeft] = 0.8f;
+            synced[lookOutRight] = 0.2f;
+            synced[lookUpLeft] = 0.9f;
+            synced[lookUpRight] = 0.1f;
+            HoFaceEyeSync.Apply(synced, 1f, 0.5f);
+            Check(Mathf.Abs(synced[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(synced[blinkRight] - 0.7f) < 0.0001f,
+                "eye sync at 1 puts both eyelids on the shared value (got " + synced[blinkLeft].ToString("F2") + ")");
+            Check(Mathf.Abs(synced[lookInLeft] - 0.5f) < 0.0001f && Mathf.Abs(synced[lookOutRight] - 0.5f) < 0.0001f,
+                "the horizontal gaze is synced across the pair that means the same world direction");
+            Check(Mathf.Abs(synced[lookUpLeft] - 0.9f) < 0.0001f && Mathf.Abs(synced[lookUpRight] - 0.1f) < 0.0001f,
+                "the vertical gaze is deliberately NOT synced (same scope as the reference)");
+
+            var mixed = new float[52];
+            mixed[blinkLeft] = 0.9f;
+            mixed[blinkRight] = 0.5f;
+            HoFaceEyeSync.Apply(mixed, 1f, 1f);
+            Check(Mathf.Abs(mixed[blinkLeft] - 0.5f) < 0.0001f && Mathf.Abs(mixed[blinkRight] - 0.5f) < 0.0001f,
+                "the mix chooses whose value wins (1 = 全用右眼)");
+
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;
             Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);
@@ -410,7 +502,7 @@ public static class HoFaceTrackingValidation
             if (Time.frameCount < frame) return;
             if (stage == 0)
             {
-                rig = UnityEngine.Object.FindObjectOfType<HoFaceTrackingDebugger>();
+                rig = UnityEngine.Object.FindFirstObjectByType<HoFaceTrackingDebugger>();
                 if (rig == null || Time.frameCount < 4) return;
                 renderer = rig.targetAnimator.transform.Find("Body").GetComponent<SkinnedMeshRenderer>();
                 // 记录接管前的 Animator 状态，作为 hasBoundPlayables 语义的实测证据。

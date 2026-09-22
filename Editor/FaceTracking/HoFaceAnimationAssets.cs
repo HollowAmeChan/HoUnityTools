@@ -183,6 +183,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public const string JellyParameterYName = "Ho/JellyY";
 
         /// <summary>
+        /// 两个**区域门控**参数。区域子树挂在驱动层根树上，权重就是它 —— 于是"这块驱动算不算数"
+        /// 是一个**参数**，可以被任何东西驱动（我们自己的会话、用户的层、以后的菜单），
+        /// 而不是只能靠重新生成控制器来切。
+        /// </summary>
+        public const string EyeGateName = "Ho/Gate/Eye";
+        public const string LipGateName = "Ho/Gate/Lip";
+
+        /// <summary>区域子树的名字前缀（清理旧子树靠它认领，别改）。</summary>
+        public const string RegionTreePrefix = DriveLayerName + " · ";
+
+        public static string GateParameterName(HoFaceGate gate) => gate == HoFaceGate.Eye ? EyeGateName : LipGateName;
+
+        public static string RegionTreeName(HoFaceGate gate) =>
+            RegionTreePrefix + (gate == HoFaceGate.Eye ? "眼" : "唇");
+
+        /// <summary>
         /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树，
         /// 另加一个空的 <see cref="EditLayerName"/> 作为用户的扩展点。
         ///
@@ -313,26 +329,77 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             var parameters = new HashSet<string>(StringComparer.Ordinal);
             foreach (var p in controller.parameters) parameters.Add(p.name);
+            EnsureGate(controller, parameters, EyeGateName);
+            EnsureGate(controller, parameters, LipGateName);
+
+            // 旧区域子树先记下来：重建后没被用上的要销毁，否则每应用一次就多留一棵孤儿树。
+            var stale = new List<BlendTree>();
+            foreach (var child in tree.children)
+                if (child.motion is BlendTree old && old.name.StartsWith(RegionTreePrefix, StringComparison.Ordinal))
+                    stale.Add(old);
 
             tree.children = new ChildMotion[0];
-            foreach (var pair in groups)
-            {
-                string parameter = "ARKit/" + pair.Key;
-                if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
+            var keep = new HashSet<Object>();
 
-                if (!existing.TryGetValue(pair.Key, out var clip))
+            foreach (HoFaceGate gate in new[] { HoFaceGate.Eye, HoFaceGate.Lip })
+            {
+                // 按 HoFaceTrackingChannels.Names 的顺序取，保证生成结果稳定（字典顺序不保证）。
+                var shapes = new List<string>();
+                foreach (string shape in HoFaceTrackingChannels.Names)
+                    if (groups.ContainsKey(shape) && HoFaceTrackingChannels.Gate(shape) == gate) shapes.Add(shape);
+                if (shapes.Count == 0) continue;
+
+                var region = new BlendTree
                 {
-                    // 一个键只需要一个"满值"片段：权重由参数给，参数为 0 时它贡献 0。
-                    clip = new AnimationClip { name = pair.Key, frameRate = 60f };
-                    foreach (var binding in pair.Value)
-                        AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
-                    AssetDatabase.AddObjectToAsset(clip, controller);
+                    name = RegionTreeName(gate),
+                    blendType = BlendTreeType.Direct
+                };
+                AssetDatabase.AddObjectToAsset(region, controller);
+                keep.Add(region);
+
+                foreach (string shape in shapes)
+                {
+                    string parameter = "ARKit/" + shape;
+                    if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
+
+                    if (!existing.TryGetValue(shape, out var clip))
+                    {
+                        // 一个键只需要一个"满值"片段：权重由参数给，参数为 0 时它贡献 0。
+                        clip = new AnimationClip { name = shape, frameRate = 60f };
+                        foreach (var binding in groups[shape])
+                            AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
+                        AssetDatabase.AddObjectToAsset(clip, controller);
+                    }
+
+                    region.AddChild(clip);
+                    var children = region.children;
+                    children[children.Length - 1].directBlendParameter = parameter;
+                    region.children = children;
                 }
 
-                tree.AddChild(clip);
-                var children = tree.children;
-                children[children.Length - 1].directBlendParameter = parameter;
-                tree.children = children;
+                // 区域子树本身挂在根树上，权重就是区域门控参数：门控 × 各键参数。
+                tree.AddChild(region);
+                var root = tree.children;
+                root[root.Length - 1].directBlendParameter = GateParameterName(gate);
+                tree.children = root;
+            }
+
+            foreach (var old in stale)
+                if (!keep.Contains(old)) UnityEngine.Object.DestroyImmediate(old, true);
+        }
+
+        /// <summary>门控参数：缺就补，并且**默认开**（单独打开这个资产时脸是有表情的，不是一片死脸）。</summary>
+        private static void EnsureGate(AnimatorController controller, HashSet<string> parameters, string name)
+        {
+            if (!parameters.Add(name)) return;
+            controller.AddParameter(name, AnimatorControllerParameterType.Float);
+            var all = controller.parameters;
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i].name != name) continue;
+                all[i].defaultFloat = 1.0f;
+                controller.parameters = all;
+                return;
             }
         }
     }

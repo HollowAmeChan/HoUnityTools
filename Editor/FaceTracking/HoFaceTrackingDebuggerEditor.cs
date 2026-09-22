@@ -117,11 +117,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 两个闸，对齐参考实现的 EyeTrackingActive / LipTrackingActive。
                 using (HoConstraintEditorControls.Row(true))
                 {
-                    DrawRegion(regions, HoFaceRegion.Eyelids, "眼（眼皮）",
-                        "面捕驱动这一块：eyeBlink / eyeSquint / eyeWide。断流后交还给自动眨眼。");
+                    DrawRegion(regions, EyeMask, "眼（眼皮 / 眉）",
+                        "面捕驱动这一块：eyeBlink / eyeSquint / eyeWide / brow。\n"
+                        + "**眉归眼区** —— 参考实现里眉挂的是 EyeTrackingActive（眉毛跟着眼神走，不是跟着嘴走）。\n"
+                        + "断流后交还给自动眨眼。");
                     HoConstraintEditorControls.Gap();
-                    DrawRegion(regions, LipMask, "唇（嘴 / 眉 / 脸颊）",
-                        "面捕驱动这一块：jaw / mouth / tongue / brow / cheek / noseSneer。");
+                    DrawRegion(regions, LipMask, "唇（嘴 / 脸颊）",
+                        "面捕驱动这一块：jaw / mouth / tongue / cheek / noseSneer。\n"
+                        + "颊鼻归唇区 —— 参考实现里它们挂的是 LipTrackingActive。");
                     HoConstraintEditorControls.Flex();
                 }
 
@@ -187,6 +190,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("双眼同步", HoConstraintEditorTheme.LabelWidth,
+                        "把左右眼合成一个值再写回去。\n"
+                        + "有些模型的左右眨眼键**各自都能闭双眼**，左右一起触发就过眨眼 —— 这时把它调到 1。\n"
+                        + "0 = 左右独立（允许 wink）；作用范围照参考实现：眼睑 + 眼球横向，眼球纵向不进去。");
+                    serializedObject.FindProperty("eyeSync").floatValue = HoConstraintEditorControls.NumberField(
+                        serializedObject.FindProperty("eyeSync").floatValue, null,
+                        "0 = 左右独立；1 = 强制两侧同值。", HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("配比", HoConstraintEditorTheme.LabelWidthSm,
+                        "同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。");
+                    serializedObject.FindProperty("eyeSyncMix").floatValue = HoConstraintEditorControls.NumberField(
+                        serializedObject.FindProperty("eyeSyncMix").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Flex();
+                }
+
                 mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
                 if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
@@ -195,12 +215,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             DrawChannels(rig, session);
         }
 
-        /// <summary>「唇」这一闸覆盖的区域。两个闸对齐参考实现的 EyeTrackingActive / LipTrackingActive。</summary>
-        private const HoFaceRegion LipMask = HoFaceRegion.Mouth | HoFaceRegion.Brows | HoFaceRegion.Cheeks;
+        /// <summary>
+        /// 「眼」「唇」两个闸覆盖的区域，对齐参考实现的 `EyeTrackingActive` / `LipTrackingActive`：
+        /// **眼 = 眼睑 + 眉**（眉跟着眼神走）、**唇 = 嘴 + 颊鼻**。凝视是单独一个开关，不在两闸里。
+        /// </summary>
+        private const HoFaceRegion EyeMask = HoFaceRegion.Eyelids | HoFaceRegion.Brows;
+
+        private const HoFaceRegion LipMask = HoFaceRegion.Mouth | HoFaceRegion.Cheeks;
 
         private static string RegionSummary(HoFaceRegion regions)
         {
-            bool eyes = (regions & HoFaceRegion.Eyelids) != 0;
+            bool eyes = (regions & EyeMask) != 0;
             bool lips = (regions & LipMask) != 0;
             bool gaze = (regions & HoFaceRegion.Gaze) != 0;
             return (eyes ? "眼" : "眼 ✕") + " · " + (lips ? "唇" : "唇 ✕") + (gaze ? " · 凝视给面捕" : "");

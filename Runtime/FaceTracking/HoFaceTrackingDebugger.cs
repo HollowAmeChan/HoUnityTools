@@ -39,6 +39,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float deadZoneGaze;
         public float deadZoneMouth;
         public float deadZoneOther;
+        [Tooltip("双眼同步：0 = 左右独立（允许 wink），1 = 强制两侧同值。\n"
+            + "有些模型的左右眨眼键**各自都能闭双眼**（美术为了不让两只眼睛闭合程度不一致），"
+            + "左右一起触发就会过眨眼 —— 这时把它调到 1。\n"
+            + "作用范围照参考实现：眼睑 + 眼球横向，眼球纵向不进去。")]
+        [Range(0f, 1f)] public float eyeSync;
+        [Tooltip("同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。")]
+        [Range(0f, 1f)] public float eyeSyncMix = 0.5f;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
