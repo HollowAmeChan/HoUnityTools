@@ -4,6 +4,8 @@
 
 ## 文档
 
+- [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 六步接线、面板四个分区各回答什么、什么会写盘、排查清单。
+- [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：中间层做什么（增益/死区/平滑/双眼同步/区域门控/轴生产）、顺序、判据，以及**哪些处理是隐式的**。
 - [面捕混合树入门与 ARKit 模板使用](FACE_TRACKING_TEMPLATE_GUIDE.md)：解释参数、混合树、动画绑定及 Jerry 模板的使用流程。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器 + 钳制"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
 - [编辑器面捕调试组件设计](FACE_TRACKING_DEBUGGER_DESIGN.md)：iFacialMocap 直连、全局面板、角色组件、输出门控和 LookAt 协作。P0–P2 已实现并在独立 Unity 工程跑通自动化验收；真机与眼球骨骼验收未做。
