@@ -42,6 +42,18 @@ namespace Hollow.HoUnityTools.FaceTracking
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
+        [Header("果冻眼")]
+        [Tooltip("把眼睑信号过一遍一维弹簧/摆锤，产出带物理的参数供果冻动画消费。\n"
+            + "参数负责「每次都不一样」，动画负责「每次都好看」—— 单用任一边都缺一半。\n"
+            + "物理由中间层自己实现（Warudo 摆锤进不了蓝图，VRC 侧没有曲线驱动参数）。")]
+        public bool jellyEnabled;
+        [Min(0.1f)] public float jellyFrequency = 6f;
+        [Range(0.02f, 1f)]
+        [Tooltip("阻尼比。越小越「果冻」（过冲多、回弹久）；1 就完全不过冲了。")]
+        public float jellyDamping = 0.25f;
+        [Tooltip("产出的参数名。果冻动画按它混合/取姿势；初始化控制器时会一并建出来。")]
+        public string jellyParameter = "Ho/Jelly";
+
         /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
         public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
 

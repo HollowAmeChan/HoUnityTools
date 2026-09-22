@@ -172,6 +172,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public const string DriveLayerName = "Ho/00 Drive";
         /// <summary>留给用户手工加逻辑的层。<b>应用改动时永不触碰它。</b></summary>
         public const string EditLayerName = "Ho/99 (EDIT THIS)";
+        /// <summary>果冻那个"带物理的参数"的名字（由 C# 生产，生成的控制器里会先建出来）。</summary>
+        public const string JellyParameterName = "Ho/Jelly";
 
         /// <summary>
         /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树，
@@ -212,6 +214,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 drive.writeDefaultValues = true;
                 drive.motion = tree;
                 PopulateDriveTree(controller, animator, tree);
+                // 果冻参数先建出来（暂时还没有东西消费它）：下一步的果冻动画层会按它取姿势，
+                // 在那之前它至少可以被写、被观察，整条链路是通的。
+                controller.AddParameter(JellyParameterName, AnimatorControllerParameterType.Float);
 
                 // 扩展点：空层 + 空片段，用户可以在这里加自己的树/耦合。应用改动时保留。
                 controller.AddLayer(EditLayerName);

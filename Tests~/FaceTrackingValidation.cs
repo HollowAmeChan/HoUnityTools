@@ -58,7 +58,12 @@ public static class HoFaceTrackingValidation
             AssetDatabase.CreateAsset(mesh, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationMesh.asset"));
             renderer.sharedMesh = mesh;
             var controller = HoFaceAnimationAssets.Generate(animator, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller"));
-            Check(controller.parameters.Length == 52, "generator discovers all 52 shapes");
+            int arkitParameters = 0;
+            foreach (var p in controller.parameters)
+                if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
+            Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
+            Check(controller.parameters.Length == 53, "generator adds exactly one extra parameter, the jelly one ("
+                + controller.parameters.Length + ")");
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
             rig.faceController = controller;
@@ -104,6 +109,9 @@ public static class HoFaceTrackingValidation
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
+            bool jellyParameterExists = false;
+            foreach (var p in controller.parameters) if (p.name == HoFaceAnimationAssets.JellyParameterName) jellyParameterExists = true;
+            Check(jellyParameterExists, "generated controller carries the jelly parameter (" + HoFaceAnimationAssets.JellyParameterName + ")");
 
             // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
             string controllerPath = AssetDatabase.GetAssetPath(controller);
@@ -147,6 +155,29 @@ public static class HoFaceTrackingValidation
             Near(rig.ApplySensitivity("jawOpen", 1.00f), 1f, "dead zone keeps the top of the range at 1", 0.001f);
             // 立刻复位：这几条是纯函数检查，留着会污染后面的实时阶段（raw 0.9 会被整形，等不到 90）。
             rig.deadZoneMouth = 0f;
+
+            // ── 果冻：一维弹簧的纯函数行为（"过冲"就是果冻的定义，所以直接断言它）────────
+            var jelly = new HoFaceJellyState();
+            float peak = 0f;
+            bool settled = false;
+            for (int i = 0; i < 600; i++)
+            {
+                HoFaceJelly.Step(ref jelly, 1f, 1f / 60f, 6f, 0.25f);
+                peak = Mathf.Max(peak, jelly.value);
+                if (i > 300 && Mathf.Abs(jelly.value - 1f) < 0.01f && Mathf.Abs(jelly.velocity) < 0.05f) settled = true;
+            }
+            Check(peak > 1.05f, "jelly overshoots a step input (that overshoot *is* the jelly, peak=" + peak.ToString("F3") + ")");
+            Check(settled, "jelly settles back to the target (value=" + jelly.value.ToString("F3") + ")");
+
+            var still = new HoFaceJellyState();
+            for (int i = 0; i < 120; i++) HoFaceJelly.Step(ref still, 0f, 1f / 60f, 6f, 0.25f);
+            Check(Mathf.Abs(still.value) < 1e-4f && Mathf.Abs(still.velocity) < 1e-4f, "jelly stays still when the input does not move");
+
+            var huge = new HoFaceJellyState();
+            HoFaceJelly.Step(ref huge, 1f, 0.5f, 6f, 0.25f);   // 卡了一帧：不能因为 dt 大就发散
+            Check(!float.IsNaN(huge.value) && !float.IsInfinity(huge.value) && Mathf.Abs(huge.value) < 10f,
+                "jelly survives a huge deltaTime without diverging (value=" + huge.value.ToString("F3") + ")");
+
             var body = AnimatorController.CreateAnimatorControllerAtPath(AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationBody.controller"));
             var bodyState = body.layers[0].stateMachine.AddState("Idle");
             bodyState.writeDefaultValues = false;

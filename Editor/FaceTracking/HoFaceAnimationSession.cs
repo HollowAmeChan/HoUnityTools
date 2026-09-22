@@ -47,6 +47,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool written;
         /// <summary>会话第一帧的标记：那一帧把所有值一次到位，避免开场从 0 扫过来。</summary>
         private bool primed;
+        private HoFaceJellyState jelly;
+
+        /// <summary>果冻眼当前值（那个"带物理的参数"）。面板观测点，也是用例的观测点。</summary>
+        public float JellyValue => jelly.value;
 
         public HoFaceAnimationSession(HoFaceTrackingDebugger rig)
         {
@@ -153,6 +157,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     : Mathf.Lerp(Smoothed[index], Effective[index], 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / tau));
             }
             primed = true;
+            StepJelly(deltaTime);
             for (int i = 0; i < selected.Length; i++)
             {
                 if (selected[i] != nextSelected[i]) changed = true;
@@ -191,6 +196,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static float Finite01(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 0 : Mathf.Clamp01(value);
+
+        /// <summary>
+        /// 果冻眼：把眼睑信号过一遍一维弹簧，产出**带物理的参数**写进控制器，供果冻动画消费。
+        ///
+        /// 这里只是"产参数"。动画怎么按它取姿势是下一步（小工具 + `Ho/10 Jelly` 层）——
+        /// 参数负责"每次都不一样"，动画负责"每次都好看"。
+        /// </summary>
+        private void StepJelly(float deltaTime)
+        {
+            if (!Rig.jellyEnabled)
+            {
+                // 关掉就复位，免得再打开时从上次的残留冲一下。
+                HoFaceJelly.Reset(ref jelly, 0f);
+                return;
+            }
+
+            // 输入取两眼睑里更闭的那只：眨眼是一起闭的，取 max 比取平均更跟手。
+            int left = HoFaceTrackingChannels.IndexOf("eyeBlinkLeft");
+            int right = HoFaceTrackingChannels.IndexOf("eyeBlinkRight");
+            float target = Mathf.Max(
+                left >= 0 ? Smoothed[left] : 0f,
+                right >= 0 ? Smoothed[right] : 0f);
+
+            HoFaceJelly.Step(ref jelly, target, deltaTime, Rig.jellyFrequency, Rig.jellyDamping);
+
+            string parameter = Rig.jellyParameter;
+            if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
+            {
+                // 弹簧会过冲到 1 以上，写参数前夹回 0..1（过冲体现在"曲线形状"上，不是数值溢出）。
+                shadow.SetFloat(parameter, Mathf.Clamp01(jelly.value));
+            }
+        }
 
         private string MappingStamp()
         {
