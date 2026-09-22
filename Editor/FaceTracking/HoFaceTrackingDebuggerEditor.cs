@@ -195,32 +195,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    SerializedProperty suppress = serializedObject.FindProperty("squintSuppression");
-                    suppress.boolValue = HoConstraintEditorControls.Toggle("眯眼抑制", suppress.boolValue,
-                        "眨眼时把眯眼按乘法压下去（眯眼 × (1 − 眨眼 × 力度)）。\n"
-                        + "ARKit 的 blink 与 squint 在模型上可能闭的是同一块，裸输入里两者同时非 0，"
-                        + "同一个形变被写两遍 → 过眨眼。\n"
-                        + "**这是我们的补偿，不是参考做法** —— 他们把会重叠的语义放进同一棵 2D 树"
-                        + "（眼睑 = 开合 × 眯眼，「眯眼」姿势自带 blink 90），靠姿势插值避免相加。"
-                        + "式子形如 VRCFT 的 lipSuckFix，但没人把它用在眼睑上。");
-                    HoConstraintEditorControls.Gap(8.0f);
-                    using (new EditorGUI.DisabledScope(!suppress.boolValue))
-                    {
-                        HoConstraintEditorControls.Label("力度", HoConstraintEditorTheme.LabelWidthSm,
-                            "1 = 眨满时眯眼完全归零；0.5 = 只压一半。");
-                        serializedObject.FindProperty("squintSuppressionAmount").floatValue = HoConstraintEditorControls.NumberField(
-                            serializedObject.FindProperty("squintSuppressionAmount").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    }
-
-                    HoConstraintEditorControls.Flex();
-                    if (!suppress.boolValue)
-                    {
-                        HoConstraintEditorControls.Caption("树里已经把重叠语义并成一棵树时不用开");
-                    }
-                }
-
-                using (HoConstraintEditorControls.Row())
-                {
                     SerializedProperty sync = serializedObject.FindProperty("eyeSync");
                     sync.boolValue = HoConstraintEditorControls.Toggle("双眼同步", sync.boolValue,
                         "把左右眼合成一个值再写回去。\n"

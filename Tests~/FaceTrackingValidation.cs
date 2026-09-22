@@ -65,7 +65,7 @@ public static class HoFaceTrackingValidation
             foreach (var p in controller.parameters)
                 if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
             Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
-            Check(controller.parameters.Length == 56, "generator adds exactly two extra parameters, the two jelly axes ("
+            Check(controller.parameters.Length == 60, "52 ARKit + 2 jelly + 2 gates + 4 eyelid axes ("
                 + controller.parameters.Length + ")");
             int gateParameters = 0;
             float gateDefault = -1f;
@@ -114,21 +114,28 @@ public static class HoFaceTrackingValidation
             Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
             Check(editState != null, "extension point is named " + HoFaceAnimationAssets.EditLayerName);
             Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
-            // 分组：根树只有两个子节点（眼 / 唇），每个区域子树里才是"一键一叶子"的 ARKit 直通。
-            // 分组的目的是**做开关** —— 区域子树挂在根上，权重就是区域门控参数。
-            Check(directTree != null && directTree.children.Length == 2,
-                "drive tree is grouped into two regions instead of one flat row ("
+            // 分组 + 眼睑 2D 子树：根树现在是 4 个子节点（眼睑左 / 眼睑右 / 眼 / 唇）。
+            Check(directTree != null && directTree.children.Length == 4,
+                "drive tree = two eyelid 2D trees + two region subtrees ("
                 + (directTree != null ? directTree.children.Length : -1) + ")");
             Check(directState != null && directState.writeDefaultValues, "Direct tree uses Write Defaults On");
             var gateNames = new System.Collections.Generic.List<string>();
-            int eyeShapes = 0, lipShapes = 0;
+            int lidTrees = 0, flatEye = 0, flatLip = 0;
             bool leavesAreArkit = directTree != null;
+            BlendTree lidLeft = null;
             if (directTree != null)
             {
-                foreach (var regionChild in directTree.children)
+                foreach (var child in directTree.children)
                 {
-                    gateNames.Add(regionChild.directBlendParameter);
-                    var region = regionChild.motion as BlendTree;
+                    gateNames.Add(child.directBlendParameter);
+                    if (child.motion is BlendTree lid && lid.blendType == BlendTreeType.FreeformCartesian2D)
+                    {
+                        lidTrees++;
+                        if (lidLeft == null) lidLeft = lid;
+                        continue;
+                    }
+
+                    var region = child.motion as BlendTree;
                     if (region == null || region.blendType != BlendTreeType.Direct)
                     {
                         leavesAreArkit = false;
@@ -144,18 +151,42 @@ public static class HoFaceTrackingValidation
                         }
 
                         string shape = leaf.directBlendParameter.Substring("ARKit/".Length);
-                        if (HoFaceTrackingChannels.Gate(shape) == HoFaceGate.Eye) eyeShapes++;
-                        else lipShapes++;
+                        if (HoFaceTrackingChannels.Gate(shape) == HoFaceGate.Eye) flatEye++;
+                        else flatLip++;
                     }
                 }
             }
 
+            Check(lidTrees == 2, "the eyelids are two 2D trees instead of six flat leaves (" + lidTrees + ")");
+            Check(flatEye == 13 && flatLip == 33,
+                "only non-eyelid shapes stay flat: eye = gaze 8 + brows 5, lip = 33 (got " + flatEye + "/" + flatLip + ")");
             Check(gateNames.Contains(HoFaceAnimationAssets.EyeGateName)
                 && gateNames.Contains(HoFaceAnimationAssets.LipGateName),
-                "the two region subtrees are weighted by the gate parameters");
+                "both gates are subtree weights — the eyelids ride the eye gate too");
             Check(leavesAreArkit, "inside a region, every leaf is still one shape weighted by its own ARKit parameter");
-            Check(eyeShapes == 19 && lipShapes == 33,
-                "regions split 19 / 33 — eye = lids + gaze + brows, lip = mouth + cheeks (got " + eyeShapes + "/" + lipShapes + ")");
+
+            // 眼睑 2D 树：五格，而且「眯」那一格**自带闭眼量** —— 这就是它不出叠加的原因。
+            Check(lidLeft != null && lidLeft.children.Length == 5,
+                "five authored eyelid poses (" + (lidLeft != null ? lidLeft.children.Length : -1) + ")");
+            float squintPoseBlink = -1f, squintPoseSquint = -1f;
+            if (lidLeft != null)
+            {
+                foreach (var child in lidLeft.children)
+                {
+                    if (child.position != new Vector2(0.0f, 1.0f)) continue;
+                    var lidClip = child.motion as AnimationClip;
+                    var blinkCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
+                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeBlinkLeft")) : null;
+                    var squintCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
+                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeSquintLeft")) : null;
+                    squintPoseBlink = blinkCurve != null ? blinkCurve.Evaluate(0.0f) : -1.0f;
+                    squintPoseSquint = squintCurve != null ? squintCurve.Evaluate(0.0f) : -1.0f;
+                }
+            }
+
+            Check(Mathf.Abs(squintPoseBlink - 90f) < 0.01f && Mathf.Abs(squintPoseSquint - 100f) < 0.01f,
+                "the squint pose carries its own blink amount (blink 90 + squint 100), so the two can never stack ("
+                + squintPoseBlink + " / " + squintPoseSquint + ")");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
@@ -180,12 +211,18 @@ public static class HoFaceTrackingValidation
             Check(appliedEdit != null && appliedEdit.GetInstanceID() == editStateBefore
                 && ReferenceEquals(appliedEdit.motion, editMotionBefore),
                 "apply leaves the EDIT THIS extension point untouched");
-            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 2, "apply rebuilds the drive tree");
+            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 4, "apply rebuilds the drive tree");
             int regionTrees = 0;
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
                 if (asset is BlendTree region && region.name.StartsWith(HoFaceAnimationAssets.RegionTreePrefix, StringComparison.Ordinal))
                     regionTrees++;
-            Check(regionTrees == 2, "re-applying does not pile up orphan region trees (" + regionTrees + ")");
+            Check(regionTrees == 4, "re-applying does not pile up orphan subtrees ("
+                + regionTrees + " — two regions + two eyelid trees)");
+            bool obsoleteGone = true;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
+                if (asset is AnimationClip stale && stale.name == "eyeBlinkLeft")
+                    obsoleteGone = false;
+            Check(obsoleteGone, "the obsolete flat blink/wide/squint clips are cleaned up (the 2D poses replaced them)");
             Check(CountClips(controllerPath) == clipsBefore, "apply reuses clips instead of piling up sub-assets (" + clipsBefore + ")");
 
             // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
@@ -433,31 +470,6 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(single[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(single[blinkRight]) < 0.0001f,
                 "single-key mode keeps one side and zeroes the other, so the deformation is applied once ("
                 + single[blinkLeft].ToString("F2") + " / " + single[blinkRight].ToString("F2") + ")");
-
-            // ── 眯眼抑制（我们的补偿，默认关）：眨眼时把眯眼压下去，别让同一个形变写两遍 ──
-            int squintLeft = HoFaceTrackingChannels.IndexOf("eyeSquintLeft");
-            var squint = new float[52];
-            squint[blinkLeft] = 1f;
-            squint[squintLeft] = 0.8f;
-            HoFaceSuppression.Apply(squint, false, 1f);
-            Check(Mathf.Abs(squint[squintLeft] - 0.8f) < 0.0001f, "squint suppression off changes nothing");
-            HoFaceSuppression.Apply(squint, true, 1f);
-            Check(Mathf.Abs(squint[squintLeft]) < 0.0001f,
-                "suppression at full strength zeroes the squint while the eye is fully blinking ("
-                + squint[squintLeft].ToString("F2") + ")");
-
-            var halfSquint = new float[52];
-            halfSquint[blinkLeft] = 0.5f;
-            halfSquint[squintLeft] = 1f;
-            HoFaceSuppression.Apply(halfSquint, true, 1f);
-            Check(Mathf.Abs(halfSquint[squintLeft] - 0.5f) < 0.0001f,
-                "the compensation is proportional to how closed the eye is (0.5 blink -> half the squint)");
-
-            var untouchedSquint = new float[52];
-            untouchedSquint[squintLeft] = 0.8f;
-            HoFaceSuppression.Apply(untouchedSquint, true, 1f);
-            Check(Mathf.Abs(untouchedSquint[squintLeft] - 0.8f) < 0.0001f,
-                "no blink means no suppression at all");
 
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;

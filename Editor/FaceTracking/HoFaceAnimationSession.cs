@@ -195,12 +195,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 shadow.SetFloat(channel.parameter, Smoothed[index]);
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
-            // 单眼内的修正先做（眨眼压眯眼），再做双眼之间的合并 —— 顺序反过来的话，
-            // 单键双眼模式已经把一侧清零，那边的抑制就没东西可压了。
-            HoFaceSuppression.Apply(Smoothed, Rig.squintSuppression, Rig.squintSuppressionAmount);
-
             // 双眼同步：必须在"写参数"之前、平滑之后 —— 它作用在最终要被写出去的那组值上。
             HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
+
+            // 眼睑 2D 树的两根轴：开合 = blink − wide（-1 睁大 / +1 闭），眯眼 = squint。
+            // **轴是"参数算术"，树做不到**（它只能消费参数），所以在这里算完再传进去。
+            // 参考实现也是这个分工：VRCFT 在外面产 Openness，模板里的 2D 树只负责姿势。
+            WriteLidAxis(0);
+            WriteLidAxis(1);
 
             // 区域门控：把"这块驱动算不算数"写成一个**参数**（而不是靠重新生成控制器来切）。
             // 于是它也能被别的东西驱动 —— 用户自己的层、以后的菜单、AFK 之类。
@@ -214,6 +216,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
                 shadow.SetFloat(parameter, open ? 1f : 0f);
+        }
+
+        /// <summary>眼睑 2D 树的两根轴。blink 与 wide 合成一根 -1~1 的轴（+1 闭 / -1 睁大）。</summary>
+        private void WriteLidAxis(int side)
+        {
+            string suffix = side == 0 ? "Left" : "Right";
+            int blink = HoFaceTrackingChannels.IndexOf("eyeBlink" + suffix);
+            int wide = HoFaceTrackingChannels.IndexOf("eyeWide" + suffix);
+            int squint = HoFaceTrackingChannels.IndexOf("eyeSquint" + suffix);
+            if (blink < 0 || squint < 0) return;
+
+            string horizontal = HoFaceAnimationAssets.LidAxisName(side, true);
+            string vertical = HoFaceAnimationAssets.LidAxisName(side, false);
+            if (parameters.Contains(horizontal))
+                shadow.SetFloat(horizontal, HoFaceAxis.LidOpenClose(Smoothed[blink], wide >= 0 ? Smoothed[wide] : 0f));
+            if (parameters.Contains(vertical))
+                shadow.SetFloat(vertical, Mathf.Clamp01(Smoothed[squint]));
         }
 
         /// <summary>

@@ -321,74 +321,199 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             if (groups.Count == 0) throw new InvalidOperationException("Animator 子级没有匹配标准 ARKit 名称的形态键。");
 
-            // 复用已有片段：这样反复应用不会把子资产越堆越多。
-            var existing = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
             string path = AssetDatabase.GetAssetPath(controller);
-            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
-                if (asset is AnimationClip clip && clip.name != "EDIT_THIS_Empty") existing[clip.name] = clip;
+            var existing = IndexClips(path);
 
             var parameters = new HashSet<string>(StringComparer.Ordinal);
             foreach (var p in controller.parameters) parameters.Add(p.name);
             EnsureGate(controller, parameters, EyeGateName);
             EnsureGate(controller, parameters, LipGateName);
+            foreach (string axis in LidAxisNames()) EnsureFloat(controller, parameters, axis);
 
-            // 旧区域子树先记下来：重建后没被用上的要销毁，否则每应用一次就多留一棵孤儿树。
+            // 旧结构先记下来：重建后没被用上的要销毁（区域子树 + 眼睑 2D 树），
+            // 否则每应用一次就多留一棵孤儿树。
             var stale = new List<BlendTree>();
             foreach (var child in tree.children)
-                if (child.motion is BlendTree old && old.name.StartsWith(RegionTreePrefix, StringComparison.Ordinal))
+                if (child.motion is BlendTree old && IsOurs(old.name))
                     stale.Add(old);
 
             tree.children = new ChildMotion[0];
-            var keep = new HashSet<Object>();
+            var keep = new HashSet<Object> { tree };
+            var arkitParameters = new HashSet<string>(StringComparer.Ordinal);
 
+            // ── 眼睑：一棵 2D 树（开合 × 眯眼），照参考实现实测的五个姿势 ──────────────
+            // 「眯眼」那一格**自带 blink 90** —— 这就是它不出叠加的原因：树是插值、权重和恒为 1，
+            // 合成结果永远不超过最强的那个姿势；而"每个键一个直通叶子"会相加。
+            // 权重直接用区域门控（跟参考实现一样，靠共用门控隐式归组），所以不需要"恒为 1"的参数。
+            for (int side = 0; side < 2; side++)
+            {
+                string suffix = side == 0 ? "Left" : "Right";
+                if (!HasAny(groups, LidShape(suffix, "eyeBlink"), LidShape(suffix, "eyeWide"), LidShape(suffix, "eyeSquint")))
+                    continue;
+
+                var lid = new BlendTree
+                {
+                    name = LidTreeName(side),
+                    blendType = BlendTreeType.FreeformCartesian2D,
+                    blendParameter = LidAxisName(side, true),
+                    blendParameterY = LidAxisName(side, false)
+                };
+                AssetDatabase.AddObjectToAsset(lid, controller);
+                keep.Add(lid);
+
+                for (int pose = 0; pose < LidPoses.Length; pose++)
+                {
+                    string clipName = LidTreeName(side) + " " + LidPoses[pose].Name;
+                    if (!existing.TryGetValue(clipName, out var clip))
+                    {
+                        clip = new AnimationClip { name = clipName, frameRate = 60f };
+                        AssetDatabase.AddObjectToAsset(clip, controller);
+                    }
+                    else
+                    {
+                        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+                            AnimationUtility.SetEditorCurve(clip, binding, null);
+                    }
+
+                    WriteLidPose(clip, groups, suffix, LidPoses[pose]);
+                    keep.Add(clip);
+                    lid.AddChild(clip, LidPoses[pose].Position);
+                }
+
+                AddChild(tree, lid, EyeGateName);
+            }
+
+            // ── 其余：按区域分两棵 Direct 子树，里面还是"一键一叶子"的直通 ─────────────
             foreach (HoFaceGate gate in new[] { HoFaceGate.Eye, HoFaceGate.Lip })
             {
-                // 按 HoFaceTrackingChannels.Names 的顺序取，保证生成结果稳定（字典顺序不保证）。
                 var shapes = new List<string>();
                 foreach (string shape in HoFaceTrackingChannels.Names)
-                    if (groups.ContainsKey(shape) && HoFaceTrackingChannels.Gate(shape) == gate) shapes.Add(shape);
+                    if (groups.ContainsKey(shape) && HoFaceTrackingChannels.Gate(shape) == gate && !IsLidShape(shape))
+                        shapes.Add(shape);
                 if (shapes.Count == 0) continue;
 
-                var region = new BlendTree
-                {
-                    name = RegionTreeName(gate),
-                    blendType = BlendTreeType.Direct
-                };
+                var region = new BlendTree { name = RegionTreeName(gate), blendType = BlendTreeType.Direct };
                 AssetDatabase.AddObjectToAsset(region, controller);
                 keep.Add(region);
 
                 foreach (string shape in shapes)
                 {
                     string parameter = "ARKit/" + shape;
-                    if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
-
-                    if (!existing.TryGetValue(shape, out var clip))
-                    {
-                        // 一个键只需要一个"满值"片段：权重由参数给，参数为 0 时它贡献 0。
-                        clip = new AnimationClip { name = shape, frameRate = 60f };
-                        foreach (var binding in groups[shape])
-                            AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
-                        AssetDatabase.AddObjectToAsset(clip, controller);
-                    }
-
-                    region.AddChild(clip);
-                    var children = region.children;
-                    children[children.Length - 1].directBlendParameter = parameter;
-                    region.children = children;
+                    arkitParameters.Add(parameter);
+                    AnimationClip clip = existing.TryGetValue(shape, out var found) ? found : CreateShapeClip(controller, shape, groups[shape]);
+                    keep.Add(clip);
+                    AddChild(region, clip, parameter);
                 }
 
-                // 区域子树本身挂在根树上，权重就是区域门控参数：门控 × 各键参数。
-                tree.AddChild(region);
-                var root = tree.children;
-                root[root.Length - 1].directBlendParameter = GateParameterName(gate);
-                tree.children = root;
+                AddChild(tree, region, GateParameterName(gate));
             }
+
+            foreach (string shape in HoFaceTrackingChannels.Names)
+                if (groups.ContainsKey(shape)) arkitParameters.Add("ARKit/" + shape);
+            foreach (string parameter in arkitParameters)
+                if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
 
             foreach (var old in stale)
                 if (!keep.Contains(old)) UnityEngine.Object.DestroyImmediate(old, true);
+
+            // 已经不再被任何树引用的旧直通片段（眼睑那六个键）——它们是我们的命名约定，
+            // 清掉免得子资产越堆越多。
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (!(asset is AnimationClip clip) || keep.Contains(clip)) continue;
+                if (Array.IndexOf(HoFaceTrackingChannels.Names, clip.name) < 0) continue;
+                UnityEngine.Object.DestroyImmediate(clip, true);
+            }
         }
 
-        /// <summary>门控参数：缺就补，并且**默认开**（单独打开这个资产时脸是有表情的，不是一片死脸）。</summary>
+        /// <summary>眼睑 2D 树的五个姿势。数值来自参考实现五个片段的实测值（见文档 21.1）。</summary>
+        private static readonly (string Name, Vector2 Position, float Blink, float Wide, float Squint)[] LidPoses =
+        {
+            ("睁大", new Vector2(-1f, 0f), 0f, 100f, 0f),
+            ("中性", new Vector2(0f, 0f), 0f, 0f, 0f),
+            ("闭", new Vector2(1f, 0f), 100f, 0f, 0f),
+            ("眯", new Vector2(0f, 1f), 90f, 0f, 100f),
+            ("睁大+眯", new Vector2(-1f, 1f), 0f, 100f, 100f)
+        };
+
+        /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>
+        private static bool IsLidShape(string shape) =>
+            shape == "eyeBlinkLeft" || shape == "eyeBlinkRight" || shape == "eyeWideLeft" || shape == "eyeWideRight"
+            || shape == "eyeSquintLeft" || shape == "eyeSquintRight";
+
+        private static string LidShape(string suffix, string prefix) => prefix + suffix;
+
+        private static string LidTreeName(int side) => RegionTreePrefix + (side == 0 ? "眼睑左" : "眼睑右");
+
+        /// <summary>眼睑 2D 的两根轴：开合（-1 睁大 / +1 闭）与眯眼（0~1）。由会话生产。</summary>
+        public static string LidAxisName(int side, bool horizontal) =>
+            "Ho/Lid" + (side == 0 ? "Left" : "Right") + (horizontal ? ".X" : ".Y");
+
+        private static IEnumerable<string> LidAxisNames()
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                yield return LidAxisName(side, true);
+                yield return LidAxisName(side, false);
+            }
+        }
+
+        private static bool IsOurs(string name) =>
+            !string.IsNullOrEmpty(name) && name.StartsWith(RegionTreePrefix, StringComparison.Ordinal);
+
+        private static bool HasAny(Dictionary<string, List<EditorCurveBinding>> groups, params string[] shapes)
+        {
+            foreach (string shape in shapes)
+                if (groups.ContainsKey(shape)) return true;
+            return false;
+        }
+
+        private static void WriteLidPose(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
+            string suffix, (string Name, Vector2 Position, float Blink, float Wide, float Squint) pose)
+        {
+            WriteShape(clip, groups, "eyeBlink" + suffix, pose.Blink);
+            WriteShape(clip, groups, "eyeWide" + suffix, pose.Wide);
+            WriteShape(clip, groups, "eyeSquint" + suffix, pose.Squint);
+        }
+
+        private static void WriteShape(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups, string shape, float value)
+        {
+            if (!groups.TryGetValue(shape, out var bindings)) return;
+            foreach (var binding in bindings)
+                AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0f, 1f / 60f, value));
+        }
+
+        private static AnimationClip CreateShapeClip(AnimatorController controller, string shape, List<EditorCurveBinding> bindings)
+        {
+            var clip = new AnimationClip { name = shape, frameRate = 60f };
+            foreach (var binding in bindings)
+                AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0f, 1f / 60f, 100f));
+            AssetDatabase.AddObjectToAsset(clip, controller);
+            return clip;
+        }
+
+        private static void AddChild(BlendTree tree, Motion motion, string parameter)
+        {
+            tree.AddChild(motion);
+            var children = tree.children;
+            children[children.Length - 1].directBlendParameter = parameter;
+            tree.children = children;
+        }
+
+        private static Dictionary<string, AnimationClip> IndexClips(string path)
+        {
+            var existing = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                if (asset is AnimationClip clip && clip.name != "EDIT_THIS_Empty") existing[clip.name] = clip;
+            return existing;
+        }
+
+        private static void EnsureFloat(AnimatorController controller, HashSet<string> parameters, string name)
+        {
+            if (parameters.Add(name)) controller.AddParameter(name, AnimatorControllerParameterType.Float);
+        }
+
+        /// <summary>门控/轴参数：缺就补，并且**默认 1**（单独打开这个资产时不是一片死脸）。</summary>
         private static void EnsureGate(AnimatorController controller, HashSet<string> parameters, string name)
         {
             if (!parameters.Add(name)) return;
