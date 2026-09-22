@@ -47,7 +47,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // ── 接线：这台组件接到哪、以及那几个会写盘的动作 ──────────────────────
             string setupSummary = rig.faceController != null ? rig.faceController.name : "未指定控制器";
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "接线", setupSummary,
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "① 接线", setupSummary,
                 HoConstraintEditorTheme.AccentMesh))
             using (HoConstraintEditorControls.Card())
             {
@@ -110,7 +110,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
-                "控制器输出参数设置",
+                "② 控制器输出参数设置",
                 RegionSummary(rig.outputRegions),
                 HoConstraintEditorTheme.AccentOutput))
             {
@@ -170,8 +170,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
             // **这一栏是为长大准备的**：以后新的整形（ramp / 抑制 / 轴合并 / 模式开关）都加在这里，
             // 别塞回上面那两栏 —— 上面两栏回答"接到哪""写什么"，这里回答"值怎么被加工"。
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "参数生产（中间层）", MiddleSummary(rig),
-                HoConstraintEditorTheme.AccentOutput))
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "③ 参数生产", MiddleSummary(rig),
+                HoConstraintEditorTheme.AccentDriver))
             using (HoConstraintEditorControls.Card())
             {
                 using (HoConstraintEditorControls.Row())
@@ -295,7 +295,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var channels = serializedObject.FindProperty("channels");
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref channelsExpanded,
-                "输入参数",
+                "④ 输入参数",
                 channels.arraySize + " 路",
                 HoConstraintEditorTheme.AccentRules))
             {
