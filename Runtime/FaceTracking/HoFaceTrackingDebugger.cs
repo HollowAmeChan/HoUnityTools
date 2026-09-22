@@ -24,8 +24,29 @@ namespace Hollow.HoUnityTools.FaceTracking
         public List<HoFacePathRemap> pathRemaps = new List<HoFacePathRemap>();
         [Min(0.1f)] public float staleSeconds = 1f;
         [Min(0.01f)] public float neutralFadeSeconds = 0.2f;
+        [Tooltip("分组指数平滑的时长（秒）。0 = 不过滤、直接透传 —— 默认就是 0，避免和手机侧自带的处理叠出额外延迟。"
+            + "眼球要跟得紧、眼睑要稳、嘴更黏，所以分三组而不是一个系数。")]
+        public float smoothEyelids;
+        public float smoothGaze;
+        public float smoothMouth;
+        [Tooltip("眉、脸颊、鼻子等剩下的键。")]
+        public float smoothOther;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
+
+        /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
+        public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
+
+        /// <summary>某一组的分组平滑时长（秒）；0 = 直通。</summary>
+        public float SmoothSeconds(HoFaceSmoothGroup group)        {
+            switch (group)
+            {
+                case HoFaceSmoothGroup.Eyelids: return smoothEyelids;
+                case HoFaceSmoothGroup.Gaze: return smoothGaze;
+                case HoFaceSmoothGroup.Mouth: return smoothMouth;
+                default: return smoothOther;
+            }
+        }
 
 #if UNITY_EDITOR
         public static event Action<HoFaceTrackingDebugger> EditorTick;

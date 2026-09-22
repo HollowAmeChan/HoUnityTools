@@ -141,8 +141,27 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         HoConstraintEditorControls.NumberField(serializedObject.FindProperty("neutralFadeSeconds").floatValue, "秒");
                 }
 
-                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
-                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("分组平滑", HoConstraintEditorTheme.LabelWidth,
+                        "每组一个指数平滑时长（秒）；0 = 不过滤、直接透传。\n"
+                        + "眼球要跟得紧、眼睑要稳、嘴更黏，所以分组而不是一个统一系数。\n"
+                        + "面板「面捕输入 → Controller 实值」两列就是平滑前 / 平滑后。");
+                    HoConstraintEditorControls.Label("眼睑", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("smoothEyelids").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothEyelids").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("眼球", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("smoothGaze").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothGaze").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("嘴", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("smoothMouth").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothMouth").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Label("其它", HoConstraintEditorTheme.LabelWidthSm);
+                    serializedObject.FindProperty("smoothOther").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothOther").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Flex();
+                }
+
+                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
 
             serializedObject.ApplyModifiedProperties();

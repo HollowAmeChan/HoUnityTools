@@ -12,6 +12,13 @@ namespace Hollow.HoUnityTools.FaceTracking
 
     public enum HoFaceInputMode { Live, Manual, Hold, Neutral, Release }
 
+    /// <summary>
+    /// 平滑分组。对齐参考实现的 <c>OSCm/Sensitivity</c> 分组手感：眼睑、眼球、嘴各自一组，其余归一组 ——
+    /// 而不是 52 个键共用一个平滑系数。实践中那不够用：眼球要跟得紧、眼睑要稳、嘴要更黏，
+    /// 三者的合适时长能差一个数量级。
+    /// </summary>
+    public enum HoFaceSmoothGroup { Eyelids, Gaze, Mouth, Other }
+
     [Serializable]
     public sealed class HoFaceChannel
     {
@@ -66,6 +73,18 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (shape.StartsWith("brow", StringComparison.Ordinal)) return HoFaceRegion.Brows;
             if (shape.StartsWith("cheek", StringComparison.Ordinal) || shape.StartsWith("nose", StringComparison.Ordinal)) return HoFaceRegion.Cheeks;
             return HoFaceRegion.Mouth;
+        }
+
+        /// <summary>平滑分组：眼球 / 眼睑 / 嘴各自一组，眉、脸颊、鼻子归到「其它」。</summary>
+        public static HoFaceSmoothGroup SmoothGroup(string shape)
+        {
+            switch (Region(shape))
+            {
+                case HoFaceRegion.Gaze: return HoFaceSmoothGroup.Gaze;
+                case HoFaceRegion.Eyelids: return HoFaceSmoothGroup.Eyelids;
+                case HoFaceRegion.Mouth: return HoFaceSmoothGroup.Mouth;
+                default: return HoFaceSmoothGroup.Other;
+            }
         }
 
         public static List<HoFaceChannel> CreateDefaults()

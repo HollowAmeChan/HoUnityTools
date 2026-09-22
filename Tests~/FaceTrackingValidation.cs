@@ -261,6 +261,38 @@ public static class HoFaceTrackingValidation
                 Debug.Log("HO_WDOFF: jawOpen=" + jaw + " mouthSmileLeft=" + smile
                     + "  —— 同样一个 Direct 树，只是 WD Off；如果这里发散，说明"
                     + "「Direct 树 + WD Off」才是不可用的组合，而不是 Direct 本身有问题");
+
+                // ── 分组平滑：开着的时候真的在过滤，关掉（默认）的时候直通 ──────────
+                // 断言刻意做成不依赖帧率：用很大的时间常数，只要求"没一步到位"，再要求它单调逼近。
+                HoFaceInputHub.Start(rig);
+                var smoothSession = HoFaceInputHub.Session(rig);
+                Check(smoothSession != null, "session started for smoothing test: " + HoFaceInputHub.Error(rig));
+                rig.smoothMouth = 1.0f;                 // jawOpen 属"嘴"组
+                Channel("jawOpen").manual = 1.0f;
+                Channel("jawOpen").mode = HoFaceInputMode.Manual;
+                stage++; frame = Time.frameCount + 3; return;
+            }
+            if (stage == 8)
+            {
+                float transit = Weight("jawOpen");
+                smoothSampleA = transit;
+                Debug.Log("HO_SMOOTH transit=" + transit + " (目标 100，平滑开着就不该一步到位)");
+                Check(transit > 0.01f && transit < 99.0f,
+                    "group smoothing filters instead of snapping (actual=" + transit + ")");
+                stage++; frame = Time.frameCount + 12; return;
+            }
+            if (stage == 9)
+            {
+                float later = Weight("jawOpen");
+                Debug.Log("HO_SMOOTH later=" + later + " (应比 transit=" + smoothSampleA + " 更接近 100)");
+                Check(later > smoothSampleA, "group smoothing keeps converging (A=" + smoothSampleA + " B=" + later + ")");
+                rig.smoothMouth = 0f;                   // 关掉 = 直通，下一帧就该到位
+                stage++; frame = Time.frameCount + 3; return;
+            }
+            if (stage == 10)
+            {
+                Near(Weight("jawOpen"), 100, "smoothing 0 means pass-through (no extra delay by default)");
+                HoFaceInputHub.Stop(rig);
                 rig.enabled = false;
                 Check(HoFaceInputHub.Session(rig) == null, "disable component disposes session immediately");
                 Debug.Log("HO_FACE_TESTS_ALL_PASSED");
@@ -276,6 +308,7 @@ public static class HoFaceTrackingValidation
     private static GameObject probeRoot;
     private static SkinnedMeshRenderer probeRenderer;
     private static AnimatorController probeWdOn, probeWdOff;
+    private static float smoothSampleA;
 
     private static float ProbeWeight(string shape) =>
         probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));

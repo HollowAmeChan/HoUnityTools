@@ -27,6 +27,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public readonly HoFaceTrackingDebugger Rig;
         public HoFaceCompiledController Compiled { get; private set; }
         public readonly float[] Effective = new float[52];
+        /// <summary>分组平滑之后、真正写进控制器参数的值。面板上「Controller 实值」这一列读的就是它。</summary>
+        public readonly float[] Smoothed = new float[52];
         public readonly float[] ControllerValues = new float[52];
         private readonly HoFaceInputMode[] lastModes = new HoFaceInputMode[52];
         private readonly bool[] selected = new bool[52];
@@ -43,6 +45,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool disposed;
         private bool configured;
         private bool written;
+        /// <summary>会话第一帧的标记：那一帧把所有值一次到位，避免开场从 0 扫过来。</summary>
+        private bool primed;
 
         public HoFaceAnimationSession(HoFaceTrackingDebugger rig)
         {
@@ -138,7 +142,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         break;
                 }
                 nextSelected[index] = mayWrite && channel.mode != HoFaceInputMode.Release && (Rig.outputRegions & HoFaceTrackingChannels.Region(channel.shape)) != 0;
+                // 分组平滑：Effective 是目标，Smoothed 才是真正写进控制器的那一个。
+                // 只有**会话第一帧**做一次性初始化（免得开始时从 0 扫一遍）；之后一律走平滑。
+                // 不需要"重新接管就快照"—— Smoothed 每帧都在跟进 Effective，本来就不会离得太远。
+                float tau = Rig.SmoothSeconds(channel.shape);
+                Smoothed[index] = !primed || tau <= 0.0001f
+                    ? Effective[index]
+                    : Mathf.Lerp(Smoothed[index], Effective[index], 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / tau));
             }
+            primed = true;
             for (int i = 0; i < selected.Length; i++)
             {
                 if (selected[i] != nextSelected[i]) changed = true;
@@ -156,7 +168,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 int index = HoFaceTrackingChannels.IndexOf(channel.shape);
                 if (index < 0 || !parameters.Contains(channel.parameter)) continue;
-                shadow.SetFloat(channel.parameter, Effective[index]);
+                shadow.SetFloat(channel.parameter, Smoothed[index]);
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
         }
