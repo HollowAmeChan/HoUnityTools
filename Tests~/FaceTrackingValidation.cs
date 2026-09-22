@@ -276,6 +276,47 @@ public static class HoFaceTrackingValidation
             Check(CountClips(controllerPath) == beforeClear - 9,
                 "clearing a kit tree takes its pose clips with it (removed " + (beforeClear - CountClips(controllerPath)) + ")");
 
+            // ── 弹簧驱动（定案 19 里果冻的落点：独立组件 + 预设 + 读已落下的键）──────────
+            // 正向目标吃挤压（含过冲），反向目标吃回弹 —— 纯函数，所以直接断言，
+            // 不用跑动画去肉眼看"回弹有没有真的送到别的键上"。
+            Near(HoSpringConstraint.Driver(1.44f, false), 1.44f, "the forward side keeps the overshoot", 0.0001f);
+            Near(HoSpringConstraint.Driver(-0.4f, false), 0f, "the forward side ignores the rebound half", 0.0001f);
+            Near(HoSpringConstraint.Driver(-0.4f, true), 0.4f, "the reversed side takes the rebound half", 0.0001f);
+            Near(HoSpringConstraint.Driver(1.44f, true), 0f, "the reversed side ignores the squash half", 0.0001f);
+
+            var jellySource = HoSpringPresets.JellyEye(new[] { renderer });
+            Check(jellySource.Axes.Count == 2 && jellySource.Label == "眨眼",
+                "jelly preset is one input driving two freedoms (" + jellySource.Axes.Count + ")");
+            Check(Mathf.Abs(jellySource.Axes[0].Frequency - 6f) < 0.001f
+                && Mathf.Abs(jellySource.Axes[1].Frequency - 8.5f) < 0.001f
+                && Mathf.Abs(jellySource.Axes[0].Damping - 0.25f) < 0.001f,
+                "the two freedoms keep different frequencies, so the path is not a straight line");
+            Check(jellySource.KeyNames.Contains("eyeBlinkLeft") && jellySource.KeyNames.Contains("eyeBlinkRight"),
+                "the preset finds the blink keys that are actually on the mesh (" + string.Join(",", jellySource.KeyNames) + ")");
+
+            // 端到端（编辑期直接喂帧，不进播放模式）：读一个**已经落下来的**键 → 弹簧 → 写另一个键。
+            var springProbe = new GameObject("SpringProbe");
+            var springMesh = springProbe.AddComponent<SkinnedMeshRenderer>();
+            springMesh.sharedMesh = renderer.sharedMesh;
+            int blinkIndex = renderer.sharedMesh.GetBlendShapeIndex("eyeBlinkLeft");
+            int jellyKey = renderer.sharedMesh.GetBlendShapeIndex("JellyEye");
+            springMesh.SetBlendShapeWeight(blinkIndex, 100f);
+            var spring = springProbe.AddComponent<HoSpringConstraint>();
+            spring.Meshes.Add(springMesh);
+            var springSource = spring.AddJellyEyePreset();
+            springSource.Axes[0].Targets.Add(new HoSpringTarget("JellyEye", 1f));
+            springSource.Axes[1].Targets.Add(new HoSpringTarget("JellyEye", 1f));
+            spring.Rebuild();
+            float springPeak = 0f;
+            for (int i = 0; i < 90; i++)
+            {
+                spring.Step(1f / 60f);
+                springPeak = Mathf.Max(springPeak, springMesh.GetBlendShapeWeight(jellyKey));
+            }
+
+            Check(springPeak > 60f, "the component reads a landed key, springs it, and writes its own key (peak=" + springPeak.ToString("F1") + ")");
+            UnityEngine.Object.DestroyImmediate(springProbe);
+
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;
             Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);
