@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Hollow.HoUnityTools.Editor.Constraints;
 using Hollow.HoUnityTools.FaceTracking;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.FaceTracking
@@ -33,23 +36,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public override void OnInspectorGUI()
         {
             var rig = (HoFaceTrackingDebugger)target;
-            serializedObject.Update();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("targetAnimator"), new GUIContent("角色 Animator"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("faceController"), new GUIContent("面部控制器"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("播放后自动驱动"));
-            serializedObject.ApplyModifiedProperties();
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("全局连接面板")) HoFaceTrackingWindow.ShowWindow();
-                using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
-                    if (GUILayout.Button("生成 ARKit 控制器")) Generate(rig);
-            }
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("检查绑定")) Check(rig);
-                if (GUILayout.Button("定位控制器资产") && rig.faceController != null) { Selection.activeObject = rig.faceController; EditorGUIUtility.PingObject(rig.faceController); }
-            }
             var session = HoFaceInputHub.Session(rig);
             HoConstraintEditorControls.Title(
                 "Ho 面捕调试",
@@ -66,8 +52,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("全局连接面板", GUILayout.Height(20))) HoFaceTrackingWindow.ShowWindow();
+                bool initialized = rig.faceController != null;
                 using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
-                    if (GUILayout.Button(new GUIContent("生成 ARKit 控制器", "扫描角色上真实存在的 ARKit 键，生成一个图层 + 一棵 Direct 混合树的纯 Unity 控制器（每键一个子节点，参数直接当权重）。"), GUILayout.Height(20))) Generate(rig);
+                {
+                    // 命名承载语义：「初始化」明确表达"产出完整文件、之后都在里面改"，且只在开始时点。
+                    // 已有控制器时它变成次要按钮 + 省略号，危险性由确认框承担。
+                    var content = initialized
+                        ? new GUIContent("重新初始化…", "会重新产出一个**完整的**控制器文件，该文件里你的手工改动都会丢失。\n"
+                            + "结构改动目前还没做「应用改动」，所以暂时只能走这里；分层生成落地后这一步就不再需要了。")
+                        : new GUIContent("初始化控制器", "从源控制器 + 当前配置产出一个完整的控制器文件。\n"
+                            + "这是唯一会写文件的动作：之后手工逻辑请在生成物的 (EDIT THIS) 段里加，"
+                            + "结构改动走「应用改动」，两者都不会碰你的手工段。");
+                    if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
+                }
             }
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -253,21 +250,98 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             for (int i = 0; i < channels.arraySize; i++) channels.GetArrayElementAtIndex(i).FindPropertyRelative("mode").enumValueIndex = (int)mode;
         }
 
-        private void Generate(HoFaceTrackingDebugger rig)
+        /// <summary>
+        /// 初始化控制器：从源控制器 + 当前配置产出**一个完整文件**。
+        ///
+        /// 这是唯一会写文件的动作，而且是破坏性的 —— 目标已存在时里面的手工改动会全丢。
+        /// 所以路径每次都问，覆盖前必须把代价说清楚，并给一条「另存为新文件」的出路。
+        /// </summary>
+        private void Initialize(HoFaceTrackingDebugger rig)
         {
-            string path = EditorUtility.SaveFilePanelInProject("保存新的 ARKit 调试控制器", "Face_ARKit", "controller", "源模型与既有控制器不会被修改。");
+            string path = EditorUtility.SaveFilePanelInProject(
+                "初始化面部控制器", "Face_ARKit", "controller",
+                "这会产出一个完整的控制器文件。之后你的手工逻辑请在它内部的 (EDIT THIS) 段里加。");
             if (string.IsNullOrEmpty(path)) return;
+
+            var existing = AssetDatabase.LoadMainAssetAtPath(path) as AnimatorController;
+            if (existing != null)
+            {
+                // 覆盖前把代价算出来，而不是笼统说「将被覆盖」。
+                string cost = DescribeController(existing);
+                int choice = EditorUtility.DisplayDialogComplex(
+                    "要覆盖这个控制器吗？",
+                    path + "\n\n该文件已存在：" + cost + "。\n"
+                    + "覆盖会把它整个重写 —— 你在里面手工加的层、状态、树都会丢失。\n\n"
+                    + "想保住现有文件就选「另存为新文件」。",
+                    "覆盖并初始化", "取消", "另存为新文件…");
+                if (choice == 1) return;
+                if (choice == 2)
+                {
+                    path = EditorUtility.SaveFilePanelInProject(
+                        "另存为新的面部控制器", Path.GetFileNameWithoutExtension(path) + "_new", "controller",
+                        "原文件不会被改动。");
+                    if (string.IsNullOrEmpty(path)) return;
+                    if (AssetDatabase.LoadMainAssetAtPath(path) != null)
+                    {
+                        report = "目标已存在，已取消：" + path;
+                        return;
+                    }
+                }
+            }
+
             try
             {
                 var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path);
-                Undo.RecordObject(rig, "Assign ARKit face controller");
+                Undo.RecordObject(rig, "Initialize face controller");
                 rig.faceController = controller;
-                rig.channels = HoFaceTrackingChannels.CreateDefaults();
+                EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
                 EditorUtility.SetDirty(rig);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
-                report = "已生成 " + controller.parameters.Length + " 路 ARKit 参数（单图层 + 一棵 Direct 混合树）。凝视输出仍由上面的分组开关控制。";
+                report = "已初始化 " + path + "：" + controller.parameters.Length + " 路 ARKit 参数（单图层 + 一棵 Direct 混合树）。"
+                    + "之后就改这个文件里的 (EDIT THIS) 段。";
             }
             catch (Exception e) { report = e.Message; }
+        }
+
+        /// <summary>把一个控制器资产的规模说出来，供覆盖确认框显示代价。</summary>
+        private static string DescribeController(AnimatorController controller)
+        {
+            int states = 0;
+            foreach (var layer in controller.layers)
+            {
+                states += CountStates(layer.stateMachine);
+            }
+
+            return controller.layers.Length + " 个图层、" + states + " 个状态、"
+                + controller.animationClips.Length + " 个片段";
+        }
+
+        private static int CountStates(AnimatorStateMachine machine)
+        {
+            if (machine == null) return 0;
+            int count = machine.states.Length;
+            foreach (var child in machine.stateMachines) count += CountStates(child.stateMachine);
+            return count;
+        }
+
+        /// <summary>
+        /// 补齐缺失的标准 ARKit 通道。**不覆盖已有的** —— 初始化不该动用户调过的配置，
+        /// 隐式重置（原来的 `channels = CreateDefaults()`）是这套契约明令禁止的。
+        /// </summary>
+        private static void EnsureChannels(HoFaceTrackingDebugger rig)
+        {
+            if (rig.channels == null)
+            {
+                rig.channels = HoFaceTrackingChannels.CreateDefaults();
+                return;
+            }
+
+            var have = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var channel in rig.channels)
+                if (channel != null && !string.IsNullOrEmpty(channel.shape)) have.Add(channel.shape);
+            foreach (var fresh in HoFaceTrackingChannels.CreateDefaults())
+                if (!have.Contains(fresh.shape)) rig.channels.Add(fresh);
+            rig.channels.RemoveAll(c => c == null || string.IsNullOrEmpty(c.shape));
         }
 
         private void Check(HoFaceTrackingDebugger rig)
