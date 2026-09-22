@@ -71,4 +71,4 @@ iFacialMocap UDP  →   增益 / 死区 / 平滑 /     →  区域闸 + 键占�
 - [混合树的能力边界](BLEND_TREE_LIMITS.md) —— 什么能写进树、什么必须在外，以及判断流程。
 - [编辑器面捕调试组件设计](FACE_TRACKING_DEBUGGER_DESIGN.md) —— 影子台/占用表这些机制层的设计。
 - [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) —— 生成物的形状与判别性实验。
-- [面捕混合树入门](FACE_TRACKING_TEMPLATE_GUIDE.md) —— 自己编树时的入门。
+- [面捕混合树入门（已归档）](archive/FACE_TRACKING_TEMPLATE_GUIDE.md) —— 讲的是 Jerry 现成模板的用法，我们改成自己生成后只作历史。

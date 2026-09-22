@@ -1,3 +1,7 @@
+> **已归档（2026-09-23）。** 一次性调查报告：`mouthClose` 这个语义在各家标准里怎么定义、
+> 各家有没有在用。**结论已经体现在生成器与中间层的行为里**，报告本身只作证据留存。
+> 现状见 [面捕工作流](../FACE_TRACKING_WORKFLOW.md) 与 [面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)。
+
 # ARKit `mouthClose` 调查报告
 
 > 调查范围：Apple 官方规范 / OpenXR 与 Meta 标准 / VRCFaceTracking 内核与各模块源码 / Pico 4 Pro 链路 / Adjerry91 的 VRCFaceTracking-Templates 仓库 / MeowFace / Warudo / VRChat / 社区实践

@@ -37,10 +37,13 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 
 ## 文档
 
-- [面捕混合树入门与 ARKit 模板使用](docs/FACE_TRACKING_TEMPLATE_GUIDE.md)
-- [编辑器面捕调试组件设计（iFacialMocap 直连，已实现待真机验收）](docs/FACE_TRACKING_DEBUGGER_DESIGN.md)
+- [**面捕工作流**](docs/FACE_TRACKING_WORKFLOW.md)
+- [**面捕中间层处理**](docs/FACE_TRACKING_MIDDLE_LAYER.md)
+- [**混合树的能力边界**](docs/BLEND_TREE_LIMITS.md)
+- [编辑器面捕调试组件设计（机制层；状态/UI 部分已过期）](docs/FACE_TRACKING_DEBUGGER_DESIGN.md)
 - [面捕控制器结构：Jerry 模板 vs 我们生成的](docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md)
-- [面捕的层间分工：参数生产层 vs 驱动层](docs/FACE_TRACKING_PIPELINE_SPLIT.md)
+- [已归档：面捕的层间分工（研究日志）](docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md)
+- [已归档：面捕混合树入门与 Jerry 模板使用](docs/archive/FACE_TRACKING_TEMPLATE_GUIDE.md)
 - [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
 - [摆锤约束设计与验证](docs/PENDULUM_CONSTRAINT.md)
 - [跟随约束坐标系规则](docs/FOLLOW_CONSTRAINT.md)
