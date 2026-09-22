@@ -29,10 +29,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private long lastPackets;
         private float packetRate;
 
-        // 分区展开状态。诊断默认收起 —— 正常用的时候不该占地方。
-        private bool connectionExpanded = true;
-        private bool characterExpanded = true;
-        private bool parametersExpanded = true;
+        // 分区展开状态：默认只展开"必须动手填"的那块（配置），其余一律收起。
+        // 排查区虽然收起，但出现新问题时会自动弹开一次（见 DrawDiagnoseSection）。
+        private bool configExpanded = true;
+        private bool parametersExpanded;
         private bool diagnoseExpanded;
         private bool logExpanded;
         private bool hintExpanded;
@@ -82,8 +82,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             var settings = HoFaceConnectionSettings.instance;
             DrawTitle();
-            DrawConnectionSection(settings);
-            DrawCharacterSection();
+            DrawConfigSection(settings);
             DrawParameterSection();
             DrawDiagnoseSection(settings.phoneIp);
         }
@@ -105,15 +104,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         // ══════════════════════════════════════════════════════════════
-        // 手机连接
+        // 配置（手机连接 + 角色，合成一块）
         // ══════════════════════════════════════════════════════════════
-        private void DrawConnectionSection(HoFaceConnectionSettings settings)
+        /// <summary>
+        /// 连接手机和挑角色本来是两块，但它们属于同一件事 —— "把输入接到这个角色上"。
+        /// 拆成两块会让首次使用的人在两处来回找，所以合成一块，也是唯一默认展开的分区。
+        /// </summary>
+        private void DrawConfigSection(HoFaceConnectionSettings settings)
         {
-            string summary = HoFaceInputHub.Connected
-                ? (HoFaceInputHub.LastFrameTime == 0 ? "等待手机" : packetRate.ToString("F0") + " 包/秒")
+            bool connected = HoFaceInputHub.Connected;
+            var session = HoFaceInputHub.Session(rig);
+            string summary = connected
+                ? (HoFaceInputHub.LastFrameTime == 0 ? "等待响应" : packetRate.ToString("F0") + " 包/秒")
                 : "未连接";
-            if (!HoConstraintEditorControls.Section(ref connectionExpanded, "手机连接", summary, HoConstraintEditorTheme.AccentDriver))
+            if (session != null) summary += " · 驱动中";
+
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref configExpanded, "配置", summary, HoConstraintEditorTheme.AccentDriver))
             {
+                // 收起也要报错：真问题不能被折叠藏起来。
+                DrawProblems(session);
                 return;
             }
 
@@ -122,7 +131,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("手机 IPv4", HoConstraintEditorTheme.LabelWidth, "iFacialMocap 所在手机在局域网里的地址；和电脑要在同一个网段。");
-                    using (new EditorGUI.DisabledScope(HoFaceInputHub.Connected))
+                    using (new EditorGUI.DisabledScope(connected))
                     {
                         Rect field = HoConstraintEditorControls.NextFlexible(90.0f);
                         EditorGUI.BeginChangeCheck();
@@ -131,7 +140,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
 
                     HoConstraintEditorControls.Gap();
-                    bool connected = HoFaceInputHub.Connected;
                     if (HoConstraintEditorControls.Button(connected ? "断开手机" : "连接手机", null, !connected, 76.0f))
                     {
                         if (connected) HoFaceInputHub.Disconnect();
@@ -147,30 +155,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     if (HoFaceInputHub.LastFrameTime != 0) HoConstraintEditorControls.Caption("来源 " + HoFaceInputHub.Receiver.Sender);
                 }
 
-                DrawReceiverProblem();
-            }
-        }
+                HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
-        /// <summary>接收侧的真问题（端口占用、socket 异常）才用红框；这不是背景信息。</summary>
-        private void DrawReceiverProblem()
-        {
-            string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
-            if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // 角色
-        // ══════════════════════════════════════════════════════════════
-        private void DrawCharacterSection()
-        {
-            var session = HoFaceInputHub.Session(rig);
-            if (!HoConstraintEditorControls.Section(ref characterExpanded, "角色", session != null ? "驱动中" : (rig != null ? "待机" : "未指定"), HoConstraintEditorTheme.AccentMesh))
-            {
-                return;
-            }
-
-            using (HoConstraintEditorControls.Card())
-            {
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("调试组件", HoConstraintEditorTheme.LabelWidth, "挂在角色上的 HoFaceTrackingDebugger。");
@@ -215,16 +201,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     else if (!Application.isPlaying) HoConstraintEditorControls.Caption("进播放模式后可驱动");
                     else if (rig == null) HoConstraintEditorControls.Caption("先指定组件");
                 }
+            }
 
-                string error = HoFaceInputHub.Error(rig);
-                if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
+            DrawProblems(session);
+        }
 
-                var compiled = HoFaceInputHub.Session(rig)?.Compiled;
-                if (compiled != null && compiled.warnings.Count > 0)
-                {
-                    EditorGUILayout.HelpBox("有 " + compiled.warnings.Count + " 个绑定没找到（例如网格上没这个键）：\n"
-                        + string.Join("\n", compiled.warnings.GetRange(0, Mathf.Min(5, compiled.warnings.Count))), MessageType.Warning);
-                }
+        /// <summary>真问题才用框：端口占用、socket 异常、会话报错、绑定缺失。这些和折叠状态无关，永远显示。</summary>
+        private void DrawProblems(HoFaceAnimationSession session)
+        {
+            string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
+            if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
+
+            string sessionError = HoFaceInputHub.Error(rig);
+            if (!string.IsNullOrEmpty(sessionError)) EditorGUILayout.HelpBox(sessionError, MessageType.Error);
+
+            var compiled = session?.Compiled;
+            if (compiled != null && compiled.warnings.Count > 0)
+            {
+                EditorGUILayout.HelpBox("有 " + compiled.warnings.Count + " 个绑定没找到（例如网格上没这个键）：\n"
+                    + string.Join("\n", compiled.warnings.GetRange(0, Mathf.Min(5, compiled.warnings.Count))), MessageType.Warning);
             }
         }
 
@@ -237,7 +232,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             for (int i = 0; i < HoFaceInputHub.ReceivedAt.Length; i++)
                 if (HoFaceInputHub.ReceivedAt[i] > 0) received++;
 
-            if (!HoConstraintEditorControls.Section(
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref parametersExpanded,
                 "参数",
                 HoFaceInputHub.Connected ? "已收到 " + received + " / " + HoFaceTrackingChannels.Names.Length : "未连接",
@@ -333,7 +328,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             string summary = DiagnoseSummary(phoneIp);
-            if (!HoConstraintEditorControls.Section(ref diagnoseExpanded, "排查", summary, HoConstraintEditorTheme.AccentDebug)) return;
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref diagnoseExpanded, "排查", summary, HoConstraintEditorTheme.AccentDebug)) return;
 
             using (HoConstraintEditorControls.Card())
             {

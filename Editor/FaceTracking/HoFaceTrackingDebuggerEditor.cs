@@ -13,8 +13,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private Vector2 scroll;
         private string search = "";
         private string report = "";
-        private bool outputExpanded = true;
-        private bool channelsExpanded = true;
+        private bool outputExpanded;
+        private bool channelsExpanded;
         private bool mappings;
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
@@ -86,7 +86,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.HelpBox(string.Join("\n", session.Compiled.warnings.Take(8)), MessageType.Warning);
 
             serializedObject.Update();
-            if (!HoConstraintEditorControls.Section(
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
                 "输出分工",
                 RegionSummary(rig.outputRegions),
@@ -151,7 +151,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             serializedObject.Update();
             var channels = serializedObject.FindProperty("channels");
-            if (!HoConstraintEditorControls.Section(
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref channelsExpanded,
                 "输入参数",
                 channels.arraySize + " 路",
