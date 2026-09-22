@@ -49,9 +49,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 (session != null ? "驱动中" : "待机", session != null),
                 (Application.isPlaying ? "播放中" : "编辑中", Application.isPlaying));
 
-            // ── ① 接线：这台组件接到哪 ────────────────────────────────────────────
+            // ── 接线：这台组件接到哪 ──────────────────────────────────────────────
             string setupSummary = rig.faceController != null ? rig.faceController.name : "未指定控制器";
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "① 接线", setupSummary,
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "接线", setupSummary,
                 HoConstraintEditorTheme.AccentMesh))
             using (HoConstraintEditorControls.Card())
             {
@@ -73,11 +73,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
             }
 
-            // ── ② 初始化：程序化产出「状态 + 驱动映射」────────────────────────────
+            // ── 初始化：程序化产出「状态 + 驱动映射」──────────────────────────────
             // **这一栏的产物不是"几个参数"，而是一大片状态与驱动映射**（片段 + 混合树 + 门控参数）。
             // 这是整个流程的关键一句：初始化 = 生产状态与映射，不是手搓。
             // 所以以后要加什么状态，就是往这一栏加"生成配置"（预设开关），而不是让用户自己去编。
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref initExpanded, "② 初始化", InitSummary(rig),
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref initExpanded, "初始化", InitSummary(rig),
                 HoConstraintEditorTheme.AccentBlink))
             using (HoConstraintEditorControls.Card())
             {
@@ -127,17 +127,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.HelpBox(string.Join("\n", session.Compiled.warnings.Take(8)), MessageType.Warning);
 
             serializedObject.Update();
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
+            // 折叠只决定"这一栏的内容画不画"，不决定"后面还有没有别的栏"。
+            // 这里原来写成 `if (!展开) { DrawChannels(); return; }` —— 一个 return 把下面的
+            // 「参数生产」整段跳过了，于是它只在输出栏展开时才存在，看着像是藏在里面。
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
-                "③ 控制器输出参数设置",
+                "控制器输出参数设置",
                 RegionSummary(rig.outputRegions),
                 HoConstraintEditorTheme.AccentOutput))
-            {
-                serializedObject.ApplyModifiedProperties();
-                DrawChannels(rig, session);
-                return;
-            }
-
             using (HoConstraintEditorControls.Card())
             {
                 var regions = serializedObject.FindProperty("outputRegions");
@@ -203,7 +200,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
             // **这一栏是为长大准备的**：以后新的整形（ramp / 抑制 / 轴合并 / 模式开关）都加在这里，
             // 别塞回上面那两栏 —— 上面两栏回答"接到哪""写什么"，这里回答"值怎么被加工"。
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "④ 参数生产", MiddleSummary(rig),
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "参数生产", MiddleSummary(rig),
                 HoConstraintEditorTheme.AccentDriver))
             using (HoConstraintEditorControls.Card())
             {
@@ -374,7 +371,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var channels = serializedObject.FindProperty("channels");
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref channelsExpanded,
-                "⑤ 输入参数",
+                "输入参数",
                 channels.arraySize + " 路",
                 HoConstraintEditorTheme.AccentRules))
             {
