@@ -1033,4 +1033,111 @@ Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回�
 那"让用户进树加逻辑"的门槛比我原来估的高。生成的树要**刻意保持浅**（Direct 根 + 一层区域子树 + 叶子），
 用户的编辑面留在组件上；`(EDIT THIS)` 是逃生口，不是主路。
 
+## 17. 两棵大树拆开看：他们到底在拆什么
+
+材料：`.research/bigtree-jerry.txt`（`FT Blendshape Driver`，22 个子节点）与
+`.research/bigtree-shinano.txt`（`Face Tracking Root`），生成脚本 `.research/inspect_bigtree.py`。
+
+### 17.1 形状
+
+**Jerry（ARKit 模板）：平铺 + 隐式归组**
+
+```
+[Direct] FT Blendshape Driver           ← 根，22 个子节点，全部平铺
+  ├ Right Eye Lid Blend      gate=EyeTrackingActive   内部 FreeDir2D(EyeLidRight × EyeSquintRight) 5 姿势
+  ├ Left  Eye Lid Blend      gate=EyeTrackingActive   同上
+  ├ Eye Look Right/Left Blend gate=EyeTrackingActive  SimpleDirectional2D(EyeRightX × EyeY) 5 姿势
+  ├ Brow Inner/Outer/Down …  gate=EyeTrackingActive   ← 眉归**眼**区
+  ├ Nose Sneer / Cheek Puff  gate=LipTrackingActive   ← 颊鼻归**唇**区
+  ├ Mouth … (十余个)          gate=LipTrackingActive
+  └ Face Tracking Emulation  gate=FaceTrackingEmulation
+       ├ Face Tracking Limits  1D(FaceTrackingLimits) → No Limits / Limits
+       └ Brow Angry / Brow Wide / Cheek Squint … Emulation   ← 用别的参数"模拟"模型没有的表情
+```
+
+**区域不是物理子树** —— 是把共用同一个 gate 参数的语义单元摆在一起，隐式归组。
+
+**Shinano（8 层控制器里的 `FacialTracking` 层）：逐层收窄**
+
+```
+[Direct] Face Tracking Root              ← 根**只有 2 个子节点**
+  ├ EyeTracking Active   gate=EyeTrackingActive   1D(EyeTracking_GestureControl)
+  │    └ Eye BlendSet        gate=GestureLeftWeight   ← 模式适配层（手势）
+  │        ├ Eye Look Left/Right Blend   SimpleDirectional2D(X × Y)，9 个姿势含四个斜向
+  │        ├ Eye Lid LR Sync             1D(Eye Lid LR Sync) → {LR BlendSet | Sync BlendSet}
+  │        ├ Brow Pinch BlendSet / KemoEar（兽耳挂在这里）
+  │    └ _EmptyAnimation  thr=1                              ← 清空 / 回退
+  └ LipTracking Active   gate=LipTrackingActive   1D(LipTracking_GestureControl)
+       └ LipTracking BlendSet  gate=GestureLeftWeight
+           ├ Mouth,Jaw Limit → Mouth X Limit → _EmptyAnimation        ┐
+           ├ JawOpenLimit_LU → JawOpenLimit_LL → JawOpen 0.anim       │ 抑制链
+           ├ LipFunnel Limit 1 → Limit 2 → _EmptyAnimation            │
+           ├ LipSuckUpper → LipSuckLower Limit                        ┘
+           ├ Mouth Sad Smile Left/Right、Nose Sneer、Cheek Puff、Ear Sad
+           └ MouthDefaultCorrection  (Direct, 9 个子节点)  ← 基础表情回退
+```
+
+**同一件事，两种写法。** Jerry 平铺（好读、好改、但区域关系是隐式的）；
+Shinano 逐层收窄（根只分两大区，每层只回答一个问题，但深度上去了、也就没人敢动）。
+
+### 17.2 抽出来的六个设计模式
+
+| # | 模式 | 他们怎么做 | 我们 |
+| --- | --- | --- | --- |
+| 1 | **区域门控** | 共用 gate 参数：`EyeTrackingActive` / `LipTrackingActive`（Float 默认 0） | **要抄**（把 C# 编译期剔除改成参数） |
+| 2 | **两级参数** | 外部开关 `EyeTrackingActive` → 平滑代理 `FT/EyeTrackingActive` | 要抄"外部/内部两段"这个区分 |
+| 3 | **维度按语义选** | 眼睑 **2D**（开合×眯眼，5 姿势）、眼球 **SimpleDirectional2D**（X×Y，9 姿势含斜向）、嘴 **1D** | **要抄**：这是"用户精确设计"的抓手 |
+| 4 | **左右同步** | 三种落地：独立小树 `Eye Lid LR Sync`（Shinano）／双向参数 `Mouth X Blend`（`-1..1` 一棵 1D 树，Jerry）／`EyeSync`+`EyeSyncMix`（Jerry，眼睑+眼球横向） | 要抄（见 16.2） |
+| 5 | **抑制（Limit）** | 成链的 `* Limit` 节点：下颌大张时唇形失效、舌头伸出时嘴部收住…… 用 `_EmptyAnimation` 收 | **要抄**：这是"不破相"的关键 |
+| 6 | **回退（Correction）** | `MouthDefaultCorrection`（9 项）／`Face Tracking Limits` 的 `No Limits / Limits` 开关：参数接近 0 时把基础表情撑起来 | **要抄**：否则面捕把所有键压到 0，脸是死的 |
+| 7 | 附加部件挂载 | 兽耳 `KemoEar` / `Ear Sad` 挂在眼、嘴参数上 | 可选，但说明这层是好挂载点 |
+| ✗ | 输入模式适配 | Shinano 的 `BlendSet` 挂 `GestureLeftWeight`（VRC 手势控制）；Jerry 的 `FaceTrackingEmulation` 开关 | **丢掉**：我们只有一个输入。但**保留这一层的位置语义** |
+| ✗ | 平滑代理 | `OSCm/Proxy/FT/v2/*` 这一整套参数命名 | 丢掉（我们的平滑在 C#，见 14 节） |
+
+### 17.3 一条我们现有分组是错的
+
+Jerry 里**眉挂 `EyeTrackingActive`**（`Brow Inner Up` / `Brow Outer Up` / `Brow Down` 全是），
+**颊鼻挂 `LipTrackingActive`**。也就是说语义分区是：
+
+- **眼区 = 眼睑 + 眼球 + 眉**（眉毛跟着眼神走）
+- **唇区 = 嘴 + 颊鼻**
+
+我们现在是 `HoFaceRegion`：`Expression = Mouth | Brows | Cheeks | Eyelids`，
+面板上「唇」= `Mouth | Brows | Cheeks` —— **把眉归到了唇**。这一条要按他们的语义改。
+（颊鼻归唇是对的，眉归眼是反的。）
+
+### 17.4 我们打算怎么拆（提案）
+
+```
+Ho/00 Drive (Direct)
+  ├ 眼睑   gate = EyeTrackingActive        ← 区域门控（参数，不是编译期剔除）
+  │   ├ 左眼睑 2D（开合 × 眯眼）
+  │   ├ 右眼睑 2D（开合 × 眯眼）
+  │   └ 左右同步（EyeSync：分开 / 同眨）
+  ├ 眼球   gate = EyeTrackingActive
+  │   ├ 左眼 SimpleDirectional2D（X × Y）
+  │   ├ 右眼 SimpleDirectional2D（X × Y）
+  │   └ 左右同步（只作用横向 In/Out —— 照抄他们的作用范围）
+  ├ 眉     gate = EyeTrackingActive        ← 眉归眼
+  ├ 嘴     gate = LipTrackingActive
+  │   ├ 各语义单元（1D / 2D）
+  │   ├ 抑制链（例如 jawOpen 大时收住唇形）
+  │   └ 回退（嘴部参数接近 0 时撑基础表情）
+  ├ 颊鼻   gate = LipTrackingActive        ← 颊鼻归唇
+  └ (可选) 附加部件挂载点（兽耳等）
+```
+
+**每一层只回答一个问题**：第一层"哪个区域算数"，第二层"这件事是几维的"，
+第三层才是具体的键。这正好是用户说的"按语义拆开之后，用户才能精确做设计"。
+
+### 17.5 为什么拆开之后才有自动化工具的可能
+
+- 现在是"一棵 Direct 根 + 52 片叶子"，**没有任何中间结构可以被工具指认**：
+  想"把眼睑整体改成 2D"或"给嘴加一条抑制"，工具找不到落脚点，只能重建整棵树。
+- 拆成语义单元之后，每个单元都是**一个有名、有参数、有维度的子树**，
+  于是"批量改维度""给某个单元加抑制""把某个单元复制到另一个角色"都变成了**对节点的操作**。
+- 也就是说：**先有语义结构，工具才有可操作的对象**。这是"先拆树、再做工具"的顺序理由 ——
+  反过来做（先做通用混合树工具）就会像 13.15 那样，工具长得像什么全靠猜。
+
+
 
