@@ -6,6 +6,7 @@
 
 - [面捕混合树入门与 ARKit 模板使用](FACE_TRACKING_TEMPLATE_GUIDE.md)：解释参数、混合树、动画绑定及 Jerry 模板的使用流程。
 - [编辑器面捕调试组件设计](FACE_TRACKING_DEBUGGER_DESIGN.md)：iFacialMocap 直连、全局面板、角色组件、输出门控和 LookAt 协作。P0–P2 已实现并在独立 Unity 工程跑通自动化验收；真机与眼球骨骼验收未做。
+- [面捕控制器结构：Jerry 模板 vs 我们生成的](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：参考实现的三层结构、一棵 Direct 树管整张脸，以及「Direct 树 + 写默认值关闭会发散」的判别性实验。
 - [Warudo FastBuild 设计与验证](WARUDO_FAST_BUILD.md)：FastBuild 的流程、SDK 约束、依赖处理和排错方法。
 - [摆锤约束设计与验证](PENDULUM_CONSTRAINT.md)：摆锤约束的模型、输出绑定、水瓶液面预设与验证结论。
 - [约束面板设计系统](EDITOR_UI_SYSTEM.md)：约束类 Inspector 共用的尺寸栅格、色板与自绘控件库（眨眼面板已按它重画）。

@@ -188,6 +188,83 @@ public static class HoFaceTrackingValidation
                 Check(!HoFaceOutputOwnership.IsReserved(renderer, renderer.sharedMesh.GetBlendShapeIndex("jawOpen")), "stop removes all reservations");
                 HoFaceInputHub.Start(rig);
                 Check(HoFaceInputHub.Session(rig) != null, "session can restart");
+                HoFaceInputHub.Stop(rig);
+
+                // ── 判别性实验：单个 Direct 混合树能不能替代"一层一个键" ──────────────
+                // 上一轮选"每个形态键一个独立 Override 图层"，理由是"Direct 树会归一化、
+                // 各通道互相削弱"。这条理由决定了 52 个图层的存在是否必要，所以这里直接测：
+                // 同一个 Direct 树里 jawOpen=0.6 与 mouthSmileLeft=0.8 同时给，
+                // 如果两者都拿到 60/80，说明 Direct 不归一化，那 52 层就是纯多余的。
+                var direct = BuildDirectController(rig.targetAnimator, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationDirect.controller"));
+                DumpDirectController(direct);
+                rig.faceController = direct;
+                foreach (var c in rig.channels) c.mode = HoFaceInputMode.Manual;
+                Channel("jawOpen").manual = 0.6f;
+                Channel("mouthSmileLeft").manual = 0.0f;
+                Channel("mouthClose").manual = 0.0f;
+                Channel("eyeLookInLeft").manual = 0.0f;
+                HoFaceInputHub.Start(rig);
+                Check(HoFaceInputHub.Session(rig) != null, "direct-tree session starts: " + HoFaceInputHub.Error(rig));
+                stage++; frame = Time.frameCount + 5; return;
+            }
+            if (stage == 6)
+            {
+                // 只驱动 jawOpen（0.6），先看单路口径下是 60 还是失控。
+                Debug.Log("HO_TRACE1 f=" + Time.frameCount + " jawOpen=" + Weight("jawOpen"));
+                Channel("jawOpen").manual = 0.0f;
+                Channel("mouthSmileLeft").manual = 0.8f;
+                stage++; frame = Time.frameCount + 5; return;
+            }
+            if (stage == 7)
+            {
+                Debug.Log("HO_TRACE2 f=" + Time.frameCount + " jawOpen=" + Weight("jawOpen") + " mouthSmileLeft=" + Weight("mouthSmileLeft"));
+                Channel("jawOpen").manual = 0.6f;
+                stage++; frame = Time.frameCount + 5; return;
+            }
+            if (stage == 8)
+            {
+                float jaw = Weight("jawOpen");
+                float smile = Weight("mouthSmileLeft");
+                Debug.Log("HO_TRACE3 f=" + Time.frameCount + " jawOpen=" + jaw + " mouthSmileLeft=" + smile);
+                Debug.Log("HO_DIRECT_WDOFF: jawOpen=" + jaw + " mouthSmileLeft=" + smile
+                    + " —— 发散，不是归一化削弱；Direct 树在写默认值关闭时不成立");
+                // 这一组只记录不判定：它是"WD Off + Direct"的反面教材。
+                HoFaceInputHub.Stop(rig);
+
+                // ── 决定性实验：同一个 Direct 树，只改 Write Defaults ────────────────
+                // Jerry 的控制器**所有状态都是 WD=1**，而我们的管线全建在 WD Off 上。
+                // 这里绕开我们自己的会话，直接拿一个干净 Animator 驱动，把两种 WD 摆一起比。
+                probeRoot = new GameObject("DirectProbe");
+                probeAnimator = probeRoot.AddComponent<Animator>();
+                probeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                var bodyGo = new GameObject("Body");
+                bodyGo.transform.SetParent(probeRoot.transform, false);
+                probeRenderer = bodyGo.AddComponent<SkinnedMeshRenderer>();
+                probeRenderer.sharedMesh = renderer.sharedMesh;
+                probeWdOn = BuildDirectController(probeAnimator, AssetDatabase.GenerateUniqueAssetPath("Assets/ProbeOn.controller"), true);
+                probeWdOff = BuildDirectController(probeAnimator, AssetDatabase.GenerateUniqueAssetPath("Assets/ProbeOff.controller"), false);
+                probeAnimator.runtimeAnimatorController = probeWdOn;
+                probeAnimator.SetFloat("ARKit/jawOpen", 0.6f);
+                probeAnimator.SetFloat("ARKit/mouthSmileLeft", 0.8f);
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 9)
+            {
+                float jaw = ProbeWeight("jawOpen");
+                float smile = ProbeWeight("mouthSmileLeft");
+                Debug.Log("HO_WDON : jawOpen=" + jaw + " mouthSmileLeft=" + smile + "  (期望 60 / 80)");
+                Check(Mathf.Abs(jaw - 60f) < 0.5f, "Direct + Write Defaults ON: jawOpen = 参数×100 (actual=" + jaw + ")");
+                Check(Mathf.Abs(smile - 80f) < 0.5f, "Direct + Write Defaults ON: smile = 参数×100 (actual=" + smile + ")");
+                probeAnimator.runtimeAnimatorController = probeWdOff;
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 10)
+            {
+                float jaw = ProbeWeight("jawOpen");
+                float smile = ProbeWeight("mouthSmileLeft");
+                Debug.Log("HO_WDOFF: jawOpen=" + jaw + " mouthSmileLeft=" + smile
+                    + "  —— 同样一个 Direct 树，只是 WD Off；如果这里发散，说明"
+                    + "「Direct 树 + WD Off」才是不可用的组合，而不是 Direct 本身有问题");
                 rig.enabled = false;
                 Check(HoFaceInputHub.Session(rig) == null, "disable component disposes session immediately");
                 Debug.Log("HO_FACE_TESTS_ALL_PASSED");
@@ -197,6 +274,79 @@ public static class HoFaceTrackingValidation
             }
         }
         catch (Exception e) { Fail(e); }
+    }
+
+    private static Animator probeAnimator;
+    private static GameObject probeRoot;
+    private static SkinnedMeshRenderer probeRenderer;
+    private static AnimatorController probeWdOn, probeWdOff;
+
+    private static float ProbeWeight(string shape) =>
+        probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));
+
+    private static void DumpDirectController(AnimatorController controller)
+    {
+        var layers = controller.layers;
+        var info = new StringBuilder("HO_DIRECTCTRL layers=" + layers.Length);
+        for (int i = 0; i < layers.Length; i++)
+        {
+            var sm = layers[i].stateMachine;
+            string states = "";
+            foreach (var cs in sm.states) states += cs.state.name + ",";
+            string def = sm.defaultState != null ? sm.defaultState.name : "(null)";
+            info.Append(" | L").Append(i).Append(" states=[").Append(states).Append("] default=").Append(def);
+            if (sm.defaultState != null && sm.defaultState.motion is BlendTree bt)
+            {
+                info.Append(" tree=").Append(bt.blendType).Append(" children=").Append(bt.children.Length);
+                var kids = bt.children;
+                for (int k = 0; k < Mathf.Min(3, kids.Length); k++)
+                    info.Append(" [").Append(kids[k].motion != null ? kids[k].motion.name : "?").Append("=>").Append(kids[k].directBlendParameter).Append("]");
+            }
+        }
+        Debug.Log(info.ToString());
+    }
+
+    /// <summary>
+    /// 对照组：整份控制器只有 **一个图层 + 一棵 Direct 混合树**，每个 ARKit 键一个子片段，
+    /// 该键的参数直接当子权重。这是 VRChat 面捕的通行做法，用来判定"一层一个键"是否必要。
+    /// </summary>
+    private static AnimatorController BuildDirectController(Animator animator, string assetPath, bool writeDefaults = false)
+    {
+        var groups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<EditorCurveBinding>>(StringComparer.Ordinal);
+        foreach (var mesh in animator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            if (mesh.sharedMesh == null || mesh.GetComponentInParent<Animator>() != animator) continue;
+            foreach (string shape in HoFaceTrackingChannels.Names)
+            {
+                if (mesh.sharedMesh.GetBlendShapeIndex(shape) < 0) continue;
+                if (!groups.TryGetValue(shape, out var list)) groups[shape] = list = new System.Collections.Generic.List<EditorCurveBinding>();
+                list.Add(EditorCurveBinding.FloatCurve(AnimationUtility.CalculateTransformPath(mesh.transform, animator.transform), typeof(SkinnedMeshRenderer), "blendShape." + shape));
+            }
+        }
+
+        var controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
+        var tree = new BlendTree { name = "ARKit Direct", blendType = BlendTreeType.Direct };
+        AssetDatabase.AddObjectToAsset(tree, controller);
+        foreach (var pair in groups)
+        {
+            string parameter = "ARKit/" + pair.Key;
+            controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
+            var clip = new AnimationClip { name = pair.Key + "_100", frameRate = 60f };
+            foreach (var binding in pair.Value)
+                AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
+            AssetDatabase.AddObjectToAsset(clip, controller);
+            tree.AddChild(clip);
+            var children = tree.children;
+            children[children.Length - 1].directBlendParameter = parameter;
+            tree.children = children;
+        }
+
+        var state = controller.layers[0].stateMachine.AddState("ARKit Direct");
+        state.writeDefaultValues = writeDefaults;
+        state.motion = tree;
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+        return controller;
     }
 
     private static void Send(string value)
