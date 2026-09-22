@@ -441,7 +441,55 @@ public static class HoFaceTrackingValidation
                 Send("jawOpen-60|");
                 stage++; frame = Time.frameCount + 4; return;
             }
+            // ── 判别性实验：WD 开时，"默认值"到底是什么 ──────────────────────────
+            // 问题：一个被状态里的片段**以权重 0** 写着的属性，Unity 会写成 0，还是会保留当前值？
+            // 这不只是"区域开关能不能做成权重"的问题，它决定我们的**回退层**怎么写：
+            //   · 保留 33  → 我们可以在影子台上**预置基础表情**，再用部分权重混回它，回退不用手写；
+            //   · 写成 0   → 默认值是硬 0，回退必须显式做一棵树
+            //                （参考实现的 MouthDefaultCorrection / Face Tracking Limits 就是这个用途）。
+            // 关键：33 要在 Animator **挂上控制器之前**摆好 —— 那样它才是"当前值/基础值"。
+            // 另设一个对照：JellyEye 这个键根本不在树里，如果它也被动，说明 WD 会碰没被动画的属性。
             if (stage == 11)
+            {
+                zeroProbeRoot = new GameObject("WdZeroProbe");
+                var zeroBody = new GameObject("Body");
+                zeroBody.transform.SetParent(zeroProbeRoot.transform, false);
+                zeroProbeRenderer = zeroBody.AddComponent<SkinnedMeshRenderer>();
+                zeroProbeRenderer.sharedMesh = renderer.sharedMesh;
+                zeroProbeRenderer.SetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex("eyeLookInLeft"), 33f);
+                zeroProbeRenderer.SetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex("JellyEye"), 33f);
+                zeroProbeAnimator = zeroProbeRoot.AddComponent<Animator>();
+                zeroProbeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                zeroProbeAnimator.runtimeAnimatorController = probeWdOn;   // 此刻 33 已经是当前值
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 12)
+            {
+                atZeroWeight = ZeroWeight("eyeLookInLeft");
+                controlWeight = ZeroWeight("JellyEye");
+                Debug.Log("HO_WDZERO: 权重 0 的键=" + atZeroWeight + "（33 = 不管它；0 = 写成默认值）"
+                    + "　不在树里的键=" + controlWeight + "（应保持 33）");
+                Check(Mathf.Abs(controlWeight - 33f) < 0.5f,
+                    "WD On does not touch a property no clip in the state animates (actual=" + controlWeight + ")");
+                // 实测：权重 0 的子节点**不碰**那个属性 —— 它不是"把它写成 0"。
+                Check(Mathf.Abs(atZeroWeight - 33f) < 0.5f,
+                    "a Direct child at weight 0 leaves the property untouched instead of writing 0 (actual=" + atZeroWeight + ")");
+                zeroProbeAnimator.SetFloat("ARKit/eyeLookInLeft", 0.6f);
+                stage++; frame = Time.frameCount + 10; return;
+            }
+            if (stage == 13)
+            {
+                float driven = ZeroWeight("eyeLookInLeft");
+                // 关键实测：WD 开的余项 (1-Σw) 混的是**这个属性在 Animator 启动时的值**（这里预置的 33），
+                // 不是硬 0 —— 0.6×100 + 0.4×33 = 73.2。之前探针台量到"精确 60"只是因为那边启动值是 0。
+                Debug.Log("HO_WDZERO: 参数 0.6 时=" + driven + "（73.2 = 0.6×100 + 0.4×33，说明余项混的是启动值）"
+                    + "　结论：zeroWeight=" + atZeroWeight);
+                Check(Mathf.Abs(driven - 73.2f) < 0.6f,
+                    "WD On blends the (1-sum) remainder against the value captured when the Animator started, "
+                    + "not against a hard 0 (actual=" + driven + ")");
+                stage++; return;
+            }
+            if (stage == 14)
             {
                 Send("jawOpen-60|");
                 if (Mathf.Abs(Weight("jawOpen") - 50f) > 0.6f) return;   // 等它被驱动上来
@@ -464,7 +512,14 @@ public static class HoFaceTrackingValidation
     private static GameObject probeRoot;
     private static SkinnedMeshRenderer probeRenderer;
     private static AnimatorController probeWdOn, probeWdOff;
+    private static GameObject zeroProbeRoot;
+    private static SkinnedMeshRenderer zeroProbeRenderer;
+    private static Animator zeroProbeAnimator;
+    private static float atZeroWeight, controlWeight;
     private static float smoothSampleA;
+
+    private static float ZeroWeight(string shape) =>
+        zeroProbeRenderer.GetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex(shape));
 
     private static float ProbeWeight(string shape) =>
         probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));
