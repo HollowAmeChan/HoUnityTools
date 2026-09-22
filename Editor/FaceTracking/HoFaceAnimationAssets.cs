@@ -178,9 +178,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public const string DriveLayerName = "Ho/00 Drive";
         /// <summary>留给用户手工加逻辑的层。<b>应用改动时永不触碰它。</b></summary>
         public const string EditLayerName = "Ho/99 (EDIT THIS)";
-        /// <summary>果冻那两个"带物理的参数"（横向 / 竖向），由 C# 生产，生成的控制器里会先建出来。</summary>
-        public const string JellyParameterXName = "Ho/JellyX";
-        public const string JellyParameterYName = "Ho/JellyY";
 
         /// <summary>
         /// 两个**区域门控**参数。区域子树挂在驱动层根树上，权重就是它 —— 于是"这块驱动算不算数"
@@ -235,11 +232,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 drive.writeDefaultValues = true;
                 drive.motion = tree;
                 PopulateDriveTree(controller, animator, tree);
-                // 果冻参数先建出来（暂时还没有东西消费它）：消费它的是**混合树**，由混合树小工具
-                // 建到用户自己的层里（子节点是用户自己选的键）。在那之前它至少可以被写、被观察，
-                // 整条链路是通的。参数空间是 [-1, 1]：0 = 静止，正 = 挤压（会过冲），负 = 回弹。
-                controller.AddParameter(JellyParameterXName, AnimatorControllerParameterType.Float);
-                controller.AddParameter(JellyParameterYName, AnimatorControllerParameterType.Float);
+                // 果冻那两个参数（Ho/JellyX · Ho/JellyY）**不再产出**：果冻已搬到独立的
+                // HoSpringConstraint，直接读写形态键，不再借道 Animator 参数（见 19.2 / 20 节）。
 
                 // 扩展点：空层 + 空片段，用户可以在这里加自己的树/耦合。应用改动时保留。
                 controller.AddLayer(EditLayerName);
@@ -428,13 +422,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
 
             // 参数改名后要清旧的：驱动层参数现在统一收在 Ho/Drive 下（门控 + 眼睑两根轴），
-            // 历史名字（Ho/Gate/*、Ho/LidLeft.X|Y）留着只会变成没人写也没人读的僵尸参数。
-            // 只动 Ho/ 命名空间 —— ARKit/ 是输入通道；Ho/Jelly* 还被 park 的混合树小工具引用着，
-            // 删它要把那边一起牵进来，单独做。
-            var wanted = new HashSet<string>(StringComparer.Ordinal)
-            {
-                EyeGateName, LipGateName, JellyParameterXName, JellyParameterYName
-            };
+            // 历史名字（Ho/Gate/*、Ho/LidLeft.X|Y，以及已撤销的 Ho/JellyX|Y）留着只会变成
+            // 没人写也没人读的僵尸参数。只动 Ho/ 命名空间 —— ARKit/ 是输入通道，不碰。
+            var wanted = new HashSet<string>(StringComparer.Ordinal) { EyeGateName, LipGateName };
             foreach (string axis in LidAxisNames()) wanted.Add(axis);
             for (int i = controller.parameters.Length - 1; i >= 0; i--)
             {

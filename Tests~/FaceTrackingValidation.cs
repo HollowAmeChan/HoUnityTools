@@ -65,7 +65,7 @@ public static class HoFaceTrackingValidation
             foreach (var p in controller.parameters)
                 if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
             Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
-            Check(controller.parameters.Length == 60, "52 ARKit + 2 jelly + 2 gates + 4 eyelid axes ("
+            Check(controller.parameters.Length == 58, "52 ARKit + 2 gates + 4 eyelid axes, and no jelly params ("
                 + controller.parameters.Length + ")");
             int gateParameters = 0;
             float gateDefault = -1f;
@@ -249,14 +249,14 @@ public static class HoFaceTrackingValidation
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
-            bool jellyX = false, jellyY = false;
+            // 果冻参数已撤销：果冻搬到独立组件 HoSpringConstraint，直接读键写键，不借道 Animator 参数。
+            bool jellyParamsGone = true;
             foreach (var p in controller.parameters)
             {
-                if (p.name == HoFaceAnimationAssets.JellyParameterXName) jellyX = true;
-                if (p.name == HoFaceAnimationAssets.JellyParameterYName) jellyY = true;
+                if (p.name == "Ho/JellyX" || p.name == "Ho/JellyY") jellyParamsGone = false;
             }
-            Check(jellyX && jellyY, "generated controller carries both jelly axes ("
-                + HoFaceAnimationAssets.JellyParameterXName + " / " + HoFaceAnimationAssets.JellyParameterYName + ")");
+
+            Check(jellyParamsGone, "the generator no longer emits jelly parameters — jelly writes shape keys directly");
 
             // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
             // 改名不能留僵尸参数：先注入两个历史名字，apply 必须把它们清掉（只动 Ho/ 命名空间）。
@@ -331,15 +331,19 @@ public static class HoFaceTrackingValidation
             Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
             rig.faceController = replaced;
 
-            // ── 混合树小工具：物理产参数 → 混合树消费 → 用户自己的键 ──────────────
+            // ── 混合树小工具（通用）：参数 → 混合树 → 用户自己的键 ────────────────
             // 这棵树是"手搓混合树一定会踩、踩了还看不出来"的三个坑的兜底，所以每条都断言：
             //   ① 原点子节点（否则参数归零时脸上挂着四个方向的加权平均）
             //   ② 每个方向都写全部键（不留"这个方向没人管这个键"的空洞）
             //   ③ 非 ARKit 的键必须穿过 Compile（否则影子台上算完抄不回真模型）
-            int jellyIndex = renderer.sharedMesh.GetBlendShapeIndex("JellyEye");
-            Check(jellyIndex >= 0, "validation mesh carries a user-owned (non ARKit) key");
+            int userKeyIndex = renderer.sharedMesh.GetBlendShapeIndex("JellyEye");
+            Check(userKeyIndex >= 0, "validation mesh carries a user-owned (non ARKit) key");
             var plan = new HoBlendTreePlan();
-            plan.keys.Add(new HoBlendTreeKey { renderer = renderer, index = jellyIndex, shape = "JellyEye" });
+            // 工具的默认参数名（Ho/ParamX|Y）不存在时会被它自己补出来；这里**故意指向两个已存在的
+            // 参数**（左眼两根眼睑轴），好顺带验证"参数已存在就不重复添加"。
+            plan.parameterX = HoFaceNaming.LidAxis(0, true);
+            plan.parameterY = HoFaceNaming.LidAxis(0, false);
+            plan.keys.Add(new HoBlendTreeKey { renderer = renderer, index = userKeyIndex, shape = "JellyEye" });
             for (int i = 0; i < HoFaceBlendTreeTool.Corners.Length; i++)
             {
                 var direction = new HoBlendTreeDirection
@@ -354,24 +358,24 @@ public static class HoFaceTrackingValidation
 
             int parametersBeforeTool = replaced.parameters.Length;
             HoFaceBlendTreeTool.Write(animator, replaced, plan);
-            var jellyState = FindState(replaced, plan.layerName);
-            var jellyTree = jellyState != null ? jellyState.motion as BlendTree : null;
-            Check(jellyTree != null && jellyTree.blendType == BlendTreeType.FreeformCartesian2D,
+            var toolState = FindState(replaced, plan.layerName);
+            var toolTree = toolState != null ? toolState.motion as BlendTree : null;
+            Check(toolTree != null && toolTree.blendType == BlendTreeType.FreeformCartesian2D,
                 "blend tree tool writes a 2D freeform cartesian tree");
-            Check(jellyTree != null && jellyTree.blendParameter == plan.parameterX && jellyTree.blendParameterY == plan.parameterY,
-                "the tree reads the two physics parameters");
-            Check(jellyTree != null && jellyTree.children.Length == 5,
-                "four corners plus an auto origin child (" + (jellyTree != null ? jellyTree.children.Length : -1) + ")");
+            Check(toolTree != null && toolTree.blendParameter == plan.parameterX && toolTree.blendParameterY == plan.parameterY,
+                "the tree reads the two parameters it was handed");
+            Check(toolTree != null && toolTree.children.Length == 5,
+                "four corners plus an auto origin child (" + (toolTree != null ? toolTree.children.Length : -1) + ")");
             Check(replaced.parameters.Length == parametersBeforeTool,
                 "the tool reuses existing parameters instead of duplicating them ("
                 + parametersBeforeTool + " -> " + replaced.parameters.Length + ")");
-            var jellyBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.JellyEye");
-            if (jellyTree != null)
+            var userKeyBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.JellyEye");
+            if (toolTree != null)
             {
-                foreach (var child in jellyTree.children)
+                foreach (var child in toolTree.children)
                 {
                     var childClip = child.motion as AnimationClip;
-                    var curve = childClip != null ? AnimationUtility.GetEditorCurve(childClip, jellyBinding) : null;
+                    var curve = childClip != null ? AnimationUtility.GetEditorCurve(childClip, userKeyBinding) : null;
                     int corner = Array.IndexOf(HoFaceBlendTreeTool.Corners, child.position);
                     float expected = child.position == Vector2.zero ? 0f : 20f * (corner + 1);
                     Check(curve != null && Mathf.Abs(curve.Evaluate(0f) - expected) < 0.001f,
@@ -379,22 +383,22 @@ public static class HoFaceTrackingValidation
                 }
             }
 
-            int jellyClips = CountClips(controllerPath);
+            int toolClips = CountClips(controllerPath);
             HoFaceBlendTreeTool.Write(animator, replaced, plan);
-            var jellyAgain = FindState(replaced, plan.layerName);
-            var againTree = jellyAgain != null ? jellyAgain.motion as BlendTree : null;
-            Check(againTree != null && againTree.children.Length == 5 && CountClips(controllerPath) == jellyClips,
-                "re-running the tool is idempotent (" + jellyClips + " clips, no orphans)");
+            var toolAgain = FindState(replaced, plan.layerName);
+            var againTree = toolAgain != null ? toolAgain.motion as BlendTree : null;
+            Check(againTree != null && againTree.children.Length == 5 && CountClips(controllerPath) == toolClips,
+                "re-running the tool is idempotent (" + toolClips + " clips, no orphans)");
 
-            bool hasJellyKey = false;
+            bool hasUserKey = false;
             int outputBindings = 0;
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
             {
                 outputBindings = compiled.bindings.Count;
-                foreach (var b in compiled.bindings) if (b.shape == "JellyEye") hasJellyKey = true;
+                foreach (var b in compiled.bindings) if (b.shape == "JellyEye") hasUserKey = true;
             }
 
-            Check(hasJellyKey, "user-owned keys survive Compile (the shadow result must reach the real mesh)");
+            Check(hasUserKey, "user-owned keys survive Compile (the shadow result must reach the real mesh)");
             Check(outputBindings == 45, "the new pass-through adds exactly one key to the 44 gated ARKit ones ("
                 + outputBindings + ")");
 

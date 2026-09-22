@@ -54,13 +54,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
     }
 
-    /// <summary>工具的输入：一棵"参数 → 姿势"的映射。果冻只是它的第一个用法（默认值就是果冻那对参数）。</summary>
+    /// <summary>
+    /// 工具的输入：一棵"参数 → 姿势"的映射，**通用**（不绑定任何特定参数）。
+    ///
+    /// 默认值历史上是果冻那对参数 `Ho/JellyX` / `Ho/JellyY` —— **那两个参数已经不在生成物里了**：
+    /// 果冻搬去了独立的 `HoSpringConstraint`，直接读键写键，不再借道 Animator 参数
+    /// （见 docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md 19.2）。所以这里也不再引用那个常量，
+    /// 参数名由使用者填；名字不存在时工具会自己补出来（<see cref="EnsureParameter"/>）。
+    /// </summary>
     [Serializable]
     public sealed class HoBlendTreePlan
     {
-        public string layerName = "Ho/Jelly";
-        public string parameterX = HoFaceAnimationAssets.JellyParameterXName;
-        public string parameterY = HoFaceAnimationAssets.JellyParameterYName;
+        public string layerName = "Ho/BlendTree";
+        public string parameterX = "Ho/ParamX";
+        public string parameterY = "Ho/ParamY";
         public readonly List<HoBlendTreeKey> keys = new List<HoBlendTreeKey>();
         public readonly List<HoBlendTreeDirection> directions = new List<HoBlendTreeDirection>();
 

@@ -47,7 +47,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool written;
         /// <summary>会话第一帧的标记：那一帧把所有值一次到位，避免开场从 0 扫过来。</summary>
         private bool primed;
-        private HoFaceJellyState jellyX, jellyY;
         private readonly Dictionary<string, float> previews = new Dictionary<string, float>(StringComparer.Ordinal);
 
         /// <summary>
@@ -63,12 +62,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         public void ClearPreviews() => previews.Clear();
-
-        /// <summary>果冻横向分量当前值（那个"带物理的参数"）。面板观测点，也是用例的观测点。</summary>
-        public float JellyValueX => jellyX.value;
-
-        /// <summary>果冻竖向分量当前值。</summary>
-        public float JellyValueY => jellyY.value;
 
         public HoFaceAnimationSession(HoFaceTrackingDebugger rig)
         {
@@ -175,7 +168,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     : Mathf.Lerp(Smoothed[index], Effective[index], 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / tau));
             }
             primed = true;
-            StepJelly(deltaTime);
             for (int i = 0; i < selected.Length; i++)
             {
                 if (selected[i] != nextSelected[i]) changed = true;
@@ -253,50 +245,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static float Finite01(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 0 : Mathf.Clamp01(value);
 
-        /// <summary>
-        /// 果冻眼：把眼睑信号过一遍一维弹簧，产出**两个方向**的带物理参数写进控制器。
-        ///
-        /// 为什么是两个方向而不是一个强度：两个弹簧取不同频率时，两个分量的合成路径是一条
-        /// Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回。取相同频率就退化成直线。
-        ///
-        /// 这里只产参数。**消费它们是混合树**（2D FreeformCartesian，子节点是用户自己选的键，
-        /// 由混合树小工具建），参数负责"每次都不一样"，树的形状负责"每次都好看"。
-        ///
-        /// **参数是有符号的。** 眼睑信号是一段脉冲（0→1→0，约 150ms），脉冲输入下弹簧不是"趋近 1
-        /// 然后停住"，而是冲过 1 再**回弹到 0 以下**再收敛 —— 回弹才是果冻。所以这里不能夹到 0..1，
-        /// 否则整个负半周被削掉，剩下的只是一次单向挤压。夹到 [-1, 1] 只是防发散。
-        /// </summary>
-        private void StepJelly(float deltaTime)
-        {
-            if (!Rig.jellyEnabled)
-            {
-                // 关掉就复位，免得再打开时从上次的残留冲一下。
-                HoFaceJelly.Reset(ref jellyX, 0f);
-                HoFaceJelly.Reset(ref jellyY, 0f);
-                return;
-            }
-
-            // 输入取两眼睑里更闭的那只：眨眼是一起闭的，取 max 比取平均更跟手。
-            int left = HoFaceTrackingChannels.IndexOf("eyeBlinkLeft");
-            int right = HoFaceTrackingChannels.IndexOf("eyeBlinkRight");
-            float target = Mathf.Max(
-                left >= 0 ? Smoothed[left] : 0f,
-                right >= 0 ? Smoothed[right] : 0f);
-
-            HoFaceJelly.Step(ref jellyX, target, deltaTime, Rig.jellyFrequencyX, Rig.jellyDamping);
-            HoFaceJelly.Step(ref jellyY, target, deltaTime, Rig.jellyFrequencyY, Rig.jellyDamping);
-
-            // 弹簧会过冲到 1 以上、回弹到 0 以下。夹到 [-1, 1] 只是为了给混合树一个稳定的参数空间，
-            // 不影响形状（过冲体现在轨迹上，不是数值溢出）。见 StepJelly 的注释。
-            WriteJelly(Rig.jellyParameterX, jellyX.value);
-            WriteJelly(Rig.jellyParameterY, jellyY.value);
-        }
-
-        private void WriteJelly(string parameter, float value)
-        {
-            if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
-                shadow.SetFloat(parameter, Mathf.Clamp(value, -1f, 1f));
-        }
+        // 果冻不在这里。它曾经是"弹簧生产参数 → 控制器里的 2D 树消费参数"的两段式，
+        // 现已整体搬到独立的 HoSpringConstraint（读键 → 弹簧 → 写键，不再借道 Animator 参数）。
+        // 原因见 docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md 19.2：混合树出不了物理参数，
+        // 于是生产者与消费者本来就都不属于状态机 —— 两头都在外面，它就该是一个组件。
 
         private string MappingStamp()
         {
