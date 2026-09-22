@@ -21,7 +21,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool outputExpanded = true;
         private bool middleExpanded = true;
         private bool channelsExpanded;
-        private bool mappings;
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
         private const string ModeTooltip = "这一路输入怎么来：\n实时 = 用手机数据\n手动 = 用滑杆\n保持 = 冻结在当前值\n中性 = 写设定的中性值\n交还 = 不碰这个键，让给基础动画";
@@ -50,6 +49,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             string setupSummary = rig.faceController != null ? rig.faceController.name : "未指定控制器";
             if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "接线", setupSummary,
                 HoConstraintEditorTheme.AccentMesh))
+            using (HoConstraintEditorControls.Card())
             {
                 serializedObject.Update();
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("targetAnimator"), new GUIContent("角色 Animator", "角色根上的 Animator。面捕不会接管它，只借用它的绑定根解析路径。"));
@@ -161,8 +161,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
-                mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
-                if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
+                // 路径重映射不是第二个折叠 —— 折叠栏下只用 box 分块，层级只有一层。
+                EditorGUILayout.LabelField("路径重映射", EditorStyles.boldLabel);
+                HoConstraintEditorControls.Caption("模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
 
             // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
