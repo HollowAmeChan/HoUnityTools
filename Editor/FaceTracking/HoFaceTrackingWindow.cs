@@ -32,10 +32,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 localIps = localAddresses.Count == 0 ? "未获取到网卡地址" : string.Join(" / ", localAddresses);
             }
             catch { localIps = "未获取到网卡地址"; }
+            HoFaceFirewall.Refresh();
         }
         private void OnDisable() => EditorApplication.update -= Refresh;
         private void Refresh()
         {
+            // UAC 弹窗是异步的：每帧问一次提权进程结束没有，结束了才更新状态。
+            HoFaceFirewall.Poll();
             double now = EditorApplication.timeSinceStartup;
             if (now - lastRateTime >= 1)
             {
@@ -70,6 +73,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             EditorGUILayout.LabelField("来源", HoFaceInputHub.Receiver.Sender);
             string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
             if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
+            DrawFirewallRow();
             DrawWaitingDiagnostics(settings.phoneIp);
             EditorGUILayout.HelpBox("手机和电脑需能通过局域网互通，App 保持前台。先看参数，再进入 Play Mode 驱动角色。关闭此窗口不停止连接；退出播放或重编译会断开。", MessageType.Info);
 
@@ -129,6 +133,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
+        /// Windows 防火墙那一行。手机的 UDP 回包是入站流量，而防火墙是按程序放行的 ——
+        /// 没有这条规则就永远收不到。改规则需要管理员，所以按钮的作用是「把 UAC 叫出来 +
+        /// 把命令写对」，不是绕过系统授权。
+        /// </summary>
+        private void DrawFirewallRow()
+        {
+            if (!HoFaceFirewall.Supported) return;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("防火墙入站规则", HoFaceFirewall.Exists ? "已配置" : "未配置", GUILayout.Width(240));
+                using (new EditorGUI.DisabledScope(HoFaceFirewall.Busy))
+                {
+                    if (GUILayout.Button("授予权限（会弹 UAC）")) HoFaceFirewall.Grant();
+                    using (new EditorGUI.DisabledScope(!HoFaceFirewall.Exists))
+                        if (GUILayout.Button("撤销", GUILayout.Width(50))) HoFaceFirewall.Revoke();
+                }
+            }
+            if (!string.IsNullOrEmpty(HoFaceFirewall.Status))
+                EditorGUILayout.HelpBox(HoFaceFirewall.Status, MessageType.Info);
+        }
+
+        /// <summary>
         /// 「等待手机响应」这一句话把三种完全不同的故障混在一起了：手机根本没发、包在路上被丢了、
         /// 或者包来了但来源 IP 不对被我们拒了。这里按手上的证据分开说，并给出能直接执行的下一步。
         /// </summary>
@@ -160,17 +186,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 + "端口是通的、握手命令也发出去了，所以断点在「手机 → 电脑」这一侧。按可能性排查：");
             text.AppendLine();
             string rule = "Unity " + Application.unityVersion + " Editor";
-            text.AppendLine("① Windows 防火墙拦了 Unity 的入站 UDP。别的程序（播放器、面捕桥接程序）能直连，"
-                + "是因为它们各自有一条针对自己的入站「允许」规则；而 Unity.exe 的允许规则只覆盖 Domain，"
-                + "在「公用」网络上还额外有一条「阻止」规则，且「阻止」优先于「允许」。");
-            text.AppendLine("用**管理员** PowerShell 执行这两条，缺一不可 —— 只禁掉阻止规则的话，"
+            text.AppendLine("① 最可能：Windows 防火墙拦了 Unity 的入站 UDP。别的程序（播放器、面捕桥接程序）"
+                + "能直连，是因为它们各自有一条针对自己的入站「允许」规则 —— 防火墙是按程序放行的，"
+                + "而 Unity.exe 的允许规则只覆盖 Domain，在「公用」网络上还额外有一条「阻止」规则。"
+                + "点上面那个「授予权限」按钮即可，它只放行这个 Unity.exe 的 UDP " + IFacialMocapReceiver.Port
+                + "，并且随时可以「撤销」。");
+            text.AppendLine("不想用按钮、要手动执行的话是这两条，缺一不可 —— 只禁掉阻止规则的话，"
                 + "公用网络没有命中任何规则，默认入站仍然是拒绝：");
             text.AppendLine("Get-NetFirewallRule -DisplayName '" + rule
                 + "' -Direction Inbound | Where-Object Action -eq 'Block' | Disable-NetFirewallRule");
-            text.AppendLine("New-NetFirewallRule -DisplayName 'HoUnityTools FaceTracking UDP 49983'"
-                + " -Direction Inbound -Action Allow -Protocol UDP -LocalPort 49983 -Profile Any"
-                + " -Program '" + EditorApplication.applicationPath + "'");
-            text.AppendLine("改完点一次「断开手机」再「连接手机」，把握手命令重发一遍。");
+            text.AppendLine("New-NetFirewallRule -DisplayName '" + HoFaceFirewall.RuleName
+                + "' -Direction Inbound -Action Allow -Protocol UDP -LocalPort " + IFacialMocapReceiver.Port
+                + " -Profile Any -Program '" + EditorApplication.applicationPath + "'");
             text.AppendLine();
 
             string local = SameSubnetMatch(phoneIp);
