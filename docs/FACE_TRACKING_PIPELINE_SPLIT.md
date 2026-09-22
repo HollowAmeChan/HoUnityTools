@@ -402,6 +402,32 @@ result.controller.ApplyOverrides(overrides);                 // 片段是过滤�
 
 **仍待定一处**：两个角色的组件指向同一个控制器资产时，两份配置谁说了算？建议**检测到就明确警告**（"该控制器已被 X 的组件加工"），不做隐式仲裁。
 
+## 13. 关键约束：曲线驱动参数是 VRChat 客户端能力，纯 Unity 用不了
+
+第 1 节说 OSCmooth 的平滑层"在控制器里"，但**它靠的机制我们这边没有**：
+
+- OSCmooth 的平滑子树把「上一帧的 `OSCm/Proxy/*`」和「这一帧的 `FT/v2/*`」按平滑系数混合，输出再写回 `OSCm/Proxy/*`。让动画输出回写参数，需要**曲线驱动 Animator 参数**。
+- 证据一：VRChat SDK 的 DLL（`VRCSDK3A.dll`）里有 `VRC_AvatarParameterDriver` 这个 StateMachineBehaviour，但**没有任何 `Driven` 符号** —— 曲线驱动不是 SDK 实现的。
+- 证据二（更有力）：**Av3Emulator 没有实现它**。Av3Emulator 是纯 Unity 里复刻 VRChat 动画行为的权威实现，它完整实现了 `VRC_AvatarParameterDriver` 的 Set/Add/Random/Copy 四种驱动（`LyumaAv3Runtime.cs` 第 792 行起），但全文找不到任何"曲线写参数"的实现 —— `driven` 只出现在 `legacySubAnimatorParameterDriverMode` 这个与曲线无关的开关上。如果 Unity 原生支持，或者模拟器需要它才能跑 OSCmooth 头像，这里不会缺。
+
+**所以：OSCmooth 式的"层内平滑"在纯 Unity 下不成立**（既跑不了，多半也预览不出来）。
+
+### 这决定了我们的中间层怎么落
+
+设计成**对该差异免疫**：
+
+| 阶段 | 我们（纯 Unity 影子） | VRC 后端 | Warudo |
+| --- | --- | --- | --- |
+| ② 参数生产 | **在 C# 里算**（`Tick` 里本来就在逐帧写参数） | 生成 OSCmooth 式图层（曲线驱动参数，客户端支持） | 蓝图里的参数平滑节点 |
+
+**参数名仍然保留 `OSCm/Local → Smooth → Proxy` 三段**，这就是三段命名真正的技术理由（不是跟风）：
+
+- 控制器本体永远只读 `OSCm/Proxy/<键>`；
+- 我们的后端把 C# 算出的平滑值写进 `Proxy`；
+- VRC 后端把平滑层插在 `Local` 和 `Proxy` 之间，**控制器本体一行都不用改**。
+
+也就是说：**中间表示描述"有平滑这一段"，各后端自己决定把它 lower 成 C# 循环、图层、还是节点。**
+
 ## 12. 「初始化」与「应用」：两个动作，语义必须分开
 
 命名承载语义。**「生成」听起来可重复、无害**，于是用户会以为可以随便点；但这一步产出的是一个**完整文件**，而之后所有手工改动都在这个文件里 —— 点错一次就全没了。所以：
