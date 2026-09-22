@@ -18,6 +18,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private string report = "";
         private bool reportIsError;
         private bool setupExpanded = true;
+        private bool initExpanded = true;
         private bool outputExpanded = true;
         private bool middleExpanded = true;
         private bool channelsExpanded;
@@ -48,7 +49,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 (session != null ? "驱动中" : "待机", session != null),
                 (Application.isPlaying ? "播放中" : "编辑中", Application.isPlaying));
 
-            // ── 接线：这台组件接到哪、以及那几个会写盘的动作 ──────────────────────
+            // ── ① 接线：这台组件接到哪 ────────────────────────────────────────────
             string setupSummary = rig.faceController != null ? rig.faceController.name : "未指定控制器";
             if (HoConstraintEditorSectionGui.DrawSectionHeader(ref setupExpanded, "① 接线", setupSummary,
                 HoConstraintEditorTheme.AccentMesh))
@@ -60,49 +61,64 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("播放后自动驱动", "进入播放模式就自动开始驱动，不会自动连接手机。"));
                 serializedObject.ApplyModifiedProperties();
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("全局连接面板", GUILayout.Height(20))) HoFaceTrackingWindow.ShowWindow();
-                bool initialized = rig.faceController != null;
-                using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    // 命名承载语义：「初始化」明确表达"产出完整文件、之后都在里面改"，且只在开始时点。
-                    // 已有控制器时它变成次要按钮 + 省略号，危险性由确认框承担。
-                    var content = initialized
-                        ? new GUIContent("重新初始化…", "会重新产出一个**完整的**控制器文件，该文件里你的手工改动都会丢失。\n"
-                            + "结构改动目前还没做「应用改动」，所以暂时只能走这里；分层生成落地后这一步就不再需要了。")
-                        : new GUIContent("初始化控制器", "从源控制器 + 当前配置产出一个完整的控制器文件。\n"
-                            + "这是唯一会写文件的动作：之后手工逻辑请在生成物的 (EDIT THIS) 段里加，"
-                            + "结构改动走「应用改动」，两者都不会碰你的手工段。");
-                    if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
+                    if (GUILayout.Button("全局连接面板", GUILayout.Height(20))) HoFaceTrackingWindow.ShowWindow();
+                    HoConstraintEditorControls.Flex();
+                    using (new EditorGUI.DisabledScope(!Application.isPlaying))
+                        if (GUILayout.Button(session == null ? "开始驱动" : "停止并交还动画", GUILayout.Height(20)))
+                        {
+                            if (session == null) HoFaceInputHub.Start(rig); else HoFaceInputHub.Stop(rig);
+                        }
                 }
             }
-            using (new EditorGUILayout.HorizontalScope())
+
+            // ── ② 初始化：程序化产出「状态 + 驱动映射」────────────────────────────
+            // **这一栏的产物不是"几个参数"，而是一大片状态与驱动映射**（片段 + 混合树 + 门控参数）。
+            // 这是整个流程的关键一句：初始化 = 生产状态与映射，不是手搓。
+            // 所以以后要加什么状态，就是往这一栏加"生成配置"（预设开关），而不是让用户自己去编。
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref initExpanded, "② 初始化", InitSummary(rig),
+                HoConstraintEditorTheme.AccentBlink))
+            using (HoConstraintEditorControls.Card())
             {
-                if (GUILayout.Button(new GUIContent("检查绑定", "只做解析，不改任何资产：列出能绑上的输出与找不到的键。"), GUILayout.Height(20))) Check(rig);
-                if (GUILayout.Button("定位控制器资产", GUILayout.Height(20)) && rig.faceController != null) { Selection.activeObject = rig.faceController; EditorGUIUtility.PingObject(rig.faceController); }
-            }
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                // 应用改动 = 就地手术：只重写 Ho/ 生成段，(EDIT THIS) 段和别的层一个字节都不动。
-                using (new EditorGUI.DisabledScope(
-                    Application.isPlaying || rig.targetAnimator == null || !(rig.faceController is AnimatorController)))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(new GUIContent("应用改动",
-                        "把当前配置写进这个控制器：只重写 " + HoFaceAnimationAssets.DriveLayerName + " 那一段，\n"
-                        + HoFaceAnimationAssets.EditLayerName + " 段和其它任何层都不会被动。\n"
-                        + "这是反复用的那个按钮；「初始化控制器」只在开始时用一次。"), GUILayout.Height(20)))
-                        ApplyChanges(rig);
+                    bool initialized = rig.faceController != null;
+                    using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
+                    {
+                        // 命名承载语义：「初始化」明确表达"产出完整文件、之后都在里面改"，且只在开始时点。
+                        var content = initialized
+                            ? new GUIContent("重新初始化…", "会重新产出一个**完整的**控制器文件，该文件里你的手工改动都会丢失。")
+                            : new GUIContent("初始化控制器", "从源控制器 + 当前配置产出一个完整的控制器文件。\n"
+                                + "这是唯一会写文件的动作：之后手工逻辑请在生成物的 (EDIT THIS) 段里加。");
+                        if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
+                    }
+
+                    // 应用改动 = 就地手术：只重写 Ho/ 生成段，(EDIT THIS) 段和别的层一个字节都不动。
+                    using (new EditorGUI.DisabledScope(
+                        Application.isPlaying || rig.targetAnimator == null || !(rig.faceController is AnimatorController)))
+                    {
+                        if (GUILayout.Button(new GUIContent("应用改动",
+                            "把生成配置重新写进这个控制器：只重写 " + HoFaceAnimationAssets.DriveLayerName + " 那一段，\n"
+                            + HoFaceAnimationAssets.EditLayerName + " 段和其它任何层都不会被动。\n"
+                            + "生成配置改了之后走这个，不用重新初始化。"), GUILayout.Height(20)))
+                            ApplyChanges(rig);
+                    }
+
+                    if (GUILayout.Button(new GUIContent("检查绑定", "只做解析，不改任何资产：列出能绑上的输出与找不到的键。"), GUILayout.Height(20))) Check(rig);
+                    if (GUILayout.Button(new GUIContent("定位资产", "选中这个控制器资产。"), GUILayout.Height(20)) && rig.faceController != null)
+                    {
+                        Selection.activeObject = rig.faceController;
+                        EditorGUIUtility.PingObject(rig.faceController);
+                    }
+
+                    HoConstraintEditorControls.Flex();
                 }
-                HoConstraintEditorControls.Flex();
-                if (rig.faceController is AnimatorController ac && !HasDriveLayer(ac))
+
+                HoConstraintEditorControls.Caption("初始化产出的是**一整片「状态 + 驱动映射」**（片段 / 混合树 / 门控参数），"
+                    + "以后要加新状态就加生成配置（预设开关），不用手搓。");
+                if (rig.faceController is AnimatorController controller && !HasDriveLayer(controller))
                     HoConstraintEditorControls.Caption("该控制器没有 " + HoFaceAnimationAssets.DriveLayerName + " 段，先初始化");
-            }
-            using (new EditorGUI.DisabledScope(!Application.isPlaying))
-                if (GUILayout.Button(session == null ? "开始驱动" : "停止并交还动画", GUILayout.Height(24)))
-                {
-                    if (session == null) HoFaceInputHub.Start(rig); else HoFaceInputHub.Stop(rig);
-                }
             }
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
@@ -113,7 +129,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
-                "② 控制器输出参数设置",
+                "③ 控制器输出参数设置",
                 RegionSummary(rig.outputRegions),
                 HoConstraintEditorTheme.AccentOutput))
             {
@@ -187,7 +203,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
             // **这一栏是为长大准备的**：以后新的整形（ramp / 抑制 / 轴合并 / 模式开关）都加在这里，
             // 别塞回上面那两栏 —— 上面两栏回答"接到哪""写什么"，这里回答"值怎么被加工"。
-            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "③ 参数生产", MiddleSummary(rig),
+            if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "④ 参数生产", MiddleSummary(rig),
                 HoConstraintEditorTheme.AccentDriver))
             using (HoConstraintEditorControls.Card())
             {
@@ -264,6 +280,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             serializedObject.ApplyModifiedProperties();
             DrawChannels(rig, session);
+        }
+
+        /// <summary>初始化摘要：控制器在不在、生成段有几层。这一栏将来会长出"生成配置"（预设开关）。</summary>
+        private static string InitSummary(HoFaceTrackingDebugger rig)
+        {
+            if (rig.faceController == null) return "未初始化";
+            if (!(rig.faceController is AnimatorController controller)) return "不是 AnimatorController";
+            if (!HasDriveLayer(controller)) return "缺 " + HoFaceAnimationAssets.DriveLayerName;
+            int managed = 0;
+            foreach (var layer in controller.layers)
+                if (HoFaceAnimationAssets.IsManagedLayer(layer.name))
+                    managed++;
+            return "已初始化 · 生成段 " + managed + " 层";
         }
 
         /// <summary>
@@ -345,7 +374,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var channels = serializedObject.FindProperty("channels");
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref channelsExpanded,
-                "④ 输入参数",
+                "⑤ 输入参数",
                 channels.arraySize + " 路",
                 HoConstraintEditorTheme.AccentRules))
             {
