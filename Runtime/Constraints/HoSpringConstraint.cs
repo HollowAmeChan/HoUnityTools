@@ -12,6 +12,12 @@ namespace Hollow.HoUnityTools.Constraints
     [Serializable]
     public sealed class HoSpringTarget
     {
+        /// <summary>
+        /// 输出上限的默认值：**90 而不是 100**。果冻的全部意义就在超调，而钳在 100 上就看不见它；
+        /// 留 10 的余量，过冲才露得出来（`HoBlinkConstraint` 的文档里也是这条建议）。
+        /// </summary>
+        public const float DefaultOutputMax = 90.0f;
+
         [SerializeField] private HoShapeKeyTarget target = new HoShapeKeyTarget();
         [SerializeField] private bool reversed;
 
@@ -22,9 +28,9 @@ namespace Hollow.HoUnityTools.Constraints
 
         public HoSpringTarget() { }
 
-        public HoSpringTarget(string keyName, float gain, bool reversed = false)
+        public HoSpringTarget(string keyName, float gain, bool reversed = false, float outputMax = DefaultOutputMax)
         {
-            target = HoShapeKeyTarget.CreateRuntime(keyName, gain);
+            target = HoShapeKeyTarget.CreateRuntime(keyName, gain, HoShapeKeyRampPreset.Direct, outputMax);
             this.reversed = reversed;
         }
     }
@@ -111,6 +117,8 @@ namespace Hollow.HoUnityTools.Constraints
         public bool KeyExists(string keyName) => writer.KeyExists(keyName);
 
         public int CountKeyBindings(string keyName) => writer.CountKeyBindings(keyName);
+
+        public string DescribeKeyBindings(string keyName, int maxNames = 3) => writer.DescribeKeyBindings(keyName, maxNames);
 
         /// <summary>
         /// 当前输入值（0~1）。取所有输入键里**最大的那个** —— 双眼键模型只有一个键，
@@ -351,6 +359,14 @@ namespace Hollow.HoUnityTools.Constraints
                 vertical ? JellyFrequencyY : JellyFrequencyX,
                 JellyDamping,
                 1.0f);
+
+            if (component.Targets.Count == 0)
+            {
+                // 搭结构：挤压一路、回弹一路。键名留空 —— 那是用户自己的键，猜不得。
+                component.Targets.Add(new HoSpringTarget(string.Empty, 1.0f, false));
+                component.Targets.Add(new HoSpringTarget(string.Empty, 1.0f, true));
+                component.Rebuild();
+            }
         }
 
         private static void AddIfPresent(List<string> keys, IEnumerable<SkinnedMeshRenderer> meshes, string keyName)

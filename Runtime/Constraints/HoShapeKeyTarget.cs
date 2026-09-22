@@ -30,24 +30,31 @@ namespace Hollow.HoUnityTools.Constraints
     public enum HoShapeKeyRampPreset
     {
         /// <summary>直接通过（y = x × 强度）。</summary>
+        [InspectorName("直通")]
         Direct,
 
         /// <summary>时间上的柔跟：形状线性，上升/回落都有一阶跟随。</summary>
+        [InspectorName("柔跟")]
         SoftFollow,
 
         /// <summary>幅度放大（1 + 0.25 × 强度 倍），可以超出目标范围。</summary>
+        [InspectorName("放大")]
         Amplify,
 
         /// <summary>幅度缓入（x²），起步慢后段快。</summary>
+        [InspectorName("缓入")]
         EaseIn,
 
         /// <summary>松得慢：上升快、回落慢。</summary>
+        [InspectorName("慢放")]
         SlowRelease,
 
         /// <summary>阶梯：驱动大于 0 就满值，立即切换。离散形变用。</summary>
+        [InspectorName("阶梯")]
         Step,
 
         /// <summary>自定义曲线与时间常数。</summary>
+        [InspectorName("自定义")]
         Custom
     }
 
@@ -168,7 +175,11 @@ namespace Hollow.HoUnityTools.Constraints
         /// 运行期构造（不序列化）。给"宿主只存键名 + 增益"的场合用 ——
         /// 例如注视约束的眼睛通道，避免每个通道都序列化 16 个字段。
         /// </summary>
-        public static HoShapeKeyTarget CreateRuntime(string keyName, float gain, HoShapeKeyRampPreset rampPreset = HoShapeKeyRampPreset.Direct)
+        /// <param name="outputMax">
+        /// 输出上限。**弹簧驱动那一侧会传 90**：超调是果冻的全部意义，而钳在 100 就看不见它了。
+        /// </param>
+        public static HoShapeKeyTarget CreateRuntime(string keyName, float gain,
+            HoShapeKeyRampPreset rampPreset = HoShapeKeyRampPreset.Direct, float outputMax = 100.0f)
         {
             HoShapeKeyTarget target = new HoShapeKeyTarget
             {
@@ -180,7 +191,7 @@ namespace Hollow.HoUnityTools.Constraints
                 weight = 1.0f,
                 meshScope = HoShapeKeyMeshScope.All,
                 outputMin = 0.0f,
-                outputMax = 100.0f,
+                outputMax = outputMax,
                 clampToRange = true
             };
             return target;
