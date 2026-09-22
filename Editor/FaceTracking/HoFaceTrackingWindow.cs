@@ -152,6 +152,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
             if (!string.IsNullOrEmpty(HoFaceFirewall.Status))
                 EditorGUILayout.HelpBox(HoFaceFirewall.Status, MessageType.Info);
+            // 提权进程的 stdout 拿不到，只能靠它自己写日志。失败时把日志摊开，别让用户面对一个光秃秃的退出码。
+            if (!string.IsNullOrEmpty(HoFaceFirewall.LastLog))
+            {
+                EditorGUILayout.LabelField("提权脚本日志（可选中复制）", EditorStyles.miniBoldLabel);
+                EditorGUILayout.TextArea(HoFaceFirewall.LastLog, GUILayout.MinHeight(90));
+            }
         }
 
         /// <summary>

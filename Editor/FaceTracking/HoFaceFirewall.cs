@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Threading;
 using UnityEditor;
@@ -22,6 +23,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     ///    把该 exe 的入站阻止规则禁掉，再加允许规则 —— 两个动作缺一不可。
     ///
     /// 规则范围刻意收窄到「指定 exe + UDP 49983」，比直接开一个端口安全得多，也随时可撤销。
+    ///
+    /// 提权进程是独立进程，拿不到它的 stdout，所以脚本把每一步写进一个日志文件，由面板读回来。
+    /// 「退出码 1 但不告诉你为什么」是没法排查的 —— 这一点是踩过之后补上的。
     /// </summary>
     public static class HoFaceFirewall
     {
@@ -32,7 +36,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static volatile bool elevating;
         private static volatile Process pending;
         private static volatile string status = "";
+        private static volatile string lastLog = "";
         private static int probing;
+
+        /// <summary>提权脚本的执行日志。提权进程的 stdout 拿不到，只能靠它自己写文件。</summary>
+        public static string LogPath => Path.Combine(Path.GetTempPath(), "HoUnityTools-firewall.log");
 
         /// <summary>只有 Windows 编辑器才有这套东西。</summary>
         public static bool Supported => Application.platform == RuntimePlatform.WindowsEditor;
@@ -44,6 +52,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public static bool Busy => elevating || pending != null;
 
         public static string Status => status;
+
+        /// <summary>上一次提权脚本的执行日志；失败时面板会把它摊开给用户看。</summary>
+        public static string LastLog => lastLog;
 
         // ── 探测 ──────────────────────────────────────────────────────────────
 
@@ -75,9 +86,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             catch { }
             process.Dispose();
             pending = null;
+            lastLog = ReadLog();
             status = code == 0
                 ? "已放行：Unity 的入站 UDP " + Port + " 现在被允许。点一次「断开手机」再「连接手机」，把握手命令重发。"
-                : "没有改成（退出码 " + code + "）。可能是在 UAC 里点了「否」，也可以照下面的命令手动执行。";
+                : "没有改成（退出码 " + code + "）。下面是提权脚本的执行日志，失败原因一般就在里面。";
             Refresh();
         }
 
@@ -103,6 +115,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
+        private static string ReadLog()
+        {
+            try
+            {
+                return File.Exists(LogPath) ? File.ReadAllText(LogPath).Trim() : "";
+            }
+            catch (Exception e) { return "（读不到日志 " + LogPath + "：" + e.Message + "）"; }
+        }
+
         // ── 授权 / 撤销 ───────────────────────────────────────────────────────
 
         public static void Grant()
@@ -126,6 +147,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             elevating = true;
             status = waiting;
+            lastLog = "";
+            try { if (File.Exists(LogPath)) File.Delete(LogPath); }
+            catch { }
             string encoded = Encode(script);
             ThreadPool.QueueUserWorkItem(_ =>
             {
@@ -136,10 +160,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         FileName = "powershell.exe",
                         // 用 -EncodedCommand 而不是拼命令行：exe 路径里有空格和括号，
                         // 拼字符串在各种引号转义下迟早会出错，base64 让转义问题彻底消失。
-                        Arguments = "-NoProfile -NonInteractive -EncodedCommand " + encoded,
+                        // 隐藏窗口交给 PowerShell 自己的 -WindowStyle，而不是 ProcessStartInfo.WindowStyle：
+                        // 后者要经过 ShellExecute 提权路径，少一层牵扯少一个变量。
+                        Arguments = "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded,
                         UseShellExecute = true,
-                        Verb = "runas",
-                        WindowStyle = ProcessWindowStyle.Hidden
+                        Verb = "runas"
                     });
                     if (process == null) status = "无法启动提权进程。";
                     else pending = process;
@@ -162,38 +187,89 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static string Encode(string script) => Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
+        /// <summary>单引号字符串里再出现单引号要翻倍。Windows 路径正常不带单引号，这里只是防御。</summary>
+        private static string Quote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";
+
+        /// <summary>两条脚本共用的开头：日志函数 + 目标程序。</summary>
+        private static StringBuilder Header()
+        {
+            // Unity 在 Windows 上给的 applicationPath 可能是正斜杠形式；防火墙规则的 Program
+            // 字段要的是反斜杠路径，这里先归一化，并把原始值也写进日志以便核对。
+            string raw = EditorApplication.applicationPath ?? "";
+            string program = raw.Replace('/', '\\');
+            var script = new StringBuilder();
+            // 故意不用 $ErrorActionPreference='Stop'：每一步单独 try/catch 并记日志，
+            // 比"整段中断只留一个退出码"有用得多。
+            script.AppendLine("$ErrorActionPreference = 'Continue'");
+            script.AppendLine("$log = " + Quote(LogPath));
+            script.AppendLine("function L([string]$m) { $m | Out-File -FilePath $log -Append -Encoding utf8 }");
+            script.AppendLine("L '=== HoUnityTools 面捕：防火墙授权 ==='");
+            script.AppendLine("$name = " + Quote(RuleName));
+            script.AppendLine("$prog = " + Quote(program));
+            script.AppendLine("L ('Unity 报告的路径: ' + " + Quote(raw) + ")");
+            script.AppendLine("L ('归一化后        : ' + $prog)");
+            script.AppendLine("L ('该 exe 是否存在 : ' + (Test-Path -LiteralPath $prog))");
+            script.AppendLine("L ('提权身份        : ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name)");
+            script.AppendLine("L ('是否已提升      : ' + (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))");
+            return script;
+        }
+
         private static string BuildGrantScript()
         {
-            // 单引号字符串里再出现单引号需要翻倍；Windows 路径正常不会带单引号，这里只是防御。
-            string program = EditorApplication.applicationPath.Replace("'", "''");
-            var script = new StringBuilder();
-            script.AppendLine("$ErrorActionPreference = 'Stop'");
+            var script = Header();
+            // 1) 阻止规则优先于允许规则：先把这个 exe 的入站阻止规则关掉，否则加允许也没用。
+            //    这里刻意不把 -Direction/-Action 和 -AssociatedNetFirewallApplicationFilter 混用：
+            //    那组参数在 -EncodedCommand 下会绑不上（实测 ParameterBindingException），
+            //    所以只按程序筛出规则，方向和动作在客户端判断。
             script.AppendLine("try {");
-            script.AppendLine("  $prog = '" + program + "'");
-            script.AppendLine("  # 阻止规则优先于允许规则：先把这个 exe 的入站阻止规则全部关掉，否则加允许也没用。");
-            script.AppendLine("  # 这里刻意不把 -Direction/-Action 和 -AssociatedNetFirewallApplicationFilter 混用：");
-            script.AppendLine("  # 那组参数在 -EncodedCommand 下会绑不上（实测 ParameterBindingException），");
-            script.AppendLine("  # 所以只按程序筛出规则，方向和动作在客户端判断。");
             script.AppendLine("  foreach ($f in @(Get-NetFirewallApplicationFilter -Program $prog -ErrorAction SilentlyContinue)) {");
             script.AppendLine("    foreach ($r in @(Get-NetFirewallRule -AssociatedNetFirewallApplicationFilter $f -ErrorAction SilentlyContinue)) {");
-            script.AppendLine("      if ($r.Direction -eq 'Inbound' -and $r.Action -eq 'Block') { $r | Disable-NetFirewallRule -ErrorAction SilentlyContinue }");
+            script.AppendLine("      if ($r.Direction -eq 'Inbound' -and $r.Action -eq 'Block') {");
+            script.AppendLine("        try { $r | Disable-NetFirewallRule -ErrorAction Stop; L ('已禁用阻止规则: ' + $r.DisplayName + ' [' + $r.Profile + ']') }");
+            script.AppendLine("        catch { L ('禁用阻止规则失败: ' + $r.DisplayName + ' -> ' + $_.Exception.Message) }");
+            script.AppendLine("      }");
             script.AppendLine("    }");
             script.AppendLine("  }");
-            script.AppendLine("  Get-NetFirewallRule -DisplayName '" + RuleName + "' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue");
-            script.AppendLine("  New-NetFirewallRule -DisplayName '" + RuleName + "' -Direction Inbound -Action Allow -Protocol UDP -LocalPort " + Port + " -Program $prog -Profile Any | Out-Null");
-            script.AppendLine("  exit 0");
-            script.AppendLine("} catch { exit 1 }");
+            script.AppendLine("} catch { L ('扫描阻止规则失败: ' + $_.Exception.Message) }");
+            // 2) 允许规则。先走 NetSecurity 模块，失败再退到 netsh（不依赖该模块）。
+            script.AppendLine("try { Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop }");
+            script.AppendLine("catch { L ('清理旧规则失败: ' + $_.Exception.Message) }");
+            script.AppendLine("try {");
+            script.AppendLine("  New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol UDP -LocalPort " + Port + " -Program $prog -Profile Any -ErrorAction Stop | Out-Null");
+            script.AppendLine("  L 'New-NetFirewallRule: OK'");
+            script.AppendLine("} catch { L ('New-NetFirewallRule 失败: ' + $_.Exception.GetType().Name + ' / ' + $_.Exception.Message) }");
+            script.AppendLine("if (@(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue).Count -eq 0) {");
+            script.AppendLine("  L '改用 netsh 退路'");
+            script.AppendLine("  $raw = & netsh advfirewall firewall add rule name=`\"$name`\" dir=in action=allow protocol=UDP localport=" + Port + " program=`\"$prog`\" enable=yes profile=any 2>&1");
+            script.AppendLine("  $code = $LASTEXITCODE");
+            script.AppendLine("  L ('netsh 输出: ' + (($raw | Out-String).Trim()) + '  (exit=' + $code + ')')");
+            script.AppendLine("}");
+            // 不信任"命令没报错"，直接回读一条规则才算数。
+            script.AppendLine("$made = @(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)");
+            script.AppendLine("L ('建后回读: ' + $made.Count + ' 条规则')");
+            script.AppendLine("$ok = $made.Count -gt 0");
+            script.AppendLine("L $(if ($ok) { 'RESULT: OK' } else { 'RESULT: FAILED' })");
+            script.AppendLine("if ($ok) { exit 0 } else { exit 1 }");
             return script.ToString();
         }
 
         private static string BuildRevokeScript()
         {
-            var script = new StringBuilder();
-            script.AppendLine("$ErrorActionPreference = 'Stop'");
+            var script = Header();
             script.AppendLine("try {");
-            script.AppendLine("  Get-NetFirewallRule -DisplayName '" + RuleName + "' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue");
-            script.AppendLine("  exit 0");
-            script.AppendLine("} catch { exit 1 }");
+            script.AppendLine("  $rules = @(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)");
+            script.AppendLine("  foreach ($r in $rules) { $r | Remove-NetFirewallRule -ErrorAction Stop }");
+            script.AppendLine("  L ('删除 ' + $rules.Count + ' 条规则')");
+            script.AppendLine("} catch { L ('删除失败: ' + $_.Exception.Message) }");
+            script.AppendLine("if (@(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue).Count -gt 0) {");
+            script.AppendLine("  $raw = & netsh advfirewall firewall delete rule name=`\"$name`\" 2>&1");
+            script.AppendLine("  L ('netsh 输出: ' + (($raw | Out-String).Trim()) + '  (exit=' + $LASTEXITCODE + ')')");
+            script.AppendLine("}");
+            script.AppendLine("$left = @(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue).Count");
+            script.AppendLine("$ok = $left -eq 0");
+            script.AppendLine("L ('剩余规则: ' + $left)");
+            script.AppendLine("L $(if ($ok) { 'RESULT: OK' } else { 'RESULT: FAILED' })");
+            script.AppendLine("if ($ok) { exit 0 } else { exit 1 }");
             return script.ToString();
         }
     }
