@@ -463,6 +463,51 @@ result.controller.ApplyOverrides(overrides);                 // 片段是过滤�
 
 **一条支持这个判断的旁证**：VRChat 生态两个主力编辑器模拟器 —— **Av3Emulator 和 Gesture Manager —— 都没有实现曲线驱动参数**。Av3Emulator 完整实现了 `VRC_AvatarParameterDriver` 的 Set/Add/Random/Copy（`LyumaAv3Runtime.cs:792` 起），但全文没有曲线写参数的实现；Gesture Manager 的 69 个 `.cs` 里也搜不到（`OSCm` 的命中全是 `OscModule`，网络 OSC，无关）。**连生态自己的预览工具都不复刻它**，用户早已接受"编辑器预览 ≠ 游戏内"。所以我们不复刻，是**和生态一致**，不是偷工减料。
 
+## 14. 推迟项备忘：VRC 后端与曲线驱动参数桥
+
+> **这条是特意留在这里的。** 推迟的决定和推迟的理由一样重要 —— 半年后只会记得"好像查过"，忘了结论和触发条件，于是要么重做一遍调查，要么凭印象拍脑袋。
+
+### 14.1 决定
+
+**短期内不用本组件生产面向 VRC 的控制器。** 因此：
+
+- **曲线驱动参数桥不做。**
+- **VRC 导出后端不做**（同一份中间表示 lower 成"VRC 图层 + 树"那条路）。
+- 平滑这一段的归属就按当前方案：**我们的后端在 C# 里算**。
+
+这不是放弃，是**等触发条件**。
+
+### 14.2 触发条件（撞上任意一条就回来做）
+
+1. **要出"能在 VRChat 里独立跑"的控制器** —— 本组件加一个 VRC 导出后端。
+2. **要调试后端逐帧对齐 VRC 行为** —— 需要预设和后端一致。
+
+### 14.3 真要做，是什么样
+
+- **本质**：让动画图有记忆（逐帧状态计算 / 反馈回路）。没有它，图只能是"参数进 → 姿势出"的纯前馈。
+- **实现**：一个"**一步延迟的反馈桥**" —— 动画求值后把曲线值读回来，下一帧写进参数。
+  约 **50~100 行 + 一个哑组件 + 生成的曲线**。
+- **唯一的坑**：Unity 只能把曲线绑到**组件属性**，绑不到 Animator 参数。所以要拿一个哑组件当锚。
+  也正因为如此，"直接照抄 VRC 的控制器"还需要**重写曲线绑定**，不是拷过来就能跑。
+- **不要做成 enum**：理由见 13.2（两套算法不会逐帧相同，enum 会制造危险的等价错觉）。
+  正确形态是**导出目标 + 只读的能力声明**，不是运行时算法下拉。
+
+### 14.4 会碰到的现有代码与资产
+
+| 位置 | 关系 |
+| --- | --- |
+| `HoFaceAnimationSession.Tick` | 现在逐帧写影子参数的地方；桥要接在这附近（读回 → 下一帧写入） |
+| `HoFaceAnimationAssets.Generate` / `PopulateDriveTree` | 生成层与树的地方；VRC 后端要在这里多生成平滑段与"哑组件 + 曲线" |
+| 参数命名 `OSCm/Local → Smooth → Proxy` | 三段命名就是为这一步留的：控制器本体永远只读 `Proxy`，平滑层插在 `Local` 与 `Proxy` 之间，**控制器一行都不用改** |
+
+### 14.5 证据出处（免得重查一遍）
+
+- VRChat SDK DLL（`VRCSDK3A.dll`）里有 `VRC_AvatarParameterDriver`，**没有任何 `Driven` 符号** → 曲线驱动不是 SDK 实现的。
+- **Av3Emulator**（`.research/Av3Emulator`，源码）：完整实现 `VRC_AvatarParameterDriver`，**无曲线驱动参数实现**；`driven` 只出现在 `legacySubAnimatorParameterDriverMode` 这个无关开关上。
+- **Gesture Manager**（`D:\UnityVrcVCC_Projects\VrcMaster\Packages\vrchat.blackstartx.gesture-manager`，69 个源码 `.cs`）：同样搜不到。
+- 结论：**曲线驱动参数是 VRChat 客户端能力，纯 Unity 用不了。**
+- 参考工程：`D:\UnityVrcVCC_Projects\VrcMaster`（含 `adjerry91.vrcft.templates`、`com.vrchat.avatars`+`base`、`com.vrcfury.vrcfury`、`lyuma.av3emulator`、`vrchat.blackstartx.gesture-manager`、`nadena.dev.modular-avatar`）。
+
 ## 12. 「初始化」与「应用」：两个动作，语义必须分开
 
 命名承载语义。**「生成」听起来可重复、无害**，于是用户会以为可以随便点；但这一步产出的是一个**完整文件**，而之后所有手工改动都在这个文件里 —— 点错一次就全没了。所以：
