@@ -62,7 +62,7 @@ public static class HoFaceTrackingValidation
             foreach (var p in controller.parameters)
                 if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
             Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
-            Check(controller.parameters.Length == 53, "generator adds exactly one extra parameter, the jelly one ("
+            Check(controller.parameters.Length == 54, "generator adds exactly two extra parameters, the two jelly axes ("
                 + controller.parameters.Length + ")");
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
@@ -109,9 +109,14 @@ public static class HoFaceTrackingValidation
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
-            bool jellyParameterExists = false;
-            foreach (var p in controller.parameters) if (p.name == HoFaceAnimationAssets.JellyParameterName) jellyParameterExists = true;
-            Check(jellyParameterExists, "generated controller carries the jelly parameter (" + HoFaceAnimationAssets.JellyParameterName + ")");
+            bool jellyX = false, jellyY = false;
+            foreach (var p in controller.parameters)
+            {
+                if (p.name == HoFaceAnimationAssets.JellyParameterXName) jellyX = true;
+                if (p.name == HoFaceAnimationAssets.JellyParameterYName) jellyY = true;
+            }
+            Check(jellyX && jellyY, "generated controller carries both jelly axes ("
+                + HoFaceAnimationAssets.JellyParameterXName + " / " + HoFaceAnimationAssets.JellyParameterYName + ")");
 
             // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
             string controllerPath = AssetDatabase.GetAssetPath(controller);
@@ -172,6 +177,19 @@ public static class HoFaceTrackingValidation
             var still = new HoFaceJellyState();
             for (int i = 0; i < 120; i++) HoFaceJelly.Step(ref still, 0f, 1f / 60f, 6f, 0.25f);
             Check(Mathf.Abs(still.value) < 1e-4f && Mathf.Abs(still.velocity) < 1e-4f, "jelly stays still when the input does not move");
+
+            // 两个方向必须真的走成两条不同的轨迹 —— 否则"两个方向"就退化成一维直线来回，
+            // 灵动的来源（Lissajous）就没了。
+            var ax = new HoFaceJellyState();
+            var ay = new HoFaceJellyState();
+            float maxGap = 0f;
+            for (int i = 0; i < 120; i++)
+            {
+                HoFaceJelly.Step(ref ax, 1f, 1f / 60f, 6f, 0.25f);
+                HoFaceJelly.Step(ref ay, 1f, 1f / 60f, 8.5f, 0.25f);
+                maxGap = Mathf.Max(maxGap, Mathf.Abs(ax.value - ay.value));
+            }
+            Check(maxGap > 0.15f, "the two axes diverge (that divergence *is* the Lissajous, maxGap=" + maxGap.ToString("F3") + ")");
 
             var huge = new HoFaceJellyState();
             HoFaceJelly.Step(ref huge, 1f, 0.5f, 6f, 0.25f);   // 卡了一帧：不能因为 dt 大就发散

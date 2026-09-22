@@ -47,10 +47,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool written;
         /// <summary>会话第一帧的标记：那一帧把所有值一次到位，避免开场从 0 扫过来。</summary>
         private bool primed;
-        private HoFaceJellyState jelly;
+        private HoFaceJellyState jellyX, jellyY;
 
-        /// <summary>果冻眼当前值（那个"带物理的参数"）。面板观测点，也是用例的观测点。</summary>
-        public float JellyValue => jelly.value;
+        /// <summary>果冻横向分量当前值（那个"带物理的参数"）。面板观测点，也是用例的观测点。</summary>
+        public float JellyValueX => jellyX.value;
+
+        /// <summary>果冻竖向分量当前值。</summary>
+        public float JellyValueY => jellyY.value;
 
         public HoFaceAnimationSession(HoFaceTrackingDebugger rig)
         {
@@ -198,9 +201,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static float Finite01(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 0 : Mathf.Clamp01(value);
 
         /// <summary>
-        /// 果冻眼：把眼睑信号过一遍一维弹簧，产出**带物理的参数**写进控制器，供果冻动画消费。
+        /// 果冻眼：把眼睑信号过一遍一维弹簧，产出**两个方向**的带物理参数写进控制器。
         ///
-        /// 这里只是"产参数"。动画怎么按它取姿势是下一步（小工具 + `Ho/10 Jelly` 层）——
+        /// 为什么是两个方向而不是一个强度：两个弹簧取不同频率时，两个分量的合成路径是一条
+        /// Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回。取相同频率就退化成直线。
+        ///
+        /// 这里只产参数。动画怎么按它们取姿势是下一步（网格列表 + 手选键 + 两条方向动画）——
         /// 参数负责"每次都不一样"，动画负责"每次都好看"。
         /// </summary>
         private void StepJelly(float deltaTime)
@@ -208,7 +214,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (!Rig.jellyEnabled)
             {
                 // 关掉就复位，免得再打开时从上次的残留冲一下。
-                HoFaceJelly.Reset(ref jelly, 0f);
+                HoFaceJelly.Reset(ref jellyX, 0f);
+                HoFaceJelly.Reset(ref jellyY, 0f);
                 return;
             }
 
@@ -219,14 +226,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 left >= 0 ? Smoothed[left] : 0f,
                 right >= 0 ? Smoothed[right] : 0f);
 
-            HoFaceJelly.Step(ref jelly, target, deltaTime, Rig.jellyFrequency, Rig.jellyDamping);
+            HoFaceJelly.Step(ref jellyX, target, deltaTime, Rig.jellyFrequencyX, Rig.jellyDamping);
+            HoFaceJelly.Step(ref jellyY, target, deltaTime, Rig.jellyFrequencyY, Rig.jellyDamping);
 
-            string parameter = Rig.jellyParameter;
+            // 弹簧会过冲到 1 以上，写参数前夹回 0..1（过冲体现在曲线形状上，不是数值溢出）。
+            WriteJelly(Rig.jellyParameterX, jellyX.value);
+            WriteJelly(Rig.jellyParameterY, jellyY.value);
+        }
+
+        private void WriteJelly(string parameter, float value)
+        {
             if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
-            {
-                // 弹簧会过冲到 1 以上，写参数前夹回 0..1（过冲体现在"曲线形状"上，不是数值溢出）。
-                shadow.SetFloat(parameter, Mathf.Clamp01(jelly.value));
-            }
+                shadow.SetFloat(parameter, Mathf.Clamp01(value));
         }
 
         private string MappingStamp()
