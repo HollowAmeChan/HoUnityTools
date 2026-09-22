@@ -23,3 +23,5 @@
 # Local upstream source checkouts used for design research.
 /.research/
 /.research.meta
+/.warudo-mod-research
+/.lab

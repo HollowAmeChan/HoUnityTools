@@ -227,7 +227,10 @@ namespace Hollow.HoUnityTools.Constraints
         private bool headMeasuredThisFrame;
         private float headAppliedFactor;
         private Vector2 lastPointerScreen;
+#pragma warning disable CS0414 // 只在 #if UNITY_EDITOR 段（Gizmo / 状态文本）里被读取，
+                              // player 编译时那段被裁掉，于是报"赋值未使用"。
         private bool hasPointerScreen;
+#pragma warning restore CS0414
         private Ray lastPointerRay;
         private bool hasPointerRay;
 

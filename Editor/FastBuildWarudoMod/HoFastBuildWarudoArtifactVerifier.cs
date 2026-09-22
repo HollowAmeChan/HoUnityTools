@@ -61,6 +61,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         public bool usedFallbackScan;
         /// <summary>关键条目读不出来，本次复核结论不完整，不能当成通过。</summary>
         public bool incomplete;
+        /// <summary>包内是否真的有 assemblymodules.dat。用 entryInventory 字符串判等会踩坑（那里带长度后缀）。</summary>
+        public bool hasAssemblyModule;
         /// <summary>有 FastBuild 复制过的脚本没有进入 Mod 程序集。</summary>
         public bool hasUnlinkedStagedComponent;
         public bool buildLogFound;
@@ -99,20 +101,28 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const int MaxBuildLogHighlights = 10;
         private const string ModCompiledAssemblyPrefix = "umod-compiled";
 
-        private static readonly string[] RequiredEntries =
+        /// <summary>
+        /// 必需条目不是固定四个，按 Mod 类型分三类：
+        ///   modinfo.dat                       —— 任何 Mod 都有
+        ///   sharedassets.* **或** sceneassets.* —— 至少要有其一（环境 Mod 用 sceneassets）
+        ///   assemblymodules.dat               —— 只有含 C# 脚本的 Mod 才有
+        ///
+        /// 早先这里写死成"四个都必须有"，于是纯资源 Mod（粒子/动画/无脚本环境）会被
+        /// 误报"缺少 assemblymodules.dat"，环境 Mod 还会被误报"缺少 sharedassets.bin"。
+        /// </summary>
+        private static readonly string[] AlwaysRequiredEntries =
         {
             "modinfo.dat",
-            "sharedassets.bin",
-            "sharedassets.meta",
-            "assemblymodules.dat",
         };
 
         /// <summary>
-        /// 只做产物自检，不比对期望组件。用于“没有临时 Prefab 时”的重新复核。
+        /// 只做产物自检，不比对期望组件。用于"没有临时 Prefab 时"的重新复核。
+        /// expectCompiledScripts：这个 Mod 是否带 C# 脚本。纯资源 Mod 不该有
+        /// assemblymodules.dat，传 false 才不会误报缺失。
         /// </summary>
-        internal static HoFastBuildArtifactVerification Verify(string artifactPath)
+        internal static HoFastBuildArtifactVerification Verify(string artifactPath, bool expectCompiledScripts = true)
         {
-            return Verify(artifactPath, null, string.Empty);
+            return Verify(artifactPath, null, string.Empty, null, expectCompiledScripts);
         }
 
         internal static HoFastBuildArtifactVerification Verify(
@@ -120,7 +130,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             IList<HoFastBuildExpectedComponent> expectedComponents,
             string expectedModName)
         {
-            return Verify(artifactPath, expectedComponents, expectedModName, null);
+            return Verify(artifactPath, expectedComponents, expectedModName, null, true);
         }
 
         internal static HoFastBuildArtifactVerification Verify(
@@ -128,6 +138,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             IList<HoFastBuildExpectedComponent> expectedComponents,
             string expectedModName,
             string buildLogPath)
+        {
+            return Verify(artifactPath, expectedComponents, expectedModName, buildLogPath, true);
+        }
+
+        internal static HoFastBuildArtifactVerification Verify(
+            string artifactPath,
+            IList<HoFastBuildExpectedComponent> expectedComponents,
+            string expectedModName,
+            string buildLogPath,
+            bool expectCompiledScripts)
         {
             var result = new HoFastBuildArtifactVerification
             {
@@ -137,7 +157,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             List<ScriptRecord> records = null;
             try
             {
-                records = InspectArtifact(result, artifactPath, expectedModName);
+                records = InspectArtifact(result, artifactPath, expectedModName, expectedComponents != null,
+                    expectCompiledScripts);
             }
             catch (Exception exception)
             {
@@ -285,7 +306,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private static List<ScriptRecord> InspectArtifact(
             HoFastBuildArtifactVerification result,
             string artifactPath,
-            string expectedModName)
+            string expectedModName,
+            bool expectCharacterRoot,
+            bool expectCompiledScripts)
         {
             if (string.IsNullOrEmpty(artifactPath) || !File.Exists(artifactPath))
             {
@@ -314,13 +337,30 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         result.entryInventory.Add(entry.FullName + " " + DescribeEntrySize(entry));
                     }
 
-                    foreach (string required in RequiredEntries)
+                    foreach (string required in AlwaysRequiredEntries)
                     {
                         if (!entries.ContainsKey(required))
                             result.missingEntries.Add(required);
                     }
 
-                    ReadPackedAssets(entries, result);
+                    // 资源容器：sharedassets 与 sceneassets 有一个成对出现即可。
+                    // 但**纯脚本插件包是合法的** —— 工作区里只有 .cs、没有任何 Unity 资源时，
+                    // UMod 不生成任何资源容器，包内就只有 modinfo.dat + assemblymodules.dat。
+                    // 所以判据是"三者至少有其一"，而不是"必须有资源容器"。
+                    bool hasSharedContainer = entries.ContainsKey("sharedassets.bin") &&
+                                              entries.ContainsKey("sharedassets.meta");
+                    bool hasSceneContainer = entries.ContainsKey("sceneassets.bin") &&
+                                             entries.ContainsKey("sceneassets.meta");
+                    bool hasAssemblyModule = entries.ContainsKey("assemblymodules.dat");
+
+                    if (!hasSharedContainer && !hasSceneContainer && !hasAssemblyModule)
+                        result.missingEntries.Add("sharedassets.* / sceneassets.* / assemblymodules.dat（三者至少有其一）");
+
+                    // 只有带 C# 脚本的 Mod 才该有编译产物。
+                    if (expectCompiledScripts && !hasAssemblyModule)
+                        result.missingEntries.Add("assemblymodules.dat");
+
+                    ReadPackedAssets(entries, result, expectCharacterRoot);
                     ReadModInfo(entries, result, expectedModName);
                     ReadAssemblyModules(entries, result);
                     return ReadScriptRecords(entries, result);
@@ -350,7 +390,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private static void ReadPackedAssets(
             Dictionary<string, ZipArchiveEntry> entries,
-            HoFastBuildArtifactVerification result)
+            HoFastBuildArtifactVerification result,
+            bool expectCharacterRoot)
         {
             byte[] data = ReadEntry(entries, "sharedassets.meta", result);
             if (data == null)
@@ -391,7 +432,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     }
                 }
 
-                if (!hasCharacterPrefab)
+                // 只有角色 Mod 才要求根节点叫 Character.prefab。
+                // 道具/粒子/环境有各自的入口名，其他 Mod 面板复核时 expectedComponents 为 null。
+                if (expectCharacterRoot && !hasCharacterPrefab)
                 {
                     result.warnings.Add(
                         "sharedassets.meta 的打包清单里没有 Character.prefab，产物可能缺少角色根节点。");
@@ -414,26 +457,41 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             try
             {
-                int offset = 4 + 8; // "UMOD" + 8 字节版本信息
-                for (int index = 0; index < 16 && offset < data.Length; index++)
+                // modinfo.dat 是 UMod 自己的二进制记录：4 字节 "UMOD" + 8 字节 + 若干 int32
+                // + 一串「1 字节长度前缀」的字符串，末尾还可能内嵌缩略图 PNG。
+                //
+                // 这里**不**做结构解析（int32 与字符串混排，不同 SDK 版本还会变），
+                // 只安全地扫出可打印字符串。之前那版猜字段布局的写法会在末尾越界
+                // （ReadInt32 没有边界检查），修完只剩纯粹的字节扫描。
+                int offset = 12;
+                var current = new StringBuilder();
+
+                while (offset < data.Length)
                 {
-                    // 该段由若干 int32 与长度前缀字符串混排，这里只做保守抽样，
-                    // 目的仅是确认产物里的 Mod 名称与当前配置一致。
-                    int value = ReadInt32(data, offset);
-                    if (value >= 0 && value <= data.Length - offset - 4)
+                    byte value = data[offset];
+
+                    // 撞到内嵌 PNG 就停：后面是图片数据。
+                    if (value == 0x89 && offset + 4 <= data.Length &&
+                        data[offset + 1] == (byte)'P' && data[offset + 2] == (byte)'N' &&
+                        data[offset + 3] == (byte)'G')
+                        break;
+
+                    if (value >= 0x20 && value < 0x7F)
                     {
-                        offset += 4;
-                        continue;
+                        current.Append((char)value);
+                    }
+                    else
+                    {
+                        if (current.Length >= 3)
+                            result.metadataStrings.Add(current.ToString());
+                        current.Clear();
                     }
 
-                    string text = ReadSevenBitString(data, ref offset);
-                    if (!string.IsNullOrEmpty(text))
-                        result.metadataStrings.Add(text);
-                    else if (offset >= data.Length)
-                        break;
-                    else
-                        offset++;
+                    offset++;
                 }
+
+                if (current.Length >= 3)
+                    result.metadataStrings.Add(current.ToString());
             }
             catch (Exception exception)
             {
@@ -455,10 +513,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             byte[] data = ReadEntry(entries, "assemblymodules.dat", result);
             if (data == null)
             {
-                // 缺条目由“缺少条目”行说明，读取失败由 ReadEntry 的警告说明，这里只标记结论不完整。
-                result.incomplete = true;
+                // 缺失由「缺少条目」行说明，读取失败由 ReadEntry 的警告说明。
+                // 纯资源 Mod（粒子/动画/无脚本环境）本来就没有它 —— 不能标成"结论不完整"。
+                // 只有"文件在、但内容读不出来"才算不完整，那种情况 ReadEntry 会加警告。
                 return;
             }
+
+            result.hasAssemblyModule = true;
 
             try
             {
@@ -527,8 +588,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             byte[] data = ReadEntry(entries, "sharedassets.bin", result);
             if (data == null)
             {
-                result.incomplete = true;
-                result.warnings.Add("sharedassets.bin 无法读取，无法确认组件的程序集链接。");
+                // 环境 Mod 只有 sceneassets.bin；纯脚本插件包两个资源容器都没有。
+                // 这两种都是合法的，不能算"结论不完整"—— 缺什么由「缺少条目」行负责说明。
                 return null;
             }
 
@@ -717,7 +778,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             int total = result.verdicts.Count;
             if (total == 0)
             {
-                builder.Append("仅检查容器结构");
+                // 其他 Mod（道具/粒子/环境/动画/插件）没有"期望组件"可逐一比对，
+                // 复核到这里只覆盖容器结构。旧文案"仅检查容器结构"读起来像失败，改成直说。
+                builder.Append("容器结构已确认（本类型无组件可比对）");
             }
             else
             {

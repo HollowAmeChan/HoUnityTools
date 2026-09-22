@@ -31,8 +31,11 @@ namespace Hollow.HoUnityTools.BoneRendering
         private Transform skeletonRoot;
 
         [Tooltip("是否包含根节点自身参与骨骼构建。")]
+#pragma warning disable CS0414 // 只在 #if UNITY_EDITOR 段（CollectFromSkeletonRoot）里被读取，
+                              // player 编译时那段被裁掉，于是报"赋值未使用"。字段本身要保留序列化数据。
         [SerializeField]
         private bool includeRoot = true;
+#pragma warning restore CS0414
 
         [Header("Display")]
         [Tooltip("骨骼形状。")]

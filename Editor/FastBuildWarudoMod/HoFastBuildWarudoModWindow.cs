@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.Warudo
 {
-    internal sealed class HoFastBuildWarudoModWindow : EditorWindow
+    internal sealed partial class HoFastBuildWarudoModWindow : EditorWindow
     {
         private const string MenuPath = "Assets/HoUnityTools/FastBuildWarudoMod";
         private const string TopLevelMenuPath = "HoUnityTools/FastBuildWarudoMod";
@@ -158,6 +158,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private string sdkError = string.Empty;
 
         private static bool resumeHookInstalled;
+
+        /// <summary>
+        /// 上次复核是否期望产物里有 assemblymodules.dat。
+        /// 纯资源 Mod（无 .cs）本来就不该有它，复核时必须用同一判据，否则会误报"缺少"。
+        /// 构建流程是静态的（要跨域重载恢复），所以这里只能是静态字段；域重载后回落成 true，
+        /// 影响仅限于"重载后再点一次复核"这一种情况，重新构建即恢复正确。
+        /// </summary>
+        private static bool lastExpectCompiledScripts = true;
         private static readonly Regex ResourcesLoadPattern = new Regex(
             @"Resources\s*\.\s*Load(?:Async)?(?:\s*<[^>]+>)?\s*\(\s*""([^""]+)""",
             RegexOptions.Compiled);
@@ -247,6 +255,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             EditorGUIUtility.labelWidth = FormLabelWidth + 8f;
             EnsureStyles();
+
+            // 页签与 HoFBX 导入处理窗口保持一致：居中、toolbarButton 样式。
+            DrawBuildPageToolbar();
+
+            if (currentPage == ModBuildPage.OtherMod)
+            {
+                DrawOtherModPage();
+                return;
+            }
+
             SynchronizeSourcePrefab();
             pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
             GUILayout.Space(8f);
@@ -2753,6 +2771,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 // 产物复核必须在清理临时目录之前执行：期望组件来自实际提交给 UMod 的
                 // 临时 Character.prefab，临时目录删除后就无法再取得这份基准。
+                lastExpectCompiledScripts = state.scripts != null && state.scripts.Length > 0;
                 HoFastBuildArtifactVerification verification = RunArtifactVerification(state, result);
                 resultMessage = "Warudo Mod 构建成功。\n" + resultSummary +
                                 (verification == null ? string.Empty : "\n" + verification.summary);
@@ -2818,7 +2837,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string artifactPath = ResolveArtifactPath(state, buildResult);
                 string modName = ReadActiveModName(state.exportSettingsPath);
                 HoFastBuildArtifactVerification verification =
-                    HoFastBuildArtifactVerifier.Verify(artifactPath, expected, modName, UModBuildLogPath);
+                    HoFastBuildArtifactVerifier.Verify(artifactPath, expected, modName, UModBuildLogPath,
+                        state.scripts != null && state.scripts.Length > 0);
 
                 PublishVerification(verification, artifactPath, expected);
                 return verification;
@@ -3044,7 +3064,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 lastArtifactPath,
                 lastExpectedComponents,
                 ReadActiveModName(exportSettingsPath),
-                UModBuildLogPath);
+                UModBuildLogPath,
+                lastExpectCompiledScripts);
 
             lastVerificationSummary = verification.summary;
             lastVerificationReport = verification.report;
