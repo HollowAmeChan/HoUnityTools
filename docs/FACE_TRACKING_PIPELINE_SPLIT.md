@@ -138,3 +138,67 @@ Mafuyu 25 层里 FT 相关的是：
 2. **果冻的归属只能有一个。** 要么控制器侧生产、我们 `HoBlinkConstraint` 只读不写；要么反过来。两边都写必然打架。
 3. **门控颗粒度对齐参考实现**：眼 / 唇 / 表情 三组，而不是我们现在的 5 组区域。参考实现是 `EyeTrackingActive` + `LipTrackingActive` 就分完了。
 4. **中间层要按阶段抽象**，别写死成"生成图层"。因为 Warudo 蓝图那条路要用同一份中间表示。
+
+## 7. 三条已定的决策
+
+| 决策 | 内容 |
+| --- | --- |
+| **HoBlinkConstraint 退役** | 果冻眼改由控制器侧生产。`HoBlinkConstraint` **暂时保留不删**，但不再是眼睛键的写入者。原则上"连约束脚本都可以整体转向控制器图层"是允许的方向。 |
+| **中间层命名对齐 OSCmooth** | 参数链用 `Local → Smooth → Proxy` 三段命名，生成层的命名也照它的风格。好处：能直接复用 VRC 生态里别人调好的配置与调参习惯。 |
+| **果冻归属控制器侧** | 参考实现的两种做法都看过了（Shinano 的独立 `JellyEye` 层 / Mafuyu 的 `MouthDefaultCorrection` 修正层），选前者：独立层、每帧推进、带历史。 |
+
+**推论（要一起守的）**：既然果冻归控制器侧，**眼睛键的写入者就只能有一个**。`HoFaceOutputOwnership` 那套键级占用要扩展成"哪一段拥有哪个键"，否则果冻层和约束脚本会互相覆盖 —— 这正是参考实现里 `MouthDefaultCorrection` 存在的原因：基础表情的回退由**专门一层**负责，而不是让面捕去猜。
+
+## 8. 傻瓜化：复杂度只能存在于生成物里
+
+担心是对的，而且参考实现早就把这件事解决了。看它实际的安装面：
+
+`Prefabs/Advance/Breakout/ARkit Blendshapes - Eye.prefab` **整个预制件只有一个组件** —— VRCFury 的 `FullController`，内容就两行引用：
+
+```yaml
+type: {class: FullController, ns: VF.Model.Feature, asm: VRCFury}
+data:
+  controllers:
+  - controller: .../Breakout/FX - ARkit - Eye.controller     # 一个控制器
+  prms:
+  - parameters:  .../Breakout/Para - ARkit - Eye.asset        # 一份参数表
+```
+
+**层和树是构建期由 VRCFury 合并出来的，作者和用户都不碰。** 傻瓜化靠的是这五条：
+
+| 手法 | 实际做法 |
+| --- | --- |
+| **按区域拆分安装** | Breakout 预制件：Eye / Eyebrow / Lip / Lip Extras / Tongue / Tongue Steps / Pupil Dilation，用哪个拖哪个 |
+| **合并放到构建期** | VRCFury `FullController` 把控制器并进 FX 层，用户看不到合并后的 626 棵树 |
+| **参数声明式** | `Para - *.asset` 就是一份 `VRCExpressionParameters` 列表，不是手工接线 |
+| **平滑也是声明式的** | VRCFury 自带 `smoothedPrms` 字段；OSCmooth 是"配置 + 生成"。生成物带 `_Gen` 后缀，名字本身就在说"这是生成的，别手改" |
+| **设备差异用变体** | `forPico4Pro` / `forQuestPro` / `GXR` / `default` 各一个预制件变体，换变体而不是改图层 |
+
+安装说明也就一句话：「Unity 工具栏 → FT Patch → Start」。
+
+### 对我们的三条硬要求
+
+1. **用户的输入面不许随生成物一起变厚。** 面板上永远是那几个开关（连不连、驱不驱、哪几组、平滑强度、果冻开关），层数由配置推导出来。生成 5 层还是 30 层，用户都不用打开 Animator。
+2. **生成物永不手改。** 生成层带前缀分段（`Ho/01 Raw`、`Ho/02 Smooth`、`Ho/03 Gate`、`Ho/04 Drive` 之类），文档和面板上都写死"要改就改配置重新生成"。参考实现用 `_Gen` 后缀表达同一件事。
+3. **影子架构是挡住复杂度的那道墙。** 对角色真实模型而言，无论控制器里有多少层，永远只有"N 个形态键被面捕会话接管"这一件事可见。用户不需要理解内部结构就能知道自己在控制什么 —— 这一点是我们比参考实现更有优势的地方，别丢掉。
+
+### Warudo 蓝图同理
+
+蓝图也必须是**生成**的，而且要能折叠：中间表示按**四段**（①输入 ②参数生产 ③门控 ④输出）组织，生成蓝图时每段折成一个节点组/子流程。用户在蓝图里看到的是四个块，不是一个几百节点的网。
+
+## 9. 中间层落地形态（命名对齐后）
+
+按四段 + OSCmooth 命名，目标产物：
+
+```
+第 1 段  输入          ARKit/<键>            ← 已有（手机直连写入）
+第 2 段  参数生产      OSCm/Local/<键>       ← 原始值中转（对齐 OSCmooth 的 Local）
+                      OSCm/Smooth/<键>      ← 平滑后的值
+                      OSCm/Proxy/<键>       ← 驱动树实际读的值
+                      OSCm/BlendSet         ← 总闸
+         （+ 果冻/修正：独立的 Ho/Jelly 段，产出自己的参数）
+第 3 段  门控          EyeTrackingActive / LipTrackingActive   ← 收敛成参考实现的两组总闸
+第 4 段  输出          ARKit Direct 树 → 形态键          ← 已有（上一轮刚改完）
+```
+
+对齐命名的一个具体好处：`OSCm/Proxy/FT/v2/<Shape>` 这套名字在 VRC 生态里是通行约定，我们的生成物能直接套用别人的调参经验，也能让别人看懂。
