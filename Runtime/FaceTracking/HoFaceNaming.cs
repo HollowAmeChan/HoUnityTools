@@ -7,25 +7,24 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 不许各自拼字符串：名字是唯一能把「混合树里的格子」和「去 DCC 做形态键时的那张清单」
     /// 对上的东西，散着写迟早会漂。
     ///
-    /// **2D 格子**（一根树一根网格）：
+    /// 格子名格式：
     /// <code>
-    /// &lt;树&gt;_&lt;x语义&gt;_&lt;y语义&gt;__&lt;格语义&gt;__&lt;x格数&gt;x&lt;y格数&gt;_&lt;x索引&gt;_&lt;y索引&gt;
-    /// </code>
-    /// **1D 格子**去掉 y 的全部字段：
-    /// <code>
-    /// &lt;树&gt;_&lt;x语义&gt;__&lt;格语义&gt;__&lt;x格数&gt;_&lt;x索引&gt;
+    /// &lt;树&gt;_&lt;方阵&gt;X&lt;x刻度&gt;Y&lt;y刻度&gt;        例：LidL_A3X2Y2
     /// </code>
     ///
     /// 规则：
     /// <list type="bullet">
-    /// <item>轴名 = **正端语义 + 负端语义**，+1 的那端在前（眼睑开合是「闭 / 睁大」→ <c>BlinkWide</c>）；
-    /// 单端轴只写正端（眯眼 → <c>Squint</c>）。</item>
-    /// <item>索引**从 0 开始**；尺寸字段写的是**格子数**（3 列写 <c>3</c>，于是索引是 0..2），不是最大索引。</item>
-    /// <item>格语义 = 各轴的**非中性端**按 x→y 顺序直接拼接（<c>WideSquint</c> / <c>BlinkSquint</c>）；
-    /// 两端都中性写 <c>Neutral</c>。</item>
-    /// <item>双下划线 <c>__</c> 是**唯一的结构分隔符**，所以轴语义里不许出现它。</item>
-    /// <item>片段名里**不带具体键名**（格式没给键名留位置）。具体这一格写哪几个键、各多少值，
-    /// 看 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md 的对照表。</item>
+    /// <item><b>方阵</b>：<c>A</c> + 每轴刻度数，而且**必定方形** —— 两根轴用同一套刻度。
+    /// <c>A3</c> = 每轴 3 个刻度（0/1/2）。用方阵而不是"3x2"是为了**天然消掉"中轴在哪"的歧义**：
+    /// 奇数刻度的中间刻度就是中线，两轴刻度数一致，不会再被误读成"关于 0 对称的 0.5 坐标"。</item>
+    /// <item><b>坐标从 0 开始、左下为原点、永远不出现负号</b>。刻度线性铺满该轴的值域：
+    /// <c>A3</c> 时 X（双边 −1..1）→ 0/1/2 即 −1/0/+1，中间刻度就是中线；
+    /// Y（单边 0..1）→ 0/1/2 即 0/0.5/+1。</item>
+    /// <item>**允许小数刻度**（如 <c>X0.5</c>）：坐标是"网格位置"而不是"第几格"，所以轴的密度
+    /// 变了也不用改字段格式 —— 这是方阵相对"格数 + 序号"最实际的好处。</item>
+    /// <item>名字里**不带轴语义、格语义、驱动键名**。那三样分别在网格定义表与
+    /// docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §5.2 的对照表里 ——
+    /// 名字里只留**一个严格可解析的字段**（<c>&lt;方阵&gt;X&lt;数&gt;Y&lt;数&gt;</c>），其余交给文档。</item>
     /// </list>
     ///
     /// **参数名一律 ASCII**（它是给后端吃的，以后 VRChat 参数名有字符限制），
@@ -37,18 +36,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         public const string ParameterRoot = "Ho/Drive";
 
         // ── 轴语义（正端在前）──────────────────────────────────────────────────
+        // 只用于**参数名**与文档：片段名里不再出现轴语义（见 <see cref="Cell"/>）。
         /// <summary>眼睑开合：<c>+1</c> 闭 / <c>-1</c> 睁大 / <c>0</c> 中性。</summary>
         public const string LidOpenAxis = "BlinkWide";
         /// <summary>眼睑眯眼：<c>+1</c> 眯 / <c>0</c> 不眯（单端）。</summary>
         public const string LidSquintAxis = "Squint";
 
-        /// <summary>眼睑 2D 网格的列数（开合：睁大 / 中性 / 闭）。</summary>
-        public const int LidColumns = 3;
-        /// <summary>眼睑 2D 网格的行数（眯眼：不眯 / 眯）。</summary>
-        public const int LidRows = 2;
-
-        /// <summary>两端都中性时的格语义。</summary>
-        public const string Neutral = "Neutral";
+        /// <summary>眼睑的网格（方阵）：<c>A3</c> = 每轴 3 刻度，原点在左下。</summary>
+        public const string LidGrid = "A3";
+        /// <summary>该方阵每轴的刻度数（就是 <see cref="LidGrid"/> 里那个 3）。</summary>
+        public const int LidSteps = 3;
 
         /// <summary>左右侧的英文名，用于参数名（ASCII）。</summary>
         public static string Side(int side) => side == 0 ? "Left" : "Right";
@@ -67,32 +64,39 @@ namespace Hollow.HoUnityTools.FaceTracking
         public static string LidAxis(int side, bool horizontal) =>
             ParameterRoot + "/Lid/" + Side(side) + "/" + (horizontal ? LidOpenAxis : LidSquintAxis);
 
-        /// <summary>
-        /// 网格索引 → 轴值。X 轴三档：索引 0/1/2 = 睁大(-1) / 中性(0) / 闭(+1)；
-        /// Y 轴两档：索引 0/1 = 不眯(0) / 眯(+1)。**闭在最后一列**就是轴名「正端在前」的来源。
-        /// </summary>
-        public static Vector2 LidPosition(int x, int y) =>
-            new Vector2(Mathf.Clamp(x - 1, -1, 1), Mathf.Clamp(y, 0, 1));
+        /// <summary>网格代号：<c>A</c> + 每轴刻度数（<c>A3</c> = 3×3 方阵）。</summary>
+        public static string Grid(int steps) => "A" + steps;
 
-        /// <summary>各轴非中性端按 x→y 顺序拼接；两端都中性 = <see cref="Neutral"/>。</summary>
-        public static string Art(string xEnd, string yEnd)
+        /// <summary>刻度写法：整数不带小数点，其余用最短写法（<c>0.5</c>）。</summary>
+        public static string Number(float step) =>
+            Mathf.Approximately(step, Mathf.Round(step))
+                ? Mathf.RoundToInt(step).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : step.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>格子名：<c>LidL_A3X2Y2</c>。</summary>
+        public static string Cell(string treeName, string grid, float x, float y) =>
+            treeName + "_" + grid + "X" + Number(x) + "Y" + Number(y);
+
+        /// <summary>
+        /// 刻度 → 轴值：双边轴（有正负两端）铺满 −1..1，单边轴铺满 0..1。
+        /// **刻度从 0 开始、顺序即从负端到正端**，所以 <c>A3</c> 的中间刻度落在轴值 0 / 0.5。
+        /// </summary>
+        public static float LatticeValue(float step, int steps, bool signedAxis)
         {
-            string art = (xEnd ?? string.Empty) + (yEnd ?? string.Empty);
-            return art.Length == 0 ? Neutral : art;
+            float t = steps <= 1 ? 0f : Mathf.Clamp01(step / (steps - 1));
+            return signedAxis ? t * 2f - 1f : t;
         }
 
-        /// <summary>2D 格子名。</summary>
-        public static string Cell(string treeName, string xSemantic, string ySemantic, string art,
-            int xCount, int yCount, int x, int y) =>
-            treeName + "_" + xSemantic + "_" + ySemantic + "__" + art + "__"
-            + xCount + "x" + yCount + "_" + x + "_" + y;
+        /// <summary>
+        /// 眼睑两轴在 <see cref="LidGrid"/> 里的格点值（喂给树的 <c>Pos X / Pos Y</c>）：
+        /// X 双边 0/1/2 → −1/0/+1（所以 <c>X1</c> 是中线），Y 单边 0/1/2 → 0/0.5/+1
+        /// （所以我们只在 <c>Y0</c> 不眯与 <c>Y2</c> 眯满两行摆了姿势，<c>Y1</c> 半眯空着）。
+        /// </summary>
+        public static Vector2 LidPosition(float xStep, float yStep) =>
+            new Vector2(LatticeValue(xStep, LidSteps, true), LatticeValue(yStep, LidSteps, false));
 
-        /// <summary>1D 格子名（只有一根轴）。</summary>
-        public static string Cell(string treeName, string xSemantic, string art, int xCount, int x) =>
-            treeName + "_" + xSemantic + "__" + art + "__" + xCount + "_" + x;
-
-        /// <summary>眼睑 2D 的格子名：<c>LidL_BlinkWide_Squint__BlinkSquint__3x2_2_1</c>。</summary>
-        public static string LidCell(int side, string xEnd, string yEnd, int x, int y) =>
-            Cell(LidTree(side), LidOpenAxis, LidSquintAxis, Art(xEnd, yEnd), LidColumns, LidRows, x, y);
+        /// <summary>眼睑格子名：<c>LidL_A3X1Y2</c>。</summary>
+        public static string LidCell(int side, float xStep, float yStep) =>
+            Cell(LidTree(side), LidGrid, xStep, yStep);
     }
 }

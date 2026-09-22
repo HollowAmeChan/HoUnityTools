@@ -206,11 +206,11 @@ public static class HoFaceTrackingValidation
                 "the 闭+眯 corner is authored instead of left to the engine: blink 100 + squint 0 = a designed max of 100 ("
                 + cornerBlink + " / " + cornerSquint + ")");
 
-            // ── 命名：格子名必须自带轴语义与格点，索引必须和树里真正用的格点一致 ──────
+            // ── 命名：格子名必须自带方阵与坐标，坐标必须和树里真正用的格点一致 ────────
             // 名字是唯一能把「树里的格子」和「去 DCC 做形态键时的那张清单」对上的东西，
             // 所以这里逐字校验，不让它悄悄漂。
             var lidNames = new System.Collections.Generic.List<string>();
-            bool namesMatchPattern = true, namesMatchGrid = true;
+            bool namesMatchPattern = true, namesMatchGrid = true, namesPositive = true;
             foreach (var lidTree in new[] { lidLeft, lidRight })
             {
                 if (lidTree == null) continue;
@@ -218,25 +218,34 @@ public static class HoFaceTrackingValidation
                 {
                     string clipName = child.motion != null ? child.motion.name : string.Empty;
                     lidNames.Add(clipName);
-                    if (!System.Text.RegularExpressions.Regex.IsMatch(clipName,
-                        "^(LidL|LidR)_BlinkWide_Squint__[A-Za-z]+__3x2_[0-9]_[0-9]$"))
-                        namesMatchPattern = false;
-
-                    string[] parts = clipName.Split(new[] { "__" }, StringSplitOptions.None);
-                    if (parts.Length != 3) { namesMatchGrid = false; continue; }
-                    string[] grid = parts[2].Split('_');
-                    if (grid.Length != 3 || grid[0] != "3x2") { namesMatchGrid = false; continue; }
-                    var expectedPosition = HoFaceNaming.LidPosition(grid[1][0] - '0', grid[2][0] - '0');
+                    var match = System.Text.RegularExpressions.Regex.Match(clipName,
+                        "^(LidL|LidR)_A3X([0-9]+(?:\\.[0-9]+)?)Y([0-9]+(?:\\.[0-9]+)?)$");
+                    if (!match.Success) { namesMatchPattern = false; continue; }
+                    float x = float.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                    float y = float.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+                    if (x < 0f || y < 0f) namesPositive = false;
+                    var expectedPosition = HoFaceNaming.LidPosition(x, y);
                     if ((child.position - expectedPosition).sqrMagnitude > 0.0001f) namesMatchGrid = false;
                 }
             }
 
             Check(lidNames.Count == 12 && new System.Collections.Generic.HashSet<string>(lidNames).Count == 12,
                 "both eyes carry six uniquely named grid cells (" + lidNames.Count + ")");
-            Check(namesMatchPattern,
-                "cell names carry tree + both axis semantics + art + grid size + indices ("
+            Check(namesMatchPattern, "cell names are <tree>_<matrix>X<x>Y<y> ("
                 + (lidNames.Count > 0 ? lidNames[0] : "none") + ")");
-            Check(namesMatchGrid, "the indices inside the name are the position the tree actually uses");
+            Check(namesPositive, "grid coordinates are non-negative — the origin is the bottom-left corner");
+            Check(namesMatchGrid, "the coordinates inside the name are the position the tree actually uses");
+            int rowBottom = 0, rowTop = 0, otherRows = 0;
+            foreach (string name in lidNames)
+            {
+                if (name.EndsWith("Y0", StringComparison.Ordinal)) rowBottom++;
+                else if (name.EndsWith("Y2", StringComparison.Ordinal)) rowTop++;
+                else otherRows++;
+            }
+
+            Check(rowBottom == 6 && rowTop == 6 && otherRows == 0,
+                "the matrix is deliberately not filled: six poses on Y0 (no squint) + six on Y2 (squint), Y1 left empty ("
+                + rowBottom + "/" + rowTop + "/" + otherRows + ")");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");

@@ -373,10 +373,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int pose = 0; pose < LidPoses.Length; pose++)
                 {
                     var cell = LidPoses[pose];
-                    // 名字由 HoFaceNaming 统一给：<树>_<x语义>_<y语义>__<格语义>__<格数>_<x>_<y>。
-                    // 名字带轴语义与格点，**不带键名** —— 具体这格写哪几个键、各多少值，
-                    // 见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md 的对照表。
-                    string clipName = HoFaceNaming.LidCell(side, cell.XEnd, cell.YEnd, cell.X, cell.Y);
+                    // 名字由 HoFaceNaming 统一给：<树>_<方阵>X<x>Y<y>，全正、左下为原点。
+                    // 名字里**不带轴语义、格语义、驱动键名** —— 那三样在网格定义表与
+                    // docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §5.2 的对照表里。
+                    string clipName = HoFaceNaming.LidCell(side, cell.X, cell.Y);
                     if (!existing.TryGetValue(clipName, out var clip))
                     {
                         clip = new AnimationClip { name = clipName, frameRate = 60f };
@@ -390,7 +390,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     WriteLidPose(clip, groups, suffix, cell);
                     keep.Add(clip);
-                    // 格点（轴值）由索引推出来，不再手写坐标 —— 索引是名字的一部分，两者不可能漂。
+                    // 格点（轴值）由刻度推出来，不再手写坐标 —— 刻度是名字的一部分，两者不可能漂。
                     lid.AddChild(clip, HoFaceNaming.LidPosition(cell.X, cell.Y));
                 }
 
@@ -457,25 +457,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 眼睑 2D 树的六个姿势。前五格的数值来自参考实现五个片段的实测值（见文档 21.1）；
-        /// **最后一格 `闭+眯(2,1)` 是我们补的** —— 参考实现没有这一格，但它的参数范围可能让那个角到不了，
-        /// 而我们的两根轴是独立参数，**真的会到**（"眨满 + 眯眼"就是过眨眼的工况）。
-        /// 不为能到达的角摆姿势，行为就交给引擎的边界行为；摆上之后那个角由**作者**决定。
+        /// 眼睑 2D 方阵（<see cref="HoFaceNaming.LidGrid"/>）里摆的六个姿势。前五格的数值来自参考实现
+        /// 五个片段的实测值（见文档 21.1）；**最后一格 `A3X2Y2` 闭+眯 是我们补的** —— 参考实现没有这一格，
+        /// 但它的参数范围可能让那个角到不了，而我们的两根轴是独立参数，**真的会到**
+        /// （"眨满 + 眯眼"就是过眨眼的工况）。不为能到达的角摆姿势，行为就交给引擎的边界行为。
         ///
         /// 这一格的含义：**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定。
         /// 默认给 `blink 100 + squint 0`：两键加和正好 100，不再过闭合。
         ///
-        /// 字段：X 轴端语义 / Y 轴端语义（空 = 该轴中性，参与拼格名）、格索引（名字里的 `_x_y`，
-        /// 也是树里格点的来源）、三个键的百分值。<b>轴值不手写</b>，由索引推（<see cref="HoFaceNaming.LidPosition"/>）。
+        /// **方阵不必铺满**：X 三档（睁大 / 中性 / 闭）走满，Y 只用了 `Y0`（不眯）与 `Y2`（眯满）两行，
+        /// 中间 `Y1`（半眯，轴值 0.5）空着 —— 空着的那行交给树插值。
+        ///
+        /// 字段：方阵刻度 X / Y（就是名字里的坐标，也是树里 <c>Pos</c> 的来源）、三个键的百分值。
+        /// <b>轴值不手写</b>，由刻度推（<see cref="HoFaceNaming.LidPosition"/>），两者不可能漂。
         /// </summary>
-        private static readonly (string XEnd, string YEnd, int X, int Y, float Blink, float Wide, float Squint)[] LidPoses =
+        private static readonly (int X, int Y, float Blink, float Wide, float Squint)[] LidPoses =
         {
-            ("Wide", "", 0, 0, 0f, 100f, 0f),
-            ("", "", 1, 0, 0f, 0f, 0f),
-            ("Blink", "", 2, 0, 100f, 0f, 0f),
-            ("", "Squint", 1, 1, 90f, 0f, 100f),
-            ("Wide", "Squint", 0, 1, 0f, 100f, 100f),
-            ("Blink", "Squint", 2, 1, 100f, 0f, 0f)
+            (0, 0, 0f, 100f, 0f),     // A3X0Y0 睁大
+            (1, 0, 0f, 0f, 0f),       // A3X1Y0 中性（X1 就是中线）
+            (2, 0, 100f, 0f, 0f),     // A3X2Y0 闭
+            (1, 2, 90f, 0f, 100f),    // A3X1Y2 眯（Y2 = 眯满；Y1 = 半眯，没摆）
+            (0, 2, 0f, 100f, 100f),   // A3X0Y2 睁大+眯
+            (2, 2, 100f, 0f, 0f)      // A3X2Y2 闭+眯
         };
 
         /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>
@@ -507,7 +510,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static void WriteLidPose(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
-            string suffix, (string XEnd, string YEnd, int X, int Y, float Blink, float Wide, float Squint) pose)
+            string suffix, (int X, int Y, float Blink, float Wide, float Squint) pose)
         {
             WriteShape(clip, groups, "eyeBlink" + suffix, pose.Blink);
             WriteShape(clip, groups, "eyeWide" + suffix, pose.Wide);
