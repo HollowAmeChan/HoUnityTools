@@ -165,28 +165,44 @@ public static class HoFaceTrackingValidation
                 "both gates are subtree weights — the eyelids ride the eye gate too");
             Check(leavesAreArkit, "inside a region, every leaf is still one shape weighted by its own ARKit parameter");
 
-            // 眼睑 2D 树：五格，而且「眯」那一格**自带闭眼量** —— 这就是它不出叠加的原因。
-            Check(lidLeft != null && lidLeft.children.Length == 5,
-                "five authored eyelid poses (" + (lidLeft != null ? lidLeft.children.Length : -1) + ")");
+            // 眼睑 2D 树：六格。前五格照参考实现，**第六格 `闭+眯(1,1)` 是我们补的** ——
+            // 它能到达（两根轴是独立参数），不摆姿势就等于把那个角交给引擎的边界行为。
+            Check(lidLeft != null && lidLeft.children.Length == 6,
+                "six authored eyelid poses (five from the reference + the reachable 闭+眯 corner) ("
+                + (lidLeft != null ? lidLeft.children.Length : -1) + ")");
             float squintPoseBlink = -1f, squintPoseSquint = -1f;
+            float cornerBlink = -1f, cornerSquint = -1f;
             if (lidLeft != null)
             {
                 foreach (var child in lidLeft.children)
                 {
-                    if (child.position != new Vector2(0.0f, 1.0f)) continue;
                     var lidClip = child.motion as AnimationClip;
                     var blinkCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
                         EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeBlinkLeft")) : null;
                     var squintCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
                         EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeSquintLeft")) : null;
-                    squintPoseBlink = blinkCurve != null ? blinkCurve.Evaluate(0.0f) : -1.0f;
-                    squintPoseSquint = squintCurve != null ? squintCurve.Evaluate(0.0f) : -1.0f;
+                    float blink = blinkCurve != null ? blinkCurve.Evaluate(0.0f) : -1.0f;
+                    float squint = squintCurve != null ? squintCurve.Evaluate(0.0f) : -1.0f;
+                    if (child.position == new Vector2(0.0f, 1.0f))
+                    {
+                        squintPoseBlink = blink;
+                        squintPoseSquint = squint;
+                    }
+
+                    if (child.position == new Vector2(1.0f, 1.0f))
+                    {
+                        cornerBlink = blink;
+                        cornerSquint = squint;
+                    }
                 }
             }
 
             Check(Mathf.Abs(squintPoseBlink - 90f) < 0.01f && Mathf.Abs(squintPoseSquint - 100f) < 0.01f,
                 "the squint pose carries its own blink amount (blink 90 + squint 100), so the two can never stack ("
                 + squintPoseBlink + " / " + squintPoseSquint + ")");
+            Check(Mathf.Abs(cornerBlink - 100f) < 0.01f && Mathf.Abs(cornerSquint) < 0.01f,
+                "the 闭+眯 corner is authored instead of left to the engine: blink 100 + squint 0 = a designed max of 100 ("
+                + cornerBlink + " / " + cornerSquint + ")");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");

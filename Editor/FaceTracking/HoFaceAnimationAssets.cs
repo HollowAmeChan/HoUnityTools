@@ -426,14 +426,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
-        /// <summary>眼睑 2D 树的五个姿势。数值来自参考实现五个片段的实测值（见文档 21.1）。</summary>
+        /// <summary>
+        /// 眼睑 2D 树的六个姿势。前五格的数值来自参考实现五个片段的实测值（见文档 21.1）；
+        /// **最后一格 `闭+眯(1,1)` 是我们补的** —— 参考实现没有这一格，但它的参数范围可能让那个角到不了，
+        /// 而我们的两根轴是独立参数，**真的会到**（"眨满 + 眯眼"就是过眨眼的工况）。
+        /// 不为能到达的角摆姿势，行为就交给引擎的边界行为；摆上之后那个角由**作者**决定。
+        ///
+        /// 这一格的含义：**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定。
+        /// 默认给 `blink 100 + squint 0`：两键加和正好 100，不再过闭合。
+        /// </summary>
         private static readonly (string Name, Vector2 Position, float Blink, float Wide, float Squint)[] LidPoses =
         {
             ("睁大", new Vector2(-1f, 0f), 0f, 100f, 0f),
             ("中性", new Vector2(0f, 0f), 0f, 0f, 0f),
             ("闭", new Vector2(1f, 0f), 100f, 0f, 0f),
             ("眯", new Vector2(0f, 1f), 90f, 0f, 100f),
-            ("睁大+眯", new Vector2(-1f, 1f), 0f, 100f, 100f)
+            ("睁大+眯", new Vector2(-1f, 1f), 0f, 100f, 100f),
+            ("闭+眯", new Vector2(1f, 1f), 100f, 0f, 0f)
         };
 
         /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>

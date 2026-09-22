@@ -23,6 +23,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool channelsExpanded;
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
+
+        /// <summary>眼睑的三档。底层还是原来那两个布尔字段（序列化兼容），但**呈现成互斥三选一**。</summary>
+        private static readonly string[] EyeLidModeLabels = { "左右独立", "强制同眨", "单键双眼" };
         private const string ModeTooltip = "这一路输入怎么来：\n实时 = 用手机数据\n手动 = 用滑杆\n保持 = 冻结在当前值\n中性 = 写设定的中性值\n交还 = 不碰这个键，让给基础动画";
         private const string ControllerValueTooltip = "真正写进混合树参数的值（面捕输入经过增益与钳制之后）。";
 
@@ -147,6 +150,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
+                // 结构报告：**从资产读出来**，不是从配置推断。
+                // 中间层有些处理是隐式的（眼睑被并成一棵 2D 树、重叠由姿势表权衡），
+                // 这里把控制器里实际的形状说出来，用户就不必靠行为去猜。
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("控制器结构", HoConstraintEditorTheme.LabelWidth,
+                        "**从资产读出来的实际形状**（不是配置声明）。\n"
+                        + "眼睑是若干棵 2D 树、每棵里有作者摆好的姿势 —— blink 与 squint 的重叠就是靠姿势权衡的，"
+                        + "那件事本身不可关。\n"
+                        + "改完结构要按「应用改动」才生效。");
+                    HoConstraintEditorControls.Caption(StructureSummary(rig));
+                    HoConstraintEditorControls.Flex();
+                }
+
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("断流等待", HoConstraintEditorTheme.LabelWidth, "多久没有有效帧就算断流。");
@@ -214,15 +231,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
+                // 眼睑：**三种互斥档位**，不是两个独立开关。
+                // （曾经就是两个布尔，其中"同步关 + 单键开"根本到不了 —— 用户踩过，所以收成一个三选一。）
                 using (HoConstraintEditorControls.Row())
                 {
                     SerializedProperty sync = serializedObject.FindProperty("eyeSync");
-                    sync.boolValue = HoConstraintEditorControls.Toggle("双眼同步", sync.boolValue,
-                        "把左右眼合成一个值再写回去。\n"
-                        + "有些模型的左右眨眼键**各自都能闭双眼**，左右一起触发就过眨眼 —— 打开它就强制同眨。\n"
-                        + "关 = 左右独立（允许 wink）。作用范围照参考实现：眼睑 + 眼球横向，眼球纵向不进去。");
+                    SerializedProperty single = serializedObject.FindProperty("eyeSyncSingleKey");
+                    int mode = sync.boolValue ? (single.boolValue ? 2 : 1) : 0;
+                    HoConstraintEditorControls.Label("眼睑", HoConstraintEditorTheme.LabelWidth,
+                        "按模型上那对眨眼键是**哪种做法**来选（三档互斥）：\n"
+                        + "· 左右独立：每个键各管一只眼 —— 能 wink，绝大多数模型是这种。\n"
+                        + "· 强制同眨：把左右合成一个值再写回两侧 —— 两眼闭得不一致时用；开了就不能 wink。\n"
+                        + "· 单键双眼：只驱动一侧、另一侧写 0 —— 只给「左右键各自都能闭双眼」的模型。");
+                    mode = HoConstraintEditorControls.Segmented(
+                        HoConstraintEditorControls.Next(HoConstraintEditorControls.SegmentedWidth(EyeLidModeLabels)),
+                        mode, EyeLidModeLabels, "按模型的眨眼键怎么做的来选；选错会表现为 wink 没了或只有一只眼眨。");
+                    sync.boolValue = mode >= 1;
+                    single.boolValue = mode >= 2;
+
                     HoConstraintEditorControls.Gap(8.0f);
-                    using (new EditorGUI.DisabledScope(!sync.boolValue))
+                    using (new EditorGUI.DisabledScope(mode == 0))
                     {
                         HoConstraintEditorControls.Label("配比", HoConstraintEditorTheme.LabelWidthSm,
                             "同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。");
@@ -232,27 +260,49 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     HoConstraintEditorControls.Flex();
                 }
-
-                using (HoConstraintEditorControls.Row())
-                {
-                    SerializedProperty syncFlag = serializedObject.FindProperty("eyeSync");
-                    SerializedProperty single = serializedObject.FindProperty("eyeSyncSingleKey");
-                    using (new EditorGUI.DisabledScope(!syncFlag.boolValue))
-                    {
-                        single.boolValue = HoConstraintEditorControls.Toggle("单键双眼", single.boolValue,
-                            "模型上的左右眨眼键**各自都能闭双眼**时打开它。\n"
-                            + "那种模型光合并两个值治不了过眨眼 —— 同一个形变还是被写了两遍；\n"
-                            + "打开这个只留左侧有值、右侧写 0，形变就只被应用一次。\n"
-                            + "代价：右侧键不再被驱动（要让基础动画拿回它，把那个通道的模式设成「释放」）。");
-                    }
-
-                    HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Caption("左右键各管一只眼的模型不用开");
-                }
             }
 
             serializedObject.ApplyModifiedProperties();
             DrawChannels(rig, session);
+        }
+
+        /// <summary>
+        /// 控制器里**实际的**驱动层形状（从资产读，不是从配置推断）。
+        /// 中间层有些处理是隐式的 —— 眼睑被并成 2D 树、重叠由姿势表权衡 —— 所以这里把它报出来。
+        /// </summary>
+        private static string StructureSummary(HoFaceTrackingDebugger rig)
+        {
+            if (!(rig.faceController is AnimatorController controller)) return "未指定控制器";
+
+            BlendTree drive = null;
+            foreach (var layer in controller.layers)
+            {
+                if (layer.name != HoFaceAnimationAssets.DriveLayerName || layer.stateMachine == null) continue;
+                foreach (var state in layer.stateMachine.states)
+                    drive = state.state.motion as BlendTree;
+            }
+
+            if (drive == null) return "这个控制器里没有 " + HoFaceAnimationAssets.DriveLayerName + " 段";
+
+            int lidTrees = 0, lidPoses = 0, regionTrees = 0, regionLeaves = 0;
+            foreach (var child in drive.children)
+            {
+                if (!(child.motion is BlendTree tree)) continue;
+                if (tree.blendType == BlendTreeType.FreeformCartesian2D)
+                {
+                    lidTrees++;
+                    lidPoses += tree.children.Length;
+                }
+                else if (tree.blendType == BlendTreeType.Direct)
+                {
+                    regionTrees++;
+                    regionLeaves += tree.children.Length;
+                }
+            }
+
+            return "眼睑 " + lidTrees + " 棵 2D 树 / 共 " + lidPoses + " 格姿势 · 区域子树 " + regionTrees
+                + " 棵 / " + regionLeaves + " 个直通叶子 · 门控 " + HoFaceAnimationAssets.EyeGateName
+                + " + " + HoFaceAnimationAssets.LipGateName;
         }
 
         /// <summary>
