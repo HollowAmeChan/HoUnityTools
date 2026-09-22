@@ -195,6 +195,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 shadow.SetFloat(channel.parameter, Smoothed[index]);
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
+            // 单眼内的修正先做（眨眼压眯眼），再做双眼之间的合并 —— 顺序反过来的话，
+            // 单键双眼模式已经把一侧清零，那边的抑制就没东西可压了。
+            HoFaceSuppression.Apply(Smoothed, Rig.squintSuppression, Rig.squintSuppressionAmount);
+
             // 双眼同步：必须在"写参数"之前、平滑之后 —— 它作用在最终要被写出去的那组值上。
             HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
 

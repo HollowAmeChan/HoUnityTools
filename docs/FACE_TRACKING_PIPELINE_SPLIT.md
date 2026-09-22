@@ -1438,6 +1438,72 @@ HoSpringConstraint
 **面板上还欠一条警告**：目标键如果正被面捕占着（`HoFaceOutputOwnership`），写会被跳过 ——
 这是对的（不许抢），但**不报错**，用户只会看到"没效果"。要在目标行上直接标出来。
 
+## 21. 「眨眼 + 眯眼」叠加：业界实际怎么处理（已核实）
+
+现象：ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是**同一块**，裸输入里两者同时非 0，
+于是同一个形变被写了两遍 → **过眨眼**。这一节是把三条实际做法查清楚之后的结果 ——
+**结论：我原先"在参数层用乘法把眯眼压下去"的想法，不是他们的做法。**
+
+### 21.1 模板侧（Jerry）：把会重叠的语义放进同一棵 2D 树，而且**姿势自带闭眼量**
+
+把五个眼睑姿势片段摊开看（`.research/dump_clips.py`，实测）：
+
+| 姿势片段 | eyeBlinkRight | eyeSquintRight | eyeWideRight |
+| --- | --- | --- | --- |
+| `Eye_Lid_Blink_Right` | **100** | 0 | 0 |
+| `Eye_Lid_Neutral_Right` | 0 | 0 | 0 |
+| `Eye_Lid_Wide_Right` | 0 | 0 | **100** |
+| **`Eye_Lid_Squint_Right`** | **90** | **100** | 0 |
+| `Eye_Open_Squint_Right` | 0 | **100** | 0 |
+
+三点关键：
+
+1. **每个姿势写的都是同样那三个键**（blink / squint / wide），只是值不同 ——
+   所以它们是**同一棵 FreeformCartesian2D(开合 × 眯眼) 树**的五个格子。
+2. **"眯眼"这个姿势里自己带了 blink 90**。作者把"眯眼时眼睛有多闭"直接摆进姿势里，
+   于是"blink 高 + squint 高"落在 2D 空间里一个**已经被摆好的点**，不是两个形变相加。
+3. **树是插值、权重和恒为 1**，所以合成结果**永远不会超过最强的那个姿势**；
+   而我们的裸树是"两个独立子节点各自权重 0..1"，两者相加自然就翻倍。
+
+**这就是"为什么眼睑是 2D 而嘴是 1D"**：不是好看，是必须 —— 会互相叠加的语义只能进同一棵树。
+
+### 21.2 UE 家族：模型上直接放一个**组合校正键**
+
+同一套模板的 Unified Expressions 一族里，闭眼+眯眼有专门的键：
+`EyeClosedSquintCorrectiveRight`（以及 `EyeSquintRight` / `EyeWideRight` / `EyeClosedRight`）。
+姿势片段直接把它写进去 —— 组合本身就是模型作者交付的一部分。
+
+### 21.3 VRCFT 侧：有后处理修正器，但**没有**对眼睑做 blink×squint 抑制
+
+`VRCFaceTracking.Core/Params/Data/Mutation/Correctors.cs`（本地源码实测）：
+
+| 修正 | 默认 | 做法 |
+| --- | --- | --- |
+| `mouthClosedFix` | **开** | `MouthClosed = Math.Min(MouthClosed, JawOpen)` —— **夹断式** |
+| `lipSuckFix` | **开** | `LipSuckLowerLeft *= (1 - MouthLowerDownLeft)` —— **乘法式**（和我想的那个式子同形，但用在唇吸上） |
+| `eyeLidBlend` | **关（0）** | 把**对侧眼**的值混进来：`v*(1-b*0.5) + 对方*(b*0.5)`；作用于 `Openness` / `EyeWide` / `EyeSquint` 的左右 |
+| `eyeLookSymmetrize` | **关** | 只把**纵向** gaze 取平均（横向的收敛是 TODO） |
+
+也就是说，**VRCFT 对眼睑的处理是"不做抑制"**：它把眼睑开合做成**一只眼一个 `Openness` 参数**，
+眯眼是**另一个 shape**，两者怎么合**交给模型/模板**——也就是 21.1 的姿势，或者 21.2 的校正键。
+
+### 21.4 结论与我们的取舍
+
+| 方案 | 出处 | 评价 |
+| --- | --- | --- |
+| **眼睑做成 2D 树（开合 × 眯眼），姿势里带上闭眼量** | 模板（21.1） | **正解。** 我们已经有 `HoFaceBlendTreeKit.Grid2D`，生成器也能出这个底子 |
+| 模型上放组合校正键 | UE 家族（21.2） | 取决于模型有没有；有就用 |
+| 参数层乘法抑制 `squint *= 1 − blink` | 我原先的想法 | **形式在生态里有先例**（`lipSuckFix`），但**没有人把它用在眼睑上**。只能算"我们的补偿"，不是"沿用语义" |
+
+**另外两条顺手核实的**（跟双眼同步有关）：
+
+- VRCFT 的 `eyeLidBlend` **默认关**，而且它融合的是 `Openness` / `EyeWide` / `EyeSquint` 的左右，
+  **不含眼球横向**；横向由另一个开关 `eyeLookSymmetrize` 处理，且它只做纵向、横向标着 TODO。
+  （Jerry 的模板里另有 `EyeSync In/Out`，所以"横向要不要同步"在生态里是**模板层**的选择。）
+- 我们现在的实现把眼球横向的跨对同步做进了同一个开关里 —— 比 VRCFT 多、比 Jerry 一致。
+  保留，但要知道它不是 VRCFT 的行为。
+
+
 ### 20.7 面板这一版：汉化 + 默认值 + 果冻预设入口
 
 **默认值那个坑值得单独记一笔。** 默认 Inspector 的截图里，新加的目标是

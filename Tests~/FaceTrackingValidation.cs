@@ -434,6 +434,31 @@ public static class HoFaceTrackingValidation
                 "single-key mode keeps one side and zeroes the other, so the deformation is applied once ("
                 + single[blinkLeft].ToString("F2") + " / " + single[blinkRight].ToString("F2") + ")");
 
+            // ── 眯眼抑制（我们的补偿，默认关）：眨眼时把眯眼压下去，别让同一个形变写两遍 ──
+            int squintLeft = HoFaceTrackingChannels.IndexOf("eyeSquintLeft");
+            var squint = new float[52];
+            squint[blinkLeft] = 1f;
+            squint[squintLeft] = 0.8f;
+            HoFaceSuppression.Apply(squint, false, 1f);
+            Check(Mathf.Abs(squint[squintLeft] - 0.8f) < 0.0001f, "squint suppression off changes nothing");
+            HoFaceSuppression.Apply(squint, true, 1f);
+            Check(Mathf.Abs(squint[squintLeft]) < 0.0001f,
+                "suppression at full strength zeroes the squint while the eye is fully blinking ("
+                + squint[squintLeft].ToString("F2") + ")");
+
+            var halfSquint = new float[52];
+            halfSquint[blinkLeft] = 0.5f;
+            halfSquint[squintLeft] = 1f;
+            HoFaceSuppression.Apply(halfSquint, true, 1f);
+            Check(Mathf.Abs(halfSquint[squintLeft] - 0.5f) < 0.0001f,
+                "the compensation is proportional to how closed the eye is (0.5 blink -> half the squint)");
+
+            var untouchedSquint = new float[52];
+            untouchedSquint[squintLeft] = 0.8f;
+            HoFaceSuppression.Apply(untouchedSquint, true, 1f);
+            Check(Mathf.Abs(untouchedSquint[squintLeft] - 0.8f) < 0.0001f,
+                "no blink means no suppression at all");
+
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;
             Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);

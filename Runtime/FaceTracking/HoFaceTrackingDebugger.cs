@@ -51,6 +51,14 @@ namespace Hollow.HoUnityTools.FaceTracking
             + "打开这个只留左侧有值、右侧写 0，形变就只被应用一次。\n"
             + "代价：右侧键不再被驱动（要让基础动画拿回它，把那个通道的模式设成「释放」）。")]
         public bool eyeSyncSingleKey;
+        [Tooltip("眯眼抑制（**我们的补偿，不是参考做法**）：眨眼时把眯眼按乘法压下去。\n"
+            + "ARKit 的 blink 与 squint 在模型上可能闭的是同一块，裸输入里两者同时非 0，同一个形变被写两遍 → 过眨眼。\n"
+            + "参考实现**不做这个抑制**：它把会重叠的语义放进同一棵 2D 树（眼睑 = 开合 × 眯眼，"
+            + "而且「眯眼」那个姿势自带 blink 90），靠姿势插值避免相加；UE 家族则在模型上放组合校正键。\n"
+            + "这个开关只是在那套结构做出来之前的应急补偿，式子形如 VRCFT 的 lipSuckFix。")]
+        public bool squintSuppression;
+        [Tooltip("补偿力度。1 = 眨满时眯眼完全归零；0.5 = 只压一半。")]
+        [Range(0f, 1f)] public float squintSuppressionAmount = 1f;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
