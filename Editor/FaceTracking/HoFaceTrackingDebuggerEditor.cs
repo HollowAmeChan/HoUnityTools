@@ -71,6 +71,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (GUILayout.Button(new GUIContent("检查绑定", "只做解析，不改任何资产：列出能绑上的输出与找不到的键。"), GUILayout.Height(20))) Check(rig);
                 if (GUILayout.Button("定位控制器资产", GUILayout.Height(20)) && rig.faceController != null) { Selection.activeObject = rig.faceController; EditorGUIUtility.PingObject(rig.faceController); }
             }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                // 应用改动 = 就地手术：只重写 Ho/ 生成段，(EDIT THIS) 段和别的层一个字节都不动。
+                using (new EditorGUI.DisabledScope(
+                    Application.isPlaying || rig.targetAnimator == null || !(rig.faceController is AnimatorController)))
+                {
+                    if (GUILayout.Button(new GUIContent("应用改动",
+                        "把当前配置写进这个控制器：只重写 " + HoFaceAnimationAssets.DriveLayerName + " 那一段，\n"
+                        + HoFaceAnimationAssets.EditLayerName + " 段和其它任何层都不会被动。\n"
+                        + "这是反复用的那个按钮；「初始化控制器」只在开始时用一次。"), GUILayout.Height(20)))
+                        ApplyChanges(rig);
+                }
+                HoConstraintEditorControls.Flex();
+                if (rig.faceController is AnimatorController ac && !HasDriveLayer(ac))
+                    HoConstraintEditorControls.Caption("该控制器没有 " + HoFaceAnimationAssets.DriveLayerName + " 段，先初始化");
+            }
             using (new EditorGUI.DisabledScope(!Application.isPlaying))
                 if (GUILayout.Button(session == null ? "开始驱动" : "停止并交还动画", GUILayout.Height(24)))
                 {
@@ -301,6 +317,36 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     + "之后就改这个文件里的 (EDIT THIS) 段。";
             }
             catch (Exception e) { report = e.Message; }
+        }
+
+        /// <summary>
+        /// 应用改动：就地手术。只重写驱动段，`(EDIT THIS)` 段与其它层一个字节都不动。
+        /// 这是反复用的那个按钮；「初始化控制器」只在开始时用一次。
+        /// </summary>
+        private void ApplyChanges(HoFaceTrackingDebugger rig)
+        {
+            if (!(rig.faceController is AnimatorController controller))
+            {
+                report = "请先「初始化控制器」，或选一个本工具产出的控制器。";
+                return;
+            }
+
+            try
+            {
+                HoFaceAnimationAssets.Apply(controller, rig.targetAnimator);
+                EnsureChannels(rig);
+                EditorUtility.SetDirty(rig);
+                report = "已应用改动：重写了 " + HoFaceAnimationAssets.DriveLayerName + " 段；"
+                    + HoFaceAnimationAssets.EditLayerName + " 段未改动。";
+            }
+            catch (Exception e) { report = e.Message; }
+        }
+
+        private static bool HasDriveLayer(AnimatorController controller)
+        {
+            foreach (var layer in controller.layers)
+                if (layer.name == HoFaceAnimationAssets.DriveLayerName) return true;
+            return false;
         }
 
         /// <summary>把一个控制器资产的规模说出来，供覆盖确认框显示代价。</summary>

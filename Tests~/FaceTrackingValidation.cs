@@ -81,20 +81,40 @@ public static class HoFaceTrackingValidation
                 Check(compiled.bindings.TrueForAll(b => b.path == "Meshes/Face" && b.renderer == alternateMesh), "nested path remap resolves actual renderer");
             rig.pathRemaps.Clear();
             UnityEngine.Object.DestroyImmediate(alternate);
-            // ── 生成器结构：单图层 + 一棵 Direct 树 + Write Defaults 开 ──────────
+            // ── 生成器结构：驱动段（一棵 Direct 树）+ 扩展点，WD 开 ──────────────
             var layers = controller.layers;
-            var directState = layers[0].stateMachine.states[0].state;
-            var directTree = directState.motion as BlendTree;
-            Check(layers.Length == 1, "generator emits a single layer (was 52 layers, one per shape)");
-            Check(layers[0].stateMachine.states.Length == 1, "generator emits a single state");
-            Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "generator emits one Direct blend tree");
+            var directState = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
+            var directTree = directState != null ? directState.motion as BlendTree : null;
+            var editState = FindState(controller, HoFaceAnimationAssets.EditLayerName);
+            Check(layers.Length == 2, "generator emits drive layer + EDIT THIS extension point");
+            Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
+            Check(editState != null, "extension point is named " + HoFaceAnimationAssets.EditLayerName);
+            Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
             Check(directTree != null && directTree.children.Length == 52, "Direct tree has one child per shape");
-            Check(directState.writeDefaultValues, "Direct tree uses Write Defaults On");
+            Check(directState != null && directState.writeDefaultValues, "Direct tree uses Write Defaults On");
             bool ownParameters = true;
             if (directTree != null)
                 foreach (var child in directTree.children)
                     if (!child.directBlendParameter.StartsWith("ARKit/", StringComparison.Ordinal)) ownParameters = false;
             Check(ownParameters, "every Direct child is weighted by its own ARKit parameter");
+            Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
+                && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
+                "drive layer is managed, extension point is not");
+
+            // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
+            string controllerPath = AssetDatabase.GetAssetPath(controller);
+            int clipsBefore = CountClips(controllerPath);
+            int editStateBefore = editState.GetInstanceID();
+            var editMotionBefore = editState.motion;
+            HoFaceAnimationAssets.Apply(controller, animator);
+            var appliedDrive = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
+            var appliedEdit = FindState(controller, HoFaceAnimationAssets.EditLayerName);
+            Check(controller.layers.Length == 2, "apply keeps the layer count");
+            Check(appliedEdit != null && appliedEdit.GetInstanceID() == editStateBefore
+                && ReferenceEquals(appliedEdit.motion, editMotionBefore),
+                "apply leaves the EDIT THIS extension point untouched");
+            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 52, "apply rebuilds the drive tree");
+            Check(CountClips(controllerPath) == clipsBefore, "apply reuses clips instead of piling up sub-assets (" + clipsBefore + ")");
 
             // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
             //（0.6 的输入 → 98.98 → 246.28 → 1059.33），不能靠运气。
@@ -259,6 +279,18 @@ public static class HoFaceTrackingValidation
 
     private static float ProbeWeight(string shape) =>
         probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));
+
+    private static AnimatorState FindState(AnimatorController controller, string layerName)
+    {
+        foreach (var layer in controller.layers)
+            if (layer.name == layerName && layer.stateMachine != null && layer.stateMachine.states.Length > 0)
+                return layer.stateMachine.states[0].state;
+        return null;
+    }
+
+    private static int CountClips(string controllerPath) =>
+        System.Linq.Enumerable.Count(
+            System.Linq.Enumerable.OfType<AnimationClip>(AssetDatabase.LoadAllAssetsAtPath(controllerPath)));
 
     private static void DumpDirectController(AnimatorController controller)
     {

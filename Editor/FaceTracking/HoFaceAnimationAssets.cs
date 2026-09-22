@@ -167,8 +167,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return false;
         }
 
+        /// <summary>生成的驱动层名字。以 <see cref="LayerPrefix"/> 开头 = 归本工具管，重新应用时会被重写。</summary>
+        public const string LayerPrefix = "Ho/";
+        public const string DriveLayerName = "Ho/00 Drive";
+        /// <summary>留给用户手工加逻辑的层。<b>应用改动时永不触碰它。</b></summary>
+        public const string EditLayerName = "Ho/99 (EDIT THIS)";
+
         /// <summary>
-        /// 每个 ARKit 键一个片段、整份控制器只有 **一个图层 + 一棵 Direct 混合树**。
+        /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树，
+        /// 另加一个空的 <see cref="EditLayerName"/> 作为用户的扩展点。
         ///
         /// 为什么不是"一层一个键"：那是早期"接管 Animator"时代的绕法，理由是"Direct 树会归一化、
         /// 各通道互相削弱"——**实测否掉了**。同一个 Direct 树里 jawOpen=0.6 与 mouthSmileLeft=0.8
@@ -184,9 +191,88 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             if (animator == null) throw new InvalidOperationException("请先指定 Animator。");
             if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null) throw new InvalidOperationException("目标资产已存在，请选择新路径。");
-            var meshes = animator.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            AnimatorController controller = null;
+            try
+            {
+                controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
+                var layers = controller.layers;
+                layers[0].name = DriveLayerName;
+                controller.layers = layers;
+
+                var tree = new BlendTree { name = DriveLayerName + " Tree", blendType = BlendTreeType.Direct };
+                AssetDatabase.AddObjectToAsset(tree, controller);
+                var drive = controller.layers[0].stateMachine.AddState("驱动");
+                // 见方法注释：Direct 树必须配 Write Defaults 开，否则 (1-Σw) 会与当前值反复混合。
+                drive.writeDefaultValues = true;
+                drive.motion = tree;
+                PopulateDriveTree(controller, animator, tree);
+
+                // 扩展点：空层 + 空片段，用户可以在这里加自己的树/耦合。应用改动时保留。
+                controller.AddLayer(EditLayerName);
+                var withEdit = controller.layers;
+                int editIndex = withEdit.Length - 1;
+                var editLayer = withEdit[editIndex];
+                editLayer.defaultWeight = 1f;
+                withEdit[editIndex] = editLayer;
+                controller.layers = withEdit;
+                var edit = editLayer.stateMachine.AddState("你的逻辑");
+                edit.writeDefaultValues = true;
+                var empty = new AnimationClip { name = "EDIT_THIS_Empty" };
+                AssetDatabase.AddObjectToAsset(empty, controller);
+                edit.motion = empty;
+
+                EditorUtility.SetDirty(controller);
+                AssetDatabase.SaveAssets();
+                return controller;
+            }
+            catch { if (controller != null) AssetDatabase.DeleteAsset(assetPath); throw; }
+        }
+
+        /// <summary>
+        /// 应用改动：**就地手术**。只重写 <see cref="DriveLayerName"/> 那一段，
+        /// <see cref="EditLayerName"/> 与其它任何层一个字节都不动。
+        ///
+        /// 这是"组件 = 控制器的修改脚本"这句话的落点：反复应用不会吃掉用户的手工逻辑。
+        /// </summary>
+        public static void Apply(AnimatorController controller, Animator animator)
+        {
+            if (controller == null) throw new InvalidOperationException("先指定面部控制器。");
+            if (animator == null) throw new InvalidOperationException("先指定角色 Animator。");
+            var tree = FindDriveTree(controller);
+            if (tree == null)
+                throw new InvalidOperationException(
+                    "这个控制器里没有 " + DriveLayerName + " 段，看来不是本工具初始化的。请先用「初始化控制器」产出一个。");
+            PopulateDriveTree(controller, animator, tree);
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>本工具管得着的层（带前缀，且不是用户的扩展点）。</summary>
+        public static bool IsManagedLayer(string layerName) =>
+            !string.IsNullOrEmpty(layerName)
+            && layerName.StartsWith(LayerPrefix, StringComparison.Ordinal)
+            && layerName != EditLayerName;
+
+        private static BlendTree FindDriveTree(AnimatorController controller)
+        {
+            foreach (var layer in controller.layers)
+            {
+                if (layer.name != DriveLayerName) continue;
+                foreach (var state in layer.stateMachine.states)
+                    if (state.state.motion is BlendTree tree) return tree;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 按角色上真实存在的 ARKit 键重建 Direct 树的子节点。
+        /// 片段按名字复用（模型没变时就是同一批），参数缺了就补 —— 幂等，反复应用结果一致。
+        /// </summary>
+        private static void PopulateDriveTree(AnimatorController controller, Animator animator, BlendTree tree)
+        {
             var groups = new Dictionary<string, List<EditorCurveBinding>>(StringComparer.Ordinal);
-            foreach (var mesh in meshes)
+            foreach (var mesh in animator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 if (mesh.sharedMesh == null || mesh.GetComponentInParent<Animator>() != animator) continue;
                 foreach (string shape in HoFaceTrackingChannels.Names)
@@ -196,37 +282,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     list.Add(EditorCurveBinding.FloatCurve(AnimationUtility.CalculateTransformPath(mesh.transform, animator.transform), typeof(SkinnedMeshRenderer), "blendShape." + shape));
                 }
             }
+
             if (groups.Count == 0) throw new InvalidOperationException("Animator 子级没有匹配标准 ARKit 名称的形态键。");
-            AnimatorController controller = null;
-            try
+
+            // 复用已有片段：这样反复应用不会把子资产越堆越多。
+            var existing = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+            string path = AssetDatabase.GetAssetPath(controller);
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                if (asset is AnimationClip clip && clip.name != "EDIT_THIS_Empty") existing[clip.name] = clip;
+
+            var parameters = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var p in controller.parameters) parameters.Add(p.name);
+
+            tree.children = new ChildMotion[0];
+            foreach (var pair in groups)
             {
-                controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
-                var tree = new BlendTree { name = "ARKit Direct", blendType = BlendTreeType.Direct };
-                AssetDatabase.AddObjectToAsset(tree, controller);
-                foreach (var pair in groups)
+                string parameter = "ARKit/" + pair.Key;
+                if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
+
+                if (!existing.TryGetValue(pair.Key, out var clip))
                 {
-                    string parameter = "ARKit/" + pair.Key;
-                    controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
                     // 一个键只需要一个"满值"片段：权重由参数给，参数为 0 时它贡献 0。
-                    var clip = new AnimationClip { name = pair.Key, frameRate = 60f };
+                    clip = new AnimationClip { name = pair.Key, frameRate = 60f };
                     foreach (var binding in pair.Value)
                         AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 1f / 60f, 100f));
                     AssetDatabase.AddObjectToAsset(clip, controller);
-                    tree.AddChild(clip);
-                    var children = tree.children;
-                    children[children.Length - 1].directBlendParameter = parameter;
-                    tree.children = children;
                 }
 
-                var root = controller.layers[0].stateMachine.AddState("ARKit");
-                // 见方法注释：Direct 树必须配 Write Defaults 开，否则 (1-Σw) 会与当前值反复混合。
-                root.writeDefaultValues = true;
-                root.motion = tree;
-                EditorUtility.SetDirty(controller);
-                AssetDatabase.SaveAssets();
-                return controller;
+                tree.AddChild(clip);
+                var children = tree.children;
+                children[children.Length - 1].directBlendParameter = parameter;
+                tree.children = children;
             }
-            catch { if (controller != null) AssetDatabase.DeleteAsset(assetPath); throw; }
         }
     }
 }
