@@ -71,7 +71,7 @@ public static class HoFaceTrackingValidation
             float gateDefault = -1f;
             foreach (var p in controller.parameters)
             {
-                if (!p.name.StartsWith("Ho/Gate/", StringComparison.Ordinal)) continue;
+                if (!p.name.StartsWith("Ho/Drive/Gate/", StringComparison.Ordinal)) continue;
                 gateParameters++;
                 gateDefault = p.defaultFloat;
             }
@@ -114,7 +114,7 @@ public static class HoFaceTrackingValidation
             Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
             Check(editState != null, "extension point is named " + HoFaceAnimationAssets.EditLayerName);
             Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
-            // 分组 + 眼睑 2D 子树：根树现在是 4 个子节点（眼睑左 / 眼睑右 / 眼 / 唇）。
+            // 分组 + 眼睑 2D 子树：根树现在是 4 个子节点（LidL / LidR / EyeRegion / LipRegion）。
             Check(directTree != null && directTree.children.Length == 4,
                 "drive tree = two eyelid 2D trees + two region subtrees ("
                 + (directTree != null ? directTree.children.Length : -1) + ")");
@@ -123,6 +123,7 @@ public static class HoFaceTrackingValidation
             int lidTrees = 0, flatEye = 0, flatLip = 0;
             bool leavesAreArkit = directTree != null;
             BlendTree lidLeft = null;
+            BlendTree lidRight = null;
             if (directTree != null)
             {
                 foreach (var child in directTree.children)
@@ -132,6 +133,7 @@ public static class HoFaceTrackingValidation
                     {
                         lidTrees++;
                         if (lidLeft == null) lidLeft = lid;
+                        else if (lidRight == null) lidRight = lid;
                         continue;
                     }
 
@@ -203,6 +205,38 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(cornerBlink - 100f) < 0.01f && Mathf.Abs(cornerSquint) < 0.01f,
                 "the 闭+眯 corner is authored instead of left to the engine: blink 100 + squint 0 = a designed max of 100 ("
                 + cornerBlink + " / " + cornerSquint + ")");
+
+            // ── 命名：格子名必须自带轴语义与格点，索引必须和树里真正用的格点一致 ──────
+            // 名字是唯一能把「树里的格子」和「去 DCC 做形态键时的那张清单」对上的东西，
+            // 所以这里逐字校验，不让它悄悄漂。
+            var lidNames = new System.Collections.Generic.List<string>();
+            bool namesMatchPattern = true, namesMatchGrid = true;
+            foreach (var lidTree in new[] { lidLeft, lidRight })
+            {
+                if (lidTree == null) continue;
+                foreach (var child in lidTree.children)
+                {
+                    string clipName = child.motion != null ? child.motion.name : string.Empty;
+                    lidNames.Add(clipName);
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(clipName,
+                        "^(LidL|LidR)_BlinkWide_Squint__[A-Za-z]+__3x2_[0-9]_[0-9]$"))
+                        namesMatchPattern = false;
+
+                    string[] parts = clipName.Split(new[] { "__" }, StringSplitOptions.None);
+                    if (parts.Length != 3) { namesMatchGrid = false; continue; }
+                    string[] grid = parts[2].Split('_');
+                    if (grid.Length != 3 || grid[0] != "3x2") { namesMatchGrid = false; continue; }
+                    var expectedPosition = HoFaceNaming.LidPosition(grid[1][0] - '0', grid[2][0] - '0');
+                    if ((child.position - expectedPosition).sqrMagnitude > 0.0001f) namesMatchGrid = false;
+                }
+            }
+
+            Check(lidNames.Count == 12 && new System.Collections.Generic.HashSet<string>(lidNames).Count == 12,
+                "both eyes carry six uniquely named grid cells (" + lidNames.Count + ")");
+            Check(namesMatchPattern,
+                "cell names carry tree + both axis semantics + art + grid size + indices ("
+                + (lidNames.Count > 0 ? lidNames[0] : "none") + ")");
+            Check(namesMatchGrid, "the indices inside the name are the position the tree actually uses");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
                 && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
                 "drive layer is managed, extension point is not");
@@ -216,6 +250,9 @@ public static class HoFaceTrackingValidation
                 + HoFaceAnimationAssets.JellyParameterXName + " / " + HoFaceAnimationAssets.JellyParameterYName + ")");
 
             // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
+            // 改名不能留僵尸参数：先注入两个历史名字，apply 必须把它们清掉（只动 Ho/ 命名空间）。
+            controller.AddParameter("Ho/LidLeft.X", AnimatorControllerParameterType.Float);
+            controller.AddParameter("Ho/Gate/Eye", AnimatorControllerParameterType.Float);
             string controllerPath = AssetDatabase.GetAssetPath(controller);
             int clipsBefore = CountClips(controllerPath);
             int editStateBefore = editState.GetInstanceID();
@@ -229,11 +266,36 @@ public static class HoFaceTrackingValidation
                 "apply leaves the EDIT THIS extension point untouched");
             Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 4, "apply rebuilds the drive tree");
             int regionTrees = 0;
+            var wantedTrees = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+            {
+                HoFaceNaming.LidTree(0), HoFaceNaming.LidTree(1),
+                HoFaceNaming.RegionTree(HoFaceGate.Eye), HoFaceNaming.RegionTree(HoFaceGate.Lip)
+            };
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
-                if (asset is BlendTree region && region.name.StartsWith(HoFaceAnimationAssets.RegionTreePrefix, StringComparison.Ordinal))
+                if (asset is BlendTree region && wantedTrees.Contains(region.name))
                     regionTrees++;
             Check(regionTrees == 4, "re-applying does not pile up orphan subtrees ("
                 + regionTrees + " — two regions + two eyelid trees)");
+
+            bool legacyParamsGone = true, axisParamsPresent = true;
+            foreach (var p in controller.parameters)
+            {
+                if (p.name == "Ho/LidLeft.X" || p.name == "Ho/Gate/Eye") legacyParamsGone = false;
+            }
+
+            for (int side = 0; side < 2; side++)
+                for (int axis = 0; axis < 2; axis++)
+                {
+                    string wanted = HoFaceNaming.LidAxis(side, axis == 0);
+                    bool found = false;
+                    foreach (var p in controller.parameters)
+                        if (p.name == wanted) found = true;
+                    if (!found) axisParamsPresent = false;
+                }
+
+            Check(legacyParamsGone, "renaming prunes the old Ho/Gate/* and Ho/Lid*.X|Y parameters (no zombies)");
+            Check(axisParamsPresent, "both eyes expose self-describing axis parameters ("
+                + HoFaceNaming.LidAxis(0, true) + " / " + HoFaceNaming.LidAxis(0, false) + ")");
             bool obsoleteGone = true;
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
                 if (asset is AnimationClip stale && stale.name == "eyeBlinkLeft")

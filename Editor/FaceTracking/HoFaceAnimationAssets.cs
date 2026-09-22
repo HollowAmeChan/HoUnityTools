@@ -186,17 +186,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 两个**区域门控**参数。区域子树挂在驱动层根树上，权重就是它 —— 于是"这块驱动算不算数"
         /// 是一个**参数**，可以被任何东西驱动（我们自己的会话、用户的层、以后的菜单），
         /// 而不是只能靠重新生成控制器来切。
+        ///
+        /// 名字统一由 <see cref="HoFaceNaming"/> 给（<c>Ho/Drive/Gate/Eye</c> / <c>…/Lip</c>）。
         /// </summary>
-        public const string EyeGateName = "Ho/Gate/Eye";
-        public const string LipGateName = "Ho/Gate/Lip";
+        public static string EyeGateName => HoFaceNaming.Gate(HoFaceGate.Eye);
+        public static string LipGateName => HoFaceNaming.Gate(HoFaceGate.Lip);
 
-        /// <summary>区域子树的名字前缀（清理旧子树靠它认领，别改）。</summary>
-        public const string RegionTreePrefix = DriveLayerName + " · ";
+        public static string GateParameterName(HoFaceGate gate) => HoFaceNaming.Gate(gate);
 
-        public static string GateParameterName(HoFaceGate gate) => gate == HoFaceGate.Eye ? EyeGateName : LipGateName;
-
-        public static string RegionTreeName(HoFaceGate gate) =>
-            RegionTreePrefix + (gate == HoFaceGate.Eye ? "眼" : "唇");
+        public static string RegionTreeName(HoFaceGate gate) => HoFaceNaming.RegionTree(gate);
 
         /// <summary>
         /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树，
@@ -332,10 +330,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 旧结构先记下来：重建后没被用上的要销毁（区域子树 + 眼睑 2D 树），
             // 否则每应用一次就多留一棵孤儿树。
-            var stale = new List<BlendTree>();
+            //
+            // 判据是**结构**，不是名字：驱动树下面的一切都是我们生成的（用户自己的逻辑在
+            // (EDIT THIS) 层里），所以旧子节点连同**它们自己的子片段**一起清 —— 而且只清
+            // **本控制器文件里的子资产**（GetAssetPath == path），外部资产一根都不碰。
+            // 名字不参与归属判断，于是"改名"（比如这次给六个格子换命名）不会漏清理。
+            var stale = new HashSet<Object>();
             foreach (var child in tree.children)
-                if (child.motion is BlendTree old && IsOurs(old.name))
-                    stale.Add(old);
+            {
+                if (child.motion == null || AssetDatabase.GetAssetPath(child.motion) != path) continue;
+                stale.Add(child.motion);
+                if (child.motion is BlendTree oldTree)
+                    foreach (var sub in oldTree.children)
+                        if (sub.motion != null && AssetDatabase.GetAssetPath(sub.motion) == path)
+                            stale.Add(sub.motion);
+            }
 
             tree.children = new ChildMotion[0];
             var keep = new HashSet<Object> { tree };
@@ -363,7 +372,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 for (int pose = 0; pose < LidPoses.Length; pose++)
                 {
-                    string clipName = LidTreeName(side) + " " + LidPoses[pose].Name;
+                    var cell = LidPoses[pose];
+                    // 名字由 HoFaceNaming 统一给：<树>_<x语义>_<y语义>__<格语义>__<格数>_<x>_<y>。
+                    // 名字带轴语义与格点，**不带键名** —— 具体这格写哪几个键、各多少值，
+                    // 见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md 的对照表。
+                    string clipName = HoFaceNaming.LidCell(side, cell.XEnd, cell.YEnd, cell.X, cell.Y);
                     if (!existing.TryGetValue(clipName, out var clip))
                     {
                         clip = new AnimationClip { name = clipName, frameRate = 60f };
@@ -375,9 +388,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             AnimationUtility.SetEditorCurve(clip, binding, null);
                     }
 
-                    WriteLidPose(clip, groups, suffix, LidPoses[pose]);
+                    WriteLidPose(clip, groups, suffix, cell);
                     keep.Add(clip);
-                    lid.AddChild(clip, LidPoses[pose].Position);
+                    // 格点（轴值）由索引推出来，不再手写坐标 —— 索引是名字的一部分，两者不可能漂。
+                    lid.AddChild(clip, HoFaceNaming.LidPosition(cell.X, cell.Y));
                 }
 
                 AddChild(tree, lid, EyeGateName);
@@ -413,6 +427,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             foreach (string parameter in arkitParameters)
                 if (parameters.Add(parameter)) controller.AddParameter(parameter, AnimatorControllerParameterType.Float);
 
+            // 参数改名后要清旧的：驱动层参数现在统一收在 Ho/Drive 下（门控 + 眼睑两根轴），
+            // 历史名字（Ho/Gate/*、Ho/LidLeft.X|Y）留着只会变成没人写也没人读的僵尸参数。
+            // 只动 Ho/ 命名空间 —— ARKit/ 是输入通道；Ho/Jelly* 还被 park 的混合树小工具引用着，
+            // 删它要把那边一起牵进来，单独做。
+            var wanted = new HashSet<string>(StringComparer.Ordinal)
+            {
+                EyeGateName, LipGateName, JellyParameterXName, JellyParameterYName
+            };
+            foreach (string axis in LidAxisNames()) wanted.Add(axis);
+            for (int i = controller.parameters.Length - 1; i >= 0; i--)
+            {
+                string name = controller.parameters[i].name;
+                if (name.StartsWith(LayerPrefix, StringComparison.Ordinal) && !wanted.Contains(name))
+                    controller.RemoveParameter(i);
+            }
+
             foreach (var old in stale)
                 if (!keep.Contains(old)) UnityEngine.Object.DestroyImmediate(old, true);
 
@@ -428,21 +458,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// 眼睑 2D 树的六个姿势。前五格的数值来自参考实现五个片段的实测值（见文档 21.1）；
-        /// **最后一格 `闭+眯(1,1)` 是我们补的** —— 参考实现没有这一格，但它的参数范围可能让那个角到不了，
+        /// **最后一格 `闭+眯(2,1)` 是我们补的** —— 参考实现没有这一格，但它的参数范围可能让那个角到不了，
         /// 而我们的两根轴是独立参数，**真的会到**（"眨满 + 眯眼"就是过眨眼的工况）。
         /// 不为能到达的角摆姿势，行为就交给引擎的边界行为；摆上之后那个角由**作者**决定。
         ///
         /// 这一格的含义：**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定。
         /// 默认给 `blink 100 + squint 0`：两键加和正好 100，不再过闭合。
+        ///
+        /// 字段：X 轴端语义 / Y 轴端语义（空 = 该轴中性，参与拼格名）、格索引（名字里的 `_x_y`，
+        /// 也是树里格点的来源）、三个键的百分值。<b>轴值不手写</b>，由索引推（<see cref="HoFaceNaming.LidPosition"/>）。
         /// </summary>
-        private static readonly (string Name, Vector2 Position, float Blink, float Wide, float Squint)[] LidPoses =
+        private static readonly (string XEnd, string YEnd, int X, int Y, float Blink, float Wide, float Squint)[] LidPoses =
         {
-            ("睁大", new Vector2(-1f, 0f), 0f, 100f, 0f),
-            ("中性", new Vector2(0f, 0f), 0f, 0f, 0f),
-            ("闭", new Vector2(1f, 0f), 100f, 0f, 0f),
-            ("眯", new Vector2(0f, 1f), 90f, 0f, 100f),
-            ("睁大+眯", new Vector2(-1f, 1f), 0f, 100f, 100f),
-            ("闭+眯", new Vector2(1f, 1f), 100f, 0f, 0f)
+            ("Wide", "", 0, 0, 0f, 100f, 0f),
+            ("", "", 1, 0, 0f, 0f, 0f),
+            ("Blink", "", 2, 0, 100f, 0f, 0f),
+            ("", "Squint", 1, 1, 90f, 0f, 100f),
+            ("Wide", "Squint", 0, 1, 0f, 100f, 100f),
+            ("Blink", "Squint", 2, 1, 100f, 0f, 0f)
         };
 
         /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>
@@ -452,11 +485,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static string LidShape(string suffix, string prefix) => prefix + suffix;
 
-        private static string LidTreeName(int side) => RegionTreePrefix + (side == 0 ? "眼睑左" : "眼睑右");
+        private static string LidTreeName(int side) => HoFaceNaming.LidTree(side);
 
         /// <summary>眼睑 2D 的两根轴：开合（-1 睁大 / +1 闭）与眯眼（0~1）。由会话生产。</summary>
-        public static string LidAxisName(int side, bool horizontal) =>
-            "Ho/Lid" + (side == 0 ? "Left" : "Right") + (horizontal ? ".X" : ".Y");
+        public static string LidAxisName(int side, bool horizontal) => HoFaceNaming.LidAxis(side, horizontal);
 
         private static IEnumerable<string> LidAxisNames()
         {
@@ -467,9 +499,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
-        private static bool IsOurs(string name) =>
-            !string.IsNullOrEmpty(name) && name.StartsWith(RegionTreePrefix, StringComparison.Ordinal);
-
         private static bool HasAny(Dictionary<string, List<EditorCurveBinding>> groups, params string[] shapes)
         {
             foreach (string shape in shapes)
@@ -478,7 +507,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static void WriteLidPose(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
-            string suffix, (string Name, Vector2 Position, float Blink, float Wide, float Squint) pose)
+            string suffix, (string XEnd, string YEnd, int X, int Y, float Blink, float Wide, float Squint) pose)
         {
             WriteShape(clip, groups, "eyeBlink" + suffix, pose.Blink);
             WriteShape(clip, groups, "eyeWide" + suffix, pose.Wide);
