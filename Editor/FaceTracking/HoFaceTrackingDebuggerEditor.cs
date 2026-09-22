@@ -96,8 +96,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
             if (!string.IsNullOrEmpty(report)) EditorGUILayout.HelpBox(report, reportIsError ? MessageType.Warning : MessageType.Info);
-            if (session != null && !string.IsNullOrEmpty(session.Warning))
-                EditorGUILayout.HelpBox(session.Warning, MessageType.Warning);
             if (session != null && session.Compiled != null && session.Compiled.warnings.Count > 0)
                 EditorGUILayout.HelpBox(string.Join("\n", session.Compiled.warnings.Take(8)), MessageType.Warning);
 

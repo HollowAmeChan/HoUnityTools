@@ -158,7 +158,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (selected[i] != nextSelected[i]) changed = true;
                 selected[i] = nextSelected[i];
             }
-            CheckGazeOverlap();
             string stamp = MappingStamp();
             if (changed || sourceController != Rig.faceController || stamp != mappingStamp)
             {
@@ -190,32 +189,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 written = true;
             }
         }
-
-        /// <summary>
-        /// 面捕凝视与 HoLookAt 眼球都开时**提示**，但不阻塞。
-        ///
-        /// 这两边各有一个开关，怎么分工是用户的事：LookAt 不是一定存在的，默认就把面捕凝视关掉
-        /// 反而是错的（不装 LookAt 的人会奇怪为什么眼珠不转）。所以这里只把"两边都在写眼睛方向"
-        /// 这件事说出来 —— 硬报错会让默认配置 + 装了 LookAt 的人直接起不来。
-        /// </summary>
-        private void CheckGazeOverlap()
-        {
-            Warning = "";
-            bool gaze = false;
-            for (int i = 0; i < selected.Length; i++)
-                if (selected[i] && HoFaceTrackingChannels.Region(HoFaceTrackingChannels.Names[i]) == HoFaceRegion.Gaze) { gaze = true; break; }
-            if (!gaze) return;
-            foreach (var lookAt in animator.GetComponentsInChildren<HoLookAtConstraint>(true))
-                if (lookAt.EyeOutputEnabled)
-                {
-                    Warning = "面捕的凝视键和 HoLookAt 的眼球同时在写眼睛方向，看起来会转两次。"
-                        + "两个开关留一个就好：要么关掉这边「凝视形态键交给面捕」，要么把 LookAt 的眼睛外部权重设为 0。";
-                    return;
-                }
-        }
-
-        /// <summary>不阻塞的提示（目前只有凝视重叠一种）。没问题时是空串。</summary>
-        public string Warning { get; private set; } = "";
 
         private static float Finite01(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 0 : Mathf.Clamp01(value);
 
