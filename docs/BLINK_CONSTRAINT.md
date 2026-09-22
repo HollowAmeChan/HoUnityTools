@@ -1,4 +1,4 @@
-# 眨眼约束（自动眨眼 + 果冻眼）设计
+﻿# 眨眼约束（自动眨眼 + 果冻眼）设计
 
 `HoUnityTools/Constraints/Ho Blink Constraint`。一个组件、两个模块：
 

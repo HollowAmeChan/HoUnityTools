@@ -1,4 +1,4 @@
-# 注视约束（眼睛 + 头部看向目标）设计
+﻿# 注视约束（眼睛 + 头部看向目标）设计
 
 `HoUnityTools/Constraints/Ho Look At Constraint`。让角色的**眼睛形态键**和**头部骨骼**尽量朝向一个目标，两种目标模式：
 
