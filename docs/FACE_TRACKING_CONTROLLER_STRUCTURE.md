@@ -178,16 +178,17 @@ Ho/99 (EDIT THIS)                                       ← 空层 + 空片段�
 都从那里取词，不许各自拼字符串（散着写迟早会漂，用例里逐字校验就是为了拦这个）。
 
 ```
-<树>_<x语义>_<y语义>__<方阵>X<x>Y<y>          例：LidL_BlinkWide_Squint__A3X2Y2
+<树>__<x语义>__<y语义>__<方阵>X<x>Y<y>          例：LidL__BlinkWide__Squint__A3X2Y2
 ```
 
-`__` 左边回答"这棵树在混**哪两根轴**"，右边回答"**哪一格**"：
+**每个字段都用 `__`（双下划线）分隔，名字里不出现单下划线** —— 于是解析不需要任何约定，
+四段各自回答一个问题：
 
 | 字段 | 规则 |
 | --- | --- |
 | `<树>` | `LidL` / `LidR` / …。**必须有**：左右两棵树除了名字完全一样，不带侧就会重名 |
-| `<x语义>` `<y语义>` | 两根轴的语义，**正端在前**：眼睑开合「闭 / 睁大」→ `BlinkWide`；单端轴只写正端 → `Squint`。**光看片段名就知道这棵树在混什么**，不必回头翻代码 |
-| `__` | 唯一的结构分隔符：左边是轴语义，右边是坐标 |
+| `<x语义>` | X 轴的语义，**正端在前**：眼睑开合「闭 / 睁大」→ `BlinkWide` |
+| `<y语义>` | Y 轴的语义，同上：单端轴只写正端 → `Squint`。**这两段合起来就是"这棵树在混什么"**，光看片段名就知道，不必回头翻代码 |
 | `<方阵>` | `A` + 每轴刻度数，**必定方形**（两根轴同一套刻度）。`A3` = 每轴 3 个刻度 |
 | `X<x>Y<y>` | 坐标：**从 0 开始、左下为原点、永不出现负号**；可以取小数（`X0.5`） |
 
@@ -205,11 +206,11 @@ Ho/99 (EDIT THIS)                                       ← 空层 + 空片段�
 **下面按 Unity 2D 混合树图的朝向打印**（坐标随轴值增加 → `Y2` 在图的上方、`Y0` 在下方）：
 
 ```
-LidL_BlinkWide_Squint__A3X0Y2 睁大+眯   …X1Y2 眯   …X2Y2 闭+眯     ← Y2（眯满）= 图的上方
-LidL_BlinkWide_Squint__A3X0Y1 （空）    …X1Y1 （空） …X2Y1 （空）   ← Y1（半眯，没摆）
-LidL_BlinkWide_Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        ← Y0（不眯）= 图的下方
+LidL__BlinkWide__Squint__A3X0Y2 睁大+眯   …X1Y2 眯   …X2Y2 闭+眯     ← Y2（眯满）= 图的上方
+LidL__BlinkWide__Squint__A3X0Y1 （空）    …X1Y1 （空） …X2Y1 （空）   ← Y1（半眯，没摆）
+LidL__BlinkWide__Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        ← Y0（不眯）= 图的下方
 ```
-（上表为省宽度省略了公共前缀 `LidL_BlinkWide_Squint__`。）
+（上表为省宽度省略了公共前缀 `LidL__BlinkWide__Squint__`。）
 
 > **原点为什么在左下、为什么不是 DX 的左上。** DX 的左上原点是**光栅/渲染目标/屏幕**的约定
 > （行主序 + V 轴向下），它管纹理与帧缓冲，不管参数网格；而且 Unity 自己就两套并用
@@ -224,12 +225,12 @@ LidL_BlinkWide_Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        ←
 
 | 片段名 | 坐标 | 树里 `Pos`（轴值） | 这一格写的键与值 |
 | --- | --- | --- | --- |
-| `LidL_BlinkWide_Squint__A3X0Y2` | X0 Y2 | (−1, +1) | `eyeWideLeft 100` + `eyeSquintLeft 100` |
-| `LidL_BlinkWide_Squint__A3X1Y2` | X1 Y2 | (0, +1) | `eyeBlinkLeft 90` + `eyeSquintLeft 100` |
-| `LidL_BlinkWide_Squint__A3X2Y2` | X2 Y2 | (+1, +1) | `eyeBlinkLeft 100` |
-| `LidL_BlinkWide_Squint__A3X0Y0` | X0 Y0 | (−1, 0) | `eyeWideLeft 100` |
-| `LidL_BlinkWide_Squint__A3X1Y0` | X1 Y0 | (0, 0) | 全 0 |
-| `LidL_BlinkWide_Squint__A3X2Y0` | X2 Y0 | (+1, 0) | `eyeBlinkLeft 100` |
+| `LidL__BlinkWide__Squint__A3X0Y2` | X0 Y2 | (−1, +1) | `eyeWideLeft 100` + `eyeSquintLeft 100` |
+| `LidL__BlinkWide__Squint__A3X1Y2` | X1 Y2 | (0, +1) | `eyeBlinkLeft 90` + `eyeSquintLeft 100` |
+| `LidL__BlinkWide__Squint__A3X2Y2` | X2 Y2 | (+1, +1) | `eyeBlinkLeft 100` |
+| `LidL__BlinkWide__Squint__A3X0Y0` | X0 Y0 | (−1, 0) | `eyeWideLeft 100` |
+| `LidL__BlinkWide__Squint__A3X1Y0` | X1 Y0 | (0, 0) | 全 0 |
+| `LidL__BlinkWide__Squint__A3X2Y0` | X2 Y0 | (+1, 0) | `eyeBlinkLeft 100` |
 
 **眯那一行（`Y2`）的 `blink 90` 是这张表最有价值的一条**：眯眼自带眨眼量，所以"又眨又眯"永远不会
 加和成 200。名字里已经有轴语义（知道在混什么）与坐标（知道哪一格），**但回答不了"这一格写多少"**

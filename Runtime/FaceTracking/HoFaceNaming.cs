@@ -9,9 +9,10 @@ namespace Hollow.HoUnityTools.FaceTracking
     ///
     /// 格子名格式：
     /// <code>
-    /// &lt;树&gt;_&lt;x语义&gt;_&lt;y语义&gt;__&lt;方阵&gt;X&lt;x刻度&gt;Y&lt;y刻度&gt;        例：LidL_BlinkWide_Squint__A3X2Y2
+    /// &lt;树&gt;__&lt;x语义&gt;__&lt;y语义&gt;__&lt;方阵&gt;X&lt;x刻度&gt;Y&lt;y刻度&gt;   例：LidL__BlinkWide__Squint__A3X2Y2
     /// </code>
-    /// <c>__</c> 左边回答"这棵树在混**哪两根轴**"，右边回答"**哪一格**"。
+    /// **每个字段都用 `__`（双下划线）分隔，名字里不出现单下划线** —— 于是解析不需要任何约定：
+    /// 四段依次是「哪棵树」「X 轴在混什么」「Y 轴在混什么」「哪一格」。
     ///
     /// 规则：
     /// <list type="bullet">
@@ -27,8 +28,8 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 否则在纹理边界上必出一次上下翻。</item>
     /// <item>**允许小数刻度**（如 <c>X0.5</c>）：坐标是"网格位置"而不是"第几格"，所以轴的密度
     /// 变了也不用改字段格式 —— 这是方阵相对"格数 + 序号"最实际的好处。</item>
-    /// <item>名字里**带轴语义、不带驱动键名**：<c>__</c> 前是"哪两根轴"（<c>BlinkWide</c> / <c>Squint</c>），
-    /// <c>__</c> 后是方阵与坐标。这样光看片段名就知道**这棵树在混什么**，不必回头翻代码或文档；
+    /// <item>名字里**带轴语义、不带驱动键名**：<c>__</c> 分出的四段依次是树 / X 轴语义 / Y 轴语义 / 方阵坐标。
+    /// 这样光看片段名就知道**这棵树在混什么**，不必回头翻代码或文档；
     /// 具体这一格写哪几个键、各多少值，仍在文档 §5.2 的对照表里。</item>
     /// </list>
     ///
@@ -78,9 +79,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                 ? Mathf.RoundToInt(step).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : step.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
-        /// <summary>2D 格子名：<c>LidL_BlinkWide_Squint__A3X2Y2</c>。</summary>
+        /// <summary>2D 格子名：<c>LidL__BlinkWide__Squint__A3X2Y2</c>。每个字段都用 <c>__</c> 分隔。</summary>
         public static string Cell2D(string treeName, string xSemantic, string ySemantic, string grid, float x, float y) =>
-            treeName + "_" + xSemantic + "_" + ySemantic + "__" + grid + "X" + Number(x) + "Y" + Number(y);
+            treeName + "__" + xSemantic + "__" + ySemantic + "__" + grid + "X" + Number(x) + "Y" + Number(y);
 
         /// <summary>
         /// 刻度 → 轴值：双边轴（有正负两端）铺满 −1..1，单边轴铺满 0..1。
@@ -100,7 +101,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         public static Vector2 LidPosition(float xStep, float yStep) =>
             new Vector2(LatticeValue(xStep, LidSteps, true), LatticeValue(yStep, LidSteps, false));
 
-        /// <summary>眼睑格子名：<c>LidL_BlinkWide_Squint__A3X1Y2</c>。</summary>
+        /// <summary>眼睑格子名：<c>LidL__BlinkWide__Squint__A3X1Y2</c>。</summary>
         public static string LidCell(int side, float xStep, float yStep) =>
             Cell2D(LidTree(side), LidOpenAxis, LidSquintAxis, LidGrid, xStep, yStep);
     }
