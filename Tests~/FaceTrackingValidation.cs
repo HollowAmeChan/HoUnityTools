@@ -424,6 +424,16 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(mixed[blinkLeft] - 0.5f) < 0.0001f && Mathf.Abs(mixed[blinkRight] - 0.5f) < 0.0001f,
                 "the mix chooses whose value wins (1 = 全用右眼)");
 
+            // 过眨眼的正解：模型上左右眨眼键**各自都能闭双眼**时，光合并值没用（形变还是写两遍），
+            // 必须只让一侧有值。
+            var single = new float[52];
+            single[blinkLeft] = 0.9f;
+            single[blinkRight] = 0.5f;
+            HoFaceEyeSync.Apply(single, true, 0.5f, true);
+            Check(Mathf.Abs(single[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(single[blinkRight]) < 0.0001f,
+                "single-key mode keeps one side and zeroes the other, so the deformation is applied once ("
+                + single[blinkLeft].ToString("F2") + " / " + single[blinkRight].ToString("F2") + ")");
+
             // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
             rig.deadZoneMouth = 0.2f;
             Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);

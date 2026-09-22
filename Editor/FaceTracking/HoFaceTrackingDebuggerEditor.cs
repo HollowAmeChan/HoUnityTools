@@ -212,6 +212,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Flex();
                 }
 
+                using (HoConstraintEditorControls.Row())
+                {
+                    SerializedProperty syncFlag = serializedObject.FindProperty("eyeSync");
+                    SerializedProperty single = serializedObject.FindProperty("eyeSyncSingleKey");
+                    using (new EditorGUI.DisabledScope(!syncFlag.boolValue))
+                    {
+                        single.boolValue = HoConstraintEditorControls.Toggle("单键双眼", single.boolValue,
+                            "模型上的左右眨眼键**各自都能闭双眼**时打开它。\n"
+                            + "那种模型光合并两个值治不了过眨眼 —— 同一个形变还是被写了两遍；\n"
+                            + "打开这个只留左侧有值、右侧写 0，形变就只被应用一次。\n"
+                            + "代价：右侧键不再被驱动（要让基础动画拿回它，把那个通道的模式设成「释放」）。");
+                    }
+
+                    HoConstraintEditorControls.Flex();
+                    HoConstraintEditorControls.Caption("左右键各管一只眼的模型不用开");
+                }
+
                 mappings = HoConstraintEditorControls.InlineFoldout(mappings, "路径重映射", "模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
                 if (mappings) EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }

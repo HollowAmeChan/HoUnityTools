@@ -35,9 +35,16 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         /// <summary>
         /// 就地把每一对的两个值朝同一个值靠。**关着时一个字节都不动**（默认就是关）。
-        /// 纯函数：直接在数组上跑，所以"过眨眼被治住了"这条可以直接断言，不用真机看。
+        ///
+        /// `singleKey`：对应**"左右眨眼键各自都能闭双眼"**的模型 —— 那种模型上，
+        /// 光把两个值合并**解决不了过眨眼**，因为同一个形变还是被写了两遍
+        /// （左右键各写一次）。这时只留一侧有值，另一侧写 0，形变就只被应用一次。
+        /// 代价是那一侧的键不再被驱动（保持 0）—— 要让基础动画拿回它，
+        /// 把那个通道的「模式」设成「释放」。
+        ///
+        /// 纯函数：直接在数组上跑，所以这两件事都能直接断言，不用真机看。
         /// </summary>
-        public static void Apply(float[] values, bool sync, float mix)
+        public static void Apply(float[] values, bool sync, float mix, bool singleKey = false)
         {
             if (values == null || !sync)
             {
@@ -56,7 +63,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 float shared = Mathf.Lerp(values[a], values[b], blend);
                 values[a] = shared;
-                values[b] = shared;
+                values[b] = singleKey ? 0.0f : shared;
             }
         }
 

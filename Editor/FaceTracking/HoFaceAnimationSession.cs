@@ -196,7 +196,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
             // 双眼同步：必须在"写参数"之前、平滑之后 —— 它作用在最终要被写出去的那组值上。
-            HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix);
+            HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
 
             // 区域门控：把"这块驱动算不算数"写成一个**参数**（而不是靠重新生成控制器来切）。
             // 于是它也能被别的东西驱动 —— 用户自己的层、以后的菜单、AFK 之类。

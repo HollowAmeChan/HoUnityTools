@@ -46,6 +46,11 @@ namespace Hollow.HoUnityTools.FaceTracking
         public bool eyeSync;
         [Tooltip("同步到哪个值：0 = 全用左眼，0.5 = 平均，1 = 全用右眼。")]
         [Range(0f, 1f)] public float eyeSyncMix = 0.5f;
+        [Tooltip("单键双眼：模型上的左右眨眼键**各自都能闭双眼**时打开它。\n"
+            + "那种模型光合并两个值治不了过眨眼 —— 同一个形变还是被写了两遍；\n"
+            + "打开这个只留左侧有值、右侧写 0，形变就只被应用一次。\n"
+            + "代价：右侧键不再被驱动（要让基础动画拿回它，把那个通道的模式设成「释放」）。")]
+        public bool eyeSyncSingleKey;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
