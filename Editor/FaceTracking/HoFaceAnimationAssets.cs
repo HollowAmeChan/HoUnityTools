@@ -91,7 +91,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         if (curve.type != typeof(SkinnedMeshRenderer) || !curve.propertyName.StartsWith("blendShape.", StringComparison.Ordinal))
                             throw new InvalidOperationException("首版面部控制器只允许形态键曲线：" + clip.name + " / " + curve.propertyName);
                         string shape = curve.propertyName.Substring("blendShape.".Length);
-                        if (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape))) continue;
+                        // **ARKit 的键走输入门控，非 ARKit 的键直接放行。**
+                        // 门控管的是"我们写哪些参数"，不是"控制器能动哪些键"。用户的果冻混合树
+                        // （或任何自己加的树）驱动的是自己的键，如果在这里被 `Allowed` 过滤掉，
+                        // 影子台上算出来的姿势就永远抄不回真模型 —— 表现是"果冻层看着在跑，
+                        // 脸上一点动静没有"。这一条是果冻改走混合树之后才暴露出来的。
+                        if (HoFaceTrackingChannels.IndexOf(shape) >= 0
+                            && (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape)))) continue;
                         string path = Remap(rig, curve.path);
                         Transform node = path.Length == 0 ? rig.targetAnimator.transform : rig.targetAnimator.transform.Find(path);
                         var renderer = node != null ? node.GetComponent<SkinnedMeshRenderer>() : null;
@@ -215,8 +221,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 drive.writeDefaultValues = true;
                 drive.motion = tree;
                 PopulateDriveTree(controller, animator, tree);
-                // 果冻参数先建出来（暂时还没有东西消费它）：下一步的果冻动画层会按它取姿势，
-                // 在那之前它至少可以被写、被观察，整条链路是通的。
+                // 果冻参数先建出来（暂时还没有东西消费它）：消费它的是**混合树**，由混合树小工具
+                // 建到用户自己的层里（子节点是用户自己选的键）。在那之前它至少可以被写、被观察，
+                // 整条链路是通的。参数空间是 [-1, 1]：0 = 静止，正 = 挤压（会过冲），负 = 回弹。
                 controller.AddParameter(JellyParameterXName, AnimatorControllerParameterType.Float);
                 controller.AddParameter(JellyParameterYName, AnimatorControllerParameterType.Float);
 

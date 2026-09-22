@@ -48,6 +48,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>会话第一帧的标记：那一帧把所有值一次到位，避免开场从 0 扫过来。</summary>
         private bool primed;
         private HoFaceJellyState jellyX, jellyY;
+        private readonly Dictionary<string, float> previews = new Dictionary<string, float>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// 调试预览：外部（混合树小工具的滑条）直接指定某个参数，在所有生产逻辑之后覆盖。
+        ///
+        /// 走这条路而不是直接 `animator.SetFloat`，是因为**预览必须走完整条管线** ——
+        /// 参数 → 影子上的混合树 → 被占用的键 → 真模型。否则预览看到的和实际跑起来看到的不是一回事。
+        /// </summary>
+        public void SetPreview(string parameter, float value)
+        {
+            if (string.IsNullOrEmpty(parameter)) return;
+            previews[parameter] = float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
+        }
+
+        public void ClearPreviews() => previews.Clear();
 
         /// <summary>果冻横向分量当前值（那个"带物理的参数"）。面板观测点，也是用例的观测点。</summary>
         public float JellyValueX => jellyX.value;
@@ -180,6 +195,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 shadow.SetFloat(channel.parameter, Smoothed[index]);
                 ControllerValues[index] = shadow.GetFloat(channel.parameter);
             }
+            foreach (var preview in previews)
+                if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
         }
 
         /// <summary>
@@ -206,8 +223,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 为什么是两个方向而不是一个强度：两个弹簧取不同频率时，两个分量的合成路径是一条
         /// Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回。取相同频率就退化成直线。
         ///
-        /// 这里只产参数。动画怎么按它们取姿势是下一步（网格列表 + 手选键 + 两条方向动画）——
-        /// 参数负责"每次都不一样"，动画负责"每次都好看"。
+        /// 这里只产参数。**消费它们是混合树**（2D FreeformCartesian，子节点是用户自己选的键，
+        /// 由混合树小工具建），参数负责"每次都不一样"，树的形状负责"每次都好看"。
+        ///
+        /// **参数是有符号的。** 眼睑信号是一段脉冲（0→1→0，约 150ms），脉冲输入下弹簧不是"趋近 1
+        /// 然后停住"，而是冲过 1 再**回弹到 0 以下**再收敛 —— 回弹才是果冻。所以这里不能夹到 0..1，
+        /// 否则整个负半周被削掉，剩下的只是一次单向挤压。夹到 [-1, 1] 只是防发散。
         /// </summary>
         private void StepJelly(float deltaTime)
         {
@@ -229,7 +250,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             HoFaceJelly.Step(ref jellyX, target, deltaTime, Rig.jellyFrequencyX, Rig.jellyDamping);
             HoFaceJelly.Step(ref jellyY, target, deltaTime, Rig.jellyFrequencyY, Rig.jellyDamping);
 
-            // 弹簧会过冲到 1 以上，写参数前夹回 0..1（过冲体现在曲线形状上，不是数值溢出）。
+            // 弹簧会过冲到 1 以上、回弹到 0 以下。夹到 [-1, 1] 只是为了给混合树一个稳定的参数空间，
+            // 不影响形状（过冲体现在轨迹上，不是数值溢出）。见 StepJelly 的注释。
             WriteJelly(Rig.jellyParameterX, jellyX.value);
             WriteJelly(Rig.jellyParameterY, jellyY.value);
         }
@@ -237,7 +259,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void WriteJelly(string parameter, float value)
         {
             if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
-                shadow.SetFloat(parameter, Mathf.Clamp01(value));
+                shadow.SetFloat(parameter, Mathf.Clamp(value, -1f, 1f));
         }
 
         private string MappingStamp()
