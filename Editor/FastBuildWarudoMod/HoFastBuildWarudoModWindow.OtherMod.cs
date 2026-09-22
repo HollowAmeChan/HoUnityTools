@@ -468,9 +468,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     {
                         context.warnings.Add(
                             "目录里没有名为 " + context.kindInfo.rootAssetName + " 的入口资产（" +
-                            context.kindInfo.rootAssetType + "）。已按类型「" +
-                            context.kindInfo.label + "」继续构建 —— 如果 Warudo 那边认不出来，" +
-                            "就说明这个入口名是硬约定。");
+                            context.kindInfo.rootAssetType + "）。已按类型「" + context.kindInfo.label +
+                            "」继续构建，但**这样构建出来的包 Warudo 用不了** —— " +
+                            "入口资产名是硬约定（道具实测：换成别的名字后不能正常使用并且报错）。" +
+                            "只有做这类验证实验时才该这么构建。");
                     }
                 }
             }
