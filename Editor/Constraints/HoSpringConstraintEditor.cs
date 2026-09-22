@@ -44,7 +44,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private SerializedProperty frequency;
         private SerializedProperty damping;
         private SerializedProperty gain;
-        private SerializedProperty targets;
+        private SerializedProperty targetsProperty;
         private SerializedProperty writingEnabled;
         private SerializedProperty mergeMode;
 
@@ -63,7 +63,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             frequency = Find("frequency");
             damping = Find("damping");
             gain = Find("gain");
-            targets = Find("targets");
+            targetsProperty = Find("targets");
             writingEnabled = Find("writingEnabled");
             mergeMode = Find("mergeMode");
         }
@@ -197,13 +197,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         // ── 目标 ──────────────────────────────────────────────────────────────
         private void DrawTargetSection(HoSpringConstraint component)
         {
-            string summary = targets.arraySize == 0 ? "未指定" : targets.arraySize + " 个";
+            string summary = targetsProperty.arraySize == 0 ? "未指定" : targetsProperty.arraySize + " 个";
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref targetExpanded, "目标", summary, TargetColor))
             {
                 return;
             }
 
-            for (int i = 0; i < targets.arraySize; i++)
+            for (int i = 0; i < targetsProperty.arraySize; i++)
             {
                 if (DrawTargetRow(component, i))
                 {
@@ -216,7 +216,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 Add(component, () => component.Targets.Add(new HoSpringTarget(string.Empty, 1.0f)), "加目标");
             }
 
-            if (targets.arraySize == 0)
+            if (targetsProperty.arraySize == 0)
             {
                 EditorGUILayout.HelpBox("还没有目标 —— 弹簧算出来的值没有地方去。「果冻眼 ×2」预设会给每根弹簧放好两行（挤压 / 回弹）。", MessageType.Info);
             }
@@ -230,7 +230,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 targetDetails.Add(false);
             }
 
-            SerializedProperty entry = targets.GetArrayElementAtIndex(index);
+            SerializedProperty entry = targetsProperty.GetArrayElementAtIndex(index);
             SerializedProperty inner = entry != null ? entry.FindPropertyRelative("target") : null;
             SerializedProperty reversed = entry != null ? entry.FindPropertyRelative("reversed") : null;
             SerializedProperty keyName = inner != null ? inner.FindPropertyRelative("keyName") : null;
@@ -298,7 +298,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             {
                 EditorGUILayout.Slider("输入", component.ReadInput(), 0.0f, 1.0f);
                 EditorGUILayout.Slider("弹簧", component.SpringValue, -1.0f, 1.5f);
-                for (int i = 0; i < targets.arraySize; i++)
+                for (int i = 0; i < targetsProperty.arraySize; i++)
                 {
                     EditorGUILayout.FloatField("目标 " + i + " 输出", component.GetTargetOutput(i));
                 }
