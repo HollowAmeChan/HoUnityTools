@@ -88,26 +88,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     bool initialized = rig.faceController != null;
                     using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
                     {
-                        // 命名承载语义：「初始化」明确表达"产出完整文件、之后都在里面改"，且只在开始时点。
+                        // 命名承载语义：「初始化」明确表达"产出文件、之后都在里面改"。
+                        // 一个按钮两种情形（见 Initialize 的注释）：我们的控制器 → 就地重写驱动段；
+                        // 第一次 / 别人的控制器 → 整文件重写。
                         var content = initialized
-                            ? new GUIContent("重新初始化…", "会重新产出一个**完整的**控制器文件，该文件里你的手工改动都会丢失。")
-                            : new GUIContent("初始化控制器", "从源控制器 + 当前配置产出一个完整的控制器文件。\n"
-                                + "这是唯一会写文件的动作：之后手工逻辑请在生成物的 (EDIT THIS) 段里加。");
+                            ? new GUIContent("重新初始化…", "就地重写 " + HoFaceAnimationAssets.DriveLayerName + " 段：\n"
+                                + "旧的树、片段、轴参数清干净；其它层与 " + HoFaceAnimationAssets.EditLayerName + " 不动。\n"
+                                + "改模板走这里。")
+                            : new GUIContent("初始化控制器", "从角色网格 + 当前模板产出一个完整的控制器文件。\n"
+                                + "这是唯一会写文件的动作；之后手工逻辑请在生成物的 (EDIT THIS) 段里加。");
                         if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
                     }
 
-                    // 应用改动 = 就地手术：只重写 Ho/ 生成段，(EDIT THIS) 段和别的层一个字节都不动。
-                    using (new EditorGUI.DisabledScope(
-                        Application.isPlaying || rig.targetAnimator == null || !(rig.faceController is AnimatorController)))
-                    {
-                        if (GUILayout.Button(new GUIContent("应用改动",
-                            "把生成配置重新写进这个控制器：只重写 " + HoFaceAnimationAssets.DriveLayerName + " 那一段，\n"
-                            + HoFaceAnimationAssets.EditLayerName + " 段和其它任何层都不会被动。\n"
-                            + "生成配置改了之后走这个，不用重新初始化。"), GUILayout.Height(20)))
-                            ApplyChanges(rig);
-                    }
-
-                    if (GUILayout.Button(new GUIContent("检查绑定", "只做解析，不改任何资产：列出能绑上的输出与找不到的键。"), GUILayout.Height(20))) Check(rig);
+                    // 「重新初始化」是**唯一**写盘的动作：目标就是组件当前在用的那个控制器。
+                    // 它自己会挑路径 —— 控制器是我们的（有驱动段）就**就地重写驱动段**（其它层与 (EDIT THIS) 不动），
+                    // 否则才整文件重写。所以不需要第二个按钮，也不需要用户自己备份。
+                    using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
                     if (GUILayout.Button(new GUIContent("定位资产", "选中这个控制器资产。"), GUILayout.Height(20)) && rig.faceController != null)
                     {
                         Selection.activeObject = rig.faceController;
@@ -505,30 +501,45 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 初始化 = 产出完整控制器。**目标就是组件当前在用的那个资产**：重新初始化直接覆盖它，
-        /// 只弹一次"确认覆盖"。只有第一次（组件上还没有控制器）才需要问路径 —— 之后就一直是覆盖。
+        /// 初始化 = 产出（或重写）控制器。**目标就是组件当前在用的那个资产**。
+        ///
+        /// 分两种情形，用户只看到**一个按钮**：
+        /// <list type="bullet">
+        /// <item>控制器是我们的（有驱动段）→ **就地重写驱动段**：旧的树/片段/轴参数清干净，其它层与
+        /// <c>(EDIT THIS)</c> 一个字节不动。切模板走这条 —— 所以**不需要用户自己备份**。</item>
+        /// <item>第一次（组件上还没有控制器），或那个控制器不是我们生成的 → 整文件重写（先问路径，
+        /// 必要时再确认一次覆盖）。</item>
+        /// </list>
         /// </summary>
         private void Initialize(HoFaceTrackingDebugger rig)
         {
-            string path = rig.faceController != null ? AssetDatabase.GetAssetPath(rig.faceController) : "";
-
-            if (string.IsNullOrEmpty(path))
+            var current = rig.faceController as AnimatorController;
+            if (current != null && HasDriveLayer(current))
             {
-                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_ARKit", "controller",
-                    "产出一个完整的控制器文件；以后「重新初始化」会直接覆盖它。");
-                if (string.IsNullOrEmpty(path)) return;
-                if (AssetDatabase.LoadMainAssetAtPath(path) != null
-                    && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
-                        path + "\n\n该文件已存在，覆盖会把它整个重写。", "覆盖并初始化", "取消"))
+                string currentPath = AssetDatabase.GetAssetPath(current);
+                if (!EditorUtility.DisplayDialog("重新初始化吗？",
+                    currentPath + "\n\n会就地重写 " + HoFaceAnimationAssets.DriveLayerName + " 段"
+                    + "（旧的树、片段、轴参数会清干净）；其它层与 "
+                    + HoFaceAnimationAssets.EditLayerName + " 一个字节都不动。",
+                    "重写", "取消"))
                     return;
-            }
-            else if (!EditorUtility.DisplayDialog("要重新初始化吗？",
-                path + "\n\n会把整个文件重写 —— 你在里面手工加的层、状态、树都会丢失。",
-                "覆盖并初始化", "取消"))
-            {
+
+                ApplyChanges(rig);
                 return;
             }
 
+            string path = current != null ? AssetDatabase.GetAssetPath(current) : "";
+            if (string.IsNullOrEmpty(path))
+            {
+                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_ARKit", "controller",
+                    "产出一个完整的控制器文件；以后「重新初始化」只重写里面的驱动段。");
+                if (string.IsNullOrEmpty(path)) return;
+            }
+
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null
+                && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
+                    path + "\n\n该文件已存在，覆盖会把它**整个**重写（包括你自己加的层）。", "覆盖并初始化", "取消"))
+                return;
             try
             {
                 var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, true, TemplateOf(rig));
