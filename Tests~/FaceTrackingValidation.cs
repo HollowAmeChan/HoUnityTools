@@ -331,76 +331,19 @@ public static class HoFaceTrackingValidation
             Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
             rig.faceController = replaced;
 
-            // ── 混合树小工具（通用）：参数 → 混合树 → 用户自己的键 ────────────────
-            // 这棵树是"手搓混合树一定会踩、踩了还看不出来"的三个坑的兜底，所以每条都断言：
-            //   ① 原点子节点（否则参数归零时脸上挂着四个方向的加权平均）
-            //   ② 每个方向都写全部键（不留"这个方向没人管这个键"的空洞）
-            //   ③ 非 ARKit 的键必须穿过 Compile（否则影子台上算完抄不回真模型）
-            int userKeyIndex = renderer.sharedMesh.GetBlendShapeIndex("JellyEye");
-            Check(userKeyIndex >= 0, "validation mesh carries a user-owned (non ARKit) key");
-            var plan = new HoBlendTreePlan();
-            // 工具的默认参数名（Ho/ParamX|Y）不存在时会被它自己补出来；这里**故意指向两个已存在的
-            // 参数**（左眼两根眼睑轴），好顺带验证"参数已存在就不重复添加"。
-            plan.parameterX = HoFaceNaming.LidAxis(0, true);
-            plan.parameterY = HoFaceNaming.LidAxis(0, false);
-            plan.keys.Add(new HoBlendTreeKey { renderer = renderer, index = userKeyIndex, shape = "JellyEye" });
-            for (int i = 0; i < HoFaceBlendTreeTool.Corners.Length; i++)
-            {
-                var direction = new HoBlendTreeDirection
-                {
-                    name = HoFaceBlendTreeTool.CornerNames[i],
-                    position = HoFaceBlendTreeTool.Corners[i]
-                };
-                direction.Fit(1);
-                direction.SetWeight(0, 20f * (i + 1));
-                plan.directions.Add(direction);
-            }
+            // ── 果冻键不进控制器：它由独立组件（HoSpringConstraint）直接读写形态键 ──────────
+            // 所以这里**不再**往 (EDIT THIS) 里塞 JellyEye 曲线，也不再测"非 ARKit 键穿过 Compile"
+            // —— 那条路现在没有消费者了。保留网格上这个键，是因为下面的 WD 探针需要一个
+            // **没有任何片段动画它**的键做对照（"WD 开"不该去碰没被动画的属性），果冻键正好符合。
+            Check(renderer.sharedMesh.GetBlendShapeIndex("JellyEye") >= 0,
+                "validation mesh keeps an un-animated user key as the Write Defaults control");
 
-            int parametersBeforeTool = replaced.parameters.Length;
-            HoFaceBlendTreeTool.Write(animator, replaced, plan);
-            var toolState = FindState(replaced, plan.layerName);
-            var toolTree = toolState != null ? toolState.motion as BlendTree : null;
-            Check(toolTree != null && toolTree.blendType == BlendTreeType.FreeformCartesian2D,
-                "blend tree tool writes a 2D freeform cartesian tree");
-            Check(toolTree != null && toolTree.blendParameter == plan.parameterX && toolTree.blendParameterY == plan.parameterY,
-                "the tree reads the two parameters it was handed");
-            Check(toolTree != null && toolTree.children.Length == 5,
-                "four corners plus an auto origin child (" + (toolTree != null ? toolTree.children.Length : -1) + ")");
-            Check(replaced.parameters.Length == parametersBeforeTool,
-                "the tool reuses existing parameters instead of duplicating them ("
-                + parametersBeforeTool + " -> " + replaced.parameters.Length + ")");
-            var userKeyBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.JellyEye");
-            if (toolTree != null)
-            {
-                foreach (var child in toolTree.children)
-                {
-                    var childClip = child.motion as AnimationClip;
-                    var curve = childClip != null ? AnimationUtility.GetEditorCurve(childClip, userKeyBinding) : null;
-                    int corner = Array.IndexOf(HoFaceBlendTreeTool.Corners, child.position);
-                    float expected = child.position == Vector2.zero ? 0f : 20f * (corner + 1);
-                    Check(curve != null && Mathf.Abs(curve.Evaluate(0f) - expected) < 0.001f,
-                        "every direction writes every key (" + child.position + " => " + expected + ")");
-                }
-            }
-
-            int toolClips = CountClips(controllerPath);
-            HoFaceBlendTreeTool.Write(animator, replaced, plan);
-            var toolAgain = FindState(replaced, plan.layerName);
-            var againTree = toolAgain != null ? toolAgain.motion as BlendTree : null;
-            Check(againTree != null && againTree.children.Length == 5 && CountClips(controllerPath) == toolClips,
-                "re-running the tool is idempotent (" + toolClips + " clips, no orphans)");
-
-            bool hasUserKey = false;
             int outputBindings = 0;
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
-            {
                 outputBindings = compiled.bindings.Count;
-                foreach (var b in compiled.bindings) if (b.shape == "JellyEye") hasUserKey = true;
-            }
 
-            Check(hasUserKey, "user-owned keys survive Compile (the shadow result must reach the real mesh)");
-            Check(outputBindings == 45, "the new pass-through adds exactly one key to the 44 gated ARKit ones ("
-                + outputBindings + ")");
+            Check(outputBindings == 44, "re-initialized controller keeps the same gated output set ("
+                + outputBindings + " bindings, gaze excluded)");
 
             // ── 混合树基础件（19 节定案：生成器只出"最基本设施"）────────────────────
             // 一：两个 0~1 的反向通道合成一根 -1~1 的单轴。混合树自己算不出新参数，
