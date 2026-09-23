@@ -4,6 +4,8 @@
 > 出来的词汇表与规则，用来回答两个问题：**它的输入是什么**、**它发出去的参数是什么格式**。
 > 前置的存档格式与字段说明见 [VBridger 的中间层：一手逆向记录](VBRIDGER_MIDDLE_LAYER_RESEARCH.md)；
 > 我们自己那套中间层见 [面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)。
+> 逐行原始数据（10 份预设 × 314 行全量表、输入并集表、min/max/smooth 直方图）在
+> `.research/vbridger/VOCABULARY.md`（不进仓库），本文只留结论。
 
 ## 0. 三句话结论
 
@@ -17,8 +19,17 @@
    而 `ParamAngleX` / `ParamEyeLOpen` / `ParamMouthOpenY` 是**每个模型自己的参数 ID**，
    官方 API **没有"直接写模型参数"的请求** —— 中间层应发**追踪参数**，让 VTS 自己的映射 / auto-setup 去对模型。
 3. **输入远不止 ARKit 52**：实测 10 份预设里出现 **104 个变量** —— ARKit（`_L/_R` 拼写）、头/眼姿态
-   （`headRotX/Y/Z`、`headPosX/Y/Z`、`eyeLeftY/eyeRightY`…）、**全身骨链**（`ChestX`…`HipsZ`，VMC 输入用）、
-   **15 个 viseme**（`viseme_AA…` 连续值 + `viseme_AA_abs…` 绝对值两条线）、`volume`，以及追踪健康位 `faceFound`。
+   （`headRotX/Y/Z`、`headPosX/Y/Z`、`eyeLeftY`…）、**15 个 viseme**（`viseme_AA…` 连续值 + `viseme_AA_abs…`
+   绝对值两条线）、`volume`，以及追踪健康位 `faceFound`。
+   ⚠️ **但它自己认的名字只有 100 个（`SceneData.shapekeys`）**，多出来的 15 个里
+   **`HipsX`/`SpineX`/`ChestX`/`UpperChestX` 全是不存在的变量** —— `VMC-Face-Head` 那条
+   `Head = −(NeckX+UpperChestX+ChestX+SpineX+HipsX) + headRotX*2` 因此**表达式校验直接失败**
+   （源码里未定义变量抛 `ESUnknownExpressionException`、输入框标红、该行不再求值），
+   **整条 Head 行是死的**。（`NeckX/Y/Z` 能成立，靠的是"vector 行在 LateUpdate 里把自己发布的
+   `名字X/Y/Z` 注册成全局变量"这个机制；`Hips/Spine/Chest/UpperChest` 在任何地方都没有。）
+   → 教训：**未定义变量必须报错，不能静默当 0**（我们自己的求值器是"未知变量 = 0"，
+   代价就是这种错永远看不见；至少要给"表达式中引用了不存在的输入"一条面板告警）。
+
 
 ## 1. 输入词汇表（表达式里能写什么）
 
@@ -27,7 +38,8 @@
 | **ARKit 52** | `eyeBlink_L/R`、`eyeWide_L/R`、`eyeSquint_L/R`、`eyeLookUp/Down/In/Out_L/R`、`jawOpen`、`mouthClose`、`mouthSmile_L/R`、`mouthFrown_L/R`、`mouthPucker`、`mouthFunnel`、`mouthRollUpper/Lower`、`mouthShrugUpper/Lower`、`mouthPress_L/R`、`mouthDimple_L/R`、`mouthStretch_L/R`、`mouthUpperUp_L/R`、`mouthLowerDown_L/R`、`mouthLeft/Right`、`cheekPuff`、`cheekSquint_L/R`、`browOuterUp_L/R`、`browDown_L/R`、`browInnerUp`、`noseSneer_L/R`、`tongueOut` | 0..1（`mouthLeft/Right` 方向语义） | 手机 App（iFacialMocap 的 `_L/_R` 拼写） |
 | **头的姿态/位置** | `headRotX/Y/Z`（度）、`headPosX/Y/Z` | 度 / 米级 | 手机 App |
 | **眼的原始角度** | `eyeLeftY`、`eyeLeftZ`、`eyeRightY`、`eyeRightZ`（VTS 直连时用） | 度/raw | VTS 追踪源 |
-| **全身骨链**（VMC 输入） | `HipsX/Y/Z`、`SpineX/Y/Z`、`ChestX/Y/Z`、`UpperChestX/Y/Z`、`NeckX/Y/Z` | 度 | VMC 输入（`VMC-Face-Head` 预设里把全身链和头拼起来） |
+| **向量行自己发布的分量** | `NeckX/Y/Z`、`HeadX/Y/Z` 之类 —— **只有存在同名 vector 行时才成立** | 同该行 | `LateUpdate` 把 `名字X/Y/Z` 注册成全局变量（L7145-L7173） |
+| ~~全身骨链~~ | ~~`HipsX/Y/Z`、`SpineX/Y/Z`、`ChestX/Y/Z`、`UpperChestX/Y/Z`~~ | — | ❌ **不存在**：源码里搜不到这些标识符，`VMC-Face-Head` 的 `Head` 行因此无效（见 §0.3） |
 | **viseme 两条线** | `viseme_AA…viseme_SIL`（**连续值**）与 `viseme_*_abs`（**当前最强口的绝对值**） | 0..1 | 音频口型模块 |
 | **音频** | `volume` | 0..1 | 音频输入 |
 | **追踪健康** | `faceFound`（丢脸） | 0/1 | 追踪侧 |
@@ -42,17 +54,23 @@
 + `eyeLeftX/Y/Z`、`eyeRightX/Y/Z` + `headPosX/Y/Z`、`headRotX/Y/Z` + `Sound Input`、`volume`
 + 15 个 `viseme_*` + 15 个 `viseme_*_abs` + `faceFound`。
 
-> 预设里还会直接用到**全身体链**（`HipsX/Y/Z`、`SpineX/Y/Z`、`ChestX/Y/Z`、`UpperChestX/Y/Z`、`NeckX/Y/Z`）——
-> 那是 VMC 输入那条路给的，**不在这张表里**（所以"表达式里用到的变量 104 个"比"声明的 100 个"多）。
+> 上面 104 个里，**89 个是这张表里的**，另外 15 个是"表里没有的"：`NeckX/Y/Z`（靠 vector 行发布）
+> 与 `Hips/Spine/Chest/UpperChest` 的 X/Y/Z **12 个纯属不存在**（见 §0.3）。
+> 反过来，这张表里有 **11 个从来没有被任何预设引用**：`BlendShapes`、`jawForward`、
+> `noseSneer_L/R`、`Joints`、`eyeLeftX`、`eyeRightX`、`Sound Input`、`viseme_SIL`、`Other`、`faceFound`
+> ——（`viseme_SIL` 只以 `_abs` 形式被用）。**声明与实际使用是两回事**，看这张表时要小心。
 
 其它追踪源**不新增变量，而是改名进这套规范名**（同文件里的三张表）：
 
-| 表 | 拼写 | 来源 |
-| --- | --- | --- |
-| `shapekeys`（规范） | `eyeBlink_L` / `eyeBlink_R` | iFacialMocap（`_L/_R`） |
-| `faceMotionKeys` | `eyeBlinkLeft` / `eyeBlinkRight` | FaceMotion3D（ARKit 拼写） |
-| `vtsKeys` | `EyeBlinkLeft` / `EyeBlinkRight`（首字母大写） | VTubeStudio 的 BlendShapes 追踪 |
-| `mouthKeys` | 27 个嘴部键 | 音频口型/嘴部模块用 |
+| 表 | 条数 | 拼写 | 来源 |
+| --- | --- | --- | --- |
+| `shapekeys`（规范） | 100 | `eyeBlink_L` / `eyeBlink_R` | iFacialMocap（`_L/_R`） |
+| `faceMotionKeys` | **66** | `eyeBlinkLeft` / `eyeBlinkRight` | FaceMotion3D（ARKit 拼写） |
+| `vtsKeys` | **66** | `EyeBlinkLeft` / `EyeBlinkRight`（首字母大写） | VTubeStudio 的 BlendShapes 追踪 |
+| `mouthKeys` | 27 | 27 个嘴部键 | 音频口型/嘴部模块用（会乘 Mouth Multiplier） |
+
+> 两张改名表**只覆盖前 66 项**（到 `headRotZ` 为止）——`volume`、`viseme_*`、`Sound Input`、
+> `faceFound` 这些**只能按原拼写进**，因为音视频源本来就只有一套名字。
 
 > **这条设计值得抄**：*一套规范名 + 每个数据源一张改名表*。表达式与预设只认规范名，
 > 换设备只换表 —— 而不是让每条规则都去写"如果来源是 X 就用另一个拼写"。
@@ -60,6 +78,30 @@
 `viseme_*` 那 15 个名字（`SIL PP FF TH DD KK CH SS NN RR AA EE IH OH OU`）不是随手起的：
 它是**微软 SAPI / JALI 那一套 viseme 枚举**，在 VTuber 工具链里被广泛沿用。
 `blendshapeCalibration` 是同文件里的 `List<float>`（**62 个 0**），就是校准按钮抓的那份"静止归零"。
+
+### 1.2 一个值从设备到表达式之间被加工了几道（这是"额外的东西"）
+
+原始值**不是**直接进表达式的，中间有四道（都可证）：
+
+| # | 加工 | 说明 | 依据 |
+| --- | --- | --- | --- |
+| 1 | **静息值标定** | `MapValue(x,0,1,calibration[i])`：把"静止时读到的那点噪声"压回 0 —— `Lerp(0,1,InverseLerp(offset,1,x))`，offset 为 0 时原样通过 | L11542-L11549 |
+| 2 | **每输入曲线** | 上一步的结果再过一条**逐输入**的 AnimationCurve（`InputCurves*.vbsettings`，**68 条**：52 ARKit + `volume` + 15 viseme）——默认**全是恒等线**，是给用户手调"某一路太灵敏"用的 | L11907 / L12053 / L12177 |
+| 3 | **Mouth Multiplier** | 27 个嘴部输入（`mouthKeys`）额外乘一个全局系数（UI 0.1–1.5，默认 1.0） | L11189-L11192 |
+| 4 | 写进 solver 的全局变量 | 之后表达式才看得到 | — |
+
+外加两个"非面捕但表达式里能读"的东西：`volume`（音频）与 `faceFound`（丢脸时置 0；
+它是在 `ExpressionSolver.globalConstants` 里被直接改的，L11185、L11996）。
+
+**表达式语言**（`AK.ExpressionSolver`，MIT，2015 Antti Kuukka，被编进 DLL）：
+
+- 内建 `sin cos tan asin acos atan atan2 sqrt abs sign floor ceil min max sinh cosh tanh exp log log10 round rand clamp approx pow strlen`，
+  常量 `e`/`pi`，字符串字面量 `'...'`（**单引号里的表达式是懒求值**），运算符 `+ - * / ^ % < > <= >= == != && ||`。
+- **VBridger 自己加了四个**（L5630-5633）：`stabil(var,dif)`（迟滞防抖）、`time(inc,max)`（锯齿计时）、
+  `if(cond,then,else)`、`lerp(a,b,t)`。
+- ⚠️ **未定义变量 = 硬错误**（不是 0）：`undefinedVariablePolicy` 默认 `Error` 且从不改（L34159），
+  写了不存在的名字 → 抛异常 → 该行 `valid=false`、输入框标红、**永远不出值**（L6697-L6713）。
+  我们的求值器选的是"未知 = 0、永不抛"，代价见 §0.3 的教训。
 
 ## 2. 输出词汇表（它往外发什么）
 
@@ -162,10 +204,10 @@
 | `AdvancedARKitSettings` | 34 | VTS（声明范围） | 参数的 **min/max/默认** 该报多少（`FaceAngle ±50`、`FacePosition −15..15`…） |
 | `AdvancedARKit_V2.0 / PlusVolume / Stepped / V3.0` | 26 ×4 | VTS | 同一套映射的四个版本：**V3 去掉音频、加平滑**；`PlusVolume` 把 `volume` 掺进嘴型；`Stepped` 给翻页动画用 |
 | `VBridger_VTS_Compatible` | 28 | VTS | 最保守的一套（兼容 VTS 自己的追踪参数），身体带 100ms 延迟 |
-| `VBridger_VMC-Face-Head` | 54 | VMC | ARKit 52 + **头/颈/全身链**（`Head = −(全身链和) + headRot×2`） |
+| `VBridger_VMC-Face-Head` | 54 | VMC | ARKit 50 行 + 4 行向量；但 **`Head` 那行引用不存在的变量、是死行**（§0.3），且 `jawLeft` 重复 |
 | `VBridger_VMC_FaceOnly` | 50 | VMC | 只发脸（仍然含镜像反接） |
 | `VBridger_VisemesARKit` | 34 | VTS | **口型优先**：有声走 viseme、静音回 ARKit（用 `viseme_SIL_abs` 当开关） |
-| `VBridger_PNGTuber` | 10 | VTS/自定义 | 2D 立绘：`Visemes = Σ(序号×viseme_abs)` 用来**选帧** |
+| `VBridger_PNGTuber` | 10 | VTS/自定义 | 2D 立绘：`Visemes = Σ(序号×viseme_abs)` 用来**选帧**（⚠️ 这行实测有错，见下表） |
 
 **反复出现的公式模式**（照抄这几条基本就能做出一套能用的映射）：
 
@@ -180,7 +222,7 @@
 | **慢跟（身体）** | `BodyAngleX = −headRotY*1.5`，`delay = 100ms` |
 | **roll/yaw 补偿** | `FaceAngleZ = headRotZ*((90−|headRotY|)/90) − headRotX*(headRotY/45)` |
 | **音频口型：加权和 × 音量 × 非静音** | `JawOpen = (Σ w_i·viseme_i)·volume·(1−viseme_SIL_abs) + jawOpen·viseme_SIL_abs` |
-| **选帧** | `Visemes = Σ(序号_i · viseme_i_abs)`（PNGTuber，max=12） |
+| **选帧** | `Visemes = Σ(序号_i · viseme_i_abs)`（PNGTuber，`min=0 max=12`）—— ⚠️ 实测这行**自己就是错的**：`viseme_SS_abs * 67`（应为 `* 6`）、`viseme_DD` 与 `viseme_KK` 都乘 `8`。**"把枚举塞进连续参数"这种做法天生易错**；我们要的是"一个参数一行/一分支" |
 
 ## 4. 取值与单位约定（做下游映射时照这个）
 

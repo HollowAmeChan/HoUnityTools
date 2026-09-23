@@ -68,7 +68,7 @@ private string fileVersion = "vbridgerV2";
   常量 `e` / `pi`，字符串字面量 `'...'` 与 `&& || == != <= >= ^ %`。
 - VBridger 每行额外加四个（L5630-5633）：`stabil(var,dif)`（防抖迟滞）、`time(inc,max)`、
   `if(cond,then,else)`、`lerp(a,b,t)`。
-- 输入是它自己那 86 个 `SceneData.shapekeys`（ARKit 的 `*_L/*_R`、`eyeLeftX..headRotZ`、
+- 输入是它自己那 100 个 `SceneData.shapekeys`（ARKit 的 `*_L/*_R`、`eyeLeftX..headRotZ`、
   `Sound Input` / `volume`、15 个 `viseme_*` + 15 个 `viseme_*_abs`、`faceFound` …），
   而 VTS / iFacialMocap 的名字集只是**索引映射的重命名表**，不是另一套变量。
 - **行可以读别的行**：`LateUpdate` 把每行结果 `SetGlobalVariable(cleanedName, 值)` 发布出去
