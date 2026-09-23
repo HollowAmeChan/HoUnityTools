@@ -1,5 +1,6 @@
 using Hollow.HoUnityTools.FaceTracking;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -27,6 +28,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var peek = go.AddComponent<HoFaceBlendTreePeek>();
             peek.controller = FindFaceController();
 
+            // **不靠猜参数名**：直接从 controller 里找出那棵 2D 树，用它自己的两根混合参数。
+            // 这样改过名（Ho/Drive/Lid/… ← Ho/LidLeft.X）也不会退化成"喂了别的通道、红点不动"。
+            string treeName = null, x = null, y = null;
+            if (peek.controller is AnimatorController asset && TryFind2DTree(asset, ref x, ref y, ref treeName))
+            {
+                peek.parameterX = x;
+                peek.parameterY = y;
+            }
+            else
+            {
+                Debug.LogWarning("[Ho 混合树观察台] 没在这个 controller 里找到带两根参数的 2D 混合树，"
+                    + "保留默认参数名（" + peek.parameterX + " / " + peek.parameterY + "），自己核对一下。");
+            }
+
             Selection.activeGameObject = go;
             EditorGUIUtility.PingObject(go);
 
@@ -34,7 +49,49 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             Audit(peek.controller, go.transform, ref total, ref missing);
             Debug.Log("[Ho 混合树观察台] controller = " + (peek.controller != null ? peek.controller.name : "（空，自己拖一个进来）")
                 + "；曲线绑定 " + total + " 条，其中 " + missing + " 条在这个空物体上解析不到。"
+                + (treeName != null ? " 驱动用的 2D 树：" + treeName + "（" + x + " / " + y + "）。" : string.Empty)
                 + " Play 后选中它、打开 Animator 窗口，并留意 Console 有没有因为缺绑定而报错。");
+        }
+
+        /// <summary>在控制器里找一棵"两根混合参数都非空"的 2D 树（我们生成的 LidL / LidR 就是）。</summary>
+        private static bool TryFind2DTree(AnimatorController controller, ref string x, ref string y, ref string treeName)
+        {
+            foreach (var layer in controller.layers)
+                if (TryFind2DTree(layer.stateMachine, ref x, ref y, ref treeName))
+                    return true;
+            return false;
+        }
+
+        private static bool TryFind2DTree(AnimatorStateMachine machine, ref string x, ref string y, ref string treeName)
+        {
+            if (machine == null) return false;
+            foreach (var child in machine.states)
+                if (TryFind2DTree(child.state.motion as BlendTree, ref x, ref y, ref treeName))
+                    return true;
+            foreach (var sub in machine.stateMachines)
+                if (TryFind2DTree(sub.stateMachine, ref x, ref y, ref treeName))
+                    return true;
+            return false;
+        }
+
+        private static bool TryFind2DTree(BlendTree tree, ref string x, ref string y, ref string treeName)
+        {
+            if (tree == null) return false;
+            bool twoDimensional = tree.blendType == BlendTreeType.FreeformCartesian2D
+                || tree.blendType == BlendTreeType.FreeformDirectional2D
+                || tree.blendType == BlendTreeType.SimpleDirectional2D;
+            if (twoDimensional && !string.IsNullOrEmpty(tree.blendParameter) && !string.IsNullOrEmpty(tree.blendParameterY))
+            {
+                x = tree.blendParameter;
+                y = tree.blendParameterY;
+                treeName = tree.name;
+                return true;
+            }
+
+            foreach (var child in tree.children)
+                if (TryFind2DTree(child.motion as BlendTree, ref x, ref y, ref treeName))
+                    return true;
+            return false;
         }
 
         /// <summary>优先用选中的面捕组件的控制器，其次是场景里任意一个面捕组件。</summary>

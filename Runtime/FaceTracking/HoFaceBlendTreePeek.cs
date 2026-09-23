@@ -71,6 +71,9 @@ namespace Hollow.HoUnityTools.FaceTracking
             // 参数名不存在时红点不会动，容易被误读成"窗口画不出来" —— 先校验，缺了就退回一个存在的 Float。
             WarnIfMissing(parameterX, parameterY, ref parameterX);
             WarnIfMissing(parameterY, parameterX, ref parameterY);
+            if (parameterX == parameterY)
+                Debug.LogWarning("[Ho 混合树观察台] 横纵轴解析成了同一个参数（" + parameterX
+                    + "）—— 红点只会沿一条直线来回，2D 图上看不出插值。请把 controller 里那棵 2D 树的两根参数填进来。", this);
 
             if (mirror && applied != null)
             {
