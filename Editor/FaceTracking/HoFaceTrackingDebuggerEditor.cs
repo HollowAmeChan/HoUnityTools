@@ -58,7 +58,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 serializedObject.Update();
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("targetAnimator"), new GUIContent("角色 Animator", "角色根上的 Animator。面捕不会接管它，只借用它的绑定根解析路径。"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("faceController"), new GUIContent("面部控制器", "只含形态键曲线的纯 Unity AnimatorController；在影子层级上求值，不驱动角色本体。"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("播放后自动驱动", "进入播放模式就自动开始驱动，不会自动连接手机。"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("startOnPlay"), new GUIContent("运行时自动开始", "进入播放模式就自动开始驱动；驱动意外掉线（异常、接收线程出错）时会自动重试。\n它不会替你连接手机 —— 手机那边要自己开始发送。"));
                 serializedObject.ApplyModifiedProperties();
 
                 using (new EditorGUILayout.HorizontalScope())

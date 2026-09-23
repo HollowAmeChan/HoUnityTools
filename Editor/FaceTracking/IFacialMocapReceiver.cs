@@ -21,7 +21,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private string sender = "";
         private string rejectedSource = "";
         private string error = "";
-        private long packets, invalid, replaced, rejected;
+        private long packets, invalid, replaced, rejected, recoveries;
 
         public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
         public bool Running => worker != null && worker.IsAlive && !stopping;
@@ -33,6 +33,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public long Invalid => Interlocked.Read(ref invalid);
         public long Replaced => Interlocked.Read(ref replaced);
         public long Rejected => Interlocked.Read(ref rejected);
+        /// <summary>扛过去的瞬时 socket 错误次数。> 0 说明网络曾经抖过，但接收没死。</summary>
+        public long Recoveries => Interlocked.Read(ref recoveries);
 
         public void Start(string phoneIp)
         {
@@ -40,7 +42,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (!IPAddress.TryParse(phoneIp, out phone) || phone.AddressFamily != AddressFamily.InterNetwork || phone.Equals(IPAddress.Any) || phone.Equals(IPAddress.Broadcast))
                 throw new ArgumentException("请输入手机的 IPv4 地址。");
             stopping = false;
-            packets = invalid = replaced = rejected = 0;
+            packets = invalid = replaced = rejected = recoveries = 0;
             lock (sync) { pending = null; error = sender = rejectedSource = ""; }
             try
             {
@@ -48,6 +50,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 socket.Client.ExclusiveAddressUse = true;
                 socket.Client.Bind(new IPEndPoint(IPAddress.Any, Port));
                 socket.Client.ReceiveTimeout = 250;
+                DisableUdpConnectionReset(socket);
                 // Listen before handshake. Replies go to PC:49983, not an ephemeral send port.
                 worker = new Thread(Receive) { IsBackground = true, Name = "Ho iFacialMocap UDP" };
                 worker.Start();
@@ -93,13 +96,42 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
                 catch (SocketException e)
                 {
+                    if (stopping) break;
                     if (e.SocketErrorCode == SocketError.TimedOut) continue;
-                    if (!stopping) lock (sync) error = e.Message;
+                    if (IsTransient(e.SocketErrorCode))
+                    {
+                        // **以前这里是 break** —— 一次瞬时错误就把接收线程打死，表现就是"跑着跑着面捕就断了"，
+                        // 而且 socket 还开着、面板写着断开，只能手动重连。网络抖一下不该是终点。
+                        Interlocked.Increment(ref recoveries);
+                        lock (sync) error = e.SocketErrorCode + "：" + e.Message;
+                        Thread.Sleep(50);
+                        continue;
+                    }
+
+                    if (!stopping) lock (sync) error = e.SocketErrorCode + "：" + e.Message;
                     break;
                 }
                 catch (ObjectDisposedException) { break; }
                 catch (Exception e) { if (!stopping) lock (sync) error = e.Message; break; }
             }
+        }
+
+        /// <summary>这些 socket 错误是"网络抖了一下"，不是"这条路走不通了"：继续收，不要退出。</summary>
+        private static bool IsTransient(SocketError code) => code == SocketError.ConnectionReset
+            || code == SocketError.NetworkReset || code == SocketError.Interrupted
+            || code == SocketError.HostUnreachable || code == SocketError.NetworkUnreachable
+            || code == SocketError.MessageSize || code == SocketError.WouldBlock
+            || code == SocketError.NoBufferSpaceAvailable;
+
+        /// <summary>
+        /// Windows 上 UDP 收到 ICMP 端口不可达时，会把**下一次** Receive 变成 ConnectionReset
+        /// （典型触发：握手包发给了一个还没在听的手机端口）。SIO_UDP_CONNRESET 关掉这个行为。
+        /// 非 Windows 或调用失败都直接忽略 —— 上面的瞬态处理已经能兜住。
+        /// </summary>
+        private static void DisableUdpConnectionReset(UdpClient client)
+        {
+            try { client.Client.IOControl(unchecked((int)0x9800000C), new byte[] { 0, 0, 0, 0 }, null); }
+            catch { }
         }
 
         public void Dispose()
