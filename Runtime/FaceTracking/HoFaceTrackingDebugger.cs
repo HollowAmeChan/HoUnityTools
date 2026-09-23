@@ -54,6 +54,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
+        [Tooltip("混合树模板：决定眼睑那几棵树长什么样、需要哪些键。留空 = 用内置默认（ho-2d-test1）。\n"
+            + "改模板属于结构改动，要按「应用改动」或重新初始化才生效。")]
+        public HoFaceTemplate template;
+
         /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
         public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
 

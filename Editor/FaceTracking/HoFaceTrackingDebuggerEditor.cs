@@ -466,6 +466,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 这是唯一会写文件的动作，而且是破坏性的 —— 目标已存在时里面的手工改动会全丢。
         /// 所以路径每次都问，覆盖前必须把代价说清楚，并给一条「另存为新文件」的出路。
         /// </summary>
+        /// <summary>组件上选的模板；没选就返回 null —— 生成器会用内置默认（ho-2d-test1）。</summary>
+        private static HoFaceTemplateSpec TemplateOf(HoFaceTrackingDebugger rig) =>
+            rig != null && rig.template != null ? rig.template.spec : null;
+
         private void Initialize(HoFaceTrackingDebugger rig)
         {
             string path = EditorUtility.SaveFilePanelInProject(
@@ -504,7 +508,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 // 在**最终路径**上判断要不要覆盖：用户可能刚刚改选了「另存为新文件」。
                 bool overwrite = AssetDatabase.LoadMainAssetAtPath(path) != null;
-                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, overwrite);
+                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, overwrite, TemplateOf(rig));
                 Undo.RecordObject(rig, "Initialize face controller");
                 rig.faceController = controller;
                 EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
@@ -538,7 +542,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             try
             {
-                HoFaceAnimationAssets.Apply(controller, rig.targetAnimator);
+                HoFaceAnimationAssets.Apply(controller, rig.targetAnimator, TemplateOf(rig));
                 EnsureChannels(rig);
                 EditorUtility.SetDirty(rig);
                 report = "已应用改动：重写了 " + HoFaceAnimationAssets.DriveLayerName + " 段；"
