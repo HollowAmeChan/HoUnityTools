@@ -184,6 +184,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static void TryReconnect()
         {
             if (Receiver.Running) return;
+            // **刚连上就别动它**：Thread.IsAlive 在 Start() 之后有一瞬间还是 false，
+            // 这段宽限期避免把刚建好的接收线程掐掉重来（重来会丢包，表现成"跑着跑着断了"）。
+            if (ConnectStartedAt > 0 && IFacialMocapReceiver.Now - ConnectStartedAt < 3.0) return;
             if (IFacialMocapReceiver.Now < nextConnectTry) return;
             var settings = HoFaceConnectionSettings.instance;
             if (!settings.wantConnected || string.IsNullOrWhiteSpace(settings.phoneIp)) return;
