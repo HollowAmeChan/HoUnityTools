@@ -34,6 +34,30 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
     }
 
+    /// <summary>
+    /// 模板里的一个**动画槽位**：树/状态引用的那个片段，以及它最后被填成了什么。
+    /// 「槽位名」就是模板里那个片段的名字；装配时按这个名字去动画文件夹找同名 `.anim`。
+    /// </summary>
+    public sealed class HoFaceClipSlot
+    {
+        /// <summary>槽位名（模板里那个片段的名字）。</summary>
+        public string name;
+        /// <summary>文件夹里同名的片段。找到就**由它顶替**模板自带的那份。</summary>
+        public AnimationClip fromFolder;
+        /// <summary>模板自带的片段（可能只是一份写着键的占位）。</summary>
+        public AnimationClip fromTemplate;
+        /// <summary>被引用了几处（同一个姿势片段常被多棵树共用）。</summary>
+        public int uses;
+
+        public AnimationClip Resolved => fromFolder != null ? fromFolder : fromTemplate;
+
+        /// <summary>这份槽位最终会不会真的写形态键。</summary>
+        public bool Writes => Resolved != null && HoFaceAnimationAssets.HasShapeCurves(Resolved);
+
+        /// <summary>面板上的一句话状态。</summary>
+        public string Status => fromFolder != null ? "文件夹" : Writes ? "模板自带" : "缺";
+    }
+
     /// <summary>控制器资产的实况（面板的「控制器结构」就是这么读出来的，不是从配置推断）。</summary>
     public sealed class HoFaceAssetInfo
     {
@@ -47,21 +71,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     }
 
     /// <summary>
-    /// 面捕控制器资产的**搬运**：把一份现成的混合树文件搬到角色上。
+    /// 面捕控制器的**装配**：模板（树形）+ 动画文件夹（数据）+ 驱动对象（写谁）→ 一份属于这台角色的控制器。
     ///
-    /// 这里已经没有"生成树"这件事了 —— 控制器是**作品**（Jerry 的 vrc-common、我们自己编的 ho-2d-test1…），
-    /// 它在 Unity 的混合树编辑器里被编出来，自带片段与动画。初始化唯一要做的处理是
-    /// **把动画驱动的对象换成这台角色的网格**（<see cref="Adopt"/>）：
-    ///
-    /// <list type="number">
-    /// <item>整份文件复制到目标路径（层、状态、参数、子树、子片段全跟着走）；</item>
-    /// <item>把每条形态键曲线重绑到"驱动对象列表"里真正有这个键的网格上；</item>
-    /// <item>源里引用的**外部**片段先复制成本文件的子资产再改 —— 绝不改动别人共享的 .anim。</item>
+    /// 三件事分开是有意的：
+    /// <list type="bullet">
+    /// <item><b>混合树模板</b> = 一份完整 `.controller`：树形、坐标、门控、参数都在里面，作者在混合树编辑器里编。
+    /// 它引用的每个片段就是一个**槽位**，按名字对应动画文件夹里的一份 `.anim`。</item>
+    /// <item><b>动画文件夹</b> = 现成的片段（`<键名>.anim` 之类）。**它跟模型无关** —— 装配时按形态键名重绑，
+    /// 所以同一份动画可以用在任何模型上。文件夹里没有的槽位就保留模板自带的那份。</item>
+    /// <item><b>驱动对象</b> = 这台角色上要驱动的网格。</item>
     /// </list>
     ///
-    /// **为什么不再有模板/规格那套东西**：那等于在代码里重新发明一遍混合树编辑器，还要把
-    /// "轴的值怎么算"这种中间层的事塞进控制器。控制器不需要声明它吃什么样的参数，它只等着被喂
-    /// （见 docs/FACE_TRACKING_WORKFLOW.md）。
+    /// <see cref="Adopt"/> 就是这三样合起来：
+    /// <list type="number">
+    /// <item>整份模板复制到目标路径（层、状态、参数、子树、子片段全跟着走）；</item>
+    /// <item>按槽位名把文件夹里的片段填进去，剩下的槽位用模板自带的；</item>
+    /// <item>把每条形态键曲线重绑到驱动对象里真正有这个键的网格上；</item>
+    /// <item>外部片段（别人的 `.anim`）先复制成本文件的子资产再改 —— 绝不改动共享资产。</item>
+    /// </list>
+    ///
+    /// **代码不生成树、也不生成姿势**：树是模板作者的，姿势是动画作者的，这里只做装配。
     /// </summary>
     public static class HoFaceAnimationAssets
     {
@@ -74,21 +103,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 复制一份源控制器到目标路径，并把它的形态键曲线重绑到 <paramref name="meshes"/> 上。
+        /// 复制模板到目标路径，填入动画文件夹里的片段，再把形态键曲线重绑到 <paramref name="meshes"/> 上。
         /// 目标文件已存在时**保留它的 GUID**（外部引用，比如窥视对象的 Animator，不会断）。
-        /// 源与目标是同一个文件时跳过复制，就地重绑。
+        /// 模板与目标是同一个文件时跳过复制，就地填与重绑。
         /// </summary>
-        public static AnimatorController Adopt(RuntimeAnimatorController source, string targetPath,
-            IList<SkinnedMeshRenderer> meshes, Animator root, bool overwrite = false)
+        public static AnimatorController Adopt(RuntimeAnimatorController template, string targetPath,
+            IList<SkinnedMeshRenderer> meshes, Animator root, string animationFolder = null, bool overwrite = false)
         {
-            if (source == null) throw new InvalidOperationException("请先指定源控制器 —— 要搬运的那份混合树文件。");
+            if (template == null) throw new InvalidOperationException("请先指定混合树模板。");
             if (root == null) throw new InvalidOperationException("请先指定角色 Animator。");
             if (string.IsNullOrEmpty(targetPath)) throw new InvalidOperationException("目标路径不能为空。");
-            if (!(source is AnimatorController))
-                throw new InvalidOperationException("源控制器必须是纯 Unity AnimatorController（不接受 OverrideController）。");
-            string sourcePath = AssetDatabase.GetAssetPath(source);
+            if (!(template is AnimatorController))
+                throw new InvalidOperationException("模板必须是纯 Unity AnimatorController（不接受 OverrideController）。");
+            string sourcePath = AssetDatabase.GetAssetPath(template);
             if (string.IsNullOrEmpty(sourcePath))
-                throw new InvalidOperationException("源控制器必须是工程里的资产。");
+                throw new InvalidOperationException("模板必须是工程里的资产。");
 
             if (!string.Equals(sourcePath, targetPath, StringComparison.Ordinal))
             {
@@ -103,10 +132,121 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(targetPath);
             if (controller == null) throw new InvalidOperationException("复制出来的文件不是 AnimatorController：" + targetPath);
+            ResolveClips(controller, animationFolder);
             Retarget(controller, meshes, root);
+            PruneUnusedClips(controller, targetPath);
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
             return controller;
+        }
+
+        /// <summary>
+        /// 模板里的所有槽位，以及每个槽位在"这份文件夹 + 这份模板"下会被填成什么。
+        /// 面板那个「动画填充」折叠框读的就是它 —— **从资产读，不是从配置推断**。
+        /// </summary>
+        public static List<HoFaceClipSlot> Slots(RuntimeAnimatorController template, string animationFolder)
+        {
+            var slots = new List<HoFaceClipSlot>();
+            if (!(template is AnimatorController controller)) return slots;
+            var folder = FolderIndex(animationFolder);
+            var at = new Dictionary<string, HoFaceClipSlot>(StringComparer.Ordinal);
+            ForEachClip(controller, clip =>
+            {
+                if (!at.TryGetValue(clip.name, out var slot))
+                {
+                    folder.TryGetValue(clip.name, out var fromFolder);
+                    at[clip.name] = slot = new HoFaceClipSlot { name = clip.name, fromFolder = fromFolder, fromTemplate = clip };
+                    slots.Add(slot);
+                }
+
+                slot.uses++;
+                return clip;
+            });
+            return slots;
+        }
+
+        /// <summary>按槽位名把动画文件夹里的片段填进树与状态。返回填了几个槽位。</summary>
+        public static int ResolveClips(AnimatorController controller, string animationFolder)
+        {
+            if (controller == null) return 0;
+            var folder = FolderIndex(animationFolder);
+            if (folder.Count == 0) return 0;
+            var filled = new HashSet<string>(StringComparer.Ordinal);
+            ForEachClip(controller, clip =>
+            {
+                if (!folder.TryGetValue(clip.name, out var replacement) || replacement == null || replacement == clip) return clip;
+                filled.Add(clip.name);
+                return replacement;
+            });
+            return filled.Count;
+        }
+
+        /// <summary>动画文件夹的索引：文件名去扩展名优先，片段名兜底（键名里有 `/` 之类时文件名会被改写）。</summary>
+        private static Dictionary<string, AnimationClip> FolderIndex(string animationFolder)
+        {
+            var index = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+            if (string.IsNullOrEmpty(animationFolder) || !AssetDatabase.IsValidFolder(animationFolder)) return index;
+            foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { animationFolder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+                if (clip == null) continue;
+                index[Path.GetFileNameWithoutExtension(path)] = clip;
+                if (!index.ContainsKey(clip.name)) index[clip.name] = clip;
+            }
+
+            return index;
+        }
+
+        /// <summary>一条片段里有没有形态键曲线（没有的话，这个槽位填了也什么都不写）。</summary>
+        public static bool HasShapeCurves(AnimationClip clip)
+        {
+            if (clip == null) return false;
+            foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+                if (binding.type == typeof(SkinnedMeshRenderer)
+                    && binding.propertyName.StartsWith("blendShape.", StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// 树与状态里引用着的每个片段都过一遍 <paramref name="resolve"/>，返回替换后的引用。
+        /// 填动画、换副本、清理都走这一个遍历，免得三处各写一遍递归。
+        /// </summary>
+        private static void ForEachClip(AnimatorController controller, Func<AnimationClip, AnimationClip> resolve)
+        {
+            foreach (var layer in controller.layers) ForEachClip(layer.stateMachine, resolve);
+        }
+
+        private static void ForEachClip(AnimatorStateMachine machine, Func<AnimationClip, AnimationClip> resolve)
+        {
+            if (machine == null) return;
+            foreach (var child in machine.states) child.state.motion = ForEachClip(child.state.motion, resolve);
+            foreach (var child in machine.stateMachines) ForEachClip(child.stateMachine, resolve);
+        }
+
+        private static Motion ForEachClip(Motion motion, Func<AnimationClip, AnimationClip> resolve)
+        {
+            if (motion is BlendTree tree)
+            {
+                var children = tree.children;
+                for (int i = 0; i < children.Length; i++) children[i].motion = ForEachClip(children[i].motion, resolve);
+                tree.children = children;
+                return tree;
+            }
+
+            if (motion is AnimationClip clip) return resolve(clip);
+            return motion;
+        }
+
+        /// <summary>填完动画后，模板里那些**已经没人引用**的片段不必跟着走（只删本文件的子资产）。</summary>
+        private static void PruneUnusedClips(AnimatorController controller, string path)
+        {
+            var used = new HashSet<AnimationClip>();
+            ForEachClip(controller, clip => { used.Add(clip); return clip; });
+            var dead = new List<Object>();
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                if (asset is AnimationClip clip && !used.Contains(clip)) dead.Add(clip);
+            foreach (var asset in dead) Object.DestroyImmediate(asset, true);
         }
 
         /// <summary>
@@ -139,7 +279,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     if (replace.ContainsKey(clip)) continue;
                     target = Object.Instantiate(clip);
                     target.name = clip.name;
-                    target.hideFlags = HideFlags.HideAndDontSave;
+                    // 复制出来的这份要**作为子资产落进本文件**，所以不能带 HideAndDontSave
+                    //（Unity 会报 "kDontSaveInEditor … persistent" 断言）。
                     AssetDatabase.AddObjectToAsset(target, controller);
                     replace[clip] = target;
                 }
@@ -199,31 +340,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>把树/状态里指向外部片段的引用换成我们复制出来的那份。</summary>
-        private static void Repoint(AnimatorController controller, Dictionary<AnimationClip, AnimationClip> replace)
-        {
-            foreach (var layer in controller.layers) RepointMachine(layer.stateMachine, replace);
-        }
-
-        private static void RepointMachine(AnimatorStateMachine machine, Dictionary<AnimationClip, AnimationClip> replace)
-        {
-            if (machine == null) return;
-            foreach (var child in machine.states) child.state.motion = RepointMotion(child.state.motion, replace);
-            foreach (var child in machine.stateMachines) RepointMachine(child.stateMachine, replace);
-        }
-
-        private static Motion RepointMotion(Motion motion, Dictionary<AnimationClip, AnimationClip> replace)
-        {
-            if (motion is BlendTree tree)
-            {
-                var children = tree.children;
-                for (int i = 0; i < children.Length; i++) children[i].motion = RepointMotion(children[i].motion, replace);
-                tree.children = children;
-                return tree;
-            }
-
-            if (motion is AnimationClip clip && replace.TryGetValue(clip, out var found)) return found;
-            return motion;
-        }
+        private static void Repoint(AnimatorController controller, Dictionary<AnimationClip, AnimationClip> replace) =>
+            ForEachClip(controller, clip => replace.TryGetValue(clip, out var found) ? found : clip);
 
         /// <summary>
         /// 把 <paramref name="guid"/> 塞回刚复制出来的 .meta：不这么做的话 CopyAsset 会给文件一个新 GUID，

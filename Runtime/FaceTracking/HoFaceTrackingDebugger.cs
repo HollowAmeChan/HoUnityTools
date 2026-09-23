@@ -16,9 +16,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         public HoFaceRegion outputRegions = HoFaceRegion.All;
         [Tooltip("仅启用面部形态键；手机头姿与眼骨旋转不会写入角色。")]
         public List<HoFaceChannel> channels = HoFaceTrackingChannels.CreateDefaults();
-        [Tooltip("要搬运的那份混合树文件（Jerry 的 vrc-common、你自己编的 ho-2d-test1…）。\n"
-            + "初始化会把**整份文件**复制成下面那个面部控制器，只把动画驱动的对象换成「驱动对象」。")]
-        public RuntimeAnimatorController sourceController;
+        [Tooltip("混合树模板：一份完整的 .controller（树形、坐标、门控、参数都在里面）。\n"
+            + "装配时整份复制成下面那个面部控制器，只把动画驱动的对象换成「驱动对象」。")]
+        public RuntimeAnimatorController treeTemplate;
+        [Tooltip("动画文件夹：装现成片段的地方（比如每个形态键一份 `<键名>.anim`）。\n"
+            + "装配时按**槽位名**（模板里那个片段的名字）找同名 .anim 填进去；找不到的槽位保留模板自带的那份。\n"
+            + "片段是**按形态键名**重绑到驱动对象上的，所以这份文件夹跟模型无关，可以复用。")]
+        public string animationFolder;
         [Tooltip("面捕要驱动的网格 —— 初始化时把控制器里的形态键动画重绑到这些网格上。\n"
             + "某个键在这些网格里谁都没有时，那条曲线原样留着不动（作者的格子数据不丢），"
             + "但那些格子落不到任何网格上 —— 面板的结构摘要会列出来。")]

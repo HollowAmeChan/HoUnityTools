@@ -4,7 +4,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 面捕参数的**命名规则 —— 唯一出处**。会话、面板、用例、文档都从这里取词，不许各自拼字符串。
     ///
     /// 这里只剩"要有哪些参数"这件事。**控制器里那些树的形状、每格写什么键，都不再由代码规定** ——
-    /// 控制器是搬来的作品（见 Editor/FaceTracking/HoFaceAnimationAssets.cs 的搬运说明），
+    /// 控制器是搬来的作品（见 Editor/FaceTracking/HoFaceAnimationAssets.cs 的装配说明），
     /// 它的格子名、轴名、树形都由作者在混合树编辑器里定。作者约定见
     /// docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §5.2。
     ///

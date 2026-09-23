@@ -14,6 +14,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     public sealed class HoFaceTrackingDebuggerEditor : UnityEditor.Editor
     {
         private Vector2 scroll;
+        private Vector2 clipScroll;
         private string search = "";
         private string report = "";
         private bool reportIsError;
@@ -22,6 +23,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool outputExpanded = true;
         private bool middleExpanded = true;
         private bool channelsExpanded;
+        private bool clipsExpanded;
+        /// <summary>「动画填充」折叠框的缓存：模板 + 文件夹没变、且刚算过，就不重复扫树。</summary>
+        private RuntimeAnimatorController slotsFor;
+        private string slotsFolder;
+        private List<HoFaceClipSlot> slots;
+        private double slotsAt;
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
 
@@ -73,30 +80,57 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
             }
 
-            // ── 初始化：把一份现成的混合树文件搬到这台角色上 ──────────────────────
-            // 控制器是**作品**（Jerry 的 vrc-common、我们自己编的 ho-2d-test1…），在混合树编辑器里编出来，
-            // 自带片段与动画。所以这一栏没有"生成配置"，只有两件事：搬哪一份、驱动哪些网格。
+            // ── 初始化（装配）：模板 + 动画文件夹 + 驱动对象 → 这台角色的控制器 ─────────
+            // 三件事分开：树形是**模板作者**的、姿势是**动画作者**的、写谁是**这台角色**的。
+            // 所以这一栏没有"生成配置"，只有这三样输入 + 一个折叠框如实显示每个槽位被填成了什么。
             // 参数不由控制器声明 —— 它只等着被喂，喂什么由中间层决定（见 docs/FACE_TRACKING_WORKFLOW.md）。
             if (HoConstraintEditorSectionGui.DrawSectionHeader(ref initExpanded, "初始化", InitSummary(rig),
                 HoConstraintEditorTheme.AccentBlink))
             using (HoConstraintEditorControls.Card())
             {
                 serializedObject.Update();
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("sourceController"),
-                    new GUIContent("源控制器", "要搬运的那份混合树文件。初始化会把**整份文件**复制成面部控制器，\n"
-                        + "只把动画驱动的对象换成下面的驱动对象（层、状态、参数、子树、片段都跟着走）。"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("treeTemplate"),
+                    new GUIContent("混合树模板", "一份完整的 .controller：树形、坐标、门控、参数都在里面。\n"
+                        + "装配时整份复制成面部控制器，只把动画驱动的对象换成下面的驱动对象。\n"
+                        + "树里引用的每个片段就是一个**槽位**，按名字去动画文件夹里找同名 .anim。"));
                 serializedObject.ApplyModifiedProperties();
 
-                if (rig.sourceController == null)
-                    HoConstraintEditorControls.Caption("先选一份源控制器。");
-                else if (!(rig.sourceController is AnimatorController))
-                    HoConstraintEditorControls.Caption("源控制器必须是纯 Unity AnimatorController（不接受 OverrideController）。");
+                if (rig.treeTemplate == null)
+                    HoConstraintEditorControls.Caption("先选一份混合树模板。");
+                else if (!(rig.treeTemplate is AnimatorController))
+                    HoConstraintEditorControls.Caption("模板必须是纯 Unity AnimatorController（不接受 OverrideController）。");
+
+                // 动画文件夹：存成路径字符串（组件是 Runtime 程序集，拿不了 UnityEditor 的 DefaultAsset）。
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("动画文件夹", HoConstraintEditorTheme.LabelWidth,
+                        "装现成片段的地方（比如每个形态键一份 `<键名>.anim`）。\n"
+                        + "装配时按**槽位名**找同名 .anim 填进去；文件夹里没有的槽位保留模板自带的那份。\n"
+                        + "片段是**按形态键名**重绑到驱动对象上的，所以这份文件夹跟模型无关，可以复用。");
+                    var folder = string.IsNullOrEmpty(rig.animationFolder)
+                        ? null
+                        : AssetDatabase.LoadAssetAtPath<DefaultAsset>(rig.animationFolder);
+                    var picked = (DefaultAsset)EditorGUILayout.ObjectField(folder, typeof(DefaultAsset), false);
+                    if (picked != folder)
+                    {
+                        serializedObject.FindProperty("animationFolder").stringValue =
+                            picked != null ? AssetDatabase.GetAssetPath(picked) : "";
+                        serializedObject.ApplyModifiedProperties();
+                        slotsFor = null;   // 折叠框缓存失效
+                    }
+
+                    HoConstraintEditorControls.Flex();
+                }
+
+                if (!string.IsNullOrEmpty(rig.animationFolder) && !AssetDatabase.IsValidFolder(rig.animationFolder))
+                    HoConstraintEditorControls.Caption("这个动画文件夹不在工程里了，重新指一个。");
 
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Label("驱动对象", HoConstraintEditorTheme.LabelWidth,
-                        "面捕要驱动哪些网格 —— 初始化把控制器里的形态键动画重绑到这些网格上。\n"
-                        + "控制器写了某个键、而这些网格里谁都没有时，那一格会被跳过（下面的结构摘要会列出来）。");
+                        "面捕要驱动哪些网格 —— 装配把控制器里的形态键动画重绑到这些网格上。\n"
+                        + "某个键在这些网格里谁都没有时，那条曲线原样留着不动（作者的格子数据不丢），"
+                        + "但那些格子落不到任何网格上（结构摘要会列出来）。");
                     if (HoConstraintEditorControls.Button("按 Animator 填充", "把角色 Animator 下所有网格填进来。"))
                     {
                         Undo.RecordObject(rig, "Fill face meshes");
@@ -114,19 +148,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("meshes"), GUIContent.none, true);
                 serializedObject.ApplyModifiedProperties();
 
+                DrawClipSlots(rig);
+
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool initialized = rig.faceController != null;
                     using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null
-                        || rig.sourceController == null || rig.meshes == null || rig.meshes.Count == 0))
+                        || rig.treeTemplate == null || rig.meshes == null || rig.meshes.Count == 0))
                     {
-                        // 命名承载语义：「初始化」明确表达"产出文件、之后都在里面改"。
+                        // 命名承载语义：装配 = 产出一份属于这台角色的控制器，之后都在里面。
                         // 一个按钮两种情形（见 Initialize 的注释）：已经有控制器 → 就地重写它；
-                        // 第一次 → 问路径新建。源控制器就是它自己时就地重绑。
+                        // 第一次 → 问路径新建。模板就是它自己时就地填与重绑。
                         var content = initialized
-                            ? new GUIContent("重新初始化…", "把源控制器**整份**搬过来覆盖它：\n"
-                                + "GUID 不变，所以引用它的地方不会断；旧的层/片段/参数由这次搬运决定。")
-                            : new GUIContent("初始化控制器", "把源控制器整份搬成一份属于这台角色的控制器。\n"
+                            ? new GUIContent("重新装配…", "拿模板 + 动画文件夹 + 驱动对象重来一遍：\n"
+                                + "GUID 不变，所以引用它的地方不会断；旧的层/片段/参数由这次装配决定。")
+                            : new GUIContent("装配控制器", "把模板整份搬成一份属于这台角色的控制器，并填入动画。\n"
                                 + "这是唯一会写文件的动作。");
                         if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
                     }
@@ -295,7 +331,78 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             DrawChannels(rig, session);
         }
 
-        /// <summary>初始化摘要：搬了没有、搬过来的是几层几个片段。</summary>
+        /// <summary>
+        /// 「动画填充」折叠框：模板里每个片段都是一个**槽位**，按槽位名去动画文件夹找同名 `.anim`。
+        /// 这里显示的是"这份模板 + 这份文件夹"现在会装出什么 —— **不用先装配就能看**，
+        /// 因为它读的是模板与文件夹本身，不是已落盘的控制器。
+        /// </summary>
+        private void DrawClipSlots(HoFaceTrackingDebugger rig)
+        {
+            clipsExpanded = HoConstraintEditorControls.InlineFoldout(clipsExpanded, "动画填充",
+                "模板里每个片段都是一个槽位：按槽位名去动画文件夹里找同名 .anim，找到就用它的，找不到就保留模板自带的那份。\n"
+                + "这里不需要先装配就能看：它读的是模板与文件夹本身。");
+            var list = SlotsFor(rig);
+            if (rig.treeTemplate == null)
+            {
+                HoConstraintEditorControls.Caption("选了模板之后，这里会列出它的每个槽位被填成了什么。");
+                return;
+            }
+
+            if (list == null || list.Count == 0)
+            {
+                HoConstraintEditorControls.Caption("这份模板里没有片段槽位。");
+                return;
+            }
+
+            int fromFolder = 0, own = 0, missing = 0;
+            foreach (var slot in list)
+            {
+                if (slot.fromFolder != null) fromFolder++;
+                else if (slot.Writes) own++;
+                else missing++;
+            }
+
+            HoConstraintEditorControls.Caption("槽位 " + list.Count + " 个：文件夹 " + fromFolder
+                + " · 模板自带 " + own + " · 缺 " + missing);
+            if (!clipsExpanded) return;
+
+            // 有问题的排前面：缺的（什么都没写）→ 用模板自带的（可能是占位）→ 文件夹的。
+            var ordered = new List<HoFaceClipSlot>(list);
+            ordered.Sort((a, b) => Rank(a).CompareTo(Rank(b)));
+            clipScroll = EditorGUILayout.BeginScrollView(clipScroll, GUILayout.Height(130.0f));
+            foreach (var slot in ordered)
+            {
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.ValueText(slot.Status, 62.0f);
+                    HoConstraintEditorControls.Gap(4.0f);
+                    HoConstraintEditorControls.Caption(slot.name
+                        + (slot.uses > 1 ? "　×" + slot.uses : "")
+                        + (slot.fromFolder == null && slot.Writes ? "　（模板自带）" : "")
+                        + (slot.Status == "缺" ? "　（这个槽位不会写任何键）" : ""));
+                    HoConstraintEditorControls.Flex();
+                }
+            }
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        private static int Rank(HoFaceClipSlot slot) => slot.fromFolder != null ? 2 : slot.Writes ? 1 : 0;
+
+        /// <summary>槽位列表带缓存（一秒一次），免得每次重画都重扫一遍几百棵树。</summary>
+        private List<HoFaceClipSlot> SlotsFor(HoFaceTrackingDebugger rig)
+        {
+            bool fresh = slotsFor == rig.treeTemplate && slotsFolder == rig.animationFolder
+                && EditorApplication.timeSinceStartup - slotsAt < 1.0;
+            if (fresh) return slots;
+            slotsFor = rig.treeTemplate;
+            slotsFolder = rig.animationFolder;
+            slotsAt = EditorApplication.timeSinceStartup;
+            slots = HoFaceAnimationAssets.Slots(rig.treeTemplate, rig.animationFolder);
+            return slots;
+        }
+
+        /// <summary>初始化摘要：装配了没有、装过来的是几层几个片段。</summary>
         private static string InitSummary(HoFaceTrackingDebugger rig)
         {
             if (rig.faceController == null) return "未初始化";
@@ -461,59 +568,70 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 初始化 = 把源控制器**整份**搬成这台角色的面部控制器。**目标就是组件当前在用的那个资产**，
-        /// 所以用户只看到**一个按钮**：
+        /// 装配 = 模板（树形）+ 动画文件夹（数据）+ 驱动对象（写谁）→ 这台角色的控制器。
+        /// **目标就是组件当前在用的那个资产**，所以用户只看到**一个按钮**：
         /// <list type="bullet">
         /// <item>已经有控制器 → 就地重写它（GUID 不变，引用它的地方不会断）；</item>
         /// <item>还没有 → 问路径新建；目标已存在时再确认一次覆盖。</item>
-        /// <item>源控制器就是它自己 → 就地重绑动画对象（没有可复制的东西）。</item>
+        /// <item>模板就是它自己 → 就地填动画与重绑（没有可复制的东西）。</item>
         /// </list>
         /// </summary>
         private void Initialize(HoFaceTrackingDebugger rig)
         {
-            var source = rig.sourceController as AnimatorController;
-            if (source == null) { Fail(new InvalidOperationException("先选一份源控制器。")); return; }
+            var template = rig.treeTemplate as AnimatorController;
+            if (template == null) { Fail(new InvalidOperationException("先选一份混合树模板。")); return; }
             if (rig.meshes == null || rig.meshes.Count == 0) { Fail(new InvalidOperationException("驱动对象列表是空的 —— 先「按 Animator 填充」。")); return; }
             if (rig.targetAnimator == null) { Fail(new InvalidOperationException("先指定角色 Animator。")); return; }
+            if (!string.IsNullOrEmpty(rig.animationFolder) && !AssetDatabase.IsValidFolder(rig.animationFolder))
+            { Fail(new InvalidOperationException("动画文件夹不在工程里了：" + rig.animationFolder)); return; }
 
-            string sourcePath = AssetDatabase.GetAssetPath(source);
+            string templatePath = AssetDatabase.GetAssetPath(template);
             var current = rig.faceController as AnimatorController;
             string path = current != null ? AssetDatabase.GetAssetPath(current) : "";
             if (string.IsNullOrEmpty(path))
             {
-                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_Controller", "controller",
-                    "产出一份属于这台角色的面部控制器；以后「重新初始化」只动这一个文件。");
+                path = EditorUtility.SaveFilePanelInProject("装配面部控制器", "Face_Controller", "controller",
+                    "产出一份属于这台角色的面部控制器；以后「重新装配」只动这一个文件。");
                 if (string.IsNullOrEmpty(path)) return;
                 if (AssetDatabase.LoadMainAssetAtPath(path) != null
                     && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
-                        path + "\n\n该文件已存在，会被整个重写。", "覆盖并初始化", "取消"))
+                        path + "\n\n该文件已存在，会被整个重写。", "覆盖并装配", "取消"))
                     return;
             }
-            else if (string.Equals(path, sourcePath, StringComparison.Ordinal))
+            else if (string.Equals(path, templatePath, StringComparison.Ordinal))
             {
-                // 源就是目标：没有可复制的，只把动画对象重绑一遍。
-                if (!EditorUtility.DisplayDialog("就地重绑吗？",
-                    path + "\n\n这份文件既是源也是目标，会就地重绑它的动画对象。", "重绑", "取消"))
+                // 模板就是目标：没有可复制的，只填动画 + 重绑驱动对象。
+                if (!EditorUtility.DisplayDialog("就地装配吗？",
+                    path + "\n\n这份文件既是模板也是目标，会就地填入动画并重绑驱动对象。", "装配", "取消"))
                     return;
             }
-            else if (!EditorUtility.DisplayDialog("重新初始化吗？",
-                path + "\n\n会把源控制器（" + source.name + "）**整份**搬过来覆盖它。\n"
+            else if (!EditorUtility.DisplayDialog("重新装配吗？",
+                path + "\n\n会把模板（" + template.name + "）**整份**搬过来覆盖它，并填入动画文件夹里的片段。\n"
                 + "资产 GUID 不变，所以引用它的地方（比如窥视对象）不会断。", "覆盖", "取消"))
                 return;
 
             try
             {
-                var controller = HoFaceAnimationAssets.Adopt(source, path, rig.meshes, rig.targetAnimator, true);
-                Undo.RecordObject(rig, "Initialize face controller");
+                var controller = HoFaceAnimationAssets.Adopt(template, path, rig.meshes, rig.targetAnimator,
+                    rig.animationFolder, true);
+                Undo.RecordObject(rig, "Assemble face controller");
                 rig.faceController = controller;
                 EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
                 EditorUtility.SetDirty(rig);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
                 reportIsError = false;
                 var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
-                report = "已初始化 " + path + "：" + info.layers + " 层 / " + info.clips + " 个片段，驱动 "
+                int own = 0, missing = 0;
+                foreach (var slot in HoFaceAnimationAssets.Slots(template, rig.animationFolder))
+                {
+                    if (slot.fromFolder != null) continue;
+                    if (slot.Writes) own++; else missing++;
+                }
+
+                report = "已装配 " + path + "：" + info.layers + " 层 / " + info.clips + " 个片段，驱动 "
                     + info.shapes.Count + " 个形态键"
-                    + (info.missing.Count > 0 ? "（" + info.missing.Count + " 个键驱动对象上没有，已跳过）" : "") + "。";
+                    + (info.missing.Count > 0 ? "（" + info.missing.Count + " 个键驱动对象上没有）" : "")
+                    + "；槽位用模板自带的 " + own + " 个、缺 " + missing + " 个。";
             }
             catch (Exception e) { Fail(e); }
         }

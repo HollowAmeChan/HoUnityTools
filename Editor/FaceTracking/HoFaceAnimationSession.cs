@@ -40,7 +40,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly HashSet<string> parameters = new HashSet<string>(StringComparer.Ordinal);
         private GameObject shadowRoot;
         private Animator shadow;
-        private RuntimeAnimatorController sourceController;
+        private RuntimeAnimatorController runningController;
         private string mappingStamp;
         private bool disposed;
         private bool configured;
@@ -177,7 +177,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 selected[i] = nextSelected[i];
             }
             string stamp = MappingStamp();
-            if (changed || sourceController != Rig.faceController || stamp != mappingStamp)
+            if (changed || runningController != Rig.faceController || stamp != mappingStamp)
             {
                 Rebuild();
                 mappingStamp = stamp;
@@ -260,7 +260,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             var text = new System.Text.StringBuilder();
             foreach (var channel in Rig.channels) if (channel != null) text.Append(channel.shape).Append(':').Append(channel.parameter).Append(';');
-            text.Append("src:").Append(Rig.sourceController != null ? Rig.sourceController.GetInstanceID() : 0).Append(';');
+            text.Append("src:").Append(Rig.treeTemplate != null ? Rig.treeTemplate.GetInstanceID() : 0).Append(';');
             if (Rig.meshes != null)
                 foreach (var mesh in Rig.meshes)
                     text.Append(mesh != null ? mesh.GetInstanceID() : 0).Append(';');
@@ -301,7 +301,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 parameters.Clear();
                 foreach (string name in next.floatParameters) parameters.Add(name);
                 shadow.runtimeAnimatorController = next.controller;
-                sourceController = Rig.faceController;
+                runningController = Rig.faceController;
                 written = false;
             }
             catch { if (Compiled != next) next.Dispose(); throw; }

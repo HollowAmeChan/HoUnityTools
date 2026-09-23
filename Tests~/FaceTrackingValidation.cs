@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using Hollow.HoUnityTools.Constraints;
+using Hollow.HoUnityTools.Editor.AnimationTools;
 using Hollow.HoUnityTools.Editor.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking;
 using UnityEditor;
@@ -60,10 +61,10 @@ public static class HoFaceTrackingValidation
             mesh.AddBlendShapeFrame("JellyEye", 100, new[] { Vector3.forward * 0.1f, Vector3.zero, Vector3.zero }, new Vector3[3], new Vector3[3]);
             AssetDatabase.CreateAsset(mesh, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationMesh.asset"));
             renderer.sharedMesh = mesh;
-            // ── 搬运：初始化 = 把一份现成的混合树文件搬到这台角色上 ────────────────
+            // ── 装配：初始化 = 把一份现成的混合树文件搬到这台角色上 ────────────────
             // 控制器是**作品**（Jerry 的 vrc-common、我们自己编的 ho-2d-test1…），代码不再生成树。
-            // 所以这里先搭一份"作者的控制器"当夹具，再断言搬运的结果。
-            // 别人的共享片段也先造好：搬运时必须**复制成本文件的子资产**再改，绝不能就地改它。
+            // 所以这里先搭一份"作者的控制器"当夹具，再断言装配的结果。
+            // 别人的共享片段也先造好：装配时必须**复制成本文件的子资产**再改，绝不能就地改它。
             string externalPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationExternal.anim");
             var external = new AnimationClip { name = "MouthCloseFromElsewhere", frameRate = 60f };
             AnimationUtility.SetEditorCurve(external,
@@ -71,12 +72,40 @@ public static class HoFaceTrackingValidation
                 AnimationCurve.Constant(0f, 1f / 60f, 100f));
             AssetDatabase.CreateAsset(external, externalPath);
 
+            // 动画文件夹：装配时按**槽位名**顶替模板自带的那一份。
+            // 给 jawOpen 那份槽位放一个"能认出来"的版本：jawOpen 仍是 100（不打乱后面的运行时断言），
+            // 但**多写一个 mouthDimpleLeft 55** —— 有它才说明用的确实是文件夹这一份。
+            const string ClipFolder = "Assets/ValidationClips";
+            if (AssetDatabase.IsValidFolder(ClipFolder)) AssetDatabase.DeleteAsset(ClipFolder);
+            AssetDatabase.CreateFolder("Assets", "ValidationClips");
+            var folderJaw = new AnimationClip { name = "jawOpen_100", frameRate = 60f };
+            AnimationUtility.SetEditorCurve(folderJaw,
+                EditorCurveBinding.FloatCurve("Elsewhere/Head", typeof(SkinnedMeshRenderer), "blendShape.jawOpen"),
+                AnimationCurve.Constant(0f, 1f / 60f, 100f));
+            AnimationUtility.SetEditorCurve(folderJaw,
+                EditorCurveBinding.FloatCurve("Elsewhere/Head", typeof(SkinnedMeshRenderer), "blendShape.mouthDimpleLeft"),
+                AnimationCurve.Constant(0f, 1f / 60f, 55f));
+            AssetDatabase.CreateAsset(folderJaw, ClipFolder + "/jawOpen_100.anim");
+
             string sourcePath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationSource.controller");
             var source = BuildSourceController(sourcePath, external);
 
+            // 装配前先看槽位清单（面板那个折叠框读的就是它）：文件夹的 / 模板自带的 / 缺的。
+            var slots = HoFaceAnimationAssets.Slots(source, ClipFolder);
+            var jawSlot = slots.Find(s => s.name == "jawOpen_100");
+            var ownSlot = slots.Find(s => s.name == "mouthSmileLeft_100");
+            var emptySlot = slots.Find(s => s.name == "EmptyPlaceholder");
+            Check(jawSlot != null && jawSlot.fromFolder != null && jawSlot.Status == "文件夹",
+                "槽位按名字对上了文件夹里的片段（" + (jawSlot != null ? jawSlot.Status : "没有这个槽位") + "）");
+            Check(ownSlot != null && ownSlot.fromFolder == null && ownSlot.Writes && ownSlot.Status == "模板自带",
+                "文件夹里没有的槽位走模板自带的那份（" + (ownSlot != null ? ownSlot.Status : "没有这个槽位") + "）");
+            Check(emptySlot != null && !emptySlot.Writes && emptySlot.Status == "缺",
+                "模板里摆着空片段、文件夹也没有的槽位会被报成「缺」（" + (emptySlot != null ? emptySlot.Status : "没有这个槽位") + "）");
+
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
-            rig.sourceController = source;
+            rig.treeTemplate = source;
+            rig.animationFolder = ClipFolder;
             rig.meshes = new System.Collections.Generic.List<SkinnedMeshRenderer> { renderer };
             // 默认是 All（凝视也开 —— LookAt 不是一定存在）。这里**刻意关掉凝视**，
             // 用来验证"排除凝视"这条路径本身，不能再赖默认值。
@@ -90,12 +119,12 @@ public static class HoFaceTrackingValidation
             Channel("eyeLookInLeft").manual = 1;
 
             string controllerPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller");
-            var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator);
+            var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, ClipFolder);
             rig.faceController = controller;
             Check(controller.layers.Length == source.layers.Length && controller.layers[0].name == source.layers[0].name,
-                "搬运是整份复制：层与状态原样带过来");
+                "装配是整份复制：层与状态原样带过来");
             Check(controller.parameters.Length == source.parameters.Length,
-                "搬运是整份复制：参数一个不少（" + controller.parameters.Length + "）");
+                "装配是整份复制：参数一个不少（" + controller.parameters.Length + "）");
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
                 Check(compiled.bindings.Count == 44, "default output filter excludes eight gaze shapes");
 
@@ -104,8 +133,18 @@ public static class HoFaceTrackingValidation
                 EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.jawOpen")) : null;
             Check(jawCurve != null && Mathf.Abs(jawCurve.Evaluate(0f) - 100f) < 0.01f,
                 "形态键曲线被重绑到驱动对象上（Source/Face → Body），值原样");
-            Check(jawClip != null && AnimationUtility.GetCurveBindings(jawClip).Length == 1,
+            Check(jawClip != null && AnimationUtility.GetCurveBindings(jawClip).Length == 2,
+                "这个槽位用的是文件夹里的那一份（它多写了 mouthDimpleLeft，于是两条曲线）");
+            var dimpleCurve = jawClip != null ? AnimationUtility.GetEditorCurve(jawClip,
+                EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.mouthDimpleLeft")) : null;
+            Check(dimpleCurve != null && Mathf.Abs(dimpleCurve.Evaluate(0f) - 55f) < 0.01f,
+                "文件夹里那份多写的键也一起被重绑过来了（55）");
+            Check(AnimationUtility.GetEditorCurve(jawClip,
+                EditorCurveBinding.FloatCurve("Source/Face", typeof(SkinnedMeshRenderer), "blendShape.jawOpen")) == null,
                 "是搬不是复制：旧路径上的绑定没有留下来");
+            var emptyClip = FindClip(controller, "EmptyPlaceholder");
+            Check(emptyClip != null && AnimationUtility.GetCurveBindings(emptyClip).Length == 0,
+                "没有对应动画的槽位装配后什么都不写（空片段仍是空的）");
 
             var stillExternal = AnimationUtility.GetEditorCurve(external,
                 EditorCurveBinding.FloatCurve("Source/Face", typeof(SkinnedMeshRenderer), "blendShape.mouthClose"));
@@ -123,6 +162,30 @@ public static class HoFaceTrackingValidation
             Check(info.layers == 1 && info.states == 1 && info.clips > 0,
                 "结构摘要读的是资产实况（" + info.layers + " 层 / " + info.states + " 状态 / " + info.clips + " 个片段）");
 
+            // ── 形态键基础动画生成器（通用动画工具，面捕只拿它当槽位数据）──────────────────
+            const string BuiltFolder = "Assets/ValidationBuiltClips";
+            if (AssetDatabase.IsValidFolder(BuiltFolder)) AssetDatabase.DeleteAsset(BuiltFolder);
+            AssetDatabase.CreateFolder("Assets", "ValidationBuiltClips");
+            var second = new GameObject("SecondFace");
+            second.transform.SetParent(root.transform, false);
+            var secondMesh = second.AddComponent<SkinnedMeshRenderer>();
+            secondMesh.sharedMesh = mesh;   // 同一个网格资产：两张网格都有全部 52 个键 + JellyEye
+            var built = HoBlendShapeClipBuilder.Build(new[] { renderer, secondMesh }, root.transform, BuiltFolder);
+            Check(built.names.Count == 53, "每个非重合键名一份片段（" + built.names.Count + " = 52 ARKit + JellyEye）");
+            var builtJaw = AssetDatabase.LoadAssetAtPath<AnimationClip>(BuiltFolder + "/jawOpen.anim");
+            Check(builtJaw != null && builtJaw.name == "jawOpen", "片段名就是键名（" + BuiltFolder + "/jawOpen.anim）");
+            Check(CountCurves(builtJaw, "jawOpen") == 2, "一个片段写所有有这个键的网格（"
+                + CountCurves(builtJaw, "jawOpen") + " 条曲线）");
+            var builtJawCurve = AnimationUtility.GetEditorCurve(builtJaw,
+                EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.jawOpen"));
+            Check(builtJawCurve != null && Mathf.Abs(builtJawCurve.Evaluate(0.5f) - 100f) < 0.01f,
+                "值是 100 常量，不是斜坡（混合树采的是姿势，片段里没有时间轴）");
+            string builtGuid = AssetDatabase.AssetPathToGUID(BuiltFolder + "/jawOpen.anim");
+            var again = HoBlendShapeClipBuilder.Build(new[] { renderer, secondMesh }, root.transform, BuiltFolder);
+            Check(again.created == 0 && again.updated == 53 && AssetDatabase.AssetPathToGUID(BuiltFolder + "/jawOpen.anim") == builtGuid,
+                "重跑是覆盖式的：同名片段保留资产本身（GUID 不变），只重写曲线");
+            UnityEngine.Object.DestroyImmediate(second);
+
             // 一个键落在两个驱动对象上：两边都要写；把对象去掉再重绑要能回来（幂等）。
             var alternate = new GameObject("Meshes");
             alternate.transform.SetParent(root.transform, false);
@@ -138,21 +201,21 @@ public static class HoFaceTrackingValidation
             HoFaceAnimationAssets.Retarget(controller, rig.meshes, animator);
             Check(CountShapeCurves(controller, "jawOpen") == 1, "重绑跟着驱动对象列表走：去掉就回到一条");
             UnityEngine.Object.DestroyImmediate(alternate);
-            // ── 覆盖式搬运：真的把文件换掉，但**不改 GUID** ─────────────────────────
+            // ── 覆盖式装配：真的把文件换掉，但**不改 GUID** ─────────────────────────
             // 改 GUID 的话，场景里引用过这个控制器的地方（窥视对象的 Animator）就全断了。
             int clipsBefore = CountClips(controllerPath);
             string guidBefore = AssetDatabase.AssetPathToGUID(controllerPath);
-            controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, true);
+            controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, ClipFolder, true);
             rig.faceController = controller;
             Check(AssetDatabase.AssetPathToGUID(controllerPath) == guidBefore,
-                "覆盖式搬运保留资产 GUID —— 引用它的地方不会断");
-            Check(CountClips(controllerPath) == clipsBefore, "覆盖式搬运不堆子资产（" + clipsBefore + " 个片段）");
+                "覆盖式装配保留资产 GUID —— 引用它的地方不会断");
+            Check(CountClips(controllerPath) == clipsBefore, "覆盖式装配不堆子资产（" + clipsBefore + " 个片段）");
             Check(CountShapeCurves(controller, "jawOpen") == 1, "覆盖后依然是重绑过的（曲线指向驱动对象）");
 
             // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
             //（0.6 的输入 → 98.98 → 246.28 → 1059.33），不能靠运气。
-            var driveState = FindState(controller, "Ho/00 Drive");   // 夹具那层的名字，搬运不该改它
-            Check(driveState != null, "搬运没有动层结构：驱动段还在");
+            var driveState = FindState(controller, "Ho/00 Drive");   // 夹具那层的名字，装配不该改它
+            Check(driveState != null, "装配没有动层结构：驱动段还在");
             driveState.writeDefaultValues = false;
             bool rejected = false;
             try { using (var compiled = HoFaceAnimationAssets.Compile(rig)) { } } catch (InvalidOperationException) { rejected = true; }
@@ -169,7 +232,7 @@ public static class HoFaceTrackingValidation
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
                 outputBindings = compiled.bindings.Count;
 
-            Check(outputBindings == 44, "搬运后的输出集合还是那 44 个（凝视排除）("
+            Check(outputBindings == 44, "装配后的输出集合还是那 44 个（凝视排除）("
                 + outputBindings + " bindings)");
 
             // ── 轴算术（中间层）：两根 0~1 的通道合成一根 -1~1 的单轴 ────────────────
@@ -182,7 +245,7 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(axisPositive) < 0.0001f && Mathf.Abs(axisNegative - 0.7f) < 0.0001f,
                 "the axis splits back into two unsigned halves");
 
-            // 二：**建树这件事已经不在代码里了**。控制器是搬来的作品（§ 搬运），
+            // 二：**建树这件事已经不在代码里了**。控制器是搬来的作品（§ 装配），
             // 它的树形/坐标/每格写什么由作者在混合树编辑器里定 —— 所以这里没有 Kit 可测。
 
             // ── 弹簧驱动（定案 19 里果冻的落点：独立组件 + 预设 + 读已落下的键）──────────
@@ -400,8 +463,14 @@ public static class HoFaceTrackingValidation
             AttachFlatLeaf(root, region, HoFaceNaming.Gate(gate));
         }
 
-        // 一个"驱动对象上没有"的键：搬运时曲线该原样留着，并被结构摘要报出来。
+        // 一个"驱动对象上没有"的键：装配时曲线该原样留着，并被结构摘要报出来。
         AttachFlatLeaf(FindTree(root, "LipRegion"), SourceShapeClip(controller, "HoNotOnMesh"), "ARKit/HoNotOnMesh");
+
+        // 一个**空槽位**：模板里摆着片段但没写任何键，文件夹里也没有同名的 —— 装配后它什么都不写。
+        controller.AddParameter("ARKit/EmptySlot", AnimatorControllerParameterType.Float);
+        var empty = new AnimationClip { name = "EmptyPlaceholder", frameRate = 60f };
+        AssetDatabase.AddObjectToAsset(empty, controller);
+        AttachFlatLeaf(FindTree(root, "EyeRegion"), empty, "ARKit/EmptySlot");
 
         var state = controller.layers[0].stateMachine.AddState("Face");
         state.writeDefaultValues = true;   // Direct 树的前提
@@ -489,6 +558,24 @@ public static class HoFaceTrackingValidation
         foreach (var binding in AnimationUtility.GetCurveBindings(clip))
             if (binding.propertyName == "blendShape." + shape) count++;
         return count;
+    }
+
+    /// <summary>一条片段里某个键的曲线条数（不限控制器 —— 生成器那条用例直接拿片段问）。</summary>
+    private static int CountCurves(AnimationClip clip, string shape)
+    {
+        if (clip == null) return 0;
+        int count = 0;
+        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+            if (binding.propertyName == "blendShape." + shape) count++;
+        return count;
+    }
+
+    /// <summary>按片段名找（装配后模板里的片段仍是子资产，只是可能没有曲线）。</summary>
+    private static AnimationClip FindClip(AnimatorController controller, string name)
+    {
+        foreach (AnimationClip clip in controller.animationClips)
+            if (clip != null && clip.name == name) return clip;
+        return null;
     }
 
     private static void PlayTests()
