@@ -1,4 +1,4 @@
-> **已归档（2026-09-23）。这是一份**过程记录**，不是现状。**
+﻿> **已归档（2026-09-23）。这是一份**过程记录**，不是现状。**
 > 它是从"解析 5 个商业面捕包"开始的一路论证日志，很多小节标着「作废 / 撤销 / 改判」，
 > 因为结论是在过程中长出来的。**要了解现状请读：**
 > [面捕工作流](../FACE_TRACKING_WORKFLOW.md)（怎么用）、
@@ -1246,7 +1246,7 @@ Ho/00 Drive (Direct)
 | 下颌·前后 | jawForward | 1D（2 姿势） |
 | 下颌·左右 | jawLeft / jawRight | **双向 1D**（右−左，3 姿势） |
 | 嘴·左右 | mouthLeft / mouthRight | **双向 1D**（3 姿势） |
-| 唇角·左/右 | smile / frown | **双向 1D**（欣↔悲，3 姿势）= Shinano 的 `SmileSadLeft/Right` |
+| 唇角·左/右 | smile / frown | **双向 1D**：Jerry 是**两棵各 2 姿势的 1D 分占半轴**（欣 `[0,1]` / 悲 `[−1,0]`，资产A `Mouth Smile Left Blend` L9566 / `Mouth Frown Left Blend` L5259）——~~3 姿势~~；Shinano 则是**一棵 4 姿势**（阈值 −0.8/−0.1/+0.1/+0.8，资产C `Mouth Sad Smile Left` L20266）。**2026-09-23 一手复核改** |
 | 嘴·唇闭合 | mouthClose | 1D（2 姿势） |
 | 上唇 左/右 | mouthUpperUp | 1D ×2 |
 | 上唇·卷/耸 | mouthRollUpper / mouthShrugUpper | 1D ×2 |

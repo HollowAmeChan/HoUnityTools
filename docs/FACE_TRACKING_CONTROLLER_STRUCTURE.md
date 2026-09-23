@@ -273,12 +273,61 @@ LidL__BlinkWide__Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        �
 | **区域门控**（`EyeTrackingActive` / `LipTrackingActive`） | ✅ 抄了 | `Ho/Drive/Gate/*` 参数 + 两棵区域子树 |
 | **参数预处理链**（平滑 / 灵敏度 / 上下限） | ✅ 抄了，但**在树外面** | 中间层（[面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)） |
 | **EyeSync 式左右交叉混合** | ✅ 抄了语义，**实现放在 C#** | `HoFaceEyeSync`（VRCFT 也在 C#：`Correctors.BlendOpposingParams`） |
-| **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝；`JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间 | ❌ 没抄 | —— |
+| **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝 | ✅ 已确认（资产A L207-218、L417-428） | 我们**没抄**：耦合留在中间层 / 用户自己的 `(EDIT THIS)` 里 |
+| `JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间 | ⚠️ **未能确认**：资产A 里以 `JawOpen` 为 blendParameter 的三处（L2052 / L10891 / L14791）都是 `m_BlendType: 0`（1D），那个 `m_BlendParameterY: …MouthClosed` 是 1D 树的**残留字段** | 我们没抄，也不需要 —— 见 §6.1 |
 | **限制 / 修正**：若干子树外面套 `FaceTrackingLimits` | ❌ 没抄 | 中间层欠账 |
-| **眼球**：SimpleDirectional2D + 四方向（可选四斜向） | ❌ 现在是直通叶子 | —— |
+| **眼球**：一棵 2D 树管四方向，坐标 **±0.7**（中性 `(0,0)`） | ✅ 已确认五姿势；Shinano 加对角共 **9 姿势** | ❌ 现在是直通叶子（§6.1 有完整形状） |
 
 后三条都是同一个处方的更多例子：**会重叠的语义进同一棵树 / 参数算术留在外面**
 （判据见 [混合树的能力边界](BLEND_TREE_LIMITS.md)）。
+
+### 6.1 成对通道与双向轴：一手取证（2026-09-23）
+
+**为什么单开一节**：我们文档里"参考实现怎么做"的结论，有一部分来自 `.research/` 里的**转储**，
+而这次取证发现**转储有两处会骗人**（见本节末尾）。所以下面每一条都回到**原始 YAML**（并用 `.meta`
+把 GUID 解成片段名）复核过，"我们的记录"与"原始资产"不一致的地方也标出来了。
+
+一手资产（都在本机）：
+- **A** = `D:\Unity_Fork\HoUnityTools\.research\VRCFaceTracking-Templates\Packages\adjerry91.vrcft.templates\Animators\ARkit Blendshapes\FX - Face Tracking - ARKit Blendshapes.controller`
+- **B** = kipfel 随包分发的旧版副本（路径见 `.research` 调查记录），与 A 多处**字节级同构**
+- **C** = Shinano 第三方实现 `FX_FT_added 2.controller`
+
+| 通道对 | 成熟实现的实际形状（一手） | 出处 | 与我们的差异 |
+| --- | --- | --- | --- |
+| `jawLeft` / `jawRight` | **合成一根 `JawX ∈ [−1,1]`，3 姿势 1D**：thr `−1 = Jaw_Left` / `0 = Jaw_X 0`（中性）/ `+1 = Jaw_Right`。**控制器里根本没有 `JawLeft`/`JawRight` 参数** | A `Jaw X Blend` L2186-2218；参数表 L7102 | 我们是两个直通叶子（没合） |
+| `mouthLeft` / `mouthRight` | 同形：`Mouth X Blend`，3 姿势 1D，`−1/0/+1` | A L8207-8245；B L8088-8120（同构） | 同上 |
+| `mouthSmile` / `mouthFrown`（每侧） | **合成一根 `SmileFrownLeft/Right ∈ [−1,1]`，但树是两棵各 2 姿势的 1D 分占半轴**：欣 `[0,1]`、悲 `[−1,0]` —— **不是一棵 3 姿势树** | A `Mouth Smile Left Blend` L9566-9587、`Mouth Frown Left Blend` L5259-5280；`…Right` L609-631 | 我们是直通叶子 |
+| ↳ 反例 | Shinano 把同一件事做成**一棵 4 姿势 1D**：thr `−0.8 / −0.1 / +0.1 / +0.8`（Min/Max 也收窄到 ±0.8） | C `Mouth Sad Smile Left` L20266-20306 | —— |
+| `eyeLookIn` / `eyeLookOut` | **压成一根水平轴，坐标对称 ±0.7**（不是 0..1 半轴） | A `Eye Look Left Blend` L2343-2397（`m_BlendType: 1` = SimpleDirectional2D） | 我们是直通叶子 |
+| `eyeLookUp` / `eyeLookDown` | **第二根垂直轴，同为 ±0.7，与水平轴同处一棵 2D 树（5 姿势）**；左右眼用不同水平轴，垂直轴**共用** | 同上；Shinano 加对角共 9 姿势（C L21526-） | 同上 |
+| `eyeBlink` / `eyeWide` | **不是 ±1 双向轴**：C# 先加成一根 **0..1 的"眼睑位置"** `EyeLid = Openness*0.75 + EyeWide*0.25` —— **中性落在 0.75**、闭眼 0、睁大 1.0；再与 `EyeSquint` 组成 FreeformCartesian2D（5 姿势：Blink `(0,0)` / Neutral `(0.75,0)` / Wide `(1,0)` / Squint `(0.25,1)` / OpenSquint `(0.75,1)`） | C# `UnifiedExpressionsParameters.cs` L57-58；A `Right Eye Lid Blend` L10898-10952 | **⚠️ 我们的眼睑轴是 ±1、中性在中间（`A3` 的 `X1`）**，与成熟做法**不同**（见 §6.1 末尾"待定"） |
+| N 通道 → 2 轴 → 一棵 2D 树 | **有，至少 4 个实例**（眼动 4→2；眼睑 3→2；`Brow Sad` 用左右两根双向轴；`Brow Sad Emulation` `(−0.7,−0.7)`） | A L2343 / L10898 / L3687-3742 | 我们只有眼睑这一棵 |
+
+**"合并出来的那个值是谁写的"这件事，成熟实现和我们架构一致（一手确认）**：`FT/v2/*` 由**外部
+VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，那是 OSC 原始值"），进图后再由
+**动画曲线直接写 Animator 参数**（clip `attribute: OSCm/Proxy/…`、`path:` 为空、`classID: 95`、
+单关键帧；Proxy 常量 ±1.25 = clamp(Smooth,±1)×1.25）搬运/夹取，**树只读 `OSCm/Proxy/*`，自己不产参数**。
+⇒ 我们"**参数算术留在树外面、树只消费**"的选择与成熟做法一致，不需要改。
+
+**这次取证纠正/推翻的我们自己的记录**：
+
+| 我们的说法 | 结论 |
+| --- | --- |
+| 归档 `FACE_TRACKING_PIPELINE_SPLIT.md:1249`「Shinano `SmileSadLeft/Right` 是 3 姿势双向 1D」 | ❌ **错**：Shinano 是 **4 姿势、阈值 −0.8/−0.1/+0.1/+0.8**（C L20266-20306） |
+| 本文 §6 旧版「`JawOpen` 是 `(JawOpen, MouthClosed)` 二维空间」 | ⚠️ **未能确认**（A 里那三处都是 1D + 残留 `m_BlendParameterY`） |
+| 归档 `arkit-mouthclose-report.md:446`「真正二维的树只有 `EyeRightX × EyeY` 与 `EyeLeftX × EyeY`」 | ✅ 确认（坐标 `(0.7,0)` / `(0,0.7)` / `(0,-0.7)`） |
+| `BLEND_TREE_LIMITS.md`「`OSCm/Proxy/v2/*` 那些 `*Smoother*` 是曲线驱动参数」 | ✅ 确认（空 path + `classID 95`） |
+| 全局左右合一的 `SmileSad`/`SmileFrown` | 参数在 C# 里存在（左右取平均），但**三个成熟控制器里没有一棵树消费它** —— 我们不用做 |
+
+**⚠️ 转储的两个坑（复现时必读，见 §7）**：`inspect_arkit_controller.py` 的 `thr=` 列**不打印 0 与 −1**，
+所以 3 子节点的 1D 树在转储里看起来像"两手两脚"；`inspect_bigtree.py` 打印的类型标签
+（`[1D]/[Simple1D]/[FreeDir2D]`）**与原始 `m_BlendType` 不符，不能引用**。
+凡是从这两个转储得出的形状结论，都要回原始 YAML 复核。
+
+**待定的两件事（都要先看这里的证据再定，不要凭"看起来合理"）**：
+1. **眼睑轴的中性位置**：成熟做法是 `EyeLid ∈ [0,1]` 且**中性 0.75**（不是中点）；我们是 `±1` 且中性在
+   `X1`。要不要改，取决于我们更看重"与成熟资产对得上"还是"方阵中线即中性"这一命名自洽性。
+2. **smile/frown 用哪种形状**：Jerry 的两棵半轴树（各 2 姿势）还是 Shinano 的一棵 4 姿势树（±0.8）。
 
 ## 7. 复现
 
@@ -293,3 +342,10 @@ python .research/inspect_shared_controller.py    # → .research/shared-controll
 ```
 
 踩过的解析坑：Unity YAML 里混合树的子节点字段是 `m_Childs`（不是 `m_Children`）、类型字段是 `m_BlendType`（不是 `m_Type`）；文档 id 在 `--- !u!206 &-123` 里，`&` 后面直接换行，不能用 `split(' ')` 截。
+
+**转储本身的两个坑（2026-09-23 取证时发现，别用它们下形状结论）**：
+- `inspect_arkit_controller.py` 的 `thr=` 列**不打印等于 0 与 −1 的阈值** → 一棵 3 子节点的 1D 树
+  在报告里看起来像"两手两脚"，据此会数错姿势。
+- `inspect_bigtree.py` 打印的类型标签（`[1D]` / `[Simple1D]` / `[FreeDir2D]`）**与原始 `m_BlendType` 不符**，
+  不可引用；要看类型请回原始 YAML。
+- 片段名要用 `.meta` 把 GUID 解回来（转储里只有 `{fileID: …, guid: …}`）。
