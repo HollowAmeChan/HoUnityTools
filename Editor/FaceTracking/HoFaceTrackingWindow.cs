@@ -64,7 +64,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             double now = EditorApplication.timeSinceStartup;
             if (now - lastRateTime >= 1)
             {
-                long packets = HoFaceInputHub.Receiver.Packets;
+                long packets = TotalPackets();
                 packetRate = Mathf.Max(0, (float)((packets - lastPackets) / (now - lastRateTime)));
                 lastPackets = packets;
                 lastRateTime = now;
@@ -75,28 +75,44 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             Repaint();
         }
 
+        private static long TotalPackets()
+        {
+            long total = 0;
+            foreach (var source in HoFaceInputHub.Sources) total += source.Packets;
+            return total;
+        }
+
+        /// <summary>第 i 条源对应的活体接收端（还没连上时返回 null）。</summary>
+        private static IHoFaceInputReceiver FindSource(int index) =>
+            index >= 0 && index < HoFaceInputHub.Sources.Count ? HoFaceInputHub.Sources[index] : null;
+
+        private static string SourceTooltip(HoFaceSourceEntry entry) =>
+            HoFaceReceiverFactory.Hint(entry.kind) + "\n"
+            + "勾掉 = 这条不拉起（顺序不变）。";
+
         // ══════════════════════════════════════════════════════════════
         // 主入口
         // ══════════════════════════════════════════════════════════════
         private void OnGUI()
         {
-            var settings = HoFaceConnectionSettings.instance;
+            var environment = HoFaceInputEnvironment.instance;
             DrawTitle();
-            DrawConfigSection(settings);
+            DrawConfigSection(environment);
             DrawParameterSection();
-            DrawDiagnoseSection(settings.phoneIp);
+            DrawDiagnoseSection(environment);
         }
 
         private void DrawTitle()
         {
             bool connected = HoFaceInputHub.Connected;
-            double age = IFacialMocapReceiver.Now - HoFaceInputHub.LastFrameTime;
+            double age = HoFaceInputHub.LastFrameTime > 0 ? IFacialMocapReceiver.Now - HoFaceInputHub.LastFrameTime : double.MaxValue;
             string state = !connected ? "已停止"
                 : HoFaceInputHub.LastFrameTime == 0 ? "等待响应"
                 : age > 1 ? "已断流" : "接收中";
             bool healthy = connected && HoFaceInputHub.LastFrameTime != 0 && age <= 1;
 
-            string right = connected ? "UDP " + IFacialMocapReceiver.Port + " · " + packetRate.ToString("F0") + " 包/秒" : "UDP " + IFacialMocapReceiver.Port;
+            string right = HoFaceInputHub.SourceCount + " 条源"
+                + (connected ? " · " + packetRate.ToString("F0") + " 包/秒" : "");
             // 只有在"连上了但一个包都没有"时多给一个胶囊 —— 这是真会挡路的当前状态，不是背景说明。
             bool blocked = connected && HoFaceInputHub.LastFrameTime == 0 && HoFaceFirewall.Supported && !HoFaceFirewall.Exists;
             if (blocked) HoConstraintEditorControls.Title("Ho 面捕调试", right, (state, healthy), ("防火墙未放行", false));
@@ -110,7 +126,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 连接手机和挑角色本来是两块，但它们属于同一件事 —— "把输入接到这个角色上"。
         /// 拆成两块会让首次使用的人在两处来回找，所以合成一块，也是唯一默认展开的分区。
         /// </summary>
-        private void DrawConfigSection(HoFaceConnectionSettings settings)
+        private void DrawConfigSection(HoFaceInputEnvironment environment)
         {
             bool connected = HoFaceInputHub.Connected;
             var session = HoFaceInputHub.Session(rig);
@@ -128,22 +144,57 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             using (HoConstraintEditorControls.Card())
             {
+                // ── 输入环境：有序源列表（**顺序 = 优先级**）────────────────────────────
+                // 合并在 Hub 里按"线名"逐个做：某个线名取**第一个还新鲜、且这一帧带来了它**的源。
+                // 端口故意各用各的（iFacialMocap 固定 49983、VTS 默认 49984），所以两条能同时连着。
+                for (int i = 0; i < environment.sources.Count; i++)
+                {
+                    var entry = environment.sources[i];
+                    if (entry == null) continue;
+                    var live = FindSource(i);
+                    using (HoConstraintEditorControls.Row())
+                    {
+                        HoConstraintEditorControls.Label("优先级 " + i, HoConstraintEditorTheme.LabelWidthSm,
+                            "越靠前优先级越高：某个线名同时有多个源在发时，取最前面那条。");
+                        using (new EditorGUI.DisabledScope(connected))
+                        {
+                            EditorGUI.BeginChangeCheck();
+                            bool enabled = HoConstraintEditorControls.Toggle(
+                                HoFaceReceiverFactory.DisplayName(entry.kind), entry.enabled, SourceTooltip(entry));
+                            if (EditorGUI.EndChangeCheck()) { entry.enabled = enabled; environment.Persist(); }
+
+                            HoConstraintEditorControls.Gap(6.0f);
+                            string edited = EditorGUI.TextField(HoConstraintEditorControls.Next(96.0f), entry.phoneIp, HoConstraintEditorTheme.Field);
+                            if (edited != entry.phoneIp) { entry.phoneIp = edited; environment.Persist(); }
+
+                            if (!HoFaceReceiverFactory.FixedPort(entry.kind))
+                            {
+                                HoConstraintEditorControls.Gap(4.0f);
+                                int port = EditorGUI.IntField(HoConstraintEditorControls.Next(56.0f), entry.localPort, HoConstraintEditorTheme.Field);
+                                if (port != entry.localPort) { entry.localPort = Mathf.Clamp(port, 1024, 65535); environment.Persist(); }
+                            }
+                        }
+
+                        HoConstraintEditorControls.Flex();
+                        HoConstraintEditorControls.Caption(live == null ? "未启动"
+                            : live.Running ? (live.LastFrameTime > 0 ? live.Packets + " 包" : "等响应") : "已停");
+                    }
+                }
+
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("手机 IPv4", HoConstraintEditorTheme.LabelWidth, "iFacialMocap 所在手机在局域网里的地址；和电脑要在同一个网段。");
-                    using (new EditorGUI.DisabledScope(connected))
+                    HoConstraintEditorControls.Label("连接", HoConstraintEditorTheme.LabelWidth, "按上面这份列表把源拉起来。");
+                    if (HoConstraintEditorControls.Button(connected ? "断开全部" : "连接", null, !connected, 76.0f))
                     {
-                        Rect field = HoConstraintEditorControls.NextFlexible(90.0f);
-                        EditorGUI.BeginChangeCheck();
-                        string edited = EditorGUI.TextField(field, settings.phoneIp, HoConstraintEditorTheme.Field);
-                        if (EditorGUI.EndChangeCheck()) { settings.phoneIp = edited; settings.Persist(); }
+                        if (connected) HoFaceInputHub.Disconnect();
+                        else HoFaceInputHub.Connect();
                     }
 
                     HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button(connected ? "断开手机" : "连接手机", null, !connected, 76.0f))
+                    if (HoConstraintEditorControls.Button("恢复默认源", "回到「VTS 手机在前、iFacialMocap 在后」的默认列表。", !connected, 84.0f))
                     {
-                        if (connected) HoFaceInputHub.Disconnect();
-                        else HoFaceInputHub.Connect(settings.phoneIp.Trim());
+                        environment.sources = HoFaceInputEnvironment.Default();
+                        environment.Persist();
                     }
                 }
 
@@ -152,7 +203,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Label("电脑 IPv4", HoConstraintEditorTheme.LabelWidth, "手机 App 里如果要填 PC 地址，填这里其中一个。");
                     HoConstraintEditorControls.Caption(localIps);
                     HoConstraintEditorControls.Flex();
-                    if (HoFaceInputHub.LastFrameTime != 0) HoConstraintEditorControls.Caption("来源 " + HoFaceInputHub.Receiver.Sender);
                 }
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
@@ -209,7 +259,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>真问题才用框：端口占用、socket 异常、会话报错、绑定缺失。这些和折叠状态无关，永远显示。</summary>
         private void DrawProblems(HoFaceAnimationSession session)
         {
-            string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
+            string error = SourceError();
             if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
 
             string sessionError = HoFaceInputHub.Error(rig);
@@ -228,9 +278,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // ══════════════════════════════════════════════════════════════
         private void DrawParameterSection()
         {
+            // "收到几路"按**输入行**算：某个形态键有对应输入行、且这一帧真的被喂上了值，才算收到。
             int received = 0;
-            for (int i = 0; i < HoFaceInputHub.ReceivedAt.Length; i++)
-                if (HoFaceInputHub.ReceivedAt[i] > 0) received++;
+            var live = HoFaceInputHub.Session(rig);
+            if (live != null)
+                foreach (string name in HoFaceTrackingChannels.Names)
+                    if (!float.IsNaN(live.MiddlewareInput(name))) received++;
 
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref parametersExpanded,
@@ -251,7 +304,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
 
                 DrawParameterHeader();
-                HoConstraintEditorControls.Separator(2.0f, 2.0f);
                 scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.Height(Mathf.Max(120.0f, position.height - 300.0f)));
                 for (int i = 0; i < HoFaceTrackingChannels.Names.Length; i++)
                 {
@@ -283,8 +335,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             string name = HoFaceTrackingChannels.Names[index];
             if (!string.IsNullOrEmpty(search) && name.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) return;
 
-            bool received = HoFaceInputHub.ReceivedAt[index] > 0;
-            float raw = received ? HoFaceInputHub.Raw[index] : 0.0f;
+            // 「规范值」= 输入行算出来的值（改名与量纲在配置里做完）；没有对应输入行就是「—」。
+            float canonical = session != null ? session.MiddlewareInput(name) : float.NaN;
+            bool received = !float.IsNaN(canonical);
+            float raw = received ? canonical : 0.0f;
             var channel = FindChannel(name);
             int mode = channel != null ? (int)channel.mode : 0;
 
@@ -317,45 +371,45 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // ══════════════════════════════════════════════════════════════
         // 排查（默认收起）
         // ══════════════════════════════════════════════════════════════
-        private void DrawDiagnoseSection(string phoneIp)
+        private void DrawDiagnoseSection(HoFaceInputEnvironment environment)
         {
             // 平时收起；一旦出现**新的**问题就自己弹开一次，之后不再和用户较劲（用户收起就是收起）。
-            string problem = ProblemKey(phoneIp);
+            string problem = ProblemKey();
             if (problem != lastProblem)
             {
                 lastProblem = problem;
                 if (!string.IsNullOrEmpty(problem)) diagnoseExpanded = true;
             }
 
-            string summary = DiagnoseSummary(phoneIp);
+            string summary = DiagnoseSummary();
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref diagnoseExpanded, "排查", summary, HoConstraintEditorTheme.AccentDebug)) return;
 
             using (HoConstraintEditorControls.Card())
             {
                 DrawFirewallRow();
-                DrawWaitingHint(phoneIp);
+                DrawWaitingHint();
                 DrawPacketStats();
                 DrawDebugDetails();
             }
         }
 
         /// <summary>当前有没有"值得一提的问题"。空串 = 没事，排查区就安静待着。</summary>
-        private string ProblemKey(string phoneIp)
+        private string ProblemKey()
         {
-            string error = string.IsNullOrEmpty(HoFaceInputHub.Receiver.Error) ? HoFaceInputHub.ConnectionError : HoFaceInputHub.Receiver.Error;
+            string error = SourceError();
             if (!string.IsNullOrEmpty(error)) return "error";
             if (!HoFaceInputHub.Connected) return "";
             if (HoFaceInputHub.LastFrameTime != 0) return "";
-            long rejected = HoFaceInputHub.Receiver.Rejected;
-            if (rejected > 0 && !string.IsNullOrEmpty(HoFaceInputHub.Receiver.RejectedSource)) return "rejected:" + HoFaceInputHub.Receiver.RejectedSource;
+            long rejected = TotalRejected();
+            if (rejected > 0 && !string.IsNullOrEmpty(RejectedFrom())) return "rejected:" + RejectedFrom();
             return IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt >= 3 ? "silent" : "";
         }
 
         /// <summary>收起状态下也要能看出"现在有没有事"。</summary>
-        private string DiagnoseSummary(string phoneIp)
+        private string DiagnoseSummary()
         {
             if (!HoFaceInputHub.Connected) return "未连接";
-            long rejected = HoFaceInputHub.Receiver.Rejected;
+            long rejected = TotalRejected();
             if (rejected > 0 && HoFaceInputHub.LastFrameTime == 0) return "来源不符 ×" + rejected;
             if (HoFaceInputHub.LastFrameTime != 0) return "正常";
             return "等了 " + (IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt).ToString("F0") + " 秒";
@@ -371,7 +425,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 HoConstraintEditorControls.Gap();
                 using (new EditorGUI.DisabledScope(HoFaceFirewall.Busy))
                 {
-                    if (HoConstraintEditorControls.Button("授予权限", "改防火墙需要管理员，会弹一次 UAC。只放行这个 Unity.exe 的 UDP " + IFacialMocapReceiver.Port + "。"))
+                    if (HoConstraintEditorControls.Button("授予权限", "改防火墙需要管理员，会弹一次 UAC。放行这个 Unity.exe 的入站 UDP（源端口见上面各条）。"))
                     {
                         HoFaceFirewall.Grant();
                     }
@@ -405,12 +459,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 收不到包时给**一行结论 + 一个按钮**，把清单收进折叠里。
         /// 以前这里是一整段四条排查说明常驻显示，正常用的时候太吵。
         /// </summary>
-        private void DrawWaitingHint(string phoneIp)
+        private void DrawWaitingHint()
         {
             if (!HoFaceInputHub.Connected || HoFaceInputHub.LastFrameTime != 0) return;
 
-            long rejected = HoFaceInputHub.Receiver.Rejected;
-            string rejectedFrom = HoFaceInputHub.Receiver.RejectedSource;
+            long rejected = TotalRejected();
+            string rejectedFrom = RejectedFrom();
             if (rejected > 0 && !string.IsNullOrEmpty(rejectedFrom))
             {
                 using (HoConstraintEditorControls.Row())
@@ -419,9 +473,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoConstraintEditorControls.Gap();
                     if (HoConstraintEditorControls.Button("改成这个地址", "填错手机 IP 时最直接的线索。", true))
                     {
-                        var settings = HoFaceConnectionSettings.instance;
-                        settings.phoneIp = rejectedFrom;
-                        settings.Persist();
+                        var environment = HoFaceInputEnvironment.instance;
+                        foreach (var entry in environment.sources)
+                            if (entry != null && entry.enabled) entry.phoneIp = rejectedFrom;   // 全部启用中的源一起改（通常就是同一台手机）
+                        environment.Persist();
                     }
                 }
 
@@ -445,42 +500,116 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             if (!hintExpanded || !HoFaceFirewall.Exists) return;
-            string subnet = SameSubnetMatch(phoneIp);
+            string subnet = SameSubnetMatch(FirstPhoneIp());
             using (HoConstraintEditorControls.Indent())
             {
-                HoConstraintEditorControls.Caption("· 手机与电脑同网段：手机 " + phoneIp + "／本机 " + (subnet ?? localIps));
-                HoConstraintEditorControls.Caption("· App 停在前台；里面若填 PC 地址就填 " + (subnet ?? localIps));
+                HoConstraintEditorControls.Caption("· 手机与电脑同网段：手机 " + FirstPhoneIp() + "／本机 " + (subnet ?? localIps));
+                foreach (var entry in HoFaceInputEnvironment.instance.sources)
+                {
+                    if (entry == null || !entry.enabled) continue;
+                    HoConstraintEditorControls.Caption("· " + HoFaceReceiverFactory.DisplayName(entry.kind) + "："
+                        + HoFaceReceiverFactory.Hint(entry.kind));
+                }
+
                 HoConstraintEditorControls.Caption("· 确认 Wi-Fi 没被蜂窝或 VPN 分流");
             }
         }
 
-        private void DrawPacketStats()
+        /// <summary>环境里第一条启用源的手机地址（面板上"手机与电脑同网段"那行用它）。</summary>
+        private static string FirstPhoneIp()
         {
-            var receiver = HoFaceInputHub.Receiver;
-            var packet = HoFaceInputHub.LastPacket;
-            using (HoConstraintEditorControls.Row(true))
-            {
-                HoConstraintEditorControls.Caption("包 " + receiver.Packets + "　无效 " + receiver.Invalid + "　其他来源 " + receiver.Rejected + "　丢旧帧 " + receiver.Replaced);
-            }
-
-            if (packet == null) return;
-            using (HoConstraintEditorControls.Row(true))
-            {
-                HoConstraintEditorControls.Caption("本包 " + packet.ShapeCount + " 有效 / " + packet.UnknownCount + " 未知 / " + packet.InvalidCount + " 无效");
-            }
-
-            DrawPose("头姿", packet.Head);
-            DrawPose("左眼", packet.LeftEye);
-            DrawPose("右眼", packet.RightEye);
+            foreach (var entry in HoFaceInputEnvironment.instance.sources)
+                if (entry != null && entry.enabled) return entry.phoneIp;
+            return "—";
         }
 
-        private void DrawPose(string label, float[] values)
+        /// <summary>任一源报的错（没有就退回连接期的错误）。</summary>
+        private static string SourceError()
         {
-            if (values == null) return;
+            foreach (var source in HoFaceInputHub.Sources)
+                if (!string.IsNullOrEmpty(source.Error)) return source.Error;
+            return HoFaceInputHub.ConnectionError;
+        }
+
+        private static long TotalRejected()
+        {
+            long total = 0;
+            foreach (var source in HoFaceInputHub.Sources) total += source.Rejected;
+            return total;
+        }
+
+        /// <summary>最近一个来源不符的地址（填错手机 IP 时最直接的线索）。</summary>
+        private static string RejectedFrom()
+        {
+            foreach (var source in HoFaceInputHub.Sources)
+                if (source.Rejected > 0 && !string.IsNullOrEmpty(source.RejectedSource)) return source.RejectedSource;
+            return "";
+        }
+
+        private void DrawPacketStats()
+        {
             using (HoConstraintEditorControls.Row(true))
             {
-                HoConstraintEditorControls.Label(label, HoConstraintEditorTheme.LabelWidthSm, "只监视，不驱动角色。头与眼球方向交给 HoLookAt。");
-                HoConstraintEditorControls.Caption(string.Join(", ", Array.ConvertAll(values, v => v.ToString("F2"))));
+                long packets = 0, invalid = 0, rejected = 0, replaced = 0, requests = 0;
+                foreach (var source in HoFaceInputHub.Sources)
+                {
+                    packets += source.Packets; invalid += source.Invalid;
+                    rejected += source.Rejected; replaced += source.Replaced; requests += source.Requests;
+                }
+
+                HoConstraintEditorControls.Caption("包 " + packets + "　无效 " + invalid + "　其他来源 " + rejected
+                    + "　丢旧帧 " + replaced + (requests > 0 ? "　请求 " + requests : ""));
+            }
+
+            foreach (var source in HoFaceInputHub.Sources)
+            {
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label(source.DisplayName, HoConstraintEditorTheme.LabelWidthSm, source.Hint);
+                    double age = source.LastFrameTime > 0 ? IFacialMocapReceiver.Now - source.LastFrameTime : double.MaxValue;
+                    HoConstraintEditorControls.Caption(age > 1
+                        ? (source.LastFrameTime > 0 ? "断流 " + age.ToString("F1") + " 秒" : "还没收到包")
+                        : "接收中");
+                    HoConstraintEditorControls.Flex();
+                    if (source.LastFrameTime > 0) HoConstraintEditorControls.Caption("来源 " + source.Sender);
+                }
+            }
+
+            var merged = HoFaceInputHub.MergedValues;
+            using (HoConstraintEditorControls.Row(true))
+            {
+                HoConstraintEditorControls.Caption("合并后有 " + merged.Count + " 个线名"
+                    + (merged.ContainsKey("FaceFound") ? "　脸在 " + (merged["FaceFound"] > 0.5f ? "是" : "否") : "")
+                    + (merged.ContainsKey("Hotkey") && merged["Hotkey"] > 0 ? "　热键 " + merged["Hotkey"].ToString("F0") : ""));
+            }
+
+            // 姿态显示用**输入行算出来的规范值**（面板与表达式看到的是同一个数）。
+            var session = HoFaceInputHub.Session(rig);
+            if (session == null) return;
+            DrawPose(session, "头姿", "headRotX", "headRotY", "headRotZ");
+            DrawPose(session, "头位", "headPosX", "headPosY", "headPosZ");
+            DrawPose(session, "左眼", "eyeLeftX", "eyeLeftY", "eyeLeftZ");
+            DrawPose(session, "右眼", "eyeRightX", "eyeRightY", "eyeRightZ");
+        }
+
+        /// <summary>
+        /// 姿态监视：**输入行算出来的规范值**（单位由你在配置里怎么换算决定 —— 我们不做隐式换算）。
+        /// 没有对应输入行时显示「—」：那说明这份配置没把这个名字从线名映射过来。
+        /// </summary>
+        private void DrawPose(HoFaceAnimationSession session, string label, params string[] names)
+        {
+            using (HoConstraintEditorControls.Row(true))
+            {
+                HoConstraintEditorControls.Label(label, HoConstraintEditorTheme.LabelWidthSm,
+                    "输入行算出的规范值（`" + names[0] + "` 等）。量纲由配置里的输入行决定。");
+                string text = "";
+                foreach (string name in names)
+                {
+                    float value = session.MiddlewareInput(name);
+                    text += name.Substring(name.Length - 1) + " " + (float.IsNaN(value) ? "—" : value.ToString("F2")) + "  ";
+                }
+
+                HoConstraintEditorControls.Caption(text.TrimEnd());
             }
         }
 

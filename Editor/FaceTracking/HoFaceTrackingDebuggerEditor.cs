@@ -191,39 +191,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded,
                 "控制器输出参数设置",
-                RegionSummary(rig.outputRegions),
+                StructureSummary(rig),
                 HoConstraintEditorTheme.AccentOutput))
             using (HoConstraintEditorControls.Card())
             {
-                var regions = serializedObject.FindProperty("outputRegions");
-                // 两个闸，对齐参考实现的 EyeTrackingActive / LipTrackingActive。
-                using (HoConstraintEditorControls.Row(true))
-                {
-                    DrawRegion(regions, EyeMask, "眼（眼皮 / 眉）",
-                        "面捕驱动这一块：eyeBlink / eyeSquint / eyeWide / brow。\n"
-                        + "**眉归眼区** —— 参考实现里眉挂的是 EyeTrackingActive（眉毛跟着眼神走，不是跟着嘴走）。\n"
-                        + "断流后交还给自动眨眼。");
-                    HoConstraintEditorControls.Gap();
-                    DrawRegion(regions, LipMask, "唇（嘴 / 脸颊）",
-                        "面捕驱动这一块：jaw / mouth / tongue / cheek / noseSneer。\n"
-                        + "颊鼻归唇区 —— 参考实现里它们挂的是 LipTrackingActive。");
-                    HoConstraintEditorControls.Flex();
-                }
-
-                // 凝视不是第三个闸，只是**面捕这一侧的开关** —— LookAt 那边也有自己的开关，
-                // 怎么分工由用户定，所以这里默认开着，不预设"凝视归 LookAt"。
-                using (HoConstraintEditorControls.Row(true))
-                {
-                    DrawRegion(regions, HoFaceRegion.Gaze, "凝视形态键（eyeLook*）",
-                        "面捕这一侧是否驱动 eyeLook* 键。默认开。\n"
-                        + "如果你同时用 HoLookAt 驱动眼球，那边也有一个开关 —— 两边只留一个，\n"
-                        + "否则同一个方向会被写两遍（本面板会提示，但不会拦你）。");
-                    HoConstraintEditorControls.Flex();
-                }
-
-                // 结构报告：**从资产读出来**，不是从配置推断。
-                // 控制器是搬来的作品，中间层有些处理是隐式的（重叠由姿势表权衡），
-                // 所以这里把控制器实际的形状、以及"哪些键这台模型上没有"说出来。
+                // **这里没有区域开关**：哪些键算数、什么时候交还给 LookAt 或自动眨眼，
+                // 由使用者自己的混合树/参数决定 —— 我们注入门控只会变成耦合干扰。
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("控制器结构", HoConstraintEditorTheme.LabelWidth,
@@ -484,22 +457,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             HoConstraintEditorControls.Caption(string.Join(" · ", parts));
         }
 
-        /// <summary>
-        /// 「眼」「唇」两个闸覆盖的区域，对齐参考实现的 `EyeTrackingActive` / `LipTrackingActive`：
-        /// **眼 = 眼睑 + 眉**（眉跟着眼神走）、**唇 = 嘴 + 颊鼻**。凝视是单独一个开关，不在两闸里。
-        /// </summary>
-        private const HoFaceRegion EyeMask = HoFaceRegion.Eyelids | HoFaceRegion.Brows;
-
-        private const HoFaceRegion LipMask = HoFaceRegion.Mouth | HoFaceRegion.Cheeks;
-
-        private static string RegionSummary(HoFaceRegion regions)
-        {
-            bool eyes = (regions & EyeMask) != 0;
-            bool lips = (regions & LipMask) != 0;
-            bool gaze = (regions & HoFaceRegion.Gaze) != 0;
-            return (eyes ? "眼" : "眼 ✕") + " · " + (lips ? "唇" : "唇 ✕") + (gaze ? " · 凝视给面捕" : "");
-        }
-
         private void DrawChannels(HoFaceTrackingDebugger rig, HoFaceAnimationSession session)
         {
             serializedObject.Update();
@@ -569,8 +526,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
                 else
                 {
-                    string raw = HoFaceInputHub.ReceivedAt[index] > 0 ? HoFaceInputHub.Raw[index].ToString("F3") : "未收到";
-                    HoConstraintEditorControls.Caption("原值 " + raw + (session != null ? " → " + session.Input[index].ToString("F3") : ""));
+                    // 「规范值」= 输入行算出来的那个数（改名与量纲都在配置里做完）；「通道值」= 再过输入曲线/断流回中性之后。
+                    float canonical = session != null ? session.MiddlewareInput(channel.FindPropertyRelative("shape").stringValue) : float.NaN;
+                    HoConstraintEditorControls.Caption("规范值 " + (float.IsNaN(canonical) ? "无输入行" : canonical.ToString("F3"))
+                        + (session != null ? " → 通道 " + session.Input[index].ToString("F3") : ""));
                     HoConstraintEditorControls.Flex();
                 }
 
@@ -584,15 +543,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     GUI.Label(HoConstraintEditorControls.Next(46.0f), new GUIContent(session.ControllerValues[index].ToString("F3"), ControllerValueTooltip), HoConstraintEditorTheme.Value);
                 }
             }
-        }
-
-        /// <summary>输出闸开关。调用方负责开一行；这里只管画一个勾选框并回写。
-        /// mask 可以是多位的组合（「唇」= 嘴|眉|脸颊），任一位为真即视为开，切换时整组一起写。</summary>
-        private static void DrawRegion(SerializedProperty property, HoFaceRegion mask, string label, string tooltip = null)
-        {
-            bool enabled = (property.intValue & (int)mask) != 0;
-            bool next = HoConstraintEditorControls.Toggle(label, enabled, tooltip);
-            if (enabled != next) property.intValue = next ? property.intValue | (int)mask : property.intValue & ~(int)mask;
         }
 
         private static void SetMode(SerializedProperty channels, HoFaceInputMode mode)

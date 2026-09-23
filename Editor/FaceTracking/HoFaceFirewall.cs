@@ -22,15 +22,36 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     ///    带着一条入站阻止规则，只加允许规则完全没用，包照样到不了 socket。所以这里先按程序路径
     ///    把该 exe 的入站阻止规则禁掉，再加允许规则 —— 两个动作缺一不可。
     ///
-    /// 规则范围刻意收窄到「指定 exe + UDP 49983」，比直接开一个端口安全得多，也随时可撤销。
+    /// 规则范围刻意收窄到「指定 exe + 我们实际在听的那几个 UDP 端口」，比直接开一个端口安全得多，也随时可撤销。
     ///
     /// 提权进程是独立进程，拿不到它的 stdout，所以脚本把每一步写进一个日志文件，由面板读回来。
     /// 「退出码 1 但不告诉你为什么」是没法排查的 —— 这一点是踩过之后补上的。
     /// </summary>
     public static class HoFaceFirewall
     {
-        public const string RuleName = "HoUnityTools FaceTracking UDP 49983";
+        public const string RuleName = "HoUnityTools FaceTracking UDP";
         public const int Port = IFacialMocapReceiver.Port;
+
+        /// <summary>
+        /// 要放行的本机端口列表（逗号分隔）：**按当前环境里启用的源算**，因为不同协议听不同端口
+        /// （iFacialMocap 固定 49983、VTS 手机默认 49984）。一条规则覆盖全部，撤销也一次干净。
+        /// </summary>
+        public static string Ports
+        {
+            get
+            {
+                var ports = new System.Collections.Generic.List<int>();
+                foreach (var entry in HoFaceInputEnvironment.instance.sources)
+                {
+                    if (entry == null || !entry.enabled) continue;
+                    int port = HoFaceReceiverFactory.FixedPort(entry.kind) ? IFacialMocapReceiver.Port : entry.localPort;
+                    if (port >= 1024 && port <= 65535 && !ports.Contains(port)) ports.Add(port);
+                }
+
+                if (ports.Count == 0) ports.Add(Port);
+                return string.Join(",", ports);
+            }
+        }
 
         private static volatile bool exists;
         private static volatile bool elevating;
@@ -88,7 +109,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             pending = null;
             lastLog = ReadLog();
             status = code == 0
-                ? "已放行：Unity 的入站 UDP " + Port + " 现在被允许。点一次「断开手机」再「连接手机」，把握手命令重发。"
+                ? "已放行：Unity 的入站 UDP " + Ports + " 现在被允许。点一次「断开全部」再「连接」，把握手/请求重发。"
                 : "没有改成（退出码 " + code + "）。下面是提权脚本的执行日志，失败原因一般就在里面。";
             Refresh();
         }
@@ -235,12 +256,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             script.AppendLine("try { Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop }");
             script.AppendLine("catch { L ('清理旧规则失败: ' + $_.Exception.Message) }");
             script.AppendLine("try {");
-            script.AppendLine("  New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol UDP -LocalPort " + Port + " -Program $prog -Profile Any -ErrorAction Stop | Out-Null");
+            script.AppendLine("  New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol UDP -LocalPort " + Ports + " -Program $prog -Profile Any -ErrorAction Stop | Out-Null");
             script.AppendLine("  L 'New-NetFirewallRule: OK'");
             script.AppendLine("} catch { L ('New-NetFirewallRule 失败: ' + $_.Exception.GetType().Name + ' / ' + $_.Exception.Message) }");
             script.AppendLine("if (@(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue).Count -eq 0) {");
             script.AppendLine("  L '改用 netsh 退路'");
-            script.AppendLine("  $raw = & netsh advfirewall firewall add rule name=`\"$name`\" dir=in action=allow protocol=UDP localport=" + Port + " program=`\"$prog`\" enable=yes profile=any 2>&1");
+            script.AppendLine("  $raw = & netsh advfirewall firewall add rule name=`\"$name`\" dir=in action=allow protocol=UDP localport=" + Ports + " program=`\"$prog`\" enable=yes profile=any 2>&1");
             script.AppendLine("  $code = $LASTEXITCODE");
             script.AppendLine("  L ('netsh 输出: ' + (($raw | Out-String).Trim()) + '  (exit=' + $code + ')')");
             script.AppendLine("}");

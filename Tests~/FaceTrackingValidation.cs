@@ -107,10 +107,9 @@ public static class HoFaceTrackingValidation
             rig.treeTemplate = source;
             rig.animationFolder = ClipFolder;
             rig.meshes = new System.Collections.Generic.List<SkinnedMeshRenderer> { renderer };
-            // 默认是 All（凝视也开 —— LookAt 不是一定存在）。这里**刻意关掉凝视**，
-            // 用来验证"排除凝视"这条路径本身，不能再赖默认值。
-            Check(rig.outputRegions == HoFaceRegion.All, "gaze defaults to ON (LookAt may not exist)");
-            rig.outputRegions = HoFaceRegion.Expression;
+            // 门控已经删掉了：哪些键算数由使用者自己的混合树决定。
+            // 所以默认**不再排除任何键** —— 编译出来的绑定数就是控制器里那 52 个（含 8 个凝视键）。
+            Check(rig.channels.Count == 52, "默认通道数 = 52 个形态键");
             foreach (var c in rig.channels) c.mode = HoFaceInputMode.Manual;
             Channel("jawOpen").manual = 0.6f;
             Channel("mouthClose").manual = 0.25f;
@@ -126,7 +125,7 @@ public static class HoFaceTrackingValidation
             Check(controller.parameters.Length == source.parameters.Length,
                 "装配是整份复制：参数一个不少（" + controller.parameters.Length + "）");
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
-                Check(compiled.bindings.Count == 44, "default output filter excludes eight gaze shapes");
+                Check(compiled.bindings.Count == 52, "没有门控之后：控制器里 52 个键全部编译进来（含 8 个凝视键）");
 
             var jawClip = FindShapeClip(controller, "jawOpen");
             var jawCurve = jawClip != null ? AnimationUtility.GetEditorCurve(jawClip,
@@ -232,7 +231,7 @@ public static class HoFaceTrackingValidation
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
                 outputBindings = compiled.bindings.Count;
 
-            Check(outputBindings == 44, "装配后的输出集合还是那 44 个（凝视排除）("
+            Check(outputBindings == 52, "装配后的输出集合 = 控制器里那 52 个（门控已删，不再排除凝视）("
                 + outputBindings + " bindings)");
 
             // ── 轴算术（中间层）：两根 0~1 的通道合成一根 -1~1 的单轴 ────────────────
@@ -491,32 +490,34 @@ public static class HoFaceTrackingValidation
         foreach (string shape in HoFaceTrackingChannels.Names)
             controller.AddParameter("ARKit/" + shape, AnimatorControllerParameterType.Float);
         controller.AddParameter("ARKit/HoNotOnMesh", AnimatorControllerParameterType.Float);
-        AddGate(controller, HoFaceNaming.Gate(HoFaceGate.Eye));
-        AddGate(controller, HoFaceNaming.Gate(HoFaceGate.Lip));
+        controller.AddParameter(RegionGateParameter, AnimatorControllerParameterType.Float);
+        SetDefaultFloat(controller, RegionGateParameter, 1f);
         for (int side = 0; side < 2; side++)
             for (int axis = 0; axis < 2; axis++)
                 controller.AddParameter(HoFaceNaming.LidAxis(side, axis == 0), AnimatorControllerParameterType.Float);
 
+        // 树形照旧分成"眼"/"唇"两块 —— 但**不再由我们注入门控参数**：这两块现在直接挂在根下，
+        // 要不要开关、什么时候交还，由使用者自己的参数/树决定。
         var root = new BlendTree { name = "DriveTree", blendType = BlendTreeType.Direct };
         AssetDatabase.AddObjectToAsset(root, controller);
-        foreach (HoFaceGate gate in new[] { HoFaceGate.Eye, HoFaceGate.Lip })
+        foreach (string group in new[] { "EyeRegion", "LipRegion" })
         {
-            var region = new BlendTree
-            {
-                name = gate == HoFaceGate.Eye ? "EyeRegion" : "LipRegion",
-                blendType = BlendTreeType.Direct
-            };
+            var region = new BlendTree { name = group, blendType = BlendTreeType.Direct };
             AssetDatabase.AddObjectToAsset(region, controller);
             foreach (string shape in HoFaceTrackingChannels.Names)
             {
-                if (HoFaceTrackingChannels.Gate(shape) != gate) continue;
+                bool eye = HoFaceTrackingChannels.Region(shape) == HoFaceRegion.Eyelids
+                    || HoFaceTrackingChannels.Region(shape) == HoFaceRegion.Gaze
+                    || HoFaceTrackingChannels.Region(shape) == HoFaceRegion.Brows;
+                if (eye != (group == "EyeRegion")) continue;
                 if (shape == "mouthClose") continue;   // 这个键走下面那条"别人的外部片段"
                 AttachFlatLeaf(region, SourceShapeClip(controller, shape), "ARKit/" + shape);
             }
 
-            if (gate == HoFaceGate.Lip) AttachFlatLeaf(region, external, "ARKit/mouthClose");
-            AttachFlatLeaf(root, region, HoFaceNaming.Gate(gate));
+            AttachChild(root, region, RegionAlways());
         }
+
+        AttachFlatLeaf(FindTree(root, "LipRegion"), external, "ARKit/mouthClose");
 
         // 一个"驱动对象上没有"的键：装配时曲线该原样留着，并被结构摘要报出来。
         AttachFlatLeaf(FindTree(root, "LipRegion"), SourceShapeClip(controller, "HoNotOnMesh"), "ARKit/HoNotOnMesh");
@@ -535,18 +536,34 @@ public static class HoFaceTrackingValidation
         return controller;
     }
 
-    /// <summary>门控参数：缺就补，并且**默认 1**（单独打开这个资产时不该是一片死脸）。</summary>
-    private static void AddGate(AnimatorController controller, string name)
+    /// <summary>
+    /// 夹具自己的"区域总开关"参数：Direct 树的每个子节点都必须挂一个参数，
+    /// **这是使用者那一侧的事**（我们的代码不再注入门控了）—— 常量 1 就是"永远算数"。
+    /// </summary>
+    private const string RegionGateParameter = "Fixture/RegionsOn";
+
+    private static string RegionAlways() => RegionGateParameter;
+
+    /// <summary>把某个 Float 参数的默认值改成 1（夹具的"区域总开关"默认就该是开的）。</summary>
+    private static void SetDefaultFloat(AnimatorController controller, string name, float value)
     {
-        controller.AddParameter(name, AnimatorControllerParameterType.Float);
         var all = controller.parameters;
         for (int i = 0; i < all.Length; i++)
         {
             if (all[i].name != name) continue;
-            all[i].defaultFloat = 1f;
+            all[i].defaultFloat = value;
             controller.parameters = all;
             return;
         }
+    }
+
+    /// <summary>把一棵子树挂到 Direct 树根下，权重挂在夹具自己的常量参数上。</summary>
+    private static void AttachChild(BlendTree root, BlendTree child, string parameter)
+    {
+        root.AddChild(child);
+        var children = root.children;
+        children[children.Length - 1].directBlendParameter = parameter;
+        root.children = children;
     }
 
     /// <summary>作者的一格：参数 0→1，键 0→100，绑在他自己的层级（Source/Face）上。</summary>
@@ -658,7 +675,9 @@ public static class HoFaceTrackingValidation
                 Near(Weight("mouthSmileLeft"), 80, "simultaneous smile is not attenuated by jaw");
                 Near(Weight("mouthClose"), 25, "mouthClose independent of jawOpen");
                 Near(Weight("eyeBlinkLeft"), 40, "eyelid interpolation");
-                Near(Weight("eyeLookInLeft"), 33, "gaze exclusion preserves body output");
+                // 门控删掉之后，凝视键**也归面捕驱动**（这个通道是 Manual=1）→ 100。
+                // 要让基础动画拿回某个键，现在的做法是把那个通道设成「交还」（stage 2 验的就是它）。
+                Near(Weight("eyeLookInLeft"), 100, "凝视键同样由面捕驱动（门控已删）");
                 Near(rig.targetAnimator.transform.localPosition.x, 2, "body transform animation preserved");
                 writer = new HoShapeKeyWriter();
                 writer.BeginBuild(new System.Collections.Generic.List<Renderer> { renderer });
@@ -678,7 +697,10 @@ public static class HoFaceTrackingValidation
                 Check(!HoFaceOutputOwnership.IsReserved(renderer, renderer.sharedMesh.GetBlendShapeIndex("mouthSmileLeft")), "release removes reservation");
                 Channel("jawOpen").mode = HoFaceInputMode.Live;
                 rig.staleSeconds = 0.3f; rig.neutralFadeSeconds = 0.1f;
-                HoFaceInputHub.Connect("127.0.0.2");
+                HoFaceInputHub.ConnectEntries(new System.Collections.Generic.List<HoFaceSourceEntry>
+                {
+                    new HoFaceSourceEntry { kind = HoFaceSourceKind.IFacialMocap, phoneIp = "127.0.0.2", localPort = IFacialMocapReceiver.Port }
+                });
                 sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
                 Send("jawOpen-90|eyeBlink_L-10|");
                 stage++; frame = Time.frameCount + 3; return;
@@ -692,7 +714,7 @@ public static class HoFaceTrackingValidation
             }
             if (stage == 4)
             {
-                if (IFacialMocapReceiver.Now - HoFaceInputHub.ReceivedAt[HoFaceTrackingChannels.IndexOf("jawOpen")] < 0.6) return;
+                if (IFacialMocapReceiver.Now - HoFaceInputHub.LastFrameTime < 0.6) return;
                 Near(Weight("jawOpen"), 17, "stale stream releases to base animation");
                 HoFaceInputHub.Stop(rig);
                 Check(rig.targetAnimator.runtimeAnimatorController != null, "stop restores original controller");
@@ -853,7 +875,10 @@ public static class HoFaceTrackingValidation
 
                 // 实时输入那条路也在这里铺好：stage 17 会用它验证 UDP → 配置 → 混合树整条链。
                 Channel("jawOpen").mode = HoFaceInputMode.Live;
-                HoFaceInputHub.Connect("127.0.0.2");
+                HoFaceInputHub.ConnectEntries(new System.Collections.Generic.List<HoFaceSourceEntry>
+                {
+                    new HoFaceSourceEntry { kind = HoFaceSourceKind.IFacialMocap, phoneIp = "127.0.0.2", localPort = IFacialMocapReceiver.Port }
+                });
                 sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
                 Send("jawOpen-60|");
 
@@ -1107,17 +1132,56 @@ public static class HoFaceTrackingValidation
     private static void ParserTests()
     {
         Check(HoFaceTrackingChannels.Names.Length == 52, "ARKit channel count");
+
+        // 中间层默认输入行：线名 → 规范名 + 量纲。这两条是"不再有隐式处理"的核心证据。
+        var defaults = HoFaceMiddlewareDefaults.Inputs();
+        Check(defaults.Count > 52, "内置输入行覆盖两种协议");
+        float converted = float.NaN;
+        float vtsConverted = float.NaN;
+        foreach (var row in defaults)
+        {
+            if (row.parameter != "jawOpen") continue;
+            if (!HoFaceExpression.TryParse(row.expression, out var parsed, out _)) continue;
+            if (row.notes == "iFacialMocap") converted = parsed.Evaluate(name => name == "jawOpen" ? 90f : 0f);
+            if (row.notes == "VTS 手机") vtsConverted = parsed.Evaluate(name => name == "JawOpen" ? 0.9f : 0f);
+        }
+        Near(converted, 0.9f, "iFacialMocap 0..100 由输入行换算成 0..1", 0.0001f);
+        Near(vtsConverted, 0.9f, "VTS 0..1 由输入行原样通过", 0.0001f);
+        Check(HoFaceMiddlewareDefaults.VtsWire("eyeBlinkLeft") == "EyeBlinkLeft", "VTS 线名 = PascalCase");
+        Check(HoFaceMiddlewareDefaults.IFacialWire("eyeBlinkLeft") == "eyeBlink_L", "iFacialMocap 线名 = _L 后缀");
+        Check(HoFaceMiddlewareDefaults.IFacialWire("mouthLeft") == "mouthLeft", "mouthLeft 不带后缀");
+
         var culture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
         try
         {
-            Check(IFacialMocapPacket.TryParse("jawOpen-60.5|eyeBlink_L-30|eyeBlink_R&42|=head#-20,5,-1,0.1,0.2,0.3|leftEye#1,-2,3|", out var p), "v1/v2 packet parsing");
-            Near(p.Values[HoFaceTrackingChannels.IndexOf("jawOpen")], 0.605f, "invariant culture normalization", 0.0001f);
-            Near(p.Values[HoFaceTrackingChannels.IndexOf("eyeBlinkLeft")], 0.3f, "wire left alias", 0.0001f);
-            Near(p.Head[0], -20, "negative head angle");
-            Check(!p.Present[HoFaceTrackingChannels.IndexOf("mouthClose")], "missing channel is not synthesized as zero");
-            Check(IFacialMocapPacket.TryParse("jawOpen-NaN|mouthClose-Infinity|eyeBlink_L-20|junk-3|", out p) && p.InvalidCount == 2 && p.UnknownCount == 1 && p.ShapeCount == 1, "invalid fields do not invalidate good channels");
-            Check(!IFacialMocapPacket.TryParse("=head#0,0,0,0,0,0|", out p), "pose-only packet does not refresh facial health");
+            var parser = new IFacialMocapReceiver();
+            Check(parser.ParseForTest("jawOpen-60.5|eyeBlink_L-30|eyeBlink_R&42|=head#-20,5,-1,0.1,0.2,0.3|leftEye#1,-2,3|", out var p), "v1/v2 packet parsing");
+            Near(p.Get("jawOpen"), 60.5f, "值原样（不除 100，量纲归输入行）", 0.0001f);
+            Near(p.Get("eyeBlink_L"), 30f, "线名原样（不改名）", 0.0001f);
+            Near(p.Get("head_0"), -20, "头姿第 0 个分量（欧拉角 X）");
+            Near(p.Get("head_5"), 0.3f, "头姿第 5 个分量（位置 Z）");
+            Near(p.Get("leftEye_1"), -2, "左眼第 1 个分量");
+            Check(!p.Has("mouthClose"), "缺的键就是不出现（不会补 0）");
+            // 无效数值（NaN/Infinity）记一次无效；**不认识的线名不再是错误** —— 接收端不需要名字表，
+            // 它只交原样，"这个名字有没有用"由中间层的输入行决定。
+            Check(parser.ParseForTest("jawOpen-NaN|mouthClose-Infinity|eyeBlink_L-20|junk-3|", out p)
+                && p.InvalidCount == 2 && p.EntryCount == 2 && p.Has("junk"), "无效数值不影响好字段，未知线名照收");
+            Check(parser.ParseForTest("=head#0,0,0,0,0,0|", out p) && p.EntryCount == 6, "只有姿态也算有效帧（姿态真的被吃进来了）");
+
+            // VTS 手机那条：字段名照抄载荷，值不换算。
+            var vts = new VtsIphoneReceiver();
+            bool vtsOk = vts.ParseForTest("{\"Timestamp\":123,\"FaceFound\":true,\"Rotation\":{\"x\":1,\"y\":2,\"z\":3},"
+                + "\"Position\":{\"x\":0.1,\"y\":0.2,\"z\":0.3},\"Hotkey\":4,"
+                + "\"BlendShapes\":[{\"k\":\"EyeBlinkLeft\",\"v\":0.75},{\"k\":\"JawOpen\",\"v\":0.2}],"
+                + "\"EyeLeft\":{\"x\":9,\"y\":8,\"z\":7},\"EyeRight\":{\"x\":6,\"y\":5,\"z\":4},\"Future\":\"ignored\"}", out var v);
+            Check(vtsOk, "VTS JSON 包解析（未知字段不炸）");
+            Near(v.Get("EyeBlinkLeft"), 0.75f, "VTS 形态键原样（0..1）", 0.0001f);
+            Near(v.Get("Rotation_y"), 2f, "VTS 头旋转分量", 0.0001f);
+            Near(v.Get("Position_z"), 0.3f, "VTS 头位置分量", 0.0001f);
+            Near(v.Get("EyeLeft_x"), 9f, "VTS 左眼分量", 0.0001f);
+            Near(v.Get("FaceFound"), 1f, "VTS 有 faceFound 字段");
+            Near(v.Get("Hotkey"), 4f, "VTS 有热键字段");
         }
         finally { CultureInfo.CurrentCulture = culture; }
     }
@@ -1128,7 +1192,7 @@ public static class HoFaceTrackingValidation
         {
             try
             {
-                receiver.Start("127.0.0.2");
+                receiver.Start(IFacialEntry("127.0.0.2"));
             }
             catch (SocketException)
             {
@@ -1146,19 +1210,25 @@ public static class HoFaceTrackingValidation
                 byte[] data = Encoding.UTF8.GetBytes("jawOpen-37|");
                 device.Send(data, data.Length, new IPEndPoint(IPAddress.Loopback, IFacialMocapReceiver.Port));
                 double until = IFacialMocapReceiver.Now + 2;
-                IFacialMocapPacket p = null;
+                HoFaceInputPacket p = null;
                 while (IFacialMocapReceiver.Now < until && p == null) { receiver.TryTake(out p, out _); Thread.Sleep(5); }
                 Check(p != null, "real UDP receiver accepts configured sender");
-                Near(p.Values[HoFaceTrackingChannels.IndexOf("jawOpen")], 0.37f, "UDP payload survives receiver", 0.0001f);
+                Near(p.Get("jawOpen"), 37f, "UDP payload survives receiver（原值，量纲归输入行）", 0.0001f);
                 bool busy = false;
                 using (var second = new IFacialMocapReceiver())
-                    try { second.Start("127.0.0.2"); } catch (SocketException) { busy = true; }
+                    try { second.Start(IFacialEntry("127.0.0.2")); } catch (SocketException) { busy = true; }
                 Check(busy, "second socket fails explicitly on occupied port");
-                receiver.Dispose(); receiver.Start("127.0.0.2");
+                receiver.Dispose(); receiver.Start(IFacialEntry("127.0.0.2"));
                 Check(receiver.Running, "socket can reopen after disposal");
             }
         }
     }
+
+    /// <summary>验证用例用的 iFacialMocap 源条目（127.0.0.2 是本机回环的另一个地址）。</summary>
+    private static HoFaceSourceEntry IFacialEntry(string ip) => new HoFaceSourceEntry
+    {
+        kind = HoFaceSourceKind.IFacialMocap, phoneIp = ip, localPort = IFacialMocapReceiver.Port
+    };
 
     private static void Near(float actual, float expected, string name, float tolerance = 0.15f) => Check(Mathf.Abs(actual - expected) < tolerance, name + " actual=" + actual + " expected=" + expected);
     private static void Check(bool condition, string name)

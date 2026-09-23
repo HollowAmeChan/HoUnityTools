@@ -11,9 +11,6 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         public Animator targetAnimator;
         public RuntimeAnimatorController faceController;
-        [Tooltip("面捕驱动哪些区域。凝视键默认也开 —— LookAt 不是一定存在的，"
-            + "要不要把凝视让给 LookAt 由两边的开关各自决定。")]
-        public HoFaceRegion outputRegions = HoFaceRegion.All;
         [Tooltip("仅启用面部形态键；手机头姿与眼骨旋转不会写入角色。")]
         public List<HoFaceChannel> channels = HoFaceTrackingChannels.CreateDefaults();
         [Tooltip("混合树模板：一份完整的 .controller（树形、坐标、门控、参数都在里面）。\n"
@@ -53,6 +50,17 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             var loaded = Middleware;
             return loaded != null && loaded.outputs.Count > 0 ? loaded.outputs : HoFaceMiddlewareDefaults.Outputs();
+        }
+
+        /// <summary>
+        /// 这台角色要跑的**输入行**（线名 → 规范名 + 量纲）。指了配置文件就**只用它里面的** ——
+        /// 一条都没有就是"不做改名"，规范名必须与线名同名；**不会偷偷拿内置默认来补**（那会变成隐式处理）。
+        /// 没指配置文件时才用内置默认（它同时带两种内置协议的行）。
+        /// </summary>
+        public List<HoFaceOutput> Inputs()
+        {
+            var loaded = Middleware;
+            return loaded != null ? loaded.inputs : HoFaceMiddlewareDefaults.Inputs();
         }
 
         /// <summary>

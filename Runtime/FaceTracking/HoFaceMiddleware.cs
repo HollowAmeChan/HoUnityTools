@@ -101,34 +101,50 @@ namespace Hollow.HoUnityTools.FaceTracking
         public AnimationCurve curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
         [Tooltip("按列出顺序生效的修饰符（平滑 / 分档 / 延迟）。")]
         public List<HoFaceModifier> modifiers = new List<HoFaceModifier>();
+        [Tooltip("备注：面板显示用，不参与求值（比如标注这一行属于哪个协议/哪台设备）。")]
+        public string notes;
 
         /// <summary>表达式 → 曲线（修饰符不在这里：它们是逐帧状态，由会话持有）。</summary>
         public float Transform(float value) => HoFaceCurve.Transfer(curve, value);
     }
 
     /// <summary>
-    /// **一套中间层**：一列输出行 + 说明。这是个纯数据对象；它的持久化形式是我们自己的
+    /// **一套中间层**：输入行 + 输出行 + 说明。这是个纯数据对象；它的持久化形式是我们自己的
     /// JSON 配置文件（见 <see cref="HoFaceProfile"/>），窗口负责编辑它。
     ///
-    /// 步骤顺序固定，见 docs/FACE_TRACKING_MIDDLE_LAYER.md §3：
-    /// 输入侧（模式 / 输入曲线 / 中性）→ 双眼同步 → **本对象（表达式 → 曲线）** → 修饰符 → 区域门控 → 写参数。
+    /// 两类行**同一套形状**（`名字 = 曲线(表达式(变量…)) + 有序修饰符`），只是写出的名字含义不同：
+    /// · **输入行** <see cref="inputs"/>：左值是**规范名**（如 `jawOpen`、`headRotX`），
+    ///   右值的变量是**手机发来的线名**（iFacialMocap 的 `eyeBlink_L` / VTS 的 `EyeBlinkLeft`）。
+    ///   改名、量纲、姿态分量、左右合并全在这一层 —— 接收端只交原样，不做任何隐式处理。
+    /// · **输出行** <see cref="outputs"/>：左值是**控制器参数名**，右值的变量是规范名（或线名）。
+    ///
+    /// 求值顺序：输入行 → 逐通道整形（模式/输入曲线/中性）→ 输出行。见 docs/FACE_TRACKING_MIDDLE_LAYER.md。
     /// </summary>
     [Serializable]
     public sealed class HoFaceMiddleware
     {
         public string displayName = "ho-2d";
         public string notes;
+        /// <summary>线名 → 规范名（+ 量纲）。引用到的线名这帧没来时，这一行**保持上一帧**（照 VBridger 的语义）。</summary>
+        public List<HoFaceOutput> inputs = new List<HoFaceOutput>();
         public List<HoFaceOutput> outputs = new List<HoFaceOutput>();
 
-        /// <summary>这套输出会读到的所有变量名（= 需要的源键，去重、按首次出现顺序）。</summary>
+        /// <summary>这套配置会读到的所有变量名（输入行与输出行都算；去重、按首次出现顺序）。</summary>
         public void UsedShapes(List<string> into)
         {
             if (into == null) return;
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var output in outputs)
+            Collect(inputs, seen, into);
+            Collect(outputs, seen, into);
+        }
+
+        private static void Collect(List<HoFaceOutput> rows, HashSet<string> seen, List<string> into)
+        {
+            if (rows == null) return;
+            foreach (var row in rows)
             {
-                if (output == null || string.IsNullOrEmpty(output.expression)) continue;
-                if (!HoFaceExpression.TryParse(output.expression, out var parsed, out _)) continue;
+                if (row == null || string.IsNullOrEmpty(row.expression)) continue;
+                if (!HoFaceExpression.TryParse(row.expression, out var parsed, out _)) continue;
                 var names = new List<string>();
                 parsed.CollectVariables(names);
                 foreach (string name in names) if (seen.Add(name)) into.Add(name);
@@ -147,13 +163,73 @@ namespace Hollow.HoUnityTools.FaceTracking
     }
 
     /// <summary>
-    /// 内置默认中间层（**没有配置文件时用它**，等价于我们一直在用的那套）：
-    /// 52 个 `ARKit/&lt;键&gt;` 直通（表达式就是键名）+ 4 根眼睑轴
-    /// （`开合 = eyeBlinkLeft − eyeWideLeft`、`眯眼 = eyeSquintLeft`）。
+    /// 内置默认中间层（**没有配置文件时用它**）。两份内容：
+    /// · **输入行**：把两种内置协议的线名映射成规范名并换算量纲（iFacialMocap ×0.01、VTS ×1）。
+    ///   两种协议的行**同时存在也没关系** —— 输入行的规矩是"引用到的线名这帧没来就保持上一帧"，
+    ///   所以哪个源在发，就只有那一套行会动。
+    /// · **输出行**：52 个 `ARKit/&lt;键&gt;` 直通 + 4 根眼睑轴。
+    ///
+    /// ⚠️ <see cref="IFacialWire"/> / <see cref="VtsWire"/> 这两个函数**只用来生成默认配置**
+    /// （也就是"新建配置文件"写出来的那几行文本）；**运行时不经过它们** —— 运行时只认 JSON 里的输入行。
+    /// 想接第三种协议，写自己的输入行即可，不用碰这里。
     /// </summary>
     public static class HoFaceMiddlewareDefaults
     {
         public const string DisplayName = "ho-2d-test1";
+
+        /// <summary>iFacialMocap 的线名：`eyeBlinkLeft` → `eyeBlink_L`（四个不带后缀的键除外）。</summary>
+        public static string IFacialWire(string canonical)
+        {
+            if (canonical == "mouthLeft" || canonical == "mouthRight" || canonical == "jawLeft" || canonical == "jawRight")
+                return canonical;
+            if (canonical.EndsWith("Left", StringComparison.Ordinal)) return canonical.Substring(0, canonical.Length - 4) + "_L";
+            if (canonical.EndsWith("Right", StringComparison.Ordinal)) return canonical.Substring(0, canonical.Length - 5) + "_R";
+            return canonical;
+        }
+
+        /// <summary>VTS 手机的线名：`eyeBlinkLeft` → `EyeBlinkLeft`（首字母大写，其余原样）。</summary>
+        public static string VtsWire(string canonical) =>
+            string.IsNullOrEmpty(canonical) ? canonical : char.ToUpperInvariant(canonical[0]) + canonical.Substring(1);
+
+        /// <summary>
+        /// 输入行：两种协议各一套。iFacialMocap 的形态键是 0..100（官方文法）所以要 `* 0.01`；
+        /// VTS 手机的是 iOS 原始值 0..1，所以原样。
+        /// 头/眼姿态只给最朴素的对应（iFacialMocap 的 `=head#` 6 个数 → `head_0..5`、`leftEye#`/`rightEye#` → 各 3 个；
+        /// VTS 的 `Rotation`/`Position`/`EyeLeft`/`EyeRight` → `_x/_y/_z`），单位换算留给使用者按自己的设备定。
+        /// </summary>
+        public static List<HoFaceOutput> Inputs()
+        {
+            var list = new List<HoFaceOutput>();
+            foreach (string shape in HoFaceTrackingChannels.Names)
+            {
+                list.Add(new HoFaceOutput { parameter = shape, expression = IFacialWire(shape) + " * 0.01", notes = "iFacialMocap" });
+                list.Add(new HoFaceOutput { parameter = shape, expression = VtsWire(shape), notes = "VTS 手机" });
+            }
+
+            // iFacialMocap：`=head#` 6 个数（欧拉角在前、位置在后，单位度），两只眼各 3 个数。
+            string[] headAxes = { "headRotX", "headRotY", "headRotZ", "headPosX", "headPosY", "headPosZ" };
+            for (int i = 0; i < headAxes.Length; i++)
+                list.Add(new HoFaceOutput { parameter = headAxes[i], expression = "head_" + i, notes = "iFacialMocap" });
+            string[] eyeAxes = { "X", "Y", "Z" };
+            for (int side = 0; side < 2; side++)
+            {
+                string eye = side == 0 ? "leftEye" : "rightEye";
+                string canonical = side == 0 ? "eyeLeft" : "eyeRight";
+                for (int i = 0; i < 3; i++)
+                    list.Add(new HoFaceOutput { parameter = canonical + eyeAxes[i], expression = eye + "_" + i, notes = "iFacialMocap" });
+            }
+
+            // VTS 手机：Rotation / Position / EyeLeft / EyeRight 各 3 个分量。
+            for (int i = 0; i < 3; i++)
+            {
+                list.Add(new HoFaceOutput { parameter = headAxes[i], expression = "Rotation_" + "xyz"[i], notes = "VTS 手机" });
+                list.Add(new HoFaceOutput { parameter = headAxes[3 + i], expression = "Position_" + "xyz"[i], notes = "VTS 手机" });
+                list.Add(new HoFaceOutput { parameter = "eyeLeft" + eyeAxes[i], expression = "EyeLeft_" + "xyz"[i], notes = "VTS 手机" });
+                list.Add(new HoFaceOutput { parameter = "eyeRight" + eyeAxes[i], expression = "EyeRight_" + "xyz"[i], notes = "VTS 手机" });
+            }
+
+            return list;
+        }
 
         public static List<HoFaceOutput> Outputs()
         {
@@ -186,8 +262,10 @@ namespace Hollow.HoUnityTools.FaceTracking
             return new HoFaceMiddleware
             {
                 displayName = DisplayName,
-                notes = "内置默认：52 个 ARKit 直通 + 眼睑两根轴（开合 = blink − wide、眯眼 = squint）。\n"
-                    + "配对：吃 `ARKit/*` 与 `Ho/Drive/Lid/*` 的控制器模板（我们自己那份 ho-2d-test1）。",
+                notes = "内置默认。\n"
+                    + "输入行：把两种内置协议的线名映射成规范名（iFacialMocap 形态键 ×0.01、VTS 手机原样）。\n"
+                    + "输出行：52 个 ARKit 直通 + 眼睑两根轴（开合 = blink − wide、眯眼 = squint）。",
+                inputs = Inputs(),
                 outputs = Outputs()
             };
         }

@@ -14,12 +14,6 @@ namespace Hollow.HoUnityTools.FaceTracking
     public enum HoFaceInputMode { Live, Manual, Hold, Neutral, Release }
 
     /// <summary>
-    /// 驱动层的两个区域子树。参考实现里眉挂 `EyeTrackingActive`、颊鼻挂 `LipTrackingActive`，
-    /// 即 **眼区 = 眼睑 + 眼球 + 眉**、**唇区 = 嘴 + 颊鼻** —— 眉毛跟着眼神走，不是跟着嘴走。
-    /// </summary>
-    public enum HoFaceGate { Eye, Lip }
-
-    /// <summary>
     /// 平滑分组。对齐参考实现的 <c>OSCm/Sensitivity</c> 分组手感：眼睑、眼球、嘴各自一组，其余归一组 ——
     /// 而不是 52 个键共用一个平滑系数。实践中那不够用：眼球要跟得紧、眼睑要稳、嘴要更黏，
     /// 三者的合适时长能差一个数量级。
@@ -82,15 +76,11 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public static int IndexOf(string name) => name != null && Indices.TryGetValue(name, out int index) ? index : -1;
 
-        /// <summary>眼区的区域位（眼睑 + 眼球 + 眉）。</summary>
-        public const HoFaceRegion EyeRegion = HoFaceRegion.Eyelids | HoFaceRegion.Gaze | HoFaceRegion.Brows;
-
-        /// <summary>唇区的区域位（嘴 + 颊鼻）。</summary>
-        public const HoFaceRegion LipRegion = HoFaceRegion.Mouth | HoFaceRegion.Cheeks;
-
-        /// <summary>这个键属于哪个区域子树。</summary>
-        public static HoFaceGate Gate(string shape) =>
-            (Region(shape) & EyeRegion) != 0 ? HoFaceGate.Eye : HoFaceGate.Lip;
+        /// <summary>
+        /// **只认规范名**（不接受 `_L/_R` 线名别名）。表达式取变量时用它：
+        /// `eyeBlink_L` 应该解析成"手机发来的线名原值"，而不是通道 `eyeBlinkLeft`。
+        /// </summary>
+        public static int CanonicalIndexOf(string name) => Array.IndexOf(Names, name);
 
         public static HoFaceRegion Region(string shape)
         {
@@ -113,6 +103,10 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
         }
 
+        /// <summary>
+        /// 组件上默认建哪些通道：52 个形态键（**它们是"规范化后的形态键名"**）。
+        /// 手机发来的线名（`eyeBlink_L` / `EyeBlinkLeft`）不在这里 —— 那是中间层配置里**输入行**的活儿。
+        /// </summary>
         public static List<HoFaceChannel> CreateDefaults()
         {
             var channels = new List<HoFaceChannel>();

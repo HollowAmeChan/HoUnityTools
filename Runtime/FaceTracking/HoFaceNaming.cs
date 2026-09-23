@@ -25,10 +25,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>左右侧的英文名，用于参数名（ASCII）。</summary>
         public static string Side(int side) => side == 0 ? "Left" : "Right";
 
-        /// <summary>区域门控参数：<c>Ho/Drive/Gate/Eye</c> / <c>Ho/Drive/Gate/Lip</c>。</summary>
-        public static string Gate(HoFaceGate gate) =>
-            ParameterRoot + "/Gate/" + (gate == HoFaceGate.Eye ? "Eye" : "Lip");
-
         /// <summary>眼睑的两根轴参数：<c>Ho/Drive/Lid/Left/BlinkWide</c> 与 <c>…/Squint</c>。</summary>
         public static string LidAxis(int side, bool horizontal) =>
             ParameterRoot + "/Lid/" + Side(side) + "/" + (horizontal ? LidOpenAxis : LidSquintAxis);

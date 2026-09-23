@@ -96,7 +96,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     {
         public static bool Allowed(HoFaceTrackingDebugger rig, string shape)
         {
-            if ((rig.outputRegions & HoFaceTrackingChannels.Region(shape)) == 0) return false;
+            // 这里**不看区域开关**了：哪些键算数由使用者自己的混合树决定（我们不注入门控）。
             foreach (var channel in rig.channels)
                 if (channel != null && channel.shape == shape) return channel.mode != HoFaceInputMode.Release;
             return false;
