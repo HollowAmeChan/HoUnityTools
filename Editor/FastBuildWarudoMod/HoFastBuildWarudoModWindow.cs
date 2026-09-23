@@ -448,8 +448,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (DrawIconButton("Refresh", "刷新", "重新读取 UMod ExportSettings 与工作区列表"))
                 {
                     SetWorkspaceStatus(string.Empty);
-                    // 宿主自带程序集是从「活动导出目录」反推的，换工作区/换游戏版本后要重探。
-                    InvalidateWarudoHostAssemblies();
                     RefreshExportSettingsPreview();
                 }
 
@@ -2157,8 +2155,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (string.Equals(typeName, "Hollow.HoUnityTools.RigConstraints.HoAuxRig", StringComparison.Ordinal))
                 return "HoAuxRig 运行时脚本可独立复制；UMod 会按完整类型名链接现有组件。";
             if (IsWarudoHostAssembly(assemblyName))
-                return "宿主自带（Warudo_Data/Managed 里就有 " + assemblyName +
-                       ".dll）：保留 Prefab 组件引用，不复制、不重新编译源码。";
+                return "宿主自带（Warudo 实测清单里有 " + assemblyName +
+                       "）：保留 Prefab 组件引用，不复制、不重新编译源码。";
             if (IsWarudoSupportedClothType(typeName))
                 return "Warudo 宿主已提供 MC1/MC2 运行时：保留 Prefab 组件引用，不复制或重新编译源码。";
             if (path.StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase))
@@ -2308,120 +2306,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                    HasTypeNamespace(typeName, "MagicaCloth2");
         }
 
-        // ---------------------------------------------------------------------
-        // 宿主自带程序集：直接去看 Warudo 到底带了什么
-        // ---------------------------------------------------------------------
-        //
-        // ⚠️ 这里曾经是一张手抄的名单（只认 MagicaCloth / MagicaCloth2 两个命名空间），
-        //    结果 `VRM.VRMSpringBone` 这类宿主明明自带、却在名单外的组件被误判成
-        //    「外部包脚本 -> 默认不复制」，产物里全变成 Missing Script。
-        //
-        // ✅ 实测：<游戏>/Warudo_Data/Managed 下有 **400 个 DLL、80 MB**，
-        //    其中就有 `VRM.dll`、`VRM10.dll`、`UniGLTF.dll`、`MagicaCloth.dll`、
-        //    `MagicaClothV2.dll`、`RootMotion.dll`、`DynamicBone.dll`、`FastSpringBone10.dll` …
-        //    抄名单永远抄不全，所以改成**读目录**：
-        //
-        //      组件所属程序集名 == Managed 目录下某个 DLL 的文件名  ->  宿主自带
-        //
-        //    这个对应关系是成立的：SDK 把 `com.vrmc.univrm` 作为源码包引入，它的
-        //    asmdef 产出的程序集就叫 `VRM`，而宿主那边正是 `VRM.dll`。
-        //    Warudo 升级换了版本，这里会自动跟上，不需要改代码。
-        //
-        // 兜底：万一定位不到游戏目录（用户还没配工作区导出目录），保持旧行为不乱判。
-
-        private static string s_WarudoManagedDirectory;
-        private static HashSet<string> s_WarudoHostAssemblies;
-        private static bool s_WarudoManagedResolved;
-
-        private static bool IsWarudoHostAssembly(string assemblyName)
-        {
-            if (string.IsNullOrEmpty(assemblyName))
-                return false;
-
-            HashSet<string> hostAssemblies = GetWarudoHostAssemblies();
-            return hostAssemblies != null && hostAssemblies.Contains(assemblyName);
-        }
-
-        private static HashSet<string> GetWarudoHostAssemblies()
-        {
-            if (s_WarudoManagedResolved)
-                return s_WarudoHostAssemblies;
-
-            s_WarudoManagedResolved = true;
-            s_WarudoManagedDirectory = ResolveWarudoManagedDirectory();
-            if (string.IsNullOrEmpty(s_WarudoManagedDirectory))
-                return s_WarudoHostAssemblies = null;
-
-            try
-            {
-                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (string file in Directory.GetFiles(s_WarudoManagedDirectory, "*.dll"))
-                    names.Add(Path.GetFileNameWithoutExtension(file));
-                s_WarudoHostAssemblies = names;
-            }
-            catch (Exception)
-            {
-                s_WarudoHostAssemblies = null;
-            }
-
-            return s_WarudoHostAssemblies;
-        }
-
-        /// <summary>让用户在「刷新」后能重新探测宿主目录（换了工程/游戏版本时用）。</summary>
-        private static void InvalidateWarudoHostAssemblies()
-        {
-            s_WarudoManagedResolved = false;
-            s_WarudoHostAssemblies = null;
-            s_WarudoManagedDirectory = null;
-        }
-
-        /// <summary>
-        /// 从活动工作区的导出目录反推宿主安装位置，返回 &lt;游戏&gt;/Warudo_Data/Managed。
-        /// 导出目录长这样：&lt;游戏&gt;/Warudo_Data/StreamingAssets/&lt;类别&gt;
-        /// </summary>
-        private static string ResolveWarudoManagedDirectory()
-        {
-            string exportPath = string.Empty;
-            try
-            {
-                UnityEngine.Object settings = LoadExportSettingsAsset(FindExportSettingsAssetPath());
-                if (settings != null)
-                {
-                    string modName;
-                    int profileIndex;
-                    TryReadActiveExportProfile(settings, out modName, out exportPath, out profileIndex);
-                }
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-
-            if (string.IsNullOrEmpty(exportPath))
-                return null;
-
-            // 最多往上找 4 层，够覆盖 StreamingAssets/<类别> 这类结构。
-            DirectoryInfo directory = null;
-            try
-            {
-                directory = new DirectoryInfo(exportPath);
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-
-            for (int depth = 0; depth < 4 && directory != null; depth++, directory = directory.Parent)
-            {
-                if (!string.Equals(directory.Name, "Warudo_Data", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string managed = Path.Combine(directory.FullName, "Managed");
-                return Directory.Exists(managed) ? managed : null;
-            }
-
-            return null;
-        }
+        // 宿主自带程序集的判断在 HoFastBuildWarudoModWindow.HostAssemblies.cs，
+        // 名单在 HoWarudoHostAssemblies.generated.cs。这里不再做任何路径探测 —— 见那两个文件的说明。
 
         private static bool HasTypeNamespace(string typeName, string namespaceName)
         {
