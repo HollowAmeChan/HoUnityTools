@@ -47,10 +47,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             int total = 0, missing = 0;
             Audit(peek.controller, go.transform, ref total, ref missing);
-            Debug.Log("[Ho 混合树观察台] controller = " + (peek.controller != null ? peek.controller.name : "（空，自己拖一个进来）")
+            Debug.Log("[Ho 混合树观察台] controller = " + (peek.controller != null ? peek.controller.name : "（空）")
                 + "；曲线绑定 " + total + " 条，其中 " + missing + " 条在这个空物体上解析不到。"
-                + (treeName != null ? " 驱动用的 2D 树：" + treeName + "（" + x + " / " + y + "）。" : string.Empty)
-                + " Play 后选中它、打开 Animator 窗口，并留意 Console 有没有因为缺绑定而报错。");
+                + (treeName != null ? " 找到的 2D 树：" + treeName + "（" + x + " / " + y + "，只在正弦模式下用到）。" : string.Empty)
+                + " 默认是「跟随正在生效的会话」模式：Play 并把面捕驱动起来，选中本物体看 Animator 窗口。");
         }
 
         /// <summary>在控制器里找一棵"两根混合参数都非空"的 2D 树（我们生成的 LidL / LidR 就是）。</summary>

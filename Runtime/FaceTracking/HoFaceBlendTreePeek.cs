@@ -1,55 +1,72 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
-    /// 混合树**观察台**（调试道具）：一个**可见、空、无渲染器**的 GameObject，挂同一个 controller，
-    /// 每帧把两个参数按正弦喂进去。它要回答的是四个"凭经验猜、但没实测"的问题 ——
-    /// 这四个问题的答案决定"让编辑器看见运行中的混合树"能不能做成一个通用组件：
+    /// 混合树**观察台**：一个**可见、空、无渲染器**的 GameObject，挂一个 controller，
+    /// 每帧往它的参数里写值 —— 于是你在 Animator 窗口里选中它，就能看到那棵树的红点与叶子明暗。
     ///
-    /// 1. Play 模式下选中一个正在跑的 Animator，Animator 窗口**是否画出** 2D 混合位置的红点与叶子明暗？
-    /// 2. controller 是**运行期创建、没有磁盘路径**的对象时（勾上「运行期复制」），窗口还画不画？
-    /// 3. controller 里的曲线指向本物体上**不存在的路径**（本物体没有子物体）时，Console 会不会报错/警告？
-    /// 4. 窗口里显示的层权重，是**控制器的默认值**还是**该 Animator 的 live 值**？（改「第 2 层权重」看它变不变）
+    /// **两种取值模式**（<see cref="source"/>）：
+    /// <list type="bullet">
+    /// <item><b>跟随正在生效的会话</b>：每帧把**影子台**（面捕会话里那个隐藏的 Animator）的
+    /// **全部 Float 参数 + 每层权重**抄过来 —— 这才是"看真实输入"。影子台由
+    /// <see cref="HoFaceShadowLink"/> 登记，不需要你拖任何引用。</item>
+    /// <item><b>正弦测试信号</b>：自己造两个正弦值写进去。**与真实输入无关**，只用来验证
+    /// "Animator 窗口画不画得出一棵正在跑的树"。看到"很规则地动"就是它的签名，不是真实输入。</item>
+    /// </list>
     ///
-    /// **它是无损的**：本物体不驱动任何渲染器、也不读任何输出，它求值出来的姿势没有去处；
-    /// 参数是写它自己身上的，与角色的 Animator、与面捕的影子台都没有关系。
+    /// **它是无损的**：本物体不驱动任何渲染器、也不读任何输出，抄过来的姿势求值出来没有去处；
+    /// 参数只写它自己身上，角色 Animator 与影子台都不受影响。
     ///
-    /// 用法：Play → 在 Hierarchy 里选中本物体 → 打开 Animator 窗口 → 看那棵树动不动、Console 干不干净。
-    /// **看不到树不等于方案不成立**：可能是窗口不认运行期的 controller（第 2 条），所以磁盘资产与运行期复制
-    /// 两个变体都要试一遍再下结论。
+    /// 用法：Play（要真实输入就再把面捕驱动起来）→ 在 Hierarchy 里选中本物体 → 打开 Animator 窗口。
+    /// 物体上的小面板显示当前模式、来源、已抄参数个数与两轴值，方便和窗口里的显示对照。
     /// </summary>
     [AddComponentMenu("HoUnityTools/Face Tracking/Ho Face Blend Tree Peek")]
     public sealed class HoFaceBlendTreePeek : MonoBehaviour
     {
-        [Tooltip("要观察的 controller：用生成出来的那个资产（Ho/00 Drive 那个 .controller）。")]
+        /// <summary>参数从哪来。</summary>
+        public enum PeekSource
+        {
+            [InspectorName("跟随正在生效的会话（真实输入）")] FollowSession,
+            [InspectorName("正弦测试信号（与真实输入无关）")] Sine
+        }
+
+        [Tooltip("取值模式。跟随会话 = 看真实输入；正弦 = 只验证窗口能不能显示一棵正在跑的树。")]
+        public PeekSource source = PeekSource.FollowSession;
+
+        [Tooltip("跟随哪个 Animator。留空 = 用当前正在生效的面捕会话（影子台）。"
+            + "也可以拖别的 Animator 进来 —— 那就与面捕无关了，任何管线都能观察。")]
+        public Animator sourceAnimator;
+
+        [Tooltip("要观察的 controller。**建议留空**：跟随模式下会自动用影子台正在跑的那个"
+            + "（运行期编译、没有磁盘路径，顺便验证窗口认不认这种 controller）。"
+            + "填了就显示你指定的资产 —— 那时最好就是影子台跑的那一份，否则参数表可能对不上。")]
         public RuntimeAnimatorController controller;
 
-        [Tooltip("运行期复制一份再挂上 —— 复制出来的对象**没有磁盘路径**，用来验证第 2 条问题。"
-            + "两个变体都要试：不勾（磁盘资产）与勾上（内存对象）。")]
+        [Tooltip("运行期复制一份再挂上 —— 复制出来的对象**没有磁盘路径**，用来验证窗口对内存 controller 还画不画。")]
         public bool useRuntimeCopy;
 
-        [Tooltip("横轴参数名。默认是左眼眼睑的两根轴 —— 它们正好驱动那棵 2D 树，红点会在方阵里走。")]
+        [Tooltip("【正弦模式】横轴参数名。菜单建物体时会自动填成 controller 里那棵 2D 树的真实轴。")]
         public string parameterX = HoFaceNaming.LidAxis(0, true);
-        [Tooltip("纵轴参数名。")]
+        [Tooltip("【正弦模式】纵轴参数名。")]
         public string parameterY = HoFaceNaming.LidAxis(0, false);
 
-        [Tooltip("两根轴的正弦频率（Hz）。取**不同值**，红点才会走成李萨如曲线 —— 比一条直线更容易看出它在动。")]
+        [Tooltip("【正弦模式】两根轴的正弦频率（Hz）。取不同值，红点才会走成李萨如曲线。")]
         public float speedX = 0.35f;
         public float speedY = 0.55f;
 
-        [Tooltip("运行时把第 2 层权重强制设成这个值（< 0 = 不碰）。验证第 4 条："
-            + "窗口里那一行的权重跟着动 = 显示的是 live 值；不动 = 显示的是控制器默认值。")]
+        [Tooltip("额外把第 2 层权重强制设成这个值（< 0 = 不碰）。验证：窗口里那一行的权重跟着变 = "
+            + "显示的是 live 值；不变 = 显示的是控制器默认值。")]
         public float secondLayerWeight = -1f;
 
-        [Tooltip("再建一个空 Animator，把参数与层权重抄过去 —— 验证同一个 controller 能不能同时挂两个 Animator。")]
-        public bool mirror;
-
+        private readonly HashSet<string> copyable = new HashSet<string>(System.StringComparer.Ordinal);
         private Animator animator;
-        private Animator mirrorAnimator;
-        private GameObject mirrorRoot;
+        private Animator boundSource;
+        private bool tightenNextFrame;
         private float currentX;
         private float currentY;
+        private int copiedParameters;
         private GUIStyle boxStyle;
 
         private void Awake()
@@ -59,43 +76,34 @@ namespace Hollow.HoUnityTools.FaceTracking
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             animator.applyRootMotion = false;
 
-            RuntimeAnimatorController applied = controller;
-            if (useRuntimeCopy && controller != null)
+            if (source == PeekSource.Sine)
             {
-                var copy = new AnimatorOverrideController(controller) { name = controller.name + "（运行期复制）" };
-                applied = copy;
+                animator.runtimeAnimatorController = CopyIfAsked(controller);
+                // 参数名不存在时红点不会动，容易被误读成"窗口画不出来" —— 先校验、缺了就退回一个存在的 Float。
+                WarnIfMissing(parameterX, parameterY, ref parameterX);
+                WarnIfMissing(parameterY, parameterX, ref parameterY);
+                if (parameterX == parameterY)
+                    Debug.LogWarning("[Ho 混合树观察台] 横纵轴解析成了同一个参数（" + parameterX
+                        + "）—— 红点只会沿一条直线来回，2D 图上看不出插值。", this);
             }
-
-            animator.runtimeAnimatorController = applied;
-
-            // 参数名不存在时红点不会动，容易被误读成"窗口画不出来" —— 先校验，缺了就退回一个存在的 Float。
-            WarnIfMissing(parameterX, parameterY, ref parameterX);
-            WarnIfMissing(parameterY, parameterX, ref parameterY);
-            if (parameterX == parameterY)
-                Debug.LogWarning("[Ho 混合树观察台] 横纵轴解析成了同一个参数（" + parameterX
-                    + "）—— 红点只会沿一条直线来回，2D 图上看不出插值。请把 controller 里那棵 2D 树的两根参数填进来。", this);
-
-            if (mirror && applied != null)
+            else if (controller != null)
             {
-                mirrorRoot = new GameObject(name + "（镜像）");
-                mirrorRoot.transform.SetParent(transform.parent, false);
-                mirrorAnimator = mirrorRoot.AddComponent<Animator>();
-                mirrorAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                mirrorAnimator.runtimeAnimatorController = applied;
+                // 跟随模式下也可以先挂上资产；等会话起来再换成它正在跑的那个。
+                animator.runtimeAnimatorController = CopyIfAsked(controller);
             }
-
-            Debug.Log("[Ho 混合树观察台] controller = " + (applied != null ? applied.name : "（空）")
-                + (useRuntimeCopy ? "，运行期复制（无磁盘路径）" : "，磁盘资产")
-                + "；层数 " + animator.layerCount
-                + "；参数 " + animator.parameters.Length
-                + "；横轴 " + parameterX + "，纵轴 " + parameterY
-                + (mirror && applied != null ? "；另建了一个镜像 Animator" : string.Empty)
-                + "。选中本物体并打开 Animator 窗口，看那棵树有没有红点/明暗在动。", this);
         }
 
         private void Update()
         {
-            if (animator == null || animator.runtimeAnimatorController == null) return;
+            if (animator == null) return;
+
+            if (source == PeekSource.FollowSession)
+            {
+                FollowSession();
+                return;
+            }
+
+            if (animator.runtimeAnimatorController == null) return;
 
             // X 走 −1..1、Y 走 0..1：正好是眼睑两根轴的真实值域（X 双边、Y 单端）。
             currentX = Mathf.Sin(Time.time * speedX * Mathf.PI * 2f);
@@ -105,29 +113,91 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             if (secondLayerWeight >= 0f && animator.layerCount > 1)
                 animator.SetLayerWeight(1, secondLayerWeight);
-
-            if (mirrorAnimator == null) return;
-            foreach (var parameter in animator.parameters)
-                if (parameter.type == AnimatorControllerParameterType.Float)
-                    mirrorAnimator.SetFloat(parameter.name, animator.GetFloat(parameter.name));
-            for (int i = 0; i < animator.layerCount && i < mirrorAnimator.layerCount; i++)
-                mirrorAnimator.SetLayerWeight(i, animator.GetLayerWeight(i));
         }
 
-        private void OnDestroy()
+        /// <summary>把正在生效的会话（影子台）的全部 Float 参数与层权重抄过来 —— 这就是"看真实输入"。</summary>
+        private void FollowSession()
         {
-            if (mirrorRoot != null) Destroy(mirrorRoot);
+            var live = sourceAnimator != null ? sourceAnimator : HoFaceShadowLink.Active;
+            if (live == null || live == animator) return;
+
+            if (boundSource != live)
+            {
+                var applied = controller != null ? controller : live.runtimeAnimatorController;
+                if (applied == null) return;
+                applied = CopyIfAsked(applied);
+                animator.runtimeAnimatorController = applied;
+
+                // 以**来源**的参数表为准建"要抄的名单"。镜像挂的通常就是同一个 controller，名单自然一致。
+                copyable.Clear();
+                foreach (var parameter in live.parameters)
+                    if (parameter.type == AnimatorControllerParameterType.Float)
+                        copyable.Add(parameter.name);
+
+                boundSource = live;
+                tightenNextFrame = true;
+                Debug.Log("[Ho 混合树观察台] 已跟随 " + live.name + "，controller = " + applied.name
+                    + (controller != null ? "（你指定的资产）" : "（影子台正在跑的那个：没有磁盘路径）")
+                    + "；要抄的 Float 参数 " + copyable.Count + " 个", this);
+            }
+
+            if (tightenNextFrame && animator.parameters.Length > 0)
+            {
+                // 绑定后的下一帧镜像的参数表已刷新：取交集兜一层，免得两边版本不同时每帧刷"参数不存在"。
+                var names = new HashSet<string>(System.StringComparer.Ordinal);
+                foreach (var parameter in animator.parameters) names.Add(parameter.name);
+                copyable.IntersectWith(names);
+                tightenNextFrame = false;
+            }
+
+            copiedParameters = 0;
+            foreach (var parameter in live.parameters)
+            {
+                if (parameter.type != AnimatorControllerParameterType.Float) continue;
+                if (!copyable.Contains(parameter.name)) continue;
+                float value = live.GetFloat(parameter.name);
+                animator.SetFloat(parameter.name, value);
+                copiedParameters++;
+                if (parameter.name == parameterX) currentX = value;
+                if (parameter.name == parameterY) currentY = value;
+            }
+
+            // 层权重也要抄：树是按层求值的，层权重不同，看到的就不是真身。
+            for (int i = 0; i < live.layerCount && i < animator.layerCount; i++)
+                animator.SetLayerWeight(i, live.GetLayerWeight(i));
+
+            if (secondLayerWeight >= 0f && animator.layerCount > 1)
+                animator.SetLayerWeight(1, secondLayerWeight);
+        }
+
+        private RuntimeAnimatorController CopyIfAsked(RuntimeAnimatorController applied)
+        {
+            if (!useRuntimeCopy || applied == null) return applied;
+            return new AnimatorOverrideController(applied) { name = applied.name + "（运行期复制）" };
         }
 
         private void OnGUI()
         {
             if (!Application.isPlaying) return;
             if (boxStyle == null) boxStyle = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, fontSize = 11 };
-            GUILayout.BeginArea(new Rect(8f, 8f, 330f, 96f), boxStyle);
+            var live = sourceAnimator != null ? sourceAnimator : HoFaceShadowLink.Active;
+            GUILayout.BeginArea(new Rect(8f, 8f, 370f, 110f), boxStyle);
             GUILayout.Label("Ho 混合树观察台（无损：无渲染器、不读输出）");
-            GUILayout.Label("横轴 " + parameterX + " = " + currentX.ToString("F3"));
-            GUILayout.Label("纵轴 " + parameterY + " = " + currentY.ToString("F3"));
-            GUILayout.Label(useRuntimeCopy ? "controller：运行期复制（无磁盘路径）" : "controller：磁盘资产");
+            if (source == PeekSource.FollowSession)
+            {
+                GUILayout.Label("模式：跟随会话　来源：" + (live != null ? live.name : "（没有正在生效的会话）"));
+                GUILayout.Label("已抄参数 " + copiedParameters + " / 名单 " + copyable.Count
+                    + (useRuntimeCopy ? "　（运行期复制）" : string.Empty));
+                GUILayout.Label("横轴 " + parameterX + " = " + currentX.ToString("F3")
+                    + "　纵轴 " + parameterY + " = " + currentY.ToString("F3"));
+            }
+            else
+            {
+                GUILayout.Label("模式：正弦测试信号（与真实输入无关）");
+                GUILayout.Label("横轴 " + parameterX + " = " + currentX.ToString("F3"));
+                GUILayout.Label("纵轴 " + parameterY + " = " + currentY.ToString("F3"));
+            }
+
             GUILayout.EndArea();
         }
 

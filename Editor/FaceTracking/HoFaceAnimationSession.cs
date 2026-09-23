@@ -88,6 +88,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             shadowRoot = new GameObject("Ho Face Shadow") { hideFlags = HideFlags.HideAndDontSave };
             shadow = shadowRoot.AddComponent<Animator>();
             shadow.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // 登记给调试器（混合树观察台）：影子台是隐藏对象，调试组件自己找不到它。
+            // 这是调试接入的全部代价 —— 一行，且不改任何生产逻辑。
+            HoFaceShadowLink.Register(shadow);
         }
 
         /// <summary>按编译结果的绑定路径搭出镜像层级，每格挂一个只被驱动、不上屏的 SkinnedMeshRenderer。</summary>
@@ -323,6 +326,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             owned.Clear();
             meshRefs.Clear();
             DestroyProxies();
+            HoFaceShadowLink.Unregister(shadow);
             if (shadowRoot != null) UnityEngine.Object.DestroyImmediate(shadowRoot);
             shadowRoot = null;
             shadow = null;
