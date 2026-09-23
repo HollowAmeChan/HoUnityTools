@@ -125,21 +125,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 serializedObject.ApplyModifiedProperties();
 
                 var template = rig.template != null ? rig.template.spec : HoFaceTemplateDefaults.TwoDTest1();
-                HoConstraintEditorControls.Caption("模板：" + template.displayName
-                    + "　需要：" + (string.IsNullOrEmpty(template.requiredKeysNote) ? "（未声明）" : template.requiredKeysNote));
                 if (rig.targetAnimator != null)
                 {
+                    // 只报"缺键"这一件实事（缺了不报错、只是那几格写不进去，所以必须说出来）；
+                    // 模板的血统、出处、需要哪些键都写在模板资产自己的 notes 里，不在面板上堆。
                     CollectShapeKeys(rig, shapeKeys);
                     var missing = new List<string>();
                     foreach (string key in template.UsedKeys())
                         if (!shapeKeys.Contains(key)) missing.Add(key);
                     if (missing.Count > 0)
-                        HoConstraintEditorControls.Caption("⚠ 网格上缺这些键，对应格子里的它们会被**跳过**（不报错）："
+                        HoConstraintEditorControls.Caption("⚠ 网格缺这些键，对应格子里的它们会被跳过："
                             + string.Join("、", missing));
                 }
 
-                HoConstraintEditorControls.Caption("初始化产出的是**一整片「状态 + 驱动映射」**（片段 / 混合树 / 门控参数），"
-                    + "以后要加新状态就加生成配置（预设开关），不用手搓。");
                 if (rig.faceController is AnimatorController controller && !HasDriveLayer(controller))
                     HoConstraintEditorControls.Caption("该控制器没有 " + HoFaceAnimationAssets.DriveLayerName + " 段，先初始化");
             }
@@ -506,45 +504,34 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
+        /// <summary>
+        /// 初始化 = 产出完整控制器。**目标就是组件当前在用的那个资产**：重新初始化直接覆盖它，
+        /// 只弹一次"确认覆盖"。只有第一次（组件上还没有控制器）才需要问路径 —— 之后就一直是覆盖。
+        /// </summary>
         private void Initialize(HoFaceTrackingDebugger rig)
         {
-            string path = EditorUtility.SaveFilePanelInProject(
-                "初始化面部控制器", "Face_ARKit", "controller",
-                "这会产出一个完整的控制器文件。之后你的手工逻辑请在它内部的 (EDIT THIS) 段里加。");
-            if (string.IsNullOrEmpty(path)) return;
+            string path = rig.faceController != null ? AssetDatabase.GetAssetPath(rig.faceController) : "";
 
-            var existing = AssetDatabase.LoadMainAssetAtPath(path) as AnimatorController;
-            if (existing != null)
+            if (string.IsNullOrEmpty(path))
             {
-                // 覆盖前把代价算出来，而不是笼统说「将被覆盖」。
-                string cost = DescribeController(existing);
-                int choice = EditorUtility.DisplayDialogComplex(
-                    "要覆盖这个控制器吗？",
-                    path + "\n\n该文件已存在：" + cost + "。\n"
-                    + "覆盖会把它整个重写 —— 你在里面手工加的层、状态、树都会丢失。\n\n"
-                    + "想保住现有文件就选「另存为新文件」。",
-                    "覆盖并初始化", "取消", "另存为新文件…");
-                if (choice == 1) return;
-                if (choice == 2)
-                {
-                    path = EditorUtility.SaveFilePanelInProject(
-                        "另存为新的面部控制器", Path.GetFileNameWithoutExtension(path) + "_new", "controller",
-                        "原文件不会被改动。");
-                    if (string.IsNullOrEmpty(path)) return;
-                    if (AssetDatabase.LoadMainAssetAtPath(path) != null)
-                    {
-                        reportIsError = true;
-                        report = "目标已存在，已取消：" + path;
-                        return;
-                    }
-                }
+                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_ARKit", "controller",
+                    "产出一个完整的控制器文件；以后「重新初始化」会直接覆盖它。");
+                if (string.IsNullOrEmpty(path)) return;
+                if (AssetDatabase.LoadMainAssetAtPath(path) != null
+                    && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
+                        path + "\n\n该文件已存在，覆盖会把它整个重写。", "覆盖并初始化", "取消"))
+                    return;
+            }
+            else if (!EditorUtility.DisplayDialog("要重新初始化吗？",
+                path + "\n\n会把整个文件重写 —— 你在里面手工加的层、状态、树都会丢失。",
+                "覆盖并初始化", "取消"))
+            {
+                return;
             }
 
             try
             {
-                // 在**最终路径**上判断要不要覆盖：用户可能刚刚改选了「另存为新文件」。
-                bool overwrite = AssetDatabase.LoadMainAssetAtPath(path) != null;
-                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, overwrite, TemplateOf(rig));
+                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, true, TemplateOf(rig));
                 Undo.RecordObject(rig, "Initialize face controller");
                 rig.faceController = controller;
                 EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
@@ -592,27 +579,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             foreach (var layer in controller.layers)
                 if (layer.name == HoFaceAnimationAssets.DriveLayerName) return true;
             return false;
-        }
-
-        /// <summary>把一个控制器资产的规模说出来，供覆盖确认框显示代价。</summary>
-        private static string DescribeController(AnimatorController controller)
-        {
-            int states = 0;
-            foreach (var layer in controller.layers)
-            {
-                states += CountStates(layer.stateMachine);
-            }
-
-            return controller.layers.Length + " 个图层、" + states + " 个状态、"
-                + controller.animationClips.Length + " 个片段";
-        }
-
-        private static int CountStates(AnimatorStateMachine machine)
-        {
-            if (machine == null) return 0;
-            int count = machine.states.Length;
-            foreach (var child in machine.stateMachines) count += CountStates(child.stateMachine);
-            return count;
         }
 
         /// <summary>
