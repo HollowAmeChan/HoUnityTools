@@ -799,13 +799,23 @@ UDP 载荷上限、每帧键数是否有任何保障。
 
 参数名形如 `v2/<Shape>`，且**允许任意前缀分层**（官方示例 `.../v2/JawOpen`、`...ExamplePrefix/v2/JawOpen`、
 `...Example/Nest/v2/JawOpen`）。类型只有 **Float 与 Binary** 两种。
+**v1（SRanipal 式、无前缀）与 v2（`v2/` 前缀）是同时发送的两套参数**，
+官方注明 v1 由 v2 "directly emulated"（v1 是兼容层）。
 
-| 参数 | 编码（官方原文） |
+> ⚠️ **官方文档与官方源码不一致，以源码为准**（已实测）：文档的 Avatar Parameters 页把眼动列成
+> `v2/EyeLeftX` / `EyeLeftY` / `EyeRightX` / `EyeRightY`，但源码
+> `VRCFaceTracking.Core/Params/Expressions/UnifiedExpressionsParameters.cs` **只发**
+> `v2/Eye` / `v2/EyeLeft` / `v2/EyeRight` —— **全仓库没有 `v2/EyeLeftX` 这个字面量**。
+> 同一页还列了 `v2/EyeSquintLeft/Right`，源码里是合并量。**对接前先探 OSCQuery，别照抄文档表格。**
+
+| 参数 | 编码（官方原文 + 源码实测） |
 | --- | --- |
-| `v2/EyeLeftX` / `EyeLeftY` / `EyeRightX` / `EyeRightY` | `<0→1>` 向右 / 向上，`<0→-1>` 向左 / 向下（归一化笛卡尔） |
-| `v2/EyeLidLeft` / `EyeLidRight` / `EyeLid` | `<0→0.75>` = 睁眼度，**`<0.75→1.0>` = 睁大**（⚠️ 0.75 才是"正常睁开"） |
-| `v2/EyeSquintLeft/Right`、`EyeSquint` | `<0→1>` |
-| `v2/PupilDilation`、`PupilDiameterLeft/Right` | `<0→1>` |
+| `v2/Eye` / `v2/EyeLeft` / `v2/EyeRight` | 注视向量。源码：`exp.Eye.Combined().Gaze` / `Left.Gaze` / `Right.Gaze`（⚠️ 文档里的 `EyeLeftX` 等名字不存在） |
+| `v2/EyeOpenLeft` / `EyeOpenRight` / `EyeOpen` | 睁眼度（原始） |
+| `v2/EyeClosedLeft` / `EyeClosedRight` / `EyeClosed` | = `1 − 睁眼度` |
+| `v2/EyeLidLeft` / `EyeLidRight` / `EyeLid` | `<0→0.75>` = 睁眼度，**`<0.75→1.0>` = 睁大**。源码公式：`openness * 0.75 + EyeWide * 0.25` —— **0.75 才是"正常睁开"** |
+| `v2/EyeWide` | 取左右眼 `EyeWide` 的**较大值** |
+| `v2/PupilDilation`、`v2/PupilDiameterLeft/Right`、`v2/PupilDiameter` | `<0→1>`（源码对 `PupilDiameter` 还乘了 `0.1` / `0.05` 做归一） |
 | `v2/BrowPinchLeft/Right`、`BrowLowererLeft/Right`、`BrowInnerUpLeft/Right`、`BrowOuterUpLeft/Right` | `<0→1>` |
 | `v2/CheekPuffSuckLeft/Right` | `<0→1>` 鼓腮，**`<0→-1>` 吸腮**（一根轴两个语义） |
 | `v2/JawOpen`、`v2/MouthClosed` | `<0→1>` |
@@ -817,25 +827,39 @@ UDP 载荷上限、每帧键数是否有任何保障。
 | 简化参数（`v2/MouthSmileLeft`、`v2/SmileSad`、`v2/BrowExpression`…） | 由左右/上下**平均或合并**而来，官方单列一组 "Simplified Tracking Parameters" |
 | 追踪状态（Bool） | `EyeTrackingActive`、`ExpressionTrackingActive`、`LipTrackingActive` —— **只在加载或状态变化时发一次** |
 
+**规模**：Unified 的形态名共 **150 个** = Base Shapes **101**（含 8 个 `EyeLook*`）+ Blended Shapes **41**；
+其中 **56 个在 ARKit 52 里完全没有对应物**（舌/颊/鼻/颈那一大片）。→ **两套名字绝不可以在同一张
+映射表里混用**；最容易踩的是把 UE 的 `BrowInnerUpLeft`（单侧）当成 ARKit 的 `browInnerUp`（双眉内端）。
+
 **与我们最相关的对照**：做"眼睑一根轴"时，VBridger 用 `0.5` 当中性，**VRCFT 用 `0.75`**
-（0.75 = 正常睁开，0.75~1.0 = 睁大）。**两种约定都真实存在**，所以"中性点"必须显式写进我们的配置，不能硬编码。
+（源码里就是 `0.75·openness + 0.25·wide`）。**两种约定都真实存在**，所以"中性点"必须显式写进我们的配置，不能硬编码。
+
+> ⚠️ **master 领先正式版**：源码 master 上有一批 v5.0.0 **未发布**的参数（`v2/LipSuckFunnel*`、
+> `v2/MouthCornerY`、`v2/MouthTightenerStretch*` 等）。所以"VRCFT 发什么"要以**运行时的参数列表**为准。
 
 ### 7.4 边界说明（我们不做 VRCFT 时要注意什么）
 
 1. **不要把 Unified 名当 ARKit 名用**：`EyeClosedLeft` ≠ `eyeBlinkLeft`，`BrowLowererLeft` ≠ `browDownLeft`。
-2. **不要把 VRChat 的参数限制当成 Unity Animator 的限制**：VRCFT 的 `v2/` 前缀与分层是它自己的机制。
+2. **不要把 VRChat 的参数限制当成 Unity Animator 的限制**：同步上限 **256 bits**（是**位数**，不是 256 个参数）、
+   `float` 占 8 bits、`bool` 占 1 bit、另有"8192 个自定义参数"这一条（**只出现在现行官方页，未见交叉确认**）
+   —— 这些都是 **VRChat** 的规则，**Unity Animator 没有这些限制**。社区流传的"256 个参数"来自一个
+   资产条数缺陷报告，不是同步上限。
 3. **我们的中间层将来加一套"VRCFT 列"不需要改机制**：本来就是"一行 = 下游名 + 一条表达式"，
    这正是 `docs/FACE_TRACKING_MIDDLE_LAYER.md` 里"按下游分表"的含义。
 4. **值得抄的两条**：`0.75` 式"中性点显式化"、**有符号合并轴**（鼓腮/吸腮一根轴），比每个语义拆一根轴省参数。
 
 ### 7.5 未能确认
 
-- VRChat 侧 Avatar Parameter 的数量上限、同步参数上限等**具体数值**：本节**没有核实**，不要引用
-  （要用请查 [VRChat OSC 文档](https://docs.vrchat.com/docs/osc-overview) 原文）。
-- VRCFT 文档自称 "Still under construction"、"Documentation still actively in development"，
-  形态列表**可能随时变**。
+- **官方文档与官方源码在眼动参数上不一致**（§7.3）：文档有 `v2/EyeLeftX` 等，源码只有
+  `v2/Eye` / `v2/EyeLeft` / `v2/EyeRight`。**以源码为准，但对接前仍应先探 OSCQuery。**
+- **`v2/EyeSquintLeft/Right` 是否真的发出**：文档列了，源码里是合并量 —— 未确认。
+- VRChat 的 **8192 个自定义参数**上限只在**现行官方页**出现，旧快照版没有 → 适用范围未交叉确认。
+- VRChat 参数名的**字符集**（是否允许空格、非 ASCII）：官方没有条文。
 - 对照表里有两处疑似官方笔误（`MouthLowerDownRight` 的 ARKit 列写成 `mouthLowerUpRight`；
-  `MouthPressLeft/Right` 旁有特殊标记）：**以 ARKit 文档的拼写为准**。
+  `MouthDimpler*` 应为 `MouthDimple*`）：**以 ARKit 文档的拼写为准**。
+- VRCFT 文档自称 "Still under construction"、"Documentation still actively in development"，
+  且 master 上有未发布参数 → 形态与参数列表**随时可能变**。
+- SRanipal 的形状官方总数、UE 是否有 v3：未找到。
 
 ---
 
@@ -874,7 +898,7 @@ UDP 载荷上限、每帧键数是否有任何保障。
 | `HandDistance` 的取值范围 | **官方未公开** | wiki 只给了语义 |
 | iFacialMocap 线协议 | ✅ 已确认（§6） | 官方开发者文档存在且给出完整文法；只有"**位置字段的单位**"官方未说明 |
 | VRM 0.x 文件里 `presetName` 到底写大写还是小写 | **UNVERIFIED**（规范自相矛盾） | README 枚举 PascalCase 17 项，JSON Schema enum 全小写 18 项（§5.1）；**两种都要能认** |
-| VRChat 侧 Avatar Parameter 数量上限 / 同步参数上限 | **未核实**（§7.5） | 本表不引用；要用请查 VRChat OSC 文档原文 |
+| VRChat 侧 Avatar Parameter 限制 | **已核实主要数值**（§7.4） | 同步上限 **256 bits**（= 位数不是个数；float 8 bits、bool 1 bit）；**8192 个自定义参数**只在现行官方页出现，未交叉确认。这些是 VRChat 的规则，**不是 Unity Animator 的限制** |
 | VRM1 新增的 `thumbMetacarpal` 与 Unity `HumanBodyBones`（只有 ThumbProximal/Intermediate/Distal）的逐节映射 | **UNVERIFIED** | 没找到官方声明；实现手部链路前必须实测 |
 | `/VMC/Ext/Set/Enabled` | **官方 spec 中不存在**（CONFIRMED 缺席） | 英文页、日文页、官方参考实现的地址白名单三处都没有 |
 | Cubism Editor 4.2 与 5.x 的标准参数表是否完全一致 | **未逐条比对** | 本表用的是 Editor 5 页面（标注 Updated 2021-08-26） |
