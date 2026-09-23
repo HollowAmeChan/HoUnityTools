@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.FaceTracking
@@ -103,7 +104,32 @@ namespace Hollow.HoUnityTools.FaceTracking
         public string displayName;
         [Tooltip("这个模板的来历与出处（参考血统的资产路径 + 行号）—— 写在这里，下一个人能核对。")]
         public string notes;
+
+        [Tooltip("这个模板需要网格上存在哪些键。**必须写明血统**，例如「标准 ARKit 52 键」或"
+            + "「标准 ARKit + JINGO 系的 EyeClosedJoyful* / EyeDilation* / EyeIrisSmall* / BrowLowerer*」。"
+            + "为什么非要写：缺键时那几格里的这些键**会被静默跳过**，模板看起来生效了、其实少了一半。")]
+        public string requiredKeysNote;
+
         public HoFaceTreeSpec[] trees = new HoFaceTreeSpec[0];
+
+        /// <summary>
+        /// 这个模板实际用到的全部键（去重）—— 由格子表推出来，用来跟网格核对"缺哪些"。
+        /// 与 <see cref="requiredKeysNote"/> 的分工：note 写给人看血统，这里给面板/校验做差集。
+        /// </summary>
+        public IEnumerable<string> UsedKeys()
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var tree in trees)
+            {
+                if (tree?.poses == null) continue;
+                foreach (var pose in tree.poses)
+                {
+                    if (pose?.values == null) continue;
+                    foreach (var value in pose.values)
+                        if (!string.IsNullOrEmpty(value.shape) && seen.Add(value.shape)) yield return value.shape;
+                }
+            }
+        }
     }
 
     /// <summary>

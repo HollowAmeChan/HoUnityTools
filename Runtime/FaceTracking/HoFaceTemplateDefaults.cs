@@ -18,7 +18,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 displayName = "ho-2d-test1（我们的 A3 方阵实验）",
                 notes = "自研实验模板：眼睑用两轴 2D 表（开合 × 眯眼），中性在方阵中线。"
-                    + "会反复改；参考血统的对照见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §6.1。"
+                    + "会反复改；参考血统的对照见 docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md §6.1。",
+                requiredKeysNote = "标准 ARKit 的六个眼睑键：eyeBlinkLeft/Right、eyeWideLeft/Right、eyeSquintLeft/Right。"
             };
 
             var trees = new HoFaceTreeSpec[2];

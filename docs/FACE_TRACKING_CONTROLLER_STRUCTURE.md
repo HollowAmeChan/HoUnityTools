@@ -347,7 +347,16 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
 
 ⇒ 于是两个预设的定义被证据定住了：
 - **`vrc-jerry`** = VRCFT 官方模板 **ARKit 支**血统：每眼一根 `0..1`（中性 0.75）+ 5 姿势 `FreeformCartesian2D`（含 squint）。
-- **`vrc-common`** = 跨血统的共同核：**每眼一根 `0..1`、中性落 0.7–0.8**；树形可选 JINGO 那种 `Simple1D` 平台（4 阈值）或 v2 那种 2D 五姿势。
+- **`vrc-jerry`** 的姿势数值已一手测出，且**只写** `eyeBlink*/eyeWide*/eyeSquint*` 三键（层 Override/weight 1，值是 0~100 绝对值）：
+  `(0,0)`→blink100 / `(0.75,0)`→全 0 / `(1,0)`→wide100 / `(0.25,1)`→blink90+squint100 / `(0.75,1)`→squint100。
+- **`vrc-common`** = 跨血统的共同核：**每眼一根 `0..1`、中性落 0.7–0.8**；**形状定为 `Simple1D` 平台式**
+  （JINGO/kipfel 那种 4 阈值 + squint 独立一根轴）—— 4 个资产这么做，比 v2 的 2D 五姿势更"common"。
+
+**⚠️ 模板必须声明"它需要哪些键"**（`HoFaceTemplateSpec.requiredKeysNote`）。原因是硬的：JINGO 血统的姿势
+写的是**模型专有键**（`EyeClosedJoyfulLeft/Right`、`EyeDilationLeft/Right`、`EyeIrisSmallLeft/Right`、
+`BrowLowererLeft/Right`），标准 ARKit 网格上**没有这些键**；而生成器对缺失的键是**静默跳过**的 ——
+于是"套用了 JINGO 模板"会看起来生效、实际少一半。所以描述里必须写明血统：
+`vrc-common` = **标准 ARKit + JINGO 系的键**；`vrc-jerry` / `ho-2d-test1` = 仅标准 ARKit 六键。
 
 **仍未取证、因此不许凭感觉填的**：这些姿势片段**各自写多少**（参考资产的姿势写的是它们自己模型的专有键）。
 在测出"每个姿势 → `eyeBlink*/eyeWide*/eyeSquint*` 的数值"之前，**不要往代码里填这些数字**。
