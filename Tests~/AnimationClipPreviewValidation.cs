@@ -1,4 +1,4 @@
-// 一次性验证探针：把 HoAnimationClipPreviewer 的姿势与 Unity 自己的预览路径（内存 AnimatorController +
+// 一次性验证探针：把 HoAnimationPreviewer 的姿势与 Unity 自己的预览路径（内存 AnimatorController +
 // Animator.Play/Update）逐帧对比，证明 PlayableGraph 对 Humanoid 的求值与 Animator 一致。
 //
 // 放进一次性验证工程的 Assets/Editor，调用 HoAnimationPreviewValidation.RunBatch。
@@ -110,7 +110,7 @@ public static class HoAnimationPreviewValidation
         // 记录"原始状态"，最后检查是否被原样还原。
         RuntimeAnimatorController originalController = animator.runtimeAnimatorController;
 
-        var previewer = root.AddComponent<HoAnimationClipPreviewer>();
+        var previewer = root.AddComponent<HoAnimationPreviewer>();
 
         // 采集点：整副骨架的本地旋转 + 世界位置。
         List<Transform> bones = new List<Transform>();

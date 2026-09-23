@@ -16,7 +16,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
     /// 所以每个动作给一串候选，探测到哪个用哪个。探测结果在 <see cref="ResolvedReport"/> 里，
     /// 面板的「设置」里可以展开看 —— 这样"哪个名字在你这个版本上有效"是查出来的，不是猜的。</para>
     /// </summary>
-    internal static class HoEditorIcons
+    internal static class HoAnimationPreviewIcons
     {
         /// <summary>一个动作的图标：候选名 + 文字兜底。</summary>
         internal sealed class Entry
@@ -216,7 +216,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                         fontSize = 11,
                         alignment = TextAnchor.MiddleCenter
                     };
-                    fallbackOn.normal.textColor = HoAnimationEditorTheme.TextBrightColor;
+                    fallbackOn.normal.textColor = HoAnimationPreviewTheme.TextBrightColor;
                 }
                 return fallbackOn;
             }
@@ -233,7 +233,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                         fontSize = 11,
                         alignment = TextAnchor.MiddleCenter
                     };
-                    fallbackOff.normal.textColor = HoAnimationEditorTheme.TextDimColor;
+                    fallbackOff.normal.textColor = HoAnimationPreviewTheme.TextDimColor;
                 }
                 return fallbackOff;
             }

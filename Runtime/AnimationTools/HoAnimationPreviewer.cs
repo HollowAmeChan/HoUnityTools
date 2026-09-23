@@ -34,7 +34,7 @@ namespace Hollow.HoUnityTools.Animations
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Ho Animation Clip Previewer")]
-    public sealed class HoAnimationClipPreviewer : MonoBehaviour
+    public sealed class HoAnimationPreviewer : MonoBehaviour
     {
         [Tooltip("要播放的动画剪辑。Humanoid / Generic / Legacy 都可以；Humanoid 需要目标 Animator 上有合法人形 Avatar。")]
         [SerializeField]
@@ -89,8 +89,8 @@ namespace Hollow.HoUnityTools.Animations
         /// 两个组件挂在同一棵骨架上时，后建的那张图会把先建的那张的姿势覆盖掉，
         /// 表现是"两个面板互相打架"，很难查 —— 所以这里直接登记归属并拒绝第二个。
         /// </summary>
-        private static readonly Dictionary<Animator, HoAnimationClipPreviewer> AnimatorOwners =
-            new Dictionary<Animator, HoAnimationClipPreviewer>();
+        private static readonly Dictionary<Animator, HoAnimationPreviewer> AnimatorOwners =
+            new Dictionary<Animator, HoAnimationPreviewer>();
 
         /// <summary>本组件当前是否持有这个 Animator 的预览权。</summary>
         private bool OwnsAnimator(Animator animator)
@@ -98,7 +98,7 @@ namespace Hollow.HoUnityTools.Animations
             if (animator == null)
                 return false;
 
-            HoAnimationClipPreviewer owner;
+            HoAnimationPreviewer owner;
             return AnimatorOwners.TryGetValue(animator, out owner) && owner == this;
         }
 
@@ -762,7 +762,7 @@ namespace Hollow.HoUnityTools.Animations
             }
 
             // 一个 Animator 只允许一个预览器接管。
-            HoAnimationClipPreviewer other;
+            HoAnimationPreviewer other;
             if (AnimatorOwners.TryGetValue(animator, out other) && other != null && other != this)
             {
                 ReportError("这个 Animator 已经被另一个 Ho Animation Clip Previewer 接管了："
@@ -820,7 +820,7 @@ namespace Hollow.HoUnityTools.Animations
                 rootMotionOverridden = true;
             }
 
-            graph = PlayableGraph.Create("HoAnimationClipPreviewer");
+            graph = PlayableGraph.Create("HoAnimationPreviewer");
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
 
             clipPlayable = AnimationClipPlayable.Create(graph, clip);
@@ -908,7 +908,7 @@ namespace Hollow.HoUnityTools.Animations
                 return;
 
             // 交还这个 Animator 的预览权（只在自己持有的时候交还）。
-            HoAnimationClipPreviewer owner;
+            HoAnimationPreviewer owner;
             if (AnimatorOwners.TryGetValue(animator, out owner) && owner == this)
                 AnimatorOwners.Remove(animator);
 

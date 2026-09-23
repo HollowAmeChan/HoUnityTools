@@ -19,7 +19,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
     /// <para>**布局全部自己算矩形**，不交给 GUILayout 分配宽度：它按剩余宽度百分比分空间，
     /// 不给宽度的按钮会被压成几个像素的小点。见 `docs/EDITOR_UI_SYSTEM.md`。</para>
     /// </summary>
-    internal static class HoAnimationTimelineControl
+    internal static class HoAnimationPreviewTimeline
     {
         /// <summary>正在拖动时间轴。拖动期间不要推进播放头。</summary>
         internal static bool Dragging { get; private set; }
@@ -30,7 +30,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         /// <summary>画整个走带。</summary>
         internal static void Draw(
-            HoAnimationClipPreviewer previewer,
+            HoAnimationPreviewer previewer,
             bool loop,
             bool hasError,
             bool hasWarning,
@@ -42,18 +42,18 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
             Rect row = EditorGUILayout.GetControlRect(
                 false,
-                HoAnimationEditorTheme.BarHeight,
+                HoAnimationPreviewTheme.BarHeight,
                 GUIStyle.none);
-            HoAnimationEditorTheme.Card(row);
+            HoAnimationPreviewTheme.Card(row);
 
             // 卡片内边距自己收，不靠 GUIStyle.padding（那会让 GUILayout 重分配宽度）。
-            const float Pad = HoAnimationEditorTheme.CardPadding;
-            Rect content = HoAnimationEditorTheme.Inset(row, Pad, Pad, Pad, Pad);
-            content.width = Mathf.Max(40f, content.width - HoAnimationEditorTheme.ScrollbarReserve);
+            const float Pad = HoAnimationPreviewTheme.CardPadding;
+            Rect content = HoAnimationPreviewTheme.Inset(row, Pad, Pad, Pad, Pad);
+            content.width = Mathf.Max(40f, content.width - HoAnimationPreviewTheme.ScrollbarReserve);
 
-            float readoutHeight = HoAnimationEditorTheme.ReadoutHeight;
-            float seekHeight = HoAnimationEditorTheme.SeekHeight;
-            float transportHeight = HoAnimationEditorTheme.TransportHeight;
+            float readoutHeight = HoAnimationPreviewTheme.ReadoutHeight;
+            float seekHeight = HoAnimationPreviewTheme.SeekHeight;
+            float transportHeight = HoAnimationPreviewTheme.TransportHeight;
 
             var readout = new Rect(content.x, content.y, content.width, readoutHeight);
             var seek = new Rect(content.x, readout.yMax + 3f, content.width, seekHeight);
@@ -69,7 +69,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         private static void DrawReadout(
             Rect row,
-            HoAnimationClipPreviewer previewer,
+            HoAnimationPreviewer previewer,
             bool loop,
             bool hasError,
             bool hasWarning)
@@ -82,16 +82,16 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 var frameRect = new Rect(row.xMax - FrameWidth, row.y, FrameWidth, row.height);
                 GUI.Label(frameRect,
                     previewer.CurrentFrame + " / " + (previewer.FrameCount - 1),
-                    HoAnimationEditorTheme.ReadoutDim);
+                    HoAnimationPreviewTheme.ReadoutDim);
             }
 
             // 左端：循环标记（只在循环时出现）。纯文字，不花图标。
             float left = row.x;
             if (loop)
             {
-                float loopWidth = HoAnimationEditorTheme.Caption.CalcSize(new GUIContent("循环")).x;
+                float loopWidth = HoAnimationPreviewTheme.Caption.CalcSize(new GUIContent("循环")).x;
                 GUI.Label(new Rect(left, row.y, loopWidth, row.height), "循环",
-                    HoAnimationEditorTheme.Caption);
+                    HoAnimationPreviewTheme.Caption);
                 left += loopWidth + 8f;
             }
 
@@ -99,8 +99,8 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             string time = ready
                 ? previewer.CurrentTime.ToString("F2") + " / " + previewer.Duration.ToString("F2") + "s"
                 : "—";
-            float timeWidth = HoAnimationEditorTheme.Readout.CalcSize(new GUIContent(time)).x;
-            GUI.Label(new Rect(left, row.y, timeWidth, row.height), time, HoAnimationEditorTheme.Readout);
+            float timeWidth = HoAnimationPreviewTheme.Readout.CalcSize(new GUIContent(time)).x;
+            GUI.Label(new Rect(left, row.y, timeWidth, row.height), time, HoAnimationPreviewTheme.Readout);
 
             // 异常挤在时间后面。
             if (hasError)
@@ -119,7 +119,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 if (errorStyle == null)
                 {
                     errorStyle = new GUIStyle(EditorStyles.miniLabel) { fontSize = 10 };
-                    errorStyle.normal.textColor = HoAnimationEditorTheme.ErrorColor;
+                    errorStyle.normal.textColor = HoAnimationPreviewTheme.ErrorColor;
                 }
                 return errorStyle;
             }
@@ -132,7 +132,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 if (warningStyle == null)
                 {
                     warningStyle = new GUIStyle(EditorStyles.miniLabel) { fontSize = 10 };
-                    warningStyle.normal.textColor = HoAnimationEditorTheme.WarningColor;
+                    warningStyle.normal.textColor = HoAnimationPreviewTheme.WarningColor;
                 }
                 return warningStyle;
             }
@@ -140,7 +140,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         // ── 按钮行 ──────────────────────────────────────────────────────
 
-        private static void DrawTransport(Rect row, HoAnimationClipPreviewer previewer, SerializedProperty clipProperty)
+        private static void DrawTransport(Rect row, HoAnimationPreviewer previewer, SerializedProperty clipProperty)
         {
             // 用 CanPreview 而不是 IsPlayableReady 当闸门：编辑器里组件不自动接管，
             // 没点过「预览」时图还没建 —— 那时候按钮必须能点（点了才发起预览）。
@@ -148,45 +148,45 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             bool usable = previewer != null && previewer.enabled
                 && previewer.CanPreview && previewer.Duration > 0f;
 
-            float size = HoAnimationEditorTheme.IconSize;
-            float gutter = HoAnimationEditorTheme.Gutter;
+            float size = HoAnimationPreviewTheme.IconSize;
+            float gutter = HoAnimationPreviewTheme.Gutter;
             // 图标格与剪辑字段同高、垂直居中。
             float y = row.y + ((row.height - size) * 0.5f);
             float x = row.x;
 
             // 播放 / 暂停：同一个键，按状态换图标。
             bool playing = usable && previewer.IsPlaying;
-            if (HoEditorIcons.Button(
+            if (HoAnimationPreviewIcons.Button(
                     new Rect(x, y, size, size),
-                    playing ? HoEditorIcons.Pause : HoEditorIcons.Play,
+                    playing ? HoAnimationPreviewIcons.Pause : HoAnimationPreviewIcons.Play,
                     playing, usable) && previewer != null)
             {
                 previewer.TogglePlay();
             }
             x += size + gutter;
 
-            if (HoEditorIcons.Button(new Rect(x, y, size, size), HoEditorIcons.Start, false, usable)
+            if (HoAnimationPreviewIcons.Button(new Rect(x, y, size, size), HoAnimationPreviewIcons.Start, false, usable)
                 && previewer != null)
             {
                 previewer.SetTime(0f, previewer.IsPlaying);
             }
             x += size + gutter;
 
-            if (HoEditorIcons.Button(new Rect(x, y, size, size), HoEditorIcons.StepBack, false, usable)
+            if (HoAnimationPreviewIcons.Button(new Rect(x, y, size, size), HoAnimationPreviewIcons.StepBack, false, usable)
                 && previewer != null)
             {
                 previewer.StepFrames(-1);
             }
             x += size + gutter;
 
-            if (HoEditorIcons.Button(new Rect(x, y, size, size), HoEditorIcons.StepForward, false, usable)
+            if (HoAnimationPreviewIcons.Button(new Rect(x, y, size, size), HoAnimationPreviewIcons.StepForward, false, usable)
                 && previewer != null)
             {
                 previewer.StepFrames(1);
             }
             x += size + gutter;
 
-            if (HoEditorIcons.Button(new Rect(x, y, size, size), HoEditorIcons.End, false, usable)
+            if (HoAnimationPreviewIcons.Button(new Rect(x, y, size, size), HoAnimationPreviewIcons.End, false, usable)
                 && previewer != null)
             {
                 previewer.SetFrame(previewer.FrameCount - 1, false);
@@ -196,7 +196,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             // 右边剩下的全给剪辑字段 —— 挂载即用，不用再往下找一行。
             if (clipProperty != null)
             {
-                float fieldX = x + HoAnimationEditorTheme.ClipFieldGap;
+                float fieldX = x + HoAnimationPreviewTheme.ClipFieldGap;
                 var fieldRect = new Rect(fieldX, row.y, Mathf.Max(40f, row.xMax - fieldX), row.height);
 
                 EditorGUI.BeginChangeCheck();
@@ -211,7 +211,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         // ── 时间轴（独占整宽）──────────────────────────────────────────
 
-        private static void DrawSeekBar(Rect rect, HoAnimationClipPreviewer previewer, bool interactable)
+        private static void DrawSeekBar(Rect rect, HoAnimationPreviewer previewer, bool interactable)
         {
             int id = GUIUtility.GetControlID(FocusType.Passive);
 
@@ -220,9 +220,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
             if (!hasTime)
             {
-                HoAnimationEditorTheme.Box(rect, HoAnimationEditorTheme.TrackColor, HoAnimationEditorTheme.LineColor);
+                HoAnimationPreviewTheme.Box(rect, HoAnimationPreviewTheme.TrackColor, HoAnimationPreviewTheme.LineColor);
                 GUI.Label(new Rect(rect.x + 7f, rect.y, rect.width - 14f, rect.height),
-                    "—", HoAnimationEditorTheme.Hint);
+                    "—", HoAnimationPreviewTheme.Hint);
                 return;
             }
 
@@ -260,9 +260,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         /// <summary>把槽画出来：底、已播放段、整秒刻度、播放头。</summary>
         private static void DrawTrack(Rect rect, float normalized, float duration)
         {
-            HoAnimationEditorTheme.Box(rect, HoAnimationEditorTheme.TrackColor, HoAnimationEditorTheme.LineColor);
+            HoAnimationPreviewTheme.Box(rect, HoAnimationPreviewTheme.TrackColor, HoAnimationPreviewTheme.LineColor);
 
-            Rect inner = HoAnimationEditorTheme.Inset(rect, 1f, 1f, 1f, 1f);
+            Rect inner = HoAnimationPreviewTheme.Inset(rect, 1f, 1f, 1f, 1f);
             if (inner.width <= 0f || inner.height <= 0f)
                 return;
 
@@ -270,10 +270,10 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             if (normalized > 0f)
             {
                 var fill = new Rect(inner.x, inner.y, inner.width * normalized, inner.height);
-                HoAnimationEditorTheme.GradientFill(fill, new Color(
-                    HoAnimationEditorTheme.AccentColor.r,
-                    HoAnimationEditorTheme.AccentColor.g,
-                    HoAnimationEditorTheme.AccentColor.b,
+                HoAnimationPreviewTheme.GradientFill(fill, new Color(
+                    HoAnimationPreviewTheme.AccentColor.r,
+                    HoAnimationPreviewTheme.AccentColor.g,
+                    HoAnimationPreviewTheme.AccentColor.b,
                     0.58f));
             }
 
@@ -287,22 +287,22 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                     if (t <= 0f || t >= 1f)
                         continue;
                     float px = inner.x + (inner.width * t);
-                    HoAnimationEditorTheme.Fill(
+                    HoAnimationPreviewTheme.Fill(
                         new Rect(Mathf.Round(px), inner.y + 3f, 1f, Mathf.Max(1f, inner.height - 6f)),
-                        HoAnimationEditorTheme.TickColor);
+                        HoAnimationPreviewTheme.TickColor);
                 }
             }
 
             // 播放头：就一条竖线，压在所有东西上面。不画三角头 —— 纯线条更干净，
             // 而且那点小三角在 1px 细线旁边反而像噪点。
             float headX = inner.x + (inner.width * normalized);
-            HoAnimationEditorTheme.Fill(
+            HoAnimationPreviewTheme.Fill(
                 new Rect(Mathf.Round(headX), rect.y, 1f, rect.height),
-                HoAnimationEditorTheme.PlayheadColor);
+                HoAnimationPreviewTheme.PlayheadColor);
         }
 
         private static void ApplyHead(
-            HoAnimationClipPreviewer previewer,
+            HoAnimationPreviewer previewer,
             Rect rect,
             float mouseX,
             float duration)

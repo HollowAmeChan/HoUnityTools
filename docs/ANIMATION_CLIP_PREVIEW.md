@@ -1,4 +1,4 @@
-﻿# 动画剪辑直通预览（HoAnimationClipPreviewer）
+﻿# 动画剪辑直通预览（HoAnimationPreviewer）
 
 填一条 `AnimationClip` 就能在场景里播，**不需要任何 AnimatorController**。
 支持倍速、拖动滑条逐帧、暂停、单帧步进。运行时组件 + 自定义 Inspector。
@@ -40,7 +40,7 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
 
 ## 用法
 
-1. 把 `HoAnimationClipPreviewer` 挂到模型上（`AddComponentMenu` 路径：`HoUnityTools/Ho Animation Clip Previewer`）。
+1. 把 `HoAnimationPreviewer` 挂到模型上（`AddComponentMenu` 路径：`HoUnityTools/Ho Animation Clip Previewer`）。
    Humanoid 模型上要有一个 `Animator` 且 **Avatar 的 Animation Type = Humanoid**。
 2. 面板里把 `AnimationClip` 拖进「剪辑」—— 这时候点播放键就直接出姿势，不用先点「预览」。
 3. 走带上五个图标键：播放/暂停（同一个键，按状态换图标）、回到开头、上一帧、下一帧、到末尾；
@@ -48,8 +48,8 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
 4. 其余设置全在默认折叠的「设置」里，摘要行不展开也能看到倍速 / 循环 / 根运动 / 采样率。
 
 面板设计稿：`.design/animation-preview-panel.html`（浏览器直接打开，含空态与展开态两个变体，
-以及令牌、手感、图标生成方式的说明）。视觉令牌在 `HoAnimationEditorTheme`，
-走带控件在 `HoAnimationTimelineControl` —— 与约束面板同一套色值，改面板时不要另写颜色和宽度。
+以及令牌、手感、图标生成方式的说明）。视觉令牌在 `HoAnimationPreviewTheme`，
+走带控件在 `HoAnimationPreviewTimeline` —— 与约束面板同一套色值，改面板时不要另写颜色和宽度。
 
 ### 改这个面板时必须守的三条（都踩过）
 

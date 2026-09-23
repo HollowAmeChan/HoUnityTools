@@ -47,6 +47,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             public string sourcePath = string.Empty;
             public string typeName = string.Empty;
+            /// <summary>组件所属程序集名。判断「宿主自带」靠它。</summary>
+            public string sourceAssembly = string.Empty;
             public string note = string.Empty;
             public bool copySource;
             public bool removeWhenExcluded;
@@ -130,6 +132,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private int dependencyCount;
         [SerializeField] private int nonScriptDependencyCount;
         [SerializeField] private int missingScriptCount;
+        /// <summary>有 Missing Script 的物体路径（含个数），用来告诉用户"到底哪里缺"。</summary>
+        private readonly List<string> missingScriptObjects = new List<string>();
         [SerializeField] private string exportSettingsPath = string.Empty;
         [SerializeField] private List<WorkspaceEntry> workspaceEntries = new List<WorkspaceEntry>();
         [SerializeField] private int activeWorkspaceIndex = -1;
@@ -444,6 +448,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (DrawIconButton("Refresh", "刷新", "重新读取 UMod ExportSettings 与工作区列表"))
                 {
                     SetWorkspaceStatus(string.Empty);
+                    // 宿主自带程序集是从「活动导出目录」反推的，换工作区/换游戏版本后要重探。
+                    InvalidateWarudoHostAssemblies();
                     RefreshExportSettingsPreview();
                 }
 
@@ -1340,7 +1346,23 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 GUILayout.Space(5f);
 
                 if (missingScriptCount > 0)
-                    EditorGUILayout.HelpBox("Prefab 中存在 Missing Script，请先修复后再构建。", MessageType.Error);
+                {
+                    string missingDetail = string.Empty;
+                    if (missingScriptObjects.Count > 0)
+                    {
+                        int shown = Mathf.Min(missingScriptObjects.Count, 12);
+                        missingDetail = "\n\n出现位置：\n· " +
+                                        string.Join("\n· ", missingScriptObjects.Take(shown).ToArray());
+                        if (missingScriptObjects.Count > shown)
+                            missingDetail += "\n… 共 " + missingScriptObjects.Count + " 个物体";
+                    }
+
+                    EditorGUILayout.HelpBox(
+                        "Prefab 中存在 Missing Script，共 " + missingScriptCount + " 个，请先修复后再构建。" +
+                        "\n这类组件在**工程里就解析不到脚本**，跟宿主自不自带无关 ——" +
+                        "UMod 编不出来，Warudo 那边也补不上。" + missingDetail,
+                        MessageType.Error);
+                }
 
                 if (scriptPreview.Count > 0 && !HasGeneratedProjectFiles())
                 {
@@ -1559,11 +1581,14 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 statusColumnStyle);
 
             string sourceStatus = item.hostProvided
-                ? "宿主 / " + Path.GetFileName(item.sourcePath)
+                ? "宿主 " + (string.IsNullOrEmpty(item.sourceAssembly) ? "?" : item.sourceAssembly) +
+                  " / " + Path.GetFileName(item.sourcePath)
                 : Path.GetFileName(item.sourcePath);
             GUI.Label(
                 sourceRect,
-                new GUIContent(TruncateToWidth(sourceStatus, EditorStyles.miniLabel, sourceRect.width), item.sourcePath),
+                new GUIContent(
+                    TruncateToWidth(sourceStatus, EditorStyles.miniLabel, sourceRect.width),
+                    (string.IsNullOrEmpty(item.note) ? string.Empty : item.note + "\n") + item.sourcePath),
                 EditorStyles.miniLabel);
 
             if (item.showReferencedAssets && item.referencedAssets != null)
@@ -1950,6 +1975,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             dependencyCount = 0;
             nonScriptDependencyCount = 0;
             missingScriptCount = 0;
+            missingScriptObjects.Clear();
             dependencyPreviewHash = string.Empty;
 
             if (!IsPrefab(sourcePrefabPath))
@@ -1964,8 +1990,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (prefab == null)
                 return;
 
+            // 注意：这里数的是**源 Prefab 自己**解析不到的脚本（Unity 的判据），
+            // 和"宿主自不自带"是两码事。宿主识别只影响"要不要复制源码"。
             foreach (Transform child in prefab.GetComponentsInChildren<Transform>(true))
-                missingScriptCount += GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject);
+            {
+                int childMissing =
+                    GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject);
+                if (childMissing <= 0)
+                    continue;
+
+                missingScriptCount += childMissing;
+                missingScriptObjects.Add(GetTransformPath(prefab.transform, child) + "  ×" + childMissing);
+            }
 
             var rows = new Dictionary<string, ScriptPreview>(StringComparer.OrdinalIgnoreCase);
             MonoBehaviour[] behaviours = prefab.GetComponentsInChildren<MonoBehaviour>(true);
@@ -1985,16 +2021,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 {
                     Type scriptType = script.GetClass();
                     string typeName = scriptType == null ? string.Empty : scriptType.FullName;
+                    string assemblyName = GetTypeAssemblyName(scriptType);
                     bool unsafeForRuntime = IsUnsafeRuntimeScript(path, typeName);
-                    bool hostProvided = IsHostProvidedRuntimeScript(path, typeName);
+                    bool hostProvided = IsHostProvidedRuntimeScript(path, typeName, assemblyName);
                     row = new ScriptPreview
                     {
                         sourcePath = path,
                         typeName = typeName,
+                        sourceAssembly = assemblyName,
                         copySource = !unsafeForRuntime && !hostProvided && ShouldCopyScriptByDefault(path),
                         removeWhenExcluded = unsafeForRuntime,
                         hostProvided = hostProvided,
-                        note = GetScriptNote(path, typeName, unsafeForRuntime),
+                        note = GetScriptNote(path, typeName, unsafeForRuntime, assemblyName),
                     };
                     bool previousValue;
                     if (!hostProvided && previousSelection != null &&
@@ -2106,7 +2144,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                        StringComparison.Ordinal);
         }
 
-        private static string GetScriptNote(string path, string typeName, bool unsafeForRuntime)
+        private static string GetScriptNote(string path, string typeName, bool unsafeForRuntime,
+            string assemblyName = null)
         {
             if (unsafeForRuntime)
             {
@@ -2117,6 +2156,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (string.Equals(typeName, "Hollow.HoUnityTools.RigConstraints.HoAuxRig", StringComparison.Ordinal))
                 return "HoAuxRig 运行时脚本可独立复制；UMod 会按完整类型名链接现有组件。";
+            if (IsWarudoHostAssembly(assemblyName))
+                return "宿主自带（Warudo_Data/Managed 里就有 " + assemblyName +
+                       ".dll）：保留 Prefab 组件引用，不复制、不重新编译源码。";
             if (IsWarudoSupportedClothType(typeName))
                 return "Warudo 宿主已提供 MC1/MC2 运行时：保留 Prefab 组件引用，不复制或重新编译源码。";
             if (path.StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase))
@@ -2124,6 +2166,23 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
                 return "外部包运行时脚本：默认不复制；启用前请确认它的源码依赖也能由 UMod 编译。";
             return "项目运行时脚本：勾选后会生成独立临时副本。";
+        }
+
+        /// <summary>组件所属程序集名；取不到时返回空串。</summary>
+        private static string GetTypeAssemblyName(Type type)
+        {
+            if (type == null)
+                return string.Empty;
+
+            try
+            {
+                System.Reflection.Assembly assembly = type.Assembly;
+                return assembly == null ? string.Empty : assembly.GetName().Name;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
         }
 
         /// <summary>
@@ -2225,8 +2284,21 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private static bool IsHostProvidedRuntimeScript(string path, string typeName)
         {
+            return IsHostProvidedRuntimeScript(path, typeName, null);
+        }
+
+        /// <summary>
+        /// 这个组件是不是"宿主已经带了，Mod 不该复制源码"。
+        /// </summary>
+        /// <param name="assemblyName">
+        /// 组件所属程序集名。能传就一定要传 —— 「宿主自带」的判据主要靠它，见
+        /// <see cref="IsWarudoHostAssembly"/>。
+        /// </param>
+        private static bool IsHostProvidedRuntimeScript(string path, string typeName, string assemblyName)
+        {
             return IsAssetInPackage(path, "app.warudo.modtool") ||
                    NormalizeAssetPath(path).StartsWith("Packages/app.warudo.modtool/", StringComparison.OrdinalIgnoreCase) ||
+                   IsWarudoHostAssembly(assemblyName) ||
                    IsWarudoSupportedClothType(typeName);
         }
 
@@ -2234,6 +2306,121 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             return HasTypeNamespace(typeName, "MagicaCloth") ||
                    HasTypeNamespace(typeName, "MagicaCloth2");
+        }
+
+        // ---------------------------------------------------------------------
+        // 宿主自带程序集：直接去看 Warudo 到底带了什么
+        // ---------------------------------------------------------------------
+        //
+        // ⚠️ 这里曾经是一张手抄的名单（只认 MagicaCloth / MagicaCloth2 两个命名空间），
+        //    结果 `VRM.VRMSpringBone` 这类宿主明明自带、却在名单外的组件被误判成
+        //    「外部包脚本 -> 默认不复制」，产物里全变成 Missing Script。
+        //
+        // ✅ 实测：<游戏>/Warudo_Data/Managed 下有 **400 个 DLL、80 MB**，
+        //    其中就有 `VRM.dll`、`VRM10.dll`、`UniGLTF.dll`、`MagicaCloth.dll`、
+        //    `MagicaClothV2.dll`、`RootMotion.dll`、`DynamicBone.dll`、`FastSpringBone10.dll` …
+        //    抄名单永远抄不全，所以改成**读目录**：
+        //
+        //      组件所属程序集名 == Managed 目录下某个 DLL 的文件名  ->  宿主自带
+        //
+        //    这个对应关系是成立的：SDK 把 `com.vrmc.univrm` 作为源码包引入，它的
+        //    asmdef 产出的程序集就叫 `VRM`，而宿主那边正是 `VRM.dll`。
+        //    Warudo 升级换了版本，这里会自动跟上，不需要改代码。
+        //
+        // 兜底：万一定位不到游戏目录（用户还没配工作区导出目录），保持旧行为不乱判。
+
+        private static string s_WarudoManagedDirectory;
+        private static HashSet<string> s_WarudoHostAssemblies;
+        private static bool s_WarudoManagedResolved;
+
+        private static bool IsWarudoHostAssembly(string assemblyName)
+        {
+            if (string.IsNullOrEmpty(assemblyName))
+                return false;
+
+            HashSet<string> hostAssemblies = GetWarudoHostAssemblies();
+            return hostAssemblies != null && hostAssemblies.Contains(assemblyName);
+        }
+
+        private static HashSet<string> GetWarudoHostAssemblies()
+        {
+            if (s_WarudoManagedResolved)
+                return s_WarudoHostAssemblies;
+
+            s_WarudoManagedResolved = true;
+            s_WarudoManagedDirectory = ResolveWarudoManagedDirectory();
+            if (string.IsNullOrEmpty(s_WarudoManagedDirectory))
+                return s_WarudoHostAssemblies = null;
+
+            try
+            {
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string file in Directory.GetFiles(s_WarudoManagedDirectory, "*.dll"))
+                    names.Add(Path.GetFileNameWithoutExtension(file));
+                s_WarudoHostAssemblies = names;
+            }
+            catch (Exception)
+            {
+                s_WarudoHostAssemblies = null;
+            }
+
+            return s_WarudoHostAssemblies;
+        }
+
+        /// <summary>让用户在「刷新」后能重新探测宿主目录（换了工程/游戏版本时用）。</summary>
+        private static void InvalidateWarudoHostAssemblies()
+        {
+            s_WarudoManagedResolved = false;
+            s_WarudoHostAssemblies = null;
+            s_WarudoManagedDirectory = null;
+        }
+
+        /// <summary>
+        /// 从活动工作区的导出目录反推宿主安装位置，返回 &lt;游戏&gt;/Warudo_Data/Managed。
+        /// 导出目录长这样：&lt;游戏&gt;/Warudo_Data/StreamingAssets/&lt;类别&gt;
+        /// </summary>
+        private static string ResolveWarudoManagedDirectory()
+        {
+            string exportPath = string.Empty;
+            try
+            {
+                UnityEngine.Object settings = LoadExportSettingsAsset(FindExportSettingsAssetPath());
+                if (settings != null)
+                {
+                    string modName;
+                    int profileIndex;
+                    TryReadActiveExportProfile(settings, out modName, out exportPath, out profileIndex);
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(exportPath))
+                return null;
+
+            // 最多往上找 4 层，够覆盖 StreamingAssets/<类别> 这类结构。
+            DirectoryInfo directory = null;
+            try
+            {
+                directory = new DirectoryInfo(exportPath);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            for (int depth = 0; depth < 4 && directory != null; depth++, directory = directory.Parent)
+            {
+                if (!string.Equals(directory.Name, "Warudo_Data", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string managed = Path.Combine(directory.FullName, "Managed");
+                return Directory.Exists(managed) ? managed : null;
+            }
+
+            return null;
         }
 
         private static bool HasTypeNamespace(string typeName, string namespaceName)
@@ -2903,11 +3090,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                             transformPath = GetTransformPath(root.transform, child),
                             typeName = behaviourType.FullName,
                             sourcePath = sourcePath ?? string.Empty,
-                            sourceAssembly = behaviourType.Assembly == null
-                                ? string.Empty
-                                : behaviourType.Assembly.GetName().Name,
+                            sourceAssembly = GetTypeAssemblyName(behaviourType),
                             stagedRuntimeScript = staged,
-                            hostProvided = !staged && IsHostProvidedRuntimeScript(sourcePath, behaviourType.FullName),
+                            hostProvided = !staged && IsHostProvidedRuntimeScript(
+                                sourcePath, behaviourType.FullName, GetTypeAssemblyName(behaviourType)),
                         });
                     }
                 }

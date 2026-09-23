@@ -5,19 +5,19 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.AnimationTools
 {
     /// <summary>
-    /// <see cref="HoAnimationClipPreviewer"/> 的面板。
+    /// <see cref="HoAnimationPreviewer"/> 的面板。
     ///
     /// <para>**外面只露一个走带**：标题、一条时间读数、一条自绘时间轴加五个图标按钮。
     /// 所有设置都在默认折叠的「设置」里 —— 这个面板是拿来"看一眼 clip"的，不是拿来调参的。</para>
     ///
     /// <para>编辑器里没有游戏循环，所以播放头由本面板的 <c>EditorApplication.update</c> 回调喂时间；
     /// 播放模式里则由组件自己的 <c>Update</c> 推进，两边共用同一套接口，不会重复推进。
-    /// 用户抓时间轴时，这里的自动推进让位（`HoAnimationTimelineControl.Dragging`）。</para>
+    /// 用户抓时间轴时，这里的自动推进让位（`HoAnimationPreviewTimeline.Dragging`）。</para>
     /// </summary>
-    [CustomEditor(typeof(HoAnimationClipPreviewer))]
-    internal sealed class HoAnimationClipPreviewerEditor : UnityEditor.Editor
+    [CustomEditor(typeof(HoAnimationPreviewer))]
+    internal sealed class HoAnimationPreviewerEditor : UnityEditor.Editor
     {
-        private HoAnimationClipPreviewer previewer;
+        private HoAnimationPreviewer previewer;
         private SerializedProperty clipProperty;
         private SerializedProperty animatorProperty;
         private SerializedProperty playOnEnableProperty;
@@ -40,7 +40,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         private void OnEnable()
         {
-            previewer = target as HoAnimationClipPreviewer;
+            previewer = target as HoAnimationPreviewer;
             clipProperty = serializedObject.FindProperty("clip");
             animatorProperty = serializedObject.FindProperty("targetAnimator");
             playOnEnableProperty = serializedObject.FindProperty("playOnEnable");
@@ -86,7 +86,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             }
 
             // 用户正在抓时间轴：播放头归鼠标，这里让位。
-            if (HoAnimationTimelineControl.Dragging)
+            if (HoAnimationPreviewTimeline.Dragging)
                 return;
 
             // 从暂停切到播放的头一帧，lastEditorTime 可能停在很久以前，夹一下不让它跳帧。
@@ -125,7 +125,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             bool loop = loopProperty != null && loopProperty.boolValue;
 
             // 剪辑字段就在按钮行的右侧 —— 挂载即用，不用再往下找一行。
-            HoAnimationTimelineControl.Draw(previewer, loop, hasError, hasWarning, clipProperty);
+            HoAnimationPreviewTimeline.Draw(previewer, loop, hasError, hasWarning, clipProperty);
         }
 
         // ── 设置（默认折叠，自绘控件）───────────────────────────────────
@@ -134,7 +134,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         {
             EditorGUILayout.Space(2f);
 
-            settingsExpanded = EditorGUILayout.Foldout(settingsExpanded, Summary(), true, HoAnimationEditorTheme.TextDim);
+            settingsExpanded = EditorGUILayout.Foldout(settingsExpanded, Summary(), true, HoAnimationPreviewTheme.TextDim);
 
             if (!settingsExpanded)
                 return;
@@ -160,14 +160,14 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private void DrawIconDiag()
         {
             iconDiagExpanded = EditorGUILayout.Foldout(
-                iconDiagExpanded, "走带图标", true, HoAnimationEditorTheme.Caption);
+                iconDiagExpanded, "走带图标", true, HoAnimationPreviewTheme.Caption);
 
             if (!iconDiagExpanded)
                 return;
 
             GUIStyle style = new GUIStyle(EditorStyles.miniLabel) { fontSize = 9, wordWrap = true };
-            style.normal.textColor = HoAnimationEditorTheme.TextFaintColor;
-            EditorGUILayout.LabelField(HoEditorIcons.ResolvedReport(), style);
+            style.normal.textColor = HoAnimationPreviewTheme.TextFaintColor;
+            EditorGUILayout.LabelField(HoAnimationPreviewIcons.ResolvedReport(), style);
         }
 
         private void DrawAnimatorRow()
@@ -175,7 +175,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             if (animatorProperty == null)
                 return;
 
-            using (HoAnimationEditorTheme.Row row = HoAnimationEditorTheme.BeginRow())
+            using (HoAnimationPreviewTheme.Row row = HoAnimationPreviewTheme.BeginRow())
             {
                 row.Label("Animator");
                 // ObjectField 也是 IMGUI，只是矩形由我们给 —— 这样才定得住宽。
@@ -188,12 +188,12 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         private void DrawSpeedRow()
         {
-            using (HoAnimationEditorTheme.Row row = HoAnimationEditorTheme.BeginRow())
+            using (HoAnimationPreviewTheme.Row row = HoAnimationPreviewTheme.BeginRow())
             {
                 row.Label("倍速");
 
-                float speed = HoAnimationEditorTheme.NumberField(
-                    row.Field(HoAnimationEditorTheme.FieldWidth + 8f),
+                float speed = HoAnimationPreviewTheme.NumberField(
+                    row.Field(HoAnimationPreviewTheme.FieldWidth + 8f),
                     previewer != null ? previewer.PlaybackSpeed : 1f,
                     "x");
 
@@ -211,7 +211,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                         bool on = previewer != null && Mathf.Approximately(previewer.PlaybackSpeed, preset);
                         Rect slot = row.Field(buttonWidth);
                         slot.width = buttonWidth;
-                        if (HoAnimationEditorTheme.Button(slot, preset.ToString("0.##") + "x", on))
+                        if (HoAnimationPreviewTheme.Button(slot, preset.ToString("0.##") + "x", on))
                             SetSpeed(preset);
                     }
                 }
@@ -233,11 +233,11 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             if (property == null)
                 return;
 
-            using (HoAnimationEditorTheme.Row row = HoAnimationEditorTheme.BeginRow())
+            using (HoAnimationPreviewTheme.Row row = HoAnimationPreviewTheme.BeginRow())
             {
                 row.Label(label);
-                bool value = HoAnimationEditorTheme.Check(
-                    row.Field(HoAnimationEditorTheme.CheckSize), property.boolValue);
+                bool value = HoAnimationPreviewTheme.Check(
+                    row.Field(HoAnimationPreviewTheme.CheckSize), property.boolValue);
 
                 if (value != property.boolValue)
                 {
@@ -279,7 +279,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 clipping = TextClipping.Clip,
                 wordWrap = false
             };
-            style.normal.textColor = HoAnimationEditorTheme.TextFaintColor;
+            style.normal.textColor = HoAnimationPreviewTheme.TextFaintColor;
 
             // 一行截断，完整原因进 tooltip —— 不为了放长句子撑高面板。
             GUI.Label(rect, new GUIContent(message, message), style);

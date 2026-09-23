@@ -14,7 +14,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
     /// <para>图标是运行时画的 32×32 白色形状（三角形/竖条/竖杠），
     /// 用 <c>GUI.color</c> 染色，所以深浅两种皮肤都清晰，且不引入任何资源文件、不落盘。</para>
     /// </summary>
-    internal static class HoAnimationEditorTheme
+    internal static class HoAnimationPreviewTheme
     {
         // ── 尺寸 ────────────────────────────────────────────────────────
         //
@@ -87,7 +87,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         /// <summary>
         /// 走带卡片的背景贴图（按九宫格拉伸）。**不在 GUIStyle 里做内边距** ——
         /// 内边距会让 GUILayout 自动分配宽度，正是"按钮被压成小点"的成因。
-        /// 布局全部由 <see cref="HoAnimationTimelineControl"/> 自己算矩形。
+        /// 布局全部由 <see cref="HoAnimationPreviewTimeline"/> 自己算矩形。
         /// </summary>
         public static Texture2D CardTexture
         {
@@ -486,7 +486,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
 
         /// <summary>
         /// 运行时生成的贴图（卡片底、渐变、纯色块）。图标**不在此列** ——
-        /// 走带图标一律用 Unity 内置的，见 <see cref="HoEditorIcons"/>。
+        /// 走带图标一律用 Unity 内置的，见 <see cref="HoAnimationPreviewIcons"/>。
         /// </summary>
         private static Texture2D NewTexture(int width, int height)
         {
