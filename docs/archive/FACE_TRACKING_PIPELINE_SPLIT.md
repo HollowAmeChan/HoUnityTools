@@ -1,4 +1,4 @@
-﻿> **已归档（2026-09-23）。这是一份**过程记录**，不是现状。**
+> **已归档（2026-09-23）。这是一份**过程记录**，不是现状。**
 > 它是从"解析 5 个商业面捕包"开始的一路论证日志，很多小节标着「作废 / 撤销 / 改判」，
 > 因为结论是在过程中长出来的。**要了解现状请读：**
 > [面捕工作流](../FACE_TRACKING_WORKFLOW.md)（怎么用）、
@@ -787,6 +787,13 @@ Lissajous 曲线 —— 读起来像有机运动，而不是一根直线来回�
 > **仓库里本来就有在 Warudo 里跑的 C# 组件。** `HoWarudoRuntimeHub` 是一个 MonoBehaviour
 > （带运行时 IMGUI 窗口），`IHoWarudoRuntimeModule` 是它的模块接口。Warudo mod 本身就是
 > Unity 程序集，所以我们的中间层（**含那一维物理**）在 Warudo 侧也是**我们自己的 C#**。
+>
+> 📝 **补注：上面举的例子已经不存在了。** `HoWarudoRuntimeHub` / `IHoWarudoRuntimeModule` /
+> `HoWarudoRuntimeGUIContext` 连同其设计文档已被整块删除 —— 在 FastBuild 能构建**任意类型**
+> Warudo Mod 之后，再自建一套"运行时中控窗口"没有意义，参数交给 Warudo 自己的资源面板/蓝图即可。
+> 但这条论证的**前提依然成立**：仓库里仍有在 Warudo 里跑的 C# 组件
+> （`HoRuntimeBoneDebugRenderer`、`HoWarudoBlendShapeBillboard`），且现在能被直接打进 Mod。
+> **结论不变。**
 
 于是物理只需要一种实现：
 

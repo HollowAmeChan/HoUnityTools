@@ -11,7 +11,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Runtime Bone Debug Renderer")]
-    public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour, IHoWarudoRuntimeModule
+    public sealed class HoRuntimeBoneDebugRenderer : MonoBehaviour
     {
         [Header("骨架来源")]
         [InspectorName("骨架根节点")]
@@ -112,26 +112,10 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private Camera m_LastDrawCamera;
         private HoBoneGroupSet m_ParsedGroupSet;
         private TextAsset m_ParsedFrom;
-        private Vector2 m_RuntimeCollectionScroll;
 
         private static readonly int[] QuadTriangles = { 0, 1, 2, 2, 1, 3 };
         private static readonly List<HoRuntimeBoneDebugRenderer> ActiveRenderers =
             new List<HoRuntimeBoneDebugRenderer>();
-
-        public string Id
-        {
-            get { return "HoRuntimeBoneDebugRenderer/" + GetInstanceID(); }
-        }
-
-        public string DisplayName
-        {
-            get { return "Bone Debug / " + gameObject.name; }
-        }
-
-        public int Order
-        {
-            get { return 100; }
-        }
 
         private void OnEnable()
         {
@@ -150,11 +134,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (refreshOnEnable)
                 RefreshSkeleton();
             RebuildMesh();
-        }
-
-        private void Start()
-        {
-            HoWarudoRuntimeHub.Current?.Register(this);
         }
 
         private void LateUpdate()
@@ -260,8 +239,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         private void OnDisable()
         {
-            HoWarudoRuntimeHub.Current?.Unregister(this);
-
             if (m_MeshRenderer != null)
                 m_MeshRenderer.enabled = false;
 
@@ -272,8 +249,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
         private void OnDestroy()
         {
-            HoWarudoRuntimeHub.Current?.Unregister(this);
-
             ActiveRenderers.Remove(this);
             if (ActiveRenderers.Count == 0)
                 Camera.onPostRender -= DrawActiveRenderers;
@@ -316,95 +291,6 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (includeRoot)
                 AddNode(skeletonRoot);
             CollectChildren(skeletonRoot);
-        }
-
-        public void DrawRuntimeGUI(HoWarudoRuntimeGUIContext context)
-        {
-            drawBones = context.Toggle("Draw bones", drawBones);
-            drawAxes = context.Toggle("Draw axes", drawAxes);
-            bool nextIncludeRoot = context.Toggle("Include root", includeRoot);
-            if (nextIncludeRoot != includeRoot)
-            {
-                includeRoot = nextIncludeRoot;
-                RefreshSkeleton();
-            }
-            filterByCollections = context.Toggle("Filter by collections", filterByCollections);
-            useCollectionColors = context.Toggle("Use collection colors", useCollectionColors);
-            lineWidth = context.Slider("World line width", lineWidth, 0.0001f, 0.05f);
-            lineWidthPixels = context.Slider("Screen line width", lineWidthPixels, 0.5f, 12f);
-            axisLength = context.Slider("Axis length", axisLength, 0f, 0.3f);
-
-            if (context.Button("Refresh skeleton"))
-            {
-                RefreshSkeleton();
-                RebuildMesh();
-            }
-
-            context.Label("Collected nodes: " + m_Nodes.Count);
-            context.Label("Visible nodes: " + m_VisibleNodeCount);
-            context.Label("Skeleton root: " + (skeletonRoot != null ? skeletonRoot.name : "none"));
-            context.Label("Renderer: " + (m_IsReady ? "ready" : "not ready"));
-
-            HoBoneGroupSet activeGroupSet = GetActiveGroupSet();
-            if (activeGroupSet == null)
-            {
-                context.Label("Collection filter: none");
-                return;
-            }
-
-            if (activeGroupSet.collections == null)
-            {
-                context.Label("Collection data has no collections");
-                return;
-            }
-
-            context.Label("Collection filter: " + (filterByCollections ? "enabled" : "disabled"));
-            context.Label("Hidden collections: " + hiddenCollections.Count);
-            if (hiddenCollections.Count > 0 && context.Button("Show all collections"))
-            {
-                filterByCollections = true;
-                hiddenCollections.Clear();
-            }
-
-            if (hiddenCollections.Count < activeGroupSet.collections.Count && context.Button("Hide all collections"))
-            {
-                filterByCollections = true;
-                hiddenCollections.Clear();
-                for (int i = 0; i < activeGroupSet.collections.Count; i++)
-                {
-                    HoBoneCollection collection = activeGroupSet.collections[i];
-                    if (collection != null && !string.IsNullOrEmpty(collection.name))
-                        hiddenCollections.Add(collection.name);
-                }
-            }
-
-            context.Space(6f);
-            if (groupJson != null && context.Button("Refresh collection data"))
-            {
-                RefreshGroupJson();
-                activeGroupSet = GetActiveGroupSet();
-            }
-
-            context.Label("Collections: " + groupJson.name);
-            m_RuntimeCollectionScroll = context.BeginScrollView(m_RuntimeCollectionScroll, GUILayout.Height(120f));
-            for (int i = 0; i < activeGroupSet.collections.Count; i++)
-            {
-                HoBoneCollection collection = activeGroupSet.collections[i];
-                if (collection == null || string.IsNullOrEmpty(collection.name))
-                    continue;
-
-                bool visible = !hiddenCollections.Contains(collection.name);
-                bool nextVisible = context.Toggle(collection.name, visible);
-                if (nextVisible != visible)
-                {
-                    filterByCollections = true;
-                    if (nextVisible)
-                        hiddenCollections.Remove(collection.name);
-                    else if (!hiddenCollections.Contains(collection.name))
-                        hiddenCollections.Add(collection.name);
-                }
-            }
-            context.EndScrollView();
         }
 
         public HoBoneGroupSet GetActiveGroupSet()

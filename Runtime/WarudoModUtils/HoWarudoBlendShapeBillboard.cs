@@ -6,7 +6,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 {
     /// <summary>
     /// Displays the live blend-shape weights of one SkinnedMeshRenderer in world space.
-    /// This component is deliberately independent from HoWarudoRuntimeHub.
+    /// Standalone MonoBehaviour with no hub or module registration.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Warudo Mod Utils/HoWarudo Blend Shape Billboard")]
