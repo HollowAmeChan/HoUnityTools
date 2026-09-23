@@ -72,6 +72,19 @@
 > 两张改名表**只覆盖前 66 项**（到 `headRotZ` 为止）——`volume`、`viseme_*`、`Sound Input`、
 > `faceFound` 这些**只能按原拼写进**，因为音视频源本来就只有一套名字。
 
+**哪个来源用哪张表（这决定"我们直连 iFacialMocap 该发什么名字"）**：
+
+| 来源 | 用不用改名表 | 条件 | 依据 |
+| --- | --- | --- | --- |
+| **iFacialMocap / 默认 UDP 协议** | ❌ **不改名** | 线名必须**逐字等于 `shapekeys` 里的一员**，否则整条 `continue` 丢掉 | L12161-L12164 |
+| FaceMotion3D | ✅ `faceMotionKeys` | 仅在 `FaceMotionActive` 时；先剥掉 `Foo.` 前缀再按**下标**换名 | L12148-L12159 |
+| VTubeStudio 的 BlendShapes | ✅ `vtsKeys` | 按**下标**对齐，查不到再用原名在 `shapekeys` 里找一次 | L12019-L12031 |
+| NVidia AR | ❌ | 它自己的表就是 `_L/_R` 拼写，还会把 `cheekPuff_L/R` 合并成 `cheekPuff = max(L,R)` | L11705-L11709 |
+
+**线上单位（重要）**：iFacialMocap 那条路的融合键是 **0..100**，源码里先 `/100f` 才进标定与曲线
+（L12177）；我们自己的接收端是同一个做法（`IFacialMocapPacket` 里也 `/100f`）。
+头姿是**度**，头位置是**厘米级**（不是米）。
+
 > **这条设计值得抄**：*一套规范名 + 每个数据源一张改名表*。表达式与预设只认规范名，
 > 换设备只换表 —— 而不是让每条规则都去写"如果来源是 X 就用另一个拼写"。
 
