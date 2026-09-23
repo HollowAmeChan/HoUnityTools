@@ -15,17 +15,17 @@
 
 ## 1. 两条路线
 
-| | **旧路线**（绕过 Warudo 蓝图） | **新路线**（翻译成它喜欢的东西） |
+| | **旧路线**（绕过 Warudo 蓝图） | **新路线**（说它的语言） |
 | --- | --- | --- |
-| 谁在算 | 我们的脚本自己算完，direct 写模型 | 我们的脚本跑**状态机**，把结果翻译成"键值 + 骨骼旋转/移动" |
-| 和 Warudo 的关系 | 我不理你，你也别管我 | 我说你的语言：真值写键、骨骼走它的覆盖层 |
+| 谁在算 | 我们的脚本自己算完，直写模型 renderer，谁也管不着 | 我们的脚本跑**状态机**，把结果翻译成"键值 + 骨骼旋转/移动"，**喂进 Warudo 的 Tracking 层** |
+| 和 Warudo 的关系 | 我不理你，你也别管我 | 我说你的语言：键走 `Set Character Tracking BlendShapes`、骨骼走 `Override Character Bone Rotation Offsets` |
 | 角色 mod | 挂着我们的组件 | **不挂任何组件**，只要键足够多 |
 | 调试 | 只能在 Unity 里挂组件试 | Unity 面板全局调试（无组件）＋ 真机同一个核心 |
 | 换面捕方案 | 要改角色上的东西 | **只换输入那一环**（mod/节点） |
 
 两条路线的分歧点其实只有一句话：**要不要保留"树"**。新路线保留（树是我们真正值钱的东西：
-1D/2D 混合、姿势表、门控、中间层那套经验），代价是 Warudo 自己那层"追踪层"的开关/权重/重置
-不再管我们，得我们自己补（见 §4）。
+1D/2D 混合、姿势表、门控、中间层那套经验）；而"喂进它的 Tracking 层"意味着它的**权重混合、整体重置、
+丢脸交还**照样管着我们 —— 这正是它给动捕留的正门（见 §4），所以我们既保住树，也不必自己造那套管理。
 
 ---
 
@@ -34,7 +34,7 @@
 | # | 产物 | 内容 | 为什么这么切 |
 | --- | --- | --- | --- |
 | ① | **角色 mod**（常规角色） | Unity Prefab `Character` + humanoid + Animator，**不挂我们的任何组件**，只要求键够多（ARKit 52 起） | 角色越干净越好上传、越能复用；键是唯一的契约 |
-| ② | **处理链 mod**（输入 + 中间层 + 树 + 翻译） | 收数据 → 读中间层配置（**构建期写死**）→ 参数 → 自己的状态机求值 → 翻译成键值/骨骼 → 写进角色 | 这是"新路线"的本体；它一个 mod 就能搞定全部处理 |
+| ② | **处理链 mod**（输入 + 中间层 + 树 + 翻译） | 收数据 → 读中间层配置（**构建期写死**）→ 参数 → 自己的状态机求值 → 翻译成键值/骨骼 → **喂进角色的 Tracking 层** | 这是"新路线"的本体；它一个 mod 就能搞定全部处理 |
 | ③ | **接收器 mod**（可选） | 只做"某种面捕方案 → 规范值"（像官方 receiver mod 那样，可注册成一种 tracking 方式） | 让"换方案"变成"换个 mod"；**前提是跨 mod 接口能立起来**（见 §5 未决项） |
 
 **Unity 侧另有两个产物**（不进任何 mod）：
@@ -76,31 +76,56 @@
 | 骨骼与根 | `OverrideBonePositions` / `OverrideBonePositionWeights` / `OverrideBoneRotations` / `OverrideBoneRotationWeights` / `OverrideRootPosition` |
 | VRM 兼容 | `GetUseVRMBlendShapeProxy` / `GetVRMBlendShapeClip` / `VrmBlendShapeClips` |
 
-蓝图侧对应节点名也印证这件事：`Set Character **Tracking** BlendShapes` 与 `Set Character BlendShape`
-是**两个不同**的节点，另有 `Reset Character Tracking BlendShapes` / `Reset Overridden Character Bones`；
+蓝图侧这两个节点名不是"一个给我们、一个给它们"，而是**两种写语义**：
+
+| 节点 | 语义 | 谁用 |
+| --- | --- | --- |
+| `Set Character BlendShape` | **直接写那一格**（基础层，设一次） | 脚本化 / 表情式的写入 |
+| **`Set Character Tracking BlendShapes`** + `Override Character Bone Rotation Offsets` + `Override Character Root Position` | **动捕输入层**：每帧喂、按 Weight 与动画混合、可整体交还 | **动捕 / 面捕的正门** |
+
+手册那页官方动捕示例的原文就是整条链：
+
+> "for every frame, we want to update the character's blendshapes (**Set Character Tracking BlendShapes**),
+> bones (**Override Character Bone Rotation Offsets**), and root position (**Override Character Root Position**)."
+
+配套的 `Reset Character Tracking BlendShapes` / `Reset Overridden Character Bones` 就是"把控制交还"的开关；
 骨骼一律带 **Weight**。
 
 **结论**：Warudo 抱的不是一个 Unity `AnimatorController`，而是
 **"每个角色一份追踪条目（键 + 曲线 + 权重）+ 骨骼覆盖（四元数 + 权重）+ 根位置覆盖"**，
 由它每帧 apply、可整体重置。它的动画则是 `AnimationClip`（`CharacterAnimation` mod 类型），不是用户的控制器资产。
 
-### 绕过它 = 我们要自己补三件事
+### 我们**全部走 Tracking 层**（不是绕过它）
 
-1. **总开关 / 重置 / 回中性**：`ResetBlendShapes`、`ResetOverridden...` 管不到我们。
-   我们自己要有"面捕开/关 + 重置到中性"（断流等待与回中性我们已经有了，当**全局配置**）。
-2. **写回时机**：mod 实体有 `OnPreUpdate / OnUpdate / OnPostUpdate / OnLateUpdate / OnEndOfFrame` 五个阶段，
-   必须**在它的动画/IK 之后**写（`OnLateUpdate` 或 `OnEndOfFrame`）—— 具体哪个阶段稳定压得住，**要实测**。
-3. **键争用**：用户若同时开着 Warudo 自带面捕/表情，两边都写同一批键，谁后写谁赢。
-   我们的 mod 启用时应**先认领**（把用到的键从它那层排除/重置），并明确文档化"同一角色只留一个写者"。
+既然动捕的正门就是 Tracking 层，我们就把出口接在这一层，于是"它自己那套管理"直接归我们享用：
+
+| 机制 | 谁提供 |
+| --- | --- |
+| 总开关 / 交还与重置 | **它**：丢脸时我们停止写并调 `Reset Character Tracking BlendShapes`（骨骼同理） |
+| 与动画/表情的**权重混合** | **它**：`BlendShapeEntry` 与骨骼覆盖都带 Weight |
+| 键争用 | **基本消失**：动捕在这层只有一个来源；我们注册成 tracking template 后，用户在面捕下拉里选的就是我们这套，不会两边同时写（**权限这一点仍要实测**） |
+| VRM 兼容 | **它**：`GetUseVRMBlendShapeProxy` / `GetVRMBlendShapeClip` |
+
+**还属于我们自己的只剩四件**（都绕不开）：
+
+1. **树跑在哪** —— 我们的树要用我们自己的控制器，所以仍要自己的影子 Animator（Warudo 里自建 Animator 已确认可行）。
+2. **丢脸的策略** —— "发中性"还是"停止写并 reset"：产品选择（我们已有断流等待/回中性两个全局参数），机制归它。
+3. **输入 + 中间层** —— Unity 侧是面板调试；Warudo 侧是构建期写死的同一份配置。
+4. **每帧的翻译** —— 把树的结果按名字喂进 `Set Character Tracking BlendShapes` 与骨骼覆盖（本来就要写，只是目标从 renderer 换成它这一层）。
+
+> ⚠️ **上一版本文写错过一句**：曾把"总开关/重置/权重/键争用"列成"绕过它之后我们必须自己补三件事"。
+> 那是**直写真值到 renderer** 那条路（`SetBlendShapeWeight`）的代价，不是这两个节点存在导致的。
+> 走 Tracking 层就没有这些负担 —— 记在这里免得后人照错的记。
 
 ---
 
-## 5. 出口形式（我们的树 → Warudo 喜欢的两种动画）
+## 5. 出口形式（我们的树 → Warudo 的 Tracking 层）
 
 | 我们的结果 | 翻译成 | 为什么 |
 | --- | --- | --- |
-| 形态键权重 | **真实键值**：`SkinnedMeshRenderer.SetBlendShapeWeight`（按名字，不用它的 tracking entry） | 真值最直接；不进它的 entry 表就没有额外一层映射与曲线语义 |
-| 头/颈/眼球等骨骼 | **`OverrideBoneRotations` + `OverrideBoneRotationWeights`**（必要时 `OverrideRootPosition` / `OverrideBonePositions`） | 直接写 `Transform.localRotation` 会被它的动画/IK 覆盖；它这套覆盖层带权重、能和动画混，是"翻译成它喜欢的形式"的正解 |
+| 形态键权重 | **`Set Character Tracking BlendShapes`**（一组 `键名 + 权重`，按名字） | 这是动捕的正门；真值直接进它的追踪层，混合/重置/交还都归它 |
+| 头/颈/眼球等骨骼 | **`Override Character Bone Rotation Offsets`**（+ Weight；必要时 `Override Character Root Position` / `Override Bone Positions`） | 直接写 `Transform.localRotation` 会被它的动画/IK 覆盖；"Offsets" 是相对动画的偏移，正好是动捕语义（坐标系待实测） |
+| 丢脸 / 交还 | **停写 + `Reset Character Tracking BlendShapes` / `Reset Overridden Character Bones`** | 用它的机制交还控制，而不是自己造一套开关 |
 | 树本身 | 跑在**我们自己的影子 Animator** 上（不进角色控制器、不求合并） | 角色 mod 保持零组件；我们的树原样复用 |
 
 ---
@@ -110,10 +135,11 @@
 | 项 | 状态 |
 | --- | --- |
 | Warudo 里能自己新建 Animator 挂我们的控制器 | **已确认可行**（"我们现有的脚本能上传就已经说明问题了"） |
-| `.controller` 资产能随 mod 一起打包 | 官方允许往 mod 文件夹放 Unity 资产（prefabs / materials / textures），且"prefab 用到的脚本要一起放"；**控制器属于同类，值得实测一遍** |
-| 写回阶段用 `OnLateUpdate` 还是 `OnEndOfFrame` | **待实测**（哪个阶段能稳定压过它的动画与表情） |
+| `.controller` 资产能随 mod 一起打包 | 官方允许往 mod 文件夹放 Unity 资产（prefabs / materials / textures），"prefab 用到的脚本要一起放"；控制器属同类，**低风险但值得一测** |
+| **普通 mod 能否每帧写它的 Tracking 层**，还是必须注册成 `CharacterTrackingTemplate` 才有这个位置 | **待实测**（决定处理链 mod 要不要注册模板） |
+| `Override Character Bone Rotation **Offsets**` 的坐标系与叠加语义 | **待实测**（"偏移" 是相对动画还是绝对；轴序/单位） |
+| `ResetBlendShapes` 与 `ResetBlendShapesNextFrame` 的差别与调用时机 | **待实测**（丢脸交还时用哪个） |
 | 接收器单独成第三个 mod 时的接口 | **未决**：跨 mod 不能共享我们的类型；可能只能靠 Warudo 自有类型（Asset）或干脆把接收器并进处理链 mod（即"两个 mod"方案） |
-| 键认领的具体做法（怎么把我们用的键从它的层里排除） | **待定**（需要实测它那层的冲突行为） |
 
 ---
 
@@ -123,7 +149,7 @@
 
 | 已定的决定 | 与本文的关系 |
 | --- | --- |
-| **删掉区域门控**（`outputRegions` / `Ho/Drive/Gate/*`） | 哪些键算数由使用者的树/参数决定，不由我们注入开关 —— 在 Warudo 里更是必须（我们的开关它不认） |
+| **删掉区域门控**（`outputRegions` / `Ho/Drive/Gate/*`） | 哪些键算数由使用者的树/参数决定，不由我们注入开关 —— 在 Warudo 里更是必须（我们要喂的是**一层值**，不是一套开关） |
 | **删掉眼睑三模式**（`eyeSync*`） | 同上，归树；代价（左右眨眼键各自能闭双眼的模型）写进踩坑文档 |
 | **接收端只交原样、映射与量纲写进中间层配置的输入行** | Warudo 侧的配置是**构建期写死的同一份格式**；两边共用同一套规范名，才可能"换个输入就换一套面捕" |
 | **断流等待 / 回中性 = 全局配置**（不进每行） | 表达式是纯函数做不了记忆；在 Warudo 里这两个参数须随 mod 的硬配置一起走 |
@@ -131,9 +157,12 @@
 
 ---
 
-## 8. 下一步（等 Warudo 侧两个实测结果）
+## 8. 下一步（等 Warudo 侧实测结果）
 
-1. 实测：mod 里新建 Animator + 打包进去的 `.controller`，`SetFloat` 后形态键是否真的动。
-2. 实测：`OnLateUpdate` / `OnEndOfFrame` 哪个阶段写键与骨骼覆盖能压过 Warudo 的动画与表情。
-3. 定第三块产物要不要存在（接收器单独成 mod 的接口可行性）。
-4. 然后才动代码：`HoFaceTracking` 收薄 → 面板吃掉输入+中间层 → 处理链 mod（同核心外壳）。
+1. 实测：**普通 mod 能不能每帧写它的 Tracking 层**（`Set Character Tracking BlendShapes` 那一层），
+   还是必须注册成 `CharacterTrackingTemplate` 才有这个位置 —— 这条决定处理链 mod 要不要注册模板。
+2. 实测：`Override Character Bone Rotation Offsets` 的坐标系/叠加语义，以及 `ResetBlendShapes` 与
+   `ResetBlendShapesNextFrame` 在丢脸交还时该用哪个。
+3. （低风险、顺手做）mod 里新建 Animator + 打包进去的 `.controller`，`SetFloat` 后形态键是否真的动。
+4. 定第三块产物要不要存在（接收器单独成 mod 的接口可行性）。
+5. 然后才动代码：`HoFaceTracking` 收薄 → 面板吃掉输入+中间层 → 处理链 mod（同核心外壳）。

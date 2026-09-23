@@ -5,7 +5,7 @@
 ## 文档
 
 - [**参数标准表**](PARAMETER_STANDARDS.md)：**下游到底认哪些名字**的权威依据（逐行表格 + 官方 URL + 未验证标记）—— VTS 追踪参数/语音/手部/控制器、VTS API 与注入规则、自定义参数、Cubism 标准参数与参数组、ARKit 52、iFacialMocap 线协议、VMC 协议地址与 HumanBodyBones、VRM 0.x/1.0、VRCFT Unified Expressions（附录）。**写任何参数名之前先查它。**
-- [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：**新路线**（独立状态机 → 翻译成 Warudo 喜欢的纯键值与骨骼动画）—— 两到三个 mod 的产物划分、Warudo 侧的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）、它那层追踪层是什么（API 取证）、绕过它后我们必须自己补的三件事、以及为什么角色 mod 可以做到零组件。
+- [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：**新路线**（独立状态机 → 翻译成 Warudo 喜欢的纯键值与骨骼动画，喂进它的 **Tracking 层**）—— 两到三个 mod 的产物划分、Warudo 侧的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）、它那层追踪层是什么（API 与官方动捕示例取证）、为什么"走 Tracking 层"比"直写 renderer"省掉一整套自造管理，以及为什么角色 mod 可以做到零组件。
 - [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 六步接线、面板五个分区各回答什么（栏名不带序号）、什么会写盘、排查清单。
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：中间层做什么、**为什么它必须存在**（树表达不了的非线性与记忆）、一列输出行 = `参数名 = 曲线(表达式) + 有序修饰符`、配置文件格式、输入曲线与门控的分工。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
