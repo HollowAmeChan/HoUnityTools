@@ -172,10 +172,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>生成的驱动层名字。以 <see cref="LayerPrefix"/> 开头 = 归本工具管，重新应用时会被重写。</summary>
         public const string LayerPrefix = "Ho/";
         public const string DriveLayerName = "Ho/00 Drive";
-        /// <summary>留给用户手工加逻辑的层。<b>应用改动时永不触碰它。</b></summary>
-        /// <summary>留给用户手工加逻辑的层。**已废弃**：整个控制器都是我们生成的，初始化只负责初始化，
-        /// 用户要改就自己备份一份去改（见 <see cref="Apply"/> 的注释）。这个常量只等面板与用例里的引用清完就删。</summary>
-        public const string EditLayerName = "Ho/99 (EDIT THIS)";
 
         /// <summary>
         /// 两个**区域门控**参数。区域子树挂在驱动层根树上，权重就是它 —— 于是"这块驱动算不算数"
@@ -192,8 +188,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public static string RegionTreeName(HoFaceGate gate) => HoFaceNaming.RegionTree(gate);
 
         /// <summary>
-        /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树，
-        /// 另加一个空的 <see cref="EditLayerName"/> 作为用户的扩展点。
+        /// 初始化：产出**一个完整文件**。每个 ARKit 键一个片段、驱动段是一棵 Direct 树。
+        /// （早期还附送一个空的 <c>Ho/99 (EDIT THIS)</c> 扩展层，现已删除 —— 见 <see cref="Apply"/>。）
         ///
         /// 为什么不是"一层一个键"：那是早期"接管 Animator"时代的绕法，理由是"Direct 树会归一化、
         /// 各通道互相削弱"——**实测否掉了**。同一个 Direct 树里 jawOpen=0.6 与 mouthSmileLeft=0.8
@@ -234,7 +230,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 果冻那两个参数（Ho/JellyX · Ho/JellyY）**不再产出**：果冻已搬到独立的
                 // HoSpringConstraint，直接读写形态键，不再借道 Animator 参数（见 19.2 / 20 节）。
 
-                PopulateDriveTree(controller, animator, tree, template);
                 EditorUtility.SetDirty(controller);
                 AssetDatabase.SaveAssets();
                 return controller;
@@ -242,12 +237,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             catch { if (controller != null) AssetDatabase.DeleteAsset(assetPath); throw; }
         }
 
-        /// <summary>
-        /// 应用改动：**就地手术**。只重写 <see cref="DriveLayerName"/> 那一段，
-        /// <see cref="EditLayerName"/> 与其它任何层一个字节都不动。
-        ///
-        /// 这是"组件 = 控制器的修改脚本"这句话的落点：反复应用不会吃掉用户的手工逻辑。
-        /// </summary>
         /// <summary>
         /// 就地重写**整个文件**（GUID 不变，所以外部引用不会断）。
         ///
@@ -280,11 +269,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>本工具管得着的层（带前缀，且不是用户的扩展点）。</summary>
+        /// <summary>本工具管得着的层：带 <see cref="LayerPrefix"/> 前缀的层。</summary>
         public static bool IsManagedLayer(string layerName) =>
-            !string.IsNullOrEmpty(layerName)
-            && layerName.StartsWith(LayerPrefix, StringComparison.Ordinal)
-            && layerName != EditLayerName;
+            !string.IsNullOrEmpty(layerName) && layerName.StartsWith(LayerPrefix, StringComparison.Ordinal);
 
         private static BlendTree FindDriveTree(AnimatorController controller)
         {
@@ -333,9 +320,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 旧结构先记下来：重建后没被用上的要销毁（区域子树 + 眼睑 2D 树），
             // 否则每应用一次就多留一棵孤儿树。
             //
-            // 判据是**结构**，不是名字：驱动树下面的一切都是我们生成的（用户自己的逻辑在
-            // (EDIT THIS) 层里），所以旧子节点连同**它们自己的子片段**一起清 —— 而且只清
-            // **本控制器文件里的子资产**（GetAssetPath == path），外部资产一根都不碰。
+            // 判据是**结构**，不是名字：驱动树下面的一切都是我们生成的，所以旧子节点连同
+            // **它们自己的子片段**一起清 —— 而且只清**本控制器文件里的子资产**
+            // （GetAssetPath == path），外部资产一根都不碰。
             // 名字不参与归属判断，于是"改名"（比如这次给六个格子换命名）不会漏清理。
             var stale = new HashSet<Object>();
             foreach (var child in tree.children)
@@ -494,7 +481,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             var existing = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
-                if (asset is AnimationClip clip && clip.name != "EDIT_THIS_Empty") existing[clip.name] = clip;
+                if (asset is AnimationClip clip) existing[clip.name] = clip;
             return existing;
         }
 

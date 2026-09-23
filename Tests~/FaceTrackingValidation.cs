@@ -105,14 +105,12 @@ public static class HoFaceTrackingValidation
                 Check(compiled.bindings.TrueForAll(b => b.path == "Meshes/Face" && b.renderer == alternateMesh), "nested path remap resolves actual renderer");
             rig.pathRemaps.Clear();
             UnityEngine.Object.DestroyImmediate(alternate);
-            // ── 生成器结构：驱动段（一棵 Direct 树）+ 扩展点，WD 开 ──────────────
+            // ── 生成器结构：只有一层驱动段（一棵 Direct 树），WD 开 ──────────────
             var layers = controller.layers;
             var directState = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
             var directTree = directState != null ? directState.motion as BlendTree : null;
-            var editState = FindState(controller, HoFaceAnimationAssets.EditLayerName);
-            Check(layers.Length == 2, "generator emits drive layer + EDIT THIS extension point");
+            Check(layers.Length == 1, "generator emits exactly one layer — the drive layer (" + layers.Length + ")");
             Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
-            Check(editState != null, "extension point is named " + HoFaceAnimationAssets.EditLayerName);
             Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
             // 分组 + 眼睑 2D 子树：根树现在是 4 个子节点（LidL / LidR / EyeRegion / LipRegion）。
             Check(directTree != null && directTree.children.Length == 4,
@@ -247,8 +245,8 @@ public static class HoFaceTrackingValidation
                 "the matrix is deliberately not filled: six poses on Y0 (no squint) + six on Y2 (squint), Y1 left empty ("
                 + rowBottom + "/" + rowTop + "/" + otherRows + ")");
             Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
-                && !HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.EditLayerName),
-                "drive layer is managed, extension point is not");
+                && !HoFaceAnimationAssets.IsManagedLayer("Base Layer"),
+                "only Ho/* layers count as ours — the animator's own layers do not");
             // 果冻参数已撤销：果冻搬到独立组件 HoSpringConstraint，直接读键写键，不借道 Animator 参数。
             bool jellyParamsGone = true;
             foreach (var p in controller.parameters)
@@ -258,21 +256,18 @@ public static class HoFaceTrackingValidation
 
             Check(jellyParamsGone, "the generator no longer emits jelly parameters — jelly writes shape keys directly");
 
-            // ── 应用改动 = 就地手术：重写驱动段，但绝不碰扩展点 ──────────────────
+            // ── 应用改动 = 整个文件就地重写：控制器整个都是我们的，只有一层 ──────────
             // 改名不能留僵尸参数：先注入两个历史名字，apply 必须把它们清掉（只动 Ho/ 命名空间）。
             controller.AddParameter("Ho/LidLeft.X", AnimatorControllerParameterType.Float);
             controller.AddParameter("Ho/Gate/Eye", AnimatorControllerParameterType.Float);
             string controllerPath = AssetDatabase.GetAssetPath(controller);
+            string controllerGuid = AssetDatabase.AssetPathToGUID(controllerPath);
             int clipsBefore = CountClips(controllerPath);
-            int editStateBefore = editState.GetInstanceID();
-            var editMotionBefore = editState.motion;
             HoFaceAnimationAssets.Apply(controller, animator);
             var appliedDrive = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
-            var appliedEdit = FindState(controller, HoFaceAnimationAssets.EditLayerName);
-            Check(controller.layers.Length == 2, "apply keeps the layer count");
-            Check(appliedEdit != null && appliedEdit.GetInstanceID() == editStateBefore
-                && ReferenceEquals(appliedEdit.motion, editMotionBefore),
-                "apply leaves the EDIT THIS extension point untouched");
+            Check(controller.layers.Length == 1, "re-initializing keeps the file at one layer (" + controller.layers.Length + ")");
+            Check(AssetDatabase.AssetPathToGUID(controllerPath) == controllerGuid,
+                "rewriting happens in place — the asset GUID survives, so external references stay valid");
             Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 4, "apply rebuilds the drive tree");
             int regionTrees = 0;
             var wantedTrees = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
@@ -326,14 +321,14 @@ public static class HoFaceTrackingValidation
             // 消息共用蓝色 Info 框，被当提示略过去了。
             // 注意：这一步会销毁旧控制器与其中的状态对象，所以必须放在所有引用旧状态的断言**之后**。
             var replaced = HoFaceAnimationAssets.Generate(animator, controllerPath, true);
-            Check(replaced != null && replaced.layers.Length == 2,
+            Check(replaced != null && replaced.layers.Length == 1,
                 "re-initializing over an existing file really replaces it (layers=" + (replaced != null ? replaced.layers.Length : -1) + ")");
             Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
             rig.faceController = replaced;
 
             // ── 果冻键不进控制器：它由独立组件（HoSpringConstraint）直接读写形态键 ──────────
-            // 所以这里**不再**往 (EDIT THIS) 里塞 JellyEye 曲线，也不再测"非 ARKit 键穿过 Compile"
-            // —— 那条路现在没有消费者了。保留网格上这个键，是因为下面的 WD 探针需要一个
+            // 所以这里**不再**测"非 ARKit 键穿过 Compile"——那条路现在没有消费者了。
+            // 保留网格上这个键，是因为下面的 WD 探针需要一个
             // **没有任何片段动画它**的键做对照（"WD 开"不该去碰没被动画的属性），果冻键正好符合。
             Check(renderer.sharedMesh.GetBlendShapeIndex("JellyEye") >= 0,
                 "validation mesh keeps an un-animated user key as the Write Defaults control");

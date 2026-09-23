@@ -89,20 +89,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
                     {
                         // 命名承载语义：「初始化」明确表达"产出文件、之后都在里面改"。
-                        // 一个按钮两种情形（见 Initialize 的注释）：我们的控制器 → 就地重写驱动段；
-                        // 第一次 / 别人的控制器 → 整文件重写。
+                        // 一个按钮两种情形（见 Initialize 的注释）：我们的控制器 → 就地重写；
+                        // 第一次 / 别人的控制器 → 问路径新建。
                         var content = initialized
-                            ? new GUIContent("重新初始化…", "就地重写 " + HoFaceAnimationAssets.DriveLayerName + " 段：\n"
-                                + "旧的树、片段、轴参数清干净；其它层与 " + HoFaceAnimationAssets.EditLayerName + " 不动。\n"
-                                + "改模板走这里。")
-                            : new GUIContent("初始化控制器", "从角色网格 + 当前模板产出一个完整的控制器文件。\n"
-                                + "这是唯一会写文件的动作；之后手工逻辑请在生成物的 (EDIT THIS) 段里加。");
+                            ? new GUIContent("重新初始化…", "就地重写这个控制器的**整个文件**：\n"
+                                + "旧的树、片段、参数清干净，GUID 不变（外部引用不会断）。\n"
+                                + "换模板走这里。")
+                            : new GUIContent("初始化控制器", "按当前配置产出一个完整的控制器文件。\n"
+                                + "这是唯一会写文件的动作。");
                         if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
                     }
 
                     // 「重新初始化」是**唯一**写盘的动作：目标就是组件当前在用的那个控制器。
-                    // 它自己会挑路径 —— 控制器是我们的（有驱动段）就**就地重写驱动段**（其它层与 (EDIT THIS) 不动），
-                    // 否则才整文件重写。所以不需要第二个按钮，也不需要用户自己备份。
+                    // 它自己会挑路径 —— 是我们的控制器就就地重写（GUID 不变），否则才问路径新建。
+                    // 所以不需要第二个按钮，也不需要用户自己备份。
                     using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
                     if (GUILayout.Button(new GUIContent("定位资产", "选中这个控制器资产。"), GUILayout.Height(20)) && rig.faceController != null)
                     {
@@ -505,10 +505,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// 分两种情形，用户只看到**一个按钮**：
         /// <list type="bullet">
-        /// <item>控制器是我们的（有驱动段）→ **就地重写驱动段**：旧的树/片段/轴参数清干净，其它层与
-        /// <c>(EDIT THIS)</c> 一个字节不动。切模板走这条 —— 所以**不需要用户自己备份**。</item>
-        /// <item>第一次（组件上还没有控制器），或那个控制器不是我们生成的 → 整文件重写（先问路径，
-        /// 必要时再确认一次覆盖）。</item>
+        /// <item>控制器是我们的（有驱动段）→ **就地重写整个文件**：GUID 不变，旧内容清干净。切模板走这条
+        /// —— 所以**不需要用户自己备份**。</item>
+        /// <item>第一次（组件上还没有控制器），或那个控制器不是我们生成的 → 问路径新建；目标已存在时再确认一次覆盖。</item>
         /// </list>
         /// </summary>
         private void Initialize(HoFaceTrackingDebugger rig)
@@ -518,9 +517,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 string currentPath = AssetDatabase.GetAssetPath(current);
                 if (!EditorUtility.DisplayDialog("重新初始化吗？",
-                    currentPath + "\n\n会就地重写 " + HoFaceAnimationAssets.DriveLayerName + " 段"
-                    + "（旧的树、片段、轴参数会清干净）；其它层与 "
-                    + HoFaceAnimationAssets.EditLayerName + " 一个字节都不动。",
+                    currentPath + "\n\n会就地重写这个控制器的**整个文件**（旧的树、片段、参数都会清干净）。\n"
+                    + "资产 GUID 不变，所以引用它的地方（比如窥视对象）不会断。",
                     "重写", "取消"))
                     return;
 
@@ -550,7 +548,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
                 reportIsError = false;
                 report = "已初始化 " + path + "：" + controller.parameters.Length + " 路 ARKit 参数（"
-                    + controller.layers.Length + " 层：驱动段 + 扩展点）。之后就改这个文件里的 (EDIT THIS) 段。";
+                    + controller.layers.Length + " 层：驱动段）。";
             }
             catch (Exception e) { Fail(e); }
         }
@@ -563,8 +561,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 应用改动：就地手术。只重写驱动段，`(EDIT THIS)` 段与其它层一个字节都不动。
-        /// 这是反复用的那个按钮；「初始化控制器」只在开始时用一次。
+        /// 重新初始化：就地重写整个控制器文件（GUID 不变）。「初始化控制器」只在开始时用一次。
         /// </summary>
         private void ApplyChanges(HoFaceTrackingDebugger rig)
         {
@@ -579,8 +576,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 HoFaceAnimationAssets.Apply(controller, rig.targetAnimator, TemplateOf(rig));
                 EnsureChannels(rig);
                 EditorUtility.SetDirty(rig);
-                report = "已应用改动：重写了 " + HoFaceAnimationAssets.DriveLayerName + " 段；"
-                    + HoFaceAnimationAssets.EditLayerName + " 段未改动。";
+                report = "已重新初始化：整个文件重写完毕（GUID 未变）。";
             }
             catch (Exception e) { Fail(e); }
         }
