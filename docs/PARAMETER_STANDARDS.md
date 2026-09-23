@@ -388,6 +388,11 @@ Unity 枚举与 VTS 枚举的拼写。
 | 舌 | 1 | `tongueOut` |
 | **合计** | **52** | 6+8+4+23+3+2+5+1 = 52 ✅ |
 
+**Apple 自己的官方分组**（用来核对"我们有没有漏"）：docs JSON API 里分成 5 组 ——
+**Left Eye 7** / **Right Eye 7** / **Mouth and Jaw 27** / **Eyebrows, Cheeks, and Nose 10** / **Tongue 1** = 52。
+和上表的关系：Left Eye 7 = 眼睑 3 + 眼动 4；Mouth and Jaw 27 = 嘴 23 + 下颌 4；
+Eyebrows/Cheeks/Nose 10 = 眉 5 + 颊 3 + 鼻 2。**两组口径合计都是 52**。
+
 ### 3.2 三套拼写来源对照
 
 | 来源 | 拼写 | 用在哪 | 依据 |
@@ -399,18 +404,35 @@ Unity 枚举与 VTS 枚举的拼写。
 
 > ⚠️ VMC 官方明确：**大小写敏感**（"due to changes in the UniVRM specification, it is Case Sensitive"）。
 > 发 camelCase 是对的；宽容实现（含 EVMC4U）会忽略大小写，但"不宽容的实现就不好使"。
+> ⚠️ **不要把"顺序"当成同一份表 —— 按索引映射名字一定会错位，必须按名字映射。** 实测证据：
+> Apple 官方分组顺序（docs JSON API 抓取）里 "Mouth and Jaw" 的开头是
+> `jawForward,` **`jawLeft, jawRight`** `, jawOpen …`；而 VTS 的 `VTSARKitBlendshape.cs`
+> （文件头自称 "Names and order taken from developer.apple.com"）写的是
+> `JawForward,` **`JawRight, JawLeft`** `, JawOpen` —— **名字一致、顺序不同**。
+> （VBridger 的 `vtsKeys` 恰恰是按**索引**对齐的：见
+> [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md) §1.1，**别照抄那个做法**。）
 
 ### 3.3 已知坑（写死在这，别再踩）
 
 | 坑 | 说明 |
 | --- | --- |
-| `mouthClose` ≠ 闭嘴的"闭" | 它是"双唇闭合"，**独立于下颌**：`jawOpen` 高 + `mouthClose` 高 = 张着嘴但抿唇。做"张嘴"轴要用 `jawOpen`，做"抿唇"才用 `mouthClose` |
-| `eyeLookIn` / `eyeLookOut` 方向 | **In/Out 是相对鼻子**：`eyeLookInLeft` = 左眼向右看。做"眼睛 X 轴"时要按这个符号合成，否则左右反 |
-| `tongueOut` / `cheekPuff` 的平台支持 | 见 §1.1：iOS/Android 才有（`cheekPuff` 只 iOS），webcam 永远没有数据 |
-| `jawForward` | iOS/Android 有，但很多追踪源给的是 0；不要拿它当"张嘴"用 |
-| 左右对称性 | 52 个里并非全部左右成对（`browInnerUp`、`cheekPuff`、`jawForward/Open`、`mouthClose/Funnel/Pucker`、`noseSneer`×2 里 noseSneer 是成对的…）：做"单根轴"时要显式决定用左、右还是平均 |
+| `mouthClose` ≠ 闭嘴的"闭" | 它是"双唇闭合"，**独立于下颌**：`jawOpen` 高 + `mouthClose` 高 = 张着嘴但抿唇。Apple 自己还警告 `jawOpen` 单独拉高会不自然。**不要写成 `mouthClose = 1 − jawOpen`** |
+| `eyeLookIn` / `eyeLookOut` 方向 | **按脸自身定义**：`eyeLookInLeft` = 左眼向**脸右侧**看（即向中线）。而 ARKit 预览画面是**镜像**的，所以"画面里向内"与 `eyeLookIn` 不是一回事 —— 调试时最容易把 L/R 判反 |
+| `eyeSquint` ≠ `eyeBlink` | `eyeBlink` 是上眼睑闭合，`eyeSquint` 是**眼周**收缩，两者可同时非零 |
+| 没有左右后缀的键 | `cheekPuff`、`browInnerUp`、`jawForward/Left/Right/Open`、`mouthClose/Funnel/Pucker/Left/Right/Roll*/Shrug*` 都是单键 —— 别去找 `cheekPuffLeft` |
+| `mouthFunnel` vs `mouthPucker` | Funnel = **张开**的圆（漏斗）；Pucker = **闭合**双唇的收拢压缩（嘬嘴） |
+| `mouthRollLower/Upper` | 官方语义是"**向口腔内侧**卷"（往牙齿方向），不是向外翻 |
+| `mouthShrugLower/Upper` | 官方是 "**outward** movement"（向外），不是"向上耸" |
+| `browDown*` / `noseSneer*` | `browDown*` 只指**眉外侧**（"outer portion"）；`noseSneer*` 是"鼻翼**周围**上提" |
+| `jawForward` | 是下颌**向前平移**，与 `jawOpen`（张开角度）正交；**具体是哪根轴官方没给**。很多追踪源对它恒发 0，不要拿它当"张嘴" |
+| `tongueOut` / `cheekPuff` 的平台支持 | 见 §1.1：只有手机端有（`cheekPuff` 只 iOS），webcam 永远没有数据；`tongueOut` 的 1.0 是"ARKit 能追踪到的最大程度"而非物理极限 |
+| **逐键机型门槛表不存在** | Apple 只给了整体要求（iOS 14 / 带 Neural Engine，或 iOS 13 及以下必须 TrueDepth）与 `tongueOut` 的 iOS 12.0；**没有"哪个键需要哪颗芯片"的官方矩阵** → 这类说法一律不要引用 |
+| 左右对称性 | 52 个里并非全部左右成对：做"单根轴"时要显式决定用左、右还是平均 |
+| `mouthStretchRight` 的官方描述 | **Apple 自己写成 "the left corner"**，Unity 写 "right corner" —— 按对称性判断 Apple 原文是笔误；别把这句抄进注释 |
 
-**来源与时间**：Apple 文档 + Unity `com.unity.xr.arkit@5.1.6` 枚举文档 + VTS 的枚举源码，抓取于 2026-09-24。
+**来源与时间**：Apple `ARFaceAnchor.BlendShapeLocation`（正文是 JS 渲染的，抓的是它的
+docs JSON API `developer.apple.com/tutorials/data/documentation/arkit/arfaceanchor/blendshapelocation.json`）
++ Unity `com.unity.xr.arkit@5.1.6` 枚举文档 + VTS 的枚举源码，抓取于 2026-09-24。
 
 ---
 
@@ -669,9 +691,14 @@ BlendShape 名-值 (0 ~ 100) | … | BlendShape 名-值 (0 ~ 100) | … |
 | --- | --- | --- |
 | 形态键 | `名称-数值`，名称就是 **ARKit 52 的拼写**（`mouthSmile_R`、`eyeBlink_L`…，即 `_L/_R` 后缀） | **0 ~ 100**（不是 0~1！） |
 | 头 | `=head#` + **6 个数**：欧拉角 X/Y/Z、位置 X/Y/Z | **度**（官方："Angle-related data is sent in degrees, not radians."）/ 位置单位官方未说明 |
-| 右眼 | `rightEye#` + 3 个欧拉角 | 度 |
-| 左眼 | `leftEye#` + 3 个欧拉角 | 度 |
-| 分隔 | 各字段之间用 `|` | |
+| 右眼 / 左眼 | `rightEye#` / `leftEye#` + 3 个欧拉角 | 度 |
+| 分隔符 | 形态键之间与变换块之间用 `\|`；`=` **划分"形态键区"与"变换区"**；`#` 划分变换名与数值；`,` 划分数值分量 | — |
+| `___iFacialMocap` | **只属于 TCP 模式**的帧结束标记；**UDP 样例帧里没有它** —— 用 UDP 却强求这个后缀会把每帧都丢掉 | 官方原文 |
+| `trackingStatus` | 会作为**普通形态键**出现（官方蓝牙示例里有 `trackingStatus-1`）；**语义官方没说明** | 存在 `CONFIRMED` / 语义 `UNVERIFIED` |
+
+**变换块的顺序不要按位置假设**：官方网页样例里是 `rightEye#…` 在 `leftEye#…` 之前，
+而 App 作者发布的官方蓝牙参考实现里规范化输出是 `leftEye#…rightEye#…` 在前 ——
+**所以按名字找块，别按第几个块找**。
 
 官方示例帧（原样，注意结尾还有一串 `34903,-1.666…` 的额外字段与一个多余的 `|`）：
 
@@ -679,25 +706,37 @@ BlendShape 名-值 (0 ~ 100) | … | BlendShape 名-值 (0 ~ 100) | … |
 mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.030653415,-0.10287084,-0.6584072|rightEye#6.0297494,2.4403017,0.25649446|leftEye#6.034903,-1.6660284,-0.17520553|34903,-1.6660284,-0.17520553|
 ```
 
-> ⚠️ 官方正文示例串里混着 `(` `)`（如 `mouthSmile_R-0(eyeLookOut_L-0)`），而**正式文法里没有括号** ——
-> 判断是网页排版/复制产物，**不要按括号解析**。
+> ⚠️ **不要拿官方这条样例帧当"标准帧"来写测试**：逐字段核对它有三处不合格式 ——
+> ① 开头粘着一段带括号的残缺片段（`mouthSmile_R-0(eyeLookOut_L-0)mouthUpperUp_L-11(eyeWide_R-0)`），
+> 而其中 `eyeLookOut_L`、`eyeWide_R` **恰好是整包唯一缺失的两个键**（这一帧只有 **50 个互异 ARKit 键**）；
+> ② 有一个孤立字段 `|1|`；③ `=head#` 之后又多出一块与 leftEye 数值重复的第 4 块。
+> ① ② 的样子像**两个 UDP 包首尾粘连** —— 结论：**不能假设每帧 52 键齐全**，
+> 缺键 ≠ 0（我们接收端的 `Present[]` 语义是对的）。
 
 **`sendDataVersion=v2`（iOS 1.1.8 起）**：握手串后面加 `|sendDataVersion=v2`，
 形态键的**分隔符从 `-` 变成 `&`**（`mouthSmile_R&0`）。
 官方给的理由："Facemotion3d 会发负的 blendshape 值，用 `-` 当分隔符可能撞车。"
 → **解析器必须同时吃 `-` 与 `&` 两种分隔**（我们现在的实现就是先找 `&` 再找 `-`）。
 
+⚠️ **负值是在源头被压掉的**：App 作者（DevelopW）发布的官方蓝牙参考实现里写明，
+**iFacialMocap 模式（`-` 分隔）会把负的 BlendShape 值 clamp 到 0**，只有 Facemotion3d 模式（`&`）保留负值。
+→ 如果我们要用"双向键"的负方向（`jawLeft`/`jawRight`、`mouthLeft`/`mouthRight`、
+`eyeLookIn`/`eyeLookOut` 这类成对键），**必须主动发 `|sendDataVersion=v2` 切换**，
+否则拿到的永远是 0。（这条来自官方参考实现而非网页文档，标 `INFERRED-官方实现`。）
+
 ### 6.3 我们这边的实现对照（`Editor/FaceTracking/IFacialMocapPacket.cs`）
 
 | 我们的假设 | 与官方文档是否一致 |
 | --- | --- |
 | 按 `\|` 切分字段 | ✅ 一致 |
-| `=head#` / `head#`、`leftEye#`、`rightEye#` | ✅ 一致（`=` 前缀是可选的） |
+| `=head#` / `head#`、`leftEye#`、`rightEye#` 按**前缀**找块 | ✅ 一致（而且"按名字找"是必须的：两块的前后顺序在官方两份材料里就不同） |
 | head 6 个数、眼 3 个数 | ✅ 一致（但**我们把 head 当 6 个平铺数存**，用的人要记得前三个是欧拉角、后三个是位置） |
 | 形态键值 `value / 100f` | ✅ 一致（官方就是 0~100） |
 | 名称用 `_L/_R` 拼写 | ✅ 一致（ARKit 拼写的 52 键） |
-| 分隔符 `&` 或 `-` 都接受 | ✅ 一致（v2 模式） |
+| 分隔符 `&` 或 `-` 都接受（先 `&` 再 `-`） | ✅ 一致（v2 模式用 `&`）。⚠️ **负号与 v1 分隔符同形**这一点在源头就被规避了（v1 不发负值），所以"先找 `&` 再找 `-`"是安全的 |
+| 缺键只记 `Present[]=false`，不写 0 | ✅ 与官方样例的实际情况相符（每帧不保证 52 键） |
 | 未实现：TCP 模式（`___iFacialMocap` 结尾）、录制回放、蓝牙、`lookForward` | 官方有，我们没做（当前只做 UDP 直连） |
+| 未消费：`trackingStatus` | 现在只会计入 `UnknownCount`；它的语义官方未说明，先不猜 |
 
 ### 6.4 已知坑
 
@@ -705,9 +744,18 @@ mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.03065341
 | --- | --- |
 | **0~100 不是 0~1** | 忘了除 100 会让所有值大 100 倍（VBridger 也是在源码里 `/100f`） |
 | head 那 6 个数的顺序 | 官方是 **欧拉角在前、位置在后**；和我们平时"位置+旋转"的直觉相反 |
+| 变换块不要按位置找 | 网页样例是 rightEye 在前，官方蓝牙参考实现是 leftEye 在前 —— **按名字找**（§6.2） |
+| **不能假设每帧 52 键齐全** | 官方样例帧只有 50 个互异键，且带粘连/孤立字段（§6.2）→ **缺键 ≠ 0**，把缺键当 0 会让表情间歇抽动 |
+| **v1 的负值在源头就没了** | `-` 分隔（默认）时 App 把负值 clamp 到 0；要用负方向必须发 `|sendDataVersion=v2`（§6.2） |
 | 60 FPS 固定 | UDP 会丢帧（官方原话 "If it is UDP, frames may be dropped"），所以我们不能假设每帧都收到 |
-| 额外尾部字段 | 官方示例里有 `34903,-1.666…` 这种没有名字前缀的字段；解析要能忽略不认识的字段（我们数 `UnknownCount`） |
+| `___iFacialMocap` 只属 TCP | UDP 帧没有这个后缀（§6.2） |
+| 额外尾部字段 | 官方示例里有 `34903,-1.666…` 这种没有名字前缀的字段，还有 `trackingStatus` 这种没写语义的键；解析要能忽略不认识的字段（我们数 `UnknownCount`） |
 | 手机端 IP | 需要用户手填 iOS 设备 IP；端口固定 49983 |
+
+**仍未确认**（不要在代码里当已知量用）：head/leftEye/rightEye 的**欧拉角轴序与旋转方向**、
+**坐标系手性与原点**、head 后三个位置值的**单位**、`trackingStatus` 的取值语义、
+**逐键机型门槛表**（Apple 只有整体要求 + `tongueOut` 的 iOS 12.0，没有"哪个键要哪颗芯片"的官方矩阵）、
+UDP 载荷上限、每帧键数是否有任何保障。
 
 ---
 
