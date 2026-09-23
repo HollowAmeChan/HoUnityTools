@@ -26,6 +26,7 @@
 - [面捕的 OSC / VRCFT 后端：调查保留](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：未来后端的调查（Av3Emulator 能力清单、VRCFT 链路、`forceRelevant`、OSCQuery 与发现过滤）。**首期没接 VRCFT**，留着是为了将来别重查一遍。
 - [ARKit `mouthClose` 调查报告](archive/arkit-mouthclose-report.md)：一次性调查，结论已体现在中间层行为里。
 - [VBridger 的中间层：一手逆向记录](archive/VBRIDGER_MIDDLE_LAYER_RESEARCH.md)：同类最成熟产品的存档格式（16 字符循环 XOR）、一行输出的全部字段、表达式语言与函数表、UI 词汇、输入曲线与校准的分层，以及它给我们的八条启示。**我们中间层的形状就是照它定的。**
+- [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md)：十份自带预设逐行统计出来的词汇表 —— **输入**（104 个规范名 + 每个数据源一张改名表：iFacialMocap `_L/_R`／FaceMotion3D `Left`／VTS `Left` 首字母大写；15 个 SAPI viseme 的连续 + `_abs` 两条线；音频、头姿、全身骨链、`faceFound`）与**输出**（喂 VTS 就用它的追踪参数白名单 24 个、喂 VMC/VRM 就用 ARKit 原名、其余是自定义驼峰名），以及十种反复出现的映射公式与取值约定。**要对接下游时照这张表。**
 
 文档中的 Warudo 结论以 Warudo Mod Tool 0.14.4.8 和 Unity 2021.3.45f2 的实际构建结果为准。SDK 或 Unity 版本变化后，应重新检查构建日志和生成的 `.warudo` 内容。
 
