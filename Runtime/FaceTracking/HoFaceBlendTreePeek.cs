@@ -60,12 +60,18 @@ namespace Hollow.HoUnityTools.FaceTracking
             + "显示的是 live 值；不变 = 显示的是控制器默认值。")]
         public float secondLayerWeight = -1f;
 
+        [Tooltip("每秒抄几次。0 = 每帧。编辑器窗口自己都不是 60 帧刷新，写那么勤对显示没有意义；"
+            + "调低能直接减负（静止时尤其明显）。卡的话先把它调到 10 试试。")]
+        public int updatesPerSecond = 20;
+
         private readonly HashSet<string> copyable = new HashSet<string>(System.StringComparer.Ordinal);
+        private readonly Dictionary<string, float> lastWritten = new Dictionary<string, float>(System.StringComparer.Ordinal);
         private Animator animator;
         private Animator boundSource;
         private bool tightenNextFrame;
         private float currentX;
         private float currentY;
+        private float nextUpdateTime;
         private int copiedParameters;
         private GUIStyle boxStyle;
 
@@ -96,6 +102,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         private void Update()
         {
             if (animator == null) return;
+
+            // 限频：编辑器窗口不是 60 帧刷新的，每帧写一遍只是白干活（静止时更明显）。
+            if (updatesPerSecond > 0)
+            {
+                if (Time.unscaledTime < nextUpdateTime) return;
+                nextUpdateTime = Time.unscaledTime + 1f / updatesPerSecond;
+            }
 
             if (source == PeekSource.FollowSession)
             {
@@ -130,6 +143,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 // 以**来源**的参数表为准建"要抄的名单"。镜像挂的通常就是同一个 controller，名单自然一致。
                 copyable.Clear();
+                lastWritten.Clear();
                 foreach (var parameter in live.parameters)
                     if (parameter.type == AnimatorControllerParameterType.Float)
                         copyable.Add(parameter.name);
@@ -156,10 +170,16 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (parameter.type != AnimatorControllerParameterType.Float) continue;
                 if (!copyable.Contains(parameter.name)) continue;
                 float value = live.GetFloat(parameter.name);
-                animator.SetFloat(parameter.name, value);
-                copiedParameters++;
                 if (parameter.name == parameterX) currentX = value;
                 if (parameter.name == parameterY) currentY = value;
+
+                // 值没变就不写：静止的脸不该每帧都在弄脏 Animator（窗口那边是有代价的）。
+                if (lastWritten.TryGetValue(parameter.name, out float previous)
+                    && Mathf.Abs(previous - value) < 0.0001f)
+                    continue;
+                lastWritten[parameter.name] = value;
+                animator.SetFloat(parameter.name, value);
+                copiedParameters++;
             }
 
             // 层权重也要抄：树是按层求值的，层权重不同，看到的就不是真身。
@@ -186,7 +206,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (source == PeekSource.FollowSession)
             {
                 GUILayout.Label("模式：跟随会话　来源：" + (live != null ? live.name : "（没有正在生效的会话）"));
-                GUILayout.Label("已抄参数 " + copiedParameters + " / 名单 " + copyable.Count
+                GUILayout.Label("名单 " + copyable.Count + " 个参数　本次实际写入 " + copiedParameters
+                    + "　节奏 " + (updatesPerSecond > 0 ? updatesPerSecond + " Hz" : "每帧")
                     + (useRuntimeCopy ? "　（运行期复制）" : string.Empty));
                 GUILayout.Label("横轴 " + parameterX + " = " + currentX.ToString("F3")
                     + "　纵轴 " + parameterY + " = " + currentY.ToString("F3"));
