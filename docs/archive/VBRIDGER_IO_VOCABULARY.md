@@ -6,6 +6,10 @@
 > 我们自己那套中间层见 [面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)。
 > 逐行原始数据（10 份预设 × 314 行全量表、输入并集表、min/max/smooth 直方图）在
 > `.research/vbridger/VOCABULARY.md`（不进仓库），本文只留结论。
+> ⚠️ **本文 §5 的"下游标准"已升级**：现在有一份**逐行、逐条带官方 URL 的权威表** →
+> [参数标准表](../PARAMETER_STANDARDS.md)（VTS 追踪参数全表 + 注入规则 + Cubism 标准参数 +
+> ARKit 52 + iFacialMocap 线协议 + VMC 地址 + HumanBodyBones + VRM 0.x/1.0 + VRCFT 附录）。
+> 对接下游时**以那份为准**；本文提供的是"VBridger 当年怎么做"这一层证据。
 
 ## 0. 三句话结论
 
@@ -17,7 +21,8 @@
    —— 中间层必须**按下游分表**（这个坑是从它自己的预设里看出来的）。
 2. **Live2D 侧有两个命名空间，别混**：VTS 的**追踪参数**是固定的一套（插件可自由写，VBridger 用的就是它）；
    而 `ParamAngleX` / `ParamEyeLOpen` / `ParamMouthOpenY` 是**每个模型自己的参数 ID**，
-   官方 API **没有"直接写模型参数"的请求** —— 中间层应发**追踪参数**，让 VTS 自己的映射 / auto-setup 去对模型。
+   **VTS 插件协议没有"直接写模型参数"的请求**（Live2D 自己的 SDK 当然能直写，那是宿主程序内部的事）
+   —— 中间层应发**追踪参数**，让 VTS 自己的映射 / auto-setup 去对模型。
 3. **输入远不止 ARKit 52**：实测 10 份预设里出现 **104 个变量** —— ARKit（`_L/_R` 拼写）、头/眼姿态
    （`headRotX/Y/Z`、`headPosX/Y/Z`、`eyeLeftY`…）、**15 个 viseme**（`viseme_AA…` 连续值 + `viseme_AA_abs…`
    绝对值两条线）、`volume`，以及追踪健康位 `faceFound`。
@@ -138,7 +143,7 @@
 | --- | --- | --- |
 | **① 官方 VTS 追踪参数**（插件可自由写） | `FaceAngleX/Y/Z`、`FacePositionX/Y/Z`、`MouthOpen`、`MouthSmile`、`MouthX`、`Brows`、`BrowLeftY/RightY`、`EyeOpenLeft/Right`、`EyeLeftX/Y`、`EyeRightX/Y`、`TongueOut`、`CheekPuff`、`FaceAngry`、`Voice*`（+ 20 个手部参数） | 名字与语义由 VTS 定；官方清单见 [VTS wiki](https://github.com/DenchiSoft/VTubeStudio/wiki/VTS-Model-Settings)；⚠️ **`CheekPuff`/`FaceAngry` 只有 iOS、`TongueOut` 只有 iOS/Android** |
 | **② 它自己声明的自定义参数**（预设里大量用） | `BodyAngleX/Y/Z`、`BodyPositionX/Y/Z`、`BodyAngle`、`BodyPosition`、`JawOpen`、`MouthPucker`、`MouthFunnel`、`MouthShrug`、`MouthPressLipOpen`、`BrowInnerUp`、`Eye_Squint_L/R`、`EyeSquintLeft/Right` | 官方追踪清单里**没有**这些名字，靠 `ParameterCreationRequest` 自动登记（名字要唯一、字母数字、4–32 字符，`min/max/default` 只是"新建映射时的默认范围"、不是钳制） |
-| **③ 模型参数 `Param*`** | **一个都没有** | `ParamAngleX` / `ParamEyeLOpen` 是**每个模型自己的 ID**，而且**官方 API 没有直接写模型参数的请求** —— 所以 VBridger 一律发追踪参数，让 VTS 的映射/auto-setup 去对模型 |
+| **③ 模型参数 `Param*`** | **一个都没有** | `ParamAngleX` / `ParamEyeLOpen` 是**每个模型自己的 ID**，而且 **VTS 插件协议没有直接写模型参数的请求** —— 所以 VBridger 一律发追踪参数，让 VTS 的映射/auto-setup 去对模型 |
 
 预设里实际用到的名字与范围：
 
@@ -257,7 +262,7 @@
 | 下游 | 名字形态 | 例子 | 范围 | 谁定义 | 跨模型稳定性 |
 | --- | --- | --- | --- | --- | --- |
 | **VTS 追踪参数**（插件能写的） | PascalCase，无前缀 | `FaceAngleX`、`MouthOpen`、`EyeOpenLeft`、`EyeRightX`、`Brows`、`TongueOut`、`VoiceA`、`HandLeftFinger_2_Index` | 协议接受 `−1e6..1e6`；各参数 min/max/default 是**"新建映射时的默认上下限"**，官方只对语音类明示 `0..1`，其余用 `InputParameterListRequest` 现取 | **VTubeStudio**（官方 Wiki），插件只能读不能增删清单 | **高**，但**平台相关**：`CheekPuff`/`FaceAngry` 仅 iOS，`TongueOut` 仅 iOS/Android |
-| **VTS 模型参数**（`Param*`） | `Param` + PascalCase，**每个模型自己起** | `ParamAngleX`、`ParamEyeLOpen`、`ParamMouthOpenY`、`ParamMouthForm`、`ParamBodyAngleX`、`ParamBreath` | 逐模型自定义；Cubism 标准表只是**惯例**（`ParamAngle*` `±30`、`ParamEye*Open` `0/1/1`、`ParamMouthOpenY` `0..1`、`ParamMouthForm` `−1..1`、`ParamBodyAngle*` `±10`） | **模型作者**（Cubism Editor）；Live2D 官方只给 Standard Parameter List 约定，非强制 | **低**。⚠️ **官方 API 没有直接写模型参数的请求** —— 只能写追踪参数，让用户在 VTS 里映射；「参数名遵守 Cubism 标准表」的价值是 **VTS auto-setup 一键映射** |
+| **VTS 模型参数**（`Param*`） | `Param` + PascalCase，**每个模型自己起** | `ParamAngleX`、`ParamEyeLOpen`、`ParamMouthOpenY`、`ParamMouthForm`、`ParamBodyAngleX`、`ParamBreath` | 逐模型自定义；Cubism 标准表只是**惯例**（`ParamAngle*` `±30`、`ParamEye*Open` `0/1/1`、`ParamMouthOpenY` `0..1`、`ParamMouthForm` `−1..1`、`ParamBodyAngle*` `±10`） | **模型作者**（Cubism Editor）；Live2D 官方只给 Standard Parameter List 约定，非强制 | **低**。⚠️ **VTS 插件协议没有直接写模型参数的请求** —— 只能写追踪参数，让用户在 VTS 里映射；「参数名遵守 Cubism 标准表」的价值是 **VTS auto-setup 一键映射** |
 | **VMC / VRM**（Blend） | 就是**接收模型自己的 blend 名**；面捕场景的事实标准 = **ARKit 52 的 camelCase** | `eyeBlinkLeft`、`jawOpen`、`mouthSmileLeft`；最小公共集是 VRM0 预设名 `A/I/U/E/O`、`Blink_L/R` | VMC 协议**不给范围**；VRM 1.0 规定 Expression `[0-1]` **并要求实现 clamp**；VRM0 绑定权重惯例 `[0,1]` | **VRM spec**（名字语义 + `[0,1]`）+ **Apple ARKit**（52 名）；接收应用自己决定映射（Warudo 提供 ARKit/MMD/VRM 三选一） | **中**：名字稳定，但**模型必须真做了这些 blend**；大小写敏感；VRM0 预设名与 VRM1 不同名，要按 spec 的映射表转 |
 | **VMC**（Bone） | `UnityEngine.HumanBodyBones` 的**类型名** | `Head`、`Neck`、`LeftEye`、`RightEye`、`Hips`、`Spine` | 位置 = 米（局部），旋转 = 四元数 | **Unity / VRM humanoid 骨骼定义** | **高**（名字固定），但**骨骼是否存在**看模型（眼骨、指骨可选） |
 | **VRM 1.0 Expression** | 小写预设名，自定义放 `expressions.custom` | `happy`、`angry`、`sad`、`relaxed`、`surprised`、`aa/ih/ou/ee/oh`、`blink`、`blinkLeft/Right`、`lookUp/Down/Left/Right`、`neutral` | **`[0-1]`，规范要求 clamp**（整个生态里唯一被规范写死的值域）；`isBinary` 阈值 0.5 | **VRM Consortium** | **最高**（规范级），但**只有 17 个预设**，做不了面捕细节 |

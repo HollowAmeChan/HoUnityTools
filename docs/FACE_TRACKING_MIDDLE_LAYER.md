@@ -143,4 +143,4 @@
 | **每行的 `min`/`max` 声明** | 不单独声明：**曲线关键点的范围就是定义域**，超出按端点算（VBridger 那份声明主要是给 VTS 报参数范围） |
 | **区域门控做成一行** | 不做：它是"这块算不算数"的**参数**，要能被别的东西驱动（会话、用户自己的层、以后的菜单） |
 | **组件上直接编辑配置** | 不做：配置文件有自己的窗口，组件那栏只留引用与摘要（职责单一） |
-| **对接下游平台的名字与范围**（VTS / VMC-VRM / Live2D `Param*`） | 本期不做，但**已经查清**：见 [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md) —— 喂 VTS 就用它那 24 个追踪参数（眼 0.5 中性、嘴 −1..1、角度用度），喂 VMC/VRM 就用 ARKit 原名；它那十种公式我们的"表达式 + 曲线"都能表达 |
+| **对接下游平台的名字与范围**（VTS / VMC-VRM / Live2D `Param*`） | 本期不做，但**已经查清**：逐行权威表见 [**参数标准表**](PARAMETER_STANDARDS.md)（官方 URL 逐条核对）—— 喂 VTS 就写它的**追踪参数**（`FaceAngleX`/`MouthOpen`…，不是 `Param*`），喂 VMC/VRM 就写 **ARKit 52**；VBridger 那十种公式我们的"表达式 + 曲线"都能表达（见 [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md)） |
