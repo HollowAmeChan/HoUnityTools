@@ -5,7 +5,7 @@
 ## 文档
 
 - [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 六步接线、面板五个分区各回答什么（栏名不带序号）、什么会写盘、排查清单。
-- [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：中间层做什么（增益/死区/平滑/双眼同步/区域门控/轴生产）、顺序、判据，以及**哪些处理是隐式的**。
+- [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：中间层做什么、**为什么它必须存在**（树表达不了的非线性与记忆）、一列输出行 = `参数名 = 曲线(表达式) + 有序修饰符`、配置文件格式、输入曲线与门控的分工。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
 - [面捕控制器结构：Jerry 模板 vs 我们的做法](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：参考实现的三层结构、一棵 Direct 树管整张脸、**模板（树形）+ 动画文件夹（姿势）+ 驱动对象（写谁）→ 装配**，以及「Direct 树 + 写默认值关闭会发散」的判别性实验。
 - [编辑器面捕调试组件设计](FACE_TRACKING_DEBUGGER_DESIGN.md)：机制层（影子台、占用表、为什么不用 PlayableGraph）。**状态与 UI 部分已过期**，看前三份。
@@ -25,6 +25,7 @@
 - [面捕混合树入门与 Jerry ARKit 模板使用](archive/FACE_TRACKING_TEMPLATE_GUIDE.md)：讲 Jerry 现成模板的用法；我们改成装配模型后，作业流程部分不再适用，但"模板里长什么样"仍是对照材料。
 - [面捕的 OSC / VRCFT 后端：调查保留](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：未来后端的调查（Av3Emulator 能力清单、VRCFT 链路、`forceRelevant`、OSCQuery 与发现过滤）。**首期没接 VRCFT**，留着是为了将来别重查一遍。
 - [ARKit `mouthClose` 调查报告](archive/arkit-mouthclose-report.md)：一次性调查，结论已体现在中间层行为里。
+- [VBridger 的中间层：一手逆向记录](archive/VBRIDGER_MIDDLE_LAYER_RESEARCH.md)：同类最成熟产品的存档格式（16 字符循环 XOR）、一行输出的全部字段、表达式语言与函数表、UI 词汇、输入曲线与校准的分层，以及它给我们的八条启示。**我们中间层的形状就是照它定的。**
 
 文档中的 Warudo 结论以 Warudo Mod Tool 0.14.4.8 和 Unity 2021.3.45f2 的实际构建结果为准。SDK 或 Unity 版本变化后，应重新检查构建日志和生成的 `.warudo` 内容。
 

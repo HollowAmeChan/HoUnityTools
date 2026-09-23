@@ -339,21 +339,25 @@ Domain Reload 开/关、退出 Play Mode、脚本重编译、场景卸载、组�
 
 ```text
 Runtime/FaceTracking/
-  HoFaceTrackingDebugger.cs        角色组件：Animator、面部 Controller、混合树模板、动画文件夹、驱动对象列表、输出分组、输入通道
-  HoFaceTrackingChannels.cs        52 项 ARKit 键名、协议别名（_L/_R）与区域归类
+  HoFaceTrackingDebugger.cs        角色组件：Animator、面部 Controller、混合树模板、动画文件夹、驱动对象、中间层配置、输入通道
+  HoFaceTrackingChannels.cs        52 项 ARKit 键名、协议别名（_L/_R）、区域归类与**输入通道**（模式 / 中性 / 输入曲线）
+  HoFaceExpression.cs              表达式求值器（递归下降；语法照 VBridger：函数表 / 惰性 if / 非有限折 0）
+  HoFaceMiddleware.cs              **中间层的数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；以及内置默认表
+  HoFaceProfile.cs                 中间层配置文件的读写（我们自己的 JSON：format/version + 曲线关键点）
   HoFaceOutputOwnership.cs         键级占用表：(Renderer, blendShapeIndex) → owner
 Editor/FaceTracking/
   HoFaceTrackingWindow.cs          全局面板：手机 IP、连接状态、参数监视、姿态监视、角色会话
-  HoFaceTrackingDebuggerEditor.cs  角色 Inspector：五个分区、52 路输入表、绑定检查、装配、动画填充折叠框
+  HoFaceTrackingDebuggerEditor.cs  角色 Inspector：五个分区、52 路输入表（含输入曲线）、绑定检查、装配、动画填充折叠框
+  HoFaceProfileWindow.cs           **面捕配置窗口**：左边行列表，右边选中行的表达式 / 曲线 / 修饰符
   HoFaceInputHub.cs                全局服务：UDP 接收、最新值、会话注册表、连接设置持久化
   IFacialMocapReceiver.cs          UDP 49983：先绑定再握手、来源校验、最新帧缓存与计数
   IFacialMocapPacket.cs            数据报解析：v1/v2、区域文化无关、拒绝 NaN/Inf
   HoFaceAnimationAssets.cs         装配（复制模板 + 填动画文件夹 + 重绑驱动对象）与预览编译（临时 OverrideController + 过滤后的临时 Clip）
-  HoFaceAnimationSession.cs        影子求值台、输入门控、键拥有权、写回与停止恢复
+  HoFaceAnimationSession.cs        影子求值台、输入整形、中间层求值（表达式 → 曲线 → 修饰符）、键拥有权、写回与停止恢复
 Editor/AnimationTools/              通用动画工具（不属于面捕；面捕只是它们的用户）
   HoBlendShapeClipBuilder.cs        形态键基础动画：每个键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）
   HoBlendShapeClipBuilderWindow.cs  它的窗口（菜单 HoUnityTools/形态键基础动画）
-Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（104 条断言）
+Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（121 条断言）
 ```
 
 网络接收和调试启动只存在于编辑器流程，组件随角色导出时不自动开端口。由于本仓库还服务 Warudo 构建，添加新 Runtime 组件时需验证 FastBuild 对组件和程序集的收集；正式运行时面捕宿主另定范围。
@@ -407,7 +411,7 @@ P0–P2 构成第一版可用的 **iFacialMocap 直连面捕调试组件**。完
 
 ## 11. 仍须实测的事项
 
-已完成的验证：独立 Unity 6000.3 工程里用**本地回环 UDP** 替代手机，跑通了协议解析、接收器、装配（模板整份复制 / 按槽位填文件夹动画 / 外部片段复制 / 重绑驱动对象 / 覆盖不改 GUID / 缺槽位如实报出）、形态键基础动画生成器（一个键一份片段、一个片段写多网格、重跑不改 GUID）、绑定重映射、混合树求值、输入门控、键占据与交还、停止恢复，**104 条断言全绿**。
+已完成的验证：独立 Unity 6000.3 工程里用**本地回环 UDP** 替代手机，跑通了协议解析、接收器、装配（模板整份复制 / 按槽位填文件夹动画 / 外部片段复制 / 重绑驱动对象 / 覆盖不改 GUID / 缺槽位如实报出）、形态键基础动画生成器（一个键一份片段、一个片段写多网格、重跑不改 GUID）、**中间层配置文件**（表达式求值器、曲线、Smooth 修饰符、JSON 读写往返、UDP → 配置 → 混合树整条链）、绑定重映射、混合树求值、输入门控、键占据与交还、停止恢复，**121 条断言全绿**。
 
 仍然不是既成结论的：
 

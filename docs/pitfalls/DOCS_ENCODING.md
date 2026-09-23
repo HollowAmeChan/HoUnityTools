@@ -49,6 +49,17 @@ $t = [IO.File]::ReadAllText($f, [Text.Encoding]::UTF8)
 - 非要脚本批量改，就把脚本**写成文件**（同样是 UTF-8）再执行，别内联。
 - 改完随手扫一眼那几行：`Select-String -Path <file> -Pattern '<你改过的关键词>'`。
 
+### 2.2 脚本文件（`.ps1`）里的中文：写成 ASCII 最省事
+
+症状：一个带中文注释与中文字符串的 `.ps1` 跑起来报
+`字符串缺少终止符: "`（或者中文全变成 `涓?` 这种）。
+
+原因：**PowerShell 5.1 按 ANSI/GBK 读没有 BOM 的 `.ps1`** —— `.md` 我们是特意带 BOM 的，
+`.ps1`/`.cs` 又不带，于是同一个"UTF-8 无 BOM"在这里就成了 bug。
+
+怎么办：**`.research/` 下的一次性脚本一律写成纯 ASCII**（注释也英文）；
+真要写中文，就给 `.ps1` 加 BOM。`.cs` 不受影响（编译器按 UTF-8 读）。
+
 ## 3. 控制台里的乱码**通常不是文件坏了**
 
 `Get-Content` / `git show` / Unity 日志在默认代码页下会把正常的 UTF-8 中文显示成
