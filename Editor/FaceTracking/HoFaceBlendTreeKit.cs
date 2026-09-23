@@ -43,11 +43,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>
         /// N×M 的 2D FreeformCartesian 树（两条轴长度可以不同）。
         /// <paramref name="pose"/> 的参数是（片段, 第一条轴的下标, 第二条轴的下标）。
+        ///
+        /// 两个可选口子，都是为了让**真正的调用方**（生成器）能用它，而不是各写一份：
+        /// <paramref name="clipName"/> 决定片段叫什么（生成器的名字要编码方阵与刻度，不能写死成 "i x j"）；
+        /// <paramref name="obtain"/> 用来**复用已存在的片段**（幂等：反复应用不该每次新建一堆子资产），
+        /// 返回 null 就新建。复用的片段会先被清空曲线，再按规矩重写。
         /// </summary>
         public static BlendTree Grid2D(AnimatorController controller, Animator animator, string name,
             string parameterX, string parameterY,
             IList<float> axisX, IList<float> axisY,
-            IList<HoPoseKey> keys, Action<AnimationClip, int, int> pose)
+            IList<HoPoseKey> keys, Action<AnimationClip, int, int> pose,
+            Func<int, int, string> clipName = null, Func<string, AnimationClip> obtain = null)
         {
             if (controller == null) throw new InvalidOperationException("先指定控制器。");
             if (string.IsNullOrWhiteSpace(parameterX) || string.IsNullOrWhiteSpace(parameterY))
@@ -68,7 +74,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 for (int j = 0; j < axisY.Count; j++)
                 {
-                    var clip = NewPose(controller, name + " " + i + "x" + j);
+                    string poseName = clipName != null ? clipName(i, j) : name + " " + i + "x" + j;
+                    var clip = obtain != null ? obtain(poseName) : null;
+                    if (clip == null) clip = NewPose(controller, poseName);
+                    else ClearCurves(clip);
+
                     Blank(clip, animator, keys);
                     pose?.Invoke(clip, i, j);
                     tree.AddChild(clip, new Vector2(axisX[i], axisY[j]));
@@ -142,6 +152,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var clip = new AnimationClip { name = name, frameRate = 60f };
             AssetDatabase.AddObjectToAsset(clip, controller);
             return clip;
+        }
+
+        /// <summary>复用一个已存在的片段：先把它的曲线清空（重置成"什么都没摆"），再交给调用方重写。</summary>
+        private static void ClearCurves(AnimationClip clip)
+        {
+            foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+                AnimationUtility.SetEditorCurve(clip, binding, null);
         }
 
         /// <summary>每个键先写 0：给归一化一个完整的权重基准，见类型注释。</summary>

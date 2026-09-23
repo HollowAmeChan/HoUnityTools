@@ -348,46 +348,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 「眯眼」那一格**自带 blink 90** —— 这就是它不出叠加的原因：树是插值、权重和恒为 1，
             // 合成结果永远不超过最强的那个姿势；而"每个键一个直通叶子"会相加。
             // 权重直接用区域门控（跟参考实现一样，靠共用门控隐式归组），所以不需要"恒为 1"的参数。
+            // 眼睑：一棵 3×2 的 2D 树（开合 × 眯眼）—— **树交给 Kit 造**，生成器只提供它不可能知道的三件事：
+            // 片段叫什么（名字要编码方阵与刻度，不能写死成 "i x j"）、这一格摆什么值、
+            // 片段已存在时怎么复用（幂等：反复应用不该每次堆一堆子资产）。
             for (int side = 0; side < 2; side++)
             {
                 string suffix = side == 0 ? "Left" : "Right";
                 if (!HasAny(groups, LidShape(suffix, "eyeBlink"), LidShape(suffix, "eyeWide"), LidShape(suffix, "eyeSquint")))
                     continue;
 
-                var lid = new BlendTree
-                {
-                    name = LidTreeName(side),
-                    blendType = BlendTreeType.FreeformCartesian2D,
-                    blendParameter = LidAxisName(side, true),
-                    blendParameterY = LidAxisName(side, false)
-                };
-                AssetDatabase.AddObjectToAsset(lid, controller);
+                var lid = HoFaceBlendTreeKit.Grid2D(controller, animator, HoFaceNaming.LidTree(side),
+                    LidAxisName(side, true), LidAxisName(side, false),
+                    LidGridX, LidGridY, null,
+                    (clip, x, row) =>
+                    {
+                        keep.Add(clip);
+                        WriteLidPose(clip, groups, suffix, LidPoses[x, row]);
+                    },
+                    (x, row) => HoFaceNaming.LidCell(side, x, LidRowStep(row)),
+                    clipName => existing.TryGetValue(clipName, out var found) ? found : null);
                 keep.Add(lid);
-
-                for (int pose = 0; pose < LidPoses.Length; pose++)
-                {
-                    var cell = LidPoses[pose];
-                    // 名字由 HoFaceNaming 统一给：<树>__<x语义>__<y语义>__<方阵>X<x>Y<y>。
-                    // 四段各回答一个问题：哪棵树 / X 轴在混什么 / Y 轴在混什么 / 哪一格
-                    // （坐标全正、左下为原点）。具体这格写哪几个键、各多少值，在文档 §5.2 的对照表里。
-                    string clipName = HoFaceNaming.LidCell(side, cell.X, cell.Y);
-                    if (!existing.TryGetValue(clipName, out var clip))
-                    {
-                        clip = new AnimationClip { name = clipName, frameRate = 60f };
-                        AssetDatabase.AddObjectToAsset(clip, controller);
-                    }
-                    else
-                    {
-                        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
-                            AnimationUtility.SetEditorCurve(clip, binding, null);
-                    }
-
-                    WriteLidPose(clip, groups, suffix, cell);
-                    keep.Add(clip);
-                    // 格点（轴值）由刻度推出来，不再手写坐标 —— 刻度是名字的一部分，两者不可能漂。
-                    lid.AddChild(clip, HoFaceNaming.LidPosition(cell.X, cell.Y));
-                }
-
                 AddChild(tree, lid, EyeGateName);
             }
 
@@ -446,29 +426,35 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
+        /// <summary>眼睑方阵 X 轴上的三个格点：睁大(−1) / 中性(0) / 闭(+1)。</summary>
+        private static readonly float[] LidGridX = { -1f, 0f, 1f };
+
         /// <summary>
-        /// 眼睑 2D 方阵（<see cref="HoFaceNaming.LidGrid"/>）里摆的六个姿势。前五格的数值来自参考实现
-        /// 五个片段的实测值（见文档 21.1）；**最后一格 `A3X2Y2` 闭+眯 是我们补的** —— 参考实现没有这一格，
-        /// 但它的参数范围可能让那个角到不了，而我们的两根轴是独立参数，**真的会到**
-        /// （"眨满 + 眯眼"就是过眨眼的工况）。不为能到达的角摆姿势，行为就交给引擎的边界行为。
-        ///
-        /// 这一格的含义：**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定。
-        /// 默认给 `blink 100 + squint 0`：两键加和正好 100，不再过闭合。
-        ///
-        /// **方阵不必铺满**：X 三档（睁大 / 中性 / 闭）走满，Y 只用了 `Y0`（不眯）与 `Y2`（眯满）两行，
-        /// 中间 `Y1`（半眯，轴值 0.5）空着 —— 空着的那行交给树插值。
-        ///
-        /// 字段：方阵刻度 X / Y（就是名字里的坐标，也是树里 <c>Pos</c> 的来源）、三个键的百分值。
-        /// <b>轴值不手写</b>，由刻度推（<see cref="HoFaceNaming.LidPosition"/>），两者不可能漂。
+        /// 眼睑方阵 Y 轴上**摆了姿势的**两个格点：不眯(0) / 眯满(+1)。
+        /// 中间那档（半眯 0.5）没摆 —— 方阵不必铺满，空着的那行交给树插值。
         /// </summary>
-        private static readonly (int X, int Y, float Blink, float Wide, float Squint)[] LidPoses =
+        private static readonly float[] LidGridY = { 0f, 1f };
+
+        /// <summary>
+        /// 摆了的第 <paramref name="row"/> 行在方阵里是第几刻度。**第 1 行是 `Y2` 而不是 `Y1`** ——
+        /// Y 轴三档里中间那档（半眯）没摆姿势，所以第二个摆了的格点落在刻度 2 上。名字必须说真话。
+        /// </summary>
+        private static int LidRowStep(int row) => row == 0 ? 0 : 2;
+
+        /// <summary>
+        /// 眼睑方阵里摆了的六格：<c>LidPoses[X 刻度 0..2, 行 0..1]</c>
+        /// （行 0 = `Y0` 不眯、行 1 = `Y2` 眯满；`Y1` 半眯没摆）。
+        ///
+        /// 前五格的数值来自参考实现五个片段的实测值（见文档 21.1）；**`A3X2Y2` 闭+眯 是我们补的** ——
+        /// 参考实现没有这一格，但它的参数范围可能让那个角到不了，而我们的两根轴是独立参数、**真的会到**
+        /// （"眨满 + 眯眼"就是过眨眼的工况）。这一格的含义是**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定：
+        /// 默认 `blink 100 + squint 0`，两键加和正好 100，不再过闭合。
+        /// </summary>
+        private static readonly (float Blink, float Wide, float Squint)[,] LidPoses =
         {
-            (0, 0, 0f, 100f, 0f),     // A3X0Y0 睁大
-            (1, 0, 0f, 0f, 0f),       // A3X1Y0 中性（X1 就是中线）
-            (2, 0, 100f, 0f, 0f),     // A3X2Y0 闭
-            (1, 2, 90f, 0f, 100f),    // A3X1Y2 眯（Y2 = 眯满；Y1 = 半眯，没摆）
-            (0, 2, 0f, 100f, 100f),   // A3X0Y2 睁大+眯
-            (2, 2, 100f, 0f, 0f)      // A3X2Y2 闭+眯
+            { (0f, 100f, 0f), (0f, 100f, 100f) },   // X0：睁大 / 睁大+眯
+            { (0f, 0f, 0f), (90f, 0f, 100f) },      // X1：中性 / 眯（眯自带 blink 90）
+            { (100f, 0f, 0f), (100f, 0f, 0f) }      // X2：闭 / 闭+眯
         };
 
         /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>
@@ -500,7 +486,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static void WriteLidPose(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
-            string suffix, (int X, int Y, float Blink, float Wide, float Squint) pose)
+            string suffix, (float Blink, float Wide, float Squint) pose)
         {
             WriteShape(clip, groups, "eyeBlink" + suffix, pose.Blink);
             WriteShape(clip, groups, "eyeWide" + suffix, pose.Wide);
