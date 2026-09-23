@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
@@ -25,15 +26,24 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// </summary>
     public enum HoFaceSmoothGroup { Eyelids, Gaze, Mouth, Other }
 
+    /// <summary>
+    /// 一路**输入**：源键 + 它怎么被整形。
+    ///
+    /// 注意这里**没有参数名、也没有增益标量**：参数名归中间层资产（输出行里那个 `parameter`），
+    /// 增益归下面这条**输入曲线** —— 这正是 VBridger 的 Input Curve："这张脸打不满 1，
+    /// 那就把 0.6 抬成 1"。它是**这台设备/这张脸**的校准，跟用哪份控制器模板无关，
+    /// 所以留在组件上、跨中间层保留。
+    /// </summary>
     [Serializable]
     public sealed class HoFaceChannel
     {
         public string shape;
-        public string parameter;
         public HoFaceInputMode mode;
         public float manual;
         public float neutral;
-        public float gain = 1f;
+        [Tooltip("输入曲线：横轴 = 原始输入（0..1），纵轴 = 整形后的输入（0..1）。\n"
+            + "打不满就把它抬起来；想压掉小抖动就在开头压平。范围之外按端点算。")]
+        public AnimationCurve inputCurve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
     }
 
     /// <summary>ARKit names, independent of the iFacialMocap wire spelling.</summary>
@@ -106,7 +116,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         public static List<HoFaceChannel> CreateDefaults()
         {
             var channels = new List<HoFaceChannel>();
-            foreach (string name in Names) channels.Add(new HoFaceChannel { shape = name, parameter = "ARKit/" + name });
+            foreach (string name in Names) channels.Add(new HoFaceChannel { shape = name });
             return channels;
         }
     }

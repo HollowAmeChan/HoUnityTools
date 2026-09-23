@@ -351,14 +351,69 @@ public static class HoFaceTrackingValidation
                 "single-key mode keeps one side and zeroes the other, so the deformation is applied once ("
                 + single[blinkLeft].ToString("F2") + " / " + single[blinkRight].ToString("F2") + ")");
 
-            // ── 响应整形（死区）：分组各自生效，且只吃实时输入 ────────────────────
-            rig.deadZoneMouth = 0.2f;
-            Near(rig.ApplySensitivity("jawOpen", 0.10f), 0f, "dead zone suppresses live input below the threshold", 0.001f);
-            Near(rig.ApplySensitivity("jawOpen", 0.60f), 0.5f, "dead zone rescales the rest of the range", 0.001f);
-            Near(rig.ApplySensitivity("eyeLookInLeft", 0.60f), 0.60f, "other groups keep their own (zero) dead zone", 0.001f);
-            Near(rig.ApplySensitivity("jawOpen", 1.00f), 1f, "dead zone keeps the top of the range at 1", 0.001f);
-            // 立刻复位：这几条是纯函数检查，留着会污染后面的实时阶段（raw 0.9 会被整形，等不到 90）。
-            rig.deadZoneMouth = 0f;
+            // ── 表达式求值器（语法照 VBridger）：变量、优先级、函数、惰性 if、非有限折 0 ──────
+            var facts = new System.Collections.Generic.Dictionary<string, float>(StringComparer.Ordinal)
+            {
+                { "eyeBlinkLeft", 0.6f }, { "eyeWideLeft", 0.7f }, { "jawOpen", 0.25f }, { "mouthClose", 0.5f }
+            };
+            Func<string, float> reads = name => facts.TryGetValue(name, out float v) ? v : 0f;
+            Check(HoFaceExpression.TryParse("eyeBlinkLeft - eyeWideLeft", out var axis, out _) && Mathf.Abs(axis.Evaluate(reads) + 0.1f) < 0.0001f,
+                "表达式能算双向轴（闭 − 睁大 = −0.1）");
+            Check(HoFaceExpression.TryParse("-2^2", out var power, out _) && Mathf.Abs(power.Evaluate(reads) + 4f) < 0.0001f,
+                "^ 比一元负号紧（-2^2 = −4，与数学一致）");
+            Check(HoFaceExpression.TryParse("clamp(1 - eyeBlinkLeft, 0, 1)", out var clamp, out _) && Mathf.Abs(clamp.Evaluate(reads) - 0.4f) < 0.0001f,
+                "函数可用（clamp(1 − blink) = 0.4）");
+            Check(HoFaceExpression.TryParse("sqrt(-1) + 5", out var finite, out _) && Mathf.Abs(finite.Evaluate(reads) - 5f) < 0.0001f,
+                "非有限结果折 0（sqrt(−1) 当 0，不污染整条算式）");
+            Check(HoFaceExpression.TryParse("jawOpen / (jawOpen - jawOpen)", out var divZero, out _) && Mathf.Abs(divZero.Evaluate(reads)) < 0.0001f,
+                "除零按 0 算");
+            Check(HoFaceExpression.TryParse("noSuchKey + 1", out var unknown, out _) && Mathf.Abs(unknown.Evaluate(reads) - 1f) < 0.0001f,
+                "未知变量按 0（不抛异常，面板另报名字）");
+            Check(!HoFaceExpression.TryParse("clamp(1, 2)", out _, out string syntaxError) && !string.IsNullOrEmpty(syntaxError),
+                "元数错在解析期就报错：" + syntaxError);
+            int lookups = 0;
+            Func<string, float> counting = name => { lookups++; return 1f; };
+            Check(HoFaceExpression.TryParse("if('jawOpen > 0.5', jawOpen, mouthClose)", out var lazy, out _)
+                && Mathf.Abs(lazy.Evaluate(counting) - 1f) < 0.0001f && lookups == 2,
+                "if('条件', 真, 假) 只算被选中的那支（另一支的变量一次都没取，" + lookups + " 次取值）");
+            // 别的血统那种加权式：VRCFT 的 EyeLid = 0.75·(1−blink) + 0.25·wide —— **一行就能表达**。
+            Check(HoFaceExpression.TryParse("0.75 - 0.75*eyeBlinkLeft + 0.25*eyeWideLeft", out var vrc, out _)
+                && Mathf.Abs(vrc.Evaluate(reads) - 0.475f) < 0.0001f,
+                "加权式不用专门的字段，表达式就够（VRCFT 的 EyeLid = 0.475）");
+
+            // ── 曲线与"一行输出"：范围之外按端点算（不外推）────────────────────────
+            var ramp = AnimationCurve.Linear(0.2f, 0f, 1f, 1f);
+            Near(HoFaceCurve.Transfer(ramp, 0.1f), 0f, "curve clamps below its first key", 0.0001f);
+            Near(HoFaceCurve.Transfer(ramp, 0.6f), 0.5f, "curve interpolates inside its key range", 0.0001f);
+            Near(HoFaceCurve.Transfer(ramp, 2f), 1f, "curve clamps above its last key instead of extrapolating", 0.0001f);
+            var curveRow = new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "jawOpen", curve = AnimationCurve.Linear(0f, 0f, 1f, 50f) };
+            Near(curveRow.Transform(0.6f), 30f, "一行输出用曲线换标度（60% → 30）", 0.01f);
+
+            // ── 默认中间层 + 配置文件读写（我们自己的 JSON）────────────────────────
+            var defaults = HoFaceMiddlewareDefaults.Create();
+            var parameterNames = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+            bool defaultsParse = true;
+            foreach (var output in defaults.outputs)
+            {
+                if (!parameterNames.Add(output.parameter)) defaultsParse = false;
+                if (!HoFaceExpression.TryParse(output.expression, out _, out _)) defaultsParse = false;
+            }
+            Check(defaults.outputs.Count == 56 && defaultsParse,
+                "默认中间层 = 52 个 ARKit 直通 + 4 根眼睑轴，表达式全部可解析（" + defaults.outputs.Count + "）");
+
+            string profileJson = HoFaceProfile.Write(defaults);
+            Check(profileJson.Contains("\"format\": \"ho-face-middleware\"") && profileJson.Contains("jawOpen") && profileJson.Contains("keys"),
+                "写出来的是带 format 头的可读 JSON");
+            Check(HoFaceProfile.TryParse(profileJson, out var roundTrip, out _)
+                && roundTrip.outputs.Count == defaults.outputs.Count
+                && roundTrip.outputs[0].parameter == defaults.outputs[0].parameter
+                && roundTrip.outputs[0].curve.length == defaults.outputs[0].curve.length,
+                "写出去再读回来是一致的（行数 + 参数名 + 曲线关键点）");
+            Check(HoFaceProfile.TryParse("{\"outputs\":[{\"parameter\":\"ARKit/jawOpen\",\"expression\":\"jawOpen\",\"modifiers\":[{\"kind\":\"nope\"}]}]}",
+                out var forgiving, out string kindError) && forgiving.outputs.Count == 1
+                && kindError != null && kindError.Contains("nope"),
+                "认不出的修饰符 kind 会被点名，而不是静默丢掉");
+            Check(!HoFaceProfile.TryParse("{ not json", out _, out _), "坏 JSON 报错，不会变成一张空表");
 
             // ── 果冻：一维弹簧的纯函数行为（"过冲"就是果冻的定义，所以直接断言它）────────
             var jelly = new HoFaceJellyState();
@@ -692,43 +747,95 @@ public static class HoFaceTrackingValidation
                     + "  —— 同样一个 Direct 树，只是 WD Off；如果这里发散，说明"
                     + "「Direct 树 + WD Off」才是不可用的组合，而不是 Direct 本身有问题");
 
-                // ── 分组平滑：开着的时候真的在过滤，关掉（默认）的时候直通 ──────────
-                // 断言刻意做成不依赖帧率：用很大的时间常数，只要求"没一步到位"，再要求它单调逼近。
+                // ── 中间层配置文件端到端：一行一个输出（表达式 + 曲线 + 有序修饰符）──────────
+                // 走完整条路：写文件 → 导入 → 组件读 → 会话求值 → 参数 → 影子混合树 → 真模型。
+                // 断言刻意做成不依赖帧率：Smooth 给 1 秒，只要求"没一步到位"、再要求它单调逼近。
+                string profileAssetPath = "Assets/ValidationProfile" + HoFaceProfile.Extension;
+                string profileFullPath = System.IO.Path.Combine(Application.dataPath, "ValidationProfile" + HoFaceProfile.Extension);
+                profileAsset = profileAssetPath;
+                profileFull = profileFullPath;
+                System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
+                {
+                    displayName = "validation",
+                    outputs = new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput
+                        {
+                            parameter = "ARKit/jawOpen", expression = "jawOpen",
+                            // 曲线是**参数值**（不是百分数）：参数直接当树的子权重，所以这里是 0..1。
+                            // 片段里那 100 是另一回事（树采的是姿势）。
+                            modifiers = new System.Collections.Generic.List<HoFaceModifier>
+                            {
+                                new HoFaceModifier { kind = HoFaceModifierKind.Smooth, seconds = 1.0f }
+                            }
+                        },
+                        new HoFaceOutput
+                        {
+                            parameter = "ARKit/mouthSmileLeft", expression = "mouthSmileLeft",
+                            curve = AnimationCurve.Linear(0f, 0f, 1f, 0.5f)      // 曲线换标度：手工 0.8 → 参数 0.4
+                        },
+                        new HoFaceOutput { parameter = "ARKit/eyeBlinkLeft", expression = "eyeBlinkLeft" }
+                    }
+                }), new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(profileAsset);
+                rig.profile = AssetDatabase.LoadAssetAtPath<TextAsset>(profileAsset);
+                rig.ReloadProfile();
+                Check(rig.Middleware != null && rig.Middleware.outputs.Count == 3,
+                    "组件从配置文件里读到了中间层（" + (rig.Middleware != null ? rig.Middleware.outputs.Count : -1) + " 行）");
                 HoFaceInputHub.Start(rig);
                 var smoothSession = HoFaceInputHub.Session(rig);
-                Check(smoothSession != null, "session started for smoothing test: " + HoFaceInputHub.Error(rig));
-                rig.smoothMouth = 1.0f;                 // jawOpen 属"嘴"组
-                Channel("jawOpen").manual = 1.0f;
+                Check(smoothSession != null, "session started for the profile test: " + HoFaceInputHub.Error(rig));
+                Channel("jawOpen").manual = 1.0f;       // 曲线 0..100 + Smooth 1s
                 Channel("jawOpen").mode = HoFaceInputMode.Manual;
+                Channel("mouthSmileLeft").manual = 0.8f;   // 曲线 0..50
+                Channel("mouthSmileLeft").mode = HoFaceInputMode.Manual;
                 stage++; frame = Time.frameCount + 3; return;
             }
             if (stage == 8)
             {
                 float transit = Weight("jawOpen");
                 smoothSampleA = transit;
-                Debug.Log("HO_SMOOTH transit=" + transit + " (目标 100，平滑开着就不该一步到位)");
+                var debugSession = HoFaceInputHub.Session(rig);
+                Debug.Log("HO_PROFILE: weight=" + transit.ToString("F2")
+                    + " param=" + (debugSession != null ? debugSession.OutputValue("ARKit/jawOpen").ToString("F4") : "?")
+                    + " (weight = 参数 × 片段里的 100；Smooth 1s 所以还没到位)"
+                    + " 目标 weight=100");
                 Check(transit > 0.01f && transit < 99.0f,
-                    "group smoothing filters instead of snapping (actual=" + transit + ")");
+                    "配置里的 Smooth 修饰符真的在过滤 (actual=" + transit + ")");
                 stage++; frame = Time.frameCount + 12; return;
             }
             if (stage == 9)
             {
                 float later = Weight("jawOpen");
-                Debug.Log("HO_SMOOTH later=" + later + " (应比 transit=" + smoothSampleA + " 更接近 100)");
-                Check(later > smoothSampleA, "group smoothing keeps converging (A=" + smoothSampleA + " B=" + later + ")");
-                rig.smoothMouth = 0f;                   // 关掉 = 直通，下一帧就该到位
+                Debug.Log("HO_SMOOTH later=" + later + " (应比 transit=" + smoothSampleA + " 更大：还在往目标爬)");
+                Check(later > smoothSampleA, "Smooth 修饰符持续收敛 (A=" + smoothSampleA + " B=" + later + ")");
                 stage++; frame = Time.frameCount + 3; return;
             }
             if (stage == 10)
             {
-                Near(Weight("jawOpen"), 100, "smoothing 0 means pass-through (no extra delay by default)");
+                Near(Weight("mouthSmileLeft"), 40, "曲线换标度：0.8 进去、参数 0.4、权重 40（这一行没有修饰符，立刻到位）");
+                float jaw = Weight("jawOpen");
+                Check(jaw > smoothSampleA && jaw < 99f,
+                    "1 秒的平滑还没到位（transit " + smoothSampleA.ToString("F1") + " → 现在 " + jaw.ToString("F1") + "）");
 
-                // 死区的端到端验证：走实时输入这条路（manual 滑杆本来就不该被死区吃）。
-                rig.deadZoneMouth = 0.2f;   // 纯函数那段已经复位过，这里自己显式设置
-                Channel("jawOpen").mode = HoFaceInputMode.Live;
-                HoFaceInputHub.Connect("127.0.0.2");
-                sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
-                Send("jawOpen-60|");
+                // 换成**没有修饰符**的同一份配置：立刻直通，证明"爬得慢"确实是那个修饰符干的。
+                System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
+                {
+                    displayName = "validation·no-modifier",
+                    outputs = new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "jawOpen" },
+                        new HoFaceOutput
+                        {
+                            parameter = "ARKit/mouthSmileLeft", expression = "mouthSmileLeft",
+                            curve = AnimationCurve.Linear(0f, 0f, 1f, 0.5f)
+                        },
+                        new HoFaceOutput { parameter = "ARKit/eyeBlinkLeft", expression = "eyeBlinkLeft" }
+                    }
+                }), new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(profileAsset);
+                rig.ReloadProfile();
+                Channel("jawOpen").manual = 1.0f;   // 还是手动 1.0：换配置之后应当**立刻**到位
                 stage++; frame = Time.frameCount + 4; return;
             }
             // ── 判别性实验：WD 开时，"默认值"到底是什么 ──────────────────────────
@@ -741,6 +848,15 @@ public static class HoFaceTrackingValidation
             // 另设一个对照：JellyEye 这个键根本不在树里，如果它也被动，说明 WD 会碰没被动画的属性。
             if (stage == 11)
             {
+                // 去掉修饰符之后直通：同一份配置、同一个输入，权重立刻到位。
+                Near(Weight("jawOpen"), 100, "去掉修饰符之后直通（参数 1.0 → 权重 100）");
+
+                // 实时输入那条路也在这里铺好：stage 17 会用它验证 UDP → 配置 → 混合树整条链。
+                Channel("jawOpen").mode = HoFaceInputMode.Live;
+                HoFaceInputHub.Connect("127.0.0.2");
+                sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
+                Send("jawOpen-60|");
+
                 zeroProbeRoot = new GameObject("WdZeroProbe");
                 var zeroBody = new GameObject("Body");
                 zeroBody.transform.SetParent(zeroProbeRoot.transform, false);
@@ -814,8 +930,8 @@ public static class HoFaceTrackingValidation
             if (stage == 17)
             {
                 Send("jawOpen-60|");
-                if (Mathf.Abs(Weight("jawOpen") - 50f) > 0.6f) return;   // 等它被驱动上来
-                Check(true, "dead zone reaches the written parameter through live input (raw 0.6 -> 50)");
+                if (Mathf.Abs(Weight("jawOpen") - 60f) > 0.6f) return;   // 等它被驱动上来
+                Check(true, "配置那条路端到端通了：UDP 0.6 → 表达式 → 曲线(0..100) → 参数 → 混合树 → 60");
                 HoFaceInputHub.Stop(rig);
                 HoFaceInputHub.Disconnect();
                 sender.Close(); sender = null;
@@ -839,6 +955,8 @@ public static class HoFaceTrackingValidation
     private static Animator zeroProbeAnimator;
     private static float atZeroWeight, controlWeight;
     private static float smoothSampleA;
+    /// <summary>中间层配置文件在工程里的路径（写文件用）/ 磁盘全路径（ImportAsset 用）。</summary>
+    private static string profileAsset, profileFull;
     private static bool receiverSkipped;
 
     private static float ZeroWeight(string shape) =>

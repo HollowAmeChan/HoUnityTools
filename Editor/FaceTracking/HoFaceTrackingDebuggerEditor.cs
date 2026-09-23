@@ -249,51 +249,43 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
             }
 
-            // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
-            // **这一栏是为长大准备的**：以后新的整形（ramp / 抑制 / 轴合并 / 模式开关）都加在这里，
-            // 别塞回上面那两栏 —— 上面两栏回答"接到哪""写什么"，这里回答"值怎么被加工"。
+            // ── 参数生产：中间层配置，一行一个输出 ────────────────────────────────
+            // **这一栏回答"值怎么被加工"**：输入侧（模式 / 输入曲线 / 中性）+ 双眼同步在这里，
+            // 真正的"参数生产"（一列 `参数 = 曲线(表达式) + 有序修饰符`）在我们自己的配置文件里，
+            // 由「面捕配置」窗口编辑 —— 那一层跟控制器模板成对，跟这台角色无关。
             if (HoConstraintEditorSectionGui.DrawSectionHeader(ref middleExpanded, "参数生产", MiddleSummary(rig),
                 HoConstraintEditorTheme.AccentDriver))
             using (HoConstraintEditorControls.Card())
             {
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("分组平滑", HoConstraintEditorTheme.LabelWidth,
-                        "每组一个指数平滑时长（秒）；0 = 不过滤、直接透传。\n"
-                        + "眼球要跟得紧、眼睑要稳、嘴更黏，所以分组而不是一个统一系数。\n"
-                        + "面板「面捕输入 → Controller 实值」两列就是平滑前 / 平滑后。");
-                    HoConstraintEditorControls.Label("眼睑", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("smoothEyelids").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothEyelids").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("眼球", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("smoothGaze").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothGaze").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("嘴", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("smoothMouth").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothMouth").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("其它", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("smoothOther").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("smoothOther").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
+                    HoConstraintEditorControls.Label("中间层配置", HoConstraintEditorTheme.LabelWidth,
+                        "一列输出行：参数名 = 曲线(表达式) + 有序修饰符。\n"
+                        + "它跟**控制器模板成对**（vrc-common 控制器配 vrc-common 中间层），所以在这里手选。\n"
+                        + "留空 = 内置默认（52 个 ARKit 直通 + 眼睑两根轴）。");
+                    serializedObject.FindProperty("profile").objectReferenceValue =
+                        EditorGUILayout.ObjectField(serializedObject.FindProperty("profile").objectReferenceValue,
+                            typeof(TextAsset), false);
+                    HoConstraintEditorControls.Gap(6.0f);
+                    if (HoConstraintEditorControls.Button("面捕配置",
+                        "打开配置窗口：预览每一行的表达式与曲线、直接改、保存回这个文件。", false, 76.0f))
+                        HoFaceProfileWindow.Open(rig.profile);
                     HoConstraintEditorControls.Flex();
                 }
 
-                using (HoConstraintEditorControls.Row())
+                // 只报"实事"：几行、哪些行的表达式用不了、哪些参数名重复、用到的键模型上有没有。
+                var loaded = rig.Middleware;
+                if (rig.profile == null)
                 {
-                    HoConstraintEditorControls.Label("分组死区", HoConstraintEditorTheme.LabelWidth,
-                        "低于它的实时输入按 0 处理，以上重新铺满 —— 压住静止时的抖动。0 = 关。\n"
-                        + "只作用在实时输入上；手动滑杆是调试用的，不受影响。\n"
-                        + "位置对齐参考实现的 OSCm/Sensitivity 分组。");
-                    HoConstraintEditorControls.Label("眼睑", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("deadZoneEyelids").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneEyelids").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("眼球", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("deadZoneGaze").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneGaze").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("嘴", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("deadZoneMouth").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneMouth").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Gap(4.0f);
-                    HoConstraintEditorControls.Label("其它", HoConstraintEditorTheme.LabelWidthSm);
-                    serializedObject.FindProperty("deadZoneOther").floatValue = HoConstraintEditorControls.NumberField(serializedObject.FindProperty("deadZoneOther").floatValue, null, null, HoConstraintEditorTheme.FieldWidthWide);
-                    HoConstraintEditorControls.Flex();
+                    HoConstraintEditorControls.Caption("用内置默认：52 个 ARKit 直通 + 眼睑两根轴。");
+                }
+                else if (loaded == null)
+                {
+                    HoConstraintEditorControls.Caption("⚠ 配置读不进来：" + rig.ProfileError);
+                }
+                else
+                {
+                    ProfileSummary(rig, loaded);
                 }
 
                 // 眼睑：**三种互斥档位**，不是两个独立开关。
@@ -432,28 +424,64 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 中间层摘要：**开着哪几类处理器**。中间层只会越长越多，所以它的摘要不列数值，
-        /// 只报"哪几件在干活"—— 一眼能看出"我现在到底加工了什么"。
+        /// 中间层摘要：**配置名 + 几行**，外加"这一层开着哪几件事"。
+        /// 中间层的本体在配置文件里（不在这栏的字段上），所以摘要不再列数值。
         /// </summary>
         private static string MiddleSummary(HoFaceTrackingDebugger rig)
         {
-            var parts = new List<string>();
-            if (rig.smoothEyelids > 0.0f || rig.smoothGaze > 0.0f || rig.smoothMouth > 0.0f || rig.smoothOther > 0.0f)
-                parts.Add("平滑");
-            if (rig.deadZoneEyelids > 0.0f || rig.deadZoneGaze > 0.0f || rig.deadZoneMouth > 0.0f || rig.deadZoneOther > 0.0f)
-                parts.Add("死区");
+            var loaded = rig.Middleware;
+            string name = loaded == null || string.IsNullOrEmpty(loaded.displayName) ? "内置默认" : loaded.displayName;
+            var parts = new List<string> { name + " " + rig.Outputs().Count + " 行" };
             if (rig.eyeSync) parts.Add(rig.eyeSyncSingleKey ? "双眼同步·单键" : "双眼同步");
+            if (rig.profile != null && loaded == null) parts.Add("⚠ 配置读不进来");
+            return string.Join(" · ", parts);
+        }
 
-            // 轴生产也是照着资产报的：控制器里真有那两根参数，写进去才算数。
+        /// <summary>
+        /// 配置摘要：**只报实事，不写散文**。行数、哪几行的表达式用不了、重复参数名、
+        /// 变量里不是标准 ARKit 键的（会被当 0）、控制器里没有那个参数名的、以及还没实现的修饰符。
+        /// </summary>
+        private static void ProfileSummary(HoFaceTrackingDebugger rig, HoFaceMiddleware loaded)
+        {
+            int bad = 0, duplicate = 0, unknown = 0, delay = 0, noParameter = 0;
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var declared = new HashSet<string>(StringComparer.Ordinal);
             if (rig.faceController is AnimatorController controller)
-                foreach (var p in controller.parameters)
-                    if (p.name == HoFaceNaming.LidAxis(0, true))
-                    {
-                        parts.Add("眼睑轴");
-                        break;
-                    }
+                foreach (var parameter in controller.parameters) declared.Add(parameter.name);
 
-            return parts.Count == 0 ? "全部关" : string.Join(" · ", parts);
+            foreach (var row in loaded.outputs)
+            {
+                if (row == null) continue;
+                if (!seen.Add(row.parameter)) duplicate++;
+                if (declared.Count > 0 && !declared.Contains(row.parameter)) noParameter++;
+                if (row.modifiers != null)
+                    foreach (var modifier in row.modifiers)
+                        if (modifier != null && modifier.kind == HoFaceModifierKind.Delay && modifier.Active) delay++;
+
+                if (HoFaceExpression.TryParse(row.expression, out var parsed, out _))
+                {
+                    var names = new List<string>();
+                    parsed.CollectVariables(names);
+                    foreach (string shape in names)
+                    {
+                        if (HoFaceTrackingChannels.IndexOf(shape) < 0) unknown++;
+                        else keys.Add(shape);
+                    }
+                }
+                else
+                {
+                    bad++;
+                }
+            }
+
+            var parts = new List<string> { loaded.outputs.Count + " 行", keys.Count + " 个源键" };
+            if (bad > 0) parts.Add("⚠ " + bad + " 行表达式有错");
+            if (duplicate > 0) parts.Add("⚠ " + duplicate + " 个重复参数名");
+            if (unknown > 0) parts.Add("⚠ " + unknown + " 个变量不是标准 ARKit 键（按 0 算）");
+            if (noParameter > 0) parts.Add("⚠ " + noParameter + " 个参数名控制器里没有（会被跳过）");
+            if (delay > 0) parts.Add("⚠ " + delay + " 个「延迟」修饰符还没实现");
+            HoConstraintEditorControls.Caption(string.Join(" · ", parts));
         }
 
         /// <summary>
@@ -542,9 +570,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 else
                 {
                     string raw = HoFaceInputHub.ReceivedAt[index] > 0 ? HoFaceInputHub.Raw[index].ToString("F3") : "未收到";
-                    HoConstraintEditorControls.Caption("原值 " + raw + (session != null ? " → " + session.Effective[index].ToString("F3") : ""));
+                    HoConstraintEditorControls.Caption("原值 " + raw + (session != null ? " → " + session.Input[index].ToString("F3") : ""));
                     HoConstraintEditorControls.Flex();
                 }
+
+                // 输入曲线：横轴 = 原始输入（0..1），纵轴 = 整形后的输入。
+                // 这就是"这张脸打不满 1"的解法（VBridger 的 Input Curve）：点一下弹曲线编辑器。
+                var curve = channel.FindPropertyRelative("inputCurve");
+                EditorGUILayout.PropertyField(curve, GUIContent.none, GUILayout.Width(44.0f));
 
                 if (session != null)
                 {

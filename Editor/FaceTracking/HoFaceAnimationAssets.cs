@@ -427,17 +427,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
             var parameters = new Dictionary<string, AnimatorControllerParameterType>(StringComparer.Ordinal);
             foreach (var p in source.parameters) parameters[p.name] = p.type;
-            var usedParameters = new HashSet<string>(StringComparer.Ordinal);
             var usedShapes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var channel in rig.channels)
             {
                 if (channel == null || HoFaceTrackingChannels.IndexOf(channel.shape) < 0)
-                    throw new InvalidOperationException("参数映射必须使用标准 ARKit 键名。");
-                if (!usedShapes.Add(channel.shape)) throw new InvalidOperationException("重复形态键映射：" + channel.shape);
-                if (string.IsNullOrWhiteSpace(channel.parameter)) throw new InvalidOperationException("参数名不能为空：" + channel.shape);
-                if (!usedParameters.Add(channel.parameter)) throw new InvalidOperationException("多个通道映射到同一参数：" + channel.parameter);
-                if (parameters.TryGetValue(channel.parameter, out var type) && type != AnimatorControllerParameterType.Float)
-                    throw new InvalidOperationException("面捕参数必须是 Float：" + channel.parameter);
+                    throw new InvalidOperationException("输入通道必须使用标准 ARKit 键名。");
+                if (!usedShapes.Add(channel.shape)) throw new InvalidOperationException("重复的输入通道：" + channel.shape);
+            }
+
+            // 参数名现在由**中间层配置**声明（控制器只是等着被喂）。这里只做实事的检查：
+            // 同名参数被两行写 = 后写者覆盖前者（说出来，不拦）；类型不是 Float 时 SetFloat 会失败。
+            var written = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var output in rig.Outputs())
+            {
+                if (output == null || string.IsNullOrWhiteSpace(output.parameter)) continue;
+                if (!written.Add(output.parameter))
+                    Debug.LogWarning("[Ho 面捕] 中间层里有两行写同一个参数：" + output.parameter + "（后一行会覆盖前一行）");
+                if (parameters.TryGetValue(output.parameter, out var type) && type != AnimatorControllerParameterType.Float)
+                    Debug.LogWarning("[Ho 面捕] 参数不是 Float，写不进去：" + output.parameter);
             }
 
             var result = new HoFaceCompiledController();

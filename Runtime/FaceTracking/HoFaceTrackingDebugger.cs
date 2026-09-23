@@ -27,21 +27,12 @@ namespace Hollow.HoUnityTools.FaceTracking
             + "某个键在这些网格里谁都没有时，那条曲线原样留着不动（作者的格子数据不丢），"
             + "但那些格子落不到任何网格上 —— 面板的结构摘要会列出来。")]
         public List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
+        [Tooltip("中间层配置（我们自己的 `.hoface.json`）：一列输出行 = 参数名 + 曲线(表达式) + 有序修饰符。\n"
+            + "它跟着控制器模板走（vrc-common 控制器配 vrc-common 中间层），在这里**手选**；\n"
+            + "面板上的「面捕配置」按钮可以直接打开窗口预览与编辑。留空 = 内置默认。")]
+        public TextAsset profile;
         [Min(0.1f)] public float staleSeconds = 1f;
         [Min(0.01f)] public float neutralFadeSeconds = 0.2f;
-        [Tooltip("分组指数平滑的时长（秒）。0 = 不过滤、直接透传 —— 默认就是 0，避免和手机侧自带的处理叠出额外延迟。"
-            + "眼球要跟得紧、眼睑要稳、嘴更黏，所以分三组而不是一个系数。")]
-        public float smoothEyelids;
-        public float smoothGaze;
-        public float smoothMouth;
-        [Tooltip("眉、脸颊、鼻子等剩下的键。")]
-        public float smoothOther;
-        [Tooltip("分组死区：低于它的（实时）输入按 0 处理，以上的部分重新铺满 0..1。用来压住静止时的抖动。0 = 关。\n"
-            + "位置对齐参考实现的 OSCm/Sensitivity 分组，但具体曲线没有逐位复刻 —— 这一版先做死区这个最有用的整形。")]
-        public float deadZoneEyelids;
-        public float deadZoneGaze;
-        public float deadZoneMouth;
-        public float deadZoneOther;
         [Tooltip("双眼同步（强制同眨）：把左右眼合成一个值再写回去。\n"
             + "有些模型的左右眨眼键**各自都能闭双眼**（美术为了不让两只眼睛闭合程度不一致），"
             + "左右一起触发就会过眨眼 —— 这时打开它。\n"
@@ -57,42 +48,51 @@ namespace Hollow.HoUnityTools.FaceTracking
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
 
-        /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
-        public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
-
-        /// <summary>某一组的死区。只作用在**实时输入**上；手动滑杆是调试用的，不该被它吃掉。</summary>
-        public float DeadZone(HoFaceSmoothGroup group)
+        /// <summary>这台角色要跑的那套输出行：指了配置文件就用它，否则用内置默认。</summary>
+        public List<HoFaceOutput> Outputs()
         {
-            switch (group)
-            {
-                case HoFaceSmoothGroup.Eyelids: return deadZoneEyelids;
-                case HoFaceSmoothGroup.Gaze: return deadZoneGaze;
-                case HoFaceSmoothGroup.Mouth: return deadZoneMouth;
-                default: return deadZoneOther;
-            }
+            var loaded = Middleware;
+            return loaded != null && loaded.outputs.Count > 0 ? loaded.outputs : HoFaceMiddlewareDefaults.Outputs();
         }
 
         /// <summary>
-        /// 响应整形（灵敏度）：死区以下归 0，以上重新铺满 0..1。
-        /// 静止时面捕总有几十分之一的抖动，死区是压住它最直接的手段。
+        /// 读进来的配置文件（<c>null</c> = 没指配置 / 读失败，那时用内置默认）。
+        /// 解析按"资产实例 + 文本长度"缓存：窗口写完文件后会调 <see cref="ReloadProfile"/>。
         /// </summary>
-        public float ApplySensitivity(string shape, float value)
+        public HoFaceMiddleware Middleware
         {
-            float dead = Mathf.Clamp(DeadZone(HoFaceTrackingChannels.SmoothGroup(shape)), 0f, 0.95f);
-            if (dead <= 0f) return value;
-            return value <= dead ? 0f : Mathf.Clamp01((value - dead) / (1f - dead));
-        }
-
-        /// <summary>某一组的分组平滑时长（秒）；0 = 直通。</summary>
-        public float SmoothSeconds(HoFaceSmoothGroup group)        {
-            switch (group)
+            get
             {
-                case HoFaceSmoothGroup.Eyelids: return smoothEyelids;
-                case HoFaceSmoothGroup.Gaze: return smoothGaze;
-                case HoFaceSmoothGroup.Mouth: return smoothMouth;
-                default: return smoothOther;
+                if (profile == null)
+                {
+                    loadedProfile = null;
+                    loadedFrom = null;
+                    profileError = null;
+                    return null;
+                }
+
+                if (loadedFrom == profile && loadedLength == profile.text.Length && loadedProfile != null) return loadedProfile;
+                loadedFrom = profile;
+                loadedLength = profile.text.Length;
+                loadedProfile = HoFaceProfile.TryParse(profile.text, out var parsed, out profileError) ? parsed : null;
+                return loadedProfile;
             }
         }
+
+        /// <summary>配置读不进来的原因（面板直接显示）；读了没问题就是 <c>null</c>。</summary>
+        public string ProfileError => profile == null ? null : profileError;
+
+        /// <summary>配置文件在磁盘上被改过之后叫它一次（窗口保存后调）。</summary>
+        public void ReloadProfile()
+        {
+            loadedFrom = null;
+            loadedProfile = null;
+        }
+
+        private HoFaceMiddleware loadedProfile;
+        private TextAsset loadedFrom;
+        private int loadedLength = -1;
+        private string profileError;
 
 #if UNITY_EDITOR
         public static event Action<HoFaceTrackingDebugger> EditorTick;

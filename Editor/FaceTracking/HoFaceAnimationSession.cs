@@ -27,9 +27,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public readonly HoFaceTrackingDebugger Rig;
         public HoFaceCompiledController Compiled { get; private set; }
         public readonly float[] Effective = new float[52];
-        /// <summary>分组平滑之后、真正写进控制器参数的值。面板上「Controller 实值」这一列读的就是它。</summary>
-        public readonly float[] Smoothed = new float[52];
+        /// <summary>输入侧整形之后的值（输入曲线 + 断流回中性 + 双眼同步）。**表达式读的就是它。**</summary>
+        public readonly float[] Input = new float[52];
+        /// <summary>每一行输出最后写出去的值（面板上「Controller 实值」这一列读它）。</summary>
         public readonly float[] ControllerValues = new float[52];
+        /// <summary>按参数名读某一行最后的输出值（用例与面板用；没有这一行时返回 <see cref="float.NaN"/>）。</summary>
+        public float OutputValue(string parameter) =>
+            parameter != null && outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
+        private readonly Dictionary<string, int> outputIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        /// <summary>某一行输出对应哪个通道（参数名正好是 `ARKit/&lt;键&gt;` 时）—— 面板的「实值」列用它。</summary>
+        private readonly int[] arkitRow = new int[52];
+        private HoFaceOutput[] outputs = new HoFaceOutput[0];
+        private HoFaceExpression[] expressions = new HoFaceExpression[0];
+        private float[] outputValues = new float[0];
+        private float[] outputSmooth = new float[0];
+        private int[] stepIndex = new int[0];
+        private double[] stepUntil = new double[0];
         private readonly HoFaceInputMode[] lastModes = new HoFaceInputMode[52];
         private readonly bool[] selected = new bool[52];
         private readonly float[] held = new float[52];
@@ -155,20 +168,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     case HoFaceInputMode.Neutral: Effective[index] = neutral; break;
                     case HoFaceInputMode.Release: break;
                     default:
-                        // 响应整形只作用在实时输入上：手动滑杆是调试用的，不该被死区吃掉。
-                        float live = Finite01(HoFaceInputHub.Raw[index] * channel.gain);
-                        float target = fresh ? Rig.ApplySensitivity(channel.shape, live) : neutral;
-                        Effective[index] = fresh ? target : Mathf.MoveTowards(Effective[index], neutral, deltaTime / fade);
+                        // 输入曲线只作用在实时输入上：手动滑杆是调试用的，不该被它整形。
+                        float live = HoFaceCurve.Transfer(channel.inputCurve, Finite01(HoFaceInputHub.Raw[index]));
+                        Effective[index] = fresh ? live : Mathf.MoveTowards(Effective[index], neutral, deltaTime / fade);
                         break;
                 }
                 nextSelected[index] = mayWrite && channel.mode != HoFaceInputMode.Release && (Rig.outputRegions & HoFaceTrackingChannels.Region(channel.shape)) != 0;
-                // 分组平滑：Effective 是目标，Smoothed 才是真正写进控制器的那一个。
-                // 只有**会话第一帧**做一次性初始化（免得开始时从 0 扫一遍）；之后一律走平滑。
-                // 不需要"重新接管就快照"—— Smoothed 每帧都在跟进 Effective，本来就不会离得太远。
-                float tau = Rig.SmoothSeconds(channel.shape);
-                Smoothed[index] = !primed || tau <= 0.0001f
-                    ? Effective[index]
-                    : Mathf.Lerp(Smoothed[index], Effective[index], 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / tau));
+                // 输入侧到此为止（模式 / 输入曲线 / 断流回中性）。**平滑不在这里** ——
+                // 它现在是每一行输出自己的修饰符（照 VBridger 的粒度）：要平滑哪一路就在那一行加。
+                Input[index] = Effective[index];
             }
             primed = true;
             for (int i = 0; i < selected.Length; i++)
@@ -183,21 +191,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 mappingStamp = stamp;
                 configured = true;
             }
-            foreach (var channel in Rig.channels)
-            {
-                int index = HoFaceTrackingChannels.IndexOf(channel.shape);
-                if (index < 0 || !parameters.Contains(channel.parameter)) continue;
-                shadow.SetFloat(channel.parameter, Smoothed[index]);
-                ControllerValues[index] = shadow.GetFloat(channel.parameter);
-            }
-            // 双眼同步：必须在"写参数"之前、平滑之后 —— 它作用在最终要被写出去的那组值上。
-            HoFaceEyeSync.Apply(Smoothed, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
+            // 双眼同步：跨眼合并作用在**输入**上，必须在表达式之前 —— 表达式读的就是这一组值。
+            HoFaceEyeSync.Apply(Input, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
 
-            // 眼睑 2D 树的两根轴：开合 = blink − wide（-1 睁大 / +1 闭），眯眼 = squint。
-            // **轴是"参数算术"，树做不到**（它只能消费参数），所以在这里算完再传进去。
-            // 参考实现也是这个分工：VRCFT 在外面产 Openness，模板里的 2D 树只负责姿势。
-            WriteLidAxis(0);
-            WriteLidAxis(1);
+            // ── 参数生产：每一行 = 曲线(表达式(源键…))，再走它自己那串有序修饰符 ──────────
+            // 这里**不再有**"某个键写某个参数"的硬编码：参数名与算法都在中间层资产里，
+            // 控制器里没有那个参数名就跳过（不猜也不补）。轴也是普通一行：
+            // `Ho/Drive/Lid/Left/BlinkWide = eyeBlinkLeft - eyeWideLeft`。
+            double frameNow = IFacialMocapReceiver.Now;
+            for (int row = 0; row < outputs.Length; row++)
+            {
+                var output = outputs[row];
+                if (output == null) continue;
+                float value = expressions[row] != null ? expressions[row].Evaluate(Lookup) : 0f;
+                value = output.Transform(value);
+                value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
+                outputValues[row] = value;
+                if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
+            }
+
+            // 面板的「Controller 实值」列：参数名正好是 `ARKit/<键>` 的行，就把它显示在那一行上。
+            for (int index = 0; index < arkitRow.Length; index++)
+                ControllerValues[index] = arkitRow[index] >= 0 ? outputValues[arkitRow[index]] : 0f;
 
             // 区域门控：把"这块驱动算不算数"写成一个**参数**（而不是靠重新生成控制器来切）。
             // 于是它也能被别的东西驱动 —— 用户自己的层、以后的菜单、AFK 之类。
@@ -207,27 +222,82 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
         }
 
+        /// <summary>表达式取变量：源键名 → 输入侧整形后的值。未知名字按 0（表达式求值器不抛异常）。</summary>
+        private float Lookup(string shape)
+        {
+            int index = HoFaceTrackingChannels.IndexOf(shape);
+            return index >= 0 ? Input[index] : 0f;
+        }
+
+        /// <summary>区域门控：参数在控制器里才写。</summary>
         private void WriteGate(string parameter, bool open)
         {
             if (!string.IsNullOrEmpty(parameter) && parameters.Contains(parameter))
                 shadow.SetFloat(parameter, open ? 1f : 0f);
         }
 
-        /// <summary>眼睑 2D 树的两根轴。blink 与 wide 合成一根 -1~1 的轴（+1 闭 / -1 睁大）。</summary>
-        private void WriteLidAxis(int side)
+        /// <summary>
+        /// 有序修饰符。按列出顺序生效（照 VBridger 的输出修饰符）：
+        /// 平滑 / 分档（延迟**还没实现**，面板会标出来）。
+        /// </summary>
+        private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now)
         {
-            string suffix = side == 0 ? "Left" : "Right";
-            int blink = HoFaceTrackingChannels.IndexOf("eyeBlink" + suffix);
-            int wide = HoFaceTrackingChannels.IndexOf("eyeWide" + suffix);
-            int squint = HoFaceTrackingChannels.IndexOf("eyeSquint" + suffix);
-            if (blink < 0 || squint < 0) return;
+            if (output.modifiers == null || output.modifiers.Count == 0) return value;
+            for (int i = 0; i < output.modifiers.Count; i++)
+            {
+                var modifier = output.modifiers[i];
+                if (modifier == null || !modifier.Active) continue;
+                switch (modifier.kind)
+                {
+                    case HoFaceModifierKind.Smooth:
+                        // 只有**会话第一帧**做一次性初始化，免得开场从 0 扫过来。
+                        outputSmooth[row] = !primed
+                            ? value
+                            : Mathf.Lerp(outputSmooth[row], value, 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / modifier.seconds));
+                        value = outputSmooth[row];
+                        break;
+                    case HoFaceModifierKind.Steps:
+                        value = Step(row, modifier, value, now);
+                        break;
+                    default:
+                        break;   // 延迟：数据留位，未实现（面板上标出来）
+                }
+            }
 
-            string horizontal = HoFaceNaming.LidAxis(side, true);
-            string vertical = HoFaceNaming.LidAxis(side, false);
-            if (parameters.Contains(horizontal))
-                shadow.SetFloat(horizontal, HoFaceAxis.LidOpenClose(Smoothed[blink], wide >= 0 ? Smoothed[wide] : 0f));
-            if (parameters.Contains(vertical))
-                shadow.SetFloat(vertical, Mathf.Clamp01(Smoothed[squint]));
+            return value;
+        }
+
+        /// <summary>
+        /// 分档：参数过 <c>trigger</c> 就跳到 <c>target</c>，往下掉超过 <c>threshold</c> 才退回去，
+        /// 触发后至少保持 <c>hold</c> 秒。没触发任何档时输出 0（等于隐含的"最小档"）。
+        /// </summary>
+        private float Step(int row, HoFaceModifier modifier, float value, double now)
+        {
+            var steps = modifier.steps;
+            if (steps == null || steps.Count == 0) return value;
+
+            int next = -1;
+            for (int i = 0; i < steps.Count; i++)
+                if (steps[i] != null && value >= steps[i].trigger) next = i;
+
+            int current = stepIndex[row];
+            if (current >= 0 && current < steps.Count && steps[current] != null)
+            {
+                if (now < stepUntil[row]) next = current;                       // 最短保持
+                else
+                {
+                    float release = steps[current].trigger - Mathf.Abs(steps[current].threshold);
+                    if (value >= release && next < current) next = current;      // 迟滞：没掉够就不退
+                }
+            }
+
+            if (next != current)
+            {
+                stepIndex[row] = next;
+                stepUntil[row] = next >= 0 && steps[next] != null ? now + Mathf.Max(0f, steps[next].hold) : 0.0;
+            }
+
+            return next >= 0 && steps[next] != null ? steps[next].target : 0f;
         }
 
         /// <summary>
@@ -254,12 +324,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // 于是生产者与消费者本来就都不属于状态机 —— 两头都在外面，它就该是一个组件。
 
         /// <summary>
-        /// 会话的"配置指纹"：换控制器、换驱动对象、改通道映射都算换了一份配置，要重建影子。
+        /// 会话的"配置指纹"：换控制器、换驱动对象、**换/改配置文件**都算换了一份配置，要重建影子与输出行。
+        ///
+        /// 配置文件是同一个 TextAsset 时，光看 `GetInstanceID()` 不够 —— 内容被改写（窗口保存、
+        /// 或者外部编辑器改了这个 .json）后实例可以不变。所以再带上"文本长度 + 解析出来的那个对象"
+        /// （`Rig.Middleware` 在长度变化或 <see cref="HoFaceTrackingDebugger.ReloadProfile"/> 之后会重新解析）。
         /// </summary>
         private string MappingStamp()
         {
             var text = new System.Text.StringBuilder();
-            foreach (var channel in Rig.channels) if (channel != null) text.Append(channel.shape).Append(':').Append(channel.parameter).Append(';');
+            text.Append("rows:").Append(Rig.Outputs().Count).Append(';');
+            var middleware = Rig.Middleware;
+            text.Append("profile:").Append(Rig.profile != null ? Rig.profile.GetInstanceID() : 0)
+                .Append(':').Append(Rig.profile != null ? Rig.profile.text.Length : 0)
+                .Append(':').Append(middleware != null ? middleware.GetHashCode() : 0).Append(';');
             text.Append("src:").Append(Rig.treeTemplate != null ? Rig.treeTemplate.GetInstanceID() : 0).Append(';');
             if (Rig.meshes != null)
                 foreach (var mesh in Rig.meshes)
@@ -267,8 +345,40 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return text.ToString();
         }
 
+        /// <summary>把当前的输出行编译成"求值用"的数组（表达式解析一次，状态数组按行开）。</summary>
+        private void BuildOutputs()
+        {
+            var rows = Rig.Outputs();
+            outputs = new HoFaceOutput[rows.Count];
+            expressions = new HoFaceExpression[rows.Count];
+            outputValues = new float[rows.Count];
+            outputSmooth = new float[rows.Count];
+            stepIndex = new int[rows.Count];
+            stepUntil = new double[rows.Count];
+            outputIndex.Clear();
+            for (int i = 0; i < 52; i++) arkitRow[i] = -1;
+            for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档
+            for (int i = 0; i < rows.Count; i++)
+            {
+                outputs[i] = rows[i];
+                if (rows[i] == null) continue;
+                if (HoFaceExpression.TryParse(rows[i].expression, out var parsed, out string error))
+                    expressions[i] = parsed;
+                else
+                    Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的表达式用不了（" + rows[i].parameter + "）：" + error);
+                if (!string.IsNullOrEmpty(rows[i].parameter) && !outputIndex.ContainsKey(rows[i].parameter))
+                    outputIndex[rows[i].parameter] = i;
+                string shape = rows[i].parameter != null && rows[i].parameter.StartsWith("ARKit/", StringComparison.Ordinal)
+                    ? rows[i].parameter.Substring("ARKit/".Length)
+                    : null;
+                int channel = HoFaceTrackingChannels.IndexOf(shape);
+                if (channel >= 0) arkitRow[channel] = i;
+            }
+        }
+
         private void Rebuild()
         {
+            BuildOutputs();
             var next = HoFaceAnimationAssets.Compile(Rig, shape => { int i = HoFaceTrackingChannels.IndexOf(shape); return i >= 0 && selected[i]; });
             try
             {
