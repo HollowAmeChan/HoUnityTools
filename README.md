@@ -49,4 +49,5 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 - [跟随约束坐标系规则](docs/FOLLOW_CONSTRAINT.md)
 - [眨眼约束设计（自动眨眼 + 果冻眼）](docs/BLINK_CONSTRAINT.md)
 - [注视约束设计（眼睛 + 头部看向目标）](docs/LOOKAT_CONSTRAINT.md)
-- [旧 Hotools 源码迁移说明](docs/MIGRATION.md)
+- [旧 Hotools 源码迁移说明](docs/archive/MIGRATION.md)
+- [踩过的坑（症状 → 原因 → 怎么办）](docs/pitfalls/README.md)

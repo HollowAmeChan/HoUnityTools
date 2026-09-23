@@ -52,22 +52,11 @@ GitHub 的 latest 链接本次指向 5.2.3.0，但该页明确说明此版本不
 
 依据：[VRCFT 发行页](https://github.com/benaclejames/VRCFaceTracking/releases/tag/5.2.3.0)、[master 版本](https://github.com/benaclejames/VRCFaceTracking/blob/6432e6a8d85fa7ec5115fc725c6abcb6dbdd4f35/Directory.Build.props)。
 
-## 3. Av3Emulator 值得借鉴的部分
+## 3. Av3Emulator 与 VRCFT：调查保留
 
-Av3Emulator 的 `LyumaAv3Osc` 提供网络接入，`LyumaAv3OSCSettings` 用 EditorWindow 展示设置并保存到 EditorPrefs；`LyumaAv3Runtime` 用 AnimatorControllerPlayable 和 AnimationLayerMixerPlayable 执行角色动画，并处理 VRC 特殊行为。
-
-| 已核对的能力 | 我们的取舍 |
-| --- | --- |
-| openSocket、disableOSC | 面板统一提供开始/停止接收，另设“暂停驱动”；两者语义分开 |
-| 本地 UDP 9000、出站 IP 127.0.0.1、出站 UDP 9001 | 借鉴收发方向的显示；这些端口留给未来 VRCFT，手机首期使用 49983 |
-| 目标 Avatar、转发给场景全部 Avatar | 选择角色组件；多角色显式订阅，首期默认一个活动角色 |
-| 本地绑定信息、消息计数、已知路径、观察到的最小/最大值 | 保留，并补充每条映射的状态与时间戳 |
-| resendAllParameters、Loopback 回复、逐消息日志 | 首期只借鉴可控日志；OSC 重发/回显不属于手机协议 |
-| Scene OSC Gizmo、发送者 IP 显示 | 参数表优先；空间 Gizmo 不作为首期重点 |
-| Animator To Debug、运行中检查参数与树 | 提供定位 Controller / State / Tree；独立 Playable 的参数必须从实际句柄读取 |
-| VRC 参数驱动、Tracking Control、本地/远端等模拟 | 保留为可选兼容后端；不让这些依赖进入核心 |
-
-源码：[OSC 组件](https://github.com/lyuma/Av3Emulator/blob/e015d6c94921cabda19cfdb119c15243fb3de93f/Runtime/Scripts/LyumaAv3Osc.cs)、[全局面板](https://github.com/lyuma/Av3Emulator/blob/e015d6c94921cabda19cfdb119c15243fb3de93f/Editor/LyumaAv3OSCSettings.cs)、[运行时](https://github.com/lyuma/Av3Emulator/blob/e015d6c94921cabda19cfdb119c15243fb3de93f/Runtime/Scripts/LyumaAv3Runtime.cs)。这是源码能力调查，不是本次已测试结论。
+这两块都是**未来后端**的调查，与首期的手机直连实现无关，已整段移入
+[面捕的 OSC / VRCFT 后端：调查保留（已归档）](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：
+Av3Emulator 的能力清单与取舍、VRCFT 的链路、`forceRelevant`、OSCQuery 与发现过滤那些。
 
 ## 4. 输入路线：首期手机直连，VRCFT 后置
 
@@ -110,29 +99,11 @@ Unity 先监听本机 UDP 49983
 
 依据：[iFacialMocap 官方通信协议](https://www.ifacialmocap.com/for-developer/)。手机侧填写电脑 IP 的替代流程需按实际 App 版本验证，首期使用上述官方 PC 发起方式。
 
-### 4.3 VRCFT 调查保留：不属于首期实施
+### 4.3 VRCFT：调查保留
 
-未来增加 VRCFT 时验证的链路：
-
-```text
-捕捉模块 → VRCFT → OSC UDP → Unity 127.0.0.1:9000 → 参数表
-                                ↑
-                   首先只看包，再启用角色输出
-```
-
-`FT` 是 Jerry 模板前缀，不是 VRCFT 固定协议前缀；路由需保留完整地址。VRCFT 还包含有符号视线、Bool 状态和 EyeLid 复合范围，不能复用首期 ARKit 的全零中性规则。
-
-**仅打开 Socket 不保证 VRCFT 发出角色所需参数。** 需要区分三个状态：模块没有数据、OSC 没到达、VRCFT 没把这些参数判为相关。
-
-可用的诊断路径是 VRCFT 中启用 Force Relevancy，用 Float 参数完成无角色配置联调；根据实际收到的前缀选择 Profile。此功能不提供二进制参数布局，也不能作为“完整原版 VRC 模板已兼容”的证明。优先让用户在 VRCFT 中切换，不在后台不透明地改对方全局设置。
-
-在核对的历史 5.2.3.0 标签中，`OscService` 使用默认入站 9001、出站 9000，并接受 `/vrcft/settings/forceRelevant` Bool；当前 master 也保留该命令，但网络服务和发现过程已重构。文档还特别提示 5.2.3.0 不应随意修改 OSC IP 或接收端口，故不能把“改 VRCFT IP/端口”写成通用教程。
-
-高级模式再做正常参数相关性/发现：从 Profile 发布目标参数集合、类型、默认值及角色标识。OSCQuery 需要 HTTP 数据树、HOST_INFO 和 mDNS 等配套；**不是多开一个 UDP 端口**。本次 master 的 `MulticastDnsService.ResolveVrChatClient` 还过滤 `VRChat-Client` / `ChilloutVR-GameClient` 服务名前缀，接收发现报文亦有限制。普通名为 HoUnityTools 的 OSCQuery 服务未必会被发现。
-
-因此未来“自动发现”需单独验证目标版本到底使用哪条发现路径、输出目的地是否随查询更新。若需要特定兼容服务名，应在界面标明，并验证与真 VRChat 同开时的选择行为。不改写真实 VRChat 用户目录或伪造用户已有 Avatar 配置。
-
-依据：[VRCFT 使用文档](https://docs.vrcft.io/docs/vrcft-software/vrcft)、[历史 OscService](https://github.com/benaclejames/VRCFaceTracking/blob/ad06f2967a2243d85ad161a397eb911522182c15/VRCFaceTracking.Core/OSC/OscService.cs)、[master OscQueryService](https://github.com/benaclejames/VRCFaceTracking/blob/6432e6a8d85fa7ec5115fc725c6abcb6dbdd4f35/VRCFaceTracking.Core/Services/OscQueryService.cs)、[发现过滤](https://github.com/benaclejames/VRCFaceTracking/blob/6432e6a8d85fa7ec5115fc725c6abcb6dbdd4f35/VRCFaceTracking.Core/mDNS/MulticastDnsService.cs)。
+链路、`forceRelevant`、OSCQuery 与发现过滤那些都移入了
+[面捕的 OSC / VRCFT 后端：调查保留（已归档）](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md) §2。
+一句话：**首期不接 VRCFT**；将来接的时候，别把它当成"多开一个 UDP 端口"。
 
 ## 5. 用户看到的组件与全局面板
 
@@ -140,33 +111,9 @@ Unity 先监听本机 UDP 49983
 
 挂在角色根或工具子物体上，显式选择 **Target Animator**。绑定根就是该 Animator 的 Transform；不允许随便选一个不一致的“根”而隐式更改 Unity 的绑定规则。
 
-```text
-Ho 面捕调试
-  角色 Animator        [Character]
-  面部控制器           [Face_ARKit.controller]
-  播放后自动驱动       [ ]
-  [全局连接面板] [生成 ARKit 控制器]
-  [检查绑定] [定位控制器资产]
-  [开始驱动 / 停止并交还动画]
-
-  【本节版面已过期（2026-09-23）：现在的面板是五栏 —— 接线 / 初始化 /
-   控制器输出参数设置 / 参数生产 / 输入参数（栏名不带序号），折叠只有一层，每栏内部只用 box 分块。
-   闸也变成了两个：眼（眼皮 / 眉）与 唇（嘴 / 脸颊），凝视单独一个。
-   见 [面捕工作流](FACE_TRACKING_WORKFLOW.md) 第 3 节。下面这段保留作历史。】
-  输出分工
-    ☑ 嘴与舌头  ☑ 眉毛  ☑ 脸颊与鼻子  ☑ 眼睑 / 眨眼
-    ☐ 凝视形态键（使用 LookAt 时关闭）
-    断流等待 / 回中性时长
-    路径重映射 / Body → Face
-
-  输入参数（52 路，可筛选）
-    每行：形态键 | 模式（实时 / 手动 / 保持 / 中性 / 交还）
-          原值 → 输入值 → Controller 实值
-    [全部实时] [全部手动] [全部中性]
-
-  输出实值 / 高级参数映射
-    每个绑定的路径/键名与当前权重；参数名 / 增益 / 中性值
-```
+**面板长什么样看 [面捕工作流](FACE_TRACKING_WORKFLOW.md) §3**（五个分区：接线 / 初始化 /
+控制器输出参数设置 / 参数生产 / 输入参数；栏名不带序号；折叠只有一层，每栏内部只用 box 分块）。
+这里只记组件这一层的两条约定：
 
 **驱动对象列表是必填项（2026-09-23 改）**：早先设计成"从 Clip 绑定和 Animator 根自动解析受影响对象、只把 Renderer 选择器当路径重映射的来源"，理由是"少一个必填项"。改成装配模型后**反过来**了：模板与动画文件夹里的曲线绑在**作者自己的层级**上（模板可能写 `Source/Face`、基础动画生成器按你的预制件写路径），**必须**由用户指定的网格列表来回答"这些动画写到谁身上"。于是路径重映射这一栏删掉了 —— 它做的事情被"装配时重绑"取代，而且做得更彻底（一个键可以扇出到列表里所有有这个键的网格）。
 
@@ -188,7 +135,9 @@ Ho 面捕调试
 
 当前实现的状态字面量是：**已停止 / 等待响应 / 接收中 / 已断流**，外加端口占用与接收异常的错误框。「无匹配参数」「暂停驱动」是后续要补的（暂停驱动与断开是两件事，现在只有断开）。基础协议未给出明确的人脸有效标志时，不根据全零表情声称「未检测到人脸」。UDP Socket 已打开不叫「设备已连接」。面板与 Inspector 各自按约 10 Hz 刷新，动画按 Unity 帧率执行，不因每个 UDP 包 Repaint。
 
-角色 Inspector 用同一套排版：标题行带状态胶囊（驱动中 / 播放中），**输出分工与 52 路参数各自折叠且默认收起**，通道同样压成一路一行，模式的五个选项用带 tooltip 的下拉。组件上必须直接填的字段（Animator、面部控制器、生成按钮）不放进折叠。
+角色 Inspector 用同一套排版：标题行带状态胶囊（驱动中 / 播放中），五个分区见
+[面捕工作流](FACE_TRACKING_WORKFLOW.md) §3，通道压成一路一行、模式用带 tooltip 的下拉。
+组件上必须直接填的字段（Animator、混合树模板、动画文件夹、驱动对象）不放进折叠。
 
 手机 IP 等本机连接设置放 `UserSettings/HoUnityTools/...`，角色映射 Profile 作为项目资产共享。一个端口只由全局服务打开一次，多个角色订阅同一来源；每个角色只允许一个活动驱动会话，防止多个窗口反复接管同一 Animator。
 
@@ -208,7 +157,11 @@ Ho 面捕调试
 - **必须同时做两件事**：先按程序路径禁用该 exe 的入站「阻止」规则，再加允许规则。因为「阻止」优先于「允许」，只加允许完全无效。
 - 提权走 `powershell -EncodedCommand`（base64），不拼命令行字符串 —— exe 路径带空格和括号，拼字符串在各种引号转义下迟早出错。
 
-这里踩过一个坑值得记下：把 `-Direction`/`-Action` 和 `-AssociatedNetFirewallApplicationFilter` 写在同一条 `Get-NetFirewallRule` 上，在 `-EncodedCommand` 下会 `ParameterBindingException`（而 `-File` 模式下会被 `-ErrorAction SilentlyContinue` 掩盖，看起来像是成功了）。所以脚本改成只按程序筛规则、方向和动作在客户端判断。**验证方式是不提权跑同一段脚本：它应该停在 `New-NetFirewallRule` 的「拒绝访问」，而不是停在参数绑定上。**
+这里踩过一个坑值得记下（**已收进 [踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §8**）：
+把 `-Direction`/`-Action` 和 `-AssociatedNetFirewallApplicationFilter` 写在同一条 `Get-NetFirewallRule` 上，
+在 `-EncodedCommand` 下会 `ParameterBindingException`（而 `-File` 模式下会被 `-ErrorAction SilentlyContinue` 掩盖，
+看起来像是成功了）。所以脚本改成只按程序筛规则、方向和动作在客户端判断。
+**验证方式是不提权跑同一段脚本：它应该停在 `New-NetFirewallRule` 的「拒绝访问」，而不是停在参数绑定上。**
 
 ## 6. 两级门控：参数选择与最终输出权限
 
@@ -418,7 +371,7 @@ Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（104 �
 > 2. 然后改成"按模板生成一棵 Direct 树 + 眼睑 2D 树"（模板是代码里的数据表）。**这一步也删了**：那等于在代码里重新发明一遍混合树编辑器，还得把"轴的值怎么算"这种中间层的事写进控制器。
 > 3. 现在是"**树是模板的、姿势是动画文件夹的、写谁是驱动对象列表的**"，代码只做装配。动画与模型解耦：装配按形态键名重绑，所以同一份动画可以用在任何模型上。
 >
-> 代价是诚实的：**我们不再保证控制器的形状**，面板因此改成**从资产读实况**（几层几个状态、写哪些键、哪些键模型上没有）。详见 [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5。
+> 代价是诚实的：**我们不再保证控制器的形状**，面板因此改成**从资产读实况**（几层几个状态、写哪些键、哪些键模型上没有）。详见 [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §3。
 
 凝视输出**默认也开**（LookAt 不是一定存在）；要不要把凝视让给 LookAt 由两边各自的开关决定。两边都开就是眼睛方向被写两遍、肉眼可见，**不做冲突检测** —— 检测要每帧扫一遍 LookAt 组件，为一个用户自己看得见的问题付这个代价不值得。眼睑默认保留；自定义额外键通过 Profile 配置。**运行预览所需的过滤副本（只含我们拥有的键）仅保存在内存**；落盘的只有装配产出/覆盖的那一个控制器文件与形态键基础动画那批片段。
 

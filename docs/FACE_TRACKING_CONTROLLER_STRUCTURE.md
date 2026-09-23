@@ -1,6 +1,6 @@
 ﻿# 面捕控制器结构：Jerry 模板 vs 我们的做法
 
-日期：2026-09-22（§5/§6 于 2026-09-23 按现状重写；§5 在删掉生成器后改成"模板 + 动画文件夹 → 装配"）。
+日期：2026-09-22（§3/§4 于 2026-09-23 按现状重写；§3 在删掉生成器后改成"模板 + 动画文件夹 → 装配"）。
 本文是**源码实测 + 一次判别性实验**的记录：参考实现怎么搭的、我们怎么把模板与现成动画装配成控制器、
 以及「Direct 树 + Write Defaults 关闭会发散」这条判别性实验。
 数据来自 `.research/VRCFaceTracking-Templates` 与 `D:\UnityVrcVCC_Projects\VrcMaster`（本地检出，gitignore）
@@ -72,49 +72,27 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 
 效果是"两眼要眨一起眨、要半闭一起半闭"，避免一只眼半闭时显得不协调。眼球注视方向也有一份同样的 `EyeSync In/Out`。
 
-## 2. 我们原来的生成器：一层一个形态键（已废弃）
+## 2. 判别性实验：Direct 树会不会削弱（2026-09-22）
 
-`HoFaceAnimationAssets.Generate` 曾经生成 **每个形态键一个独立 Override 图层**，每层一棵 Simple1D 树、两个片段（0 / 100）。一个 52 键的模型 ≈ **52 个图层 + 104 个片段**。
-
-代码里的理由是：
-
-> Independent Override layers avoid Direct-tree normalization and cross-channel attenuation.
-> （独立 Override 图层避免 Direct 树的归一化与通道间削弱）
-
-**这条理由是错的 —— 实测否掉了。**（第 5 节记录了替代实现与结果。）
-
-## 3. 判别性实验：Direct 树到底会不会削弱
-
-用例在 `Tests~/FaceTrackingValidation.cs`。同一个模型、同一个 Direct 树（1 图层、52 个子节点、每个子节点用自己的 ARKit 参数当权重），只改一个变量：
+早先我们以为"多个通道同时给会互相削弱"，于是给每个形态键开一个独立 Override 图层（52 键 ≈ 52 层 + 104 个片段）。
+**这条理由是错的**，同一个 Direct 树只改一个变量的实测：
 
 | 条件 | jawOpen（参数 0.6） | mouthSmileLeft（参数 0.8） | 结论 |
 | --- | --- | --- | --- |
-| **Direct + Write Defaults 开** | **60.0** | **80.0** | 精确等于 `参数 × 100`。**不归一化、不互相削弱** |
-| Direct + Write Defaults 关（干净物体） | 0 | 0 | 归零 |
-| Direct + Write Defaults 关（场景里有基础动画在写同一个键） | 98.98 → 246.28 → 1059.33 | 131.97 → 531.97 | **发散**：逐帧拿"当前值"当基准反复混合 |
+| **Direct + Write Defaults 开** | **60.0** | **80.0** | 精确 = `参数 × 100`：不归一化、不互相削弱 |
+| Direct + Write Defaults 关（没有别的写入者） | 0 | 0 | 归零 |
+| Direct + Write Defaults 关（基础动画也在写同一个键） | 98.98 → 246.28 → 1059.33 | 131.97 → 531.97 | **发散** |
 
-`98.976` 精确等于递推 `out ← 0.6×100 + 0.4×out` 的第五项，验证了机制：**Direct 树里权重和不足 1 的那部分 `(1 − Σw)` 会与"当前值"混合；写默认值关闭时这个"当前值"永远不会被复位，于是每帧往上爬，最终发散。**
+机制（`98.976` 精确等于递推 `out ← 0.6×100 + 0.4×out` 的第五项）与完整数字见
+[踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §1。结论两条：
 
-所以：
+- **Direct 树本身没问题** —— Unity 官方文档也明说 Direct 就是"把参数映射到子权重"，并点名可用于混合表情的形态键。
+- **不可用的组合是「Direct 树 + 写默认值关闭」**，而参考实现所有状态都是 WD 开 —— 这才是两边真正的分岔点。
 
-- **Direct 树本身没有问题**，Unity 官方文档也明说 Direct 就是用来 map 参数到子权重、并点名"可用于混合表情的形态键"（[Direct blending](https://docs.unity3d.com/6/Documentation/Manual/BlendTree-DirectBlending.html)）。
-- **不可用的组合是「Direct 树 + Write Defaults Off」。** 而 Jerry 的控制器**所有状态都是 WD 开** —— 这才是两边真正的分岔点。
+"必须 WD Off"来自早期**接管角色 Animator**的设计（那时 WD On 会把身体动画每帧复位）。
+改影子求值之后这条约束过期了：影子台是隔离的、没有别的写入者，WD On 完全无害 —— 图层数才能从 52 收到 1。
 
-## 4. 那我们的 52 个图层怎么评价
-
-**结论：不是"不合理"，但它是为一个已经被放弃的设计付的代价。**
-
-- 当初选多层，表面理由是"避免 Direct 归一化"——**这条已被实验否定**。
-- 真正的约束是：我们的管线**强制 Write Defaults 关闭**（`HoFaceAnimationAssets.Compile` 会拒绝 WD On）。在那条约束下 Direct 树确实不能用，`Simple1D + 独立 Override 层`是当时唯一可行的绕法。
-- 但那条约束来自**早期"接管角色 Animator、把身体层和面部层叠进同一个 PlayableGraph"的设计**。那套设计已经被实测否掉，改成了**影子求值**（见设计文档 7.1）。
-
-**关键推论：影子是隔离的，没有任何别的写入者。** WD On 会把控制器里出现过的属性每帧复位到默认值 —— 在共享 Animator 的旧设计里这会踩掉身体动画，但在只跑面部控制器的影子台上**完全无害**。也就是说：
-
-> **"必须 WD Off" 现在是一条过期约束。**
-
-放开它，就能换成 Jerry 那种结构，图层数从 52 降到 **1**。
-
-## 5. 现在的做法：模板 + 动画文件夹 + 驱动对象 → 装配（2026-09-23 改）
+## 3. 现在的做法：模板 + 动画文件夹 + 驱动对象 → 装配（2026-09-23 改）
 
 **代码不生成树，也不生成姿势。** 三件事分开，各归各的作者：
 
@@ -154,7 +132,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 **边界仍在**：运行期只允许形态键曲线；无 Behaviour、无同步图层、无事件/对象曲线（`Compile` 会拦）。
 模板带了这些时装配不拦，但**开始驱动时**会被拒，面板会说是哪一条。
 
-### 5.1 装配之后，谁负责什么
+### 3.1 装配之后，谁负责什么
 
 | 东西 | 谁管 |
 | --- | --- |
@@ -167,13 +145,13 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 **幂等**：装配是幂等的（反复装配结果一致）。换模板、换文件夹、改驱动对象列表，都只是再装配一次；
 把某个网格从列表里去掉，它上面的绑定也就没了 —— 键在别的网格上时不会留下孤儿绑定。
 
-**下面 §5.2 那张表不是"我们现在生成的形状"**，而是**编模板与姿势时的作者约定**（我们上一版生成器
+**下面 §3.2 那张表不是"我们现在生成的形状"**，而是**编模板与姿势时的作者约定**（我们上一版生成器
 就是照它出的，所以留着当参考）。这个仓库里没有 `ho-2d-test1.controller`：那份模板在作者手上，
 仓库只负责装配它。
 
-### 5.2 命名规则与对照表（**作者约定**，不是代码规则）
+### 3.2 命名规则与对照表（**作者约定**，不是代码规则）
 
-> 代码不再生产这些名字了（§5）：格子名与树名活在**混合树模板**里。这份约定留给编模板的人 ——
+> 代码不再生产这些名字了（§3）：格子名与树名活在**混合树模板**里。这份约定留给编模板的人 ——
 > `ho-2d-test1` 那份模板按它编，以后新编的树也照它编。**运行期只有参数名还被代码引用**
 > （会话要往 `Ho/Drive/Gate/*`、`Ho/Drive/Lid/*` 里写值，写之前先查参数在不在）。
 
@@ -268,27 +246,26 @@ LidL__BlinkWide__Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        �
 **归属不靠名字判断**：装配时按"驱动对象里谁有这个键"重绑，不靠树名/片段名认领 ——
 所以改名字不会漏掉任何东西（名字是模板与动画那侧的数据，按键名对得上就行）。
 
-## 6. 参考实现里我们抄了 / 还没抄的
+## 4. 参考实现里我们抄了 / 还没抄的
 
 | 参考实现的东西 | 我们 | 落在哪 |
 | --- | --- | --- |
-| **二维区域**（眼睑 `开合 × 眯眼` 五格姿势） | ✅ 抄了（我们那份模板的六格是它的直系后代） | 混合树模板（§5） |
+| **二维区域**（眼睑 `开合 × 眯眼` 五格姿势） | ✅ 抄了（我们那份模板的六格是它的直系后代） | 混合树模板（§3） |
 | **区域门控**（`EyeTrackingActive` / `LipTrackingActive`） | ✅ 抄了 | `Ho/Drive/Gate/*` 参数 + 两棵区域子树（模板里） |
 | **参数预处理链**（平滑 / 灵敏度 / 上下限） | ✅ 抄了，但**在树外面** | 中间层（[面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)） |
 | **EyeSync 式左右交叉混合** | ✅ 抄了语义，**实现放在 C#** | `HoFaceEyeSync`（VRCFT 也在 C#：`Correctors.BlendOpposingParams`） |
 | **耦合**：`SmileFrown` 同时驱动嘴角 / 脸颊 / 酒窝 | ✅ 已确认（资产A L207-218、L417-428） | 我们**没抄**：耦合留在中间层 / 模板里 |
-| `JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间 | ⚠️ **未能确认**：资产A 里以 `JawOpen` 为 blendParameter 的三处（L2052 / L10891 / L14791）都是 `m_BlendType: 0`（1D），那个 `m_BlendParameterY: …MouthClosed` 是 1D 树的**残留字段** | 我们没抄，也不需要 —— 见 §6.1 |
+| `JawOpen` 是 `(JawOpen, MouthClosed)` 的二维空间 | ⚠️ **未能确认**：资产A 里以 `JawOpen` 为 blendParameter 的三处（L2052 / L10891 / L14791）都是 `m_BlendType: 0`（1D），那个 `m_BlendParameterY: …MouthClosed` 是 1D 树的**残留字段** | 我们没抄，也不需要 —— 见 §4.1 |
 | **限制 / 修正**：若干子树外面套 `FaceTrackingLimits` | ❌ 没抄 | 中间层欠账 |
-| **眼球**：一棵 2D 树管四方向，坐标 **±0.7**（中性 `(0,0)`） | ✅ 已确认五姿势；Shinano 加对角共 **9 姿势** | ❌ 还没做（要加就加在混合树模板里，§6.1 有完整形状） |
+| **眼球**：一棵 2D 树管四方向，坐标 **±0.7**（中性 `(0,0)`） | ✅ 已确认五姿势；Shinano 加对角共 **9 姿势** | ❌ 还没做（要加就加在混合树模板里，§4.1 有完整形状） |
 
 后三条都是同一个处方的更多例子：**会重叠的语义进同一棵树 / 参数算术留在外面**
 （判据见 [混合树的能力边界](BLEND_TREE_LIMITS.md)）。
 
-### 6.1 成对通道与双向轴：一手取证（2026-09-23）
+### 4.1 成对通道与双向轴：一手取证（2026-09-23）
 
-**为什么单开一节**：我们文档里"参考实现怎么做"的结论，有一部分来自 `.research/` 里的**转储**，
-而这次取证发现**转储有两处会骗人**（见本节末尾）。所以下面每一条都回到**原始 YAML**（并用 `.meta`
-把 GUID 解成片段名）复核过，"我们的记录"与"原始资产"不一致的地方也标出来了。
+**为什么单开一节**：本节的结论来自 **原始 YAML**（并用 `.meta` 把 GUID 解成片段名），不是来自
+`.research/` 里的转储 —— 那些转储有两处会骗人，规矩见 [踩过的坑 · YAML 与转储](pitfalls/UNITY_YAML_AND_DUMPS.md)。
 
 一手资产（都在本机）：
 - **A** = `D:\Unity_Fork\HoUnityTools\.research\VRCFaceTracking-Templates\Packages\adjerry91.vrcft.templates\Animators\ARkit Blendshapes\FX - Face Tracking - ARKit Blendshapes.controller`
@@ -303,7 +280,7 @@ LidL__BlinkWide__Squint__A3X0Y0 睁大      …X1Y0 中性  …X2Y0 闭        �
 | ↳ 反例 | Shinano 把同一件事做成**一棵 4 姿势 1D**：thr `−0.8 / −0.1 / +0.1 / +0.8`（Min/Max 也收窄到 ±0.8） | C `Mouth Sad Smile Left` L20266-20306 | —— |
 | `eyeLookIn` / `eyeLookOut` | **压成一根水平轴，坐标对称 ±0.7**（不是 0..1 半轴） | A `Eye Look Left Blend` L2343-2397（`m_BlendType: 1` = SimpleDirectional2D） | 我们是直通叶子 |
 | `eyeLookUp` / `eyeLookDown` | **第二根垂直轴，同为 ±0.7，与水平轴同处一棵 2D 树（5 姿势）**；左右眼用不同水平轴，垂直轴**共用** | 同上；Shinano 加对角共 9 姿势（C L21526-） | 同上 |
-| `eyeBlink` / `eyeWide` | **不是 ±1 双向轴**：C# 先加成一根 **0..1 的"眼睑位置"** `EyeLid = Openness*0.75 + EyeWide*0.25` —— **中性落在 0.75**、闭眼 0、睁大 1.0；再与 `EyeSquint` 组成 FreeformCartesian2D（5 姿势：Blink `(0,0)` / Neutral `(0.75,0)` / Wide `(1,0)` / Squint `(0.25,1)` / OpenSquint `(0.75,1)`） | C# `UnifiedExpressionsParameters.cs` L57-58；A `Right Eye Lid Blend` L10898-10952 | **⚠️ 我们的眼睑轴是 ±1、中性在中间（`A3` 的 `X1`）**，与成熟做法**不同**（见 §6.1 末尾"待定"） |
+| `eyeBlink` / `eyeWide` | **不是 ±1 双向轴**：C# 先加成一根 **0..1 的"眼睑位置"** `EyeLid = Openness*0.75 + EyeWide*0.25` —— **中性落在 0.75**、闭眼 0、睁大 1.0；再与 `EyeSquint` 组成 FreeformCartesian2D（5 姿势：Blink `(0,0)` / Neutral `(0.75,0)` / Wide `(1,0)` / Squint `(0.25,1)` / OpenSquint `(0.75,1)`） | C# `UnifiedExpressionsParameters.cs` L57-58；A `Right Eye Lid Blend` L10898-10952 | **⚠️ 我们的眼睑轴是 ±1、中性在中间（`A3` 的 `X1`）**，与成熟做法**不同**（见 §4.1 末尾"待定"） |
 | N 通道 → 2 轴 → 一棵 2D 树 | **有，至少 4 个实例**（眼动 4→2；眼睑 3→2；`Brow Sad` 用左右两根双向轴；`Brow Sad Emulation` `(−0.7,−0.7)`） | A L2343 / L10898 / L3687-3742 | 我们只有眼睑这一棵 |
 
 **"合并出来的那个值是谁写的"这件事，成熟实现和我们架构一致（一手确认）**：`FT/v2/*` 由**外部
@@ -317,15 +294,10 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
 | 我们的说法 | 结论 |
 | --- | --- |
 | 归档 `FACE_TRACKING_PIPELINE_SPLIT.md:1249`「Shinano `SmileSadLeft/Right` 是 3 姿势双向 1D」 | ❌ **错**：Shinano 是 **4 姿势、阈值 −0.8/−0.1/+0.1/+0.8**（C L20266-20306） |
-| 本文 §6 旧版「`JawOpen` 是 `(JawOpen, MouthClosed)` 二维空间」 | ⚠️ **未能确认**（A 里那三处都是 1D + 残留 `m_BlendParameterY`） |
+| 本文旧版「`JawOpen` 是 `(JawOpen, MouthClosed)` 二维空间」 | ⚠️ **未能确认**（A 里那三处都是 1D + 残留 `m_BlendParameterY`） |
 | 归档 `arkit-mouthclose-report.md:446`「真正二维的树只有 `EyeRightX × EyeY` 与 `EyeLeftX × EyeY`」 | ✅ 确认（坐标 `(0.7,0)` / `(0,0.7)` / `(0,-0.7)`） |
 | `BLEND_TREE_LIMITS.md`「`OSCm/Proxy/v2/*` 那些 `*Smoother*` 是曲线驱动参数」 | ✅ 确认（空 path + `classID 95`） |
 | 全局左右合一的 `SmileSad`/`SmileFrown` | 参数在 C# 里存在（左右取平均），但**三个成熟控制器里没有一棵树消费它** —— 我们不用做 |
-
-**⚠️ 转储的两个坑（复现时必读，见 §7）**：`inspect_arkit_controller.py` 的 `thr=` 列**不打印 0 与 −1**，
-所以 3 子节点的 1D 树在转储里看起来像"两手两脚"；`inspect_bigtree.py` 打印的类型标签
-（`[1D]/[Simple1D]/[FreeDir2D]`）**与原始 `m_BlendType` 不符，不能引用**。
-凡是从这两个转储得出的形状结论，都要回原始 YAML 复核。
 
 **眼睑开合轴：跨血统一手指证（2026-09-23 第二批）**
 
@@ -348,7 +320,7 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
    **共同区间是 0.7–0.8，且轴一律是 `0..1`、`1 = 睁大`** —— **不是我们这种 `±1`、中性居中**。
 3. 同一个 0.75 有**三种来源**要分清：C# 公式给、作者摆坐标给、参数默认值给（同厂商内部都不一致）。
 
-⇒ 于是"照哪种血统编控制器"这件事被证据定住了。**代码里不再有预设**（模板那套已删除，见 §5），
+⇒ 于是"照哪种血统编模板"这件事被证据定住了。**代码里不再有预设**（模板那套已删除，见 §3），
 这三条留着是因为它们决定**你该抄谁的形状**：
 
 - **VRCFT 官方模板 ARKit 支**：每眼一根 `0..1`（中性 0.75）+ 5 姿势 `FreeformCartesian2D`（含 squint）。
@@ -368,24 +340,16 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
 
 **还待定的一件事**：`smile`/`frown` 用哪种形状 —— Jerry 的两棵半轴树（各 2 姿势）还是 Shinano 的一棵 4 姿势树（±0.8，Min/Max 也收窄）。
 
-## 7. 复现
+## 5. 复现
 
 ```powershell
 # 控制器结构（层 / 状态 / 树骨架 / 参数驱动 / 参数表）
 python .research/inspect_arkit_controller.py     # → .research/arkit-controller-report.txt
 python .research/inspect_shared_controller.py    # → .research/shared-controller-report.txt
 
-# 判别性实验（Direct 树 × Write Defaults）
-# 把 Tests~/FaceTrackingValidation.cs 放进一次性 Unity 工程的 Assets/Editor，
-# 跑 HoFaceTrackingValidation.RunBatch，看 HO_WDON / HO_WDOFF 两行
-# （同一份用例也覆盖装配：整份复制、外部片段复制、重绑驱动对象、覆盖不改 GUID）
+# 判别性实验（Direct 树 × Write Defaults）与装配那批断言，同一套用例
+# 跑法见 docs/pitfalls/VALIDATION_LOOP.md，结果看 HO_WDON / HO_WDOFF 两行
 ```
 
-踩过的解析坑：Unity YAML 里混合树的子节点字段是 `m_Childs`（不是 `m_Children`）、类型字段是 `m_BlendType`（不是 `m_Type`）；文档 id 在 `--- !u!206 &-123` 里，`&` 后面直接换行，不能用 `split(' ')` 截。
-
-**转储本身的两个坑（2026-09-23 取证时发现，别用它们下形状结论）**：
-- `inspect_arkit_controller.py` 的 `thr=` 列**不打印等于 0 与 −1 的阈值** → 一棵 3 子节点的 1D 树
-  在报告里看起来像"两手两脚"，据此会数错姿势。
-- `inspect_bigtree.py` 打印的类型标签（`[1D]` / `[Simple1D]` / `[FreeDir2D]`）**与原始 `m_BlendType` 不符**，
-  不可引用；要看类型请回原始 YAML。
-- 片段名要用 `.meta` 把 GUID 解回来（转储里只有 `{fileID: …, guid: …}`）。
+**解析这些 YAML 的坑（字段名、子资产、转储会骗人的地方）单开了一份**：
+[踩过的坑 · Unity YAML 与转储](pitfalls/UNITY_YAML_AND_DUMPS.md)。

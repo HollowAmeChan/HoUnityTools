@@ -5,14 +5,9 @@
 
 ## 为什么不用 `EditorGUILayout.*` 直接堆
 
-| 问题 | 表现 | 根因 |
-| --- | --- | --- |
-| 同一列在不同行宽度不同 | 面板看着"乱"，控件左右不对齐 | GUILayout 按**剩余宽度百分比**分配空间，label 默认吃掉面板 40% |
-| 一个 `0.35` 占半行 | 数字输入框被拉得很长 | 同上：字段是"可伸缩"的，没人给它定宽 |
-| 横条/滑杆铺满整行 | 一个标量占掉一行，纵向浪费 | Unity 的 `Slider` 天生铺满 |
-| 层次不清 | 标题、参数、读数、说明都是同一号灰字 | 没定义文字分级 |
+根因一条：`GUILayout` 按**剩余宽度百分比**分配空间，于是同一列在不同行宽度不同（label 默认吃掉面板 40%）、数字框被拉长、横条 / 滑杆天生铺满整行；再加上没有文字分级，标题 / 参数 / 读数 / 说明全是同一号灰字。所以面板里不再用自动布局排参数行，**每一行自己算矩形**。
 
-所以：**面板里不再用自动布局排参数行**，每一行自己算矩形。
+（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md)）
 
 ## 令牌（`HoConstraintEditorTheme`）
 
@@ -32,27 +27,33 @@
 分区强调色（网格蓝 / 眨眼绿 / 规则紫 / 调试灰）、读数色（驱动青 / 输出绿）、提醒橙、错误红。
 全部有浅色皮肤分支。
 
-样式：`Label / Value / Caption / Bold / SectionTitle / SectionSummary / Field / FieldMissing /
-NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / Card / CardAlt / IconButton`。
+样式：`Label / Value / Caption / Bold / Foldout / LabelDim / SectionTitle / SectionSummary / Field / FieldMissing /
+NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / Card / CardAlt / IconButton / CheckGlyph`
+（完整清单看 `HoConstraintEditorTheme.cs`）。
 
-贴图：运行时生成的 4×4（九宫格描边）与 64×1（分区头渐变），`HideFlags.HideAndDontSave`，**不落盘、不进包**。
+贴图：运行时生成的 4×4（九宫格描边）与 64×1（分区头渐变）。
+
+（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md)：自绘贴图用 `HideFlags.HideAndDontSave`，不落盘、不进包；字段上加 `[Header(...)]` 会被 `PropertyField` 再画一遍，标题重复两遍。）
 
 ## 控件（`HoConstraintEditorControls`）
 
+共 31 个 public 成员（含三个作用域类的 `Dispose`）；完整清单看 `HoConstraintEditorControls.cs`，常用的这些：
+
 | 控件 | 说明 |
 | --- | --- |
+| `Title(标题, 右侧文字, pills)` | 面板标题行，右侧可挂状态胶囊（`Pill`） |
 | `Section(ref bool, 标题, 摘要, 强调色)` | 28px 分区头：左侧 3px 色条 + 主色渐变 + 右摘要，整行可点折叠 |
 | `Card()` / `Card(alt)` | 1px 描边卡片，自动内边距；规则/目标各一张 |
 | `Row(tight)` / `Indent()` | 一行 / 一层缩进 |
-| `Next(w)` / `NextFlexible(min)` / `NextAuto(文字, 样式)` | 申请固定 / 伸缩 / 按内容宽度 |
+| `Next(w)` / `NextFlexible(min)` / `NextAuto(文字, 样式)` / `Flex()` / `Gap(w)` | 申请固定 / 伸缩 / 按内容宽度；`Flex` 吃掉行内剩余宽度，`Gap` 是控件间距 |
 | `Label / Caption / ValueText` | 三级文字 |
-| `NumberField(value, unit)` | 定宽数字格，单位画在尾部（不占输入区） |
+| `NumberField(value, unit)` / `IntField(rect, 值)` | 定宽数字格 / 整数格，单位画在尾部（不占输入区） |
 | `Toggle(文字, 值)` | 14px 方块 + 勾 |
-| `Segmented(rect, 下标, 选项)` | **2~4 个选项直接点**，比下拉少一次点击 |
-| `Dropdown(rect, 下标, 选项)` | 选项多时（如 ramp 预设 7 档）用菜单 |
+| `Segmented(rect, 下标, 选项)` / `SegmentedWidth(选项)` | **2~4 个选项直接点**，比下拉少一次点击；`SegmentedWidth` 算出所需宽度 |
+| `Dropdown(rect, 下标, 选项)` / `EnumControl(rect, 下标, 选项, segmented)` | 选项多时（如 ramp 预设 7 档）用菜单；`EnumControl` 按 `segmented` 在分段与下拉之间切换 |
 | `MiniSlider(值, min, max, 默认值)` | 10px 矮滑杆，拖动改值、双击回默认 |
 | `Meter(rect, 值, min, max, 色, ghost)` | 实时横条：单极从左长、双极从中轴长；`ghost` 画弹簧前的原始值刻度 |
-| `MeterRow(...)` | `标签 [横条] 数值` 一整套，固定宽度，可塞在行尾 |
+| `MeterRow(...)` / `MeterRowWidth(标签)` | `标签 [横条] 数值` 一整套，固定宽度，可塞在行尾 |
 | `KeyField(...)` | 键名输入 + ▾ 菜单 + **状态点**（绿点带绑定数 / 红叉 = 网格上没这个键） |
 | `Button / IconButton / InlineFoldout / Pill / Separator` | 其余零件 |
 
@@ -67,7 +68,5 @@ NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / C
 
 ## 迁移进度
 
-| 面板 | 状态 |
-| --- | --- |
-| `HoBlinkConstraintEditor` | ✅ 已按本系统重写 |
-| `HoLookAtConstraintEditor` / `HoPendulumConstraintEditor` | ⏳ 仍用旧的 `HoConstraintEditorSectionGui`（分区头 + `NarrowLabels`），后续迁移 |
+- 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoBlendShapeClipBuilderWindow`、`HoFaceTrackingDebuggerEditor`、`HoFaceTrackingWindow`（后两者仍用 `HoConstraintEditorSectionGui.DrawSectionHeader` 画分区头），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。
+- 仍走旧的 `HoConstraintEditorSectionGui`（分区头 + 栅格）：`HoLookAtConstraintEditor`、`HoPendulumConstraintEditor`、`HoFollowConstraintEditor`、`HoFloatingConstraintEditor`、`HoSpringConstraintEditor`。
