@@ -91,14 +91,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         if (curve.type != typeof(SkinnedMeshRenderer) || !curve.propertyName.StartsWith("blendShape.", StringComparison.Ordinal))
                             throw new InvalidOperationException("首版面部控制器只允许形态键曲线：" + clip.name + " / " + curve.propertyName);
                         string shape = curve.propertyName.Substring("blendShape.".Length);
-                        // **ARKit 的键走输入门控，非 ARKit 的键直接放行。**
-                        // 门控管的是"我们写哪些参数"，不是"控制器能动哪些键"：用户自己在 (EDIT THIS) 段里
-                        // 加的非 ARKit 键（自己摆的姿势、联动）如果没有这条放行，影子台上算出来的姿势就
-                        // 永远抄不回真模型 —— 表现是"那层看着在跑，脸上一动不动"。
-                        // 注：这条最早是果冻改走控制器混合树时暴露出来的；果冻后来搬回独立组件
-                        //（直接读写形态键），所以现在这条放行服务的对象是"(EDIT THIS) 里用户自己加的键"。
-                        if (HoFaceTrackingChannels.IndexOf(shape) >= 0
-                            && (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape)))) continue;
+                        // 只收我们那 52 个标准 ARKit 键：**整个控制器都是我们生成的**（没有用户层了），
+                        // 所以"非 ARKit 键直接放行"那条已经删掉 —— 它的消费者（用户自己加的键）不存在了。
+                        if (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape))) continue;
                         string path = Remap(rig, curve.path);
                         Transform node = path.Length == 0 ? rig.targetAnimator.transform : rig.targetAnimator.transform.Find(path);
                         var renderer = node != null ? node.GetComponent<SkinnedMeshRenderer>() : null;
@@ -178,6 +173,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public const string LayerPrefix = "Ho/";
         public const string DriveLayerName = "Ho/00 Drive";
         /// <summary>留给用户手工加逻辑的层。<b>应用改动时永不触碰它。</b></summary>
+        /// <summary>留给用户手工加逻辑的层。**已废弃**：整个控制器都是我们生成的，初始化只负责初始化，
+        /// 用户要改就自己备份一份去改（见 <see cref="Apply"/> 的注释）。这个常量只等面板与用例里的引用清完就删。</summary>
         public const string EditLayerName = "Ho/99 (EDIT THIS)";
 
         /// <summary>
@@ -237,20 +234,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 果冻那两个参数（Ho/JellyX · Ho/JellyY）**不再产出**：果冻已搬到独立的
                 // HoSpringConstraint，直接读写形态键，不再借道 Animator 参数（见 19.2 / 20 节）。
 
-                // 扩展点：空层 + 空片段，用户可以在这里加自己的树/耦合。应用改动时保留。
-                controller.AddLayer(EditLayerName);
-                var withEdit = controller.layers;
-                int editIndex = withEdit.Length - 1;
-                var editLayer = withEdit[editIndex];
-                editLayer.defaultWeight = 1f;
-                withEdit[editIndex] = editLayer;
-                controller.layers = withEdit;
-                var edit = editLayer.stateMachine.AddState("你的逻辑");
-                edit.writeDefaultValues = true;
-                var empty = new AnimationClip { name = "EDIT_THIS_Empty" };
-                AssetDatabase.AddObjectToAsset(empty, controller);
-                edit.motion = empty;
-
+                PopulateDriveTree(controller, animator, tree, template);
                 EditorUtility.SetDirty(controller);
                 AssetDatabase.SaveAssets();
                 return controller;
@@ -264,10 +248,29 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// 这是"组件 = 控制器的修改脚本"这句话的落点：反复应用不会吃掉用户的手工逻辑。
         /// </summary>
+        /// <summary>
+        /// 就地重写**整个文件**（GUID 不变，所以外部引用不会断）。
+        ///
+        /// **为什么是"整个文件"而不是"只重写驱动层"**：这个 .controller 是**独立的面捕控制器**，
+        /// 里面的一切都是我们生成的（扩展层 `(EDIT THIS)` 已删除）。只重写一层反而不干净 ——
+        /// 参数属于**整个控制器**而不是某一层，"这个公共参数是哪一层的"根本没法核对。
+        /// 所以约定很简单：**初始化只负责初始化**，用户改过什么不由我们判断，后果用户自己承担
+        /// （要自己改就先备份/另存一份，改了那份就别再对它初始化）。
+        /// </summary>
         public static void Apply(AnimatorController controller, Animator animator, HoFaceTemplateSpec template = null)
         {
             if (controller == null) throw new InvalidOperationException("先指定面部控制器。");
             if (animator == null) throw new InvalidOperationException("先指定角色 Animator。");
+
+            // 只保留驱动层：用户自己加的层、旧版本留下的扩展点，都属于"该被重写掉"的东西。
+            var layers = controller.layers;
+            if (layers.Length > 1)
+            {
+                Array.Resize(ref layers, 1);
+                layers[0].name = DriveLayerName;
+                controller.layers = layers;
+            }
+
             var tree = FindDriveTree(controller);
             if (tree == null)
                 throw new InvalidOperationException(
