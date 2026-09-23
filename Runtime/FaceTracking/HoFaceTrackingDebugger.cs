@@ -4,13 +4,6 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
-    [Serializable]
-    public sealed class HoFacePathRemap
-    {
-        public string sourcePath = "Body";
-        public SkinnedMeshRenderer target;
-    }
-
     /// <summary>Editor-only sessions subscribe to these callbacks. Exported players never open a socket.</summary>
     [DisallowMultipleComponent, DefaultExecutionOrder(-10000)]
     [AddComponentMenu("HoUnityTools/Face Tracking/Ho Face Tracking Debugger")]
@@ -23,7 +16,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         public HoFaceRegion outputRegions = HoFaceRegion.All;
         [Tooltip("仅启用面部形态键；手机头姿与眼骨旋转不会写入角色。")]
         public List<HoFaceChannel> channels = HoFaceTrackingChannels.CreateDefaults();
-        public List<HoFacePathRemap> pathRemaps = new List<HoFacePathRemap>();
+        [Tooltip("要搬运的那份混合树文件（Jerry 的 vrc-common、你自己编的 ho-2d-test1…）。\n"
+            + "初始化会把**整份文件**复制成下面那个面部控制器，只把动画驱动的对象换成「驱动对象」。")]
+        public RuntimeAnimatorController sourceController;
+        [Tooltip("面捕要驱动的网格 —— 初始化时把控制器里的形态键动画重绑到这些网格上。\n"
+            + "某个键在这些网格里谁都没有时，那条曲线原样留着不动（作者的格子数据不丢），"
+            + "但那些格子落不到任何网格上 —— 面板的结构摘要会列出来。")]
+        public List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
         [Min(0.1f)] public float staleSeconds = 1f;
         [Min(0.01f)] public float neutralFadeSeconds = 0.2f;
         [Tooltip("分组指数平滑的时长（秒）。0 = 不过滤、直接透传 —— 默认就是 0，避免和手机侧自带的处理叠出额外延迟。"
@@ -53,10 +52,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         public bool eyeSyncSingleKey;
         [Tooltip("进入播放后自动启动角色动画会话，不会自动连接手机。")]
         public bool startOnPlay;
-
-        [Tooltip("混合树模板：决定眼睑那几棵树长什么样、需要哪些键。留空 = 用内置默认（ho-2d-test1）。\n"
-            + "改模板属于结构改动，要按「应用改动」或重新初始化才生效。")]
-        public HoFaceTemplate template;
 
         /// <summary>按形态键名取分组平滑时长（秒）；0 = 直通。</summary>
         public float SmoothSeconds(string shape) => SmoothSeconds(HoFaceTrackingChannels.SmoothGroup(shape));
@@ -110,6 +105,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             targetAnimator = GetComponent<Animator>();
             if (targetAnimator == null) targetAnimator = GetComponentInParent<Animator>();
             if (targetAnimator == null) targetAnimator = GetComponentInChildren<Animator>();
+            if (targetAnimator != null && (meshes == null || meshes.Count == 0))
+                meshes = new List<SkinnedMeshRenderer>(targetAnimator.GetComponentsInChildren<SkinnedMeshRenderer>(true));
         }
     }
 }

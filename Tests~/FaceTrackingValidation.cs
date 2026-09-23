@@ -60,28 +60,24 @@ public static class HoFaceTrackingValidation
             mesh.AddBlendShapeFrame("JellyEye", 100, new[] { Vector3.forward * 0.1f, Vector3.zero, Vector3.zero }, new Vector3[3], new Vector3[3]);
             AssetDatabase.CreateAsset(mesh, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationMesh.asset"));
             renderer.sharedMesh = mesh;
-            var controller = HoFaceAnimationAssets.Generate(animator, AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller"));
-            int arkitParameters = 0;
-            foreach (var p in controller.parameters)
-                if (p.name.StartsWith("ARKit/", StringComparison.Ordinal)) arkitParameters++;
-            Check(arkitParameters == 52, "generator discovers all 52 shapes (" + arkitParameters + ")");
-            Check(controller.parameters.Length == 58, "52 ARKit + 2 gates + 4 eyelid axes, and no jelly params ("
-                + controller.parameters.Length + ")");
-            int gateParameters = 0;
-            float gateDefault = -1f;
-            foreach (var p in controller.parameters)
-            {
-                if (!p.name.StartsWith("Ho/Drive/Gate/", StringComparison.Ordinal)) continue;
-                gateParameters++;
-                gateDefault = p.defaultFloat;
-            }
+            // ── 搬运：初始化 = 把一份现成的混合树文件搬到这台角色上 ────────────────
+            // 控制器是**作品**（Jerry 的 vrc-common、我们自己编的 ho-2d-test1…），代码不再生成树。
+            // 所以这里先搭一份"作者的控制器"当夹具，再断言搬运的结果。
+            // 别人的共享片段也先造好：搬运时必须**复制成本文件的子资产**再改，绝不能就地改它。
+            string externalPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationExternal.anim");
+            var external = new AnimationClip { name = "MouthCloseFromElsewhere", frameRate = 60f };
+            AnimationUtility.SetEditorCurve(external,
+                EditorCurveBinding.FloatCurve("Source/Face", typeof(SkinnedMeshRenderer), "blendShape.mouthClose"),
+                AnimationCurve.Constant(0f, 1f / 60f, 100f));
+            AssetDatabase.CreateAsset(external, externalPath);
 
-            Check(gateParameters == 2, "generator emits the two region gates (" + gateParameters + ")");
-            Check(Mathf.Abs(gateDefault - 1f) < 0.001f,
-                "region gates default to OPEN so a freshly generated asset is not a dead face (default=" + gateDefault + ")");
+            string sourcePath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationSource.controller");
+            var source = BuildSourceController(sourcePath, external);
+
             rig = root.AddComponent<HoFaceTrackingDebugger>();
             rig.targetAnimator = animator;
-            rig.faceController = controller;
+            rig.sourceController = source;
+            rig.meshes = new System.Collections.Generic.List<SkinnedMeshRenderer> { renderer };
             // 默认是 All（凝视也开 —— LookAt 不是一定存在）。这里**刻意关掉凝视**，
             // 用来验证"排除凝视"这条路径本身，不能再赖默认值。
             Check(rig.outputRegions == HoFaceRegion.All, "gaze defaults to ON (LookAt may not exist)");
@@ -92,242 +88,78 @@ public static class HoFaceTrackingValidation
             Channel("mouthSmileLeft").manual = 0.8f;
             Channel("eyeBlinkLeft").manual = 0.4f;
             Channel("eyeLookInLeft").manual = 1;
+
+            string controllerPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller");
+            var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator);
+            rig.faceController = controller;
+            Check(controller.layers.Length == source.layers.Length && controller.layers[0].name == source.layers[0].name,
+                "搬运是整份复制：层与状态原样带过来");
+            Check(controller.parameters.Length == source.parameters.Length,
+                "搬运是整份复制：参数一个不少（" + controller.parameters.Length + "）");
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
                 Check(compiled.bindings.Count == 44, "default output filter excludes eight gaze shapes");
+
+            var jawClip = FindShapeClip(controller, "jawOpen");
+            var jawCurve = jawClip != null ? AnimationUtility.GetEditorCurve(jawClip,
+                EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.jawOpen")) : null;
+            Check(jawCurve != null && Mathf.Abs(jawCurve.Evaluate(0f) - 100f) < 0.01f,
+                "形态键曲线被重绑到驱动对象上（Source/Face → Body），值原样");
+            Check(jawClip != null && AnimationUtility.GetCurveBindings(jawClip).Length == 1,
+                "是搬不是复制：旧路径上的绑定没有留下来");
+
+            var stillExternal = AnimationUtility.GetEditorCurve(external,
+                EditorCurveBinding.FloatCurve("Source/Face", typeof(SkinnedMeshRenderer), "blendShape.mouthClose"));
+            Check(stillExternal != null && Mathf.Abs(stillExternal.Evaluate(0f) - 100f) < 0.01f,
+                "别人共享的 .anim 一个字节没动");
+            var copiedExternal = FindShapeClip(controller, "mouthClose");
+            Check(copiedExternal != null && copiedExternal != external && AssetDatabase.GetAssetPath(copiedExternal) == controllerPath,
+                "外部片段被复制成本文件的子资产");
+            Check(ReferenceEquals(FindLeafMotion(FindTree(controller, "LipRegion"), "ARKit/mouthClose"), copiedExternal),
+                "树里指向的是复制出来的那份，不是别人那份");
+
+            var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
+            Check(info.shapes.Contains("jawOpen") && info.missing.Contains("HoNotOnMesh"),
+                "结构摘要报得出哪些键这台模型没有（缺 " + info.missing.Count + " 个）");
+            Check(info.layers == 1 && info.states == 1 && info.clips > 0,
+                "结构摘要读的是资产实况（" + info.layers + " 层 / " + info.states + " 状态 / " + info.clips + " 个片段）");
+
+            // 一个键落在两个驱动对象上：两边都要写；把对象去掉再重绑要能回来（幂等）。
             var alternate = new GameObject("Meshes");
             alternate.transform.SetParent(root.transform, false);
             var target = new GameObject("Face");
             target.transform.SetParent(alternate.transform, false);
             var alternateMesh = target.AddComponent<SkinnedMeshRenderer>();
             alternateMesh.sharedMesh = mesh;
-            rig.pathRemaps.Add(new HoFacePathRemap { sourcePath = "Body", target = alternateMesh });
-            using (var compiled = HoFaceAnimationAssets.Compile(rig))
-                Check(compiled.bindings.TrueForAll(b => b.path == "Meshes/Face" && b.renderer == alternateMesh), "nested path remap resolves actual renderer");
-            rig.pathRemaps.Clear();
+            rig.meshes.Add(alternateMesh);
+            HoFaceAnimationAssets.Retarget(controller, rig.meshes, animator);
+            Check(CountShapeCurves(controller, "jawOpen") == 2,
+                "同一个键在多个驱动对象上就写多个绑定（" + CountShapeCurves(controller, "jawOpen") + "）");
+            rig.meshes.Remove(alternateMesh);
+            HoFaceAnimationAssets.Retarget(controller, rig.meshes, animator);
+            Check(CountShapeCurves(controller, "jawOpen") == 1, "重绑跟着驱动对象列表走：去掉就回到一条");
             UnityEngine.Object.DestroyImmediate(alternate);
-            // ── 生成器结构：只有一层驱动段（一棵 Direct 树），WD 开 ──────────────
-            var layers = controller.layers;
-            var directState = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
-            var directTree = directState != null ? directState.motion as BlendTree : null;
-            Check(layers.Length == 1, "generator emits exactly one layer — the drive layer (" + layers.Length + ")");
-            Check(directState != null, "drive layer is named " + HoFaceAnimationAssets.DriveLayerName);
-            Check(directTree != null && directTree.blendType == BlendTreeType.Direct, "drive layer is one Direct blend tree");
-            // 分组 + 眼睑 2D 子树：根树现在是 4 个子节点（LidL / LidR / EyeRegion / LipRegion）。
-            Check(directTree != null && directTree.children.Length == 4,
-                "drive tree = two eyelid 2D trees + two region subtrees ("
-                + (directTree != null ? directTree.children.Length : -1) + ")");
-            Check(directState != null && directState.writeDefaultValues, "Direct tree uses Write Defaults On");
-            var gateNames = new System.Collections.Generic.List<string>();
-            int lidTrees = 0, flatEye = 0, flatLip = 0;
-            bool leavesAreArkit = directTree != null;
-            BlendTree lidLeft = null;
-            BlendTree lidRight = null;
-            if (directTree != null)
-            {
-                foreach (var child in directTree.children)
-                {
-                    gateNames.Add(child.directBlendParameter);
-                    if (child.motion is BlendTree lid && lid.blendType == BlendTreeType.FreeformCartesian2D)
-                    {
-                        lidTrees++;
-                        if (lidLeft == null) lidLeft = lid;
-                        else if (lidRight == null) lidRight = lid;
-                        continue;
-                    }
-
-                    var region = child.motion as BlendTree;
-                    if (region == null || region.blendType != BlendTreeType.Direct)
-                    {
-                        leavesAreArkit = false;
-                        continue;
-                    }
-
-                    foreach (var leaf in region.children)
-                    {
-                        if (!leaf.directBlendParameter.StartsWith("ARKit/", StringComparison.Ordinal))
-                        {
-                            leavesAreArkit = false;
-                            continue;
-                        }
-
-                        string shape = leaf.directBlendParameter.Substring("ARKit/".Length);
-                        if (HoFaceTrackingChannels.Gate(shape) == HoFaceGate.Eye) flatEye++;
-                        else flatLip++;
-                    }
-                }
-            }
-
-            Check(lidTrees == 2, "the eyelids are two 2D trees instead of six flat leaves (" + lidTrees + ")");
-            Check(flatEye == 13 && flatLip == 33,
-                "only non-eyelid shapes stay flat: eye = gaze 8 + brows 5, lip = 33 (got " + flatEye + "/" + flatLip + ")");
-            Check(gateNames.Contains(HoFaceAnimationAssets.EyeGateName)
-                && gateNames.Contains(HoFaceAnimationAssets.LipGateName),
-                "both gates are subtree weights — the eyelids ride the eye gate too");
-            Check(leavesAreArkit, "inside a region, every leaf is still one shape weighted by its own ARKit parameter");
-
-            // 眼睑 2D 树：六格。前五格照参考实现，**第六格 `闭+眯(1,1)` 是我们补的** ——
-            // 它能到达（两根轴是独立参数），不摆姿势就等于把那个角交给引擎的边界行为。
-            Check(lidLeft != null && lidLeft.children.Length == 6,
-                "six authored eyelid poses (five from the reference + the reachable 闭+眯 corner) ("
-                + (lidLeft != null ? lidLeft.children.Length : -1) + ")");
-            float squintPoseBlink = -1f, squintPoseSquint = -1f;
-            float cornerBlink = -1f, cornerSquint = -1f;
-            if (lidLeft != null)
-            {
-                foreach (var child in lidLeft.children)
-                {
-                    var lidClip = child.motion as AnimationClip;
-                    var blinkCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
-                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeBlinkLeft")) : null;
-                    var squintCurve = lidClip != null ? AnimationUtility.GetEditorCurve(lidClip,
-                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeSquintLeft")) : null;
-                    float blink = blinkCurve != null ? blinkCurve.Evaluate(0.0f) : -1.0f;
-                    float squint = squintCurve != null ? squintCurve.Evaluate(0.0f) : -1.0f;
-                    if (child.position == new Vector2(0.0f, 1.0f))
-                    {
-                        squintPoseBlink = blink;
-                        squintPoseSquint = squint;
-                    }
-
-                    if (child.position == new Vector2(1.0f, 1.0f))
-                    {
-                        cornerBlink = blink;
-                        cornerSquint = squint;
-                    }
-                }
-            }
-
-            Check(Mathf.Abs(squintPoseBlink - 90f) < 0.01f && Mathf.Abs(squintPoseSquint - 100f) < 0.01f,
-                "the squint pose carries its own blink amount (blink 90 + squint 100), so the two can never stack ("
-                + squintPoseBlink + " / " + squintPoseSquint + ")");
-            Check(Mathf.Abs(cornerBlink - 100f) < 0.01f && Mathf.Abs(cornerSquint) < 0.01f,
-                "the 闭+眯 corner is authored instead of left to the engine: blink 100 + squint 0 = a designed max of 100 ("
-                + cornerBlink + " / " + cornerSquint + ")");
-
-            // ── 命名：格子名必须自带方阵与坐标，坐标必须和树里真正用的格点一致 ────────
-            // 名字是唯一能把「树里的格子」和「去 DCC 做形态键时的那张清单」对上的东西，
-            // 所以这里逐字校验，不让它悄悄漂。
-            var lidNames = new System.Collections.Generic.List<string>();
-            bool namesMatchPattern = true, namesMatchGrid = true, namesPositive = true;
-            foreach (var lidTree in new[] { lidLeft, lidRight })
-            {
-                if (lidTree == null) continue;
-                foreach (var child in lidTree.children)
-                {
-                    string clipName = child.motion != null ? child.motion.name : string.Empty;
-                    lidNames.Add(clipName);
-                    var match = System.Text.RegularExpressions.Regex.Match(clipName,
-                        "^(LidL|LidR)__BlinkWide__Squint__A3X([0-9]+(?:\\.[0-9]+)?)Y([0-9]+(?:\\.[0-9]+)?)$");
-                    if (!match.Success) { namesMatchPattern = false; continue; }
-                    float x = float.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                    float y = float.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
-                    if (x < 0f || y < 0f) namesPositive = false;
-                    var expectedPosition = HoFaceNaming.LidPosition(x, y);
-                    if ((child.position - expectedPosition).sqrMagnitude > 0.0001f) namesMatchGrid = false;
-                }
-            }
-
-            Check(lidNames.Count == 12 && new System.Collections.Generic.HashSet<string>(lidNames).Count == 12,
-                "both eyes carry six uniquely named grid cells (" + lidNames.Count + ")");
-            Check(namesMatchPattern, "cell names are <tree>__<xAxis>__<yAxis>__<matrix>X<x>Y<y> ("
-                + (lidNames.Count > 0 ? lidNames[0] : "none") + ")");
-            Check(namesPositive, "grid coordinates are non-negative — the origin is the bottom-left corner");
-            Check(namesMatchGrid, "the coordinates inside the name are the position the tree actually uses");
-            int rowBottom = 0, rowTop = 0, otherRows = 0;
-            foreach (string name in lidNames)
-            {
-                if (name.EndsWith("Y0", StringComparison.Ordinal)) rowBottom++;
-                else if (name.EndsWith("Y2", StringComparison.Ordinal)) rowTop++;
-                else otherRows++;
-            }
-
-            Check(rowBottom == 6 && rowTop == 6 && otherRows == 0,
-                "the matrix is deliberately not filled: six poses on Y0 (no squint) + six on Y2 (squint), Y1 left empty ("
-                + rowBottom + "/" + rowTop + "/" + otherRows + ")");
-            Check(HoFaceAnimationAssets.IsManagedLayer(HoFaceAnimationAssets.DriveLayerName)
-                && !HoFaceAnimationAssets.IsManagedLayer("Base Layer"),
-                "only Ho/* layers count as ours — the animator's own layers do not");
-            // 果冻参数已撤销：果冻搬到独立组件 HoSpringConstraint，直接读键写键，不借道 Animator 参数。
-            bool jellyParamsGone = true;
-            foreach (var p in controller.parameters)
-            {
-                if (p.name == "Ho/JellyX" || p.name == "Ho/JellyY") jellyParamsGone = false;
-            }
-
-            Check(jellyParamsGone, "the generator no longer emits jelly parameters — jelly writes shape keys directly");
-
-            // ── 应用改动 = 整个文件就地重写：控制器整个都是我们的，只有一层 ──────────
-            // 改名不能留僵尸参数：先注入两个历史名字，apply 必须把它们清掉（只动 Ho/ 命名空间）。
-            controller.AddParameter("Ho/LidLeft.X", AnimatorControllerParameterType.Float);
-            controller.AddParameter("Ho/Gate/Eye", AnimatorControllerParameterType.Float);
-            string controllerPath = AssetDatabase.GetAssetPath(controller);
-            string controllerGuid = AssetDatabase.AssetPathToGUID(controllerPath);
+            // ── 覆盖式搬运：真的把文件换掉，但**不改 GUID** ─────────────────────────
+            // 改 GUID 的话，场景里引用过这个控制器的地方（窥视对象的 Animator）就全断了。
             int clipsBefore = CountClips(controllerPath);
-            HoFaceAnimationAssets.Apply(controller, animator);
-            var appliedDrive = FindState(controller, HoFaceAnimationAssets.DriveLayerName);
-            Check(controller.layers.Length == 1, "re-initializing keeps the file at one layer (" + controller.layers.Length + ")");
-            Check(AssetDatabase.AssetPathToGUID(controllerPath) == controllerGuid,
-                "rewriting happens in place — the asset GUID survives, so external references stay valid");
-            Check(appliedDrive != null && ((BlendTree)appliedDrive.motion).children.Length == 4, "apply rebuilds the drive tree");
-            int regionTrees = 0;
-            var wantedTrees = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
-            {
-                HoFaceNaming.LidTree(0), HoFaceNaming.LidTree(1),
-                HoFaceNaming.RegionTree(HoFaceGate.Eye), HoFaceNaming.RegionTree(HoFaceGate.Lip)
-            };
-            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
-                if (asset is BlendTree region && wantedTrees.Contains(region.name))
-                    regionTrees++;
-            Check(regionTrees == 4, "re-applying does not pile up orphan subtrees ("
-                + regionTrees + " — two regions + two eyelid trees)");
-
-            bool legacyParamsGone = true, axisParamsPresent = true;
-            foreach (var p in controller.parameters)
-            {
-                if (p.name == "Ho/LidLeft.X" || p.name == "Ho/Gate/Eye") legacyParamsGone = false;
-            }
-
-            for (int side = 0; side < 2; side++)
-                for (int axis = 0; axis < 2; axis++)
-                {
-                    string wanted = HoFaceNaming.LidAxis(side, axis == 0);
-                    bool found = false;
-                    foreach (var p in controller.parameters)
-                        if (p.name == wanted) found = true;
-                    if (!found) axisParamsPresent = false;
-                }
-
-            Check(legacyParamsGone, "renaming prunes the old Ho/Gate/* and Ho/Lid*.X|Y parameters (no zombies)");
-            Check(axisParamsPresent, "both eyes expose self-describing axis parameters ("
-                + HoFaceNaming.LidAxis(0, true) + " / " + HoFaceNaming.LidAxis(0, false) + ")");
-            bool obsoleteGone = true;
-            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(controllerPath))
-                if (asset is AnimationClip stale && stale.name == "eyeBlinkLeft")
-                    obsoleteGone = false;
-            Check(obsoleteGone, "the obsolete flat blink/wide/squint clips are cleaned up (the 2D poses replaced them)");
-            Check(CountClips(controllerPath) == clipsBefore, "apply reuses clips instead of piling up sub-assets (" + clipsBefore + ")");
+            string guidBefore = AssetDatabase.AssetPathToGUID(controllerPath);
+            controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, true);
+            rig.faceController = controller;
+            Check(AssetDatabase.AssetPathToGUID(controllerPath) == guidBefore,
+                "覆盖式搬运保留资产 GUID —— 引用它的地方不会断");
+            Check(CountClips(controllerPath) == clipsBefore, "覆盖式搬运不堆子资产（" + clipsBefore + " 个片段）");
+            Check(CountShapeCurves(controller, "jawOpen") == 1, "覆盖后依然是重绑过的（曲线指向驱动对象）");
 
             // 反面用例：同一个 Direct 树把 Write Defaults 关掉必须被拒 —— 实测那个组合会发散
             //（0.6 的输入 → 98.98 → 246.28 → 1059.33），不能靠运气。
-            directState.writeDefaultValues = false;
+            var driveState = FindState(controller, "Ho/00 Drive");   // 夹具那层的名字，搬运不该改它
+            Check(driveState != null, "搬运没有动层结构：驱动段还在");
+            driveState.writeDefaultValues = false;
             bool rejected = false;
             try { using (var compiled = HoFaceAnimationAssets.Compile(rig)) { } } catch (InvalidOperationException) { rejected = true; }
             Check(rejected, "reject Direct tree with Write Defaults Off instead of letting it diverge");
-            directState.writeDefaultValues = true;
-
-            // 回归：覆盖式「初始化」必须真的把旧文件换掉。
-            // 曾经是个真 bug —— 面板加了覆盖确认框，但 Generate 里"目标资产已存在就报错"的守卫
-            // 忘了删，于是用户点「覆盖并初始化」后文件原封不动（还是旧的 52 层），而报错又和成功
-            // 消息共用蓝色 Info 框，被当提示略过去了。
-            // 注意：这一步会销毁旧控制器与其中的状态对象，所以必须放在所有引用旧状态的断言**之后**。
-            var replaced = HoFaceAnimationAssets.Generate(animator, controllerPath, true);
-            Check(replaced != null && replaced.layers.Length == 1,
-                "re-initializing over an existing file really replaces it (layers=" + (replaced != null ? replaced.layers.Length : -1) + ")");
-            Check(CountClips(controllerPath) == clipsBefore, "re-initialize does not leave the old clips behind (" + clipsBefore + ")");
-            rig.faceController = replaced;
+            driveState.writeDefaultValues = true;
 
             // ── 果冻键不进控制器：它由独立组件（HoSpringConstraint）直接读写形态键 ──────────
-            // 所以这里**不再**测"非 ARKit 键穿过 Compile"——那条路现在没有消费者了。
             // 保留网格上这个键，是因为下面的 WD 探针需要一个
             // **没有任何片段动画它**的键做对照（"WD 开"不该去碰没被动画的属性），果冻键正好符合。
             Check(renderer.sharedMesh.GetBlendShapeIndex("JellyEye") >= 0,
@@ -337,12 +169,12 @@ public static class HoFaceTrackingValidation
             using (var compiled = HoFaceAnimationAssets.Compile(rig))
                 outputBindings = compiled.bindings.Count;
 
-            Check(outputBindings == 44, "re-initialized controller keeps the same gated output set ("
-                + outputBindings + " bindings, gaze excluded)");
+            Check(outputBindings == 44, "搬运后的输出集合还是那 44 个（凝视排除）("
+                + outputBindings + " bindings)");
 
-            // ── 混合树基础件（19 节定案：生成器只出"最基本设施"）────────────────────
-            // 一：两个 0~1 的反向通道合成一根 -1~1 的单轴。混合树自己算不出新参数，
-            // 所以"值"和"树"必须成对交付，这里两半都验。
+            // ── 轴算术（中间层）：两根 0~1 的通道合成一根 -1~1 的单轴 ────────────────
+            // 混合树自己算不出新参数，只能消费 —— 所以轴必须在外面算（19 节定案）。
+            // 树那一半现在在控制器作品里（作者的资产），代码这边只剩这个纯函数。
             Near(HoFaceAxis.Merge(0.8f, 0.3f), 0.5f, "axis merge is positive minus negative", 0.0001f);
             Near(HoFaceAxis.Merge(0.2f, 0.9f), -0.7f, "axis merge goes negative when the other side wins", 0.0001f);
             Near(HoFaceAxis.Merge(float.NaN, 0.4f), -0.4f, "axis merge swallows NaN instead of poisoning the axis", 0.0001f);
@@ -350,94 +182,8 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(axisPositive) < 0.0001f && Mathf.Abs(axisNegative - 0.7f) < 0.0001f,
                 "the axis splits back into two unsigned halves");
 
-            // 二：**按模板建树**（模板化之后 Kit 的唯一入口）—— 2D 与 1D 各一棵。
-            // 模板决定树形、参数名、坐标/阈值、每格写什么；Kit 只管建树、建（或复用）片段、摆坐标。
-            var kitGridSpec = new HoFaceTreeSpec
-            {
-                name = "Ho/BT Test Grid",
-                kind = HoFaceTreeKind.FreeformCartesian2D,
-                x = new HoFaceAxisSpec { parameter = "Ho/Test/X" },
-                y = new HoFaceAxisSpec { parameter = "Ho/Test/Y" },
-                poses = new[]
-                {
-                    new HoFacePoseSpec
-                    {
-                        clipName = "Ho/BT Test Grid 0",
-                        position = new Vector2(0f, 0f),
-                        values = new[]
-                        {
-                            new HoFacePoseValue("eyeBlinkLeft", 0f),
-                            new HoFacePoseValue("eyeWideLeft", 0f)
-                        }
-                    },
-                    new HoFacePoseSpec
-                    {
-                        clipName = "Ho/BT Test Grid 1",
-                        position = new Vector2(1f, 1f),
-                        values = new[]
-                        {
-                            new HoFacePoseValue("eyeBlinkLeft", 100f),
-                            new HoFacePoseValue("eyeWideLeft", 0f)
-                        }
-                    }
-                }
-            };
-
-            System.Action<AnimationClip, HoFacePoseSpec> writePose = (clip, pose) =>
-            {
-                foreach (var value in pose.values)
-                    AnimationUtility.SetEditorCurve(clip,
-                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape." + value.shape),
-                        AnimationCurve.Constant(0f, 1f / 60f, value.value));
-            };
-
-            var kitGrid = HoFaceBlendTreeKit.Tree(replaced, animator, kitGridSpec, null, writePose);
-            Check(kitGrid.blendType == BlendTreeType.FreeformCartesian2D && kitGrid.children.Length == 2,
-                "kit builds a 2D tree from a template (" + kitGrid.children.Length + ")");
-            Check(kitGrid.blendParameter == "Ho/Test/X" && kitGrid.blendParameterY == "Ho/Test/Y",
-                "the 2D tree reads exactly the two axis parameters the template names");
-
-            var blinkBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeBlinkLeft");
-            var wideBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeWideLeft");
-            int blankCells = 0, posedCells = 0, placed = 0;
-            foreach (var child in kitGrid.children)
-            {
-                var cell = child.motion as AnimationClip;
-                var wide = cell != null ? AnimationUtility.GetEditorCurve(cell, wideBinding) : null;
-                var blink = cell != null ? AnimationUtility.GetEditorCurve(cell, blinkBinding) : null;
-                if (wide != null && Mathf.Abs(wide.Evaluate(0f)) < 0.001f) blankCells++;
-                if (blink != null && Mathf.Abs(blink.Evaluate(0f) - 100f) < 0.001f) posedCells++;
-                if (child.position == new Vector2(1f, 1f)) placed++;
-            }
-
-            Check(blankCells == 2, "every cell carries its keys explicitly, 0 included (" + blankCells + ")");
-            Check(posedCells == 1 && placed == 1, "only the posed cell differs, at its template coordinate");
-
-            var kitAxisSpec = new HoFaceTreeSpec
-            {
-                name = "Ho/BT Test Axis",
-                kind = HoFaceTreeKind.Simple1D,
-                x = new HoFaceAxisSpec { parameter = "Ho/Test/Axis" },
-                poses = new[]
-                {
-                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 0", threshold = -1f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 100f) } },
-                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 1", threshold = 0f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 0f) } },
-                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 2", threshold = 1f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 0f) } }
-                }
-            };
-            var kitAxis = HoFaceBlendTreeKit.Tree(replaced, animator, kitAxisSpec, null, writePose);
-            Check(kitAxis.blendType == BlendTreeType.Simple1D && kitAxis.children.Length == 3,
-                "kit builds a 1D tree from a template (" + kitAxis.children.Length + ")");
-            Check(Mathf.Abs(kitAxis.children[0].threshold + 1f) < 0.0001f
-                && Mathf.Abs(kitAxis.children[1].threshold) < 0.0001f
-                && Mathf.Abs(kitAxis.children[2].threshold - 1f) < 0.0001f,
-                "the 1D tree sits at the thresholds the template gives (-1 / 0 / +1)");
-
-            int beforeClear = CountClips(controllerPath);
-            HoFaceBlendTreeKit.Clear(kitGrid);
-            HoFaceBlendTreeKit.Clear(kitAxis);
-            Check(CountClips(controllerPath) == beforeClear - 5,
-                "clearing a kit tree takes its pose clips with it (removed " + (beforeClear - CountClips(controllerPath)) + ")");
+            // 二：**建树这件事已经不在代码里了**。控制器是搬来的作品（§ 搬运），
+            // 它的树形/坐标/每格写什么由作者在混合树编辑器里定 —— 所以这里没有 Kit 可测。
 
             // ── 弹簧驱动（定案 19 里果冻的落点：独立组件 + 预设 + 读已落下的键）──────────
             // 正向目标吃挤压（含过冲），反向目标吃回弹 —— 纯函数，所以直接断言，
@@ -610,6 +356,140 @@ public static class HoFaceTrackingValidation
 
     private static HoFaceChannel Channel(string name) => rig.channels.Find(c => c.shape == name);
     private static float Weight(string name) => renderer.GetBlendShapeWeight(renderer.sharedMesh.GetBlendShapeIndex(name));
+
+    /// <summary>
+    /// 测试夹具：模拟"一份作者编好的混合树文件"。**控制器是作品，代码不再生成它** ——
+    /// 所以夹具照我们那份控制器的形状手搭：一层驱动段 + 一棵 Direct 根树（眼/唇两棵区域子树、
+    /// 每个 ARKit 键一个直通叶子、门控各一个参数）+ 4 根眼睑轴参数。
+    /// **曲线绑在 `Source/Face` 上**（作者自己的模型层级），这样"重绑驱动对象"才真的被验到。
+    /// </summary>
+    private static AnimatorController BuildSourceController(string path, AnimationClip external)
+    {
+        var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
+        var layers = controller.layers;
+        layers[0].name = "Ho/00 Drive";
+        controller.layers = layers;
+
+        foreach (string shape in HoFaceTrackingChannels.Names)
+            controller.AddParameter("ARKit/" + shape, AnimatorControllerParameterType.Float);
+        controller.AddParameter("ARKit/HoNotOnMesh", AnimatorControllerParameterType.Float);
+        AddGate(controller, HoFaceNaming.Gate(HoFaceGate.Eye));
+        AddGate(controller, HoFaceNaming.Gate(HoFaceGate.Lip));
+        for (int side = 0; side < 2; side++)
+            for (int axis = 0; axis < 2; axis++)
+                controller.AddParameter(HoFaceNaming.LidAxis(side, axis == 0), AnimatorControllerParameterType.Float);
+
+        var root = new BlendTree { name = "DriveTree", blendType = BlendTreeType.Direct };
+        AssetDatabase.AddObjectToAsset(root, controller);
+        foreach (HoFaceGate gate in new[] { HoFaceGate.Eye, HoFaceGate.Lip })
+        {
+            var region = new BlendTree
+            {
+                name = gate == HoFaceGate.Eye ? "EyeRegion" : "LipRegion",
+                blendType = BlendTreeType.Direct
+            };
+            AssetDatabase.AddObjectToAsset(region, controller);
+            foreach (string shape in HoFaceTrackingChannels.Names)
+            {
+                if (HoFaceTrackingChannels.Gate(shape) != gate) continue;
+                if (shape == "mouthClose") continue;   // 这个键走下面那条"别人的外部片段"
+                AttachFlatLeaf(region, SourceShapeClip(controller, shape), "ARKit/" + shape);
+            }
+
+            if (gate == HoFaceGate.Lip) AttachFlatLeaf(region, external, "ARKit/mouthClose");
+            AttachFlatLeaf(root, region, HoFaceNaming.Gate(gate));
+        }
+
+        // 一个"驱动对象上没有"的键：搬运时曲线该原样留着，并被结构摘要报出来。
+        AttachFlatLeaf(FindTree(root, "LipRegion"), SourceShapeClip(controller, "HoNotOnMesh"), "ARKit/HoNotOnMesh");
+
+        var state = controller.layers[0].stateMachine.AddState("Face");
+        state.writeDefaultValues = true;   // Direct 树的前提
+        state.motion = root;
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+        return controller;
+    }
+
+    /// <summary>门控参数：缺就补，并且**默认 1**（单独打开这个资产时不该是一片死脸）。</summary>
+    private static void AddGate(AnimatorController controller, string name)
+    {
+        controller.AddParameter(name, AnimatorControllerParameterType.Float);
+        var all = controller.parameters;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].name != name) continue;
+            all[i].defaultFloat = 1f;
+            controller.parameters = all;
+            return;
+        }
+    }
+
+    /// <summary>作者的一格：参数 0→1，键 0→100，绑在他自己的层级（Source/Face）上。</summary>
+    private static AnimationClip SourceShapeClip(AnimatorController controller, string shape)
+    {
+        var clip = new AnimationClip { name = shape + "_100", frameRate = 60f };
+        AnimationUtility.SetEditorCurve(clip,
+            EditorCurveBinding.FloatCurve("Source/Face", typeof(SkinnedMeshRenderer), "blendShape." + shape),
+            AnimationCurve.Constant(0f, 1f / 60f, 100f));
+        AssetDatabase.AddObjectToAsset(clip, controller);
+        return clip;
+    }
+
+    private static void AttachFlatLeaf(BlendTree tree, Motion motion, string parameter)
+    {
+        tree.AddChild(motion);
+        var children = tree.children;
+        children[children.Length - 1].directBlendParameter = parameter;
+        tree.children = children;
+    }
+
+    private static BlendTree FindTree(AnimatorController controller, string name)
+    {
+        foreach (var layer in controller.layers)
+            foreach (var state in layer.stateMachine.states)
+                if (FindTree(state.state.motion, name) is BlendTree found) return found;
+        return null;
+    }
+
+    private static BlendTree FindTree(Motion motion, string name)
+    {
+        if (!(motion is BlendTree tree)) return null;
+        if (tree.name == name) return tree;
+        foreach (var child in tree.children)
+            if (FindTree(child.motion, name) is BlendTree found) return found;
+        return null;
+    }
+
+    private static Motion FindLeafMotion(BlendTree tree, string parameter)
+    {
+        if (tree == null) return null;
+        foreach (var child in tree.children)
+            if (child.directBlendParameter == parameter) return child.motion;
+        return null;
+    }
+
+    private static AnimationClip FindShapeClip(AnimatorController controller, string shape)
+    {
+        foreach (AnimationClip clip in controller.animationClips)
+        {
+            if (clip == null) continue;
+            foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+                if (binding.propertyName == "blendShape." + shape) return clip;
+        }
+
+        return null;
+    }
+
+    private static int CountShapeCurves(AnimatorController controller, string shape)
+    {
+        var clip = FindShapeClip(controller, shape);
+        if (clip == null) return 0;
+        int count = 0;
+        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+            if (binding.propertyName == "blendShape." + shape) count++;
+        return count;
+    }
 
     private static void PlayTests()
     {

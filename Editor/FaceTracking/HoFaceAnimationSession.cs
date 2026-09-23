@@ -201,8 +201,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 区域门控：把"这块驱动算不算数"写成一个**参数**（而不是靠重新生成控制器来切）。
             // 于是它也能被别的东西驱动 —— 用户自己的层、以后的菜单、AFK 之类。
-            WriteGate(HoFaceAnimationAssets.EyeGateName, (Rig.outputRegions & HoFaceTrackingChannels.EyeRegion) != 0);
-            WriteGate(HoFaceAnimationAssets.LipGateName, (Rig.outputRegions & HoFaceTrackingChannels.LipRegion) != 0);
+            WriteGate(HoFaceNaming.Gate(HoFaceGate.Eye), (Rig.outputRegions & HoFaceTrackingChannels.EyeRegion) != 0);
+            WriteGate(HoFaceNaming.Gate(HoFaceGate.Lip), (Rig.outputRegions & HoFaceTrackingChannels.LipRegion) != 0);
             foreach (var preview in previews)
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
         }
@@ -222,8 +222,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             int squint = HoFaceTrackingChannels.IndexOf("eyeSquint" + suffix);
             if (blink < 0 || squint < 0) return;
 
-            string horizontal = HoFaceAnimationAssets.LidAxisName(side, true);
-            string vertical = HoFaceAnimationAssets.LidAxisName(side, false);
+            string horizontal = HoFaceNaming.LidAxis(side, true);
+            string vertical = HoFaceNaming.LidAxis(side, false);
             if (parameters.Contains(horizontal))
                 shadow.SetFloat(horizontal, HoFaceAxis.LidOpenClose(Smoothed[blink], wide >= 0 ? Smoothed[wide] : 0f));
             if (parameters.Contains(vertical))
@@ -253,11 +253,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // 原因见 docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md 19.2：混合树出不了物理参数，
         // 于是生产者与消费者本来就都不属于状态机 —— 两头都在外面，它就该是一个组件。
 
+        /// <summary>
+        /// 会话的"配置指纹"：换控制器、换驱动对象、改通道映射都算换了一份配置，要重建影子。
+        /// </summary>
         private string MappingStamp()
         {
             var text = new System.Text.StringBuilder();
             foreach (var channel in Rig.channels) if (channel != null) text.Append(channel.shape).Append(':').Append(channel.parameter).Append(';');
-            foreach (var map in Rig.pathRemaps) if (map != null) text.Append(map.sourcePath).Append(':').Append(map.target != null ? map.target.GetInstanceID() : 0).Append(';');
+            text.Append("src:").Append(Rig.sourceController != null ? Rig.sourceController.GetInstanceID() : 0).Append(';');
+            if (Rig.meshes != null)
+                foreach (var mesh in Rig.meshes)
+                    text.Append(mesh != null ? mesh.GetInstanceID() : 0).Append(';');
             return text.ToString();
         }
 

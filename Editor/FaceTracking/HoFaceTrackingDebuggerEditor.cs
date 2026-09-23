@@ -22,8 +22,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool outputExpanded = true;
         private bool middleExpanded = true;
         private bool channelsExpanded;
-        /// <summary>目标网格上真实存在的形态键（用来跟模板"需要的键"做差集）。</summary>
-        private readonly HashSet<string> shapeKeys = new HashSet<string>();
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
 
@@ -75,34 +73,65 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
             }
 
-            // ── 初始化：程序化产出「状态 + 驱动映射」──────────────────────────────
-            // **这一栏的产物不是"几个参数"，而是一大片状态与驱动映射**（片段 + 混合树 + 门控参数）。
-            // 这是整个流程的关键一句：初始化 = 生产状态与映射，不是手搓。
-            // 所以以后要加什么状态，就是往这一栏加"生成配置"（预设开关），而不是让用户自己去编。
+            // ── 初始化：把一份现成的混合树文件搬到这台角色上 ──────────────────────
+            // 控制器是**作品**（Jerry 的 vrc-common、我们自己编的 ho-2d-test1…），在混合树编辑器里编出来，
+            // 自带片段与动画。所以这一栏没有"生成配置"，只有两件事：搬哪一份、驱动哪些网格。
+            // 参数不由控制器声明 —— 它只等着被喂，喂什么由中间层决定（见 docs/FACE_TRACKING_WORKFLOW.md）。
             if (HoConstraintEditorSectionGui.DrawSectionHeader(ref initExpanded, "初始化", InitSummary(rig),
                 HoConstraintEditorTheme.AccentBlink))
             using (HoConstraintEditorControls.Card())
             {
+                serializedObject.Update();
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("sourceController"),
+                    new GUIContent("源控制器", "要搬运的那份混合树文件。初始化会把**整份文件**复制成面部控制器，\n"
+                        + "只把动画驱动的对象换成下面的驱动对象（层、状态、参数、子树、片段都跟着走）。"));
+                serializedObject.ApplyModifiedProperties();
+
+                if (rig.sourceController == null)
+                    HoConstraintEditorControls.Caption("先选一份源控制器。");
+                else if (!(rig.sourceController is AnimatorController))
+                    HoConstraintEditorControls.Caption("源控制器必须是纯 Unity AnimatorController（不接受 OverrideController）。");
+
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("驱动对象", HoConstraintEditorTheme.LabelWidth,
+                        "面捕要驱动哪些网格 —— 初始化把控制器里的形态键动画重绑到这些网格上。\n"
+                        + "控制器写了某个键、而这些网格里谁都没有时，那一格会被跳过（下面的结构摘要会列出来）。");
+                    if (HoConstraintEditorControls.Button("按 Animator 填充", "把角色 Animator 下所有网格填进来。"))
+                    {
+                        Undo.RecordObject(rig, "Fill face meshes");
+                        rig.meshes = rig.targetAnimator != null
+                            ? new List<SkinnedMeshRenderer>(rig.targetAnimator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                            : new List<SkinnedMeshRenderer>();
+                        EditorUtility.SetDirty(rig);
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
+                    }
+
+                    HoConstraintEditorControls.Flex();
+                }
+
+                serializedObject.Update();
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("meshes"), GUIContent.none, true);
+                serializedObject.ApplyModifiedProperties();
+
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool initialized = rig.faceController != null;
-                    using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
+                    using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null
+                        || rig.sourceController == null || rig.meshes == null || rig.meshes.Count == 0))
                     {
                         // 命名承载语义：「初始化」明确表达"产出文件、之后都在里面改"。
-                        // 一个按钮两种情形（见 Initialize 的注释）：我们的控制器 → 就地重写；
-                        // 第一次 / 别人的控制器 → 问路径新建。
+                        // 一个按钮两种情形（见 Initialize 的注释）：已经有控制器 → 就地重写它；
+                        // 第一次 → 问路径新建。源控制器就是它自己时就地重绑。
                         var content = initialized
-                            ? new GUIContent("重新初始化…", "就地重写这个控制器的**整个文件**：\n"
-                                + "旧的树、片段、参数清干净，GUID 不变（外部引用不会断）。\n"
-                                + "换模板走这里。")
-                            : new GUIContent("初始化控制器", "按当前配置产出一个完整的控制器文件。\n"
+                            ? new GUIContent("重新初始化…", "把源控制器**整份**搬过来覆盖它：\n"
+                                + "GUID 不变，所以引用它的地方不会断；旧的层/片段/参数由这次搬运决定。")
+                            : new GUIContent("初始化控制器", "把源控制器整份搬成一份属于这台角色的控制器。\n"
                                 + "这是唯一会写文件的动作。");
                         if (GUILayout.Button(content, GUILayout.Height(20))) Initialize(rig);
                     }
 
-                    // 「重新初始化」是**唯一**写盘的动作：目标就是组件当前在用的那个控制器。
-                    // 它自己会挑路径 —— 是我们的控制器就就地重写（GUID 不变），否则才问路径新建。
-                    // 所以不需要第二个按钮，也不需要用户自己备份。
+                    // 写盘的动作只有上面那一个：目标就是组件当前在用的那个控制器（没指定时才问路径）。
                     using (new EditorGUI.DisabledScope(Application.isPlaying || rig.targetAnimator == null))
                     if (GUILayout.Button(new GUIContent("定位资产", "选中这个控制器资产。"), GUILayout.Height(20)) && rig.faceController != null)
                     {
@@ -112,30 +141,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     HoConstraintEditorControls.Flex();
                 }
-
-                // 模板：决定眼睑那几棵树长什么样、**需要哪些键**。留空 = 内置默认（ho-2d-test1）。
-                serializedObject.Update();
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("template"),
-                    new GUIContent("混合树模板", "决定眼睑那几棵树长什么样、需要哪些键。\n留空 = 内置默认（ho-2d-test1）。\n"
-                        + "改模板是**结构改动**，要走「应用改动」或重新初始化才生效。"));
-                serializedObject.ApplyModifiedProperties();
-
-                var template = rig.template != null ? rig.template.spec : HoFaceTemplateDefaults.TwoDTest1();
-                if (rig.targetAnimator != null)
-                {
-                    // 只报"缺键"这一件实事（缺了不报错、只是那几格写不进去，所以必须说出来）；
-                    // 模板的血统、出处、需要哪些键都写在模板资产自己的 notes 里，不在面板上堆。
-                    CollectShapeKeys(rig, shapeKeys);
-                    var missing = new List<string>();
-                    foreach (string key in template.UsedKeys())
-                        if (!shapeKeys.Contains(key)) missing.Add(key);
-                    if (missing.Count > 0)
-                        HoConstraintEditorControls.Caption("⚠ 网格缺这些键，对应格子里的它们会被跳过："
-                            + string.Join("、", missing));
-                }
-
-                if (rig.faceController is AnimatorController controller && !HasDriveLayer(controller))
-                    HoConstraintEditorControls.Caption("该控制器没有 " + HoFaceAnimationAssets.DriveLayerName + " 段，先初始化");
             }
 
             if (!string.IsNullOrEmpty(HoFaceInputHub.Error(rig))) EditorGUILayout.HelpBox(HoFaceInputHub.Error(rig), MessageType.Error);
@@ -181,15 +186,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
 
                 // 结构报告：**从资产读出来**，不是从配置推断。
-                // 中间层有些处理是隐式的（眼睑被并成一棵 2D 树、重叠由姿势表权衡），
-                // 这里把控制器里实际的形状说出来，用户就不必靠行为去猜。
+                // 控制器是搬来的作品，中间层有些处理是隐式的（重叠由姿势表权衡），
+                // 所以这里把控制器实际的形状、以及"哪些键这台模型上没有"说出来。
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("控制器结构", HoConstraintEditorTheme.LabelWidth,
-                        "**从资产读出来的实际形状**（不是配置声明）。\n"
-                        + "眼睑是若干棵 2D 树、每棵里有作者摆好的姿势 —— blink 与 squint 的重叠就是靠姿势权衡的，"
-                        + "那件事本身不可关。\n"
-                        + "改完结构要按「应用改动」才生效。");
+                        "**从资产读出来的实况**（不是配置声明）：几层、几个状态、几个片段、会写哪些形态键。\n"
+                        + "控制器的形状由它自己决定 —— 要改结构就去编那份控制器，然后重新初始化。\n"
+                        + "面捕只驱动自己有通道的标准 ARKit 键：控制器里写的别的键（别人模型的专有键）不归我们。");
                     HoConstraintEditorControls.Caption(StructureSummary(rig));
                     HoConstraintEditorControls.Flex();
                 }
@@ -207,11 +211,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             HoConstraintEditorTheme.FieldWidthWide + 14.0f);
                     HoConstraintEditorControls.Flex();
                 }
-
-                // 路径重映射不是第二个折叠 —— 折叠栏下只用 box 分块，层级只有一层。
-                EditorGUILayout.LabelField("路径重映射", EditorStyles.boldLabel);
-                HoConstraintEditorControls.Caption("模型层级和控制器里的路径不一致时用（例如控制器写 Body，模型里是 Meshes/Face）。");
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("pathRemaps"), GUIContent.none, true);
             }
 
             // ── 参数生产：中间层的处理器，一行一个 ────────────────────────────────
@@ -296,56 +295,33 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             DrawChannels(rig, session);
         }
 
-        /// <summary>初始化摘要：控制器在不在、生成段有几层。这一栏将来会长出"生成配置"（预设开关）。</summary>
+        /// <summary>初始化摘要：搬了没有、搬过来的是几层几个片段。</summary>
         private static string InitSummary(HoFaceTrackingDebugger rig)
         {
             if (rig.faceController == null) return "未初始化";
             if (!(rig.faceController is AnimatorController controller)) return "不是 AnimatorController";
-            if (!HasDriveLayer(controller)) return "缺 " + HoFaceAnimationAssets.DriveLayerName;
-            int managed = 0;
-            foreach (var layer in controller.layers)
-                if (HoFaceAnimationAssets.IsManagedLayer(layer.name))
-                    managed++;
-            return "已初始化 · 生成段 " + managed + " 层";
+            var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
+            return "已初始化 · " + info.layers + " 层 / " + info.clips + " 个片段";
         }
 
         /// <summary>
-        /// 控制器里**实际的**驱动层形状（从资产读，不是从配置推断）。
-        /// 中间层有些处理是隐式的 —— 眼睑被并成 2D 树、重叠由姿势表权衡 —— 所以这里把它报出来。
+        /// 控制器资产的**实况**（从资产读，不是从配置推断）：层/状态/片段/会写哪些形态键，
+        /// 以及"控制器写了、但这台模型的驱动对象上没有"的那些键。
         /// </summary>
         private static string StructureSummary(HoFaceTrackingDebugger rig)
         {
             if (!(rig.faceController is AnimatorController controller)) return "未指定控制器";
+            var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
+            if (info.clips == 0) return "这份控制器里没有片段";
 
-            BlendTree drive = null;
-            foreach (var layer in controller.layers)
-            {
-                if (layer.name != HoFaceAnimationAssets.DriveLayerName || layer.stateMachine == null) continue;
-                foreach (var state in layer.stateMachine.states)
-                    drive = state.state.motion as BlendTree;
-            }
-
-            if (drive == null) return "这个控制器里没有 " + HoFaceAnimationAssets.DriveLayerName + " 段";
-
-            int lidTrees = 0, lidPoses = 0, regionTrees = 0, regionLeaves = 0;
-            foreach (var child in drive.children)
-            {
-                if (!(child.motion is BlendTree tree)) continue;
-                if (tree.blendType == BlendTreeType.FreeformCartesian2D)
-                {
-                    lidTrees++;
-                    lidPoses += tree.children.Length;
-                }
-                else if (tree.blendType == BlendTreeType.Direct)
-                {
-                    regionTrees++;
-                    regionLeaves += tree.children.Length;
-                }
-            }
-
-            return "眼睑 " + lidTrees + " 棵 2D 树 / 共 " + lidPoses + " 格姿势 · 区域子树 " + regionTrees
-                + " 棵 / " + regionLeaves + " 个直通叶子 · 门控 " + HoFaceAnimationAssets.EyeGateName
-                + " + " + HoFaceAnimationAssets.LipGateName;
+            string text = info.layers + " 层 · " + info.states + " 个状态 · " + info.clips + " 个片段 · 写 "
+                + (info.shapes.Count + info.missing.Count) + " 个形态键";
+            if (info.otherCurves > 0)
+                text += "\n另有 " + info.otherCurves + " 条非形态键曲线（按原路径保留）："
+                    + string.Join("、", info.otherKinds.Take(4));
+            if (info.missing.Count > 0)
+                text += "\n⚠ 驱动对象上没有这些键，对应格子会被跳过：" + string.Join("、", info.missing);
+            return text;
         }
 
         /// <summary>
@@ -361,8 +337,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 parts.Add("死区");
             if (rig.eyeSync) parts.Add(rig.eyeSyncSingleKey ? "双眼同步·单键" : "双眼同步");
 
-            // 轴生产是结构性的（控制器里有对应的 2D 树就有），所以只要控制器是这套生成物就报出来。
-            if (rig.faceController != null) parts.Add("眼睑轴");
+            // 轴生产也是照着资产报的：控制器里真有那两根参数，写进去才算数。
+            if (rig.faceController is AnimatorController controller)
+                foreach (var p in controller.parameters)
+                    if (p.name == HoFaceNaming.LidAxis(0, true))
+                    {
+                        parts.Add("眼睑轴");
+                        break;
+                    }
+
             return parts.Count == 0 ? "全部关" : string.Join(" · ", parts);
         }
 
@@ -478,77 +461,59 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 初始化控制器：从源控制器 + 当前配置产出**一个完整文件**。
-        ///
-        /// 这是唯一会写文件的动作，而且是破坏性的 —— 目标已存在时里面的手工改动会全丢。
-        /// 所以路径每次都问，覆盖前必须把代价说清楚，并给一条「另存为新文件」的出路。
-        /// </summary>
-        /// <summary>组件上选的模板；没选就返回 null —— 生成器会用内置默认（ho-2d-test1）。</summary>
-        private static HoFaceTemplateSpec TemplateOf(HoFaceTrackingDebugger rig) =>
-            rig != null && rig.template != null ? rig.template.spec : null;
-
-        /// <summary>目标 Animator 下所有网格上真实存在的形态键（跟模板"需要的键"做差集用）。</summary>
-        private static void CollectShapeKeys(HoFaceTrackingDebugger rig, HashSet<string> into)
-        {
-            into.Clear();
-            if (rig == null || rig.targetAnimator == null) return;
-            foreach (var mesh in rig.targetAnimator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                if (mesh.sharedMesh == null || mesh.GetComponentInParent<Animator>() != rig.targetAnimator) continue;
-                for (int i = 0; i < mesh.sharedMesh.blendShapeCount; i++)
-                    into.Add(mesh.sharedMesh.GetBlendShapeName(i));
-            }
-        }
-
-        /// <summary>
-        /// 初始化 = 产出（或重写）控制器。**目标就是组件当前在用的那个资产**。
-        ///
-        /// 分两种情形，用户只看到**一个按钮**：
+        /// 初始化 = 把源控制器**整份**搬成这台角色的面部控制器。**目标就是组件当前在用的那个资产**，
+        /// 所以用户只看到**一个按钮**：
         /// <list type="bullet">
-        /// <item>控制器是我们的（有驱动段）→ **就地重写整个文件**：GUID 不变，旧内容清干净。切模板走这条
-        /// —— 所以**不需要用户自己备份**。</item>
-        /// <item>第一次（组件上还没有控制器），或那个控制器不是我们生成的 → 问路径新建；目标已存在时再确认一次覆盖。</item>
+        /// <item>已经有控制器 → 就地重写它（GUID 不变，引用它的地方不会断）；</item>
+        /// <item>还没有 → 问路径新建；目标已存在时再确认一次覆盖。</item>
+        /// <item>源控制器就是它自己 → 就地重绑动画对象（没有可复制的东西）。</item>
         /// </list>
         /// </summary>
         private void Initialize(HoFaceTrackingDebugger rig)
         {
+            var source = rig.sourceController as AnimatorController;
+            if (source == null) { Fail(new InvalidOperationException("先选一份源控制器。")); return; }
+            if (rig.meshes == null || rig.meshes.Count == 0) { Fail(new InvalidOperationException("驱动对象列表是空的 —— 先「按 Animator 填充」。")); return; }
+            if (rig.targetAnimator == null) { Fail(new InvalidOperationException("先指定角色 Animator。")); return; }
+
+            string sourcePath = AssetDatabase.GetAssetPath(source);
             var current = rig.faceController as AnimatorController;
-            if (current != null && HasDriveLayer(current))
-            {
-                string currentPath = AssetDatabase.GetAssetPath(current);
-                if (!EditorUtility.DisplayDialog("重新初始化吗？",
-                    currentPath + "\n\n会就地重写这个控制器的**整个文件**（旧的树、片段、参数都会清干净）。\n"
-                    + "资产 GUID 不变，所以引用它的地方（比如窥视对象）不会断。",
-                    "重写", "取消"))
-                    return;
-
-                ApplyChanges(rig);
-                return;
-            }
-
             string path = current != null ? AssetDatabase.GetAssetPath(current) : "";
             if (string.IsNullOrEmpty(path))
             {
-                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_ARKit", "controller",
-                    "产出一个完整的控制器文件；以后「重新初始化」只重写里面的驱动段。");
+                path = EditorUtility.SaveFilePanelInProject("初始化面部控制器", "Face_Controller", "controller",
+                    "产出一份属于这台角色的面部控制器；以后「重新初始化」只动这一个文件。");
                 if (string.IsNullOrEmpty(path)) return;
+                if (AssetDatabase.LoadMainAssetAtPath(path) != null
+                    && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
+                        path + "\n\n该文件已存在，会被整个重写。", "覆盖并初始化", "取消"))
+                    return;
             }
-
-            if (AssetDatabase.LoadMainAssetAtPath(path) != null
-                && !EditorUtility.DisplayDialog("要覆盖这个控制器吗？",
-                    path + "\n\n该文件已存在，覆盖会把它**整个**重写（包括你自己加的层）。", "覆盖并初始化", "取消"))
+            else if (string.Equals(path, sourcePath, StringComparison.Ordinal))
+            {
+                // 源就是目标：没有可复制的，只把动画对象重绑一遍。
+                if (!EditorUtility.DisplayDialog("就地重绑吗？",
+                    path + "\n\n这份文件既是源也是目标，会就地重绑它的动画对象。", "重绑", "取消"))
+                    return;
+            }
+            else if (!EditorUtility.DisplayDialog("重新初始化吗？",
+                path + "\n\n会把源控制器（" + source.name + "）**整份**搬过来覆盖它。\n"
+                + "资产 GUID 不变，所以引用它的地方（比如窥视对象）不会断。", "覆盖", "取消"))
                 return;
+
             try
             {
-                var controller = HoFaceAnimationAssets.Generate(rig.targetAnimator, path, true, TemplateOf(rig));
+                var controller = HoFaceAnimationAssets.Adopt(source, path, rig.meshes, rig.targetAnimator, true);
                 Undo.RecordObject(rig, "Initialize face controller");
                 rig.faceController = controller;
                 EnsureChannels(rig);   // 只补齐缺失的通道，不覆盖用户已经调过的
                 EditorUtility.SetDirty(rig);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(rig);
                 reportIsError = false;
-                report = "已初始化 " + path + "：" + controller.parameters.Length + " 路 ARKit 参数（"
-                    + controller.layers.Length + " 层：驱动段）。";
+                var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
+                report = "已初始化 " + path + "：" + info.layers + " 层 / " + info.clips + " 个片段，驱动 "
+                    + info.shapes.Count + " 个形态键"
+                    + (info.missing.Count > 0 ? "（" + info.missing.Count + " 个键驱动对象上没有，已跳过）" : "") + "。";
             }
             catch (Exception e) { Fail(e); }
         }
@@ -558,34 +523,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             reportIsError = true;
             report = e.Message;
-        }
-
-        /// <summary>
-        /// 重新初始化：就地重写整个控制器文件（GUID 不变）。「初始化控制器」只在开始时用一次。
-        /// </summary>
-        private void ApplyChanges(HoFaceTrackingDebugger rig)
-        {
-            if (!(rig.faceController is AnimatorController controller))
-            {
-                report = "请先「初始化控制器」，或选一个本工具产出的控制器。";
-                return;
-            }
-
-            try
-            {
-                HoFaceAnimationAssets.Apply(controller, rig.targetAnimator, TemplateOf(rig));
-                EnsureChannels(rig);
-                EditorUtility.SetDirty(rig);
-                report = "已重新初始化：整个文件重写完毕（GUID 未变）。";
-            }
-            catch (Exception e) { Fail(e); }
-        }
-
-        private static bool HasDriveLayer(AnimatorController controller)
-        {
-            foreach (var layer in controller.layers)
-                if (layer.name == HoFaceAnimationAssets.DriveLayerName) return true;
-            return false;
         }
 
         /// <summary>
