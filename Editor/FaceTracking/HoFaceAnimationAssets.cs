@@ -92,10 +92,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             throw new InvalidOperationException("首版面部控制器只允许形态键曲线：" + clip.name + " / " + curve.propertyName);
                         string shape = curve.propertyName.Substring("blendShape.".Length);
                         // **ARKit 的键走输入门控，非 ARKit 的键直接放行。**
-                        // 门控管的是"我们写哪些参数"，不是"控制器能动哪些键"。用户的果冻混合树
-                        // （或任何自己加的树）驱动的是自己的键，如果在这里被 `Allowed` 过滤掉，
-                        // 影子台上算出来的姿势就永远抄不回真模型 —— 表现是"果冻层看着在跑，
-                        // 脸上一点动静没有"。这一条是果冻改走混合树之后才暴露出来的。
+                        // 门控管的是"我们写哪些参数"，不是"控制器能动哪些键"：用户自己在 (EDIT THIS) 段里
+                        // 加的非 ARKit 键（自己摆的姿势、联动）如果没有这条放行，影子台上算出来的姿势就
+                        // 永远抄不回真模型 —— 表现是"那层看着在跑，脸上一动不动"。
+                        // 注：这条最早是果冻改走控制器混合树时暴露出来的；果冻后来搬回独立组件
+                        //（直接读写形态键），所以现在这条放行服务的对象是"(EDIT THIS) 里用户自己加的键"。
                         if (HoFaceTrackingChannels.IndexOf(shape) >= 0
                             && (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape)))) continue;
                         string path = Remap(rig, curve.path);

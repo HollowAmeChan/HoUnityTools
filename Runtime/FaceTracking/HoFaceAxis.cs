@@ -32,6 +32,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>眼睑开合：`+1` = 闭（blink）/ `-1` = 睁大（wide）/ `0` = 中性。</summary>
         public static float LidOpenClose(float blink, float wide) => Merge(blink, wide);
 
+        // ↓ 下面三个**目前没有消费者**（只有用例在测 Merge 本身）。它们是"成对反向通道 → 一根 −1~1 轴"
+        //   的标准写法，但**哪些通道真的该合并、合并后树上摆几个姿势**这件事还没定案 —— 要先拿成熟实现
+        //   与 Jerry 模板的做法取证，再决定给它们接线还是删掉。**别当成已经在用的功能。**
+
         /// <summary>唇角：`+1` = 欣（smile）/ `-1` = 悲（frown）。</summary>
         public static float SmileSad(float smile, float frown) => Merge(smile, frown);
 
