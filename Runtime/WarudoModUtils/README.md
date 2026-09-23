@@ -1,4 +1,4 @@
-# WarudoModUtils
+﻿# WarudoModUtils
 
 此目录存放 Warudo **运行时可用的工具组件**。代码保持运行时独立，不依赖 `UnityEditor`
 或 Warudo 私有程序集，方便由 Warudo 的资源面板 / 蓝图传参。
