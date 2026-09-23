@@ -22,6 +22,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool outputExpanded = true;
         private bool middleExpanded = true;
         private bool channelsExpanded;
+        /// <summary>目标网格上真实存在的形态键（用来跟模板"需要的键"做差集）。</summary>
+        private readonly HashSet<string> shapeKeys = new HashSet<string>();
         private double nextRepaint;
         private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
 
@@ -113,6 +115,27 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
 
                     HoConstraintEditorControls.Flex();
+                }
+
+                // 模板：决定眼睑那几棵树长什么样、**需要哪些键**。留空 = 内置默认（ho-2d-test1）。
+                serializedObject.Update();
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("template"),
+                    new GUIContent("混合树模板", "决定眼睑那几棵树长什么样、需要哪些键。\n留空 = 内置默认（ho-2d-test1）。\n"
+                        + "改模板是**结构改动**，要走「应用改动」或重新初始化才生效。"));
+                serializedObject.ApplyModifiedProperties();
+
+                var template = rig.template != null ? rig.template.spec : HoFaceTemplateDefaults.TwoDTest1();
+                HoConstraintEditorControls.Caption("模板：" + template.displayName
+                    + "　需要：" + (string.IsNullOrEmpty(template.requiredKeysNote) ? "（未声明）" : template.requiredKeysNote));
+                if (rig.targetAnimator != null)
+                {
+                    CollectShapeKeys(rig, shapeKeys);
+                    var missing = new List<string>();
+                    foreach (string key in template.UsedKeys())
+                        if (!shapeKeys.Contains(key)) missing.Add(key);
+                    if (missing.Count > 0)
+                        HoConstraintEditorControls.Caption("⚠ 网格上缺这些键，对应格子里的它们会被**跳过**（不报错）："
+                            + string.Join("、", missing));
                 }
 
                 HoConstraintEditorControls.Caption("初始化产出的是**一整片「状态 + 驱动映射」**（片段 / 混合树 / 门控参数），"
@@ -469,6 +492,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>组件上选的模板；没选就返回 null —— 生成器会用内置默认（ho-2d-test1）。</summary>
         private static HoFaceTemplateSpec TemplateOf(HoFaceTrackingDebugger rig) =>
             rig != null && rig.template != null ? rig.template.spec : null;
+
+        /// <summary>目标 Animator 下所有网格上真实存在的形态键（跟模板"需要的键"做差集用）。</summary>
+        private static void CollectShapeKeys(HoFaceTrackingDebugger rig, HashSet<string> into)
+        {
+            into.Clear();
+            if (rig == null || rig.targetAnimator == null) return;
+            foreach (var mesh in rig.targetAnimator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (mesh.sharedMesh == null || mesh.GetComponentInParent<Animator>() != rig.targetAnimator) continue;
+                for (int i = 0; i < mesh.sharedMesh.blendShapeCount; i++)
+                    into.Add(mesh.sharedMesh.GetBlendShapeName(i));
+            }
+        }
 
         private void Initialize(HoFaceTrackingDebugger rig)
         {

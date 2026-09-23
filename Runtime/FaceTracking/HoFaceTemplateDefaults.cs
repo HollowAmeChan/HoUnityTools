@@ -195,7 +195,6 @@ namespace Hollow.HoUnityTools.FaceTracking
             for (int side = 0; side < 2; side++)
             {
                 string suffix = side == 0 ? "Left" : "Right";
-                string lidParameter = "Ho/Drive/Lid/" + suffix + "/EyeLid";
 
                 // 眨眼轴：Simple1D 平台式 —— 中性在 0.7 与 0.8 两个阈值上（同一档）。
                 var lidPoses = new[]
