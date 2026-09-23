@@ -7,15 +7,18 @@
 
 ## 0. 三句话结论
 
-1. **输出不是一套统一标准**，而是"**目标平台自己的命名**"：喂 VTubeStudio 就用 **VTS 的追踪参数名**
-   （`FaceAngleX`、`EyeOpenLeft`、`MouthOpen`…），喂 VMC/VRM 应用就用 **ARKit 原名**（`eyeBlinkLeft`…），
-   其余是**给用户自定义的驼峰名**（`JawOpen`、`MouthX`…）。
-2. **Live2D 侧没有一个"全局标准"**：VTS 的**追踪参数**是固定的一套（VBridger 用的就是它）；
-   而 `ParamAngleX` / `ParamEyeLOpen` / `ParamMouthOpenY` 这些是**每个模型自己的参数 ID**
-   （Cubism 只有一套"Cubism 标准参数"的约定），客户端要驱模型参数得走 VTS 的参数注入/自定义参数机制。
+1. **输出不是一套统一标准**，而是"**目标平台自己的命名**"，而且**一张表只打一个下游**：
+   喂 VTubeStudio 用 **VTS 的追踪参数名**（`FaceAngleX`、`EyeOpenLeft`、`MouthOpen`…，固定清单）；
+   喂 VMC/VRM 应用用 **ARKit 原名**（`eyeBlinkLeft`…，事实上的可移植面部词汇表）；
+   其余是**它自己声明/用户自定义的驼峰名**（`JawOpen`、`MouthX`、`BodyAngle`…）。
+   ⚠️ **同名在两套表里可能不是一回事**：`JawOpen` 在一份预设里是 VTS 自定义参数，另一份里是 VMC 的 ARKit 键名
+   —— 中间层必须**按下游分表**（这个坑是从它自己的预设里看出来的）。
+2. **Live2D 侧有两个命名空间，别混**：VTS 的**追踪参数**是固定的一套（插件可自由写，VBridger 用的就是它）；
+   而 `ParamAngleX` / `ParamEyeLOpen` / `ParamMouthOpenY` 是**每个模型自己的参数 ID**，
+   官方 API **没有"直接写模型参数"的请求** —— 中间层应发**追踪参数**，让 VTS 自己的映射 / auto-setup 去对模型。
 3. **输入远不止 ARKit 52**：实测 10 份预设里出现 **104 个变量** —— ARKit（`_L/_R` 拼写）、头/眼姿态
    （`headRotX/Y/Z`、`headPosX/Y/Z`、`eyeLeftY/eyeRightY`…）、**全身骨链**（`ChestX`…`HipsZ`，VMC 输入用）、
-   **15 个 viseme**（`viseme_AA…` 连续值 + `viseme_AA_abs…` 绝对值两条线）、`volume`，以及追踪健康位。
+   **15 个 viseme**（`viseme_AA…` 连续值 + `viseme_AA_abs…` 绝对值两条线）、`volume`，以及追踪健康位 `faceFound`。
 
 ## 1. 输入词汇表（表达式里能写什么）
 
@@ -73,31 +76,71 @@
 
 （`EyeLeftX/Y` 在这里出现，但十份预设里只写 `EyeRightX/Y` —— VTS 侧两眼共用一个注视目标。）
 
-预设里实际用到的（含预设自己加的自定义名）：
+**但预设里发出去的名字**远比这 24 个多，要分成三类看（314 行输出统计：**119 行 VTS 追踪名 /
+127 行 ARKit 名 / 4 行人类骨骼名 / 0 行 `Param*` / 64 行自定义**）：
 
-| 名字 | 范围 | 用途 |
+| 类别 | 名字 | 说明 |
+| --- | --- | --- |
+| **① 官方 VTS 追踪参数**（插件可自由写） | `FaceAngleX/Y/Z`、`FacePositionX/Y/Z`、`MouthOpen`、`MouthSmile`、`MouthX`、`Brows`、`BrowLeftY/RightY`、`EyeOpenLeft/Right`、`EyeLeftX/Y`、`EyeRightX/Y`、`TongueOut`、`CheekPuff`、`FaceAngry`、`Voice*`（+ 20 个手部参数） | 名字与语义由 VTS 定；官方清单见 [VTS wiki](https://github.com/DenchiSoft/VTubeStudio/wiki/VTS-Model-Settings)；⚠️ **`CheekPuff`/`FaceAngry` 只有 iOS、`TongueOut` 只有 iOS/Android** |
+| **② 它自己声明的自定义参数**（预设里大量用） | `BodyAngleX/Y/Z`、`BodyPositionX/Y/Z`、`BodyAngle`、`BodyPosition`、`JawOpen`、`MouthPucker`、`MouthFunnel`、`MouthShrug`、`MouthPressLipOpen`、`BrowInnerUp`、`Eye_Squint_L/R`、`EyeSquintLeft/Right` | 官方追踪清单里**没有**这些名字，靠 `ParameterCreationRequest` 自动登记（名字要唯一、字母数字、4–32 字符，`min/max/default` 只是"新建映射时的默认范围"、不是钳制） |
+| **③ 模型参数 `Param*`** | **一个都没有** | `ParamAngleX` / `ParamEyeLOpen` 是**每个模型自己的 ID**，而且**官方 API 没有直接写模型参数的请求** —— 所以 VBridger 一律发追踪参数，让 VTS 的映射/auto-setup 去对模型 |
+
+预设里实际用到的名字与范围：
+
+| 名字 | 范围（VBridger 声明） | 用途 |
 | --- | --- | --- |
 | `FaceAngleX/Y/Z`（或 vector 版 `FaceAngle`） | ±30…±50（度） | 头部朝向 |
 | `FacePositionX/Y/Z`（或 `FacePosition`） | X ±15 / Y ±5 / Z ±10 | 头部位置 |
-| `BodyAngleX/Y/Z`（或 `BodyAngle`） | ±30…±40 | 身体朝向（**带 100ms 延迟**，让身体慢跟头） |
-| `BodyPositionX/Y/Z` | 同 FacePosition | 身体位置 |
+| `BodyAngleX/Y/Z`（或 `BodyAngle`）〔自定义〕 | ±30…±40 | 身体朝向（**带 100ms 延迟**，让身体慢跟头） |
+| `BodyPositionX/Y/Z`〔自定义〕 | 同 FacePosition | 身体位置 |
 | `EyeOpenLeft` / `EyeOpenRight` | 0..1，**0.5 = 中性** | 睁眼度（0 = 闭） |
 | `EyeRightX` / `EyeRightY` | ±0.6…±1 | 眼球方向（VTS 里两眼共用一个目标，所以只发一套） |
 | `MouthOpen` | 0..1 | 张嘴（= 下颌 − 唇闭合 + 漏斗修正） |
 | `MouthSmile` | −1..1 | 笑/哭 |
 | `MouthX` | −1..1 | 嘴左右 |
-| `MouthPucker` / `MouthFunnel` | −1..1 / 0..1 | 嘟嘴 / 漏斗 |
-| `MouthPressLipOpen` / `MouthShrug` | ±1.3 / 0..1 | 抿嘴张开 / 嘴耸 |
-| `JawOpen` / `CheekPuff` / `TongueOut` | 0..1 | 直通 |
-| `Brows` / `BrowInnerUp` / `BrowLeftY` / `BrowRightY` | 0..1，**默认 0.5** | 眉 |
+| `MouthPucker` / `MouthFunnel`〔自定义〕 | −1..1 / 0..1 | 嘟嘴 / 漏斗 |
+| `MouthPressLipOpen` / `MouthShrug`〔自定义〕 | ±1.3 / 0..1 | 抿嘴张开 / 嘴耸 |
+| `JawOpen` / `CheekPuff` / `TongueOut` | 0..1 | 直通（`JawOpen` 是自定义名，`CheekPuff`/`TongueOut` 是官方名） |
+| `Brows` / `BrowLeftY` / `BrowRightY` | 0..1，**默认 0.5** | 眉（`BrowInnerUp` 是自定义） |
 | `VoiceVolumePlusMouthOpen` / `VoiceFrequencyPlusMouthSmile` | 0..1 | VTS 的"音频驱动"口型（VBridger 用**嘴型**冒充） |
-| `Eye_Squint_L/R`、`EyeSquintLeft/Right` | 0..1 | 眯眼（自定义名，不同预设拼写不同） |
+| `Eye_Squint_L/R`、`EyeSquintLeft/Right`〔自定义〕 | 0..1 | 眯眼（自定义名，不同预设拼写不同） |
+
+> ⚠️ 上表的"范围"是**VBridger 自己声明的**（写在预设的 `min`/`max` 里）。官方只对语音类明示 `0..1`，
+> 其余追踪参数的权威 min/max 要运行时用 `InputParameterListRequest` 现取。
+
 
 ### 2.2 ARKit 原名（喂 VMC / VRM 应用）
 
-`eyeBlinkLeft` … `mouthStretchRight` 共 **51 个**（52 键里少一个），基本一对一，
-但有两处**故意反接**：VMC 预设里 `browOuterUpLeft ← browOuterUp_R`、`eyeBlinkLeft ← eyeBlink_R`
-—— 因为那份模型的键是镜像的。**这就是"中间层要能改数据"的典型理由。**
+两份 VMC 预设的输出**全是 ARKit-52 的 camelCase 名**（逐行实测）：
+
+| 预设 | 行数 | ARKit 行 | 唯一名 | 其它 |
+| --- | --- | --- | --- | --- |
+| `VBridger_VMC_FaceOnly` | 50 | 50 | **49** | — |
+| `VBridger_VMC-Face-Head` | 54 | 50 | **49** | 4 行向量 `Head` / `Neck` / `LeftEye` / `RightEye` |
+
+**都不是完整 52 个**：`jawForward`、`noseSneerLeft`、`noseSneerRight` 缺失，而 **`jawLeft` 写了两遍**
+（两行完全一样，应该是 `jawRight` 的笔误）—— 下游若按"必须有 52 个"校验会直接失败。
+
+**镜像反接也不一致**（这才是"中间层要能改数据"的典型理由）：
+
+| 预设 | 反接的键 |
+| --- | --- |
+| `VMC_FaceOnly` | `eyeBlinkLeft ← eyeBlink_R`、`eyeBlinkRight ← eyeBlink_L`、`browOuterUpLeft ← browOuterUp_R`、`browOuterUpRight ← browOuterUp_L` |
+| `VMC-Face-Head` | 只有 `browOuterUpLeft ← browOuterUp_R`、`browOuterUpRight ← browOuterUp_L`（`eyeBlinkLeft = eyeBlink_L` **没反**） |
+
+同一家出的两份预设，同一批键的左右接法都不一样 —— 说明**左右约定是"看模型"的，不是标准的**。
+
+为什么 ARKit 名字会成为事实标准：VMC 协议本身**不规定任何混合键名表**（`/VMC/Ext/Blend/Val`
+只带一个字符串 + 一个 float，收方按自己模型里的键去对），是 VRM/ARKit 生态把它当成了通用词汇。
+三个相关但**不同**的东西别混：
+
+| 名字 | 是什么 | 谁定 |
+| --- | --- | --- |
+| **ARKit 52**（`eyeBlinkLeft`/`jawOpen`/`mouthSmileLeft`…） | Apple `ARFaceAnchor.BlendShapeLocation` 的 52 个键，**camelCase** | Apple；VMC/VRM 生态事实采用 |
+| **VTS `VTSARKitBlendshape`** | VTS 侧的另一种 input 类型，**它自己映射成 52 个 ARKit 语义**（用 `Left` 拼写，如 `EyeBlinkLeft`） | VTS |
+| **VRCFT "Unified Expressions"** | 另一套**更大**的前脸标准（含 `EyeLook*`/`Jaw*`/`Lip*` 数十个），不是 ARKit 52 | VRCFT |
+
+⚠️ 结论：**"ARKit 52 直通"这句话在我们这里要按下游分别建表**，而且**要能纠左右** —— 不能一张表打天下。
 
 ### 2.3 vector 行（一行写 X/Y/Z）
 
@@ -149,10 +192,70 @@
 - **修饰符**：`smooth` 是 **0..1 的 EMA 系数**（0 = 不滤），实测 0 ~ 0.77；`delay` 是**毫秒**（只有身体用 100）；
   `stepDetails2` 只出现在 `Stepped`/`PNGTuber`。
 
-## 5. 对我们自己的意义
+## 5. 下游标准（别人吃什么）
 
-1. **"参数格式"不是我们发明的**：要对接 VTS 就照 §2.1 的名字与范围；对接 VMC/VRM 就照 §2.2 的 ARKit 原名。
-   这两套名字就是"输入参数"该长什么样的**事实标准**（加上 VRM 1.0 的 expression 名与 Cubism 的 `Param*` 约定）。
+上面 §2 讲的是 **VBridger 自己发什么**。这一节讲**下游真的认什么** —— 两边并不重合，这才是"我至今
+不知道 l2d 那边吃的输入有什么标准"的答案：**Live2D 侧吃的不是模型参数，是 VTS 的追踪参数**。
+
+### 5.1 结论表
+
+| 下游 | 名字形态 | 例子 | 范围 | 谁定义 | 跨模型稳定性 |
+| --- | --- | --- | --- | --- | --- |
+| **VTS 追踪参数**（插件能写的） | PascalCase，无前缀 | `FaceAngleX`、`MouthOpen`、`EyeOpenLeft`、`EyeRightX`、`Brows`、`TongueOut`、`VoiceA`、`HandLeftFinger_2_Index` | 协议接受 `−1e6..1e6`；各参数 min/max/default 是**"新建映射时的默认上下限"**，官方只对语音类明示 `0..1`，其余用 `InputParameterListRequest` 现取 | **VTubeStudio**（官方 Wiki），插件只能读不能增删清单 | **高**，但**平台相关**：`CheekPuff`/`FaceAngry` 仅 iOS，`TongueOut` 仅 iOS/Android |
+| **VTS 模型参数**（`Param*`） | `Param` + PascalCase，**每个模型自己起** | `ParamAngleX`、`ParamEyeLOpen`、`ParamMouthOpenY`、`ParamMouthForm`、`ParamBodyAngleX`、`ParamBreath` | 逐模型自定义；Cubism 标准表只是**惯例**（`ParamAngle*` `±30`、`ParamEye*Open` `0/1/1`、`ParamMouthOpenY` `0..1`、`ParamMouthForm` `−1..1`、`ParamBodyAngle*` `±10`） | **模型作者**（Cubism Editor）；Live2D 官方只给 Standard Parameter List 约定，非强制 | **低**。⚠️ **官方 API 没有直接写模型参数的请求** —— 只能写追踪参数，让用户在 VTS 里映射；「参数名遵守 Cubism 标准表」的价值是 **VTS auto-setup 一键映射** |
+| **VMC / VRM**（Blend） | 就是**接收模型自己的 blend 名**；面捕场景的事实标准 = **ARKit 52 的 camelCase** | `eyeBlinkLeft`、`jawOpen`、`mouthSmileLeft`；最小公共集是 VRM0 预设名 `A/I/U/E/O`、`Blink_L/R` | VMC 协议**不给范围**；VRM 1.0 规定 Expression `[0-1]` **并要求实现 clamp**；VRM0 绑定权重惯例 `[0,1]` | **VRM spec**（名字语义 + `[0,1]`）+ **Apple ARKit**（52 名）；接收应用自己决定映射（Warudo 提供 ARKit/MMD/VRM 三选一） | **中**：名字稳定，但**模型必须真做了这些 blend**；大小写敏感；VRM0 预设名与 VRM1 不同名，要按 spec 的映射表转 |
+| **VMC**（Bone） | `UnityEngine.HumanBodyBones` 的**类型名** | `Head`、`Neck`、`LeftEye`、`RightEye`、`Hips`、`Spine` | 位置 = 米（局部），旋转 = 四元数 | **Unity / VRM humanoid 骨骼定义** | **高**（名字固定），但**骨骼是否存在**看模型（眼骨、指骨可选） |
+| **VRM 1.0 Expression** | 小写预设名，自定义放 `expressions.custom` | `happy`、`angry`、`sad`、`relaxed`、`surprised`、`aa/ih/ou/ee/oh`、`blink`、`blinkLeft/Right`、`lookUp/Down/Left/Right`、`neutral` | **`[0-1]`，规范要求 clamp**（整个生态里唯一被规范写死的值域）；`isBinary` 阈值 0.5 | **VRM Consortium** | **最高**（规范级），但**只有 17 个预设**，做不了面捕细节 |
+| **Unity Animator 参数**（我们自己的链） | 任意字符串，大小写敏感，类型只有 Float/Int/Bool/Trigger | 随项目自定 | Float 无内置范围 | **我们自己** | **零** —— 正因为自由，**建议直接采用 VTS 追踪参数名或 ARKit-52 名**，省掉一张映射表 |
+
+引用：[VTS Model Settings](https://github.com/DenchiSoft/VTubeStudio/wiki/VTS-Model-Settings)、
+[VTS README（custom parameters / 注入规则）](https://github.com/DenchiSoft/VTubeStudio#adding-new-tracking-parameters-custom-parameters)、
+[Cubism 标准参数表](https://docs.live2d.com/en/cubism-editor-manual/standard-parameter-list/)、
+[VMC Protocol spec](https://protocol.vmc.info/english)、
+[VRM 0.0 spec](https://github.com/vrm-c/vrm-specification/blob/master/specification/0.0/README.md)、
+[VRMC_vrm-1.0 expressions](https://github.com/vrm-c/vrm-specification/blob/master/specification/VRMC_vrm-1.0/expressions.md)、
+[Apple `ARFaceAnchor.BlendShapeLocation`](https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapelocation)；
+逐条实测与 UNVERIFIED 清单见 `.research/vbridger/DOWNSTREAM_STANDARDS.md`。
+
+### 5.2 注册自定义参数（写 VTS 非清单名时）
+
+```jsonc
+{ "messageType": "ParameterCreationRequest",
+  "data": { "parameterName": "MyNewParamName", "explanation": "…",
+            "min": -50, "max": 50, "defaultValue": 10 } }
+```
+
+- `parameterName`：**唯一、仅字母数字、无空格、长度 4–32**（所以 `Eye_Squint_L` 这种下划线名
+  根本注册不了，`HandLeftFinger_2_Index` 能存在是因为它是 VTS 内置的）。
+- `min/max/defaultValue`：`±1e6` 内，**不是值的硬上下限**，只是"新建映射时默认填的范围"。
+- 配额：全局 300 个、单插件 100 个；重名（别人建的）失败，自己重复创建成功并能**改 min/max/default**。
+- 存 `StreamingAssets/Config/custom_parameters.json`；**吊销 token 会删掉该插件的全部自定义参数**。
+- 注入约束：值必须是 float 且 `−1e6..1e6`；`id` 不存在直接报错；**每个参数至少每秒重发一次**，
+  否则 VTS 视为丢失并回落；`mode` 缺省 = 覆盖（同参数同时只能一个插件写），`"add"` = 叠加。
+
+### 5.3 三条落地建议
+
+1. **输出表按下游分表**，不要一张扁平表。VBridger 自己就踩了这个坑：
+   `JawOpen` 在 VTS 预设里是自定义追踪参数、在 VMC 预设里是 blend 名，"同名两种身份"。
+2. **每行带 `(name, min, max, default)` 元数据**：写 VTS 时拿去 `ParameterCreationRequest`，
+   写 VMC 时它只是钳位/曲线定义域（VBridger 就是这么干的，源码可证）。
+3. **先探测再写**：VTS 先 `InputParameterListRequest`（区分 `defaultParameters` / `customParameters`）
+   → 缺的注册 → 每帧注入；VMC 侧**没有探测机制**，只能靠模型约定 + 骨名白名单（HumanBodyBones）校验。
+
+### 5.4 未确认（不要当结论用）
+
+- VTS 各默认追踪参数的**完整** min/max/default：官方 README 的示例自称 incomplete，只能运行时取。
+- 能否用 `InjectParameterDataRequest` 直写 `ParamAngleX`：官方文档只承认写追踪参数 → **不依赖**。
+- VMC 的 `/VMC/Ext/Blend/Val` 值域是否被协议限定 `0..1`：spec 只写 float，`0..1` 来自 VRM 规范。
+- OBSKUR 的 blend 命名要求：没找到官方说明。
+
+## 6. 对我们自己的意义
+
+1. **"参数格式"不是我们发明的**：要对接 VTS 就照 §2.1 的名字与范围；对接 VMC/VRM 就照 §2.2 的 ARKit 原名
+   （下游侧的标准见 §5）。这两套名字就是"输出参数"该长什么样的**事实标准**
+   （加上 VRM 1.0 的 expression 名与 Cubism 的 `Param*` 约定）。
+   更关键的一条：**Live2D 那边根本没有"输入参数标准"这回事** —— 我们能写的是 VTS 的追踪参数，
+   模型参数 `Param*` 是逐模型的、官方 API 不给直写；所以别去猜 L2D 吃什么，交给 VTS 的映射。
 2. **我们的 profile 已经能表达上面全部规则**：加权和、减法、门控、`clamp`、`lerp`、`if`、
    按行曲线与有序修饰符 —— §3 的十种模式都是"一条表达式 + 一条曲线"。
 3. **值得抄的两条设计**：① 同一语义给"连续值 + `_abs` 绝对值"两条输入线（做门控用）；
