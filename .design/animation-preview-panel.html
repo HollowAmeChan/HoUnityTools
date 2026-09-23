@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ho 动画剪辑预览 · 面板视觉规划（IMGUI 可实现范围）</title>
+<style>
+  /* ── 设计令牌：与 HoConstraintEditorTheme 同一套色值 ────────────────────
+     面板底 #3F3F3F / 输入井 #2E2E2E / 描边 #2C2C2C / 分隔 #4A4A4A
+     文字 主 #D4D4D4 次 #A0A0A0 弱 #7C7C7C 亮 #EDEFF2
+     强调 #4A9BFF  提醒 #E8A33D  错误 #E5534B
+     走带高 46  图标 16  槽高 14  行距 4 */
+  :root{
+    --panel:#3F3F3F; --well:#2E2E2E; --line:#2C2C2C; --sep:#4A4A4A;
+    --fg:#D4D4D4; --fg2:#A0A0A0; --fg3:#7C7C7C; --fg0:#EDEFF2;
+    --accent:#4A9BFF; --warn:#E8A33D; --err:#E5534B;
+    --track:rgba(0,0,0,.42);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:#2B2B2B;color:var(--fg);
+       font:12px/1.45 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  h1{font-size:15px;margin:0 0 4px}
+  .hint{color:var(--fg3);margin:0 0 20px;font-size:11.5px}
+  .wrap{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+
+  /* ── 面板容器：Unity Inspector 的宽度感 ─────────────────────────── */
+  .inspector{width:340px;background:#383838;border:1px solid #262626;padding:6px 6px 8px}
+
+  /* ── 标题行 16px：左标题，右一个状态词 ─────────────────────────── */
+  .title{height:16px;display:flex;align-items:center;font-weight:600;font-size:11px;color:var(--fg)}
+  .title .st{margin-left:auto;font-size:10px;font-weight:400}
+  .st.play{color:var(--accent)} .st.err{color:var(--err)} .st.idle{color:var(--fg3)}
+
+  /* ── 走带卡片：1px 描边，内边距 6，总高 80 ─────────────────────
+     三层各占自己的高度，互不抢宽度：
+       读数 13  + 3  →  时间轴 18  + 3  →  按钮 20
+     时间轴吃满整宽。图标 16px、键距 10px —— 14px + 4px 时五个键会读成一排小东西。 */
+  .bar{background:var(--panel);border:1px solid var(--line);padding:6px;margin:2px 0;width:284px}
+
+  /* 读数行 13px */
+  .readout{height:13px;display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+  .readout .loop{width:12px;height:12px;flex:none}
+  .readout .warn{font-size:10px;color:var(--warn)}
+  .readout .num{font-family:Consolas,"DejaVu Sans Mono",monospace;font-size:10px;color:var(--fg0)}
+  .readout .frame{margin-left:auto;font-size:10px;color:var(--fg2);width:42px;text-align:right}
+
+  /* 按钮行 20px：圆播放键 26px + 四个 16px 图标（键距 10） */
+  .transport{height:20px;display:flex;align-items:flex-start;gap:10px;margin-top:3px}
+  .ib{width:16px;height:16px;flex:none}
+  .ib:hover{background:rgba(255,255,255,.08)}
+  .ib svg{width:16px;height:16px;display:block;fill:var(--fg2)}
+  .play{width:26px;height:26px;flex:none;margin-right:-2px;border-radius:50%;
+        background:#384F63;border:1px solid #4A9BFF;display:flex;align-items:center;justify-content:center}
+  .play:hover{background:#445F76}
+  .play svg{width:16px;height:16px;fill:#EDEFF2}
+
+  /* 时间轴槽：底 + 已播放渐变 + 整秒刻度 + 播放头 */
+  .seek{position:relative;height:14px;flex:1;background:var(--track);
+        border:1px solid var(--line);cursor:ew-resize;min-width:40px}
+  .seek .played{position:absolute;left:1px;top:1px;bottom:1px;
+        background:linear-gradient(90deg, rgba(74,155,255,.55), rgba(74,155,255,.40))}
+  .seek .tick{position:absolute;top:3px;bottom:3px;width:1px;background:rgba(255,255,255,.13)}
+  .seek .head{position:absolute;top:-1px;bottom:-1px;width:1px;background:#EAF0F8}
+  .seek .knob{position:absolute;top:-2px;width:6px;height:3px;background:#EAF0F8}
+  .seek.empty{cursor:default}
+  .seek.empty .ph{position:absolute;left:6px;top:0;bottom:0;display:flex;align-items:center;
+        color:var(--fg3);font-size:10px}
+
+  /* ── 剪辑字段 ─────────────────────────────────────────────────── */
+  .field{display:flex;align-items:center;height:18px;margin-top:4px;gap:6px}
+  .field .lb{width:30px;flex:none;color:var(--fg2);font-size:11px}
+  .field .well{flex:1;height:18px;background:var(--well);border:1px solid var(--line);
+        display:flex;align-items:center;padding:0 5px;font-size:11px;color:var(--fg)}
+  .field .well.empty{color:var(--fg3)}
+
+  /* ── 折叠栏（默认关）─────────────────────────────────────────── */
+  .fold{display:flex;align-items:center;gap:4px;height:18px;margin-top:6px;
+        font-weight:600;font-size:11px;cursor:pointer;color:var(--fg2)}
+  .fold .sum{font-weight:400;font-size:10px;color:var(--fg3)}
+  .foldbody{padding:2px 0 0 12px;border-top:1px solid #444;margin-top:2px}
+
+  /* ── 设置区：自绘行，18px 行高、62px 标签列、10px 缩进 ───────── */
+  .frow{height:18px;display:flex;align-items:center}
+  .frow .lb{width:62px;flex:none;color:var(--fg2);font-size:11px;padding-left:10px}
+  .frow .well{height:16px;background:var(--well);border:1px solid var(--line);
+        display:flex;align-items:center;padding:0 5px;font-size:11px;min-width:40px}
+  .frow .num{height:16px;width:52px;background:var(--well);border:1px solid var(--line);
+        display:flex;align-items:center;justify-content:flex-end;padding:0 5px;font-size:11px;color:var(--fg0)}
+  .frow .num i{font-style:normal;color:var(--fg3);margin-left:3px;font-size:10px}
+  .pbtn{height:16px;padding:0 6px;background:#333;border:1px solid var(--line);color:var(--fg2);
+        display:flex;align-items:center;font-size:10px;margin-right:2px}
+  .pbtn.on{background:#3E5C7E;border-color:#4E7BA6;color:#E8F1FA}
+  .chk{width:13px;height:13px;border:1px solid var(--line);background:var(--well);flex:none;
+       display:flex;align-items:center;justify-content:center;font-size:9px;color:#CFF6E2}
+  .chk.on{background:#2E6E50;border-color:#3E8F66}
+  .cap{font-size:9.5px;color:var(--fg3)}
+  .foot{font-size:9px;color:var(--fg3);margin-top:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+
+  /* ── 说明栏 ───────────────────────────────────────────────────── */
+  .notes{width:360px;color:var(--fg2);font-size:11.5px}
+  .notes h2{font-size:12px;color:var(--fg);margin:16px 0 6px}
+  .notes h2:first-child{margin-top:0}
+  .notes ul{margin:0;padding-left:16px}
+  .notes li{margin:3px 0}
+  code{background:#333;padding:0 3px;font-family:Consolas,monospace;font-size:11px;color:#CFE3FF}
+</style>
+</head>
+<body>
+<h1>Ho 动画剪辑预览 · 面板视觉规划</h1>
+<p class="hint">左：外面的样子（只露走带 + 折叠栏）。下面还给了两个状态变体。右：令牌与规则。
+IMGUI 全部可实现：纯色矩形 + 1px 描边 + 文字，无圆角无阴影。</p>
+
+<div class="wrap">
+<div>
+  <!-- ══════════════ 正常状态（折叠栏关，默认） ══════════════ -->
+  <div class="inspector">
+    <div class="title">动画剪辑预览<span class="st play">播放中</span></div>
+
+    <div class="bar">
+      <div class="readout">
+        <svg class="loop" viewBox="0 0 32 32" style="fill:#A0A0A0">
+          <path d="M16 4a12 12 0 0 1 8.5 3.5l2.1-2.1v8h-8l2.5-2.5A8 8 0 0 0 8 16H4A12 12 0 0 1 16 4zm0 24a12 12 0 0 1-8.5-3.5l-2.1 2.1v-8h8l-2.5 2.5A8 8 0 0 0 24 16h4a12 12 0 0 1-12 12z"/>
+        </svg>
+        <span class="num">1.24 / 3.00s</span>
+        <span class="frame">37/90</span>
+      </div>
+
+      <!-- 时间轴：独占一整行 -->
+      <div class="seek">
+        <div class="played" style="width:41%"></div>
+        <div class="tick" style="left:33.4%"></div>
+        <div class="tick" style="left:66.7%"></div>
+        <div class="head" style="left:41%"></div>
+        <div class="knob" style="left:calc(41% - 3px)"></div>
+      </div>
+
+      <div class="transport">
+        <!-- 暂停中：显示 ▶。唯一有底的键 -->
+        <div class="play" title="播放 / 暂停">
+          <svg viewBox="0 0 16 16"><path d="M3 4h3l7 4-7 4H3z"/></svg>
+        </div>
+        <div class="ib" title="回到开头">
+          <svg viewBox="0 0 16 16"><rect x="2" y="3" width="2" height="10"/><path d="M4 8l7-4v8z"/></svg>
+        </div>
+        <div class="ib" title="上一帧">
+          <svg viewBox="0 0 16 16"><path d="M11 8L4 4v8z"/></svg>
+        </div>
+        <div class="ib" title="下一帧">
+          <svg viewBox="0 0 16 16"><path d="M5 4v8l7-4z"/></svg>
+        </div>
+        <div class="ib" title="到末尾">
+          <svg viewBox="0 0 16 16"><path d="M9 4v8L2 8z"/><rect x="12" y="3" width="2" height="10"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lb">剪辑</span>
+      <span class="well">Idle_Loop_A</span>
+    </div>
+
+    <div class="fold">▸ 设置 <span class="sum">· 1x · 循环 · 根运动开 · 30fps</span></div>
+  </div>
+
+  <!-- ══════════════ 空态 ══════════════ -->
+  <div class="inspector" style="margin-top:18px">
+    <div class="title">动画剪辑预览<span class="st idle">空</span></div>
+    <div class="bar">
+      <div class="readout"><span class="num">—</span></div>
+      <div class="seek empty"><span class="ph">—</span></div>
+      <div class="transport">
+        <div class="play dim" style="background:#2E2E2E;border-color:#3A3A3A">
+          <svg viewBox="0 0 16 16" style="fill:#5A5A5A"><path d="M3 4h3l7 4-7 4H3z"/></svg>
+        </div>
+        <div class="ib dim"><svg viewBox="0 0 16 16" style="fill:#5A5A5A"><rect x="2" y="3" width="2" height="10"/><path d="M4 8l7-4v8z"/></svg></div>
+        <div class="ib dim"><svg viewBox="0 0 16 16" style="fill:#5A5A5A"><path d="M11 8L4 4v8z"/></svg></div>
+        <div class="ib dim"><svg viewBox="0 0 16 16" style="fill:#5A5A5A"><path d="M5 4v8l7-4z"/></svg></div>
+        <div class="ib dim"><svg viewBox="0 0 16 16" style="fill:#5A5A5A"><path d="M9 4v8L2 8z"/><rect x="12" y="3" width="2" height="10"/></svg></div>
+      </div>
+    </div>
+    <div class="field">
+      <span class="lb">剪辑</span>
+      <span class="well empty">None (Animation Clip)</span>
+    </div>
+    <div class="foot">把一条 AnimationClip 拖进来的「剪辑」即可 —— 不需要任何 AnimatorController。</div>
+    <div class="fold">▸ 设置 <span class="sum">· 1x · 循环 · 根运动开 · 0fps</span></div>
+  </div>
+
+  <!-- ══════════════ 展开折叠栏 ══════════════ -->
+  <div class="inspector" style="margin-top:18px">
+    <div class="title">动画剪辑预览<span class="st idle">暂停</span></div>
+    <div class="bar">
+      <div class="readout">
+        <span class="num">1.24 / 3.00s</span><span class="frame">37 / 90</span>
+      </div>
+      <div class="seek">
+        <div class="played" style="width:41%"></div>
+        <div class="head" style="left:41%"></div>
+        <div class="knob" style="left:calc(41% - 3px)"></div>
+      </div>
+      <div class="transport">
+        <div class="play"><svg viewBox="0 0 16 16"><path d="M3 4h3l7 4-7 4H3z"/></svg></div>
+        <div class="ib"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="2" height="10"/><path d="M4 8l7-4v8z"/></svg></div>
+        <div class="ib"><svg viewBox="0 0 16 16"><path d="M11 8L4 4v8z"/></svg></div>
+        <div class="ib"><svg viewBox="0 0 16 16"><path d="M5 4v8l7-4z"/></svg></div>
+        <div class="ib"><svg viewBox="0 0 16 16"><path d="M9 4v8L2 8z"/><rect x="12" y="3" width="2" height="10"/></svg></div>
+      </div>
+    </div>
+    <div class="field"><span class="lb">剪辑</span><span class="well">Idle_Loop_A</span></div>
+
+    <div class="fold" style="color:#D4D4D4">▾ 设置 <span class="sum">· 1x · 循环 · 根运动开 · 30fps</span></div>
+    <div class="foldbody">
+      <div class="frow"><span class="lb">Animator</span><span class="well" style="flex:1">CHR_NGT01 (Animator)</span></div>
+      <div class="frow">
+        <span class="lb">倍速</span>
+        <span class="num">1<i>x</i></span>
+        <span class="pbtn">0.1x</span><span class="pbtn">0.25x</span><span class="pbtn">0.5x</span><span class="pbtn on">1x</span><span class="pbtn">2x</span><span class="pbtn">4x</span>
+      </div>
+      <div class="frow"><span class="lb">循环</span><span class="chk on">✓</span></div>
+      <div class="frow"><span class="lb">根运动</span><span class="chk on">✓</span></div>
+      <div class="frow"><span class="lb">播放模式启用即播</span><span class="chk on">✓</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 说明 ══════════════ -->
+<div class="notes">
+  <h2>面板上只有三样东西</h2>
+  <ul>
+    <li><b>标题行 16px</b>：左标题，右侧一个状态词（播放中 / 暂停 / 未预览 / 空 / 失败 / 缺人形 Avatar）。正常状态几乎不占注意力。</li>
+    <li><b>走带卡片 46px</b>：一条读数行（左：循环标记或异常；右：<code>时间/时长</code> + <code>帧/总帧</code> 等宽数字）＋ 一条走带行（5 个图标按钮 + 时间轴）。</li>
+    <li><b>剪辑字段 18px</b>：主入口，留在外面。其余全部进折叠栏。</li>
+  </ul>
+
+  <h2>折叠栏默认关</h2>
+  <ul>
+    <li>标题是「设置 · 1x · 循环 · 根运动开 · 30fps」—— <b>不展开也看得见现状</b>，所以默认关不丢信息。</li>
+    <li>里面有：Animator、倍速（数字 + 6 个档）、循环、根运动、播放模式启用即播。</li>
+    <li>没有 HelpBox。异常只在底部出一行 9pt 灰字（完整原因挂 tooltip），正常时一行都不出。</li>
+  </ul>
+
+  <h2>时间轴怎么画</h2>
+  <ul>
+    <li>槽底是 <code>rgba(0,0,0,.42)</code> 加深 + 1px 描边；已播放段是强调蓝 <b>0.55→0.40 的横向渐变</b>，有方向感。</li>
+    <li><b>整秒刻度</b>只在时长 ≤ 60s 时画（密了就糊成一片）。</li>
+    <li>播放头 = 1px 亮线 + 顶端 6×3 的小三角，压在刻度上面。</li>
+  </ul>
+
+  <h2>全部自绘（IMGUI）</h2>
+  <ul>
+    <li><b>走带</b>：整行用 <code>EditorGUILayout.GetControlRect</code> 拿一次矩形自己画背景，之后每个图标 <code>new Rect</code> 手算 —— 不交给 GUILayout 分配宽度。</li>
+    <li><b>设置区</b>：也不用 <code>EditorGUILayout.PropertyField</code>。每行自己算矩形（18px 行高 / 62px 标签列 / 10px 缩进），
+        用自绘的输入井、勾选框、档位按钮。理由和约束面板一样：自动布局会按剩余宽度百分比分空间，
+        结果是"滑条铺满整行、数字框被拉得老长"。</li>
+    <li><code>EditorGUI.ObjectField</code> 也是 IMGUI，只是矩形由我们给 —— 这样才定得住宽，同时保留 Unity 的对象拾取器。</li>
+  </ul>
+
+  <h2>图标</h2>
+  <ul>
+    <li>运行时画的 <b>14×14</b> 纯白形状，<code>FilterMode.Point</code>，<b>按显示尺寸原样生成、不缩放</b>。</li>
+    <li>早先按 32×32 生成再缩到 12×12，5px 宽的竖条被双线性过滤摊薄成 2–3px 的碎点（表现是"图标变成一排小点"）。
+        小尺寸图标上，抗锯齿的收益远小于形状糊掉的代价。</li>
+    <li>每个形状按<b>显式点位</b>写死（见 <code>HoAnimationEditorTheme</code> 里的点位表）。几像素宽的图形用公式推必然跑偏。</li>
+  </ul>
+
+  <h2>手感</h2>
+  <ul>
+    <li><b>按下即抓取</b>：在槽内任何位置按下都跳到该处并开始拖动 —— 播放器的通行习惯，不用先瞄准播放头。</li>
+    <li>拖动期间<b>播放头归鼠标</b>，编辑器那边的自动推进让位；松开后回到按钮控制的播放状态。</li>
+    <li>悬停给 <code>ew-resize</code> 光标 + 图标按钮 <code>rgba(255,255,255,.07)</code> 底；按下 <code>.13</code>。</li>
+    <li>暂停键与播放键<b>是同一个键</b>，按状态换图标 —— 少一个键，也少一次误点。</li>
+  </ul>
+
+  <h2>间距</h2>
+  <ul>
+    <li>四个角色各自的"太挤"阈值不同：图标间距 <b>5px</b>（≤2px 五个键会读成一坨）、图标 14px 放在 20px 走带行里、
+       读数行与走带行之间 2px。走带总高 52px。</li>
+  </ul>
+</div>
+</div>
+</body>
+</html>
