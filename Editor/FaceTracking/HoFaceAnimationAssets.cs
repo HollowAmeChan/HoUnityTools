@@ -208,7 +208,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// 参考实现（Jerry 的 ARKit 模板）也是这个形状：1 个驱动层 + 一棵 Direct 树。
         /// </summary>
-        public static AnimatorController Generate(Animator animator, string assetPath, bool overwrite = false)
+        public static AnimatorController Generate(Animator animator, string assetPath, bool overwrite = false,
+            HoFaceTemplateSpec template = null)
         {
             if (animator == null) throw new InvalidOperationException("请先指定 Animator。");
             if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null)
@@ -232,7 +233,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 见方法注释：Direct 树必须配 Write Defaults 开，否则 (1-Σw) 会与当前值反复混合。
                 drive.writeDefaultValues = true;
                 drive.motion = tree;
-                PopulateDriveTree(controller, animator, tree);
+                PopulateDriveTree(controller, animator, tree, template);
                 // 果冻那两个参数（Ho/JellyX · Ho/JellyY）**不再产出**：果冻已搬到独立的
                 // HoSpringConstraint，直接读写形态键，不再借道 Animator 参数（见 19.2 / 20 节）。
 
@@ -263,7 +264,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// 这是"组件 = 控制器的修改脚本"这句话的落点：反复应用不会吃掉用户的手工逻辑。
         /// </summary>
-        public static void Apply(AnimatorController controller, Animator animator)
+        public static void Apply(AnimatorController controller, Animator animator, HoFaceTemplateSpec template = null)
         {
             if (controller == null) throw new InvalidOperationException("先指定面部控制器。");
             if (animator == null) throw new InvalidOperationException("先指定角色 Animator。");
@@ -271,7 +272,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (tree == null)
                 throw new InvalidOperationException(
                     "这个控制器里没有 " + DriveLayerName + " 段，看来不是本工具初始化的。请先用「初始化控制器」产出一个。");
-            PopulateDriveTree(controller, animator, tree);
+            PopulateDriveTree(controller, animator, tree, template);
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
         }
@@ -298,8 +299,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 按角色上真实存在的 ARKit 键重建 Direct 树的子节点。
         /// 片段按名字复用（模型没变时就是同一批），参数缺了就补 —— 幂等，反复应用结果一致。
         /// </summary>
-        private static void PopulateDriveTree(AnimatorController controller, Animator animator, BlendTree tree)
+        private static void PopulateDriveTree(AnimatorController controller, Animator animator, BlendTree tree,
+            HoFaceTemplateSpec template)
         {
+            // 没有指定模板就用内置默认（ho-2d-test1）—— 保证老场景/老用例的行为与迁移前一致。
+            template = template ?? HoFaceTemplateDefaults.TwoDTest1();
             var groups = new Dictionary<string, List<EditorCurveBinding>>(StringComparer.Ordinal);
             foreach (var mesh in animator.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
@@ -321,7 +325,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             foreach (var p in controller.parameters) parameters.Add(p.name);
             EnsureGate(controller, parameters, EyeGateName);
             EnsureGate(controller, parameters, LipGateName);
-            foreach (string axis in LidAxisNames()) EnsureFloat(controller, parameters, axis);
+            foreach (string axis in TemplateAxisNames(template)) EnsureFloat(controller, parameters, axis);
 
             // 旧结构先记下来：重建后没被用上的要销毁（区域子树 + 眼睑 2D 树），
             // 否则每应用一次就多留一棵孤儿树。
@@ -349,27 +353,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 「眯眼」那一格**自带 blink 90** —— 这就是它不出叠加的原因：树是插值、权重和恒为 1，
             // 合成结果永远不超过最强的那个姿势；而"每个键一个直通叶子"会相加。
             // 权重直接用区域门控（跟参考实现一样，靠共用门控隐式归组），所以不需要"恒为 1"的参数。
-            // 眼睑：一棵 3×2 的 2D 树（开合 × 眯眼）—— **树交给 Kit 造**，生成器只提供它不可能知道的三件事：
-            // 片段叫什么（名字要编码方阵与刻度，不能写死成 "i x j"）、这一格摆什么值、
-            // 片段已存在时怎么复用（幂等：反复应用不该每次堆一堆子资产）。
-            for (int side = 0; side < 2; side++)
+            // 模板里的每一棵树：**结构、名字、坐标、每格写什么，全在模板里**；这里只解释它 ——
+            // 建树/建片段由 Kit 干，参数由下面的 TemplateAxisNames 收进参数表。
+            foreach (var treeSpec in template.trees)
             {
-                string suffix = side == 0 ? "Left" : "Right";
-                if (!HasAny(groups, LidShape(suffix, "eyeBlink"), LidShape(suffix, "eyeWide"), LidShape(suffix, "eyeSquint")))
-                    continue;
+                if (!HasAnyPoseShape(groups, treeSpec)) continue;
 
-                var lid = HoFaceBlendTreeKit.Grid2D(controller, animator, HoFaceNaming.LidTree(side),
-                    LidAxisName(side, true), LidAxisName(side, false),
-                    LidGridX, LidGridY, null,
-                    (clip, x, row) =>
+                var built = HoFaceBlendTreeKit.Tree(controller, animator, treeSpec,
+                    clipName => existing.TryGetValue(clipName, out var found) ? found : null,
+                    (clip, pose) =>
                     {
                         keep.Add(clip);
-                        WriteLidPose(clip, groups, suffix, LidPoses[x, row]);
-                    },
-                    (x, row) => HoFaceNaming.LidCell(side, x, LidRowStep(row)),
-                    clipName => existing.TryGetValue(clipName, out var found) ? found : null);
-                keep.Add(lid);
-                AddChild(tree, lid, EyeGateName);
+                        WritePoseValues(clip, groups, pose);
+                    });
+                keep.Add(built);
+                AddChild(tree, built, EyeGateName);
             }
 
             // ── 其余：按区域分两棵 Direct 子树，里面还是"一键一叶子"的直通 ─────────────
@@ -406,7 +404,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 历史名字（Ho/Gate/*、Ho/LidLeft.X|Y，以及已撤销的 Ho/JellyX|Y）留着只会变成
             // 没人写也没人读的僵尸参数。只动 Ho/ 命名空间 —— ARKit/ 是输入通道，不碰。
             var wanted = new HashSet<string>(StringComparer.Ordinal) { EyeGateName, LipGateName };
-            foreach (string axis in LidAxisNames()) wanted.Add(axis);
+            foreach (string axis in TemplateAxisNames(template)) wanted.Add(axis);
             for (int i = controller.parameters.Length - 1; i >= 0; i--)
             {
                 string name = controller.parameters[i].name;
@@ -427,71 +425,42 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
-        /// <summary>眼睑方阵 X 轴上的三个格点：睁大(−1) / 中性(0) / 闭(+1)。</summary>
-        private static readonly float[] LidGridX = { -1f, 0f, 1f };
-
-        /// <summary>
-        /// 眼睑方阵 Y 轴上**摆了姿势的**两个格点：不眯(0) / 眯满(+1)。
-        /// 中间那档（半眯 0.5）没摆 —— 方阵不必铺满，空着的那行交给树插值。
-        /// </summary>
-        private static readonly float[] LidGridY = { 0f, 1f };
-
-        /// <summary>
-        /// 摆了的第 <paramref name="row"/> 行在方阵里是第几刻度。**第 1 行是 `Y2` 而不是 `Y1`** ——
-        /// Y 轴三档里中间那档（半眯）没摆姿势，所以第二个摆了的格点落在刻度 2 上。名字必须说真话。
-        /// </summary>
-        private static int LidRowStep(int row) => row == 0 ? 0 : 2;
-
-        /// <summary>
-        /// 眼睑方阵里摆了的六格：<c>LidPoses[X 刻度 0..2, 行 0..1]</c>
-        /// （行 0 = `Y0` 不眯、行 1 = `Y2` 眯满；`Y1` 半眯没摆）。
-        ///
-        /// 前五格的数值来自参考实现五个片段的实测值（见文档 21.1）；**`A3X2Y2` 闭+眯 是我们补的** ——
-        /// 参考实现没有这一格，但它的参数范围可能让那个角到不了，而我们的两根轴是独立参数、**真的会到**
-        /// （"眨满 + 眯眼"就是过眨眼的工况）。这一格的含义是**眨满时眯眼还剩多少** —— 一次纯粹的艺术决定：
-        /// 默认 `blink 100 + squint 0`，两键加和正好 100，不再过闭合。
-        /// </summary>
-        private static readonly (float Blink, float Wide, float Squint)[,] LidPoses =
-        {
-            { (0f, 100f, 0f), (0f, 100f, 100f) },   // X0：睁大 / 睁大+眯
-            { (0f, 0f, 0f), (90f, 0f, 100f) },      // X1：中性 / 眯（眯自带 blink 90）
-            { (100f, 0f, 0f), (100f, 0f, 0f) }      // X2：闭 / 闭+眯
-        };
-
-        /// <summary>眼睑的三/六个键归 2D 树管，不再作为直通叶子。</summary>
+        /// <summary>眼睑的三/六个键归模板里的树管，不再作为直通叶子。</summary>
         private static bool IsLidShape(string shape) =>
             shape == "eyeBlinkLeft" || shape == "eyeBlinkRight" || shape == "eyeWideLeft" || shape == "eyeWideRight"
             || shape == "eyeSquintLeft" || shape == "eyeSquintRight";
 
-        private static string LidShape(string suffix, string prefix) => prefix + suffix;
-
-        private static string LidTreeName(int side) => HoFaceNaming.LidTree(side);
-
         /// <summary>眼睑 2D 的两根轴：开合（-1 睁大 / +1 闭）与眯眼（0~1）。由会话生产。</summary>
         public static string LidAxisName(int side, bool horizontal) => HoFaceNaming.LidAxis(side, horizontal);
 
-        private static IEnumerable<string> LidAxisNames()
+        /// <summary>模板里所有轴的参数名（去重）—— 生成器靠它把轴参数建出来/留下来。</summary>
+        private static IEnumerable<string> TemplateAxisNames(HoFaceTemplateSpec template)
         {
-            for (int side = 0; side < 2; side++)
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var tree in template.trees)
             {
-                yield return LidAxisName(side, true);
-                yield return LidAxisName(side, false);
+                if (tree.x != null && !string.IsNullOrEmpty(tree.x.parameter) && seen.Add(tree.x.parameter))
+                    yield return tree.x.parameter;
+                if (tree.y != null && !string.IsNullOrEmpty(tree.y.parameter) && seen.Add(tree.y.parameter))
+                    yield return tree.y.parameter;
             }
         }
 
-        private static bool HasAny(Dictionary<string, List<EditorCurveBinding>> groups, params string[] shapes)
+        /// <summary>这棵树有没有落地的键：一个都没有就跳过它（和以前"网格上没这对键就不建树"一致）。</summary>
+        private static bool HasAnyPoseShape(Dictionary<string, List<EditorCurveBinding>> groups, HoFaceTreeSpec tree)
         {
-            foreach (string shape in shapes)
-                if (groups.ContainsKey(shape)) return true;
+            foreach (var pose in tree.poses)
+                foreach (var value in pose.values)
+                    if (groups.ContainsKey(value.shape)) return true;
             return false;
         }
 
-        private static void WriteLidPose(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
-            string suffix, (float Blink, float Wide, float Squint) pose)
+        /// <summary>把一个格子的键值写进片段（值来自模板；没摆的键也要写 0，模板校验器负责查）。</summary>
+        private static void WritePoseValues(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups,
+            HoFacePoseSpec pose)
         {
-            WriteShape(clip, groups, "eyeBlink" + suffix, pose.Blink);
-            WriteShape(clip, groups, "eyeWide" + suffix, pose.Wide);
-            WriteShape(clip, groups, "eyeSquint" + suffix, pose.Squint);
+            foreach (var value in pose.values)
+                WriteShape(clip, groups, value.shape, value.value);
         }
 
         private static void WriteShape(AnimationClip clip, Dictionary<string, List<EditorCurveBinding>> groups, string shape, float value)

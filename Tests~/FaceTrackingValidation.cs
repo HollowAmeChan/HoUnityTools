@@ -355,21 +355,52 @@ public static class HoFaceTrackingValidation
             Check(Mathf.Abs(axisPositive) < 0.0001f && Mathf.Abs(axisNegative - 0.7f) < 0.0001f,
                 "the axis splits back into two unsigned halves");
 
-            // 二：N×M 的 2D 树 + 三姿势的双向 1D 树。
-            var kitKeys = new[]
+            // 二：**按模板建树**（模板化之后 Kit 的唯一入口）—— 2D 与 1D 各一棵。
+            // 模板决定树形、参数名、坐标/阈值、每格写什么；Kit 只管建树、建（或复用）片段、摆坐标。
+            var kitGridSpec = new HoFaceTreeSpec
             {
-                new HoPoseKey(renderer, "eyeBlinkLeft"),
-                new HoPoseKey(renderer, "eyeWideLeft")
-            };
-            var kitGrid = HoFaceBlendTreeKit.Grid2D(replaced, animator, "Ho/BT Test Grid", "Ho/Test/X", "Ho/Test/Y",
-                new[] { -1f, 0f, 1f }, new[] { 0f, 1f }, kitKeys, (clip, i, j) =>
+                name = "Ho/BT Test Grid",
+                kind = HoFaceTreeKind.FreeformCartesian2D,
+                x = new HoFaceAxisSpec { parameter = "Ho/Test/X" },
+                y = new HoFaceAxisSpec { parameter = "Ho/Test/Y" },
+                poses = new[]
                 {
-                    if (i == 2 && j == 1) HoFaceBlendTreeKit.Pose(clip, animator, renderer, "eyeBlinkLeft", 100f);
-                });
-            Check(kitGrid.blendType == BlendTreeType.FreeformCartesian2D && kitGrid.children.Length == 6,
-                "kit builds an N x M grid (" + kitGrid.children.Length + ")");
+                    new HoFacePoseSpec
+                    {
+                        clipName = "Ho/BT Test Grid 0",
+                        position = new Vector2(0f, 0f),
+                        values = new[]
+                        {
+                            new HoFacePoseValue("eyeBlinkLeft", 0f),
+                            new HoFacePoseValue("eyeWideLeft", 0f)
+                        }
+                    },
+                    new HoFacePoseSpec
+                    {
+                        clipName = "Ho/BT Test Grid 1",
+                        position = new Vector2(1f, 1f),
+                        values = new[]
+                        {
+                            new HoFacePoseValue("eyeBlinkLeft", 100f),
+                            new HoFacePoseValue("eyeWideLeft", 0f)
+                        }
+                    }
+                }
+            };
+
+            System.Action<AnimationClip, HoFacePoseSpec> writePose = (clip, pose) =>
+            {
+                foreach (var value in pose.values)
+                    AnimationUtility.SetEditorCurve(clip,
+                        EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape." + value.shape),
+                        AnimationCurve.Constant(0f, 1f / 60f, value.value));
+            };
+
+            var kitGrid = HoFaceBlendTreeKit.Tree(replaced, animator, kitGridSpec, null, writePose);
+            Check(kitGrid.blendType == BlendTreeType.FreeformCartesian2D && kitGrid.children.Length == 2,
+                "kit builds a 2D tree from a template (" + kitGrid.children.Length + ")");
             Check(kitGrid.blendParameter == "Ho/Test/X" && kitGrid.blendParameterY == "Ho/Test/Y",
-                "the grid reads exactly the two axis parameters");
+                "the 2D tree reads exactly the two axis parameters the template names");
 
             var blinkBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeBlinkLeft");
             var wideBinding = EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.eyeWideLeft");
@@ -384,22 +415,33 @@ public static class HoFaceTrackingValidation
                 if (child.position == new Vector2(1f, 1f)) placed++;
             }
 
-            Check(blankCells == 6, "every grid cell carries every key as a 0 baseline (" + blankCells + ")");
-            Check(posedCells == 1 && placed == 1, "only the posed cell differs, at its grid coordinate");
+            Check(blankCells == 2, "every cell carries its keys explicitly, 0 included (" + blankCells + ")");
+            Check(posedCells == 1 && placed == 1, "only the posed cell differs, at its template coordinate");
 
-            var kitAxis = HoFaceBlendTreeKit.Axis1D(replaced, animator, "Ho/BT Test Axis", "Ho/Test/Axis",
-                HoFaceBlendTreeKit.ThreePointAxis, kitKeys, null);
+            var kitAxisSpec = new HoFaceTreeSpec
+            {
+                name = "Ho/BT Test Axis",
+                kind = HoFaceTreeKind.Simple1D,
+                x = new HoFaceAxisSpec { parameter = "Ho/Test/Axis" },
+                poses = new[]
+                {
+                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 0", threshold = -1f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 100f) } },
+                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 1", threshold = 0f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 0f) } },
+                    new HoFacePoseSpec { clipName = "Ho/BT Test Axis 2", threshold = 1f, values = new[] { new HoFacePoseValue("eyeBlinkLeft", 0f) } }
+                }
+            };
+            var kitAxis = HoFaceBlendTreeKit.Tree(replaced, animator, kitAxisSpec, null, writePose);
             Check(kitAxis.blendType == BlendTreeType.Simple1D && kitAxis.children.Length == 3,
-                "kit builds a three-point 1D axis (" + kitAxis.children.Length + ")");
+                "kit builds a 1D tree from a template (" + kitAxis.children.Length + ")");
             Check(Mathf.Abs(kitAxis.children[0].threshold + 1f) < 0.0001f
                 && Mathf.Abs(kitAxis.children[1].threshold) < 0.0001f
                 && Mathf.Abs(kitAxis.children[2].threshold - 1f) < 0.0001f,
-                "the three-point axis sits at -1 / 0 / +1");
+                "the 1D tree sits at the thresholds the template gives (-1 / 0 / +1)");
 
             int beforeClear = CountClips(controllerPath);
             HoFaceBlendTreeKit.Clear(kitGrid);
             HoFaceBlendTreeKit.Clear(kitAxis);
-            Check(CountClips(controllerPath) == beforeClear - 9,
+            Check(CountClips(controllerPath) == beforeClear - 5,
                 "clearing a kit tree takes its pose clips with it (removed " + (beforeClear - CountClips(controllerPath)) + ")");
 
             // ── 弹簧驱动（定案 19 里果冻的落点：独立组件 + 预设 + 读已落下的键）──────────

@@ -1,117 +1,92 @@
 using System;
-using System.Collections.Generic;
+using Hollow.HoUnityTools.FaceTracking;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
-    /// <summary>姿势里的一个目标：哪张网格的哪个形态键。</summary>
-    public struct HoPoseKey
-    {
-        public SkinnedMeshRenderer mesh;
-        public string shape;
-
-        public HoPoseKey(SkinnedMeshRenderer mesh, string shape)
-        {
-            this.mesh = mesh;
-            this.shape = shape;
-        }
-    }
-
     /// <summary>
-    /// 混合树的**基础件**：机械到不值得手点的部分。
+    /// 混合树的**基础件**：把模板里的一棵树（<see cref="HoFaceTreeSpec"/>）落成控制器里的真树 + 片段。
     ///
-    /// **它不替用户做设计。** 按 19 节的定案，混合树由用户手摆姿势 —— 这里只负责
-    /// "两条轴上 N×M 个格子就建 N×M 个片段、摆好坐标"这类纯体力活，
-    /// 以及"双向轴的标准三姿势 1D 树"（值由 <c>HoFaceAxis</c> 出）。
+    /// **它不含任何模板数字** —— 树名、两根轴的参数名、每个格子的坐标/阈值、每格写哪些键与多少，
+    /// 全部来自模板；这里只负责"创建（或复用）片段、摆坐标、接上树"这类纯体力活。
+    /// 所以"加一个模板"就是"加一个文件"，不用改这里，也不用改生成器。
     ///
-    /// **当前状态：`Grid2D` 已接线**（生成器的眼睑 2D 树走它），**`Axis1D` 还没有消费者** ——
-    /// "把成对反向通道合成一根 −1~1 轴 + 三姿势 1D 树"那件事要先取证（成熟实现与 Jerry 模板到底合不合并、
-    /// 摆几个姿势），再决定接线还是删掉。别让它悬着。
+    /// **规矩（模板作者要守）**：每一格都写满这棵树用到的**全部**键。混合树对权重做归一化，
+    /// 某个键只在部分格里有曲线，等于让它在其余格上失去权重基准 —— 表现是"参数走到某些角落
+    /// 这个键莫名消失"。这里**不静默修补**（修补会掩盖模板的错误），由模板校验器去报。
     ///
-    /// **规矩：每个格子都写满全部键**（没摆的写 0）。混合树对权重做归一化，某个键只在部分
-    /// 格子里有曲线，等于让它在其余格子上失去权重基准 —— 表现是"参数走到某些角落这个键莫名消失"。
-    /// 所以这里由 Kit 统一预写 0，调用方只覆盖要摆的那些。
+    /// 历史：这里曾有两件为"手搓调用方"写的工具（`Grid2D` 铺满笛卡尔积、`Axis1D` 三姿势单轴）。
+    /// 模板化之后它们被这个入口取代 —— `Grid2D` 表达不了参考模板那种**非积分布**的姿势表
+    /// （例如眼睑 5 姿势里的 `(0.25,1)`），留两个入口只会分叉。
     /// </summary>
     public static class HoFaceBlendTreeKit
     {
-        /// <summary>双向轴的标准三档。</summary>
-        public static readonly float[] ThreePointAxis = { -1f, 0f, 1f };
-
         /// <summary>
-        /// N×M 的 2D FreeformCartesian 树（两条轴长度可以不同）。
-        /// <paramref name="pose"/> 的参数是（片段, 第一条轴的下标, 第二条轴的下标）。
-        ///
-        /// 两个可选口子，都是为了让**真正的调用方**（生成器）能用它，而不是各写一份：
-        /// <paramref name="clipName"/> 决定片段叫什么（生成器的名字要编码方阵与刻度，不能写死成 "i x j"）；
-        /// <paramref name="obtain"/> 用来**复用已存在的片段**（幂等：反复应用不该每次新建一堆子资产），
-        /// 返回 null 就新建。复用的片段会先被清空曲线，再按规矩重写。
+        /// 按模板建一棵树。<paramref name="obtain"/> 用来复用已存在的片段（幂等：反复应用不该每次
+        /// 新建一堆子资产），返回 null 就新建；复用的片段会先被清空曲线。<paramref name="fill"/>
+        /// 由调用方负责把这一格的键值写进片段（顺便把片段收进自己的清理白名单）。
         /// </summary>
-        public static BlendTree Grid2D(AnimatorController controller, Animator animator, string name,
-            string parameterX, string parameterY,
-            IList<float> axisX, IList<float> axisY,
-            IList<HoPoseKey> keys, Action<AnimationClip, int, int> pose,
-            Func<int, int, string> clipName = null, Func<string, AnimationClip> obtain = null)
+        public static BlendTree Tree(AnimatorController controller, Animator animator, HoFaceTreeSpec spec,
+            Func<string, AnimationClip> obtain, Action<AnimationClip, HoFacePoseSpec> fill)
         {
             if (controller == null) throw new InvalidOperationException("先指定控制器。");
-            if (string.IsNullOrWhiteSpace(parameterX) || string.IsNullOrWhiteSpace(parameterY))
-                throw new InvalidOperationException("两个参数名都要给。");
-            if (axisX == null || axisX.Count == 0 || axisY == null || axisY.Count == 0)
-                throw new InvalidOperationException("两条轴都要至少一个位置。");
+            if (spec == null) throw new InvalidOperationException("模板里这棵树是空的。");
+            if (string.IsNullOrWhiteSpace(spec.name)) throw new InvalidOperationException("树名不能为空。");
+            if (spec.poses == null || spec.poses.Length == 0)
+                throw new InvalidOperationException("模板里这棵树一个格子都没有：" + spec.name);
+            if (spec.x == null || string.IsNullOrWhiteSpace(spec.x.parameter))
+                throw new InvalidOperationException("X 轴的参数名没给：" + spec.name);
+
+            bool twoDimensional = spec.kind == HoFaceTreeKind.FreeformCartesian2D;
+            if (twoDimensional && (spec.y == null || string.IsNullOrWhiteSpace(spec.y.parameter)))
+                throw new InvalidOperationException("2D 树的 Y 轴参数名没给：" + spec.name);
 
             var tree = new BlendTree
             {
-                name = name,
-                blendType = BlendTreeType.FreeformCartesian2D,
-                blendParameter = parameterX,
-                blendParameterY = parameterY
+                name = spec.name,
+                blendType = twoDimensional ? BlendTreeType.FreeformCartesian2D : BlendTreeType.Simple1D,
+                blendParameter = spec.x.parameter
             };
-            AssetDatabase.AddObjectToAsset(tree, controller);
 
-            for (int i = 0; i < axisX.Count; i++)
+            if (twoDimensional)
             {
-                for (int j = 0; j < axisY.Count; j++)
+                tree.blendParameterY = spec.y.parameter;
+            }
+            else
+            {
+                float min = spec.poses[0].threshold;
+                float max = spec.poses[0].threshold;
+                for (int i = 1; i < spec.poses.Length; i++)
                 {
-                    string poseName = clipName != null ? clipName(i, j) : name + " " + i + "x" + j;
-                    var clip = obtain != null ? obtain(poseName) : null;
-                    if (clip == null) clip = NewPose(controller, poseName);
-                    else ClearCurves(clip);
-
-                    Blank(clip, animator, keys);
-                    pose?.Invoke(clip, i, j);
-                    tree.AddChild(clip, new Vector2(axisX[i], axisY[j]));
+                    min = Mathf.Min(min, spec.poses[i].threshold);
+                    max = Mathf.Max(max, spec.poses[i].threshold);
                 }
+
+                tree.useAutomaticThresholds = false;
+                tree.minThreshold = min;
+                tree.maxThreshold = max;
             }
 
-            return tree;
-        }
-
-        /// <summary>一根轴上的 1D 树。双向轴就是 <see cref="ThreePointAxis"/>。</summary>
-        public static BlendTree Axis1D(AnimatorController controller, Animator animator, string name, string parameter,
-            IList<float> axis, IList<HoPoseKey> keys, Action<AnimationClip, int> pose)
-        {
-            if (controller == null) throw new InvalidOperationException("先指定控制器。");
-            if (string.IsNullOrWhiteSpace(parameter)) throw new InvalidOperationException("参数名不能为空。");
-            if (axis == null || axis.Count == 0) throw new InvalidOperationException("轴至少一个位置。");
-
-            var tree = new BlendTree
-            {
-                name = name,
-                blendType = BlendTreeType.Simple1D,
-                blendParameter = parameter,
-                minThreshold = axis[0],
-                maxThreshold = axis[axis.Count - 1],
-                useAutomaticThresholds = false
-            };
             AssetDatabase.AddObjectToAsset(tree, controller);
 
-            for (int i = 0; i < axis.Count; i++)
+            foreach (var pose in spec.poses)
             {
-                var clip = NewPose(controller, name + " " + i);
-                Blank(clip, animator, keys);
-                pose?.Invoke(clip, i);
-                tree.AddChild(clip, axis[i]);
+                var clip = obtain != null ? obtain(pose.clipName) : null;
+                if (clip == null)
+                {
+                    clip = new AnimationClip { name = pose.clipName, frameRate = 60f };
+                    AssetDatabase.AddObjectToAsset(clip, controller);
+                }
+                else
+                {
+                    ClearCurves(clip);
+                }
+
+                fill?.Invoke(clip, pose);
+                if (twoDimensional) tree.AddChild(clip, pose.position);
+                else tree.AddChild(clip, pose.threshold);
             }
 
             return tree;
@@ -124,61 +99,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public static void Clear(BlendTree tree)
         {
             if (tree == null) return;
-            var clips = new HashSet<AnimationClip>();
+            var clips = new System.Collections.Generic.HashSet<AnimationClip>();
             foreach (var child in tree.children)
                 if (child.motion is AnimationClip clip) clips.Add(clip);
             foreach (var clip in clips) UnityEngine.Object.DestroyImmediate(clip, true);
             UnityEngine.Object.DestroyImmediate(tree, true);
         }
 
-        /// <summary>把一个姿势写进片段：这张网格的这个形态键 = 这个权重（0~100）。</summary>
-        public static void Pose(AnimationClip clip, Animator animator, SkinnedMeshRenderer mesh, string shape, float weight)
-        {
-            if (clip == null) throw new InvalidOperationException("片段为空。");
-            if (animator == null) throw new InvalidOperationException("需要 Animator 来算绑定路径。");
-            if (mesh == null || mesh.sharedMesh == null) throw new InvalidOperationException("网格或 Mesh 为空。");
-            if (mesh.GetComponentInParent<Animator>() != animator)
-                throw new InvalidOperationException("网格不在这个 Animator 下，曲线绑不上：" + mesh.name);
-            if (mesh.sharedMesh.GetBlendShapeIndex(shape) < 0)
-                throw new InvalidOperationException(mesh.name + " 上没有形态键：" + shape);
-
-            AnimationUtility.SetEditorCurve(clip, Binding(mesh, animator, shape),
-                AnimationCurve.Constant(0f, 1f / 60f, Mathf.Clamp(weight, 0f, 100f)));
-        }
-
-        private static AnimationClip NewPose(AnimatorController controller, string name)
-        {
-            var clip = new AnimationClip { name = name, frameRate = 60f };
-            AssetDatabase.AddObjectToAsset(clip, controller);
-            return clip;
-        }
-
-        /// <summary>复用一个已存在的片段：先把它的曲线清空（重置成"什么都没摆"），再交给调用方重写。</summary>
+        /// <summary>复用一个片段：先把曲线清空（重置成"什么都没摆"），再交给调用方重写。</summary>
         private static void ClearCurves(AnimationClip clip)
         {
             foreach (var binding in AnimationUtility.GetCurveBindings(clip))
                 AnimationUtility.SetEditorCurve(clip, binding, null);
-        }
-
-        /// <summary>每个键先写 0：给归一化一个完整的权重基准，见类型注释。</summary>
-        private static void Blank(AnimationClip clip, Animator animator, IList<HoPoseKey> keys)
-        {
-            if (keys == null) return;
-            foreach (var key in keys)
-            {
-                if (key.mesh == null || key.mesh.sharedMesh == null) continue;
-                if (key.mesh.sharedMesh.GetBlendShapeIndex(key.shape) < 0) continue;
-                if (animator != null && key.mesh.GetComponentInParent<Animator>() != animator) continue;
-                AnimationUtility.SetEditorCurve(clip,
-                    Binding(key.mesh, animator, key.shape), AnimationCurve.Constant(0f, 1f / 60f, 0f));
-            }
-        }
-
-        private static EditorCurveBinding Binding(SkinnedMeshRenderer mesh, Animator animator, string shape)
-        {
-            Transform root = animator != null ? animator.transform : mesh.transform.root;
-            return EditorCurveBinding.FloatCurve(AnimationUtility.CalculateTransformPath(mesh.transform, root),
-                typeof(SkinnedMeshRenderer), "blendShape." + shape);
         }
     }
 }
