@@ -94,7 +94,8 @@
 > 换设备只换表 —— 而不是让每条规则都去写"如果来源是 X 就用另一个拼写"。
 
 `viseme_*` 那 15 个名字（`SIL PP FF TH DD KK CH SS NN RR AA EE IH OH OU`）不是随手起的：
-它是**微软 SAPI / JALI 那一套 viseme 枚举**，在 VTuber 工具链里被广泛沿用。
+它是 **OVR / Oculus LipSync 的15项口型词汇**。2026-09-25 更正：此前误写为“SAPI / JALI”；
+VBridger 1.1 的[官方公告](https://steamcommunity.com/app/1898830/announcements/)明确说明音频输入使用 OVR Audio Visemes。
 `blendshapeCalibration` 是同文件里的 `List<float>`（**62 个 0**），就是校准按钮抓的那份"静止归零"。
 
 ### 1.2 一个值从设备到表达式之间被加工了几道（这是"额外的东西"）

@@ -12,6 +12,9 @@
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
 - [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条全绿 + 怎么重跑）。
 - [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
+- [**VTS → VB → 高质量混合树全量契约（当前设计入口）**](VTS_HIGH_QUALITY_FACE_CONTRACT.md)：98个公开VTS固定参数、52原始形变、34个原装VB V3输出、39个拟定HQ扩展和42个高级树族；含全量矩阵、条件轴及选择性填动画的fallback规则，不限定格数。[机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json)。
+- [**VTS / VB 参数空间与轴来源**](VTS_FACE_PARAMETER_SPACES.md)：哪些参数组成2D、哪些是高维空间的条件切片、哪些应先保留1D；逐轴给出来源公式，不规定采样格数。
+- [**VTS / VB 创作者路线调查**](VTS_CREATOR_WORKFLOW_RESEARCH.md)：十份预设差异、麦克风契约、官方示例实际映射与教程证据；其中动画预算仅为演算示例，采样由作者决定。
 - [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：那一边的产物划分（**2 mod / 5 节点**）、为什么要走它的 **Tracking 层**、Warudo 的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）。
 - [**参数标准表**](PARAMETER_STANDARDS.md)：**下游到底认哪些名字**的权威依据（逐行表格 + 官方 URL + 未验证标记）—— VTS 追踪参数/语音/手部/控制器、VTS API 与注入规则、自定义参数、Cubism 标准参数与参数组、ARKit 52、iFacialMocap 线协议、VMC 协议地址与 HumanBodyBones、VRM 0.x/1.0、VRCFT Unified Expressions（附录）。**写任何参数名之前先查它。**
 
@@ -43,7 +46,7 @@
 - [面捕的 OSC / VRCFT 后端：调查保留](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：未来后端的调查（Av3Emulator 能力清单、VRCFT 链路、`forceRelevant`、OSCQuery 与发现过滤）。**首期没接 VRCFT**，留着是为了将来别重查一遍。
 - [ARKit `mouthClose` 调查报告](archive/arkit-mouthclose-report.md)：一次性调查，结论已体现在中间层行为里。
 - [VBridger 的中间层：一手逆向记录](archive/VBRIDGER_MIDDLE_LAYER_RESEARCH.md)：同类最成熟产品的存档格式（16 字符循环 XOR）、一行输出的全部字段、表达式语言与函数表、UI 词汇、输入曲线与校准的分层，以及它给我们的八条启示。**我们中间层的形状就是照它定的。**
-- [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md)：十份自带预设逐行统计出来的词汇表 —— **输入**（104 个规范名 + 每个数据源一张改名表：iFacialMocap `_L/_R`／FaceMotion3D `Left`／VTS `Left` 首字母大写；15 个 SAPI viseme 的连续 + `_abs` 两条线；音频、头姿、全身骨链、`faceFound`）与**输出**（喂 VTS 就用它的追踪参数白名单 24 个、喂 VMC/VRM 就用 ARKit 原名、其余是自定义驼峰名），以及十种反复出现的映射公式与取值约定。**要对接下游时照这张表。**
+- [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md)：十份自带预设逐行统计出来的词汇表 —— **输入**（104 个规范名 + 每个数据源一张改名表：iFacialMocap `_L/_R`／FaceMotion3D `Left`／VTS `Left` 首字母大写；15 个 OVR viseme 的连续 + `_abs` 两条线；音频、头姿、全身骨链、`faceFound`）与**输出**（喂 VTS 就用它的追踪参数白名单 24 个、喂 VMC/VRM 就用 ARKit 原名、其余是自定义驼峰名），以及十种反复出现的映射公式与取值约定。**要对接下游时照这张表。**
 
 文档中的 Warudo 结论以 Warudo Mod Tool 0.14.4.8 和 Unity 2021.3.45f2 的实际构建结果为准。SDK 或 Unity 版本变化后，应重新检查构建日志和生成的 `.warudo` 内容。
 

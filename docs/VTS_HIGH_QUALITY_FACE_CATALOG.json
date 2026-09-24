@@ -1,0 +1,4221 @@
+{
+  "date": "2026-09-25",
+  "status": "design catalog; not a runnable profile/controller",
+  "sampling_policy": "author-defined; no leaf count fixed",
+  "native": [
+    {
+      "name": "FacePositionX",
+      "category": "face_mouse_audio",
+      "explanation": "horizontal position of face",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "头部横移",
+      "range": "运行时查询",
+      "template_target": "H02"
+    },
+    {
+      "name": "FacePositionY",
+      "category": "face_mouse_audio",
+      "explanation": "vertical position of face",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "头部升降",
+      "range": "运行时查询",
+      "template_target": "H02"
+    },
+    {
+      "name": "FacePositionZ",
+      "category": "face_mouse_audio",
+      "explanation": "distance from camera",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "头部远近",
+      "range": "运行时查询",
+      "template_target": "H02条件"
+    },
+    {
+      "name": "FaceAngleX",
+      "category": "face_mouse_audio",
+      "explanation": "face right/left rotation",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "左右转头",
+      "range": "运行时查询",
+      "template_target": "H01"
+    },
+    {
+      "name": "FaceAngleY",
+      "category": "face_mouse_audio",
+      "explanation": "face up/down rotation",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "抬低头",
+      "range": "运行时查询",
+      "template_target": "H01"
+    },
+    {
+      "name": "FaceAngleZ",
+      "category": "face_mouse_audio",
+      "explanation": "face lean rotation",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "歪头",
+      "range": "运行时查询",
+      "template_target": "H01条件/姿态"
+    },
+    {
+      "name": "MouthSmile",
+      "category": "face_mouse_audio",
+      "explanation": "how much you're smiling",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "综合嘴型",
+      "range": "运行时查询",
+      "template_target": "校准为Form → M01等"
+    },
+    {
+      "name": "MouthOpen",
+      "category": "face_mouse_audio",
+      "explanation": "how open your mouth is",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "嘴唇开口",
+      "range": "0..1",
+      "template_target": "Open → M01等"
+    },
+    {
+      "name": "Brows",
+      "category": "face_mouse_audio",
+      "explanation": "up/down for both brows combined",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "双眉合并",
+      "range": "运行时查询",
+      "template_target": "眉代理来源；高档优先左右信息"
+    },
+    {
+      "name": "MousePositionX",
+      "category": "face_mouse_audio",
+      "explanation": "x-pos. of mouse or finger within set range",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "鼠标/触摸横向",
+      "range": "运行时查询",
+      "template_target": "Gaze/头姿/作者演出轴的替代来源"
+    },
+    {
+      "name": "MousePositionY",
+      "category": "face_mouse_audio",
+      "explanation": "y-pos. of mouse or finger within set range",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "鼠标/触摸纵向",
+      "range": "运行时查询",
+      "template_target": "同上，与X成2D"
+    },
+    {
+      "name": "TongueOut",
+      "category": "face_mouse_audio",
+      "explanation": "stick out your tongue",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "❌",
+        "❌",
+        "❌"
+      ],
+      "meaning": "伸舌",
+      "range": "运行时查询",
+      "template_target": "M14/C03"
+    },
+    {
+      "name": "EyeOpenLeft",
+      "category": "face_mouse_audio",
+      "explanation": "how open your left eye is",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "左眼睁开",
+      "range": "运行时查询",
+      "template_target": "LidLeft → E01L等"
+    },
+    {
+      "name": "EyeOpenRight",
+      "category": "face_mouse_audio",
+      "explanation": "how open your right eye is",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "右眼睁开",
+      "range": "运行时查询",
+      "template_target": "LidRight → E01R等"
+    },
+    {
+      "name": "EyeLeftX",
+      "category": "face_mouse_audio",
+      "explanation": "eye-tracking",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "左眼水平",
+      "range": "运行时查询",
+      "template_target": "E02L/E03L的替代来源"
+    },
+    {
+      "name": "EyeLeftY",
+      "category": "face_mouse_audio",
+      "explanation": "eye-tracking",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "左眼垂直",
+      "range": "运行时查询",
+      "template_target": "E02L/E03L的替代来源"
+    },
+    {
+      "name": "EyeRightX",
+      "category": "face_mouse_audio",
+      "explanation": "eye-tracking",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "右眼水平",
+      "range": "运行时查询",
+      "template_target": "E02R/E03R的替代来源"
+    },
+    {
+      "name": "EyeRightY",
+      "category": "face_mouse_audio",
+      "explanation": "eye-tracking",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "右眼垂直",
+      "range": "运行时查询",
+      "template_target": "E02R/E03R的替代来源"
+    },
+    {
+      "name": "CheekPuff",
+      "category": "face_mouse_audio",
+      "explanation": "detects when you puff out your cheeks",
+      "platforms": [
+        "✔️",
+        "❌",
+        "❌",
+        "❌",
+        "❌"
+      ],
+      "meaning": "鼓腮",
+      "range": "运行时查询",
+      "template_target": "C02/C03"
+    },
+    {
+      "name": "BrowLeftY",
+      "category": "face_mouse_audio",
+      "explanation": "up/down for left brow",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "左眉高",
+      "range": "运行时查询",
+      "template_target": "B02L；可降级代理B01L"
+    },
+    {
+      "name": "BrowRightY",
+      "category": "face_mouse_audio",
+      "explanation": "up/down for right brow",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "右眉高",
+      "range": "运行时查询",
+      "template_target": "B02R；可降级代理B01R"
+    },
+    {
+      "name": "VoiceFrequency",
+      "category": "face_mouse_audio",
+      "explanation": "depends on detected phonemes",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "合成语音嘴型",
+      "range": "0..1",
+      "template_target": "Form的音频来源，非Hz"
+    },
+    {
+      "name": "VoiceVolume",
+      "category": "face_mouse_audio",
+      "explanation": "how loud microphone volume is",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "音量",
+      "range": "0..1",
+      "template_target": "Open/Jaw/HQAudioStrength的音频来源"
+    },
+    {
+      "name": "VoiceVolumePlusMouthOpen",
+      "category": "face_mouse_audio",
+      "explanation": "MouthOpen + VoiceVolume",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "音量辅助开合",
+      "range": "0..1",
+      "template_target": "Open替代来源，不与原Open重复相加"
+    },
+    {
+      "name": "VoiceFrequencyPlusMouthSmile",
+      "category": "face_mouse_audio",
+      "explanation": "MouthSmile + VoiceFrequency",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "语音辅助嘴型",
+      "range": "0..1",
+      "template_target": "Form替代来源，不与原Form重复相加"
+    },
+    {
+      "name": "VoiceA",
+      "category": "face_mouse_audio",
+      "explanation": "detected phoneme: A",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "A元音权重",
+      "range": "0..1",
+      "template_target": "音频→既有嘴轴；或A01音素分支权重"
+    },
+    {
+      "name": "VoiceI",
+      "category": "face_mouse_audio",
+      "explanation": "detected phoneme: I",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "I元音权重",
+      "range": "0..1",
+      "template_target": "音频→既有嘴轴；或A01音素分支权重"
+    },
+    {
+      "name": "VoiceU",
+      "category": "face_mouse_audio",
+      "explanation": "detected phoneme: U",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "U元音权重",
+      "range": "0..1",
+      "template_target": "音频→既有嘴轴；或A01音素分支权重"
+    },
+    {
+      "name": "VoiceE",
+      "category": "face_mouse_audio",
+      "explanation": "detected phoneme: E",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "E元音权重",
+      "range": "0..1",
+      "template_target": "音频→既有嘴轴；或A01音素分支权重"
+    },
+    {
+      "name": "VoiceO",
+      "category": "face_mouse_audio",
+      "explanation": "detected phoneme: O",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "O元音权重",
+      "range": "0..1",
+      "template_target": "音频→既有嘴轴；或A01音素分支权重"
+    },
+    {
+      "name": "VoiceSilence",
+      "category": "face_mouse_audio",
+      "explanation": "detected sound/phoneme: Silence",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "静音量",
+      "range": "0..1",
+      "template_target": "音频/视觉供值比例；不作为美术坐标"
+    },
+    {
+      "name": "MouthX",
+      "category": "face_mouse_audio",
+      "explanation": "Mouth X position (shift mouth left/right)",
+      "platforms": [
+        "✔️",
+        "✔️",
+        "❌",
+        "✔️",
+        "✔️"
+      ],
+      "meaning": "偏嘴",
+      "range": "运行时查询",
+      "template_target": "M04/M15/E04L/E04R"
+    },
+    {
+      "name": "FaceAngry",
+      "category": "face_mouse_audio",
+      "explanation": "detects angry face(EXPERIMENTAL, not recommended)",
+      "platforms": [
+        "✔️",
+        "❌",
+        "❌",
+        "❌",
+        "❌"
+      ],
+      "meaning": "实验性生气量",
+      "range": "运行时查询",
+      "template_target": "保留可绑定；不用它替代可靠的眉/唇观测"
+    },
+    {
+      "name": "HandLeftFound",
+      "category": "hand",
+      "explanation": "1 if left hand is currently tracked/found, 0 otherwise.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "追踪可用性",
+      "range": "0/1",
+      "template_target": "控制来源可用性"
+    },
+    {
+      "name": "HandRightFound",
+      "category": "hand",
+      "explanation": "1 if right hand is currently tracked/found, 0 otherwise.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "追踪可用性",
+      "range": "0/1",
+      "template_target": "控制来源可用性"
+    },
+    {
+      "name": "BothHandsFound",
+      "category": "hand",
+      "explanation": "1 if both hands are currently tracked/found, 0 otherwise.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "追踪可用性",
+      "range": "0/1",
+      "template_target": "控制来源可用性"
+    },
+    {
+      "name": "HandDistance",
+      "category": "hand",
+      "explanation": "The distance between the hands (if they are both found).",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "双手距离",
+      "range": "未公开",
+      "template_target": "作者自定义演出轴"
+    },
+    {
+      "name": "HandLeftPositionX",
+      "category": "hand",
+      "explanation": "X-distance to center (left hand). Outwards is 10, middle is 0, inwards (towards right) is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手位置X",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandLeftPositionY",
+      "category": "hand",
+      "explanation": "Y-distance to center (left hand). Up is 10, middle is 0, down is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手位置Y",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandLeftPositionZ",
+      "category": "hand",
+      "explanation": "Z-distance to center (left hand). Close to camera is 10, far back is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手位置Z",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandRightPositionX",
+      "category": "hand",
+      "explanation": "X-distance to center (right hand). Outwards is 10, middle is 0, inwards (towards left) is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手位置X",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandRightPositionY",
+      "category": "hand",
+      "explanation": "Y-distance to center (right hand). Up is 10, middle is 0, down is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手位置Y",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandRightPositionZ",
+      "category": "hand",
+      "explanation": "Z-distance to center (right hand). Close to camera is 10, far back is -10.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手位置Z",
+      "range": "见轴定义",
+      "template_target": "P01"
+    },
+    {
+      "name": "HandLeftAngleX",
+      "category": "hand",
+      "explanation": "Left/Right rotation of left hand. Between +/- 180.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手角度X",
+      "range": "±180",
+      "template_target": "P01条件"
+    },
+    {
+      "name": "HandLeftAngleZ",
+      "category": "hand",
+      "explanation": "Left/Right lean of left hand. Between +/- 180.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手角度Z",
+      "range": "±180",
+      "template_target": "P01条件"
+    },
+    {
+      "name": "HandRightAngleX",
+      "category": "hand",
+      "explanation": "Left/Right rotation of right hand. Between +/- 180.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手角度X",
+      "range": "±180",
+      "template_target": "P01条件"
+    },
+    {
+      "name": "HandRightAngleZ",
+      "category": "hand",
+      "explanation": "Left/Right lean of right hand. Between +/- 180.",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手角度Z",
+      "range": "±180",
+      "template_target": "P01条件"
+    },
+    {
+      "name": "HandLeftOpen",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左手整体张开",
+      "range": "0..1",
+      "template_target": "P02整体手形来源"
+    },
+    {
+      "name": "HandRightOpen",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右手整体张开",
+      "range": "0..1",
+      "template_target": "P02整体手形来源"
+    },
+    {
+      "name": "HandLeftFinger_1_Thumb",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左拇指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandLeftFinger_2_Index",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左食指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandLeftFinger_3_Middle",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左中指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandLeftFinger_4_Ring",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左无名指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandLeftFinger_5_Pinky",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "左小指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandRightFinger_1_Thumb",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右拇指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandRightFinger_2_Index",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右食指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandRightFinger_3_Middle",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右中指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandRightFinger_4_Ring",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右无名指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "HandRightFinger_5_Pinky",
+      "category": "hand",
+      "explanation": "Finger openness 0..1",
+      "platforms": [
+        "desktop MediaPipe"
+      ],
+      "meaning": "右小指",
+      "range": "0..1",
+      "template_target": "P02对应手指"
+    },
+    {
+      "name": "ControllerStickLeftX",
+      "category": "controller",
+      "range": "-1 to 1",
+      "explanation": "Left stick horizontal (left = -1, right = 1)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerStickLeftY",
+      "category": "controller",
+      "range": "-1 to 1",
+      "explanation": "Left stick vertical (down = -1, up = 1)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerStickRightX",
+      "category": "controller",
+      "range": "-1 to 1",
+      "explanation": "Right stick horizontal",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerStickRightY",
+      "category": "controller",
+      "range": "-1 to 1",
+      "explanation": "Right stick vertical",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerStickPressLeft",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Left stick click (L3)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerStickPressRight",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Right stick click (R3)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerDPadX",
+      "category": "controller",
+      "range": "-1, 0, or 1",
+      "explanation": "D-Pad horizontal (left = -1, right = 1)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerDPadY",
+      "category": "controller",
+      "range": "-1, 0, or 1",
+      "explanation": "D-Pad vertical (down = -1, up = 1)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTriangle",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Triangle / Y button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerCross",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Cross / A button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerSquare",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Square / X button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerCircle",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Circle / B button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerShoulderLeft",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Left shoulder / L1 / LB",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerShoulderRight",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Right shoulder / R1 / RB",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTriggerLeft",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Left trigger (analog)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTriggerRight",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Right trigger (analog)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerOptionLeft",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Select / Share button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerOptionRight",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Start / Options button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerHome",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Home / PS button",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadPress",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Touchpad click",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerButtonsAnyLeft",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "1 if any left-side button is pressed",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerButtonsAnyRight",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "1 if any right-side button is pressed",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerButtonCountLeft",
+      "category": "controller",
+      "range": "0+",
+      "explanation": "Number of left-side buttons currently pressed",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerButtonCountRight",
+      "category": "controller",
+      "range": "0+",
+      "explanation": "Number of right-side buttons currently pressed",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerLean",
+      "category": "controller",
+      "range": "-1 to 1",
+      "explanation": "A calculated \"lean/nudge\" value. Tilts based on which side's buttons are being pressed and stick positions.",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerThumbPosLeft",
+      "category": "controller",
+      "range": "0–3",
+      "explanation": "Left thumb: 0 = On Buttons, 1 = On Stick, 2 = On Option, 3 = On Touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerThumbPosRight",
+      "category": "controller",
+      "range": "0–3",
+      "explanation": "Right thumb position (same mapping)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerFingerPosLeft",
+      "category": "controller",
+      "range": "0–2",
+      "explanation": "Left index finger: 0 = On Shoulder, 1 = On Trigger, 2 = On Both",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerFingerPosRight",
+      "category": "controller",
+      "range": "0–2",
+      "explanation": "Right index finger position (same mapping)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadTouchCount",
+      "category": "controller",
+      "range": "0–2",
+      "explanation": "Number of fingers currently touching the touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerLeftActive",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Whether the left/first finger is on the touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerRightActive",
+      "category": "controller",
+      "range": "0 or 1",
+      "explanation": "Whether the right/second finger is on the touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerLeftX",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Left finger X position on touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerLeftY",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Left finger Y position on touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerRightX",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Right finger X position on touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerTouchPadFingerRightY",
+      "category": "controller",
+      "range": "0.0 to 1.0",
+      "explanation": "Right finger Y position on touchpad",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerOrientationX",
+      "category": "controller",
+      "range": "-60.0 to 60.0",
+      "explanation": "Controller orientation X (Euler angle, yaw)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerOrientationY",
+      "category": "controller",
+      "range": "-60.0 to 60.0",
+      "explanation": "Controller orientation Y (Euler angle, pitch)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    },
+    {
+      "name": "ControllerOrientationZ",
+      "category": "controller",
+      "range": "-60.0 to 60.0",
+      "explanation": "Controller orientation Z (Euler angle, roll)",
+      "platforms": [
+        "desktop controller"
+      ],
+      "template_target": "P03 / 作者指定的演出参数来源"
+    }
+  ],
+  "raw_arkit": [
+    {
+      "name": "eyeBlinkLeft",
+      "vts_wire": "EyeBlinkLeft",
+      "vb_internal": "eyeBlink_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeOpenLeft"
+      ]
+    },
+    {
+      "name": "eyeLookDownLeft",
+      "vts_wire": "EyeLookDownLeft",
+      "vb_internal": "eyeLookDown_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeRightY",
+        "HQGazeLeftY"
+      ]
+    },
+    {
+      "name": "eyeLookInLeft",
+      "vts_wire": "EyeLookInLeft",
+      "vb_internal": "eyeLookIn_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeRightX",
+        "HQGazeLeftX"
+      ]
+    },
+    {
+      "name": "eyeLookOutLeft",
+      "vts_wire": "EyeLookOutLeft",
+      "vb_internal": "eyeLookOut_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeRightX",
+        "HQGazeLeftX"
+      ]
+    },
+    {
+      "name": "eyeLookUpLeft",
+      "vts_wire": "EyeLookUpLeft",
+      "vb_internal": "eyeLookUp_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeRightY",
+        "HQGazeLeftY"
+      ]
+    },
+    {
+      "name": "eyeSquintLeft",
+      "vts_wire": "EyeSquintLeft",
+      "vb_internal": "eyeSquint_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeSquintLeft"
+      ]
+    },
+    {
+      "name": "eyeWideLeft",
+      "vts_wire": "EyeWideLeft",
+      "vb_internal": "eyeWide_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeOpenLeft"
+      ]
+    },
+    {
+      "name": "eyeBlinkRight",
+      "vts_wire": "EyeBlinkRight",
+      "vb_internal": "eyeBlink_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeOpenRight"
+      ]
+    },
+    {
+      "name": "eyeLookDownRight",
+      "vts_wire": "EyeLookDownRight",
+      "vb_internal": "eyeLookDown_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQGazeRightY"
+      ]
+    },
+    {
+      "name": "eyeLookInRight",
+      "vts_wire": "EyeLookInRight",
+      "vb_internal": "eyeLookIn_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQGazeRightX"
+      ]
+    },
+    {
+      "name": "eyeLookOutRight",
+      "vts_wire": "EyeLookOutRight",
+      "vb_internal": "eyeLookOut_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQGazeRightX"
+      ]
+    },
+    {
+      "name": "eyeLookUpRight",
+      "vts_wire": "EyeLookUpRight",
+      "vb_internal": "eyeLookUp_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQGazeRightY"
+      ]
+    },
+    {
+      "name": "eyeSquintRight",
+      "vts_wire": "EyeSquintRight",
+      "vb_internal": "eyeSquint_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeSquintRight"
+      ]
+    },
+    {
+      "name": "eyeWideRight",
+      "vts_wire": "EyeWideRight",
+      "vb_internal": "eyeWide_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeOpenRight"
+      ]
+    },
+    {
+      "name": "jawForward",
+      "vts_wire": "JawForward",
+      "vb_internal": "jawForward",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQJawForward"
+      ]
+    },
+    {
+      "name": "jawLeft",
+      "vts_wire": "JawLeft",
+      "vb_internal": "jawLeft",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQJawX"
+      ]
+    },
+    {
+      "name": "jawRight",
+      "vts_wire": "JawRight",
+      "vb_internal": "jawRight",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQJawX"
+      ]
+    },
+    {
+      "name": "jawOpen",
+      "vts_wire": "JawOpen",
+      "vb_internal": "jawOpen",
+      "range": "0..1",
+      "processed_outputs": [
+        "JawOpen",
+        "MouthOpen",
+        "VoiceVolumePlusMouthOpen",
+        "MouthFunnel"
+      ]
+    },
+    {
+      "name": "mouthClose",
+      "vts_wire": "MouthClose",
+      "vb_internal": "mouthClose",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthOpen",
+        "VoiceVolumePlusMouthOpen",
+        "HQMouthSeal"
+      ]
+    },
+    {
+      "name": "mouthFunnel",
+      "vts_wire": "MouthFunnel",
+      "vb_internal": "mouthFunnel",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthOpen",
+        "VoiceVolumePlusMouthOpen",
+        "MouthFunnel",
+        "HQLipFunnel"
+      ]
+    },
+    {
+      "name": "mouthPucker",
+      "vts_wire": "MouthPucker",
+      "vb_internal": "mouthPucker",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "MouthPucker",
+        "HQLipPucker"
+      ]
+    },
+    {
+      "name": "mouthLeft",
+      "vts_wire": "MouthLeft",
+      "vb_internal": "mouthLeft",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthX",
+        "BrowLeftY",
+        "BrowRightY"
+      ]
+    },
+    {
+      "name": "mouthRight",
+      "vts_wire": "MouthRight",
+      "vb_internal": "mouthRight",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthX",
+        "BrowLeftY",
+        "BrowRightY"
+      ]
+    },
+    {
+      "name": "mouthSmileLeft",
+      "vts_wire": "MouthSmileLeft",
+      "vb_internal": "mouthSmile_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "MouthX",
+        "HQEyeSmileLeft",
+        "HQSmileFrownLeft",
+        "HQEmotion"
+      ]
+    },
+    {
+      "name": "mouthSmileRight",
+      "vts_wire": "MouthSmileRight",
+      "vb_internal": "mouthSmile_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "MouthX",
+        "HQEyeSmileRight",
+        "HQSmileFrownRight",
+        "HQEmotion"
+      ]
+    },
+    {
+      "name": "mouthFrownLeft",
+      "vts_wire": "MouthFrownLeft",
+      "vb_internal": "mouthFrown_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "HQSmileFrownLeft",
+        "HQEmotion"
+      ]
+    },
+    {
+      "name": "mouthFrownRight",
+      "vts_wire": "MouthFrownRight",
+      "vb_internal": "mouthFrown_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "HQSmileFrownRight",
+        "HQEmotion"
+      ]
+    },
+    {
+      "name": "mouthDimpleLeft",
+      "vts_wire": "MouthDimpleLeft",
+      "vb_internal": "mouthDimple_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "MouthPucker",
+        "HQMouthDimpleLeft"
+      ]
+    },
+    {
+      "name": "mouthDimpleRight",
+      "vts_wire": "MouthDimpleRight",
+      "vb_internal": "mouthDimple_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthSmile",
+        "VoiceFrequencyPlusMouthSmile",
+        "MouthPucker",
+        "HQMouthDimpleRight"
+      ]
+    },
+    {
+      "name": "mouthStretchLeft",
+      "vts_wire": "MouthStretchLeft",
+      "vb_internal": "mouthStretch_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQLipStretchLeft"
+      ]
+    },
+    {
+      "name": "mouthStretchRight",
+      "vts_wire": "MouthStretchRight",
+      "vb_internal": "mouthStretch_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQLipStretchRight"
+      ]
+    },
+    {
+      "name": "mouthRollLower",
+      "vts_wire": "MouthRollLower",
+      "vb_internal": "mouthRollLower",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthOpen",
+        "VoiceVolumePlusMouthOpen",
+        "MouthPressLipOpen",
+        "HQLowerLipRoll"
+      ]
+    },
+    {
+      "name": "mouthRollUpper",
+      "vts_wire": "MouthRollUpper",
+      "vb_internal": "mouthRollUpper",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthOpen",
+        "VoiceVolumePlusMouthOpen",
+        "MouthPressLipOpen",
+        "HQUpperLipRoll"
+      ]
+    },
+    {
+      "name": "mouthShrugLower",
+      "vts_wire": "MouthShrugLower",
+      "vb_internal": "mouthShrugLower",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthShrug",
+        "HQLowerLipShrug"
+      ]
+    },
+    {
+      "name": "mouthShrugUpper",
+      "vts_wire": "MouthShrugUpper",
+      "vb_internal": "mouthShrugUpper",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthShrug",
+        "HQUpperLipShrug"
+      ]
+    },
+    {
+      "name": "mouthPressLeft",
+      "vts_wire": "MouthPressLeft",
+      "vb_internal": "mouthPress_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthShrug",
+        "HQLipPressLeft"
+      ]
+    },
+    {
+      "name": "mouthPressRight",
+      "vts_wire": "MouthPressRight",
+      "vb_internal": "mouthPress_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthShrug",
+        "HQLipPressRight"
+      ]
+    },
+    {
+      "name": "mouthLowerDownLeft",
+      "vts_wire": "MouthLowerDownLeft",
+      "vb_internal": "mouthLowerDown_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthPressLipOpen",
+        "HQLowerLipDropLeft"
+      ]
+    },
+    {
+      "name": "mouthLowerDownRight",
+      "vts_wire": "MouthLowerDownRight",
+      "vb_internal": "mouthLowerDown_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthPressLipOpen",
+        "HQLowerLipDropRight"
+      ]
+    },
+    {
+      "name": "mouthUpperUpLeft",
+      "vts_wire": "MouthUpperUpLeft",
+      "vb_internal": "mouthUpperUp_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthPressLipOpen",
+        "HQUpperLipRaiseLeft"
+      ]
+    },
+    {
+      "name": "mouthUpperUpRight",
+      "vts_wire": "MouthUpperUpRight",
+      "vb_internal": "mouthUpperUp_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "MouthPressLipOpen",
+        "HQUpperLipRaiseRight"
+      ]
+    },
+    {
+      "name": "browDownLeft",
+      "vts_wire": "BrowDownLeft",
+      "vb_internal": "browDown_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "Brows",
+        "BrowLeftY",
+        "HQBrowDownLeft",
+        "HQBrowExpressionLeft"
+      ]
+    },
+    {
+      "name": "browDownRight",
+      "vts_wire": "BrowDownRight",
+      "vb_internal": "browDown_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "Brows",
+        "BrowRightY",
+        "HQBrowDownRight",
+        "HQBrowExpressionRight"
+      ]
+    },
+    {
+      "name": "browInnerUp",
+      "vts_wire": "BrowInnerUp",
+      "vb_internal": "browInnerUp",
+      "range": "0..1",
+      "processed_outputs": [
+        "BrowInnerUp",
+        "HQBrowExpressionLeft",
+        "HQBrowExpressionRight"
+      ]
+    },
+    {
+      "name": "browOuterUpLeft",
+      "vts_wire": "BrowOuterUpLeft",
+      "vb_internal": "browOuterUp_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "EyeRightY",
+        "Brows",
+        "BrowLeftY",
+        "HQBrowOuterUpLeft",
+        "HQBrowExpressionLeft"
+      ]
+    },
+    {
+      "name": "browOuterUpRight",
+      "vts_wire": "BrowOuterUpRight",
+      "vb_internal": "browOuterUp_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "Brows",
+        "BrowRightY",
+        "HQBrowOuterUpRight",
+        "HQBrowExpressionRight"
+      ]
+    },
+    {
+      "name": "cheekPuff",
+      "vts_wire": "CheekPuff",
+      "vb_internal": "cheekPuff",
+      "range": "0..1",
+      "processed_outputs": [
+        "CheekPuff"
+      ]
+    },
+    {
+      "name": "cheekSquintLeft",
+      "vts_wire": "CheekSquintLeft",
+      "vb_internal": "cheekSquint_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQCheekSquintLeft"
+      ]
+    },
+    {
+      "name": "cheekSquintRight",
+      "vts_wire": "CheekSquintRight",
+      "vb_internal": "cheekSquint_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQCheekSquintRight"
+      ]
+    },
+    {
+      "name": "noseSneerLeft",
+      "vts_wire": "NoseSneerLeft",
+      "vb_internal": "noseSneer_L",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQNoseSneerLeft"
+      ]
+    },
+    {
+      "name": "noseSneerRight",
+      "vts_wire": "NoseSneerRight",
+      "vb_internal": "noseSneer_R",
+      "range": "0..1",
+      "processed_outputs": [
+        "HQNoseSneerRight"
+      ]
+    },
+    {
+      "name": "tongueOut",
+      "vts_wire": "TongueOut",
+      "vb_internal": "tongueOut",
+      "range": "0..1",
+      "processed_outputs": [
+        "TongueOut"
+      ]
+    }
+  ],
+  "vbridger_v3": [
+    {
+      "name": "FaceAngleX",
+      "store_row": 1,
+      "equation": "- headRotY * .66",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 2.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 3,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.67,
+      "smooth_on": true,
+      "trees": "H01"
+    },
+    {
+      "name": "FaceAngleY",
+      "store_row": 1,
+      "equation": "( - headRotX * .66) ",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 2.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 3,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.67,
+      "smooth_on": true,
+      "trees": "H01"
+    },
+    {
+      "name": "FaceAngleZ",
+      "store_row": 1,
+      "equation": "headRotZ * .66",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 2.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 3,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.67,
+      "smooth_on": true,
+      "trees": "H01条件/姿态"
+    },
+    {
+      "name": "BodyAngleX",
+      "store_row": 2,
+      "equation": "- headRotY * .66",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.14,
+      "smooth_on": true,
+      "trees": "H03"
+    },
+    {
+      "name": "BodyAngleY",
+      "store_row": 2,
+      "equation": "( - headRotX * .66) ",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.14,
+      "smooth_on": true,
+      "trees": "H03"
+    },
+    {
+      "name": "BodyAngleZ",
+      "store_row": 2,
+      "equation": "headRotZ * .66",
+      "range": [
+        "-30",
+        "30"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -30.0,
+            "value": -30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 30.0,
+            "value": 30.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.14,
+      "smooth_on": true,
+      "trees": "H03条件"
+    },
+    {
+      "name": "FacePositionX",
+      "store_row": 3,
+      "equation": "headPosX * - 1",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.19,
+      "smooth_on": true,
+      "trees": "H02"
+    },
+    {
+      "name": "FacePositionY",
+      "store_row": 3,
+      "equation": "headPosY",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.19,
+      "smooth_on": true,
+      "trees": "H02"
+    },
+    {
+      "name": "FacePositionZ",
+      "store_row": 3,
+      "equation": "headPosZ",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.19,
+      "smooth_on": true,
+      "trees": "H02条件"
+    },
+    {
+      "name": "BodyPositionX",
+      "store_row": 4,
+      "equation": "headPosX * - 1",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.22,
+      "smooth_on": true,
+      "trees": "H04"
+    },
+    {
+      "name": "BodyPositionY",
+      "store_row": 4,
+      "equation": "headPosY",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.22,
+      "smooth_on": true,
+      "trees": "H04"
+    },
+    {
+      "name": "BodyPositionZ",
+      "store_row": 4,
+      "equation": "headPosZ",
+      "range": [
+        "-15",
+        "15"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -15.0,
+            "value": -15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 15.0,
+            "value": 15.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.22,
+      "smooth_on": true,
+      "trees": "H04条件"
+    },
+    {
+      "name": "EyeRightX",
+      "store_row": 5,
+      "equation": "(eyeLookIn_L - .1) - eyeLookOut_L",
+      "range": [
+        "-1",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.0,
+            "value": -1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze"
+    },
+    {
+      "name": "EyeRightY",
+      "store_row": 6,
+      "equation": "(eyeLookUp_L - eyeLookDown_L) + (browOuterUp_L * .15)",
+      "range": [
+        "-1",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.0,
+            "value": -1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": -0.0228274465,
+            "value": -0.004783988,
+            "inTangent": 1.00000072,
+            "outTangent": 1.00000143,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 3,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze"
+    },
+    {
+      "name": "EyeOpenLeft",
+      "store_row": 7,
+      "equation": ".5 + ((eyeBlink_L * - .8) + (eyeWide_L * .8))",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "LidLeft → E01L等"
+    },
+    {
+      "name": "EyeOpenRight",
+      "store_row": 8,
+      "equation": ".5 + ((eyeBlink_R * - .8) + (eyeWide_R * .8))",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "LidRight → E01R等"
+    },
+    {
+      "name": "EyeSquintLeft",
+      "store_row": 9,
+      "equation": "eyeSquint_L",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "E01L/E03L/B02L"
+    },
+    {
+      "name": "EyeSquintRight",
+      "store_row": 10,
+      "equation": "eyeSquint_R",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "E01R/E03R/B02R"
+    },
+    {
+      "name": "JawOpen",
+      "store_row": 11,
+      "equation": "jawOpen",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 0.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "M02/M03/M14等"
+    },
+    {
+      "name": "MouthOpen",
+      "store_row": 12,
+      "equation": "((jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2))",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 0.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.15,
+      "smooth_on": true,
+      "trees": "Open → M01等"
+    },
+    {
+      "name": "VoiceVolumePlusMouthOpen",
+      "store_row": 13,
+      "equation": "((jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2))",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 0.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "Open替代来源，不与原Open重复相加"
+    },
+    {
+      "name": "MouthSmile",
+      "store_row": 14,
+      "equation": "(2 - ((mouthFrown_L + mouthFrown_R + mouthPucker) / 1) + ((mouthSmile_R + mouthSmile_L + ((mouthDimple_L + mouthDimple_R) / 2)) / 1)) / 4",
+      "range": [
+        "-1",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.0,
+            "value": -1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "校准为Form → M01等"
+    },
+    {
+      "name": "VoiceFrequencyPlusMouthSmile",
+      "store_row": 15,
+      "equation": "(2 - ((mouthFrown_L + mouthFrown_R + mouthPucker) / 1) + ((mouthSmile_R + mouthSmile_L + ((mouthDimple_L + mouthDimple_R) / 2)) / 1)) / 4",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0.5",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "Form替代来源，不与原Form重复相加"
+    },
+    {
+      "name": "MouthFunnel",
+      "store_row": 16,
+      "equation": "mouthFunnel - (jawOpen * .2)",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "Funnel → M01/M13等"
+    },
+    {
+      "name": "MouthPressLipOpen",
+      "store_row": 17,
+      "equation": "(((mouthUpperUp_R + mouthUpperUp_L + mouthLowerDown_R + mouthLowerDown_L) / 1.8) - (mouthRollLower + mouthRollUpper))",
+      "range": [
+        "-1.3",
+        "1.3"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.3,
+            "value": -1.3,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 2.0,
+            "outTangent": 2.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.3,
+            "value": 1.3,
+            "inTangent": 0.0,
+            "outTangent": 0.0,
+            "inWeight": 0.0,
+            "outWeight": 0.0,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 3,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "Press → M01/M07/M08等"
+    },
+    {
+      "name": "MouthPucker",
+      "store_row": 18,
+      "equation": "(((mouthDimple_R + mouthDimple_L) * 2) - mouthPucker)",
+      "range": [
+        "-1",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.0,
+            "value": -1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "M04/C02等"
+    },
+    {
+      "name": "MouthX",
+      "store_row": 19,
+      "equation": "((mouthLeft - mouthRight) + (mouthSmile_L - mouthSmile_R)) ",
+      "range": [
+        "-1",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": -1.0,
+            "value": -1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "M04/M15/E04L/E04R"
+    },
+    {
+      "name": "CheekPuff",
+      "store_row": 20,
+      "equation": "cheekPuff",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "C02/C03"
+    },
+    {
+      "name": "TongueOut",
+      "store_row": 21,
+      "equation": "tongueOut",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.0,
+      "smooth_on": false,
+      "trees": "M14/C03"
+    },
+    {
+      "name": "MouthShrug",
+      "store_row": 22,
+      "equation": "((mouthShrugUpper + mouthShrugLower + mouthPress_R + mouthPress_L) / 4)",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.1,
+      "smooth_on": true,
+      "trees": "M16基础，M05细分"
+    },
+    {
+      "name": "Brows",
+      "store_row": 23,
+      "equation": ".5 + (browOuterUp_R + browOuterUp_L - browDown_L - browDown_R) / 4",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0.5",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.15,
+      "smooth_on": true,
+      "trees": "眉代理来源；高档优先左右信息"
+    },
+    {
+      "name": "BrowLeftY",
+      "store_row": 24,
+      "equation": ".5 + (browOuterUp_L - browDown_L) + ((mouthRight - mouthLeft) / 8)",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.4,
+      "smooth_on": true,
+      "trees": "B02L；可降级代理B01L"
+    },
+    {
+      "name": "BrowRightY",
+      "store_row": 25,
+      "equation": ".5 + (browOuterUp_R - browDown_R) + ((mouthLeft - mouthRight) / 8)",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.4,
+      "smooth_on": true,
+      "trees": "B02R；可降级代理B01R"
+    },
+    {
+      "name": "BrowInnerUp",
+      "store_row": 26,
+      "equation": "browInnerUp",
+      "range": [
+        "0",
+        "1"
+      ],
+      "declared_default": "0",
+      "curve": {
+        "keys": [
+          {
+            "time": 0.0,
+            "value": 0.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          },
+          {
+            "time": 1.0,
+            "value": 1.0,
+            "inTangent": 1.0,
+            "outTangent": 1.0,
+            "inWeight": 0.333333343,
+            "outWeight": 0.333333343,
+            "weightedMode": 0,
+            "tangentMode": 0
+          }
+        ],
+        "length": 2,
+        "preWrapMode": 8,
+        "postWrapMode": 8
+      },
+      "smooth": 0.32,
+      "smooth_on": true,
+      "trees": "B01L/B01R/B02L/B02R条件"
+    }
+  ],
+  "hq_extensions": [
+    {
+      "name": "HQGazeLeftX",
+      "equation": "eyeLookIn_L - eyeLookOut_L",
+      "meaning": "Left眼水平注视",
+      "trees": [
+        "E02L",
+        "E03L"
+      ],
+      "range": "-1..1",
+      "note": "以演员自身右方为正；模型镜像在校准映射处理"
+    },
+    {
+      "name": "HQGazeLeftY",
+      "equation": "eyeLookUp_L - eyeLookDown_L",
+      "meaning": "Left眼垂直注视",
+      "trees": [
+        "E02L",
+        "E03L"
+      ],
+      "range": "-1..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQEyeSmileLeft",
+      "equation": "mouthSmile_L",
+      "meaning": "Left笑眼造型代理",
+      "trees": [
+        "E01L",
+        "E03L",
+        "E04L"
+      ],
+      "range": "0..1",
+      "note": "从嘴角笑映射；是作者联动，不是独立眼部笑观测"
+    },
+    {
+      "name": "HQSmileFrownLeft",
+      "equation": "clamp(mouthSmile_L - mouthFrown_L, -1, 1)",
+      "meaning": "Left嘴角欣/悲造型轴",
+      "trees": [
+        "M06"
+      ],
+      "range": "-1..1",
+      "note": "这是造型轴，不是心理情绪识别"
+    },
+    {
+      "name": "HQUpperLipRaiseLeft",
+      "equation": "mouthUpperUp_L",
+      "meaning": "Left上唇展开",
+      "trees": [
+        "M07"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLowerLipDropLeft",
+      "equation": "mouthLowerDown_L",
+      "meaning": "Left下唇下拉",
+      "trees": [
+        "M08"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipPressLeft",
+      "equation": "mouthPress_L",
+      "meaning": "Left压唇",
+      "trees": [
+        "M10"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipStretchLeft",
+      "equation": "mouthStretch_L",
+      "meaning": "Left横拉嘴角",
+      "trees": [
+        "M11"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQMouthDimpleLeft",
+      "equation": "mouthDimple_L",
+      "meaning": "Left酒窝/嘴角收紧",
+      "trees": [
+        "M12"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQCheekSquintLeft",
+      "equation": "cheekSquint_L",
+      "meaning": "Left颊收紧",
+      "trees": [
+        "C01"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQNoseSneerLeft",
+      "equation": "noseSneer_L",
+      "meaning": "Left鼻翼抬起",
+      "trees": [
+        "N01"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowDownLeft",
+      "equation": "browDown_L",
+      "meaning": "Left压眉",
+      "trees": [
+        "B01L"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowOuterUpLeft",
+      "equation": "browOuterUp_L",
+      "meaning": "Left外眉抬起",
+      "trees": [
+        "B01L"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowExpressionLeft",
+      "equation": "clamp((browInnerUp + browOuterUp_L) * .5, 0, 1) - browDown_L",
+      "meaning": "Left眉情绪造型",
+      "trees": [
+        "B03"
+      ],
+      "range": "-1..1",
+      "note": "借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT"
+    },
+    {
+      "name": "HQGazeRightX",
+      "equation": "eyeLookOut_R - eyeLookIn_R",
+      "meaning": "Right眼水平注视",
+      "trees": [
+        "E02R",
+        "E03R"
+      ],
+      "range": "-1..1",
+      "note": "以演员自身右方为正；模型镜像在校准映射处理"
+    },
+    {
+      "name": "HQGazeRightY",
+      "equation": "eyeLookUp_R - eyeLookDown_R",
+      "meaning": "Right眼垂直注视",
+      "trees": [
+        "E02R",
+        "E03R"
+      ],
+      "range": "-1..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQEyeSmileRight",
+      "equation": "mouthSmile_R",
+      "meaning": "Right笑眼造型代理",
+      "trees": [
+        "E01R",
+        "E03R",
+        "E04R"
+      ],
+      "range": "0..1",
+      "note": "从嘴角笑映射；是作者联动，不是独立眼部笑观测"
+    },
+    {
+      "name": "HQSmileFrownRight",
+      "equation": "clamp(mouthSmile_R - mouthFrown_R, -1, 1)",
+      "meaning": "Right嘴角欣/悲造型轴",
+      "trees": [
+        "M06"
+      ],
+      "range": "-1..1",
+      "note": "这是造型轴，不是心理情绪识别"
+    },
+    {
+      "name": "HQUpperLipRaiseRight",
+      "equation": "mouthUpperUp_R",
+      "meaning": "Right上唇展开",
+      "trees": [
+        "M07"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLowerLipDropRight",
+      "equation": "mouthLowerDown_R",
+      "meaning": "Right下唇下拉",
+      "trees": [
+        "M08"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipPressRight",
+      "equation": "mouthPress_R",
+      "meaning": "Right压唇",
+      "trees": [
+        "M10"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipStretchRight",
+      "equation": "mouthStretch_R",
+      "meaning": "Right横拉嘴角",
+      "trees": [
+        "M11"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQMouthDimpleRight",
+      "equation": "mouthDimple_R",
+      "meaning": "Right酒窝/嘴角收紧",
+      "trees": [
+        "M12"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQCheekSquintRight",
+      "equation": "cheekSquint_R",
+      "meaning": "Right颊收紧",
+      "trees": [
+        "C01"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQNoseSneerRight",
+      "equation": "noseSneer_R",
+      "meaning": "Right鼻翼抬起",
+      "trees": [
+        "N01"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowDownRight",
+      "equation": "browDown_R",
+      "meaning": "Right压眉",
+      "trees": [
+        "B01R"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowOuterUpRight",
+      "equation": "browOuterUp_R",
+      "meaning": "Right外眉抬起",
+      "trees": [
+        "B01R"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQBrowExpressionRight",
+      "equation": "clamp((browInnerUp + browOuterUp_R) * .5, 0, 1) - browDown_R",
+      "meaning": "Right眉情绪造型",
+      "trees": [
+        "B03"
+      ],
+      "range": "-1..1",
+      "note": "借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT"
+    },
+    {
+      "name": "HQUpperLipRoll",
+      "equation": "mouthRollUpper",
+      "meaning": "上卷唇",
+      "trees": [
+        "M09"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLowerLipRoll",
+      "equation": "mouthRollLower",
+      "meaning": "下卷唇",
+      "trees": [
+        "M09"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQUpperLipShrug",
+      "equation": "mouthShrugUpper",
+      "meaning": "上耸唇",
+      "trees": [
+        "M05"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLowerLipShrug",
+      "equation": "mouthShrugLower",
+      "meaning": "下耸唇",
+      "trees": [
+        "M05"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQJawForward",
+      "equation": "jawForward",
+      "meaning": "下颌前伸",
+      "trees": [
+        "M02"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQMouthSeal",
+      "equation": "mouthClose",
+      "meaning": "独立唇闭合",
+      "trees": [
+        "M03",
+        "C02"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipFunnel",
+      "equation": "mouthFunnel",
+      "meaning": "原始漏斗形变",
+      "trees": [
+        "M13"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQLipPucker",
+      "equation": "mouthPucker",
+      "meaning": "原始嘟嘴形变",
+      "trees": [
+        "M13"
+      ],
+      "range": "0..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQJawX",
+      "equation": "jawRight - jawLeft",
+      "meaning": "下颌侧移",
+      "trees": [
+        "M02",
+        "M15"
+      ],
+      "range": "-1..1",
+      "note": "直接保留原始自由度"
+    },
+    {
+      "name": "HQEmotion",
+      "equation": "clamp((mouthSmile_L + mouthSmile_R - mouthFrown_L - mouthFrown_R) / 2, -1, 1)",
+      "meaning": "音素库的欣/悲造型代理",
+      "trees": [
+        "A01"
+      ],
+      "range": "-1..1",
+      "note": "保留给语音嘴的表情条件，不是心理情绪识别"
+    },
+    {
+      "name": "HQAudioStrength",
+      "equation": "audio amplitude after calibration",
+      "meaning": "音素库的发音幅度",
+      "trees": [
+        "A01"
+      ],
+      "range": "0..1",
+      "note": "音频适配层输出；不引用未接入的原始音量作为假数据"
+    }
+  ],
+  "tree_families": [
+    {
+      "id": "M01",
+      "region": "外嘴核心",
+      "axes": [
+        "Form",
+        "Open"
+      ],
+      "condition_axes": [
+        "Funnel",
+        "Press"
+      ],
+      "role": "基础姿势；嘴唇轮廓/口孔",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "创作者证实该耦合；此处Unity组织为设计",
+      "samples": null
+    },
+    {
+      "id": "M02",
+      "region": "下颌/口内",
+      "axes": [
+        "JawOpen",
+        "HQJawForward"
+      ],
+      "condition_axes": [
+        "HQJawX"
+      ],
+      "role": "基础姿势；下颌、牙/口内，明确与M01绑定分工",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M03",
+      "region": "唇闭合与下颌",
+      "axes": [
+        "HQMouthSeal",
+        "JawOpen"
+      ],
+      "condition_axes": [
+        "Open",
+        "Form",
+        "Funnel"
+      ],
+      "role": "条件修正；闭唇时保留下颌运动",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M04",
+      "region": "横向嘴型",
+      "axes": [
+        "MouthPucker",
+        "MouthX"
+      ],
+      "condition_axes": [
+        "Open",
+        "Form"
+      ],
+      "role": "对M01的嘴宽/偏嘴修正；不重复写完整外嘴",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M05",
+      "region": "上下耸唇",
+      "axes": [
+        "HQUpperLipShrug",
+        "HQLowerLipShrug"
+      ],
+      "condition_axes": [
+        "Open",
+        "MouthPucker"
+      ],
+      "role": "对合并MouthShrug基础的细分修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M06",
+      "region": "左右嘴角表情",
+      "axes": [
+        "HQSmileFrownLeft",
+        "HQSmileFrownRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "Funnel",
+        "Press"
+      ],
+      "role": "不对称/局部嘴角修正；先扣除M01已表达部分",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M07",
+      "region": "上唇左右展开",
+      "axes": [
+        "HQUpperLipRaiseLeft",
+        "HQUpperLipRaiseRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "Press"
+      ],
+      "role": "独立上唇/露齿修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M08",
+      "region": "下唇左右展开",
+      "axes": [
+        "HQLowerLipDropLeft",
+        "HQLowerLipDropRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "Press"
+      ],
+      "role": "独立下唇/露齿修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M09",
+      "region": "上下卷唇",
+      "axes": [
+        "HQUpperLipRoll",
+        "HQLowerLipRoll"
+      ],
+      "condition_axes": [
+        "Open",
+        "JawOpen"
+      ],
+      "role": "对合并Press的卷唇细分修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M10",
+      "region": "左右压唇",
+      "axes": [
+        "HQLipPressLeft",
+        "HQLipPressRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "MouthPucker"
+      ],
+      "role": "局部压唇修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M11",
+      "region": "左右横向拉伸",
+      "axes": [
+        "HQLipStretchLeft",
+        "HQLipStretchRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "Form"
+      ],
+      "role": "拉伸修正，保留区别于Smile的形变",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M12",
+      "region": "左右酒窝/嘴角收紧",
+      "axes": [
+        "HQMouthDimpleLeft",
+        "HQMouthDimpleRight"
+      ],
+      "condition_axes": [
+        "Open",
+        "Form"
+      ],
+      "role": "酒窝/嘴角细节修正，扣除Form/Pucker已覆盖部分",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M13",
+      "region": "原始圆口与嘟嘴",
+      "axes": [
+        "HQLipFunnel",
+        "HQLipPucker"
+      ],
+      "condition_axes": [
+        "Open",
+        "Form",
+        "Press"
+      ],
+      "role": "恢复V3整形/合并丢失的圆口组合残差",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M14",
+      "region": "伸舌与口内",
+      "axes": [
+        "TongueOut",
+        "JawOpen"
+      ],
+      "condition_axes": [
+        "Open",
+        "MouthPucker",
+        "Funnel",
+        "Press"
+      ],
+      "role": "舌基础＋必要的唇/齿接触修正",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M15",
+      "region": "下颌偏移与偏嘴",
+      "axes": [
+        "HQJawX",
+        "MouthX"
+      ],
+      "condition_axes": [
+        "JawOpen",
+        "Open"
+      ],
+      "role": "下颌/嘴角错位修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "M16",
+      "region": "合并耸唇基础",
+      "axes": [
+        "MouthShrug"
+      ],
+      "condition_axes": [
+        "Open",
+        "MouthPucker"
+      ],
+      "role": "给V3兼容来源的合并耸唇基础；M05做细分残差",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "E01L",
+      "region": "Left眼睑",
+      "axes": [
+        "LidLeft",
+        "EyeSquintLeft"
+      ],
+      "condition_axes": [
+        "HQEyeSmileLeft"
+      ],
+      "role": "核心眼睑完整姿势；笑眼是第三维",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "眼睑2D本地资产已证实；笑眼条件为高级扩展设计",
+      "samples": null
+    },
+    {
+      "id": "E02L",
+      "region": "Left眼球注视",
+      "axes": [
+        "HQGazeLeftX",
+        "HQGazeLeftY"
+      ],
+      "condition_axes": [],
+      "role": "眼球注视基础",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "2D本地资产已证实",
+      "samples": null
+    },
+    {
+      "id": "E03L",
+      "region": "Left眼睑随视线",
+      "axes": [
+        "LidLeft",
+        "HQGazeLeftY"
+      ],
+      "condition_axes": [
+        "HQGazeLeftX",
+        "EyeSquintLeft",
+        "HQEyeSmileLeft"
+      ],
+      "role": "眼睑跟随/极端视线残差；不再次写完整眼球基础",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；具体切片设计为本次提出",
+      "samples": null
+    },
+    {
+      "id": "E04L",
+      "region": "Left眼睑随偏嘴",
+      "axes": [
+        "MouthX",
+        "LidLeft"
+      ],
+      "condition_axes": [
+        "HQEyeSmileLeft"
+      ],
+      "role": "偏嘴带动眼周修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；具体切片设计为本次提出",
+      "samples": null
+    },
+    {
+      "id": "B01L",
+      "region": "Left眉核心",
+      "axes": [
+        "HQBrowDownLeft",
+        "HQBrowOuterUpLeft"
+      ],
+      "condition_axes": [
+        "BrowInnerUp"
+      ],
+      "role": "眉毛基础；完整保留压眉/外眉抬起/内眉抬起",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "B02L",
+      "region": "Left眉眼接触",
+      "axes": [
+        "BrowLeftY",
+        "LidLeft"
+      ],
+      "condition_axes": [
+        "BrowInnerUp",
+        "EyeSquintLeft"
+      ],
+      "role": "眉压/睁大重叠修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；此处为设计",
+      "samples": null
+    },
+    {
+      "id": "E01R",
+      "region": "Right眼睑",
+      "axes": [
+        "LidRight",
+        "EyeSquintRight"
+      ],
+      "condition_axes": [
+        "HQEyeSmileRight"
+      ],
+      "role": "核心眼睑完整姿势；笑眼是第三维",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "眼睑2D本地资产已证实；笑眼条件为高级扩展设计",
+      "samples": null
+    },
+    {
+      "id": "E02R",
+      "region": "Right眼球注视",
+      "axes": [
+        "HQGazeRightX",
+        "HQGazeRightY"
+      ],
+      "condition_axes": [],
+      "role": "眼球注视基础",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "2D本地资产已证实",
+      "samples": null
+    },
+    {
+      "id": "E03R",
+      "region": "Right眼睑随视线",
+      "axes": [
+        "LidRight",
+        "HQGazeRightY"
+      ],
+      "condition_axes": [
+        "HQGazeRightX",
+        "EyeSquintRight",
+        "HQEyeSmileRight"
+      ],
+      "role": "眼睑跟随/极端视线残差；不再次写完整眼球基础",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；具体切片设计为本次提出",
+      "samples": null
+    },
+    {
+      "id": "E04R",
+      "region": "Right眼睑随偏嘴",
+      "axes": [
+        "MouthX",
+        "LidRight"
+      ],
+      "condition_axes": [
+        "HQEyeSmileRight"
+      ],
+      "role": "偏嘴带动眼周修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；具体切片设计为本次提出",
+      "samples": null
+    },
+    {
+      "id": "B01R",
+      "region": "Right眉核心",
+      "axes": [
+        "HQBrowDownRight",
+        "HQBrowOuterUpRight"
+      ],
+      "condition_axes": [
+        "BrowInnerUp"
+      ],
+      "role": "眉毛基础；完整保留压眉/外眉抬起/内眉抬起",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "B02R",
+      "region": "Right眉眼接触",
+      "axes": [
+        "BrowRightY",
+        "LidRight"
+      ],
+      "condition_axes": [
+        "BrowInnerUp",
+        "EyeSquintRight"
+      ],
+      "role": "眉压/睁大重叠修正",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "官方教程有联动章节；此处为设计",
+      "samples": null
+    },
+    {
+      "id": "E05",
+      "region": "双眼非对称协调",
+      "axes": [
+        "LidLeft",
+        "LidRight"
+      ],
+      "condition_axes": [
+        "EyeSquintLeft",
+        "EyeSquintRight"
+      ],
+      "role": "仅鼻根/眼周非对称残差；同步算法在中间层",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "B03",
+      "region": "左右眉中央协同",
+      "axes": [
+        "HQBrowExpressionLeft",
+        "HQBrowExpressionRight"
+      ],
+      "condition_axes": [],
+      "role": "中央眉/额头修正；不与B01重复整眉基础",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本地Jerry有该2D；作为残差的分工为本次设计",
+      "samples": null
+    },
+    {
+      "id": "C01",
+      "region": "双颊收紧",
+      "axes": [
+        "HQCheekSquintLeft",
+        "HQCheekSquintRight"
+      ],
+      "condition_axes": [
+        "Form",
+        "LidLeft",
+        "LidRight"
+      ],
+      "role": "脸颊肌肉基础/修正；与眼睑绑定分工",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "C02",
+      "region": "鼓腮嘴型",
+      "axes": [
+        "CheekPuff",
+        "MouthPucker"
+      ],
+      "condition_axes": [
+        "Open",
+        "HQMouthSeal",
+        "Form"
+      ],
+      "role": "鼓腮基础＋闭口/嘴型接触修正",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "C03",
+      "region": "鼓腮与伸舌",
+      "axes": [
+        "CheekPuff",
+        "TongueOut"
+      ],
+      "condition_axes": [
+        "JawOpen"
+      ],
+      "role": "极端组合残差",
+      "missing_animation": "零修正；保留基础输出",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "N01",
+      "region": "鼻翼/鼻唇",
+      "axes": [
+        "HQNoseSneerLeft",
+        "HQNoseSneerRight"
+      ],
+      "condition_axes": [
+        "HQUpperLipRaiseLeft",
+        "HQUpperLipRaiseRight",
+        "Form"
+      ],
+      "role": "鼻翼基础＋鼻唇接触修正",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "H01",
+      "region": "头部朝向",
+      "axes": [
+        "FaceAngleX",
+        "FaceAngleY"
+      ],
+      "condition_axes": [
+        "FaceAngleZ"
+      ],
+      "role": "姿态输出；需要绘制透视造型时再采姿势表",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "VB有数据；3D宿主通常走姿态链",
+      "samples": null
+    },
+    {
+      "id": "H02",
+      "region": "头部位置",
+      "axes": [
+        "FacePositionX",
+        "FacePositionY"
+      ],
+      "condition_axes": [
+        "FacePositionZ"
+      ],
+      "role": "姿态输出/透视造型",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "H03",
+      "region": "身体朝向",
+      "axes": [
+        "BodyAngleX",
+        "BodyAngleY"
+      ],
+      "condition_axes": [
+        "BodyAngleZ"
+      ],
+      "role": "姿态输出/造型，VB可从头姿推导",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "H04",
+      "region": "身体位置",
+      "axes": [
+        "BodyPositionX",
+        "BodyPositionY"
+      ],
+      "condition_axes": [
+        "BodyPositionZ"
+      ],
+      "role": "姿态输出/造型，非独立身体观测",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "A01",
+      "region": "显式音素嘴库",
+      "axes": [
+        "HQAudioStrength",
+        "HQEmotion"
+      ],
+      "condition_axes": [
+        "phoneme_category"
+      ],
+      "role": "每个音素一张幅度×表情二维表；音素类别不插成数字轴",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "VTS显式元音能力＋本次情绪化库设计",
+      "samples": null
+    },
+    {
+      "id": "P01",
+      "region": "手位置",
+      "axes": [
+        "HandPositionX",
+        "HandPositionY"
+      ],
+      "condition_axes": [
+        "HandPositionZ",
+        "HandAngleX",
+        "HandAngleZ"
+      ],
+      "role": "左右各自展开，送手部姿态或造型空间",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "VTS手部公开参数；模板组织为设计",
+      "samples": null
+    },
+    {
+      "id": "P02",
+      "region": "手指姿态",
+      "axes": [
+        "FingerCurl"
+      ],
+      "condition_axes": [
+        "hand_side",
+        "finger_category"
+      ],
+      "role": "每指独立，或手形组合；类别不作连续轴",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    },
+    {
+      "id": "P03",
+      "region": "控制器造型",
+      "axes": [
+        "StickX",
+        "StickY"
+      ],
+      "condition_axes": [
+        "Trigger",
+        "ButtonState"
+      ],
+      "role": "外设驱动演出/手部；不占用面部形态键输出",
+      "missing_animation": "复用低维基础姿势/中性，不放空Motion",
+      "evidence": "本次高级模板设计，非VB原装树",
+      "samples": null
+    }
+  ],
+  "axis_aliases": {
+    "Form": "MouthSmile经作者校准",
+    "Open": "MouthOpen经作者校准",
+    "Funnel": "MouthFunnel经作者校准",
+    "Press": "MouthPressLipOpen经作者校准",
+    "LidLeft": "EyeOpenLeft或原始Blink/Wide经作者校准",
+    "LidRight": "EyeOpenRight或原始Blink/Wide经作者校准",
+    "phoneme_category": "音素类别，不是连续距离",
+    "HandPositionX": "HandLeft/RightPositionX",
+    "HandPositionY": "HandLeft/RightPositionY",
+    "HandPositionZ": "HandLeft/RightPositionZ",
+    "HandAngleX": "HandLeft/RightAngleX",
+    "HandAngleZ": "HandLeft/RightAngleZ",
+    "hand_side": "左右类别",
+    "finger_category": "手指类别",
+    "FingerCurl": "HandLeft/RightFinger_1..5",
+    "StickX": "ControllerStickLeft/RightX",
+    "StickY": "ControllerStickLeft/RightY",
+    "Trigger": "ControllerTriggerLeft/Right",
+    "ButtonState": "Controller具体按钮状态"
+  },
+  "scope": "98 explicitly documented VTS tracking names; custom and model parameters are runtime-extensible",
+  "sources": {
+    "model": "https://github.com/DenchiSoft/VTubeStudio/wiki/VTS-Model-Settings",
+    "hands": "https://github.com/DenchiSoft/VTubeStudio/wiki/Hand-Tracking",
+    "controller": "https://github.com/DenchiSoft/VTubeStudio/wiki/Controller-Input",
+    "vb": "local decoded VBridger_AdvancedARKit_V3.0.vbridger.txt"
+  }
+}

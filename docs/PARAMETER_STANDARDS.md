@@ -96,7 +96,7 @@
 | `VoiceFrequency` / `VoiceFrequencyPlusMouthSmile` | `0..1` | 由元音检测合成，供"只有一个嘴型参数"的模型用（后者 = `MouthSmile + VoiceFrequency`） |
 
 官方两条要点：① 这些参数可以接到**任意** Live2D 参数上，不限于嘴（可做均衡器效果）；
-② **`VoiceA/I/U/E/O` 永远不会同时为 1**，只在小值区间混合（这是官方保证，不用我们自己防）。
+② **`VoiceA/I/U/E/O` 永远不会同时为 1**，只在小值区间混合（这是 **VTS 自身输出**的保证；自行接入 uLipSync、混合其他源或改写权重后，应由我们自己约束，不能沿用该保证）。
 ③ 官方给的嘴部推荐接法：`MouthOpen → ParamMouthOpen`、`MouthSmile → ParamMouthForm`、
 `VoiceSilence → ParamSilence`、`VoiceA..O → ParamA..O`，由 `ParamSilence` 决定"有声走元音、无声走面捕"。
 （官方这段示例里写的是 `ParamMouthOpen`，而 Cubism 标准表里叫 `ParamMouthOpenY` —— 后者是标准名。）
@@ -998,4 +998,3 @@ UDP 载荷上限、每帧键数是否有任何保障。
 | Cubism Editor 4.2 与 5.x 的标准参数表是否完全一致 | **未逐条比对** | 本表用的是 Editor 5 页面（标注 Updated 2021-08-26） |
 | `/VMC/Ext/Bone/Pos` 能否真的用上某根骨 | 取决于模型（**不是 UNVERIFIED，是"必须实测"**） | VRM 的眼骨/颚骨/指骨是 Optional（§5.1） |
 | Apple `ARFaceAnchor.BlendShapeLocation` 页面正文 | 页面可访问但 **JS 渲染抓不到纯文本** | 本表的 52 名与语义取自 **Unity 官方枚举文档**（`com.unity.xr.arkit@5.1.6`，每条都带 Apple 文档链接）+ VTS 的枚举源码，**两者逐名一致** |
-
