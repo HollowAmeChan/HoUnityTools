@@ -81,13 +81,14 @@
 | 项 | 今天 | 依据 |
 |---|---|---|
 | mod 个数 | **1 个**：`[PluginType] Id = hollow.hofacetracking`，Name `Ho Face Tracking`，v`0.2.0` | `HoFaceTrackingPlugin.cs:32-46` |
-| 节点个数 | **3 个**（`NodeTypes` 列全）；📖 计划拆成 4 个（`Ho Face 处理链` → `HoFace参数处理` + `HoFace控制求解`，见 §2.0.1） | 同上 `:38-43` |
+| 节点个数 | **4 个**（`NodeTypes` 列全）：接收器 / `HoFace参数处理` / `HoFace控制求解` / 调试日志（2026-09-25 拆完，见 §2.0.1） | `HoFaceTrackingPlugin.cs:38-44` |
 | 沙箱目录名 | `…/StreamingAssets/Plugins/Data/hollow.hofacetracking/`（= pluginId） | `Player.log`：`[Ho 面捕] 中间层配置目录：…（现有 2 份配置）` |
 
-| 节点（面板标题） | 状态 | 输出的口（2026-09-25 收口后） |
+| 节点（面板标题） | 状态 | 输出的口（2026-09-25 收口 + 拆分后） |
 |---|---|---|
-| `Ho Face 接收器（VTS 手机）` | **正式** | **3 个**：`原始值`（字典，列表语义，喂处理链）、`新鲜`（布尔，喂处理链「输入新鲜」——这是信号不是给人看的）、`状态`（一行文本：在不在收 / 状态说明 / 本帧键 / 帧·坏帧 / 距上帧，外加**只在真丢包时**出现的来源提示）。<br>砍掉的六个：`运行中` `本帧键数` `距上帧秒` `累计帧/坏帧` `外来来源` `本帧原始值` —— 都只是"给人看一眼"，不驱动任何节点，`本帧原始值` 还是 `原始值` 的文本版（想看就把 `原始值` 接「Ho调试日志」，那边摊成 `线名 = 值`）。 |
-| `Ho Face 处理链` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个合并后的 `状态`（四行：配置行 · 问题 · 沙箱路径 · 沙箱里现成的配置）。<br>砍掉的五个诊断口：`沙箱目录` `可用配置` `配置问题` `发出内容` `数值预览` —— 前四个并进 `状态`，`数值预览` 那份长文本仍在（点「重读配置」按钮会整份写进 `Player.log`）。 |
+| `Ho Face 接收器（VTS 手机）` | **正式** | **3 个**：`原始值`（字典，列表语义，喂参数处理）、`新鲜`（布尔，喂参数处理「输入新鲜」——这是信号不是给人看的）、`状态`（一行文本：来源 / 状态说明 / 本帧键 / 帧·坏帧 / 距上帧；手机模式外加**只在真丢包时**出现的来源提示，本机模式改报客户端数与注入次数）。<br>砍掉的六个：`运行中` `本帧键数` `距上帧秒` `累计帧/坏帧` `外来来源` `本帧原始值` —— 都只是"给人看一眼"，不驱动任何节点，`本帧原始值` 还是 `原始值` 的文本版（想看就把 `原始值` 接「Ho调试日志」，那边摊成 `线名 = 值`）。<br>输入侧另有 **VTS 服务端模式**（勾选框 + `API 端口`），见 §2.0.1 第三条来源。 |
+| `HoFace参数处理` | **正式** | **3 个**：`参数`（字典，列表语义 —— 输出行的结果，**键已去掉 `ARKit/` 前缀**）+ `有脸`（布尔）+ `状态`（四行：配置行 · 问题 · 沙箱路径 · 沙箱里现成的配置）。<br>这就是两层之间**唯一的接口**；`数值预览` 那份长文本按「重读配置」按钮写进 `Player.log`（摊开的就是出口那份参数）。 |
+| `HoFace控制求解` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个 `状态`（一行：参数几个键 · 形状几个 · 有脸 · 头姿）。**零配置**；输入 = `参数`（字典）+ `有脸`（布尔，**默认 true**）。<br>⚠️ 它的 `NodeType.Id` **沿用旧「Ho Face 处理链」那个** `7c3a91d6-…`，所以升级时指官方三个节点的 5 根线不会断。 |
 | `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制；⑥ **显示认几类值**（`Describe`）：字符串原样、名→值的表（排序摊平）、**数组/列表逐项**（`[i] = (x, y, z, w)`）、`Vector3`/`Quaternion` 用 F3 —— ⚠️ 数组这条修过：`object` 口拿到 `Bone Rotations`（`Quaternion[]`）时只靠 `ToString()` 屏上只有 `UnityEngine.Quaternion[]` 一行，而官方「检查值」把数组序列化成 JSON，所以"官方的能出值"，差的不是口、是显示。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
 
 **2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「Ho调试日志」接替）：
@@ -100,9 +101,11 @@
 ⚠️ 处理链节点**没有 flow 触发**：5 个输出口惰性求值、一帧只算一次（`HoFaceMiddlewareNode.cs:70-84`），
 因为 Warudo 没承诺节点之间的执行顺序 —— 不赌顺序。想手动催就用节点上的「重读配置」按钮。
 
-### 2.0.1 📖 计划：「Ho Face 处理链」拆成两个节点（2026-09-25 定）
+### 2.0.1 ✅ 已完成：「Ho Face 处理链」拆成两个节点（2026-09-25 定 → 当天落地）
 
-**拆点不是新架构 —— 它已经在代码里了。** `HoFaceChain.Evaluate` 就是三层，要拆的那条缝正好在中间：
+**拆点不是新架构 —— 它已经在代码里了。** `HoFaceChain.Evaluate` 就是三层，要拆的那条缝正好在中间
+（✅ 落地后：`EvaluateInputs` / `EvaluateOutputs` 留在 `Core/HoFaceChain.cs`，`Assemble` 搬去 `Core/HoFaceSolver.cs`；
+参数层出口多一份 `Parameters` 字典，键已去 `ARKit/` 前缀）：
 
 ```csharp
 public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, double now)
@@ -161,9 +164,10 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 **代价（要认的）**：中间那份字典从"内部实现"变成**公开接口**（要冻结、写进文档 —— 好在就是输出行词汇，成本低）；
 图上多一个节点、多两根线；两个节点各有一份帧护栏与诊断。
 
-**拆的时候怎么少接一次线**：把老「Ho Face 处理链」的 `NodeType.Id`（`7c3a91d6-4f2b-48e7-9a15-63d8f0b2c47e`）
-**给控制求解** —— 连到官方三个应用节点的那 5 根线原样保住；参数处理用新 Id，只需重接接收器过来的那几根
-（3 根 < 5 根）。背景：Id 或口名一变，老连线就是孤儿线（[从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7）。
+**✅ 拆的时候是这么少接一次线的**：老「Ho Face 处理链」的 `NodeType.Id`（`7c3a91d6-4f2b-48e7-9a15-63d8f0b2c47e`）
+**给了控制求解** —— 连到官方三个应用节点的那 5 根线原样保住；参数处理拿了新 Id（`a41d0c86-…`），
+要重接的只有接收器过来的那几根（3 根 < 5 根）。背景：Id 或口名一变，老连线就是孤儿线
+（[从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7）。
 
 **✅ 第三条来源已落地：接收器的「VTS 服务端模式」（2026-09-25 写进 mod，未在 Warudo 里跑过）**
 
@@ -219,16 +223,16 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 
 * **6 = 我们的 3 个 + 官方那 3 个**（`Ho调试日志` 是可选调试件，不算在内）。
   **走 VB 的路线也是 5 个**：`接收器（用 VTS 服务端模式）+ HoFace控制求解 + 官方 3`（**不加节点**）。
-* **📖 2026-09-25 新定的拆分：把「Ho Face 处理链」拆成 `HoFace参数处理` + `HoFace控制求解` 两个节点。**
-  理由与做法见上面 §2.0.1；拆完老节点不再存在。
+* **✅ 2026-09-25 的拆分已落地：`Ho Face 处理链` 已拆成 `HoFace参数处理` + `HoFace控制求解`，老节点不再存在。**
+  理由与做法见上面 §2.0.1（余下的"两个 mod"是另一件事，见最后一条）。
 * **`HoVtsTrack`** —— 通用接收节点：只做"读值 + 直通传参"，外加状态与调试输出。**写一次以后基本不用再动。**
 * **`HoVtsTrackController`** —— 语义上同样通用，但**带着我们指定的中间层配置 + 控制器**：
   内部在影子上跑控制器、把结果反算出来，直接产出 BS 列表 / 骨骼旋转偏移 / 根位置。
 * **应用端不碰 Warudo 的通用机械**（`SWITCH_*` / `SMOOTH_*` / `MERGE_*` / `EMPTY_*` / `DEFAULT_*` / `LOOK_AT`），
   只留那三个官方应用节点。
-* **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② "控制器"还是**数据树**（`Core/HoFaceChain.cs`）而不是
-  `.controller`；③ 今天的处理链端**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
-  目标形态那个**求解节点**直接输出"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
+* **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② "控制器"还是**数据树**（`Core/HoFaceSolver.cs`）而不是
+  `.controller`；③ 求解端的**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
+  目标形态那边直接叫"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
   offset，所以**语义**上今天已经是偏移了：单位四元数 = 不改那根骨头，见 §3.3 与 §3.4 第 3 条）。
 * **为什么现在没拆成两个 mod**：Warudo **每个 mod 各自编译成一个程序集**，同名类型跨 mod 是**不同的 `Type`**，
   拆开就得复制代码 + 靠端口通信；边界应该是"**mod 的种类**"（角色 / 插件），不是"功能模块"
