@@ -29,10 +29,13 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private const string RootKey = "Ho.BlendShape.ClipBuilder.Root";
         private const string MeshesKey = "Ho.BlendShape.ClipBuilder.Meshes";
         private const string FolderKey = "Ho.BlendShape.ClipBuilder.Folder";
+        private const string PruneKey = "Ho.BlendShape.ClipBuilder.PruneStale";
 
         private GameObject root;
         private readonly List<SkinnedMeshRenderer> meshes = new List<SkinnedMeshRenderer>();
         private string folder = "Assets/HoUnityTools/BlendShapeClips";
+        /// <summary>生成时顺手清掉输出文件夹里这次没写到的片段（默认开：那个文件夹是产物目录）。</summary>
+        private bool pruneStale = true;
         private string report = "";
         private bool reportIsError;
         private readonly List<string> reportNames = new List<string>();
@@ -62,6 +65,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private void OnEnable()
         {
             folder = EditorPrefs.GetString(FolderKey, folder);
+            pruneStale = EditorPrefs.GetBool(PruneKey, pruneStale);
             root = ResolveRoot(EditorPrefs.GetString(RootKey, ""));
             RestoreMeshes();
         }
@@ -225,6 +229,17 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                     }
                 }
 
+                HoConstraintEditorControls.Gap();
+                bool prune = HoConstraintEditorControls.Toggle("清掉旧片段", pruneStale,
+                    "生成时把输出文件夹里**这次没写到的**片段删掉。\n"
+                    + "那个文件夹是产物目录（生成完整份拷走再用）：旧键 / 旧网格留下的片段留着只会让人以为它还生效。\n"
+                    + "只有这个文件夹里的 `AnimationClip` 会被删，删了什么会在下面点名。");
+                if (prune != pruneStale)
+                {
+                    pruneStale = prune;
+                    EditorPrefs.SetBool(PruneKey, pruneStale);
+                }
+
                 HoConstraintEditorControls.Flex();
             }
         }
@@ -331,14 +346,27 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         {
             try
             {
-                var built = HoBlendShapeClipBuilder.Build(meshes, root.transform, folder);
+                var built = HoBlendShapeClipBuilder.Build(meshes, root.transform, folder, pruneStale);
                 SaveMeshes();
                 reportIsError = false;
                 report = "生成 " + built.created + " 个 / 更新 " + built.updated + " 个 · 曲线 " + built.curves
                     + " 条 → " + built.folder
                     + (built.renamed.Count > 0 ? "（文件名被改写过：" + string.Join("、", built.renamed) + "）" : "");
-                string stale = StaleClips(built.names);
-                if (!string.IsNullOrEmpty(stale)) report += "\n" + stale;
+                if (built.removed.Count > 0)
+                {
+                    built.removed.Sort(StringComparer.Ordinal);
+                    report += "\n清掉 " + built.removed.Count + " 个没用的旧片段："
+                        + string.Join("、", built.removed.GetRange(0, Math.Min(6, built.removed.Count)))
+                        + (built.removed.Count > 6 ? "…" : "");
+                }
+
+                // 没开清理时，至少把"还留着什么"说出来（别让人以为跑完就干净了）。
+                if (!pruneStale)
+                {
+                    string stale = StaleClips(built.names);
+                    if (!string.IsNullOrEmpty(stale)) report += "\n" + stale;
+                }
+
                 reportNames.Clear();
                 reportNames.AddRange(built.names);
             }

@@ -1,5 +1,32 @@
 ﻿# Unity 资产与编辑器的坑
 
+## 0. `DeleteAsset` 之后那个引用就废了 —— 名字要在删之前取
+
+症状：清理产物文件夹时抛
+`MissingReferenceException: The object of type 'UnityEngine.AnimationClip' has been destroyed
+but you are still trying to access it.`，堆栈正好指在 `DeleteAsset(path)` 那一行**后面**读
+`clip.name` 的地方（2026-09-25 实测，跑在批处理用例里）。
+
+原因：`AssetDatabase.DeleteAsset(path)` 不只是删文件 —— 它会把那个**托管包装对象一起销毁**
+（`Object` 的 native 端没了，C# 那层还在），所以紧接着 `clip.name` / `GetAssetPath(clip)` 都会炸。
+
+怎么办：**先收集"路径 + 名字"，再统一删**：
+
+```csharp
+var doomed = new List<(string Path, string Name)>();
+foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { folder }))
+{
+    string path = AssetDatabase.GUIDToAssetPath(guid);
+    var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+    if (clip != null && !keep.Contains(clip.name)) doomed.Add((path, clip.name));   // ← 名字先拿好
+}
+
+foreach (var entry in doomed)
+    if (AssetDatabase.DeleteAsset(entry.Path)) report.removed.Add(entry.Name);      // ← 只碰字符串
+```
+
+同一条也适用于 `DestroyImmediate`（循环里删完还要用下一个元素时同理）。
+
 ## 1. `AssetDatabase.CopyAsset` 会把 GUID 换掉
 
 症状：装配完控制器，场景里引用过它的地方（窥视对象的 Animator）**全断了**。

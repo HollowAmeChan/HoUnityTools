@@ -1,4 +1,4 @@
-# 面捕设计：已验证的机制层
+﻿# 面捕设计：已验证的机制层
 
 日期：2026-09-25。这份只讲**今天仍然成立**的东西：输入路线、中间层配置的语义、影子台、键的占用表、时钟与线程、验收。
 
@@ -382,8 +382,8 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 
 | 文件 | 是什么 |
 | --- | --- |
-| `Editor/AnimationTools/HoBlendShapeClipBuilder.cs`（生成逻辑）+ `HoAnimationToolsWindow.cs`（菜单 `HoUnityTools/动画工具` 的「形态键动画」栏） | 形态键动画：每个形态键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）。**不属于面捕**，只是它的上游 —— 同一个页面里还挂着「轨道处理」（旧「动画处理」：只留 Float 曲线的 YAML 处理，`HoAnimationClipProcessor.cs`） |
-| `Tests~/FaceTrackingValidation.cs` | 独立验证工程的批处理用例（**114 条断言**，2026-09-25 Unity 6000.3.15f1 全绿） |
+| `Editor/AnimationTools/HoBlendShapeClipBuilder.cs`（生成逻辑）+ `HoAnimationToolsWindow.cs`（菜单 `HoUnityTools/动画工具` 的「形态键动画」栏） | 形态键动画：每个形态键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）；重跑**覆盖同名片段**（保留资产、GUID 不变，只重写曲线），并可一并**清掉这次没写到的旧片段**（面板上默认开；那个文件夹是产物目录）。**不属于面捕**，只是它的上游 —— 同一个页面里还挂着「轨道处理」（旧「动画处理」：只留 Float 曲线的 YAML 处理，`HoAnimationClipProcessor.cs`） |
+| `Tests~/FaceTrackingValidation.cs` | 独立验证工程的批处理用例（**116 条断言**，2026-09-25 Unity 6000.3.15f1 全绿） |
 | `Tests~/AnimationClipPreviewValidation.cs` | 另一套用例（动画剪辑预览），与面捕无关 |
 
 网络接收与调试启动**只存在于编辑器流程**：接收端、宿主、面板全在 `Editor/` 下，所以它们不进玩家构建。
@@ -437,7 +437,7 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 ```
 
 成功标记是 **`HO_FACE_TESTS_ALL_PASSED`**（`Tests~/FaceTrackingValidation.cs:1008`）；失败会抛 `HO_FACE_TEST_FAILED: <断言名>` 并 `Exit(1)`。
-断言总数 **114**（`Check` / `Near` 的调用点计数与之一致）。环境、会绊人的地方、一次性工程怎么搭，见
+断言总数 **116**（`Check` / `Near` 的调用点计数与之一致）。环境、会绊人的地方、一次性工程怎么搭，见
 [批处理验证这套用例怎么跑](pitfalls/VALIDATION_LOOP.md)。**UDP 端口被占时用例会明确跳过接收端那几条，而不是假装通过。**
 
 两条实时 UDP 断言**几帧内没驱动上来**时，用例会自己打一条 `HO_LIVE`（接收端统计 + 合并后的线名值 + 输入行落点）。

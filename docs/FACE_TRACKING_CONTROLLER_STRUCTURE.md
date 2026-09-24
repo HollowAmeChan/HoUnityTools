@@ -1,4 +1,4 @@
-# 面捕控制器：结构、就地装配与命名约定
+﻿# 面捕控制器：结构、就地装配与命名约定
 
 日期：2026-09-25（§1 参考实现与 §2 判别性实验的数据来自 2026-09-22/23 的实测，2026-09-25 复核结论未变；
 §3 按"控制器编辑页就地装配"的现状重写）。
@@ -26,7 +26,7 @@
 
 - **角色预制件上零组件**：调试状态全在上面那两个文件里（不是组件）。
 - 要驱动的网格 = 调试对象下**所有** `SkinnedMeshRenderer`（`HoFaceDebugSettings.Meshes()`，`HoFaceDebugSettings.cs:115-121`；每次调用返回**新表**）。
-- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**114 条断言全绿**（用例里 114 处 `Check(`/`Near(` 调用，定义在 `Tests~/FaceTrackingValidation.cs:1241-1245`）；跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)。
+- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**116 条断言全绿**（用例里 116 处 `Check(`/`Near(` 调用，定义在 `Tests~/FaceTrackingValidation.cs:1241-1245`）；跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)。
 
 ## 1. 参考实现：Jerry 的 ARKit 控制器长什么样
 

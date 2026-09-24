@@ -10,7 +10,7 @@
 - [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 三个页各管什么、首次接线、什么会写盘、排查清单（症状 → 先看哪）。
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
-- [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（114 条全绿 + 怎么重跑）。
+- [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条全绿 + 怎么重跑）。
 - [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
 - [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：那一边的产物划分（**2 mod / 5 节点**）、为什么要走它的 **Tracking 层**、Warudo 的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）。
 - [**参数标准表**](PARAMETER_STANDARDS.md)：**下游到底认哪些名字**的权威依据（逐行表格 + 官方 URL + 未验证标记）—— VTS 追踪参数/语音/手部/控制器、VTS API 与注入规则、自定义参数、Cubism 标准参数与参数组、ARKit 52、iFacialMocap 线协议、VMC 协议地址与 HumanBodyBones、VRM 0.x/1.0、VRCFT Unified Expressions（附录）。**写任何参数名之前先查它。**
