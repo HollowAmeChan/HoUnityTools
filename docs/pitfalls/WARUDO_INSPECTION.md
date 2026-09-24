@@ -117,11 +117,33 @@ public override void OnUpdate()
    把官方那两句（`Text = 值; BroadcastDataInput(nameof(Text));`）补回去，同一份代码立刻就画出来了。
    → 这段显示字段，照抄这两句；`SetDataInput` 只影响端口值，不等于界面会重画。
 
-**顺带一个"想要能复制的文本"的结论**：`[Markdown]` 是**只读渲染**（官方「查看值」也复制不出来），
-而 Warudo 没有"自绘节点 UI"的口子（`Warudo.Core` 里没有自定义绘制特性、也没有相关基类方法，
-反射 `--list Custom/Draw/UI` 全空）。所以"能鼠标选中、能 Ctrl+C 的框"只有一个选择：
-**`[DataInput]` + `[MultilineInput]` 的可编辑多行框**（同样是"字段赋值 + `BroadcastDataInput`"去写它）。
-我们最终的「Ho调试日志」就是这个形态：一个入口 + 一个能复制的框，没有按钮、没有说明文字。
+**顺带一个"想要能复制的文本"的结论**（走过一圈弯路，2026-09-25 定稿）：
+Warudo 没有"自绘节点 UI"的口子（`Warudo.Core` 里没有自定义绘制特性、也没有相关基类方法，
+反射 `--list Custom/Draw/UI` 全空），能显示文本的就两类控件：
+
+* `[Markdown]`：**只读渲染**，选不中（官方「查看值」就用它）。
+* `[DataInput] + [MultilineInput]`：**能选中的可编辑多行框**，是唯一自带文本选择的控件。
+
+第一版选了后者（"能选中就能 Ctrl+C，连按钮都省了"）—— **实测是死路**：
+值在动的时候框**每帧重画，选区立刻被冲掉**（用户报的：Ctrl+A 之后还没来得及复制就没了）。
+所以"手选复制"对**会变的**内容不成立。最终形态 = **`[Markdown]` 只读显示 + 一个复制按钮**：
+
+| 部分 | 用什么 | 为什么 |
+|---|---|---|
+| 显示 | `[Markdown(20, false, false)] public string Text`（+`[Transient]`） | 照抄官方「查看值」那一行（`--attrs` 读出来是 `[Markdown(13, False, False)] public String Text`）：**控件由特性决定、不由类决定**，照抄特性就是复用同一个控件 |
+| 按钮 | `[FlowInput] public Continuation Copy()` | Warudo 没有"普通按钮"，Core / Plugins.Core 里**没有 `[Trigger]`**（`--find-attr Trigger` 两处都空）；能点的就是 `[FlowInput]`（返回 `Continuation`），接收器节点的「连接/断开」同款 |
+| 剪贴板 | `UnityEngine.GUIUtility.systemCopyBuffer` | Warudo **自己没有剪贴板 API**（`--list Clipboard` 两处都空）；整个 Managed 目录里只有 `UnityEngine.IMGUIModule.dll` 带这个名字 → 本地编译检查的引用表为此要加 `UnityEngine.IMGUIModule.dll` |
+
+**"能不能直接继承官方那个节点、只加一个按钮"**：技术上可以 —— 反射确认
+`Warudo.Plugins.Core.Nodes.InspectValueNode` 是 **public、非 sealed**，`OnUpdate` 是 **public virtual**。
+但**不值得**：① 真正要复用的只有"那一行特性声明"和"字段赋值 + `BroadcastDataInput`"这个写法，各一行，
+照抄就等于复用了同一个控件；② 继承会把它的 `OnUpdate` 一起带进来，而它靠"字段被推"喂值 ——
+**那正是对我们不灵的东西**（§8），所以照样得 override，还要连带接受它那两道 early-return
+（只在自己那张图 / 只在本机有 WebSocket 会话）；③ 唯一新增的不确定项是"Warudo 会不会发现**基类上声明**的端口"
+（`A` / `Text` 都在基类上），收益为零、风险却多一个。
+
+**另外，显示版给 Markdown 补了硬换行**（行尾两个空格）：Markdown 里单个换行是"软换行"，有些渲染器会并成一行。
+**复制按钮复制的是没被改写的原文**（另存一个私有字段）—— 所以剪贴板里的内容与显示版可以不一样。
 
 **连带教训：改端口名/类型会让蓝图里已有的连线变成孤儿。** 我们的调试节点从 `Content`/`Source`(string)
 改成 `A`(object) 之后，旧连线指向的键在新类型上不存在 ——
