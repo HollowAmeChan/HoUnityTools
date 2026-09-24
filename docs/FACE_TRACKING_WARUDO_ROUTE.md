@@ -72,7 +72,7 @@
 
 ---
 
-## 2. Warudo 侧：最终连线（**5 个节点，两个 mod**）
+## 2. Warudo 侧：最终连线（**我们的 3 + 官方 3 = 6 个节点**；走 VB 则 5 个；两个 mod）
 
 ### 2.0 先把"今天真实存在什么"与"目标形态"分开
 
@@ -81,7 +81,7 @@
 | 项 | 今天 | 依据 |
 |---|---|---|
 | mod 个数 | **1 个**：`[PluginType] Id = hollow.hofacetracking`，Name `Ho Face Tracking`，v`0.2.0` | `HoFaceTrackingPlugin.cs:32-46` |
-| 节点个数 | **3 个**（`NodeTypes` 列全） | 同上 `:38-43` |
+| 节点个数 | **3 个**（`NodeTypes` 列全）；📖 计划拆成 4 个（`Ho Face 处理链` → `HoFace参数处理` + `HoFace控制求解`，见 §2.0.1） | 同上 `:38-43` |
 | 沙箱目录名 | `…/StreamingAssets/Plugins/Data/hollow.hofacetracking/`（= pluginId） | `Player.log`：`[Ho 面捕] 中间层配置目录：…（现有 2 份配置）` |
 
 | 节点（面板标题） | 状态 | 输出的口（2026-09-25 收口后） |
@@ -100,16 +100,114 @@
 ⚠️ 处理链节点**没有 flow 触发**：5 个输出口惰性求值、一帧只算一次（`HoFaceMiddlewareNode.cs:70-84`），
 因为 Warudo 没承诺节点之间的执行顺序 —— 不赌顺序。想手动催就用节点上的「重读配置」按钮。
 
+### 2.0.1 📖 计划：「Ho Face 处理链」拆成两个节点（2026-09-25 定）
+
+**拆点不是新架构 —— 它已经在代码里了。** `HoFaceChain.Evaluate` 就是三层，要拆的那条缝正好在中间：
+
+```csharp
+public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, double now)
+{
+    current = rawValues;
+    EvaluateInputs(rawValues, deltaTime, now);   // 输入行：规范名 = 曲线(表达式(裸线名…))   → 参数处理
+    EvaluateOutputs(deltaTime, now);             // 输出行：参数名 = 曲线(表达式(规范名…))  → 参数处理
+    Assemble(rawValues);                         // 装配成 5 个口                          → 控制求解
+}
+```
+
+（`Core/HoFaceChain.cs:220-227`；`Assemble` 在 `:276-298` —— `ARKit/` 去前缀进 `BlendShapes`，
+9 个保留名进欧拉角 / 头位 / 根位，骨骼数组只写 `Head`。）
+
+| 节点（面板标题） | 拿什么 | 吐什么 | 配置 |
+|---|---|---|---|
+| **`HoFace参数处理`** | `原始值`（裸线名字典）+ `新鲜` + `配置文件` | **`参数`**（dict）+ **`有脸`**（bool） | **有**：`*.hoface.json`，输入行 + 输出行的曲线 / 修饰符 |
+| **`HoFace控制求解`** | **`参数`**（dict）+ **`有脸`**（bool） | 官方同形 5 个：`Is Tracked` / `BlendShapes` / `Head Position` / `Root Position` / `Bone Rotations`（外加一个 `状态`） | **零配置**（红线，见第 2 条） |
+
+**名字的含义**：`HoFace控制求解` 的"求解"是**从参数反求动画输出**（骨骼旋转偏移 / 头位 / 根位 / 融合形状），
+不是 IK 那个意思。名字就这么定。
+
+**两层之间唯一的接口 =「参数处理输出行那份字典」**，词表口径**对齐官方 `BlendShapes` 的命名**
+（2026-09-25 修正过一次：不要带 `ARKit/` 前缀）：
+
+| 键 | 值 | 说明 |
+|---|---|---|
+| **裸规范名**（`JawOpen` / `EyeBlinkLeft` …52 个） | float | 就是官方 `BlendShapes` 字典的命名 —— 参数处理出口时**去掉 `ARKit/` 前缀**（`Assemble` 本来就是这么去的，`Core/HoFaceChain.cs:278-282`） |
+| `Head/RotX|Y|Z` | 度，X→Y→Z | 保留名，`Quaternion.Euler(x, y, z)` |
+| `Head/PosX|Y|Z` / `Root/PosX|Y|Z` | 米 | 保留名（相对角色根 / 根位置） |
+
+（`Core/HoFaceChain.cs:46-76`。profile 里**照旧写** `ARKit/<规范名>` —— 那是配置层的写法，
+前缀只在参数处理内部存在，出口不带。）
+
+**四条先定死的**（都是这次讨论定下来的）：
+
+1. **`有脸` / `IsTracked` 由上游算，求解不算。** 今天的判据是"新鲜 **且** `FaceFound ≠ 0`，
+   而 `FaceFound` 是**裸线名**（`Nodes/HoFaceMiddlewareNode.cs:195-208`）—— 那是**协议知识**，
+   求解只拿到规范名、根本看不到。所以 `有脸` 是**输入口**：参数处理按 VTS / iFacialMocap 的规矩算它，
+   接收器的 VTS 服务端模式则直接拿 VTS 注入请求里的 `faceFound`（见下）。顺带省一根线
+   （今天的「新鲜」只喂 `IsTracked`，折进这一个 bool 就够）。
+2. **控制求解保持"零配置"。** 一旦往它里面塞平滑 / 曲线，"别的源跳过参数处理"这条唯一的卖点就没了。
+3. **不做"接错层自证"。** 两层都是 `Dictionary<string,float>`，接错是用户自己的事 ——
+   不额外加判据、不往 `状态` 里加提示（2026-09-25 明确否掉）。
+4. **缺键 = 中性**：契约里没有的键，求解按 0 / identity 处理（例如 VB 那条路不会给
+   `Head/RotX`，那求解的头姿就是 identity，头/根由 VB 自己那边的骨骼输出承担）。这条今天已经是行为
+   （`Reserved()` 缺行返回 0，`Core/HoFaceChain.cs:309-314`），只是现在要**写成承诺**。
+
+**为什么值得拆**：
+
+* **允许用户不接中间层**：VB 那一路几乎与我们的中间层配置平行，用户直接喂求解；
+* 与 Unity 侧两份文档**一对一**：`FACE_TRACKING_MIDDLE_LAYER.md` ↔ 参数处理、
+  `FACE_TRACKING_CONTROLLER_STRUCTURE.md` ↔ 控制求解 —— 一份文档一个节点；
+* 第三个输入源只需要新增"源 → 参数"，**不碰求解**（iFacialMocap 的内置输入行已经在了）。
+
+**代价（要认的）**：中间那份字典从"内部实现"变成**公开接口**（要冻结、写进文档 —— 好在就是输出行词汇，成本低）；
+图上多一个节点、多两根线；两个节点各有一份帧护栏与诊断。
+
+**拆的时候怎么少接一次线**：把老「Ho Face 处理链」的 `NodeType.Id`（`7c3a91d6-4f2b-48e7-9a15-63d8f0b2c47e`）
+**给控制求解** —— 连到官方三个应用节点的那 5 根线原样保住；参数处理用新 Id，只需重接接收器过来的那几根
+（3 根 < 5 根）。背景：Id 或口名一变，老连线就是孤儿线（[从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7）。
+
+**📖 第三条来源：让**已有的接收器**加一个"VTS 服务端"模式（2026-09-25 定，不加新节点）**
+
+目标：用户**继续用 VB 原来的 VTS 输出模式**（不用为自己的用途换模式），我们把那份数据接过来。
+**关键事实：这不是"同一个 socket 上多收一种包"，两者方向是反的**：
+
+| 路径 | 谁主动 | 传输 |
+|---|---|---|
+| 今天收的（手机） | **我们**发 `iOSTrackingDataRequest`，手机把数据发回我们 | UDP |
+| VB 的 VTS 模式 | **VB 当客户端**，连一个 VTS **服务端** | WebSocket（默认 `ws://localhost:8001`）+ 插件握手 + `InjectParameterDataRequest`（`.research/vts-creator-workflow/vts-api.md:124/1379`） |
+
+所以要加的是"接收器里的另一个模式"，它要实现的其实是 **VTS 公开 API 的服务端那一侧**（三条）：
+① UDP `47779` 上发一份 `VTubeStudioAPIStateBroadcast`（VTS 每 2 秒广播一次，**unsolicited**，不是请求应答 ——
+所以我们只要也广播一份，VB 的客户端列表里就会出现我们；`vts-api.md:183-204`）；
+② WebSocket 服务端 + 插件握手（`AuthenticationTokenRequest` → 我们直接给 token；`AuthenticationRequest` → 回 authenticated）；
+③ 解析 `InjectParameterDataRequest`：`data.parameterValues[] = {id, value}` → **`参数`**（键就是 VB 的输出参数名，
+就是 ARKit 那套 ✓）、`data.faceFound` → **`有脸`**（VTS 自己就给了这个字段 ✓），并且**对任何参数都回成功、不报错**
+（真 VTS 对不存在的参数会报错，我们照收）。
+
+契约不变（还是 `参数` + `有脸`）→ 直接接 `HoFace控制求解`，**拆分计划完全不受影响**。
+
+**❓ 做之前必须先验的一件事**：VB 的客户端列表**认不认一个"自称 VTS"的服务端**
+（它可能校验 `apiName`/`apiVersion`，或连上后先发某个请求核对）。便宜的验证法：先只写"假广播 + 最小 WS 服务端"，
+看 VB 列表里出不出得来 —— 通不过的话再退回 VMC（那条我们不主动做，理由见下）。
+**⚠️ VMC 那条不做**：Warudo 自带 VMC（`GET_VMC_RECEIVER_DATA` 节点，输出 `IsTracked` + `BlendShapes` 字典，
+形状正好对齐），技术上最省 —— **但它要用户把 VB 切到 VMC 模式**，等于把成本转嫁给用户、还可能弄断他原来的 VTS 用途，
+所以 2026-09-25 明确否掉（只作为假 VTS 走不通时的后备）。
+
 **目标形态**（📖 计划，尚未落地）：
 
 ```
-[HoVtsTrack mod]                    [HoVtsTrackController mod]              [官方节点 ×3]
-  HoVts 接收器      ──原始值/状态/调试──▶  中间层+控制器（合并成一个节点）  ──▶ 设置角色面部追踪 BlendShape 列表
-                   （裸线名原样交出）       内部 = 我们的中间层配置 + 控制器         覆盖角色骨骼旋转偏移列表
-                                          输出 = BS 列表 / 骨骼旋转偏移 / 根位置     覆盖角色根位置
+[HoVtsTrack mod]                        [HoVtsTrackController mod]                   [官方节点 ×3]
+  HoVts 接收器  ──原始值/新鲜/状态──▶  HoFace参数处理 ──参数/有脸──▶ HoFace控制求解 ──▶ 设置角色面部追踪 BlendShape 列表
+              （裸线名原样交出）        （中间层配置：裸线名→规范名，    （零配置：从参数反求         覆盖角色骨骼旋转偏移列表
+                                        曲线/修饰符）                    动画输出）                  覆盖角色根位置
+
+  〔同一个接收器的另一个模式〕VTS 服务端模式：VB 的 VTS 输出 ──参数/有脸──▶ HoFace控制求解
+  〔别的源〕官方面捕源（iFacialMocap 等）→ 参数处理的内置输入行 ──▶ 同上
 ```
 
-* **5 = 我们的 2 个 + 官方那 3 个**。
+* **6 = 我们的 3 个 + 官方那 3 个**（`Ho调试日志` 是可选调试件，不算在内）。
+  **走 VB 的路线也是 5 个**：`接收器（用 VTS 服务端模式）+ HoFace控制求解 + 官方 3`（**不加节点**）。
+* **📖 2026-09-25 新定的拆分：把「Ho Face 处理链」拆成 `HoFace参数处理` + `HoFace控制求解` 两个节点。**
+  理由与做法见上面 §2.0.1；拆完老节点不再存在。
 * **`HoVtsTrack`** —— 通用接收节点：只做"读值 + 直通传参"，外加状态与调试输出。**写一次以后基本不用再动。**
 * **`HoVtsTrackController`** —— 语义上同样通用，但**带着我们指定的中间层配置 + 控制器**：
   内部在影子上跑控制器、把结果反算出来，直接产出 BS 列表 / 骨骼旋转偏移 / 根位置。
@@ -117,7 +215,7 @@
   只留那三个官方应用节点。
 * **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② "控制器"还是**数据树**（`Core/HoFaceChain.cs`）而不是
   `.controller`；③ 今天的处理链端**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
-  目标形态那个合一节点直接输出"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
+  目标形态那个**求解节点**直接输出"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
   offset，所以**语义**上今天已经是偏移了：单位四元数 = 不改那根骨头，见 §3.3 与 §3.4 第 3 条）。
 * **为什么现在没拆成两个 mod**：Warudo **每个 mod 各自编译成一个程序集**，同名类型跨 mod 是**不同的 `Type`**，
   拆开就得复制代码 + 靠端口通信；边界应该是"**mod 的种类**"（角色 / 插件），不是"功能模块"
