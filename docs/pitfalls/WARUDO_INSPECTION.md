@@ -111,7 +111,11 @@ public override void OnUpdate()
    所以"上游把值写进下游字段"这条机制**是有的**；我们的字段是空 ⇒ **线根本没送到我们那个口上**。
 2. 它有两道 early-return：**只在自己那张图**（`GetSelectedGraph()`）、**只在本机有 WebSocket 会话**时更新。
    自己写节点时别照抄这两条（我们不需要）。
-3. `BroadcastDataInput("Text")` 才是刷新文本块那一步 —— 与本文 § 那几条"读写都要走端口"的实测一致。
+3. **`BroadcastDataInput` 才是让界面刷新那一句**，光有字段赋值不够 —— 我们踩了两轮才认下来：
+   有一版用 `SetDataInput(key, value, broadcast: true)` 代替它，结果**端口里明明是新值
+   （日志 `显示口 45 字符`）、界面上那块 `[Markdown]` 纹丝不动**（只显示创建时的初始文字）。
+   把官方那两句（`Text = 值; BroadcastDataInput(nameof(Text));`）补回去，同一份代码立刻就画出来了。
+   → 写"只读文本块"的节点，照抄这两句；`SetDataInput` 只影响端口值，不等于界面会重画。
 
 **连带教训：改端口名/类型会让蓝图里已有的连线变成孤儿。** 我们的调试节点从 `Content`/`Source`(string)
 改成 `A`(object) 之后，旧连线指向的键在新类型上不存在 ——
