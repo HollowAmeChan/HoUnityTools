@@ -126,4 +126,24 @@ public override void OnUpdate()
 **连带教训：改端口名/类型会让蓝图里已有的连线变成孤儿。** 我们的调试节点从 `Content`/`Source`(string)
 改成 `A`(object) 之后，旧连线指向的键在新类型上不存在 ——
 UI 上可能**还画着**那条线（看着接在「写入」上），但求值时找不到端口，值永远不进来；
-`Player.log` 只会显示"端口 空 · 字段 空"。遇到这种"看着接了却没值"，**删掉节点重新放一个**再接线。
+`Player.log` 只会显示"端口 空 · 字段 空"。
+
+**这种"看着接了却没值"现在可以一句话定性**：`Graph.GetInputDataConnections(Node)` 返回
+`IReadOnlyDictionary<String, List<DataConnection>>`，**键就是输入口名**，`DataConnection` 上带
+`OutputNode` / `OutputPort` / `InputNode` / `InputPort`。于是节点自己就能分清三种情况：
+
+| 情况 | 从 API 上看到的样子 |
+|---|---|
+| 线没接上 | 字典里没有你那个键（或者整张字典是空的） |
+| 接在一个**已经不存在**的旧口上（孤儿线） | 有 `"Content"` 这样的键，但该连接的 `InputPort == null` |
+| 接对了、上游还没给值 | 键是 `"A"`、`InputPort` 非空，端口值却是空 |
+
+`InputPort == null` 就是孤儿线的**确定判据**（比"看 UI 画没画"可靠）。我们的「Ho调试日志」把这句诊断
+每 0.5 秒往 `Player.log` 写一次（`Nodes/HoDebugLogNode.cs`），**只在还没拿到值的时候写、且只在连线变化时写**
+—— 界面上依旧只有一个入口 + 一个能复制的框，不为了调试往 UI 上堆东西。
+
+**另一条顺手的宽容设计**：如果上游是**直接接在显示框那一行**上（老版本那种用法），节点就用
+`GetInputDataConnections` 探到这一点、**不再去覆盖那个字段**，让它自己显示。这样"接入口"和"接显示框"
+两种接法都能用 —— 用户不用知道我们内部换了哪个字段名。
+
+（`DataConnection.OutputNode.Name` 拿到的是**标题还是内部名**没验过；只拿它认人，不参与逻辑。）
