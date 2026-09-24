@@ -564,11 +564,11 @@ AvatarCloneParent：Character Avatar Clone Parent
   （`Runtime/FaceTracking/HoFaceMiddleware.cs:190-192`）**逐个对得上**（离线测试覆盖了 52 个）。
   ⚠️ 规范名（`eyeBlinkLeft`）与线名（`EyeBlinkLeft`）是两套拼写，别混。
   ⚠️⚠️ **但"VTS 手机 = PascalCase"只对官方那台 iOS App 成立，别当普适规律**（2026-09-25 实测反例）：
-  用户那台设备**形态键发的是 iFacialMocap 命名**（`jawOpen` / `eyeBlink_L` / `mouthSmile_L` / `browInnerUp_R`…），
+  **安卓版 VTS**（用户实测那台）**形态键发的是 iFacialMocap 命名**（`jawOpen` / `eyeBlink_L` / `mouthSmile_L` / `browInnerUp_R`…），
   而**标量发的才是 VTS 命名**（`Rotation_x` / `Position_x` / `EyeLeft_x` / `FaceFound`…），另加 PascalCase 的
   `EyeBlinkLeft/Right` —— 一份 payload 里两套方言并存。56 键的"PascalCase 形态键"照样一个都没有 ⇒ 当时按
   PascalCase 写的那份调试配置读出来全是 `缺`（原始字典里根本没那些键）。**教训：输入行按"设备实际发的"
-  写，内置默认表给每个规范名配两行（iFacialMocap + VTS）不是啰嗦，是方言兼容层。** 完整的 65 键实测清单抄在
+  写，内置默认表给每个规范名配两行（iFacialMocap + VTS）不是啰嗦，是方言兼容层。** 完整的 65 键实测清单抄在（调试配置也按它命名：`ho-debug-android.hoface.json`）
   mod `README.md` §1.4。
 * **出处**：协议来自官方仓库 <https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest>
   （README 原话 "Apps like VSeeFace and VBridger use this."；载荷定义 `VTubeStudioRawTrackingData.cs`）——
