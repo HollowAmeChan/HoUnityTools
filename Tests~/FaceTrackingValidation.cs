@@ -168,7 +168,7 @@ public static class HoFaceTrackingValidation
             Check(info.layers == 1 && info.states == 1 && info.clips > 0,
                 "结构摘要读的是资产实况（" + info.layers + " 层 / " + info.states + " 状态 / " + info.clips + " 个片段）");
 
-            // ── 形态键基础动画生成器（通用动画工具，面捕只拿它当槽位数据）──────────────────
+            // ── 形态键动画生成器（动画工具页里那一栏，面捕只拿它的产物当槽位数据）──────────
             const string BuiltFolder = "Assets/ValidationBuiltClips";
             if (AssetDatabase.IsValidFolder(BuiltFolder)) AssetDatabase.DeleteAsset(BuiltFolder);
             AssetDatabase.CreateFolder("Assets", "ValidationBuiltClips");

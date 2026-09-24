@@ -1,4 +1,4 @@
-﻿# 面捕设计：已验证的机制层
+# 面捕设计：已验证的机制层
 
 日期：2026-09-25。这份只讲**今天仍然成立**的东西：输入路线、中间层配置的语义、影子台、键的占用表、时钟与线程、验收。
 
@@ -382,7 +382,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 
 | 文件 | 是什么 |
 | --- | --- |
-| `Editor/AnimationTools/HoBlendShapeClipBuilder.cs` + `HoBlendShapeClipBuilderWindow.cs` | 形态键基础动画（菜单 `HoUnityTools/形态键基础动画`）：每个形态键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）。**不属于面捕**，只是它的上游 |
+| `Editor/AnimationTools/HoBlendShapeClipBuilder.cs`（生成逻辑）+ `HoAnimationToolsWindow.cs`（菜单 `HoUnityTools/动画工具` 的「形态键动画」栏） | 形态键动画：每个形态键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）。**不属于面捕**，只是它的上游 —— 同一个页面里还挂着「轨道处理」（旧「动画处理」：只留 Float 曲线的 YAML 处理，`HoAnimationClipProcessor.cs`） |
 | `Tests~/FaceTrackingValidation.cs` | 独立验证工程的批处理用例（**114 条断言**，2026-09-25 Unity 6000.3.15f1 全绿） |
 | `Tests~/AnimationClipPreviewValidation.cs` | 另一套用例（动画剪辑预览），与面捕无关 |
 
@@ -452,4 +452,4 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 - **Unity 2021.3**：package 声明的最低版本，只在 6000.3.15f1 上验证过。
 - **Warudo 侧的 .controller 打包与 5 节点连线**：mod 里放 `.controller`、`SharedAssets.Load<RuntimeAnimatorController>` 取回、`HoVtsTrack` / `HoVtsTrackController` 两个 mod 与官方三个 apply 节点的实际连线与行为。见 [面捕方案总览](FACE_TRACKING_WARUDO_ROUTE.md) §2 与 §7 的待办。
 - **带 Behaviour / 同步图层 / 非形态键曲线的控制器**：装配不拦，**开始驱动会被拒**（§6.1 的接受范围）；把这类控制器放到影子台上跑还没试过。
-- **组合姿势片段的来源**：形态键基础动画只会出"一个键一份 100"的基础片段；眼睑 2D 树那种组合姿势（`眯 = blink 90 + squint 100`）要作者自己做，面板只负责报"哪个槽位缺"。
+- **组合姿势片段的来源**：动画工具的「形态键动画」只会出"一个键一份 100"的基础片段；眼睑 2D 树那种组合姿势（`眯 = blink 90 + squint 100`）要作者自己做，「控制器编辑」只负责报"哪个槽位缺"。

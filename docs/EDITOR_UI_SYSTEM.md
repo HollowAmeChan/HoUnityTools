@@ -1,4 +1,4 @@
-﻿# Ho 约束面板设计系统
+# Ho 约束面板设计系统
 
 约束类组件的 Inspector（眨眼 / 注视 / 摆锤…）共用一套**栅格 + 自绘控件**。
 设计稿：`.design/blink-panel.html`（浏览器直接打开，左边是目标外观，右边是令牌清单）。
@@ -68,5 +68,5 @@ NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / C
 
 ## 迁移进度
 
-- 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoBlendShapeClipBuilderWindow`、`HoFaceTrackingWindow`、`HoFaceControllerToolWindow`、`HoFaceProfileWindow`（面捕这三页里，前两页仍用 `HoConstraintEditorSectionGui.DrawSectionHeader` 画分区头），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。
+- 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoAnimationToolsWindow`（动画工具）、`HoFaceTrackingWindow` / `HoFaceControllerToolWindow` / `HoFaceProfileWindow`（面捕三页），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。分区头（`HoConstraintEditorSectionGui.DrawSectionHeader`）用在动画工具与面捕前两页上。
 - 仍走旧的 `HoConstraintEditorSectionGui`（分区头 + 栅格）：`HoLookAtConstraintEditor`、`HoPendulumConstraintEditor`、`HoFollowConstraintEditor`、`HoFloatingConstraintEditor`、`HoSpringConstraintEditor`。

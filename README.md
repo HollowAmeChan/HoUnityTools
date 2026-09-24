@@ -1,4 +1,4 @@
-﻿# Ho Unity Tools
+# Ho Unity Tools
 
 本 Unity 包联动 [HollowAmeChan/HoTools](https://github.com/HollowAmeChan/HoTools) Blender 插件。
 
@@ -7,13 +7,12 @@
 
 | 功能 | 入口 |
 | --- | --- |
-| 动画处理 | `HoUnityTools/动画处理` |
+| 动画工具（折叠栏：**形态键动画** + **轨道处理**） | `HoUnityTools/动画工具` |
 | FBX 导入处理中控 | `HoUnityTools/HoFBX导入处理` |
 | Warudo Prefab 快速构建 | `HoUnityTools/FastBuildWarudoMod` |
 | 面捕：调试面板 | `HoUnityTools/面捕/调试面板` |
 | 面捕：控制器编辑（就地装配控制器） | `HoUnityTools/面捕/控制器编辑` |
 | 面捕：配置文件（`.hoface.json`） | `HoUnityTools/面捕/配置文件` |
-| 形态键基础动画（每个键一份 `<键名>.anim`） | `HoUnityTools/形态键基础动画` |
 
 选中 FBX 资产后，也可以使用 `Assets/HoUnityTools/HoFBX导入处理` 打开同一个 FBX 面板并自动扫描相邻配置文件。这是面板的上下文快捷入口，不是另一套功能。
 
