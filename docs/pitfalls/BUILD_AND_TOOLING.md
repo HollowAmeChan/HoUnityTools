@@ -101,6 +101,25 @@ BUILD FAILED!
 `port.ComputedValue()` 一行就是那个口这一帧的值 —— 纯调用，安全校验无感。
 这是本次把反射方案整个换掉的落点（见 [从蓝图里取证](WARUDO_INSPECTION.md) §8）。
 
+### 4.2 ⚠️ 别拿 `Trivial.CodeSecurity` 的默认规则集当"本地验证器"（它会误报）
+
+想法很自然：UMod 的校验器就在 `Managed/Trivial.CodeSecurity.dll` 里，API 也是公开的 ——
+`CodeRestrictions.CreateDefaultRestrictions()` 拿规则、`new CodeSecurityEngine(dllPath)` +
+`SecurityCheckAssembly(restrictions, ref report)` 就能在本地跑（2026-09-25 本机实测：**确实能跑**）。
+**但它不是 UMod 实际用的那套规则。** 实测对照：
+
+| 探针 | 默认规则集的判决 | 事实 |
+|---|---|---|
+| 只用 `System.Net.Sockets`（`new UdpClient(...)`） | **非法**：`Illegal reference to disallowed namespace: System.Net.Sockets` | **放行** —— 我们的接收器就在用它，真机构建 + 运行都正常 |
+| 只用 `System.Security.Cryptography`（`SHA1.Create()`） | 非法（ns=1） | 大概率也非法（同一家族），但**这条不能用它证明** |
+| 我们今天在跑的那个 mod 程序集 | **55 条非法**（ns=7 / type=42 / asm=6） | 真机构建**通过**（0 条） |
+
+结论：**默认规则集比 UMod 实际用的严得多**（少了"允许的运行时程序集/命名空间"那层补充）。所以它
+**只能当探针**（问"某命名空间在这个更严的集合里让不让"，拿一个**否定信号**），**绝不能当门禁** ——
+拿它当门禁会把能过真机的代码判死。要确认某个 API 合不合法，只有两条路：
+**看官方 mod 有没有在用**（`System.Net.Sockets` 就是这么确认的：官方 VMC/OSC 插件在用），或者**真机构建一次**
+（报错会点名到 IL 偏移）。⚠️ 顺带记一笔：`UnityEngine.AssetBundle` 至今**没有本地结论**（见 §4.1 同款问题）。
+
 ## 5. asmdef 与工作区目录
 
 UMod 多 Mod 模式按 Unity 生成的运行时 `.csproj` 判断源码能否进编译：**额外 asmdef 可能让临时源码落到错误的工程文件**，
