@@ -72,13 +72,28 @@ ModBuildException: Code security validation failed
 BUILD FAILED!
 ```
 
-**两条教训**：
+**三条教训**：
 
 1. **本地编译检查 ≠ 能过安全校验**。`compile-check.ps1` 只是拿真机 DLL 编一遍，`RunCodeValidation` 是 UMod 在构建
-   流水线里单独跑的。凡是要动"别的节点/别的程序集里的东西"，先在脑子里过一遍 §4；有疑问就直接构建一次，别等交付。
+   流水线里单独跑的（FastBuild 走的是 UMod 官方入口，所以校验躲不掉）。
+   **现在那个脚本补了一个 `UMod sandbox lint` 阶段**专门拦这类引用（`-LintOnly` 只跑 lint，秒回）——
+   第二次构建撞的那条 `GetType().Name`，就是加 lint 之后在本地红的。
+   但它是**正则级**的（剥掉注释与字符串后按行匹配），只覆盖**已经踩过并写进名单**的那些名字；
+   碰到新的沙箱规则，第一次仍然得靠真机构建告诉你。
 2. **报错会精确到 IL 偏移**（`IL_004f: Callvirt …`）—— 连"到底是哪一行"都不用猜，照它给的成员名去删即可。
-   注意它连**字段签名里出现的类型**（`static readonly BindingFlags`）和**间接引用**（`MethodInfo::op_Inequality`、
-   `MemberInfo::get_Name`）都算，所以"只差一个 `GetType().Name`"也算违规 —— §4 举的第一行就是这个意思。
+   注意它连**字段签名里出现的类型**（`static readonly BindingFlags`）和**间接引用**都算，
+   所以"只差一个 `GetType().Name`"照样违规 —— 第二次构建就是这么炸的：
+
+   ```
+   Referenced in method body: 'System.String …::Summarize(System.Object)' at instruction:
+           'IL_005a: Callvirt System.String System.Reflection.MemberInfo::get_Name()'
+   Illegal reference to disallowed type: System.Reflection.MemberInfo
+   Illegal Namespace References = '1', Illegal Type References = '1', Illegal Member References = '1'
+   ```
+
+   `value.GetType().Name` 看着人畜无害，`get_Name` 却**声明在 `MemberInfo` 上**（`System.Type` 是它的子类），
+   于是"只想打个类型名"就废掉整个构建。**想知道类型就别打类型名**：用 `is` 模式自己列几种认得的（见 `Summarize`）。
+3. **改完这类东西，先跑本地 lint 再交付**（`-LintOnly` 不到一秒）。两次构建的代价远大于一条命令。
 
 **要读别的节点的口，用 `DataOutputPort.ComputedValue`（不用反射）**：
 `Graph.GetInputDataConnections(this)` 给的 `DataConnection.OutputPort` 本身就是 `Warudo.Core.Graphs.DataOutputPort`，
