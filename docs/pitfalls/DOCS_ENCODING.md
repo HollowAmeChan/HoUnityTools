@@ -26,6 +26,16 @@ $t = [IO.File]::ReadAllText($f, [Text.Encoding]::UTF8)
 ([regex]::Matches($t, [char]0xFFFD)).Count      # 必须是 0
 ```
 
+**同一个写入路径还会顺手改另外两样**，所以改完 `.md` 要核**四件事**（BOM / `U+FFFD` / 行尾 / 空行）：
+
+| 症状 | 原因 | 判据 |
+| --- | --- | --- |
+| 整个文件在 `git diff` 里全变了 | 写回时把 `\n` 规范化成了 `\r\n`（`[IO.File]::WriteAllText` 在 .NET Framework 下就会） | 数一遍 CR：`([regex]::Matches($t,"`r")).Count`；本来是纯 LF 就把它 `Replace("`r`n","`n")` 复位 |
+| 两行**粘成一行**（例如表头与 `| --- |` 合成一行） | `edit` 的 `old_string` 以换行结尾、`new_string` 不以（或反过来）时，尾部空行被吃掉 | 改多行块时让 old/new 的**首尾空行一致**；改完扫一眼那几行 |
+| 中文变问号 / 掉字 | 把中文塞进了命令行 | 改中文只用 `edit`/`write` 写字面量（见 §2.1） |
+
+多 worker 并行改 `docs/` 时，还要在收尾**重新**验一次这些（可能有人在你之后动过同一个文件）。
+
 ## 2. 别用 PowerShell 文本 cmdlet 批量改中文
 
 `Get-Content -Raw | Set-Content` 会按当前代码页重新编码，**曾经一次弄坏 5 个文件**。

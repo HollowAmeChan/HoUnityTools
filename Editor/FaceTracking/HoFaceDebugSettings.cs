@@ -62,13 +62,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>动画文件夹：装现成片段的目录，装配时按槽位名找同名 `.anim` 填进去。</summary>
         public string animationFolder = "";
 
-        /// <summary>中间层配置（`*.hoface.json`）。**必须**；空的时候面板下面全部锁住不让改。</summary>
+        /// <summary>
+        /// 中间层配置（`*.hoface.json`）的路径。面板把它当**必填总闸**（空着就把下面各栏锁住），
+        /// 但运行时**没指定也有内置默认表兜底**（`Inputs()/Outputs()`）—— 语义精确到两类行的差异见那两个方法。
+        /// </summary>
         public string profilePath = "";
 
         /// <summary>
         /// 52 个输入通道（模式 / 手动值 / 中性 / 输入曲线）。
         /// ⚠️ **过渡期字段**：按已定的方向，输入曲线归 profile 的输入行，通道层只剩排练用途，
-        /// 面板上不再画它（第三栏只显示裸输入值）。等会话那边摘掉通道层之后这个字段也该删。
+        /// 面板上不再画它（「参数输入」栏只显示裸输入值）。等会话那边摘掉通道层之后这个字段也该删。
         /// </summary>
         public List<HoFaceChannel> channels = HoFaceTrackingChannels.CreateDefaults();
 

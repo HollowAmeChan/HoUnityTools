@@ -58,7 +58,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public string Status => fromFolder != null ? "文件夹" : Writes ? "模板自带" : "缺";
     }
 
-    /// <summary>控制器资产的实况（面板的「控制器结构」就是这么读出来的，不是从配置推断）。</summary>
+    /// <summary>控制器资产的实况（「控制器编辑」页的「详情」栏就是这么读出来的，不是从配置推断）。</summary>
     public sealed class HoFaceAssetInfo
     {
         public int layers, states, clips, blendCurves, otherCurves;
@@ -141,8 +141,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 模板里的所有槽位，以及每个槽位在"这份文件夹 + 这份模板"下会被填成什么。
-        /// 面板那个「动画填充」折叠框读的就是它 —— **从资产读，不是从配置推断**。
+        /// 控制器里的所有槽位，以及每个槽位在"这份文件夹 + 这份控制器"下会被填成什么。
+        /// 「控制器编辑」页的「详情」栏读的就是它 —— **从资产读，不是从配置推断**。
         /// </summary>
         public static List<HoFaceClipSlot> Slots(RuntimeAnimatorController template, string animationFolder)
         {

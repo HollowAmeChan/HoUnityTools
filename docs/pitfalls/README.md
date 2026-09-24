@@ -9,6 +9,7 @@
 | --- | --- |
 | [Unity YAML 与转储](UNITY_YAML_AND_DUMPS.md) | 要直接读 `.controller` / `.anim` 原文，或写脚本解析它们 |
 | [混合树的坑](BLEND_TREE_TRAPS.md) | 摆树、看权重、怀疑"为什么不归一化 / 为什么发散" |
+| [面捕流水线](FACE_TRACKING_PIPELINE.md) | 包到了但脸不动、实时输入整体不动、换配置后失效、JsonUtility 丢字段 |
 | [形态键输出](SHAPE_KEY_OUTPUT.md) | 键怎么都是 100、关掉规则不回 0、左右族/内外族混用 |
 | [Animator IK 与更新时机](UNITY_IK_AND_TIMING.md) | 头不动、IK 收不到、尾巴一阵一阵抽搐、和布料抢骨头 |
 | [鼠标与指针输入](INPUT_AND_MOUSE.md) | 注视约束的鼠标目标：失焦、基准方向、射线交点、参考系 |
@@ -17,6 +18,7 @@
 | [编辑器 UI 与 Playable API](EDITOR_UI_AND_API.md) | 面板排版不对齐、`[Header]` 画两遍、`PlayableGraph.IsValid()` |
 | [批处理验证](VALIDATION_LOOP.md) | 跑 `Tests~/` 那套用例，或结果不对劲时 |
 | [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md) | Mod 产物 Missing Script、`.csproj`、UMod 安全审查、提权脚本 |
+| [从蓝图里取证](WARUDO_INSPECTION.md) | 反射/场景文件/`Player.log` 读官方节点：端口表、节点归属、开关方向、资产清单 |
 | [文档与编码](DOCS_ENCODING.md) | 改带中文的 `.md` / `.cs`，或看到乱码 |
 | [仓库与提交](REPO_AND_GIT.md) | 提交、并行改动、`.research/` 这些东西怎么处理 |
 

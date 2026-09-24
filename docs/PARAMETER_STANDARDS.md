@@ -10,6 +10,11 @@
 - 标 `UNVERIFIED` 的是**没有找到权威来源**的东西；标 `INFERRED` 的是由多处证据推出、但没人明说。
 - 版本/抓取时间写在每节末尾（官方文档会变，尤其是 VTS 与 VRM 生态）。
 
+**现状一句话（2026-09-25，代码是唯一真相）**：**输入只剩 VTS 手机**那一条请求式协议（§1.8）；
+`iFacialMocap` 已整个删掉（§6 只作**官方协议记录**保留，我们不再接）；
+中间层 `*.hoface.json` 是**映射表的唯一来源**（面板把它当必填总闸；没指定时两类行都吃内置默认表，
+指定之后输入行只认它 —— §8 逐条给代码出处）。
+
 **三条铁律**（后面所有内容都是这三条的展开）
 
 1. **"追踪参数"和"模型参数"是两个世界。** VTS 的 `FaceAngleX`/`MouthOpen` 是**追踪参数**（固定清单，插件可写）；
@@ -19,6 +24,11 @@
    名字空间属于收方模型，大小写敏感。面捕场景里事实上的通用词汇是 **Apple ARKit 52**。
 3. **Unity Animator 参数名完全是我们自己的。** 正因为自由，**建议直接采用第 1、2 条里的名字**
    （追踪参数名或 ARKit 名）当 Animator 参数名 —— 这样 `SetFloat` 的名字与下游一致，省掉一张映射表。
+   **我们的现状**：内置默认表用的就是这套约定 —— 输出行 = 52 个 `ARKit/<规范名>` 直通
+   （`ARKit/jawOpen`…）+ 眼睑两根轴 `Ho/Drive/Lid/{Left,Right}/{BlinkWide,Squint}`
+   （`Runtime/FaceTracking/HoFaceMiddleware.cs:234`、`Runtime/FaceTracking/HoFaceNaming.cs:29`）。
+   这只是**默认表与内置约定**，不是强制：输出行的 `parameter` 由使用者自己的配置文件定，
+   控制器里没有那个名字就跳过（不猜也不补）。
 
 ---
 
@@ -125,8 +135,10 @@
 | 值域 | 见 §1.1（多数官方未公开） | 逐模型；Cubism 标准表只是**惯例**（§2） |
 | 跨模型稳定 | 高（同版本内一致） | **低**（同名不同范围很常见） |
 
-**所以"给 Live2D 喂数据"这件事，真相是**：我们写**追踪参数** → 用户在 VTS 的
+**所以"给 Live2D 喂数据"这件事，真相是**：写**追踪参数** → 用户在 VTS 的
 "VTS Parameter Setup" 里把它映射到自己的 `Param*` → （若用户用的是标准名）auto-setup 可以一键配好。
+（**我们现在的接收链路不写追踪参数** —— 中间层输出行的内置约定是 ARKit 名 `ARKit/<键>`；
+要喂 VTS 就自己在配置文件里加输出行、按 §1.5 的注入规则发，§8 那条"按下游分表"说的是这件事。）
 `Live2DParameterListRequest` 能把当前模型的 `Param*`（含各自 min/max/default）读回来，
 但**只读不写**。
 **"必须用 Cubism 标准名"的真正理由是**：模型作者可以随便改名、改范围、甚至不建这个参数 ——
@@ -193,8 +205,11 @@
 | 吊销 token | **该插件建的 custom 参数全部被删**；已用过它的模型里会显示为红字，插件可随时重新建回来 |
 
 > **这条对我们最有用**：往外发自定义名时，`min/max/default` 是**给 UI 当默认范围用的元数据**，
-> 不是钳制。所以我们的输出行带 `min/max/default` 是有意义的（对接 VTS 时用得上），
+> 不是钳制。所以将来若对接 VTS，输出行带 `min/max/default` 是有意义的（VTS 要报这三个值），
 > 但真正钳制值的是我们自己的曲线定义域。
+> ⚠️ **现状**：我们的输出行**现在没有** `min`/`max`/`default` 字段 ——
+> `HoFaceOutput` 只有 `parameter` / `expression` / `curve` / `modifiers` / `notes`
+> （`Runtime/FaceTracking/HoFaceMiddleware.cs:92`），定义域就是曲线关键点的范围。
 
 ### 1.7 还有一类输入：控制器（附录）
 
@@ -214,6 +229,60 @@
 **来源与时间**：以上 VTS 内容抓取于 2026-09-24；官方 README 对应提交
 `0f46ef44b487fa17c8120db572ebd925924b93a3`（2026-09-02），API 版本串 `"1.0"`。
 **官方 wiki 不提供版本号或修订日期**，只能以抓取日期为准。
+
+### 1.8 VTS 手机 "3rd Party PC Clients" 协议（我们现在唯一接的输入）
+
+来源：[VTubeStudioBlendshapeUDPReceiverTest（官方示例仓库）](https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest)，
+载荷字段名取自 `Assets/VTubeStudioBlendshapeDataReceiver/VTubeStudioRawTrackingData.cs`。
+App 侧开关：VTS 手机版设置第一页底部的 "3rd Party PC Clients"（README 原话：**"Apps like VSeeFace and VBridger use this."**）。
+
+**它是请求式，不是推流**：PC 先往 `手机:21412`（UDP）发一条请求，手机再把数据发回**这个包的源 IP**、
+端口用请求里 `ports` 列的那些（`Runtime/FaceTracking/HoVtsPacket.cs:62`）。
+官方 README 原文：端口是 "`21412` **or whatever is displayed in the iOS app**"、`ports` 可列 **1–32 个**
+（"so you can have multiple apps running on one PC that all receive the data on different ports"）、
+数据 "typically at 60 FPS unless there is lag in the iPhone app"。
+
+```json
+{"messageType":"iOSTrackingDataRequest","time":5,"sentBy":"HoFaceTracking","ports":[49984]}
+```
+
+| 字段 | 约束（官方 README / 示例类型） | 我们的取值 |
+| --- | --- | --- |
+| `time` | 只允许 **0.5–10 秒**；官方建议 "send one request per second with `time` set to `5`" | `5`，每秒续一次（`Editor/FaceTracking/VtsIphoneReceiver.cs:39`） |
+| `sentBy` | 长度 **1–64**，"currently only used for logging" | `HoFaceTracking` |
+| `ports` | **至少一个、最多 32 个**；本机 UDP 监听端口 | 默认 `49984`（`VtsIphoneReceiver.cs:36`） |
+
+**每帧载荷**（字段名与注释照抄官方 `VTubeStudioRawTrackingData`；README 原话 "Some fields may be
+**added** to this payload in the future" → 未知字段一律跳过）：
+
+| 字段 | 官方类型与注释 | 落到线名空间后叫什么 |
+| --- | --- | --- |
+| `Timestamp` | `long` —— "Current UNIX millisecond timestamp" | `Timestamp`（⚠️ float 只有约 7 位有效数字，**只够调试看个大概**） |
+| `Hotkey` | `int`，**初值 `-1`** —— "Last pressed on-screen hotkey"（README：按键值是 **1–8**） | `Hotkey`（我们原样交出去，**没解释 `-1` 的语义**） |
+| `FaceFound` | `bool` —— "Whether or not face has been found" | `FaceFound`（1/0）—— **这是我们选它而不选 iFacialMocap 的那个字段**（§6） |
+| `Rotation` / `Position` | `Vector3` —— "Current face rotation" / "Current face position" | `Rotation_x/_y/_z`、`Position_x/_y/_z` |
+| `EyeLeft` / `EyeRight` | `Vector3` —— "Left/Right eye rotation" | `EyeLeft_x/…`、`EyeRight_x/…` |
+| `BlendShapes` | `List<VTSTrackingDataEntry>`，每项 `{k: string, v: float}` —— "Current iOS blendshapes" | **线名 = `k` 原样**、值 = `v` 原样 |
+
+**形态键线名是 PascalCase**（`EyeBlinkLeft`、`JawOpen`），与 §3.1 的 PascalCase 列、VTS 的
+`VTSARKitBlendshape` 枚举一致；**数值是 iOS 的原始 0..1，接收端不换算**（`HoVtsPacket.cs:160`）。
+所以内置默认输入行里 VTS 那一套是原样直通，只有 iFacialMocap 那一套要 `× 0.01`。
+⚠️ **载荷里的 `k` 是字符串、不是枚举**：官方类型里那个
+`Dictionary<VTSARKitBlendshape, float> BlendShapeDictionary` 是**收方自己填的**（注释：
+"Not sent over network, filled on receiver side"）—— 别以为线上传的是枚举序号。
+
+> ⚠️ **别用 `JsonUtility.FromJson` 解这个载荷**（本机实测，已记在 `HoVtsPacket.cs:8` 与
+> `Runtime/FaceTracking/HoJson.cs`）：`BlendShapes` 是 `List<嵌套类>`，`JsonUtility` 会**静默丢掉它** ——
+> 12 个头/眼分量全在、**52 个形态键全丢**，解析还"成功"。我们走自己的 `HoJsonReader`。
+
+> ⚠️ **官方示例仓库这个名字有点误导**：它演示的是**同一台 iPhone 上 VTS App 转发 iOS blendshape 数据**
+> （VSeeFace 也吃这条，见 §4.5），而不是"手机从 VTS 拿追踪参数"。**它是 PC 客户端收包，不是 PC 客户端读 VTS 的参数**。
+
+**来源与时间**：官方示例仓库 `DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest` 的 README
+（`raw.githubusercontent.com/.../main/README.md`）与载荷类型定义
+（`Assets/VTubeStudioBlendshapeDataReceiver/VTubeStudioRawTrackingData.cs`），
+**2026-09-25 联网复核，逐条对上**。`Runtime/FaceTracking/HoVtsPacket.cs:55` 里记的
+"`time` ∈ [0.5, 10]、`sentBy` 长度 1–64、`ports` 至少一个"与官方 README 一致。
 
 ---
 
@@ -316,10 +385,14 @@ while a coefficient of one represents the fully articulated position." → **0 =
 
 ### 3.1 全表（52 个）
 
-`camelCase` 列是 Apple 的规范拼写（也是 VMC 生态与 iFacialMocap 用的），`PascalCase` 列是
-Unity 枚举与 VTS 枚举的拼写。
+`camelCase` 列是 Apple 的规范拼写（VMC 生态用这一列；也是**我们内部 52 个规范名**，
+`Runtime/FaceTracking/HoFaceTrackingChannels.cs:46`），`PascalCase` 列是
+Unity 枚举与 VTS 枚举的拼写（也是 **VTS 手机包发来的形态键线名**，§1.8）。
+⚠️ **iFacialMocap 的线名是第三套**：它把左右后缀写成 `_L/_R`（`eyeBlink_L`），
+而 `jawLeft` / `jawRight` / `mouthLeft` / `mouthRight` 这 4 个**不带后缀、保持 camelCase**
+（`HoFaceMiddlewareDefaults.IFacialWire`，`HoFaceMiddleware.cs:181`）。
 
-| # | camelCase（Apple / VMC / iFacialMocap） | PascalCase（Unity / VTS） | 中文语义（照抄 Unity 官方描述） |
+| # | camelCase（Apple / VMC / 我们的规范名） | PascalCase（Unity / VTS / VTS 手机线名） | 中文语义（照抄 Unity 官方描述） |
 | --- | --- | --- | --- |
 | 1 | `browDownLeft` | `BrowDownLeft` | 左眉外端下压 |
 | 2 | `browDownRight` | `BrowDownRight` | 右眉外端下压 |
@@ -393,13 +466,15 @@ Unity 枚举与 VTS 枚举的拼写。
 和上表的关系：Left Eye 7 = 眼睑 3 + 眼动 4；Mouth and Jaw 27 = 嘴 23 + 下颌 4；
 Eyebrows/Cheeks/Nose 10 = 眉 5 + 颊 3 + 鼻 2。**两组口径合计都是 52**。
 
-### 3.2 三套拼写来源对照
+### 3.2 拼写来源对照（五条路）
 
 | 来源 | 拼写 | 用在哪 | 依据 |
 | --- | --- | --- | --- |
-| **Apple** `ARFaceAnchor.BlendShapeLocation` | camelCase（`eyeBlinkLeft`） | iOS 原生 / iFacialMocap 线协议 | Apple 文档 |
+| **Apple** `ARFaceAnchor.BlendShapeLocation` | camelCase（`eyeBlinkLeft`） | iOS 原生 / VMC 生态 / **我们的 52 个规范名** | Apple 文档 |
 | **Unity** `ARKitBlendShapeLocation` | PascalCase（`EyeBlinkLeft`） | Unity ARKit 包 | Unity 文档（枚举名逐条给了 Apple 文档链接） |
 | **VTS** `VTSARKitBlendshape` | PascalCase，**顺序照抄 Apple** | VTS 的 iOS blendshape UDP 接收 | [VTSARKitBlendshape.cs](https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest/blob/main/Assets/VTubeStudioBlendshapeDataReceiver/VTSARKitBlendshape.cs) 文件头原文："Names and order taken from https://developer.apple.com/..." |
+| **VTS 手机**（"3rd Party PC Clients" 的 JSON 包，§1.8） | **PascalCase，与 `VTSARKitBlendshape` 同一套** | VTS 手机直接发给本机（形态键线名就是这一列） | 官方示例仓库 `VTubeStudioBlendshapeUDPReceiverTest` 的类型定义 + 本机实测（`HoVtsPacket.cs`） |
+| **iFacialMocap**（§6，**我们不再接**） | camelCase + `_L/_R` 后缀（`eyeBlink_L`；4 个键不带后缀） | 官方线协议 | 官方开发者文档 §6.2；`HoFaceMiddlewareDefaults.IFacialWire` |
 | **VMC / VRM 生态** | camelCase | `/VMC/Ext/Blend/Val` 的 name | VMC 官方 spec 直接链接 Unity 的 ARKit 枚举文档作为"高级面捕"参考 |
 
 > ⚠️ VMC 官方明确：**大小写敏感**（"due to changes in the UniVRM specification, it is Case Sensitive"）。
@@ -658,7 +733,13 @@ if the application gives a value outside this range."
 
 ---
 
-## 6. iFacialMocap 线协议（我们直连的那一条）
+## 6. iFacialMocap 线协议（**官方协议记录**：我们不再接，历史与将来参考）
+
+> **状态（2026-09-25）**：**我们不再接 iFacialMocap**。它给不出 `FaceFound`，而那是"丢追回中性"
+> 整条机制唯一的开关，所以接收端连着 `IFacialMocapPacket.cs` 一起删了
+> （`Editor/FaceTracking/HoFaceInputEnvironment.cs:13`、`Tests~/FaceTrackingValidation.cs:1204`）。
+> **本节整节保留为官方协议记录** —— 读别人的文档、看别家工具的日志、将来要再接回来时都用得上。
+> 下面凡写"我们"的句子，都是**当年的实现**，不是现状。
 
 来源：**官方开发者文档** [iFacialMocap communication specifications](https://www.ifacialmocap.com/for-developer/)
 （另有[日文版](https://www.ifacialmocap.com/for-developer/%E6%97%A5%E6%9C%AC%E8%AA%9E/)、
@@ -720,11 +801,15 @@ mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.03065341
 
 ⚠️ **负值是在源头被压掉的**：App 作者（DevelopW）发布的官方蓝牙参考实现里写明，
 **iFacialMocap 模式（`-` 分隔）会把负的 BlendShape 值 clamp 到 0**，只有 Facemotion3d 模式（`&`）保留负值。
-→ 如果我们要用"双向键"的负方向（`jawLeft`/`jawRight`、`mouthLeft`/`mouthRight`、
+→ 如果要用"双向键"的负方向（`jawLeft`/`jawRight`、`mouthLeft`/`mouthRight`、
 `eyeLookIn`/`eyeLookOut` 这类成对键），**必须主动发 `|sendDataVersion=v2` 切换**，
-否则拿到的永远是 0。（这条来自官方参考实现而非网页文档，标 `INFERRED-官方实现`。）
+否则拿到的永远是 0。（这条来自官方参考实现而非网页文档，标 `INFERRED-官方实现`。
+**我们现在不接这条协议，所以这是"将来要接回来时的前置条件"**。）
 
-### 6.3 我们这边的实现对照（`Editor/FaceTracking/IFacialMocapPacket.cs`）
+### 6.3 当年我们这边的实现对照（历史记录；那份代码已删）
+
+> ⚠️ **这张表现在只是历史**：它对照的 `Editor/FaceTracking/IFacialMocapPacket.cs` **已经删掉了**
+> （理由见本节开头）。留着它的价值是"官方文法的每一条我们都逐条核过"，以及"重接时要重新满足哪些点"。
 
 | 我们的假设 | 与官方文档是否一致 |
 | --- | --- |
@@ -735,21 +820,27 @@ mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.03065341
 | 名称用 `_L/_R` 拼写 | ✅ 一致（ARKit 拼写的 52 键） |
 | 分隔符 `&` 或 `-` 都接受（先 `&` 再 `-`） | ✅ 一致（v2 模式用 `&`）。⚠️ **负号与 v1 分隔符同形**这一点在源头就被规避了（v1 不发负值），所以"先找 `&` 再找 `-`"是安全的 |
 | 缺键只记 `Present[]=false`，不写 0 | ✅ 与官方样例的实际情况相符（每帧不保证 52 键） |
-| 未实现：TCP 模式（`___iFacialMocap` 结尾）、录制回放、蓝牙、`lookForward` | 官方有，我们没做（当前只做 UDP 直连） |
-| 未消费：`trackingStatus` | 现在只会计入 `UnknownCount`；它的语义官方未说明，先不猜 |
+| 未实现：TCP 模式（`___iFacialMocap` 结尾）、录制回放、蓝牙、`lookForward` | 官方有，当年只做了 UDP 直连（**现在这条协议整个不接了**） |
+| 未消费：`trackingStatus` | 当年只会计入 `UnknownCount`；它的语义官方未说明，先不猜 |
+
+> ⚠️ **一处容易看漏的现状**：`IFacialWire`（`eyeBlinkLeft` → `eyeBlink_L`）**还在代码里活着** ——
+> 它生成的是**内置默认表的输入行**（`× 0.01`），未指配置文件时会生效
+> （`Runtime/FaceTracking/HoFaceMiddleware.cs:181`、`Tests~/FaceTrackingValidation.cs:1201`）。
+> 也就是说：**解析 iFacialMocap 报文的代码没了，但"iFacialMocap 线名 → 规范名"这张映射表还在**。
+> 要接第三种协议，写自己的输入行即可。
 
 ### 6.4 已知坑
 
 | 坑 | 说明 |
 | --- | --- |
-| **0~100 不是 0~1** | 忘了除 100 会让所有值大 100 倍（VBridger 也是在源码里 `/100f`） |
+| **0~100 不是 0~1** | 忘了换会让所有值大 100 倍（VBridger 在源码里 `/100f`；我们**不写死代码**，内置默认输入行的写法是表达式 `jawOpen * 0.01`，`HoFaceMiddleware.cs:205`） |
 | head 那 6 个数的顺序 | 官方是 **欧拉角在前、位置在后**；和我们平时"位置+旋转"的直觉相反 |
 | 变换块不要按位置找 | 网页样例是 rightEye 在前，官方蓝牙参考实现是 leftEye 在前 —— **按名字找**（§6.2） |
 | **不能假设每帧 52 键齐全** | 官方样例帧只有 50 个互异键，且带粘连/孤立字段（§6.2）→ **缺键 ≠ 0**，把缺键当 0 会让表情间歇抽动 |
 | **v1 的负值在源头就没了** | `-` 分隔（默认）时 App 把负值 clamp 到 0；要用负方向必须发 `|sendDataVersion=v2`（§6.2） |
 | 60 FPS 固定 | UDP 会丢帧（官方原话 "If it is UDP, frames may be dropped"），所以我们不能假设每帧都收到 |
 | `___iFacialMocap` 只属 TCP | UDP 帧没有这个后缀（§6.2） |
-| 额外尾部字段 | 官方示例里有 `34903,-1.666…` 这种没有名字前缀的字段，还有 `trackingStatus` 这种没写语义的键；解析要能忽略不认识的字段（我们数 `UnknownCount`） |
+| 额外尾部字段 | 官方示例里有 `34903,-1.666…` 这种没有名字前缀的字段，还有 `trackingStatus` 这种没写语义的键；解析要能忽略不认识的字段（当年我们数 `UnknownCount`） |
 | 手机端 IP | 需要用户手填 iOS 设备 IP；端口固定 49983 |
 
 **仍未确认**（不要在代码里当已知量用）：head/leftEye/rightEye 的**欧拉角轴序与旋转方向**、
@@ -863,25 +954,27 @@ UDP 载荷上限、每帧键数是否有任何保障。
 
 ---
 
-## 8. 我们的设计分别引用了上面哪张表
+## 8. 本仓库现在怎么用上面这些表（逐条给代码出处）
 
 | 我们的设计 | 依据 | 具体引用 |
 | --- | --- | --- |
-| 组件**不声明**它吃什么参数，只等着被喂 | §1.4 两个命名空间 | 模型参数 `Param*` 逐模型、**VTS 插件协议不提供直写请求**；追踪参数才是可写面 |
-| 中间层的输出行名字按**下游分表**（L2D 一套、3D 一套） | §1.1 / §3.2 | `JawOpen` 这类名字在 VTS 是自定义追踪参数、在 VMC 是 ARKit 键名 —— 同名两种身份 |
+| 中间层**不声明**它读什么、也不声明写什么，只等着被喂 | §1.4 两个命名空间 | 模型参数 `Param*` 逐模型、**VTS 插件协议不提供直写请求**；追踪参数才是可写面 |
+| 写入侧的唯一映射表是 **`*.hoface.json` 配置文件**（面板把它当必填总闸） | §1.4 / §1.5 | 它装"输入行（线名 → 规范名）+ 输出行（参数名 = 曲线(表达式)）"。**没指定配置文件也能跑**：那时两类行都吃内置默认表；但**一旦指定，输入行就只认它的**（漏一条线名那条链静默失效），输出行则要求它至少有一行（`Editor/FaceTracking/HoFaceDebugSettings.cs:327-341`）。**没有"组件替我们决定吃哪些键"这回事了** |
+| 输出行名字按**下游分表** | §1.1 / §3.2 | 现在默认那套下游是我们自己的控制器（`ARKit/<规范名>` + 眼睑两根轴）；要喂 L2D 或 VMC 就在配置里另加一套 —— 同一个语义在不同下游是**不同名字**（L2D 追踪参数是 `MouthOpen`/`JawOpen` 这类，VMC 是 `jawOpen`），共用一份映射表一定会错 |
 | 每个输出参数**只能有一个写入者**（占用表） | §1.1 官方约束 + §1.5 `mode` | VTS 官方："Each output parameter can only be chosen once"；`mode:set` 同参数同时只能一个插件写 |
-| 面捕输出来源键用 ARKit 52 名，内部再定"轴语义" | §3.1 / §3.2 | ARKit 52 是跨应用通用词汇；iFacialMocap 线协议就是 `_L/_R` 拼写的这 52 个 |
-| iFacialMocap 收到值先 `/100` | §6.2 | 官方文法写明形态键是 **0~100** |
+| 面捕输入用 ARKit 52 名当**规范名**，姿态分量与线名换算全交给输入行 | §3.1 / §3.2 | 52 个规范名 = §3.1 的 camelCase 列（`HoFaceTrackingChannels.cs:46`）；线名三套（VTS 手机 PascalCase / iFacialMocap `_L/_R` / 同名直通）都在输入行里换算（`HoFaceMiddlewareDefaults.Inputs`，`HoFaceMiddleware.cs:200`） |
+| 形态键量纲在**输入行**里换算：iFacialMocap `× 0.01`、VTS 手机原样 | §6.2 / §1.8 | 官方文法写明 iFacialMocap 形态键是 **0~100**；VTS 手机包是 iOS 原始 **0..1**。⚠️ **接收端只交原样，不在 C# 里除法**（`HoVtsPacket.cs:160`） |
 | 值进树的量纲：**参数是 0..1 的权重、clip 里写 100** | §3 值域 + §5.2 clamp | ARKit / VRM1 都是 `[0-1]`；**VRM0 文件里是 0–100**（schema `maximum: 100`）；Cubism 眼/嘴"闭 0 开 1"。⚠️ 详见 `pitfalls/SHAPE_KEY_OUTPUT.md` §6（写成百分比会得到 210 这种值） |
-| **眼睑轴的"中性点"必须写进配置，不能硬编码** | §7.3 | VBridger 用 `0.5`，VRCFT 用 `0.75`（0.75 才 = 正常睁开）—— 两种约定都真实存在 |
-| "睁大 / 闭 / 眯"要合成一根轴 | §3.1 `eyeBlink` × `eyeWide` × `eyeSquint` | ARKit 把它们拆成三个独立键，没有现成的"睁眼度"轴 |
+| **眼睑轴的"中性点"必须显式写在配置里，不能硬编码** | §7.3 | VBridger 用 `0.5`，VRCFT 用 `0.75`（0.75 才 = 正常睁开）—— 两种约定都真实存在。内置默认表给的是**双向轴**：`BlinkWide = eyeBlink − eyeWide`（+1 闭 / −1 睁大 / 0 中性，`HoFaceNaming.cs:20`、`HoFaceMiddleware.cs:244`） |
+| "睁大 / 闭 / 眯"合成两根轴 | §3.1 `eyeBlink` × `eyeWide` × `eyeSquint` | ARKit 把它们拆成三个独立键，没有现成的"睁眼度"轴；内置默认把前两个压成一根双向轴、`squint` 一根单端轴 |
 | 做"张嘴"用 `jawOpen`，做"抿唇"用 `mouthClose`，不混 | §3.3 | `mouthClose` 官方语义是"双唇闭合，独立于下颌" |
 | 合成"眼睛 X / Y"轴时必须定符号 | §3.3 `eyeLookIn/Out` | In/Out 是**相对鼻子**的方向，直接相减会把左右弄反 |
-| 输出行带 `min/max/default` 元数据 | §1.6 | 对接 VTS 时它要报这三个值；但它们是"默认映射范围"而非钳制 |
+| 输出行**不声明** `min/max/default`：曲线关键点的范围就是定义域 | §1.6 | VTS 的 `min/max/default` 是"默认映射范围"而非钳制；现在输出行只有 `parameter`/`expression`/`curve`/`modifiers`/`notes`（`HoFaceMiddleware.cs:92`） |
 | 不做"一行写 X/Y/Z"的 vector 输出 | §4.1 `/VMC/Ext/Bone/Pos` + §4.3 | 骨骼是另一个概念（HumanBodyBones 白名单 + 四元数），不该和形态键挤一张表 |
 | 发骨名之前先确认模型有这个骨 | §4.3 + §5.1 | VRM 0.x 里眼骨、颚骨、指骨是 **Optional** |
 | 明确"我们不实现 VRCFT" | §7 | VRCFT 的 Unified Expressions 是**另一套更大的标准**，与 ARKit 52 不能混用 |
-| 面板里显示"控制器里缺哪些参数" | §1.5 / §1.6 | VTS 写不存在的参数会**直接报错**；同名不同下游也会静默失效 |
+| 控制器里没有那个参数名就**跳过**（不猜也不补） | §1.5 / §1.6 | VTS 写不存在的参数会**直接报错**；同名不同下游也会静默失效。会话只写控制器 `parameters` 里真有的名字（`HoFaceAnimationSession.cs:242`） |
+| 只抄自己**拥有**的形态键（占用表） | §1.1 的"一个参数一个写入者" | `HoFaceOutputOwnership` 防 LookAt / 眨眼约束与面捕互相覆盖（`Runtime/FaceTracking/HoFaceOutputOwnership.cs:10`）；同一个键被第二个面捕会话抢会直接报错 |
 
 ---
 
@@ -896,7 +989,8 @@ UDP 载荷上限、每帧键数是否有任何保障。
 | VTS `weight` 与 `mode:"add"` 的精确混合公式 | **部分确认** | 官方只给语义（`weight` 做加权混合、`add` 忽略 weight），没给公式 |
 | OBSKUR 的 blend/命名要求 | **UNVERIFIED** | 未找到官方说明 |
 | `HandDistance` 的取值范围 | **官方未公开** | wiki 只给了语义 |
-| iFacialMocap 线协议 | ✅ 已确认（§6） | 官方开发者文档存在且给出完整文法；只有"**位置字段的单位**"官方未说明 |
+| VTS 手机 "3rd Party PC Clients" 协议（§1.8） | ✅ 已确认（官方示例仓库 + 本机实测） | 请求包字段约束与载荷字段名都可读；**没确认的是** `Rotation`/`Position`/`EyeLeft`/`EyeRight` 的欧拉角轴序与旋转方向、坐标系手性与原点、位置字段单位 —— 全在输入行里交给使用者按设备定（`HoFaceMiddleware.cs:194`） |
+| iFacialMocap 线协议 | ✅ 已确认（§6）**但我们现在不接** | 官方开发者文档存在且给出完整文法；只有"**位置字段的单位**"官方未说明。留着当官方协议记录 |
 | VRM 0.x 文件里 `presetName` 到底写大写还是小写 | **UNVERIFIED**（规范自相矛盾） | README 枚举 PascalCase 17 项，JSON Schema enum 全小写 18 项（§5.1）；**两种都要能认** |
 | VRChat 侧 Avatar Parameter 限制 | **已核实主要数值**（§7.4） | 同步上限 **256 bits**（= 位数不是个数；float 8 bits、bool 1 bit）；**8192 个自定义参数**只在现行官方页出现，未交叉确认。这些是 VRChat 的规则，**不是 Unity Animator 的限制** |
 | VRM1 新增的 `thumbMetacarpal` 与 Unity `HumanBodyBones`（只有 ThumbProximal/Intermediate/Distal）的逐节映射 | **UNVERIFIED** | 没找到官方声明；实现手部链路前必须实测 |

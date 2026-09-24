@@ -27,22 +27,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public readonly HoFaceDebugSettings Settings;
         public HoFaceCompiledController Compiled { get; private set; }
         public readonly float[] Effective = new float[52];
-        /// <summary>输入侧整形之后的值（输入曲线 + 断流回中性 + 双眼同步）。**表达式读的就是它。**</summary>
+        /// <summary>通道层整形之后的值（模式 / 输入曲线 / 断流回中性）。**表达式读的就是它。**</summary>
         public readonly float[] Input = new float[52];
-        /// <summary>每一行输出最后写出去的值（面板上「Controller 实值」这一列读它）。</summary>
+        /// <summary>每一行 `ARKit/&lt;键&gt;` 输出最后写出去的值（调试输出读它）。</summary>
         public readonly float[] ControllerValues = new float[52];
-        /// <summary>按参数名读某一行最后的输出值（用例与面板用；没有这一行时返回 <see cref="float.NaN"/>）。</summary>
+        /// <summary>按参数名读某一行最后的输出值（用例与调试输出用；没有这一行时返回 <see cref="float.NaN"/>）。</summary>
         public float OutputValue(string parameter) =>
             parameter != null && outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
 
         /// <summary>
-        /// 按**规范名**读输入行算出来的值（面板显示"规范值"用）。没有对应输入行时返回 <see cref="float.NaN"/> ——
+        /// 按**规范名**读输入行算出来的值（「排查」栏的姿态监视用）。没有对应输入行时返回 <see cref="float.NaN"/> ——
         /// 那说明这份配置根本没有把这个名字从线名映射过来。
         /// </summary>
         public float MiddlewareInput(string canonical) =>
             canonical != null && inputIndex.TryGetValue(canonical, out int row) ? inputValues[row] : float.NaN;
         private readonly Dictionary<string, int> outputIndex = new Dictionary<string, int>(StringComparer.Ordinal);
-        /// <summary>某一行输出对应哪个通道（参数名正好是 `ARKit/&lt;键&gt;` 时）—— 面板的「实值」列用它。</summary>
+        /// <summary>某一行输出对应哪个通道（参数名正好是 `ARKit/&lt;键&gt;` 时）—— <see cref="ControllerValues"/> 用它。</summary>
         private readonly int[] arkitRow = new int[52];
         /// <summary>输入行（线名 → 规范名）。它们先把手机原值翻成规范名，通道与输出行都只认规范名。</summary>
         private HoFaceOutput[] inputRows = new HoFaceOutput[0];
@@ -242,7 +242,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
             }
 
-            // 面板的「Controller 实值」列：参数名正好是 `ARKit/<键>` 的行，就把它显示在那一行上。
+            // 参数名正好是 `ARKit/<键>` 的行，把它的输出值扫到那一格上（调试读数用）。
             for (int index = 0; index < arkitRow.Length; index++)
                 ControllerValues[index] = arkitRow[index] >= 0 ? outputValues[arkitRow[index]] : 0f;
 

@@ -68,5 +68,5 @@ NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / C
 
 ## 迁移进度
 
-- 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoBlendShapeClipBuilderWindow`、`HoFaceTrackingDebuggerEditor`、`HoFaceTrackingWindow`（后两者仍用 `HoConstraintEditorSectionGui.DrawSectionHeader` 画分区头），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。
+- 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoBlendShapeClipBuilderWindow`、`HoFaceTrackingWindow`、`HoFaceControllerToolWindow`、`HoFaceProfileWindow`（面捕这三页里，前两页仍用 `HoConstraintEditorSectionGui.DrawSectionHeader` 画分区头），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。
 - 仍走旧的 `HoConstraintEditorSectionGui`（分区头 + 栅格）：`HoLookAtConstraintEditor`、`HoPendulumConstraintEditor`、`HoFollowConstraintEditor`、`HoFloatingConstraintEditor`、`HoSpringConstraintEditor`。

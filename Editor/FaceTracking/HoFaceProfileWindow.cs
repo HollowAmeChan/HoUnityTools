@@ -7,9 +7,9 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
-    /// **面捕中间层配置面板**：左边是输出行目录，右边是选中那一行的全部细节。
+    /// **面捕中间层配置窗口**：左边是**输入行 / 输出行**的目录，右边是选中那一行的全部细节。
     ///
-    /// 它编辑的数据 = 运行时那份 <see cref="HoFaceMiddleware"/>（`.hoface.json` 文本资产）。
+    /// 它编辑的数据 = 运行时那份 <see cref="HoFaceMiddleware"/>（磁盘上的 `.hoface.json`）。
     /// 面板上的顺序就是生效顺序 —— 左边列表的顺序 = 写参数的顺序，修饰符列表的顺序 = 串起来的顺序。
     ///
     /// 三处刻意做成"一眼能看出坏在哪"：表达式解析不过 / 变量不是 ARKit 键 / 用了还没实现的延迟。

@@ -10,6 +10,10 @@
 | 动画处理 | `HoUnityTools/动画处理` |
 | FBX 导入处理中控 | `HoUnityTools/HoFBX导入处理` |
 | Warudo Prefab 快速构建 | `HoUnityTools/FastBuildWarudoMod` |
+| 面捕：调试面板 | `HoUnityTools/面捕/调试面板` |
+| 面捕：控制器编辑（就地装配控制器） | `HoUnityTools/面捕/控制器编辑` |
+| 面捕：配置文件（`.hoface.json`） | `HoUnityTools/面捕/配置文件` |
+| 形态键基础动画（每个键一份 `<键名>.anim`） | `HoUnityTools/形态键基础动画` |
 
 选中 FBX 资产后，也可以使用 `Assets/HoUnityTools/HoFBX导入处理` 打开同一个 FBX 面板并自动扫描相邻配置文件。这是面板的上下文快捷入口，不是另一套功能。
 
@@ -37,17 +41,33 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 
 ## 文档
 
-- [**面捕工作流**](docs/FACE_TRACKING_WORKFLOW.md)
-- [**面捕中间层处理**](docs/FACE_TRACKING_MIDDLE_LAYER.md)
-- [**混合树的能力边界**](docs/BLEND_TREE_LIMITS.md)
-- [编辑器面捕调试组件设计（机制层；状态/UI 部分已过期）](docs/FACE_TRACKING_DEBUGGER_DESIGN.md)
-- [面捕控制器结构：Jerry 模板 vs 我们生成的](docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md)
-- [已归档：面捕的层间分工（研究日志）](docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md)
-- [已归档：面捕混合树入门与 Jerry 模板使用](docs/archive/FACE_TRACKING_TEMPLATE_GUIDE.md)
+面捕（入口：`HoUnityTools/面捕/{调试面板, 控制器编辑, 配置文件}`；角色预制件上零组件）
+
+- [**面捕工作流**](docs/FACE_TRACKING_WORKFLOW.md)：怎么用 —— 三个页各管什么、首次接线、什么会写盘、排查清单。
+- [**面捕中间层处理**](docs/FACE_TRACKING_MIDDLE_LAYER.md)：输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式 / 曲线 / 修饰符、配置文件格式。
+- [**混合树的能力边界**](docs/BLEND_TREE_LIMITS.md)：什么能放进树、什么必须放在外面。
+- [**面捕设计：已验证的机制层**](docs/FACE_TRACKING_DESIGN.md)：影子台、占用表、为什么不用 PlayableGraph、时钟与线程、验收现状。
+- [**面捕控制器结构**](docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是作品 —— 结构、命名约定、装配模型与判别性实验。
+- [**面捕在 Warudo 的路线**](docs/FACE_TRACKING_WARUDO_ROUTE.md)：那边的产物划分（2 mod / 5 节点）、Tracking 层与硬约束。
+- [**参数标准表**](docs/PARAMETER_STANDARDS.md)：下游到底认哪些名字的权威依据（官方 URL + 逐行表格）。**写任何参数名之前先查它。**
+
+其他
+
 - [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
 - [摆锤约束设计与验证](docs/PENDULUM_CONSTRAINT.md)
 - [跟随约束坐标系规则](docs/FOLLOW_CONSTRAINT.md)
+- [约束面板设计系统](docs/EDITOR_UI_SYSTEM.md)
+- [动画剪辑直通预览](docs/ANIMATION_CLIP_PREVIEW.md)
 - [眨眼约束设计（自动眨眼 + 果冻眼）](docs/BLINK_CONSTRAINT.md)
 - [注视约束设计（眼睛 + 头部看向目标）](docs/LOOKAT_CONSTRAINT.md)
+
+归档（"当初凭什么这么判断"的证据，不是现状）
+
+- [面捕的层间分工（研究日志）](docs/archive/FACE_TRACKING_PIPELINE_SPLIT.md)
+- [面捕混合树入门与 Jerry 模板使用](docs/archive/FACE_TRACKING_TEMPLATE_GUIDE.md)
+- [面捕的 OSC / VRCFT 后端调查](docs/archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)
+- [VBridger 的中间层逆向记录](docs/archive/VBRIDGER_MIDDLE_LAYER_RESEARCH.md) ／ [输入输出参数格式](docs/archive/VBRIDGER_IO_VOCABULARY.md)
+- [ARKit `mouthClose` 调查报告](docs/archive/arkit-mouthclose-report.md)
 - [旧 Hotools 源码迁移说明](docs/archive/MIGRATION.md)
+
 - [踩过的坑（症状 → 原因 → 怎么办）](docs/pitfalls/README.md)

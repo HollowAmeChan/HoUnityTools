@@ -10,7 +10,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// 「给当前这个 Unity.exe 放行 UDP 49983」这件事的封装，供面板上的按钮使用。
+    /// 「给当前这个 Unity.exe 放行我们实际在听的那几个 UDP 端口」这件事的封装，供面板上的按钮使用。
     ///
     /// 两个必须说清楚的约束：
     ///

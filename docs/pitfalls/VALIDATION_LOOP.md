@@ -33,6 +33,9 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 | 第一次跑要几分钟 | 全新工程要全量导入 + 编译；之后每次十几秒。 |
 | 播放阶段的用例超时 | 用例靠场景里的 Animator 跑；没有相机时必须 `AlwaysAnimate`（脚本里已设），以及 49983 不能用。 |
 | `-batchmode` 起不来 / 一直等授权 | Unity 的授权客户端有**全局互斥量**：本机已经开着一个 Unity 编辑器时跑不了批处理。关掉编辑器，或换机器 / 换许可。 |
+| `&\ "…\Unity.exe" …` **立刻返回**、`$LASTEXITCODE` 是空的 | Unity 是 GUI 子系统程序，PowerShell 的 `&` **不等它**。于是"后台任务已完成"不代表 Unity 跑完了，还会连带出一堆假象。用 `Start-Process -FilePath $unity -ArgumentList $a -Wait -PassThru -NoNewWindow`，再打 `$p.ExitCode`。 |
+| 读日志报 `文件正由另一进程使用` | Unity 还活着、日志还开着。要么等它退出（看进程），要么用共享读：`[IO.File]::Open($log,'Open','Read','ReadWrite')` 再 `StreamReader.ReadToEnd()`。 |
+| `ArgumentOutOfRangeException … UnityEditor.Search.SearchDatabase` | **不是我们的错**，是 Unity 自己的搜索库在批处理里起索引时的噪声。看别的堆栈帧确认。 |
 
 ## 一次性工程怎么搭
 
