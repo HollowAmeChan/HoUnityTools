@@ -51,6 +51,41 @@ methodInfo.Invoke(target, args)
 运行时错误用固定文本 + `Debug.LogException(exception)` 保留诊断。
 （FastBuild 自身在 `Editor` 程序集里可以反射调 UMod 入口 —— 两者必须保持程序集边界。）
 
+### 4.1 现场什么样（2026-09-25 实测，一次就够记住）
+
+「Ho调试日志」要读**上游节点那个口**，第一版用 `Type.GetMethod(name, ...)` + `MethodInfo.Invoke(...)` 实现 ——
+本地 `tools/compile-check.ps1` 三遍全 **OK**，真机构建直接：
+
+```
+[UMod.BuildEngine.BuildEngineService]: Illegal reference to disallowed namespace: System.Reflection
+[UMod.BuildEngine.BuildEngineService]: Illegal reference to disallowed type: System.Reflection.BindingFlags
+[UMod.BuildEngine.BuildEngineService]: Illegal reference to disallowed type: System.Reflection.MethodInfo
+[UMod.BuildEngine.BuildEngineService]: Illegal reference to disallowed type: System.Reflection.MethodBase
+[UMod.BuildEngine.BuildEngineService]: Referenced in field definition signature:
+        'System.Reflection.BindingFlags HoFaceTracking.Nodes.HoDebugLogNode::Public'
+[UMod.BuildEngine.BuildEngineService]: Referenced in method body: '…::TryInvokePort(…)' at instruction:
+        'IL_004f: Callvirt System.Object System.Reflection.MethodBase::Invoke(System.Object,System.Object[])'
+[UMod.BuildEngine.BuildEngineService]: Assembly 'umod-compiled-…' has failed code security verification.
+        Illegal Assembly Reference = '0', Illegal Namespace References = '1',
+        Illegal Type References = '8', Illegal Member References = '9', Illegal PInvoke References = '0'
+ModBuildException: Code security validation failed
+BUILD FAILED!
+```
+
+**两条教训**：
+
+1. **本地编译检查 ≠ 能过安全校验**。`compile-check.ps1` 只是拿真机 DLL 编一遍，`RunCodeValidation` 是 UMod 在构建
+   流水线里单独跑的。凡是要动"别的节点/别的程序集里的东西"，先在脑子里过一遍 §4；有疑问就直接构建一次，别等交付。
+2. **报错会精确到 IL 偏移**（`IL_004f: Callvirt …`）—— 连"到底是哪一行"都不用猜，照它给的成员名去删即可。
+   注意它连**字段签名里出现的类型**（`static readonly BindingFlags`）和**间接引用**（`MethodInfo::op_Inequality`、
+   `MemberInfo::get_Name`）都算，所以"只差一个 `GetType().Name`"也算违规 —— §4 举的第一行就是这个意思。
+
+**要读别的节点的口，用 `DataOutputPort.ComputedValue`（不用反射）**：
+`Graph.GetInputDataConnections(this)` 给的 `DataConnection.OutputPort` 本身就是 `Warudo.Core.Graphs.DataOutputPort`，
+上面挂着 **`public Func<Object> ComputedValue`**（`Node.GetDataOutputPort(key)` 也能按口名拿到同一个）。
+`port.ComputedValue()` 一行就是那个口这一帧的值 —— 纯调用，安全校验无感。
+这是本次把反射方案整个换掉的落点（见 [从蓝图里取证](WARUDO_INSPECTION.md) §8）。
+
 ## 5. asmdef 与工作区目录
 
 UMod 多 Mod 模式按 Unity 生成的运行时 `.csproj` 判断源码能否进编译：**额外 asmdef 可能让临时源码落到错误的工程文件**，

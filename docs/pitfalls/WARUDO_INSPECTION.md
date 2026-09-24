@@ -188,11 +188,19 @@ if (key == null) { invokedFlow.Invoke(node, null); return; }      // 把自己�
 **所以可靠的做法**（`Nodes/HoDebugLogNode.cs` 定案，"谁先跑、什么时候灌字段"一概不赌）：
 
 1. `Graph.GetInputDataConnections(this)` 拿到上游 `DataConnection`；
-2. 取 `connection.OutputNode` + `connection.OutputPort.Key`；
-3. **按口名在「上游节点的类型」上找那个 public 无参方法，直接调它**（属性/字段也顺手认一下）；
-4. 读到的就是这一帧的值。端口/字段那条老路留着当**兜底**（真被推过来时照样认）。
+2. 取 `connection.OutputNode` + `connection.OutputPort`；
+3. **口上就挂着那个求值器**：`Warudo.Core.Graphs.DataOutputPort.ComputedValue` 是 **`public Func<Object>`**，
+   `port.ComputedValue()` 一行拿到这一帧的值（`connection.OutputPort` 本身就是 `DataOutputPort`；
+   用 `Node.GetDataOutputPort(key)` 也能按口名取到上游节点自己的那一个）；
+4. 端口/字段那条老路留着当**兜底**（真被推过来时照样认）。
 
-副作用心里要有数：这等于**替流程图求值一次上游那个口**。对 `Snapshot()` 这种纯读无所谓；
+⚠️ **第 3 步千万别写成反射**。`[DataOutput]` 是 public 方法这件事很诱人想用
+`Type.GetMethod(...)` + `MethodInfo.Invoke(...)` 去调 —— **UMod 的安全校验会直接毙掉整个构建**
+（`Illegal reference to disallowed namespace: System.Reflection` → `BUILD FAILED!`，
+本地编译检查**查不出来**）。`ComputedValue` 就是为此存在的非反射入口，
+现场与完整报错见 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md) §4.1。
+
+副作用心里要有数：直读等于**替流程图求值一次上游那个口**。对 `Snapshot()` 这种纯读无所谓；
 要是上游那个口本身有副作用，就得先想清楚（我们自己的节点都是"读状态"，安全）。
 
 **顺带一个好处**：直读对**孤儿线**照样有效 —— 只要 `OutputNode`/`OutputPort` 还在，
