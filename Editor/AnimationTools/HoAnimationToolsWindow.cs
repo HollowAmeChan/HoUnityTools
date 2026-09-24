@@ -154,7 +154,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                     + "**预制件或场景里的对象都行** —— 两种都会记住（资产记路径，场景对象记层级路径）。"
                     + "注意：片段写的是**这个根下面的相对路径**，以后它要跟同一套层级对上才有用。");
                 var pickedRoot = (GameObject)EditorGUI.ObjectField(
-                    HoConstraintEditorControls.NextFlexible(90.0f), root, typeof(GameObject), false);
+                    HoConstraintEditorControls.NextFlexible(90.0f), root, typeof(GameObject), true);
                 if (pickedRoot != root)
                 {
                     root = pickedRoot;
