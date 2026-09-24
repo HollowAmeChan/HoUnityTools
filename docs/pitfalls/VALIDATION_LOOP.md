@@ -16,6 +16,11 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 
 成功标记是 **`HO_FACE_TESTS_ALL_PASSED`**；失败会抛 `HO_FACE_TEST_FAILED: <断言名>` 并 `Exit(1)`。
 
+两个阶段的实时 UDP 断言（第 3 段与最后一段）如果**几帧内没驱动上来**，用例会自己打一条 **`HO_LIVE`**：
+接收端统计（包数 / 坏包 / 来源被拒 / 错误原文）+ 合并后的线名值 + 输入行的落点。
+它按第 5 / 第 120 帧各打一条；**一切正常时不会打**（值在第一两帧就到位了）。看到它就直接照那几项往下切：
+`packets=0` 看 socket/端口，`hasJawWire=False` 看协议解析，`hubJaw=0.9` 但 `weight` 不动看时钟与输入行。
+
 ## 会绊人的地方
 
 | 症状 | 原因 / 怎么办 |

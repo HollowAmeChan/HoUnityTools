@@ -30,11 +30,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     public static class HoFaceFirewall
     {
         public const string RuleName = "HoUnityTools FaceTracking UDP";
-        public const int Port = IFacialMocapReceiver.Port;
 
         /// <summary>
-        /// 要放行的本机端口列表（逗号分隔）：**按当前环境里启用的源算**，因为不同协议听不同端口
-        /// （iFacialMocap 固定 49983、VTS 手机默认 49984）。一条规则覆盖全部，撤销也一次干净。
+        /// 要放行的本机端口列表（逗号分隔）：**按当前环境里启用的源算**。
+        /// 现在只有 VTS 一种协议，端口就是那条源自己的 `localPort`；留成"算出来的"
+        /// 是为了以后加设备时不用回来改这里。
         /// </summary>
         public static string Ports
         {
@@ -44,11 +44,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 foreach (var entry in HoFaceInputEnvironment.instance.sources)
                 {
                     if (entry == null || !entry.enabled) continue;
-                    int port = HoFaceReceiverFactory.FixedPort(entry.kind) ? IFacialMocapReceiver.Port : entry.localPort;
+                    int port = entry.localPort;
                     if (port >= 1024 && port <= 65535 && !ports.Contains(port)) ports.Add(port);
                 }
 
-                if (ports.Count == 0) ports.Add(Port);
+                if (ports.Count == 0) ports.Add(49984);
                 return string.Join(",", ports);
             }
         }

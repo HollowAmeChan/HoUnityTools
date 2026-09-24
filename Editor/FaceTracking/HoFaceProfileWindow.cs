@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Hollow.HoUnityTools.Editor.Constraints;
+using Hollow.HoUnityTools.Editor.FaceTracking;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,7 +13,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 面板上的顺序就是生效顺序 —— 左边列表的顺序 = 写参数的顺序，修饰符列表的顺序 = 串起来的顺序。
     ///
     /// 三处刻意做成"一眼能看出坏在哪"：表达式解析不过 / 变量不是 ARKit 键 / 用了还没实现的延迟。
-    /// 保存后会把场景里的 <see cref="HoFaceTrackingDebugger"/> 的解析缓存打掉（见 <see cref="SaveProfile"/>）。
+    /// 保存后会让宿主重新读一遍这份配置（见 <see cref="SaveProfile"/>）。
     /// </summary>
     public sealed class HoFaceProfileWindow : EditorWindow
     {
@@ -29,16 +30,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         private Vector2 listScroll;
         private bool dirty;
 
-        [MenuItem("HoUnityTools/面捕/面捕配置")]
+        [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
         private static void Open()
         {
-            GetWindow<HoFaceProfileWindow>(false, "面捕配置", true);
+            GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
         }
 
-        /// <summary>从组件面板跳进来：直接盯着那份配置，不预选任何一行。</summary>
+        /// <summary>从主面板跳进来：直接盯着那份配置，不预选任何一行。</summary>
         public static void Open(TextAsset profile)
         {
-            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "面捕配置", true);
+            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
             window.profile = profile;
             window.selected = -1;
             window.ReloadProfile(true);
@@ -751,17 +752,12 @@ namespace Hollow.HoUnityTools.FaceTracking
             AssetDatabase.ImportAsset(path);
             dirty = false;
 
-            // 组件按"资产实例 + 文本长度"缓存解析结果，长度没变时会继续用旧的那份 —— 必须敲一下
-            TextAsset saved = profile;
+            // 设置对象按"路径 + 文件写盘时间戳"缓存解析结果 —— 存完盘时间戳一定变，
+            // 但为了让面板立刻看到新内容（而不是等下一次 tick），这里主动敲一下。
             EditorApplication.delayCall += () =>
             {
-                foreach (HoFaceTrackingDebugger rig in Object.FindObjectsByType<HoFaceTrackingDebugger>(FindObjectsSortMode.None))
-                {
-                    if (rig != null && rig.profile == saved)
-                    {
-                        rig.ReloadProfile();
-                    }
-                }
+                HoFaceDebugHost.Settings.ReloadProfile();
+                HoFaceDebugHost.Save();
             };
 
             SetMessage("已保存 " + path, false);

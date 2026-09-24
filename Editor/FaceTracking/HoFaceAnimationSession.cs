@@ -24,7 +24,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// </summary>
     public sealed class HoFaceAnimationSession : IDisposable
     {
-        public readonly HoFaceTrackingDebugger Rig;
+        public readonly HoFaceDebugSettings Settings;
         public HoFaceCompiledController Compiled { get; private set; }
         public readonly float[] Effective = new float[52];
         /// <summary>输入侧整形之后的值（输入曲线 + 断流回中性 + 双眼同步）。**表达式读的就是它。**</summary>
@@ -94,18 +94,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         public void ClearPreviews() => previews.Clear();
 
-        public HoFaceAnimationSession(HoFaceTrackingDebugger rig)
+        public HoFaceAnimationSession(HoFaceDebugSettings settings)
         {
-            Rig = rig;
-            animator = rig.targetAnimator;
-            if (!EditorApplication.isPlaying || animator == null || !rig.isActiveAndEnabled || !animator.isActiveAndEnabled)
-                throw new InvalidOperationException("请进入播放模式，并启用角色组件和 Animator。");
+            // ⚠️ 别把参数也起名叫 Settings：那样这一行会变成 `Settings = Settings;`（自赋值），
+            // 字段永远拿不到值、之后处处 NRE，而编译器一声不吭。
+            Settings = settings;
+            animator = settings.TargetAnimator();
+            if (!EditorApplication.isPlaying || animator == null || !animator.isActiveAndEnabled)
+                throw new InvalidOperationException("请进入播放模式，并确保调试对象上有一个已启用的 Animator。");
             // 不去碰 animator.runtimeAnimatorController，所以也不用限制 Animator 的更新模式：
             // 影子 Animator 用自己的默认更新，角色怎么更新是角色自己的事。
             try
             {
                 // Validate even when no phone frames have arrived yet.
-                using (var check = HoFaceAnimationAssets.Compile(rig)) { }
+                using (var check = HoFaceAnimationAssets.Compile(Settings)) { }
                 BuildShadow();
                 Tick(0);
             }
@@ -158,31 +160,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public void Tick(float deltaTime)
         {
             if (disposed) return;
-            if (animator == null || Rig.targetAnimator != animator || !animator.isActiveAndEnabled)
+            if (animator == null || Settings.TargetAnimator() != animator || !animator.isActiveAndEnabled)
                 throw new InvalidOperationException("目标 Animator 已变更或禁用，会话已停止。");
             foreach (var entry in meshRefs)
                 if (entry.Key == null || entry.Key.sharedMesh != entry.Value) throw new InvalidOperationException("模型 Mesh 已变更，请重新检查绑定后启动。");
             bool changed = !configured;
             var nextSelected = new bool[52];
-            double now = IFacialMocapReceiver.Now;
+            double now = HoFaceClock.Now;
 
             // ── 输入行：线名 → 规范名（改名 + 量纲都在这里，接收端只交原样）──────────────
             // 规矩照 VBridger：**引用到的线名这一帧没来 ⇒ 这一行不写**（保持上一帧）。
             // 于是"两种协议的输入行同时存在"是安全的：哪个源在发，只有那一套行会动。
             EvaluateInputs(now, Mathf.Max(0f, deltaTime));
 
-            foreach (var channel in Rig.channels)
+            foreach (var channel in Settings.channels)
             {
                 if (channel == null) continue;
                 int index = HoFaceTrackingChannels.IndexOf(channel.shape);
                 if (index < 0) continue;
-                float fade = Mathf.Max(0.01f, Rig.neutralFadeSeconds);
+                float fade = Mathf.Max(0.01f, Settings.neutralFadeSeconds);
                 bool hasValue = inputIndex.TryGetValue(channel.shape, out int inputRow);
                 double age = hasValue ? HoFaceInputHub.LastFrameTime : 0;
                 age = age > 0 ? now - age : double.MaxValue;
-                bool fresh = hasValue && inputFresh[inputRow] && HoFaceInputHub.Connected && age <= Mathf.Max(0.1f, Rig.staleSeconds);
+                bool fresh = hasValue && inputFresh[inputRow] && HoFaceInputHub.Connected && age <= Mathf.Max(0.1f, Settings.staleSeconds);
                 // Never received live channels do not reserve model properties.
-                bool mayWrite = channel.mode != HoFaceInputMode.Live || (hasValue && inputFresh[inputRow] && age <= Mathf.Max(0.1f, Rig.staleSeconds) + fade);
+                bool mayWrite = channel.mode != HoFaceInputMode.Live || (hasValue && inputFresh[inputRow] && age <= Mathf.Max(0.1f, Settings.staleSeconds) + fade);
                 if (channel.mode != lastModes[index] && channel.mode == HoFaceInputMode.Hold) held[index] = Effective[index];
                 lastModes[index] = channel.mode;
                 float neutral = Finite01(channel.neutral);
@@ -213,20 +215,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 selected[i] = nextSelected[i];
             }
             string stamp = MappingStamp();
-            if (changed || runningController != Rig.faceController || stamp != mappingStamp)
+            if (changed || runningController != Settings.FaceController() || stamp != mappingStamp)
             {
                 Rebuild();
                 mappingStamp = stamp;
                 configured = true;
             }
-            // 双眼同步：跨眼合并作用在**输入**上，必须在表达式之前 —— 表达式读的就是这一组值。
-            HoFaceEyeSync.Apply(Input, Rig.eyeSync, Rig.eyeSyncMix, Rig.eyeSyncSingleKey);
+            // 双眼同步（`HoFaceEyeSync`）已经删掉了：那是**混合树的事**，不该在参数生产这一层做。
+            // 面板上那三个开关（eyeSync / eyeSyncMix / eyeSyncSingleKey）也一并退休 ——
+            // 需要在树里合并就画在树里，这样"面板里看到什么 = Warudo 里是什么"才成立。
+            // 这里曾经是：HoFaceEyeSync.Apply(Input, Settings.eyeSync, Settings.eyeSyncMix, Settings.eyeSyncSingleKey);
 
             // ── 参数生产：每一行 = 曲线(表达式(源键…))，再走它自己那串有序修饰符 ──────────
             // 这里**不再有**"某个键写某个参数"的硬编码：参数名与算法都在中间层资产里，
             // 控制器里没有那个参数名就跳过（不猜也不补）。轴也是普通一行：
             // `Ho/Drive/Lid/Left/BlinkWide = eyeBlinkLeft - eyeWideLeft`。
-            double frameNow = IFacialMocapReceiver.Now;
+            double frameNow = HoFaceClock.Now;
             for (int row = 0; row < outputs.Length; row++)
             {
                 var output = outputs[row];
@@ -244,6 +248,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             foreach (var preview in previews)
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
+
+            // ⚠️ **强制立刻求值一次**，然后调用方紧接着调 WriteOutputs() 就能读到这一帧的结果。
+            //
+            // 为什么必须这样：以前是组件的 Update/LateUpdate 一对 —— 设参数在 Update、抄回在
+            // LateUpdate，中间那段时间让 Unity 自己把影子 Animator 算完。现在没有组件了，
+            // 而"设参数"和"读结果"如果分在两个编辑器回调里，就是在**赌回调顺序**。
+            // 自己 Update(0f) 之后，这一步变成同步的：设参数 → 求值 → 读值，一次调用里完成。
+            // （影子是 AlwaysAnimate 的活动对象，Unity 之后还会再算一次 —— 参数没变，无害。）
+            shadow.Update(0f);
         }
 
         /// <summary>
@@ -393,29 +406,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 会话的"配置指纹"：换控制器、换驱动对象、**换/改配置文件**都算换了一份配置，要重建影子与输出行。
         ///
         /// 配置文件是同一个 TextAsset 时，光看 `GetInstanceID()` 不够 —— 内容被改写（窗口保存、
-        /// 或者外部编辑器改了这个 .json）后实例可以不变。所以再带上"文本长度 + 解析出来的那个对象"
-        /// （`Rig.Middleware` 在长度变化或 <see cref="HoFaceTrackingDebugger.ReloadProfile"/> 之后会重新解析）。
+        /// 或者外部编辑器改了这个 .json）后实例可以不变。所以再带上"文件路径 + 写盘时间戳 + 解析出来的那个对象"
+        /// （<see cref="HoFaceDebugSettings.Middleware"/> 会在路径或时间戳变化后重新解析）。
         /// </summary>
         private string MappingStamp()
         {
             var text = new System.Text.StringBuilder();
-            text.Append("rows:").Append(Rig.Outputs().Count).Append('/').Append(Rig.Inputs().Count).Append(';');
-            var middleware = Rig.Middleware;
-            text.Append("profile:").Append(Rig.profile != null ? Rig.profile.GetInstanceID() : 0)
-                .Append(':').Append(Rig.profile != null ? Rig.profile.text.Length : 0)
+            text.Append("rows:").Append(Settings.Outputs().Count).Append('/').Append(Settings.Inputs().Count).Append(';');
+            var middleware = Settings.Middleware;
+            text.Append("profile:").Append(Settings.ProfileStamp)
                 .Append(':').Append(middleware != null ? middleware.GetHashCode() : 0).Append(';');
-            text.Append("src:").Append(Rig.treeTemplate != null ? Rig.treeTemplate.GetInstanceID() : 0).Append(';');
-            if (Rig.meshes != null)
-                foreach (var mesh in Rig.meshes)
-                    text.Append(mesh != null ? mesh.GetInstanceID() : 0).Append(';');
+            var controller = Settings.FaceController();
+            text.Append("src:").Append(controller != null ? controller.GetInstanceID() : 0).Append(';');
+            foreach (var mesh in Settings.Meshes())
+                text.Append(mesh != null ? mesh.GetInstanceID() : 0).Append(';');
             return text.ToString();
         }
 
         /// <summary>把当前的输入行与输出行编译成"求值用"的数组（表达式解析一次，状态数组按行开）。</summary>
         private void BuildOutputs()
         {
-            var middleware = Rig.Middleware;
-            var inputList = Rig.Inputs();
+            var middleware = Settings.Middleware;
+            var inputList = Settings.Inputs();
             inputRows = new HoFaceOutput[inputList.Count];
             inputExpressions = new HoFaceExpression[inputList.Count];
             inputValues = new float[inputList.Count];
@@ -436,7 +448,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 inputIndex[inputList[i].parameter] = i;   // 同名多行：最后一行生效（用户覆盖用）
             }
 
-            var rows = Rig.Outputs();
+            var rows = Settings.Outputs();
             outputs = new HoFaceOutput[rows.Count];
             expressions = new HoFaceExpression[rows.Count];
             outputValues = new float[rows.Count];
@@ -467,7 +479,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void Rebuild()
         {
             BuildOutputs();
-            var next = HoFaceAnimationAssets.Compile(Rig, shape => { int i = HoFaceTrackingChannels.IndexOf(shape); return i >= 0 && selected[i]; });
+            var next = HoFaceAnimationAssets.Compile(Settings, shape => { int i = HoFaceTrackingChannels.IndexOf(shape); return i >= 0 && selected[i]; });
             try
             {
                 var nextKeys = new HashSet<(SkinnedMeshRenderer, int)>();
@@ -499,7 +511,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 parameters.Clear();
                 foreach (string name in next.floatParameters) parameters.Add(name);
                 shadow.runtimeAnimatorController = next.controller;
-                runningController = Rig.faceController;
+                runningController = Settings.FaceController();
                 written = false;
             }
             catch { if (Compiled != next) next.Dispose(); throw; }

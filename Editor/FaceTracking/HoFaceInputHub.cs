@@ -33,13 +33,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>每个线名最后一次被"新鲜源"提供的时刻（会话判断断流用）。</summary>
         private static readonly Dictionary<string, double> MergedAt = new Dictionary<string, double>(StringComparer.Ordinal);
 
-        private static readonly Dictionary<HoFaceTrackingDebugger, HoFaceAnimationSession> Sessions = new Dictionary<HoFaceTrackingDebugger, HoFaceAnimationSession>();
-        private static readonly Dictionary<HoFaceTrackingDebugger, string> Errors = new Dictionary<HoFaceTrackingDebugger, string>();
-        /// <summary>用户自己按了「停止并交还」的 rig：本次 Play 内不再自动拉起。</summary>
-        private static readonly HashSet<HoFaceTrackingDebugger> UserStopped = new HashSet<HoFaceTrackingDebugger>();
-        /// <summary>每个 rig 下一次允许自动重试的时刻（单调时钟）—— 失败后 1 秒一次，不做热循环。</summary>
-        private static readonly Dictionary<HoFaceTrackingDebugger, double> NextTry = new Dictionary<HoFaceTrackingDebugger, double>();
-        private static readonly Dictionary<HoFaceTrackingDebugger, int> Attempts = new Dictionary<HoFaceTrackingDebugger, int>();
+        private static readonly Dictionary<HoFaceDebugSettings, HoFaceAnimationSession> Sessions = new Dictionary<HoFaceDebugSettings, HoFaceAnimationSession>();
+        private static readonly Dictionary<HoFaceDebugSettings, string> Errors = new Dictionary<HoFaceDebugSettings, string>();
+        /// <summary>用户自己按了「停止并交还」的 settings：本次 Play 内不再自动拉起。</summary>
+        private static readonly HashSet<HoFaceDebugSettings> UserStopped = new HashSet<HoFaceDebugSettings>();
+        /// <summary>每个 settings 下一次允许自动重试的时刻（单调时钟）—— 失败后 1 秒一次，不做热循环。</summary>
+        private static readonly Dictionary<HoFaceDebugSettings, double> NextTry = new Dictionary<HoFaceDebugSettings, double>();
+        private static readonly Dictionary<HoFaceDebugSettings, int> Attempts = new Dictionary<HoFaceDebugSettings, int>();
         private static double nextConnectTry;
 
         public static double LastFrameTime { get; private set; }
@@ -66,13 +66,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         static HoFaceInputHub()
         {
-            EditorApplication.update += Update;
+            // 输入侧**自己驱动自己**：收包与重连不该依赖窗口开着、也不依赖进了播放模式
+            //（面板上"连上手机、看原始值"这一步就在编辑模式里做）。
+            // 会话那一侧由 HoFaceDebugHost 驱动，两者互不重叠。
+            EditorApplication.update += HostUpdate;
             EditorApplication.playModeStateChanged += PlayState;
             EditorApplication.quitting += Shutdown;
             AssemblyReloadEvents.beforeAssemblyReload += Shutdown;
-            HoFaceTrackingDebugger.EditorTick += Tick;
-            HoFaceTrackingDebugger.EditorLateTick += LateTick;
-            HoFaceTrackingDebugger.EditorDisabled += rig => DisposeSession(rig);
         }
 
         /// <summary>
@@ -145,91 +145,93 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             MergedAt.Clear();
         }
 
-        public static HoFaceAnimationSession Session(HoFaceTrackingDebugger rig) => rig != null && Sessions.TryGetValue(rig, out var session) ? session : null;
+        public static HoFaceAnimationSession Session(HoFaceDebugSettings settings) => settings != null && Sessions.TryGetValue(settings, out var session) ? session : null;
 
-        public static string Error(HoFaceTrackingDebugger rig)
+        public static string Error(HoFaceDebugSettings settings)
         {
-            if (rig == null || !Errors.TryGetValue(rig, out string error)) return "";
-            bool retrying = rig.startOnPlay && !UserStopped.Contains(rig) && !Sessions.ContainsKey(rig);
+            if (settings == null || !Errors.TryGetValue(settings, out string error)) return "";
+            bool retrying = settings.startOnPlay && !UserStopped.Contains(settings) && !Sessions.ContainsKey(settings);
             return retrying
-                ? error + "（自动重试中，第 " + (Attempts.TryGetValue(rig, out int attempts) ? attempts : 1) + " 次）"
+                ? error + "（自动重试中，第 " + (Attempts.TryGetValue(settings, out int attempts) ? attempts : 1) + " 次）"
                 : error;
         }
 
-        public static void Start(HoFaceTrackingDebugger rig)
+        public static void Start(HoFaceDebugSettings settings)
         {
-            DisposeSession(rig);
-            UserStopped.Remove(rig);
+            DisposeSession(settings);
+            UserStopped.Remove(settings);
             try
             {
                 foreach (var pair in Sessions)
-                    if (pair.Value.Rig.targetAnimator == rig.targetAnimator) throw new InvalidOperationException("该 Animator 已有一个面捕会话。");
-                Sessions.Add(rig, new HoFaceAnimationSession(rig));
-                Errors.Remove(rig);
-                Attempts.Remove(rig);
+                    if (pair.Value.Settings.TargetAnimator() == settings.TargetAnimator()) throw new InvalidOperationException("该 Animator 已有一个面捕会话。");
+                Sessions.Add(settings, new HoFaceAnimationSession(settings));
+                Errors.Remove(settings);
+                Attempts.Remove(settings);
             }
-            catch (Exception e) { Fail(rig, e.Message); }
+            catch (Exception e) { Fail(settings, e.Message); }
         }
 
         /// <summary>用户自己停的：记下来，本次 Play 内不再自动拉起。</summary>
-        public static void Stop(HoFaceTrackingDebugger rig)
+        public static void Stop(HoFaceDebugSettings settings)
         {
-            if (ReferenceEquals(rig, null)) return;
-            UserStopped.Add(rig);
-            Attempts.Remove(rig);
-            DisposeSession(rig);
+            if (ReferenceEquals(settings, null)) return;
+            UserStopped.Add(settings);
+            Attempts.Remove(settings);
+            DisposeSession(settings);
         }
 
         /// <summary>收摊，但**不代表用户意图** —— 组件被禁用、退出播放、出错都属这一类，之后还能自动拉起来。</summary>
-        private static void DisposeSession(HoFaceTrackingDebugger rig)
+        private static void DisposeSession(HoFaceDebugSettings settings)
         {
-            if (rig == null) return;
-            if (Sessions.TryGetValue(rig, out var session)) { Sessions.Remove(rig); session.Dispose(); }
+            if (settings == null) return;
+            if (Sessions.TryGetValue(settings, out var session)) { Sessions.Remove(settings); session.Dispose(); }
         }
 
         /// <summary>驱动挂了：收摊 + 记下原因 + 1 秒后再试（「运行时自动开始」打开时会真的重试）。</summary>
-        private static void Fail(HoFaceTrackingDebugger rig, string message)
+        private static void Fail(HoFaceDebugSettings settings, string message)
         {
-            if (ReferenceEquals(rig, null)) return;
-            DisposeSession(rig);
-            Errors[rig] = message;
-            Attempts[rig] = Attempts.TryGetValue(rig, out int attempts) ? attempts + 1 : 1;
-            NextTry[rig] = Now + 1.0;
+            if (ReferenceEquals(settings, null)) return;
+            DisposeSession(settings);
+            Errors[settings] = message;
+            Attempts[settings] = Attempts.TryGetValue(settings, out int attempts) ? attempts + 1 : 1;
+            NextTry[settings] = Now + 1.0;
         }
 
-        private static void Tick(HoFaceTrackingDebugger rig)
+        public static void Tick(HoFaceDebugSettings settings)
         {
             if (!Application.isPlaying) return;
             UpdateInput();
 
             // 「运行时自动开始」：进播放就自动驱动；**失败后自动重试**（用户自己停过的不再拉起）。
-            if (rig.startOnPlay && !UserStopped.Contains(rig) && !Sessions.ContainsKey(rig)
-                && (!NextTry.TryGetValue(rig, out double next) || Now >= next))
+            if (settings.startOnPlay && !UserStopped.Contains(settings) && !Sessions.ContainsKey(settings)
+                && (!NextTry.TryGetValue(settings, out double next) || Now >= next))
             {
-                NextTry[rig] = Now + 1.0;
-                Start(rig);
+                NextTry[settings] = Now + 1.0;
+                Start(settings);
             }
 
-            if (!Sessions.TryGetValue(rig, out var session)) return;
+            if (!Sessions.TryGetValue(settings, out var session)) return;
             try { session.Tick(Time.deltaTime); }
-            catch (Exception e) { Fail(rig, e.Message); }
+            catch (Exception e) { Fail(settings, e.Message); }
         }
 
-        private static void LateTick(HoFaceTrackingDebugger rig)
+        public static void LateTick(HoFaceDebugSettings settings)
         {
             if (!Application.isPlaying) return;
-            if (!Sessions.TryGetValue(rig, out var session)) return;
+            if (!Sessions.TryGetValue(settings, out var session)) return;
             try { session.WriteOutputs(); }
-            catch (Exception e) { Fail(rig, e.Message); }
+            catch (Exception e) { Fail(settings, e.Message); }
         }
 
-        private static void Update()
+        public static void HostUpdate()
         {
             UpdateInput();
-            var dead = new List<HoFaceTrackingDebugger>();
+            var dead = new List<HoFaceDebugSettings>();
+            // 以前这里还看"组件是不是启用的" —— 现在没有组件了，会话的存活只由播放模式决定，
+            // 启不启用由宿主（面板/菜单）说了算。
             foreach (var pair in Sessions)
-                if (pair.Key == null || !pair.Key.isActiveAndEnabled || !Application.isPlaying) dead.Add(pair.Key);
-            foreach (var rig in dead) DisposeSession(rig);   // 不是用户停的：之后还能自动拉回来
+                if (pair.Key == null || !Application.isPlaying) dead.Add(pair.Key);
+            foreach (var settings in dead) DisposeSession(settings);   // 不是用户停的：之后还能自动拉回来
 
             // 连接不跟着播放模式一起断（也兜住接收线程真死掉的情况）—— 见 TryReconnect 的注释。
             TryReconnect();
@@ -318,7 +320,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             Disconnect(userInitiated: false);   // 收 socket 是为了让新域能绑上端口，不代表用户想断开
         }
 
-        /// <summary>共享时钟：接收端与面板都用它算"多久没收到包了"。</summary>
-        public static double Now => HoFaceReceiverBase.Now;
+        /// <summary>共享时钟：接收端、会话与面板都用它算"多久没收到包了"（唯一定义在 <see cref="HoFaceClock"/>）。</summary>
+        public static double Now => HoFaceClock.Now;
     }
 }

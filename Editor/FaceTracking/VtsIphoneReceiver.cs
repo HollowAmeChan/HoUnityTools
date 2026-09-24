@@ -2,7 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using UnityEngine;
+using Hollow.HoUnityTools.FaceTracking;
 
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
@@ -18,6 +18,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     ///    `time` 只允许 **0.5–10 秒**，所以要每秒续一次（见 <see cref="OnTick"/>）；
     /// 3. 手机按帧回 JSON：时间戳 + `FaceFound` + 52 个形态键 + 头旋转/位置 + 左右眼旋转 + 屏幕热键。
     ///
+    /// ⚠️ **协议细节（请求包的构造、载荷的解析）全在 <see cref="HoVtsPacket"/>**，这个类只管 socket 与节奏。
+    /// 为什么必须这样：这里原来自己写了一套 `JsonUtility.FromJson&lt;VtsTrackingData&gt;`，
+    /// 而载荷里的 `BlendShapes` 是 `List&lt;嵌套类&gt;` —— **正是 Warudo 那边静默丢掉 52 个形态键的那个模式**
+    /// （见 Runtime/FaceTracking/HoJson.cs 记的三次事故）。搬家之后 Unity 侧与 Warudo 侧读的是同一份解析器、
+    /// 同一份离线测试（`.research/profile-json-test`，87 条）。
+    ///
     /// 本接收端**只交原样**：字段名照抄载荷里的名字（`Rotation` → `Rotation_x/y/z`），形态键数值也不做换算。
     /// 哪一段是"角度"、哪一段是"位置"、要不要 `* 0.0174533`，全写在中间层的输入行里。
     /// </summary>
@@ -26,14 +32,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>iPhone 侧监听端口（官方默认值；App 界面上显示的那个）。</summary>
         public const int PhonePort = 21412;
 
-        /// <summary>本机默认监听端口。**故意避开 49983**：这样 iFacialMocap 和 VTS 两条可以同时连着。</summary>
+        /// <summary>本机默认监听端口。</summary>
         public const int DefaultPort = 49984;
 
-        /// <summary>官方允许 0.5–10 秒；我们要 5 秒、每秒续一次。</summary>
-        public const float RequestSeconds = 5f;
+        /// <summary>官方允许 0.5–10 秒；我们要 5 秒、每秒续一次。定义在 <see cref="HoVtsPacket"/>。</summary>
+        public const float RequestSeconds = HoVtsPacket.RequestSeconds;
 
         private const double RenewSeconds = 1.0;
-        private const string AppName = "HoUnityTools";
 
         private double lastRequest;
 
@@ -58,60 +63,27 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>要数据。每次只买 <see cref="RequestSeconds"/> 秒，所以要定期续（官方要求）。</summary>
         private void SendRequest(UdpClient client, IPAddress phone)
         {
-            var request = new Request
-            {
-                messageType = "iOSTrackingDataRequest",
-                time = RequestSeconds,
-                sentBy = AppName,
-                ports = new[] { LocalPort }
-            };
-            byte[] payload = Encoding.UTF8.GetBytes(JsonUtility.ToJson(request));
+            byte[] payload = Encoding.UTF8.GetBytes(HoVtsPacket.BuildRequest(LocalPort));
             client.Send(payload, payload.Length, new IPEndPoint(phone, PhonePort));
             CountRequest();
             lastRequest = Now;
         }
 
-        [Serializable]
-        private sealed class Request
-        {
-            public string messageType;
-            public float time;
-            public string sentBy;
-            public int[] ports;
-        }
-
         protected override bool TryParsePacket(string text, out HoFaceInputPacket packet)
         {
-            packet = null;
-            if (!HoFaceInputPacket.TryParseJson(text, out var parsed, out var data)) return false;
-            packet = parsed;
+            packet = new HoFaceInputPacket();
 
-            if (data.BlendShapes != null)
-            {
-                for (int i = 0; i < data.BlendShapes.Count; i++)
-                {
-                    var entry = data.BlendShapes[i];
-                    if (entry == null || string.IsNullOrEmpty(entry.k)) { packet.InvalidCount++; continue; }
-                    packet.Set(entry.k, entry.v);   // 线名照原样（PascalCase），值照原样
-                }
-            }
+            bool faceFound;
+            string error;
+            var values = default(System.Collections.Generic.Dictionary<string, float>);
+            if (!HoVtsPacket.TryParse(text, out values, out faceFound, out error)) return false;
+            if (values == null) return false;
 
-            WriteVector(data.Rotation, "Rotation", packet);
-            WriteVector(data.Position, "Position", packet);
-            WriteVector(data.EyeLeft, "EyeLeft", packet);
-            WriteVector(data.EyeRight, "EyeRight", packet);
-            packet.Set("FaceFound", data.FaceFound ? 1f : 0f);
-            packet.Set("Hotkey", data.Hotkey);
-            packet.Set("Timestamp", data.Timestamp);
+            foreach (var pair in values) packet.Set(pair.Key, pair.Value);
+
+            // ⚠️ 这里不再逐条统计 InvalidCount：认不出的形态键条目由 HoVtsPacket 直接跳过，
+            // 它只报"整包能不能解析"。整包坏掉会返回 false（走坏帧计数），这才是真正需要盯的那个数。
             return packet.EntryCount > 0;
-        }
-
-        /// <summary>`Rotation` → `Rotation_x/y/z`：分量名照 Unity 的 Vector3 字段名。</summary>
-        private static void WriteVector(Vector3 source, string name, HoFaceInputPacket packet)
-        {
-            packet.Set(name + "_x", source.x);
-            packet.Set(name + "_y", source.y);
-            packet.Set(name + "_z", source.z);
         }
     }
 }

@@ -94,10 +94,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// </summary>
     public static class HoFaceAnimationAssets
     {
-        public static bool Allowed(HoFaceTrackingDebugger rig, string shape)
+        public static bool Allowed(HoFaceDebugSettings settings, string shape)
         {
             // 这里**不看区域开关**了：哪些键算数由使用者自己的混合树决定（我们不注入门控）。
-            foreach (var channel in rig.channels)
+            foreach (var channel in settings.channels)
                 if (channel != null && channel.shape == shape) return channel.mode != HoFaceInputMode.Release;
             return false;
         }
@@ -415,10 +415,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             foreach (var child in machine.stateMachines) CountStates(child.stateMachine, ref count);
         }
 
-        public static HoFaceCompiledController Compile(HoFaceTrackingDebugger rig, Func<string, bool> outputFilter = null)
+        public static HoFaceCompiledController Compile(HoFaceDebugSettings settings, Func<string, bool> outputFilter = null)
         {
-            if (rig.targetAnimator == null) throw new InvalidOperationException("请指定角色 Animator。");
-            if (!(rig.faceController is AnimatorController source))
+            if (settings.TargetAnimator() == null) throw new InvalidOperationException("请指定角色 Animator。");
+            if (!(settings.FaceController() is AnimatorController source))
                 throw new InvalidOperationException("请选择纯 Unity AnimatorController。首版不接 VRC 行为或嵌套 OverrideController。");
             foreach (var layer in source.layers)
             {
@@ -428,7 +428,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var parameters = new Dictionary<string, AnimatorControllerParameterType>(StringComparer.Ordinal);
             foreach (var p in source.parameters) parameters[p.name] = p.type;
             var usedShapes = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var channel in rig.channels)
+            foreach (var channel in settings.channels)
             {
                 if (channel == null || HoFaceTrackingChannels.IndexOf(channel.shape) < 0)
                     throw new InvalidOperationException("输入通道必须使用标准 ARKit 键名。");
@@ -438,7 +438,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 参数名现在由**中间层配置**声明（控制器只是等着被喂）。这里只做实事的检查：
             // 同名参数被两行写 = 后写者覆盖前者（说出来，不拦）；类型不是 Float 时 SetFloat 会失败。
             var written = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var output in rig.Outputs())
+            foreach (var output in settings.Outputs())
             {
                 if (output == null || string.IsNullOrWhiteSpace(output.parameter)) continue;
                 if (!written.Add(output.parameter))
@@ -473,9 +473,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         string shape = curve.propertyName.Substring("blendShape.".Length);
                         // 只收我们有通道、且这个区域被打开的标准 ARKit 键。控制器是搬来的，可能还写了
                         // 别的键（别人的模型专有键），那些不归我们驱动 —— 不猜、也不写。
-                        if (!Allowed(rig, shape) || (outputFilter != null && !outputFilter(shape))) continue;
+                        if (!Allowed(settings, shape) || (outputFilter != null && !outputFilter(shape))) continue;
                         string path = curve.path;
-                        Transform node = path.Length == 0 ? rig.targetAnimator.transform : rig.targetAnimator.transform.Find(path);
+                        Transform node = path.Length == 0 ? settings.TargetAnimator().transform : settings.TargetAnimator().transform.Find(path);
                         var renderer = node != null ? node.GetComponent<SkinnedMeshRenderer>() : null;
                         if (renderer == null || renderer.sharedMesh == null || renderer.sharedMesh.GetBlendShapeIndex(shape) < 0)
                         {
@@ -483,7 +483,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             if (!result.warnings.Contains(warning)) result.warnings.Add(warning);
                             continue;
                         }
-                        if (renderer.GetComponentInParent<Animator>() != rig.targetAnimator)
+                        if (renderer.GetComponentInParent<Animator>() != settings.TargetAnimator())
                             throw new InvalidOperationException("目标 Mesh 位于另一个 Animator 下：" + path);
                         var binding = curve;
                         binding.path = path;

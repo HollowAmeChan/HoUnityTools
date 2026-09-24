@@ -18,13 +18,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// </summary>
     public sealed class HoFaceTrackingWindow : EditorWindow
     {
-        private static readonly string[] Modes = { "实时", "手动", "保持", "中性", "交还" };
-
-        private Vector2 scroll;
-        private string search = "";
+        /// <summary>「配置详情」与「参数输入」各自一份筛选/滚动位置 —— 共用一个的话，一个栏里的筛选会顺手把另一栏也滤掉。</summary>
+        private Vector2 profileScroll;
+        private string profileSearch = "";
+        private Vector2 inputScroll;
+        private string inputSearch = "";
         private readonly System.Collections.Generic.List<string> localAddresses = new System.Collections.Generic.List<string>();
         private string localIps = "";
-        private HoFaceTrackingDebugger rig;
+        /// <summary>
+        /// 设置对象由宿主持有（角色上不挂组件之后它就是**全局状态**），窗口只是它的一个视图。
+        /// 所以这里是只读的：窗口不再"选一个组件"，而是编辑宿主那一份设置。
+        /// </summary>
+        private static HoFaceDebugSettings settings { get { return HoFaceDebugHost.Settings; } }
         private double lastRepaint, lastRateTime;
         private long lastPackets;
         private float packetRate;
@@ -32,13 +37,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // 分区展开状态：默认只展开"必须动手填"的那块（配置），其余一律收起。
         // 排查区虽然收起，但出现新问题时会自动弹开一次（见 DrawDiagnoseSection）。
         private bool configExpanded = true;
+        private bool profileExpanded = true;
         private bool parametersExpanded;
         private bool diagnoseExpanded;
         private bool logExpanded;
         private bool hintExpanded;
         private string lastProblem = "";
 
-        [MenuItem("HoUnityTools/面捕调试")]
+        /// <summary>把绝对路径尽量转成工程相对路径（`Assets/...`），这样设置文件里存的是可移植路径。</summary>
+        private static string MakeProjectRelative(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return path;
+            string root = System.IO.Directory.GetParent(Application.dataPath).FullName;
+            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return path;
+            return path.Substring(root.Length).TrimStart('\\', '/').Replace('\\', '/');
+        }
+
+        [MenuItem("HoUnityTools/面捕/调试面板", false, 10)]
         public static void ShowWindow() => GetWindow<HoFaceTrackingWindow>("Ho 面捕调试");
 
         private void OnEnable()
@@ -61,7 +76,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             // UAC 弹窗是异步的：每帧问一次提权进程结束没有，结束了才更新状态。
             HoFaceFirewall.Poll();
-            double now = EditorApplication.timeSinceStartup;
+            double now = HoFaceClock.Now;
             if (now - lastRateTime >= 1)
             {
                 long packets = TotalPackets();
@@ -97,15 +112,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             var environment = HoFaceInputEnvironment.instance;
             DrawTitle();
-            DrawConfigSection(environment);
-            DrawParameterSection();
-            DrawDiagnoseSection(environment);
+            // 四栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
+            DrawObjectSection(environment);      // 一、对象：调试对象 / 混合树控制器 / 配置文件对象 / 连接
+            DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥
+            DrawInputSection();                  // 三、参数输入：VTS 传过来的**全部裸参数**（纯调试）
+            DrawDiagnoseSection(environment);    // 四、排查：权限、端口、连接、包统计、问题
         }
 
         private void DrawTitle()
         {
             bool connected = HoFaceInputHub.Connected;
-            double age = HoFaceInputHub.LastFrameTime > 0 ? IFacialMocapReceiver.Now - HoFaceInputHub.LastFrameTime : double.MaxValue;
+            double age = HoFaceInputHub.LastFrameTime > 0 ? HoFaceClock.Now - HoFaceInputHub.LastFrameTime : double.MaxValue;
             string state = !connected ? "已停止"
                 : HoFaceInputHub.LastFrameTime == 0 ? "等待响应"
                 : age > 1 ? "已断流" : "接收中";
@@ -120,22 +137,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         // ══════════════════════════════════════════════════════════════
-        // 配置（手机连接 + 角色，合成一块）
+        // 一、对象栏：三样东西，全部由面板持有（角色上不挂任何组件）
         // ══════════════════════════════════════════════════════════════
         /// <summary>
-        /// 连接手机和挑角色本来是两块，但它们属于同一件事 —— "把输入接到这个角色上"。
-        /// 拆成两块会让首次使用的人在两处来回找，所以合成一块，也是唯一默认展开的分区。
+        /// 三样：**调试对象**（场景里的角色实例）、**面捕混合树控制器**、**配置文件对象**。
+        /// 最后一样是**必须的** —— 没填它，下面三栏全部锁住不让改（配置是这套东西的心脏，
+        /// 空着往下调只会得到一堆看不懂的数字）。
         /// </summary>
-        private void DrawConfigSection(HoFaceInputEnvironment environment)
+        private void DrawObjectSection(HoFaceInputEnvironment environment)
         {
             bool connected = HoFaceInputHub.Connected;
-            var session = HoFaceInputHub.Session(rig);
-            string summary = connected
-                ? (HoFaceInputHub.LastFrameTime == 0 ? "等待响应" : packetRate.ToString("F0") + " 包/秒")
-                : "未连接";
-            if (session != null) summary += " · 驱动中";
+            var session = HoFaceInputHub.Session(settings);
+            string summary = !settings.HasProfile ? "缺配置文件对象"
+                : settings.FaceController() == null ? "缺控制器"
+                : settings.Character() == null ? "缺调试对象"
+                : session != null ? "驱动中" : "就绪";
+            if (session != null && connected) summary += " · 接收中";
 
-            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref configExpanded, "配置", summary, HoConstraintEditorTheme.AccentDriver))
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref configExpanded, "对象", summary, HoConstraintEditorTheme.AccentDriver))
             {
                 // 收起也要报错：真问题不能被折叠藏起来。
                 DrawProblems(session);
@@ -144,9 +163,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             using (HoConstraintEditorControls.Card())
             {
-                // ── 输入环境：有序源列表（**顺序 = 优先级**）────────────────────────────
+                // ── 输入源：有序列表（**顺序 = 优先级**）──────────────────────────────
                 // 合并在 Hub 里按"线名"逐个做：某个线名取**第一个还新鲜、且这一帧带来了它**的源。
-                // 端口故意各用各的（iFacialMocap 固定 49983、VTS 默认 49984），所以两条能同时连着。
+                // 现在只有 VTS 一条，留着列表是为了以后加设备时不动结构。
                 for (int i = 0; i < environment.sources.Count; i++)
                 {
                     var entry = environment.sources[i];
@@ -154,25 +173,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     var live = FindSource(i);
                     using (HoConstraintEditorControls.Row())
                     {
-                        HoConstraintEditorControls.Label("优先级 " + i, HoConstraintEditorTheme.LabelWidthSm,
-                            "越靠前优先级越高：某个线名同时有多个源在发时，取最前面那条。");
+                        // 现在只有一种协议、一条源，所以不写"优先级 N"了 —— 那是多设备才有的概念。
+                        HoConstraintEditorControls.Label("手机 IP", HoConstraintEditorTheme.LabelWidth, SourceTooltip(entry));
                         using (new EditorGUI.DisabledScope(connected))
                         {
-                            EditorGUI.BeginChangeCheck();
-                            bool enabled = HoConstraintEditorControls.Toggle(
-                                HoFaceReceiverFactory.DisplayName(entry.kind), entry.enabled, SourceTooltip(entry));
-                            if (EditorGUI.EndChangeCheck()) { entry.enabled = enabled; environment.Persist(); }
-
                             HoConstraintEditorControls.Gap(6.0f);
                             string edited = EditorGUI.TextField(HoConstraintEditorControls.Next(96.0f), entry.phoneIp, HoConstraintEditorTheme.Field);
                             if (edited != entry.phoneIp) { entry.phoneIp = edited; environment.Persist(); }
 
-                            if (!HoFaceReceiverFactory.FixedPort(entry.kind))
-                            {
-                                HoConstraintEditorControls.Gap(4.0f);
-                                int port = EditorGUI.IntField(HoConstraintEditorControls.Next(56.0f), entry.localPort, HoConstraintEditorTheme.Field);
-                                if (port != entry.localPort) { entry.localPort = Mathf.Clamp(port, 1024, 65535); environment.Persist(); }
-                            }
+                            HoConstraintEditorControls.Gap(6.0f);
+                            int port = EditorGUI.IntField(HoConstraintEditorControls.Next(56.0f), entry.localPort, HoConstraintEditorTheme.Field);
+                            if (port != entry.localPort) { entry.localPort = Mathf.Clamp(port, 1024, 65535); environment.Persist(); }
+
+                            HoConstraintEditorControls.Gap(6.0f);
+                            EditorGUI.BeginChangeCheck();
+                            bool enabled = HoConstraintEditorControls.Toggle("启用", entry.enabled,
+                                "关掉就不启动这一路接收端（比断开更彻底）。");
+                            if (EditorGUI.EndChangeCheck()) { entry.enabled = enabled; environment.Persist(); }
                         }
 
                         HoConstraintEditorControls.Flex();
@@ -183,19 +200,60 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("连接", HoConstraintEditorTheme.LabelWidth, "按上面这份列表把源拉起来。");
-                    if (HoConstraintEditorControls.Button(connected ? "断开全部" : "连接", null, !connected, 76.0f))
+                    HoConstraintEditorControls.Label("混合树控制器", HoConstraintEditorTheme.LabelWidth,
+                        "会话真正跑的那份控制器。在「控制器编辑」页里原地装配；你也可以自己改完指到这里。");
+                    var current = settings.FaceController();
+                    var picked = (RuntimeAnimatorController)EditorGUI.ObjectField(
+                        HoConstraintEditorControls.NextFlexible(90.0f), current, typeof(RuntimeAnimatorController), false);
+                    if (picked != current)
                     {
-                        if (connected) HoFaceInputHub.Disconnect();
-                        else HoFaceInputHub.Connect();
+                        settings.SetFaceController(picked, picked != null ? AssetDatabase.GetAssetPath(picked) : "");
+                        HoFaceDebugHost.Save();
+                    }
+                    if (current == null) HoConstraintEditorControls.Caption("未指定 —— 会话跑不起来");
+                }
+
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("配置文件对象", HoConstraintEditorTheme.LabelWidth,
+                        "**必须**。中间层配置（*.hoface.json）—— Unity 侧与 Warudo 侧读的是同一个文件。");
+                    string editedPath = EditorGUI.TextField(
+                        HoConstraintEditorControls.NextFlexible(70.0f), settings.profilePath, HoConstraintEditorTheme.Field);
+                    if (editedPath != settings.profilePath)
+                    {
+                        settings.profilePath = editedPath;
+                        settings.ReloadProfile();
+                        HoFaceDebugHost.Save();
                     }
 
                     HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("恢复默认源", "回到「VTS 手机在前、iFacialMocap 在后」的默认列表。", !connected, 84.0f))
+                    if (HoConstraintEditorControls.Button("选…", "选一个现有的 .hoface.json。", false, 34.0f))
                     {
-                        environment.sources = HoFaceInputEnvironment.Default();
-                        environment.Persist();
+                        string path = EditorUtility.OpenFilePanel("选中间层配置", Application.dataPath, "json");
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            settings.profilePath = MakeProjectRelative(path);
+                            settings.ReloadProfile();
+                            HoFaceDebugHost.Save();
+                        }
                     }
+
+                    if (HoConstraintEditorControls.Button("新建", "在工程里写一份内置默认配置。", false, 40.0f))
+                    {
+                        string path = EditorUtility.SaveFilePanelInProject(
+                            "新建中间层配置", "ho-2d.hoface.json", "json", "写一份内置默认");
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            System.IO.File.WriteAllText(path, HoFaceProfile.WriteDefaults());
+                            AssetDatabase.Refresh();
+                            settings.profilePath = path;
+                            settings.ReloadProfile();
+                            HoFaceDebugHost.Save();
+                        }
+                    }
+
+                    if (!settings.HasProfile) HoConstraintEditorControls.Caption("必填；空着下面三栏都锁住");
+                    else if (settings.Middleware == null) HoConstraintEditorControls.Caption("读不出来：" + settings.ProfileError);
                 }
 
                 using (HoConstraintEditorControls.Row(true))
@@ -207,49 +265,70 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
+                // ── 连接：**归第一栏**（"连哪台手机"是对象的事；参数栏纯粹用来看值）──────
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("调试组件", HoConstraintEditorTheme.LabelWidth, "挂在角色上的 HoFaceTrackingDebugger。");
-                    rig = (HoFaceTrackingDebugger)EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), rig, typeof(HoFaceTrackingDebugger), true);
-                    HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("当前选择", "用当前选中的物体（含父/子级）里的组件。"))
+                    HoConstraintEditorControls.Label("连接", HoConstraintEditorTheme.LabelWidth, "按上面那份源列表把接收端拉起来。");
+                    if (HoConstraintEditorControls.Button(connected ? "断开" : "连接", null, !connected, 60.0f))
                     {
-                        var go = Selection.activeGameObject;
-                        if (go != null) rig = go.GetComponentInParent<HoFaceTrackingDebugger>() ?? go.GetComponentInChildren<HoFaceTrackingDebugger>();
+                        if (connected) HoFaceInputHub.Disconnect();
+                        else HoFaceInputHub.Connect();
                     }
 
-                    using (new EditorGUI.DisabledScope(Selection.activeGameObject == null))
+                    HoConstraintEditorControls.Gap();
+                    if (HoConstraintEditorControls.Button("恢复默认源", "回到默认的 VTS 手机一条。", !connected, 84.0f))
                     {
-                        if (HoConstraintEditorControls.Button("添加", "给当前选中的物体加一个调试组件。", false, 44.0f) && Selection.activeGameObject != null)
-                        {
-                            var go = Selection.activeGameObject;
-                            rig = go.GetComponent<HoFaceTrackingDebugger>() ?? Undo.AddComponent<HoFaceTrackingDebugger>(go);
-                            Selection.activeGameObject = rig.gameObject;
-                        }
+                        environment.sources = HoFaceInputEnvironment.Default();
+                        environment.Persist();
                     }
+
+                    HoConstraintEditorControls.Flex();
+                    HoConstraintEditorControls.Caption(connected
+                        ? HoFaceInputHub.SourceCount + " 条源 · " + packetRate.ToString("F0") + " 包/秒"
+                        : "未连接");
                 }
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    using (new EditorGUI.DisabledScope(!Application.isPlaying || rig == null))
+                    HoConstraintEditorControls.Label("调试对象", HoConstraintEditorTheme.LabelWidth,
+                        "场景里的角色实例。**角色上不需要挂任何组件** —— 拿它只是为了读骨架与网格。");
+                    var character = settings.Character();
+                    var picked = (GameObject)EditorGUI.ObjectField(
+                        HoConstraintEditorControls.NextFlexible(90.0f), character, typeof(GameObject), true);
+                    if (picked != character) { settings.SetCharacter(picked); HoFaceDebugHost.Save(); }
+
+                    HoConstraintEditorControls.Gap();
+                    if (HoConstraintEditorControls.Button("当前选择", "用当前选中的物体当调试对象。"))
+                    {
+                        if (Selection.activeGameObject != null) { settings.SetCharacter(Selection.activeGameObject); HoFaceDebugHost.Save(); }
+                    }
+
+                    if (character == null && !string.IsNullOrEmpty(settings.characterPath))
+                        HoConstraintEditorControls.Caption("按路径找不到：" + settings.characterPath);
+                }
+
+                using (HoConstraintEditorControls.Row())
+                {
+                    using (new EditorGUI.DisabledScope(!Application.isPlaying || settings == null))
                     {
                         if (HoConstraintEditorControls.Button(session == null ? "开始驱动" : "停止并交还", "播放模式下面捕才真正驱动混合树。停止会把占用的形态键还回去。", session == null, 84.0f))
                         {
-                            if (session == null) HoFaceInputHub.Start(rig);
-                            else HoFaceInputHub.Stop(rig);
+                            if (session == null) HoFaceInputHub.Start(settings);
+                            else HoFaceInputHub.Stop(settings);
                         }
                     }
 
                     HoConstraintEditorControls.Gap();
-                    if (rig != null && HoConstraintEditorControls.Button("选中", "在层级里选中这个角色。", false, 44.0f))
+                    var character = settings.Character();
+                    if (character != null && HoConstraintEditorControls.Button("选中", "在层级里选中这个角色。", false, 44.0f))
                     {
-                        Selection.activeGameObject = rig.gameObject;
+                        Selection.activeGameObject = character;
                     }
 
                     HoConstraintEditorControls.Flex();
                     if (session != null) HoConstraintEditorControls.Caption(session.StateSummary);
                     else if (!Application.isPlaying) HoConstraintEditorControls.Caption("进播放模式后可驱动");
-                    else if (rig == null) HoConstraintEditorControls.Caption("先指定组件");
+                    else if (settings == null) HoConstraintEditorControls.Caption("先指定组件");
                 }
             }
 
@@ -262,7 +341,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             string error = SourceError();
             if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
 
-            string sessionError = HoFaceInputHub.Error(rig);
+            string sessionError = HoFaceInputHub.Error(settings);
             if (!string.IsNullOrEmpty(sessionError)) EditorGUILayout.HelpBox(sessionError, MessageType.Error);
 
             var compiled = session?.Compiled;
@@ -274,98 +353,190 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         // ══════════════════════════════════════════════════════════════
-        // 参数
+        // 二、配置详情栏：这份 profile 吃啥、怎么处理、输出啥
         // ══════════════════════════════════════════════════════════════
-        private void DrawParameterSection()
+        /// <summary>
+        /// 把配置文件逐行摊开：`名字 = 曲线(表达式) + 有序修饰符` —— 也就是 VBridger 的那一层。
+        /// **只读**：改配置去改那个 `.json`（面板不画曲线编辑器，那是文件自己的事）。
+        /// </summary>
+        private void DrawProfileSection()
         {
-            // "收到几路"按**输入行**算：某个形态键有对应输入行、且这一帧真的被喂上了值，才算收到。
-            int received = 0;
-            var live = HoFaceInputHub.Session(rig);
-            if (live != null)
-                foreach (string name in HoFaceTrackingChannels.Names)
-                    if (!float.IsNaN(live.MiddlewareInput(name))) received++;
+            var middleware = settings.Middleware;
+            string summary = !settings.HasProfile ? "先把配置文件对象填上"
+                : middleware == null ? "读不出来"
+                : "输入行 " + middleware.inputs.Count + " · 输出行 " + middleware.outputs.Count;
 
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
-                ref parametersExpanded,
-                "参数",
-                HoFaceInputHub.Connected ? "已收到 " + received + " / " + HoFaceTrackingChannels.Names.Length : "未连接",
-                HoConstraintEditorTheme.AccentOutput))
+                ref profileExpanded, "配置详情", summary, HoConstraintEditorTheme.AccentOutput))
             {
                 return;
             }
 
-            var session = HoFaceInputHub.Session(rig);
             using (HoConstraintEditorControls.Card())
             {
+                if (!settings.HasProfile)
+                {
+                    HoConstraintEditorControls.Caption("对象栏里的「配置文件对象」是必填的；填好之后这里会列出它的全部行。");
+                    return;
+                }
+
+                if (middleware == null)
+                {
+                    EditorGUILayout.HelpBox(settings.ProfileError ?? "配置读不出来。", MessageType.Error);
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(settings.ProfileError))
+                    EditorGUILayout.HelpBox(settings.ProfileError, MessageType.Warning);
+
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Label("筛选", HoConstraintEditorTheme.LabelWidthSm);
-                    search = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), search, HoConstraintEditorTheme.Field);
+                    profileSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), profileSearch, HoConstraintEditorTheme.Field);
                 }
 
-                DrawParameterHeader();
-                scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.Height(Mathf.Max(120.0f, position.height - 300.0f)));
-                for (int i = 0; i < HoFaceTrackingChannels.Names.Length; i++)
-                {
-                    DrawParameterRow(i, session);
-                }
+                profileScroll = EditorGUILayout.BeginScrollView(profileScroll, GUILayout.Height(Mathf.Max(160.0f, position.height - 420.0f)));
+
+                HoConstraintEditorControls.Caption("输入行 —— 手机线名 → 规范名（改名与量纲在这一层）");
+                DrawProfileHeader("规范名", "曲线", "修饰符");
+                foreach (var row in middleware.inputs) DrawProfileRow(row);
+
+                HoConstraintEditorControls.Separator(4.0f, 4.0f);
+
+                HoConstraintEditorControls.Caption("输出行 —— 规范名 → 输出（控制器参数名 / 保留名）");
+                DrawProfileHeader("输出", "曲线", "修饰符");
+                foreach (var row in middleware.outputs) DrawProfileRow(row);
 
                 EditorGUILayout.EndScrollView();
             }
         }
 
-        private void DrawParameterHeader()
+        private static void DrawProfileHeader(string name, string curve, string modifiers)
         {
             using (HoConstraintEditorControls.Row(true))
             {
-                GUI.Label(HoConstraintEditorControls.Next(104.0f), "形态键", HoConstraintEditorTheme.Caption);
-                GUI.Label(HoConstraintEditorControls.Next(38.0f), "模式", HoConstraintEditorTheme.Caption);
-                GUI.Label(HoConstraintEditorControls.Next(46.0f), "原值", HoConstraintEditorTheme.Caption);
+                GUI.Label(HoConstraintEditorControls.Next(130.0f), name, HoConstraintEditorTheme.Caption);
                 HoConstraintEditorControls.Flex();
-                GUI.Label(HoConstraintEditorControls.Next(54.0f), "面捕输入", HoConstraintEditorTheme.Caption);
+                GUI.Label(HoConstraintEditorControls.Next(56.0f), curve, HoConstraintEditorTheme.Caption);
+                GUI.Label(HoConstraintEditorControls.Next(84.0f), modifiers, HoConstraintEditorTheme.Caption);
             }
         }
 
-        /// <summary>
-        /// 一行一个键：名称 / 模式 / 原值 / 横条 / 面捕输入。
-        /// 以前每个键占三行（粗体名 + 模式 + Controller 值），52 个键就是一面墙 —— 这里压成一行。
-        /// </summary>
-        private void DrawParameterRow(int index, HoFaceAnimationSession session)
+        private void DrawProfileRow(HoFaceOutput row)
         {
-            string name = HoFaceTrackingChannels.Names[index];
-            if (!string.IsNullOrEmpty(search) && name.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) return;
-
-            // 「规范值」= 输入行算出来的值（改名与量纲在配置里做完）；没有对应输入行就是「—」。
-            float canonical = session != null ? session.MiddlewareInput(name) : float.NaN;
-            bool received = !float.IsNaN(canonical);
-            float raw = received ? canonical : 0.0f;
-            var channel = FindChannel(name);
-            int mode = channel != null ? (int)channel.mode : 0;
+            if (row == null) return;
+            string name = row.parameter ?? "";
+            string expression = row.expression ?? "";
+            if (!string.IsNullOrEmpty(profileSearch)
+                && name.IndexOf(profileSearch, StringComparison.OrdinalIgnoreCase) < 0
+                && expression.IndexOf(profileSearch, StringComparison.OrdinalIgnoreCase) < 0) return;
 
             using (HoConstraintEditorControls.Row(true))
             {
-                GUI.Label(HoConstraintEditorControls.Next(104.0f), name, received ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
-                GUI.Label(HoConstraintEditorControls.Next(38.0f), Modes[Mathf.Clamp(mode, 0, Modes.Length - 1)], HoConstraintEditorTheme.LabelDim);
-                GUI.Label(HoConstraintEditorControls.Next(46.0f), received ? (raw * 100.0f).ToString("F1") : "—", HoConstraintEditorTheme.Value);
+                GUI.Label(HoConstraintEditorControls.Next(130.0f), name, HoConstraintEditorTheme.Value);
+                GUI.Label(HoConstraintEditorControls.NextFlexible(120.0f), expression, EditorStyles.label);
 
-                Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
-                if (received) HoConstraintEditorControls.Meter(bar, raw, 0.0f, 1.0f, HoConstraintEditorTheme.AccentDriver);
-                else if (Event.current.type == EventType.Repaint) EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
-
-                float effective = session != null ? session.Effective[index] : float.NaN;
-                GUI.Label(
-                    HoConstraintEditorControls.Next(54.0f),
-                    float.IsNaN(effective) ? "—" : effective.ToString("F3"),
-                    session != null ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+                string curve = row.curve == null || row.curve.length == 0 ? "—" : row.curve.length + " 点";
+                GUI.Label(HoConstraintEditorControls.Next(56.0f), curve, HoConstraintEditorTheme.LabelDim);
+                GUI.Label(HoConstraintEditorControls.Next(84.0f), ModifierText(row), HoConstraintEditorTheme.LabelDim);
             }
         }
 
-        private HoFaceChannel FindChannel(string shape)
+        private static string ModifierText(HoFaceOutput row)
         {
-            if (rig == null) return null;
-            foreach (var channel in rig.channels)
-                if (channel != null && channel.shape == shape) return channel;
-            return null;
+            if (row.modifiers == null || row.modifiers.Count == 0) return "—";
+            var parts = new System.Collections.Generic.List<string>();
+            foreach (var modifier in row.modifiers)
+            {
+                if (modifier == null) continue;
+                switch (modifier.kind)
+                {
+                    case HoFaceModifierKind.Smooth: parts.Add("平滑 " + modifier.seconds.ToString("0.##") + "s"); break;
+                    case HoFaceModifierKind.Delay: parts.Add("延迟 " + modifier.seconds.ToString("0.##") + "s"); break;
+                    case HoFaceModifierKind.Steps: parts.Add("分档 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 档"); break;
+                }
+            }
+            return parts.Count == 0 ? "—" : string.Join(" → ", parts.ToArray());
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // 三、参数输入栏：VTS 传过来的**全部裸参数**
+        // ══════════════════════════════════════════════════════════════
+        /// <summary>
+        /// **纯调试**：只看 VTS 传过来的裸值。名字就是手机发来的样子，不做规范名、不做量纲、
+        /// 不画曲线、没有模式与覆盖。连接那些操作在**对象栏**（那是"连哪台手机"的事）。
+        /// </summary>
+        private void DrawInputSection()
+        {
+            int count = HoFaceInputHub.MergedValues.Count;
+            string summary = HoFaceInputHub.Connected
+                ? (count > 0 ? count + " 个线名" : "等待响应")
+                : "未连接";
+
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
+                ref parametersExpanded, "参数输入", summary, HoConstraintEditorTheme.AccentDriver))
+            {
+                return;
+            }
+
+            using (HoConstraintEditorControls.Card())
+            {
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("筛选", HoConstraintEditorTheme.LabelWidthSm);
+                    inputSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), inputSearch, HoConstraintEditorTheme.Field);
+                }
+
+                if (count == 0)
+                {
+                    HoConstraintEditorControls.Caption(HoFaceInputHub.Connected
+                        ? "还没收到包 —— 看第四栏「排查」。"
+                        : "没连上。手机那边打开「3rd Party PC Clients」，在第一栏填手机 IP 再点连接。");
+                    return;
+                }
+
+                inputScroll = EditorGUILayout.BeginScrollView(inputScroll, GUILayout.Height(Mathf.Max(140.0f, position.height - 420.0f)));
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    GUI.Label(HoConstraintEditorControls.Next(140.0f), "线名（手机原样）", HoConstraintEditorTheme.Caption);
+                    HoConstraintEditorControls.Flex();
+                    GUI.Label(HoConstraintEditorControls.Next(64.0f), "值", HoConstraintEditorTheme.Caption);
+                    GUI.Label(HoConstraintEditorControls.Next(56.0f), "距上帧", HoConstraintEditorTheme.Caption);
+                }
+
+                var names = new System.Collections.Generic.List<string>(HoFaceInputHub.MergedValues.Keys);
+                names.Sort(StringComparer.Ordinal);
+                double now = HoFaceClock.Now;
+                foreach (string wire in names)
+                {
+                    if (!string.IsNullOrEmpty(inputSearch) && wire.IndexOf(inputSearch, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    float value = HoFaceInputHub.MergedValues[wire];
+                    double at = HoFaceInputHub.ReceivedAt(wire);
+                    double age = at > 0 ? now - at : double.MaxValue;
+                    bool fresh = age <= Mathf.Max(0.1f, settings.staleSeconds);
+
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        GUI.Label(HoConstraintEditorControls.Next(140.0f), wire,
+                            fresh ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+
+                        Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
+                        // 0..1 的画条（形态键就是这个量纲）；头姿、毫秒时间戳这些超范围的只显示数字。
+                        if (value >= 0f && value <= 1f)
+                            HoConstraintEditorControls.Meter(bar, value, 0f, 1f, HoConstraintEditorTheme.AccentDriver);
+                        else if (Event.current.type == EventType.Repaint)
+                            EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
+
+                        GUI.Label(HoConstraintEditorControls.Next(64.0f), value.ToString("F4"),
+                            fresh ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+                        GUI.Label(HoConstraintEditorControls.Next(56.0f),
+                            at <= 0 ? "—" : age.ToString("F1") + "s", HoConstraintEditorTheme.LabelDim);
+                    }
+                }
+
+                EditorGUILayout.EndScrollView();
+            }
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -402,7 +573,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (HoFaceInputHub.LastFrameTime != 0) return "";
             long rejected = TotalRejected();
             if (rejected > 0 && !string.IsNullOrEmpty(RejectedFrom())) return "rejected:" + RejectedFrom();
-            return IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt >= 3 ? "silent" : "";
+            return HoFaceClock.Now - HoFaceInputHub.ConnectStartedAt >= 3 ? "silent" : "";
         }
 
         /// <summary>收起状态下也要能看出"现在有没有事"。</summary>
@@ -412,7 +583,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             long rejected = TotalRejected();
             if (rejected > 0 && HoFaceInputHub.LastFrameTime == 0) return "来源不符 ×" + rejected;
             if (HoFaceInputHub.LastFrameTime != 0) return "正常";
-            return "等了 " + (IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt).ToString("F0") + " 秒";
+            return "等了 " + (HoFaceClock.Now - HoFaceInputHub.ConnectStartedAt).ToString("F0") + " 秒";
         }
 
         private void DrawFirewallRow()
@@ -483,7 +654,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 return;
             }
 
-            if (IFacialMocapReceiver.Now - HoFaceInputHub.ConnectStartedAt < 3) return;
+            if (HoFaceClock.Now - HoFaceInputHub.ConnectStartedAt < 3) return;
 
             using (HoConstraintEditorControls.Row())
             {
@@ -566,7 +737,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Label(source.DisplayName, HoConstraintEditorTheme.LabelWidthSm, source.Hint);
-                    double age = source.LastFrameTime > 0 ? IFacialMocapReceiver.Now - source.LastFrameTime : double.MaxValue;
+                    double age = source.LastFrameTime > 0 ? HoFaceClock.Now - source.LastFrameTime : double.MaxValue;
                     HoConstraintEditorControls.Caption(age > 1
                         ? (source.LastFrameTime > 0 ? "断流 " + age.ToString("F1") + " 秒" : "还没收到包")
                         : "接收中");
@@ -584,7 +755,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             // 姿态显示用**输入行算出来的规范值**（面板与表达式看到的是同一个数）。
-            var session = HoFaceInputHub.Session(rig);
+            var session = HoFaceInputHub.Session(settings);
             if (session == null) return;
             DrawPose(session, "头姿", "headRotX", "headRotY", "headRotZ");
             DrawPose(session, "头位", "headPosX", "headPosY", "headPosZ");
@@ -616,7 +787,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>手机长什么样、原值/路由值分别是什么 —— 平时不看，放折叠里。</summary>
         private void DrawDebugDetails()
         {
-            var session = HoFaceInputHub.Session(rig);
+            var session = HoFaceInputHub.Session(settings);
             if (session?.Compiled == null) return;
             using (HoConstraintEditorControls.Row(true))
             {

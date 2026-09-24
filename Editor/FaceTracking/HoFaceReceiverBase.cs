@@ -112,8 +112,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public long Requests => Interlocked.Read(ref requests);
         public double LastFrameTime { get { lock (sync) return lastFrameTime; } }
 
-        /// <summary>共享时钟：所有接收端与面板都用它算"多久没收到包了"。</summary>
-        public static double Now => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+        /// <summary>
+        /// 共享时钟：接收端（**后台线程**给包打时间戳）、会话（判"这一包新不新鲜"）、面板（包速率）都读它。
+        /// **唯一定义在 <see cref="HoFaceClock"/>** —— 这里只是别名，不许另起一个实现：
+        /// 两个时钟只要差一个恒定偏移，会话那边的差值就永远越界，表现是"包到了、合并里也有，通道就是不写"。
+        /// </summary>
+        public static double Now => HoFaceClock.Now;
 
         public void Start(HoFaceSourceEntry entry)
         {

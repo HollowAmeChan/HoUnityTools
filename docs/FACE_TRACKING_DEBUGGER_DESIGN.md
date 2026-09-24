@@ -2,6 +2,24 @@
 
 日期：2026-09-22。状态：**P0–P2 已实现并在独立 Unity 工程中跑通自动化验收；P3 的挂钩已就位但未做真机与人类眼球骨骼验收；真机（手机）联调未做**。
 
+> ## ⚠️ 架构已变更：**角色上不再挂任何组件**（目标态"裸角色预制件 + 菜单接管调试"已落地）
+>
+> | 以前 | 现在 |
+> |---|---|
+> | 角色上挂 `HoFaceTrackingDebugger`（MonoBehaviour） | **已删除**。角色预制件上零组件、零引用 |
+> | 组件持有配置，并在 `Update`/`LateUpdate` 里发 tick | `HoFaceDebugSettings`（普通类，落盘成 `Assets/HoFaceDebugSettings.json`）+ `HoFaceDebugHost`（`[InitializeOnLoad]`，拥有每帧 tick） |
+> | 组件 Inspector（40 KB） | 已删除，UI 并进面板 |
+> | 面板三段（配置 / 参数 / 排查） | 面板四节：**对象**（调试对象 / 混合树控制器 / 配置文件对象 / 输入源 + 连接）→ **配置详情**（profile 逐行摊开）→ **参数输入**（纯调试：只看 VTS 裸值）→ **排查** |
+> | 混合树装配混在组件 Inspector 里 | 独立的工具页 **`HoUnityTools/面捕/控制器编辑`**（从预置目录复制一份控制器到工程 → 就地填动画 → 重绑网格）。**面捕这套的三个入口统一收在 `HoUnityTools/面捕/` 下面**：调试面板 / 控制器编辑 / 配置文件 |
+> | 输入协议：iFacialMocap + VTS | **只留 VTS**。iFacialMocap 给不出 `FaceFound`，而 Warudo 侧"丢追回中性"整条机制就靠它 |
+> | profile 是 `TextAsset` | profile 是**磁盘文件路径**：Unity 侧与 Warudo 侧读的是**同一个 `.hoface.json`** |
+> | 影子 Animator 靠 Unity 自己求值（Update 设参数 / LateUpdate 抄回） | 会话设完参数后自己 `shadow.Update(0f)` → **一次同步调用**里完成"设参数 → 求值 → 读值"，不再依赖回调顺序 |
+>
+> 所以：本文里讲**组件、组件面板分区、iFacialMocap 连接流程**的部分**都已作废**（§4.2 / §5.1 / §5.2 已就地标注）；
+> **机制层仍然成立** —— 影子求值、占用表、为什么不用 PlayableGraph、门控与交还的语义（§6 / §7 / §8）。
+>
+> Warudo 侧的最终连线（2 个 mod / 5 个节点）见 [面捕方案总览](FACE_TRACKING_WARUDO_ROUTE.md) §2。
+
 > **部分过期（2026-09-23）**：这份里的**机制层**（影子台、占用表、为什么不用 PlayableGraph、
 > 门控与交还的语义）仍然成立；但**状态、UI 与操作流程**那部分已经变了 ——
 > 现状看 [面捕工作流](FACE_TRACKING_WORKFLOW.md)（五个分区/六个动作）、
@@ -77,7 +95,12 @@ ARKit 基础预设的系数中性值为 0，输出最多 52 个模型实际存�
 
 原始值、标准化值、门控后值和 Controller 实值分开显示。首期预设默认不额外平滑，避免手机已有处理与 Unity 处理叠出延迟；需要时由用户开启。头姿和眼球旋转字段可监视，但默认不写 Transform，保留给 LookAt。
 
-### 4.2 iFacialMocap 首期连接流程
+### 4.2 iFacialMocap 首期连接流程 —— ⛔ **已作废**
+
+> ⛔ **整节作废**：iFacialMocap 支持**已从包里删除**（`IFacialMocapReceiver.cs` 连同它的默认源条目）。
+> 原因见文首那张表 —— 它给不出 `FaceFound`，而 Warudo 侧"丢追回中性"整条机制靠它。
+> 现在只剩 VTS 手机那一条请求式协议：**我们每秒向 `手机:21412` 发一次请求，它把数据发回请求的源 IP**，
+> 手机那边没有"目标地址"可填。下面这段文字仅作历史保留。
 
 ```text
 Unity 先监听本机 UDP 49983
@@ -105,9 +128,17 @@ Unity 先监听本机 UDP 49983
 [面捕的 OSC / VRCFT 后端：调查保留（已归档）](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md) §2。
 一句话：**首期不接 VRCFT**；将来接的时候，别把它当成"多开一个 UDP 端口"。
 
-## 5. 用户看到的组件与全局面板
+## 5. 用户看到的组件与全局面板 —— ⛔ **本节已作废**
 
-### 5.1 角色组件 `HoFaceTrackingDebugger`
+> ⛔ **§5.1 / §5.2 均作废**：角色上那个组件已经删掉了，面板也从三段变成四节。
+> 现状见文首那张表，以及：
+> - `Editor/FaceTracking/HoFaceTrackingWindow.cs` —— 四节面板
+> - `Editor/FaceTracking/HoFaceDebugSettings.cs` / `HoFaceDebugHost.cs` —— 全局设置与宿主
+> - `Editor/FaceTracking/HoFaceControllerToolWindow.cs` —— 「控制器编辑」工具页（`HoUnityTools/面捕/控制器编辑`）
+>
+> 下面两节只作历史保留。
+
+### 5.1 角色组件 `HoFaceTrackingDebugger`（已删除）
 
 挂在角色根或工具子物体上，显式选择 **Target Animator**。绑定根就是该 Animator 的 Transform；不允许随便选一个不一致的“根”而隐式更改 Unity 的绑定规则。
 
@@ -357,7 +388,7 @@ Editor/FaceTracking/
 Editor/AnimationTools/              通用动画工具（不属于面捕；面捕只是它们的用户）
   HoBlendShapeClipBuilder.cs        形态键基础动画：每个键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）
   HoBlendShapeClipBuilderWindow.cs  它的窗口（菜单 HoUnityTools/形态键基础动画）
-Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（121 条断言）
+Tests~/FaceTrackingValidation.cs   独立验证工程的批处理用例（114 条断言，2026-09-25 Unity 6000.3.15f1 全绿）
 ```
 
 网络接收和调试启动只存在于编辑器流程，组件随角色导出时不自动开端口。由于本仓库还服务 Warudo 构建，添加新 Runtime 组件时需验证 FastBuild 对组件和程序集的收集；正式运行时面捕宿主另定范围。
@@ -411,7 +442,14 @@ P0–P2 构成第一版可用的 **iFacialMocap 直连面捕调试组件**。完
 
 ## 11. 仍须实测的事项
 
-已完成的验证：独立 Unity 6000.3 工程里用**本地回环 UDP** 替代手机，跑通了协议解析、接收器、装配（模板整份复制 / 按槽位填文件夹动画 / 外部片段复制 / 重绑驱动对象 / 覆盖不改 GUID / 缺槽位如实报出）、形态键基础动画生成器（一个键一份片段、一个片段写多网格、重跑不改 GUID）、**中间层配置文件**（表达式求值器、曲线、Smooth 修饰符、JSON 读写往返、UDP → 配置 → 混合树整条链）、绑定重映射、混合树求值、输入门控、键占据与交还、停止恢复，**121 条断言全绿**。
+已完成的验证（**组件拆掉、改成"裸角色 + 全局面板"之后重跑过**）：独立 Unity 6000.3.15f1 工程里用**本地回环 UDP** 替代手机，跑通了协议解析、接收器、装配（模板整份复制 / 按槽位填文件夹动画 / 外部片段复制 / 重绑驱动对象 / 覆盖不改 GUID / 缺槽位如实报出）、形态键基础动画生成器（一个键一份片段、一个片段写多网格、重跑不改 GUID）、**中间层配置文件**（表达式求值器、曲线、Smooth 修饰符、JSON 读写往返、UDP → 配置 → 混合树整条链 —— 线名映射走配置文件里的**输入行**，不再有内置兜底）、绑定重映射、混合树求值、键占据与交还、停止恢复，**114 条断言全绿**（`HO_FACE_TESTS_ALL_PASSED`，2026-09-25）。
+
+> 这一轮抓到的两个真问题，都记在代码里了：
+> ① **两个时钟**：会话判"这一包新不新鲜"读 `EditorApplication.timeSinceStartup`，而接收端在**后台线程**给包打的时间戳读 `Stopwatch` —— 差一个恒定偏移，症状是"包到了、合并里也有、通道就是不写"。
+> 现在唯一定义在 `HoFaceClock`（`Stopwatch` 实现：任何线程可读、单调、域重载不影响）。
+> 用例里那条 `HO_LIVE` 日志就是为这类故障留的（打印接收端统计 + 合并值 + 输入行落点）。
+> ② **配置文件一旦指定，线名 → 规范名就只认它的输入行**（内置默认表只在"还没指配置文件"时兜底）：
+> 夹具那份只有输出行的配置会让实时那条链静默失效 —— 用例现在显式断言输入行也读进来了。
 
 仍然不是既成结论的：
 

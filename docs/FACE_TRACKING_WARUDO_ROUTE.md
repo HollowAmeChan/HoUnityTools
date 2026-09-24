@@ -1,168 +1,350 @@
-﻿# 面捕在 Warudo 的路线（新路线：独立状态机 → 翻译成纯键值与骨骼动画）
+﻿# 面捕方案总览：VTS 裸输入 → 中间层反算 → 喂进 Warudo 官方面捕蓝图
 
-> **一句话**：旧路线是"完全绕过 Warudo 蓝图、自己去做动作/表情/状态操作"；
-> 新路线是"**独立脚本跑状态机，把它翻译成 Warudo 喜欢的纯键值动画 + 纯骨骼旋转/移动动画**"，
-> 用**两到三个互不挂载的 mod** 达成效果。
->
-> 新路线的两个好处：① 角色上**只要键够多，就能吃任意方案的面捕** —— 换方案只是换个输入节点/mod；
-> ② Unity 内部调试**极其方便，而且不在角色上留任何污染**（角色 mod 干净得可以原样上传）。
-
-本文记录这条路线**为什么成立、约束在哪、产物怎么分**，以及它前面那串决定（门控/眼睑/输入层）的关系。
-取证来源：`.warudo-mod-research/`（另一路 Warudo 调研，含官方手册抓取、本机 Warudo 0.15.0 程序集元数据扫描、
-`WarudoPluginExamples` 官方插件源码结构）；参数标准见 [参数标准表](PARAMETER_STANDARDS.md)。
+> 本文是这套面捕方案的**权威路线图**。带 ✅ 的是有本机实测/转储依据的；❓ 是未验证的推断。
+> 环境：Warudo 0.15.0 + Mod Tool 0.14.4.8（Warudo 侧）/ Unity 6000.3.15f1（HoUnityTools 包侧）。
+> 取证来源：真机程序集反射转储（`.research/warudo-knobs/`，含 437 条 `typeId → 类型` 对照）、
+> 运行期探针（`Mods-Ho/HoFaceTracking`）、以及**本机场景文件本身**
+> `Warudo_Data/StreamingAssets/Scenes/DefaultScene.json`。参数标准见 [参数标准表](PARAMETER_STANDARDS.md)。
 
 ---
 
-## 1. 两条路线
+## 0. 一句话
 
-| | **旧路线**（绕过 Warudo 蓝图） | **新路线**（说它的语言） |
-| --- | --- | --- |
-| 谁在算 | 我们的脚本自己算完，直写模型 renderer，谁也管不着 | 我们的脚本跑**状态机**，把结果翻译成"键值 + 骨骼旋转/移动"，**喂进 Warudo 的 Tracking 层** |
-| 和 Warudo 的关系 | 我不理你，你也别管我 | 我说你的语言：键走 `Set Character Tracking BlendShapes`、骨骼走 `Override Character Bone Rotation Offsets` |
-| 角色 mod | 挂着我们的组件 | **不挂任何组件**，只要键足够多 |
-| 调试 | 只能在 Unity 里挂组件试 | Unity 面板全局调试（无组件）＋ 真机同一个核心 |
-| 换面捕方案 | 要改角色上的东西 | **只换输入那一环**（mod/节点） |
+**VTS 裸输入 → 中间层配置映射成干净参数（VB 那样的输入行）→ 我们自己的混合树控制器算 →
+反算成"这个角色身上实际做了什么" → 直接喂 Warudo 官方面捕蓝图的下游节点。**
 
-两条路线的分歧点其实只有一句话：**要不要保留"树"**。新路线保留（树是我们真正值钱的东西：
-1D/2D 混合、姿势表、门控、中间层那套经验）；而"喂进它的 Tracking 层"意味着它的**权重混合、整体重置、
-丢脸交还**照样管着我们 —— 这正是它给动捕留的正门（见 §4），所以我们既保住树，也不必自己造那套管理。
+没有我们发明的标准名层。输出的键就是角色上真实存在的键。
 
 ---
 
-## 2. 产物划分（2～3 个 mod）
+## 1. Unity 侧（HoUnityTools 包）
 
-| # | 产物 | 内容 | 为什么这么切 |
-| --- | --- | --- | --- |
-| ① | **角色 mod**（常规角色） | Unity Prefab `Character` + humanoid + Animator，**不挂我们的任何组件**，只要求键够多（ARKit 52 起） | 角色越干净越好上传、越能复用；键是唯一的契约 |
-| ② | **处理链 mod**（输入 + 中间层 + 树 + 翻译） | 收数据 → 读中间层配置（**构建期写死**）→ 参数 → 自己的状态机求值 → 翻译成键值/骨骼 → **喂进角色的 Tracking 层** | 这是"新路线"的本体；它一个 mod 就能搞定全部处理 |
-| ③ | **接收器 mod**（可选） | 只做"某种面捕方案 → 规范值"（像官方 receiver mod 那样，可注册成一种 tracking 方式） | 让"换方案"变成"换个 mod"；**前提是跨 mod 接口能立起来**（见 §5 未决项） |
-
-**Unity 侧另有两个产物**（不进任何 mod）：
-
-- `HoFaceTracking`：**极薄的运行时外壳** —— 运行时把（装配好的）控制器接到自己的影子上跑起来，
-  再把结果写回真实模型。它不含输入、不含中间层、不含配置。
-- **面捕调试面板**：**纯编辑器全局状态**（不是组件）。它同时扮演"输入 + 中间层 + 观察者"，
-  直接驱动上面那个薄外壳。删掉它，角色上什么都不剩 —— 这就是"debugger"这个名字该有的样子。
+* **角色：正常做，不挂任何面捕相关组件。** 这是硬约束 —— 它模拟 Warudo 侧"不耦合进角色 mod"。
+* **调试走一个专用面板**（不是挂在角色上的组件）。它吃三样：
+  1. **一个新的控制器**（带混合树）—— Unity 侧控制器能跑；
+  2. **一份裸参数处理配置**（中间层：线名 → 规范名的输入行 + 表达式 / 曲线 / 有序修饰符）；
+  3. **连接手机设备的能力**（VTS 手机 / iFacialMocap，UDP）。
+* **运行中完整算一遍，再纯写入到角色预制件上**：影子 Animator 跑控制器 → 取出结果
+  （形态键权重、骨头旋转、根位置）→ 直接写角色。**不许借角色自己的 Animator。**
+* 为什么必须这样：Warudo 里我们的控制器对**本体无效**，只能纯写入；Unity 侧的调试环境
+  必须模拟同一个约束，否则调出来的东西搬过去就不一样。
 
 ---
 
-## 3. Warudo 侧的硬约束（决定了产物怎么切）
+## 2. Warudo 侧：最终连线（**5 个节点，两个 mod**）
 
-来自 `.warudo-mod-research/warudo-mod-build-pipeline-research.md`（官方 mod-sdk / plugin-mod 页原文）：
+```
+[HoVtsTrack mod]                    [HoVtsTrackController mod]              [官方节点 ×3]
+  HoVts 接收器      ──原始值/状态/调试──▶  中间层+控制器（合并成一个节点）  ──▶ 设置角色面部追踪 BlendShape 列表
+                   （裸线名原样交出）       内部 = 我们的中间层配置 + 控制器         覆盖角色骨骼旋转偏移列表
+                                          输出 = BS 列表 / 骨骼旋转偏移 / 根位置     覆盖角色根位置
+```
 
-| 约束 | 对我们意味着什么 |
-| --- | --- |
-| **不支持 `.asmdef`**（"C# scripts covered by the assembly definitions will not be packaged into the mod"） | 我们包里所有脚本都在 asmdef 下 → **给 Warudo 的 `.cs` 必须是脱离 asmdef 的散文件**（构建时按类型挑出来放进 mod 文件夹） |
-| **不支持 ScriptableObject** | 配置只能是**组件的序列化字段**或 **TextAsset**；"工程设置里一份输入环境"这种设计在 Warudo 里不成立 |
-| **不支持已编译 DLL**（只能 `.cs` 源码，UMod 用 Roslyn 现场编） | 两个 mod 各自编译成不同程序集 → **同名类型是两个不同的 Type** → **跨 mod 不能 `GetComponent<我们的类型>()`** |
-| **不能用反射、`System.IO`、`UnityEditor`** | 运行时路径不能碰文件与反射；接收端用 `System.Net.Sockets` + 线程是允许的（官方 VMC 插件就这么干） |
-| 官方插件骨架（VMC） | `Plugin.cs`（`[PluginType]`）+ `Assets/*Asset.cs` + `Behaviors/*Behavior.cs` + `Nodes/`（可选）+ `Localizations/`；VMC 靠注册 `FaceTrackingTemplate` 把自己变成"可选的面捕方式" |
+* **`HoVtsTrack`** —— **通用 Warudo 插件**：一个接收器节点，只做"读值 + 直通传参"，
+  外加状态与调试输出。**写一次以后基本不用再动。**
+* **`HoVtsTrackController`** —— 语义上同样通用，但**带着我们指定的中间层配置 + 动画控制器**：
+  内部在影子上跑控制器、把结果反算出来，直接产出 BS 列表 / 骨骼旋转偏移 / 根位置。
+* 应用端不碰 Warudo 的通用机械（`SWITCH_*` / `SMOOTH_*` / `MERGE_*` / `EMPTY_*` /
+  `DEFAULT_*` / `LOOK_AT`），只留那三个官方应用节点。
 
-**跨 mod 的唯一可用接口是"两边都引用的类型"**：Unity 原生类型（`Animator` / `Transform` /
-`SkinnedMeshRenderer`）与 Warudo 自有类型（`Warudo.Core` 里的 `Character` / `Asset` / `Node`）。
-我们自己的类型跨不过去 —— 这是产物划分的硬边界。
+### 2.1 应用节点的字段：两处必须知道的默认值
 
----
+| 节点 | 关键字段 | 官方默认 | 说明 |
+|---|---|---|---|
+| 设置角色面部追踪 BlendShape 列表 | `BlendShapes` | — | 键就是**角色自己的形态键名** |
+| 覆盖角色骨骼旋转偏移列表 | `BoneRotationOffsets` | — | **偏移**语义：单位四元数 = 不改那根骨头 |
+| 覆盖角色根位置 | `RootPosition` / `RootPositionWeight` / `Immediate` / `AllowFloating` | 全 `0` / `false` | ⚠️ **权重默认是 `0.0`，不是 1** —— 留空 = 这个节点永远不生效。官方图里它是**被接线驱动的**（`SWITCH_FLOAT.Output → RootPositionWeight`，即 `1 − IsTracked`） |
 
-## 4. Warudo 自己那一层是什么（我们要绕过的对象）
+⚠️ **"根位置的值本身能不能表达 0 权重"：按下面 §2.2 的规律，几乎可以肯定"不能"。**
 
-从本机 Warudo 0.15.0 程序集扫描（`.warudo-mod-research/.data/api-scan/api-Warudo.Plugins.Core.txt`）：
+### 2.2 权重的分布规律（顺带解掉"根位置是绝对还是增量"）
 
-| 类别 | 成员 |
-| --- | --- |
-| 注册"一种追踪方式" | `RegisterCharacterTrackingTemplate` / `UnregisterCharacterTrackingTemplate` / `CreateCharacterTrackingTemplate` / `AutoCompleteCharacterTrackingTemplates` |
-| 混合键层 | `BlendShapeEntry` / `IBlendShapeEntry` / `IBlendShapeEntryProvider`；`AddBlendShapeCurve` / `RemoveBlendShapeCurve`；`UpdateBlendShapes` / `ApplyBlendShapeEntry` |
-| 重置/开关 | `ResetBlendShapes` / `ResetBlendShapesNextFrame` |
-| 骨骼与根 | `OverrideBonePositions` / `OverrideBonePositionWeights` / `OverrideBoneRotations` / `OverrideBoneRotationWeights` / `OverrideRootPosition` |
-| VRM 兼容 | `GetUseVRMBlendShapeProxy` / `GetVRMBlendShapeClip` / `VrmBlendShapeClips` |
+把四个覆盖节点的字段摆一起，规律立刻出来 —— **权重只出现在"值是绝对的"那种节点上；
+凡是增量的写法都有个天然的"不发表意见"的值，所以不需要权重**：
 
-蓝图侧这两个节点名不是"一个给我们、一个给它们"，而是**两种写语义**：
+| 节点 | 值字段 | 权重 | 为什么 |
+|---|---|---|---|
+| 覆盖角色骨骼旋转 | `Quaternion[] BoneLocalRotations`（**绝对**） | `Single[] BoneRotationWeights` —— **逐骨头一个** | 绝对值得能说"第 7 根别动"，一个标量做不到 |
+| 覆盖角色骨骼位置 | `Vector3[] BoneLocalPositions`（**绝对**） | `Single[] BonePositionWeights` —— 逐骨头 | 同上 |
+| 覆盖角色骨骼旋转偏移 | `Quaternion[] BoneRotationOffsets`（**增量**） | **没有** | 单位四元数本身就是"不改" |
+| 覆盖角色根位置 | `Vector3 RootPosition` | `Single RootPositionWeight` —— 一个标量 | 根只有一根，所以一个值配一个权重 |
 
-| 节点 | 语义 | 谁用 |
-| --- | --- | --- |
-| `Set Character BlendShape` | **直接写那一格**（基础层，设一次） | 脚本化 / 表情式的写入 |
-| **`Set Character Tracking BlendShapes`** + `Override Character Bone Rotation Offsets` + `Override Character Root Position` | **动捕输入层**：每帧喂、按 Weight 与动画混合、可整体交还 | **动捕 / 面捕的正门** |
+→ **`RootPosition` 有权重、名字也不叫 `...Offset`，所以它极可能是"绝对值"**
+（❓ 仍未实测；这条是从整个 API 的权重分布规律推的，比单看签名强）。
+若成立：`(0,0,0)` + 权重 1 不是"不加偏移"，而是**"断言根在原点"** ——
+**能表达 mute 的只有权重，值本身表达不了**（那个权重在语义上就是**节点级的 mute**）。
 
-手册那页官方动捕示例的原文就是整条链：
+实测判据（一分钟、不用构建）：`RootPosition` 设 `(0,0,0)`、权重设 `1`，给角色放一段
+**带位移**的动作，看位移还在不在 —— 还在 = 增量语义（值够用、权重多余）；
+被钉住 = 绝对语义。
 
-> "for every frame, we want to update the character's blendshapes (**Set Character Tracking BlendShapes**),
-> bones (**Override Character Bone Rotation Offsets**), and root position (**Override Character Root Position**)."
-
-配套的 `Reset Character Tracking BlendShapes` / `Reset Overridden Character Bones` 就是"把控制交还"的开关；
-骨骼一律带 **Weight**。
-
-**结论**：Warudo 抱的不是一个 Unity `AnimatorController`，而是
-**"每个角色一份追踪条目（键 + 曲线 + 权重）+ 骨骼覆盖（四元数 + 权重）+ 根位置覆盖"**，
-由它每帧 apply、可整体重置。它的动画则是 `AnimationClip`（`CharacterAnimation` mod 类型），不是用户的控制器资产。
-
-### 我们**全部走 Tracking 层**（不是绕过它）
-
-既然动捕的正门就是 Tracking 层，我们就把出口接在这一层，于是"它自己那套管理"直接归我们享用：
-
-| 机制 | 谁提供 |
-| --- | --- |
-| 总开关 / 交还与重置 | **它**：丢脸时我们停止写并调 `Reset Character Tracking BlendShapes`（骨骼同理） |
-| 与动画/表情的**权重混合** | **它**：`BlendShapeEntry` 与骨骼覆盖都带 Weight |
-| 键争用 | **基本消失**：动捕在这层只有一个来源；我们注册成 tracking template 后，用户在面捕下拉里选的就是我们这套，不会两边同时写（**权限这一点仍要实测**） |
-| VRM 兼容 | **它**：`GetUseVRMBlendShapeProxy` / `GetVRMBlendShapeClip` |
-
-**还属于我们自己的只剩四件**（都绕不开）：
-
-1. **树跑在哪** —— 我们的树要用我们自己的控制器，所以仍要自己的影子 Animator（Warudo 里自建 Animator 已确认可行）。
-2. **丢脸的策略** —— "发中性"还是"停止写并 reset"：产品选择（我们已有断流等待/回中性两个全局参数），机制归它。
-3. **输入 + 中间层** —— Unity 侧是面板调试；Warudo 侧是构建期写死的同一份配置。
-4. **每帧的翻译** —— 把树的结果按名字喂进 `Set Character Tracking BlendShapes` 与骨骼覆盖（本来就要写，只是目标从 renderer 换成它这一层）。
-
-> ⚠️ **上一版本文写错过一句**：曾把"总开关/重置/权重/键争用"列成"绕过它之后我们必须自己补三件事"。
-> 那是**直写真值到 renderer** 那条路（`SetBlendShapeWeight`）的代价，不是这两个节点存在导致的。
-> 走 Tracking 层就没有这些负担 —— 记在这里免得后人照错的记。
+**这一条不影响面捕**：面捕本来没有根运动，所以权重填 1 + 值恒为原点在"只有面捕"的场景里
+看不出差别。真要做根运动时改值即可，连线不用动。
 
 ---
 
-## 5. 出口形式（我们的树 → Warudo 的 Tracking 层）
+## 3. 官方蓝图解剖（★ 这一节是设计的直接依据）
 
-| 我们的结果 | 翻译成 | 为什么 |
-| --- | --- | --- |
-| 形态键权重 | **`Set Character Tracking BlendShapes`**（一组 `键名 + 权重`，按名字） | 这是动捕的正门；真值直接进它的追踪层，混合/重置/交还都归它 |
-| 头/颈/眼球等骨骼 | **`Override Character Bone Rotation Offsets`**（+ Weight；必要时 `Override Character Root Position` / `Override Bone Positions`） | 直接写 `Transform.localRotation` 会被它的动画/IK 覆盖；"Offsets" 是相对动画的偏移，正好是动捕语义（坐标系待实测） |
-| 丢脸 / 交还 | **停写 + `Reset Character Tracking BlendShapes` / `Reset Overridden Character Bones`** | 用它的机制交还控制，而不是自己造一套开关 |
-| 树本身 | 跑在**我们自己的影子 Animator** 上（不进角色控制器、不求合并） | 角色 mod 保持零组件；我们的树原样复用 |
+✅ **证据**：本机场景 `DefaultScene.json` 里那张图 `面部追踪 - iFacialMocap`（21 个节点），
+连同节点端口定义与全部 25 条数据连线 + 5 条流程连线，都是从这个文件里解出来的。
+
+### 3.1 官方接收器节点的端口 —— 这就是接口
+
+```
+GET_IFACIALMOCAP_RECEIVER_DATA
+  dataOutputs:
+    IsTracked      bool
+    RootPosition   UnityEngine.Vector3
+    BoneRotations  UnityEngine.Quaternion[]
+    BlendShapes    System.Collections.Generic.Dictionary<string, float>
+    HeadPosition   UnityEngine.Vector3
+  dataInputs:
+    Receiver       Warudo.Plugins.iFacialMocap.Assets.iFacialMocapReceiverAsset
+```
+
+第二处独立确认：社区 mod `veasu.vtubestudio.GetVTubeStudioDataNode` 的成员正好是这五个
+（`api-scan` 转储）。
+
+→ **五个端口，不多不少。对上它就能直接塞进官方那张图，不需要自己造图。**
+
+### 3.2 接线
+
+```
+ON_UPDATE ─flow→ SET_CHARACTER_TRACKING_BLENDSHAPES ─→ OVERRIDE_CHARACTER_BONE_ROTATION_OFFSETS
+            ─→ OVERRIDE_CHARACTER_ROOT_POSITION
+
+融合形状：
+  接收器.BlendShapes → SWITCH_BLENDSHAPE_LIST.IfTrue
+  接收器.IsTracked   → SWITCH_BLENDSHAPE_LIST.Condition
+  EMPTY_BLENDSHAPE_LIST.Output → SWITCH_BLENDSHAPE_LIST.IfFalse
+  → SMOOTH_BLENDSHAPES → GENERATE_HEAD_&_EYES_MOTION.BlendShapes
+  → .OutputBlendShapes → SET_CHARACTER_TRACKING_BLENDSHAPES.BlendShapes
+
+骨骼：
+  接收器.BoneRotations → SWITCH_ROTATIONS.IfTrue
+  DEFAULT_CHARACTER_BONE_ROTATIONS.Output → SWITCH_ROTATIONS.IfFalse
+  → MERGE_CHARACTER_BONE_ROTATIONS（Face/Head/Pelvis/LeftLeg/RightLeg 五个口接同一源）
+  → SMOOTH_ROTATIONS → GENERATE_HEAD_&_EYES_MOTION.BoneRotations
+  → CHARACTER_LOOK_AT_TARGET → .OutputBoneRotations
+  → OVERRIDE_CHARACTER_BONE_ROTATION_OFFSETS.BoneRotationOffsets
+
+根位置：
+  接收器.RootPosition → SMOOTH_POSITION → OVERRIDE_CHARACTER_ROOT_POSITION.RootPosition
+  SWITCH_FLOAT.Output  → OVERRIDE_CHARACTER_ROOT_POSITION.RootPositionWeight
+
+权重：
+  接收器.IsTracked → SWITCH_FLOAT.Condition；SWITCH_FLOAT.Output → SUBTRACT_FLOAT.B
+  SUBTRACT_FLOAT.Result → GENERATE_HEAD_&_EYES_MOTION.Weight
+
+收拾：
+  ON_DISABLE_GRAPH → RESET_CHARACTER_TRACKING_BLENDSHAPES → RESET_CHARACTER_BONES
+```
+
+### 3.3 每个节点是什么，以及它体现了什么考虑
+
+| 节点 | 端口 / 功能 | 体现的考虑 |
+|---|---|---|
+| `SWITCH_FLOAT` / `SWITCH_BLENDSHAPE_LIST` / `SWITCH_ROTATION_LIST` | `Condition` + `IfTrue` / `IfFalse`，**并且两个方向各自有 `TransitionTime` / `TransitionDelay` / `TransitionEasing`** | **断流不是硬切，是一次带缓动和延迟的过渡。** 追踪丢失 → 换掉输入（融合形状换空列表、骨骼换默认）+ 用过渡时间淡出 |
+| `SMOOTH_BLENDSHAPES` / `SMOOTH_ROTATIONS` / `SMOOTH_POSITION` | 各自 `SmoothTime`（滑条 0–2 s），其中 `SmoothBlendShapeListNode : ProcessBlendShapesNode` | 平滑是**分通道**给的，不是全局一个系数 |
+| `MERGE_CHARACTER_BONE_ROTATIONS` | **9 个身体部位口**：`Face` / `Head` / `Pelvis` / `LeftArm` / `RightArm` / `LeftFingers` / `RightFingers` / `LeftLeg` / `RightLeg` → 一个 `Quaternion[]` | **官方支持"多个追踪器各管一块身体再合并"**。面捕图只接了 5 个口；这也解释了接收器为什么要输出一个大数组 |
+| `DEFAULT_CHARACTER_BONE_ROTATIONS` | **没有任何输入端口**，只输出 `Quaternion[]` | 它是"不追踪时用的那份旋转"。配合下面的 offsets 语义 → **默认 = 不改动** |
+| `OVERRIDE_CHARACTER_BONE_ROTATION_OFFSETS` | `Quaternion[] BoneRotationOffsets` + `Immediate` | **是偏移（offset），不是绝对旋转** —— 叠在角色自身动画的旋转之上 |
+| `OVERRIDE_CHARACTER_BONE_ROTATIONS` | `BoneLocalRotations` + `BoneRotationWeights` | 另一条路：**绝对局部旋转 + 每根骨骼一个权重**。字段名直接证明这一层是**局部空间** |
+| `OVERRIDE_CHARACTER_BONE_POSITIONS` | `BoneLocalPositions` + `BonePositionWeights` + `SkipNonHipsBones` + `SkipEyeBones` | 位置层专门考虑过"**只给胯、别动眼**"（眼骨位置不能让外部动捕乱推） |
+| `SET_CHARACTER_TRACKING_BLENDSHAPES`（`: OverrideCharacterBlendShapesNode`） | `Character` + `Dictionary<string,float> BlendShapes` + `ApplyToAllSkinnedMeshes` + `TargetSkinnedMesh` + `UseVRMBlendShapeProxy` + `AdditiveVRMBlendShapeClips` + `ClampAllBlendShapes` + `ClampedBlendShapes` / `UnclampedBlendShapes` | 键就是**角色自己形态键名**（自动补全走角色）；同时覆盖"所有网格/指定网格""VRM 代理/非 VRM""哪些键要夹" |
+| `CHARACTER_LOOK_AT_TARGET` | `BoneRotations` + `Character` + `Target` + `Enabled` + `Weight` / `HeadWeight` / `EyesWeight` + `MaximumLookAtAngle`(30–135°) + `MaximalHeadRotation` / `MaximalEyeRotation`（度）+ `SmoothHeadTime` / `SmoothEyesTime` | 注视是**叠加在追踪结果上的后处理**，头/眼分开限幅、分开平滑 |
+| `EMPTY_BLENDSHAPE_LIST` | 无输入 → 空 `Dictionary<string,float>` | 提供"空"作为一个显式常量，配合 switch |
+| `FloatSubtractNode` | `A - B` | 用来算 `1 - IsTracked` 当淡出权重 |
+| `ON_UPDATE` / `ON_DISABLE_GRAPH` | 事件 → flow | 每帧推进；停用图时**归位**（reset）而不是留着上一帧 |
+| `GENERATE_HEAD_&_EYES_MOTION`（面板上叫**生成头部待机动画**） | ⚠️ **不在 `Warudo.Plugins.Core` 里** —— 它属于官方 iFacialMocap 插件，函数体反射不到。**完整端口表来自用户截图**（✅ 见过界面，❓ 内部行为未知）：输入 `BlendShape 列表` / `骨骼旋转列表` / `权重` / `角色` / `应用`；生成开关 `自动眨眼` / `自动眼部运动` / `自动头部运动`；眨眼参数 `眨眼 BlendShape 列表` / `眨眼间隔(X–Y)` / `眨眼速度` / `默认闭眼程度` / `移除输入眼部 BlendShape`；视线参数 `视线权重` / `最大视线角度`；头部参数 `头部倾斜` / `转头间隔`；输出 `输出 BlendShape 列表` / `输出骨骼旋转` | **这不只是"面捕转头眼运动"，它同时是丢追时的待机生成器**：`移除输入眼部 BlendShape = 是` 说明它把输入的眨眼键**剔掉、换成自己合成的**（接管而非让路）。所以官方丢追时的填充**来自这个节点**，不是来自角色自己的动画 |
+
+> ⚠️ **上一条曾经写错过，教训记在这里**：早先我只看**连线**就把这个节点的输入当成
+> `BlendShapes` / `BoneRotations` / `Weight` 三个，于是断言"图里没有待机生成节点"。
+> **连线只给出被连上的端口，不等于完整端口表**；而这个节点在插件程序集里、反射不到。
+> 教训：**判断一个节点"有什么能力"必须拿到它的完整端口表**，否则会得出方向完全相反的结论
+> （"丢追靠释放" vs "丢追靠生成"是两套完全不同的实现）。
+
+### 3.4 三条直接结论
+
+1. **「断流回中性」在图上，不在接收器里。** 接收器只管如实报 `IsTracked`。
+   这印证了"接收器不做任何隐式处理"那条决定。
+   （但要注意：图上做这件事的方式是**生成待机**，见 §3.3 最后一行 —— 不是"释放"。）
+2. **应用端三个节点全在 Tracking 层**，`Character` 在各自节点上选。
+   `BlendShapes` 就是个 `Dictionary<string,float>`，**键就是角色上真实的形态键** ——
+   我们**不需要标准键名**。
+3. **骨骼那条路是"偏移"，不是"绝对"。** 我们自己算出来的东西应该以 **offset（相对基准的增量）**
+   的形式交出去；`DEFAULT = 不改` 这个语义是整套设计的基线。
 
 ---
 
-## 6. 已确认与待实测
+## 4. 已确证的机制与硬边界
 
-| 项 | 状态 |
-| --- | --- |
-| Warudo 里能自己新建 Animator 挂我们的控制器 | **已确认可行**（"我们现有的脚本能上传就已经说明问题了"） |
-| `.controller` 资产能随 mod 一起打包 | 官方允许往 mod 文件夹放 Unity 资产（prefabs / materials / textures），"prefab 用到的脚本要一起放"；控制器属同类，**低风险但值得一测** |
-| **普通 mod 能否每帧写它的 Tracking 层**，还是必须注册成 `CharacterTrackingTemplate` 才有这个位置 | **待实测**（决定处理链 mod 要不要注册模板） |
-| `Override Character Bone Rotation **Offsets**` 的坐标系与叠加语义 | **待实测**（"偏移" 是相对动画还是绝对；轴序/单位） |
-| `ResetBlendShapes` 与 `ResetBlendShapesNextFrame` 的差别与调用时机 | **待实测**（丢脸交还时用哪个） |
-| 接收器单独成第三个 mod 时的接口 | **未决**：跨 mod 不能共享我们的类型；可能只能靠 Warudo 自有类型（Asset）或干脆把接收器并进处理链 mod（即"两个 mod"方案） |
+### 4.1 mod 能加载自己包里的资产 ✅
+
+```
+UMod.ModHost : MonoBehaviour
+    prop public IModAssets Assets {get;}
+    prop public IModAssets SharedAssets {get;}      ← 对应产物里的 sharedassets.bin
+UMod.IModAssets                                       （住在 UMod-Interface.dll）
+    prop  public Boolean CanLoadAssets {get;}
+    prop  public Int32 AssetCount {get;}
+    method public T Load<T>(String nameOrPath)
+    method public T[] LoadWithSubAssets<T>(String nameOrPath)
+    method public T Instantiate<T>(String nameOrPath)
+```
+
+`Plugin.ModHost` 是 public，所以：
+
+```csharp
+var assets = this.Plugin.ModHost.SharedAssets;
+if (assets != null && assets.CanLoadAssets)
+    shadowAnimator.runtimeAnimatorController = assets.Load<RuntimeAnimatorController>("<名字或路径>");
+```
+
+**两个实测到的坑：**
+
+* **`ModAssetsBridge` 不是公开类型** —— 就是那个带 `FindAllRelativeNames()` 的实现，
+  cast 去枚举包内资产名会报 `CS0122`。`IModAssets` 没有枚举接口 →
+  **只能按名字/路径加载，拿不到清单**。
+* **运行时没有 `AnimatorController` 这个类型** —— 它是 `UnityEditor.Animations` 的编辑器独占类；
+  玩家端只有 `RuntimeAnimatorController`（`Animator.runtimeAnimatorController` 收的就是它）。
+
+禁令边界：被点名的是 **`UMod-ModTools`**；`UMod.dll` / `UMod-Interface.dll` 不在禁令里。
+`tools/compile-check.ps1` 的引用列表已补上这两个。
+
+### 4.2 角色身上没有 controller ✅
+
+实测：`本体：enabled=True activeAndEnabled=True avatar=humanoid isHuman=True controller=null`。
+Warudo 的角色动画走 Animancer 直接播 clip。→ **在角色本体上跑混合树这条路不存在**，
+混合树只能在我们的影子 Animator 上跑（控制器从 4.1 那条路来）。
+
+### 4.3 `CharacterAsset` 不交出"裸预制件"，但活实例够用 ✅
+
+整条继承链（`CharacterAsset : FromSourceGameObjectAsset : GameObjectAsset : Asset`）没有 `Prefab`
+字段、没有 public 加载入口（`CreateGameObject()` 是 `protected virtual`）。能拿到的是活实例：
+`AvatarClone` / `GameObject` / `Animator` / `SkinnedMeshRenderers` / `BlendShapes` /
+`HumanBodyBoneToBodyTransforms`。
+
+**骨架与网格是同一个根下的两块**，复刻要复刻根：
+
+```
+Character Root                            ← GameObject（复刻这个）
+  Character Parent/Root/…                  ← 31 个渲染器都挂这儿
+  Character Avatar Clone Parent
+    Character Avatar Clone                 ← AvatarClone：998 子物体 + Animator，0 渲染器
+```
+
+### 4.4 中间层配置文件放插件沙箱 ✅（已跑通）
+
+`Plugin.PersistentData`（`PluginPersistentDataManager`）是沙箱化文件 API。
+实测路径：`Warudo_Data/StreamingAssets/Plugins/Data/<pluginId>/`，
+本机已经出现 `hollow.hofacetracking/ho-2d-test1.hoface.json`。
+
+⚠️ **`GetFiles` 不能用**：它第三个参数是 `System.IO.SearchOption`，而 UMod 构建期审查
+禁止引用 `System.IO.*`。只能用 `GetFileEntries(相对路径, 通配, Func<string,bool>)`。
+
+### 4.5 ✅ 已解决：profile 的 JSON 读写换成我们自己的
+
+**曾经的问题**：沙箱里那份 `ho-2d-test1.hoface.json` 只有 **342 字节** ——
+`format` / `version` / `displayName` / `notes` 四个字段在，**`inputs` / `outputs` 两个
+`List<内部类>` 整个没了**，而文件末尾的 `}` 是完整的（不是截断，是**序列化器跳过了这两个字段**）。
+
+**读路径同样是坏的**：运行期实测 `配置问题 = "配置文件里一行输出都没有。"`，
+而 `可用配置` 明明列出了那两个文件 —— 也就是 `JsonUtility.FromJson` 解析出了空列表。
+
+根因：**Unity 的 `JsonUtility` 在播放器里会静默丢掉这两个 `List<内部类>` 字段，而编辑器里是好的。**
+这类"编辑器里好好的、搬到 Warudo 就变样"的差异，对中间层配置这种心脏部件不能容忍。
+
+**现在的做法**：`Runtime/FaceTracking/HoFaceProfileJson.cs` —— 自己写的读写器
+（`HoFaceProfile` 退化成"格式的名字 + 入口"）。顺带多了两件事：
+未知字段统一跳过（向前兼容照旧）、**报错带字符位置**。
+
+**验证**：`.research/profile-json-test` 离线跑**包里的真源码**（桩件顶替 UnityEngine），
+`dotnet run` → **87/87 通过**，含 `写→读→写 文本完全一致（字节稳定）`、
+128 输入行 / 56 输出行、曲线关键点与修饰符**顺序**往返、转义与 Unicode 往返、
+`a{b}c[d],e:f"g` 这种带括号逗号的字符串、坏 JSON 报字符位置。
+
+> 教训：**别用 `JsonUtility` 存我们的数据。** 它在编辑器里能工作，在播放器里对
+> "内部类 + 嵌套 List"这套结构会静默降级，症状是"面板里明明有值、Warudo 里什么都没有"，
+> 极难往回查。
+
+### 4.6 ✅ 第三次：VTS 收包也丢字段（规则就此钉死）
+
+同一类坑又咬了一次，这次在收包：VTS 载荷里 `BlendShapes` 是 `List<{k,v}>`
+（官方示例里就是 `List<VTSTrackingDataEntry>`），用 `JsonUtility.FromJson` 解析的结果是 ——
+**12 个头眼分量全在、`FaceFound`/`Hotkey`/`Timestamp` 都在，52 个形态键全丢**
+（运行期实测 `本帧键数=15`）。包"解析成功"、字段名也对，丢的正是最要紧的东西。
+
+规则因此变成硬的、覆盖**所有**数据路径：
+
+> **我们的数据一律不用 `JsonUtility`** —— 配置文件读写、接收端线格式，全部走
+> `Runtime/FaceTracking/HoJson.cs` 里自己写的读取器。
+> 接收器解析搬到 `HoVtsPacket.cs`（纯静态、不碰 socket），所以能脱离 Unity 离线测。
+
+### 4.7 VTS 手机协议的确切形状（✅ 官方文档 + 手机截图核对）
+
+* **不是"手机主动推流"。** 手机不接受目标地址：它把数据发回**请求包的源 IP**，
+  端口用请求里 `ports` 数组指定的。所以**手机上除了那个开关没有要填的东西**。
+* 我们这边填：`手机 IPv4` = 手机的局域网 IP（**必须填对**，源 IP 过滤会静默丢包）、
+  `手机端口` = `21412`（或 App 上显示的）、`本机端口` = 数据回来的落点（如 `49985`）。
+* 请求包（`HoVtsPacket.BuildRequest`，离线测试断言了原文）：
+  `{"messageType":"iOSTrackingDataRequest","time":5,"sentBy":"HoFaceTracking","ports":[49985]}`
+  `time` 允许 0.5–10 → **每秒续一次**；`sentBy` 是**手机上 `Connected VSF Clients:` 列表里显示的名字**。
+* **线名拼写 = PascalCase**：官方 `VTSARKitBlendshape.cs` 那份枚举里 52 个名字是
+  `EyeBlinkLeft` / `JawOpen` / `MouthSmileLeft` / `TongueOut`…
+  我们默认配置里"首字母大写"的规则**逐个对得上**（离线测试覆盖了 52 个）。
+* 本机端口实测：官方 iFacialMocap 接收器资源占 `49983`（关掉它才空出来）、我们占 `49985`；
+  防火墙已有 `Warudo.exe` 的 UDP 任意端口入站放行规则，不用另加。
 
 ---
 
-## 7. 与前面几条决定的关系
+## 5. 空间问题 ❓（唯一未定的技术点）
 
-这条路线不是孤立的，后面几条都是同一条原则（**"算的地方算干净，用的人自己决定怎么用"**）的推论：
-
-| 已定的决定 | 与本文的关系 |
-| --- | --- |
-| **删掉区域门控**（`outputRegions` / `Ho/Drive/Gate/*`） | 哪些键算数由使用者的树/参数决定，不由我们注入开关 —— 在 Warudo 里更是必须（我们要喂的是**一层值**，不是一套开关） |
-| **删掉眼睑三模式**（`eyeSync*`） | 同上，归树；代价（左右眨眼键各自能闭双眼的模型）写进踩坑文档 |
-| **接收端只交原样、映射与量纲写进中间层配置的输入行** | Warudo 侧的配置是**构建期写死的同一份格式**；两边共用同一套规范名，才可能"换个输入就换一套面捕" |
-| **断流等待 / 回中性 = 全局配置**（不进每行） | 表达式是纯函数做不了记忆；在 Warudo 里这两个参数须随 mod 的硬配置一起走 |
-| **`HoFaceTracking` 收薄成"只把控制器跑起来"** | 它是 Unity 世界的运行时外壳；Warudo 世界对应的外壳就是处理链 mod |
+* ✅ 消费端要**局部**：`BoneLocalRotations` / `BoneLocalPositions`（见 3.3）。
+* ✅ 骨骼那条路是**偏移**语义（`BoneRotationOffsets`，`DEFAULT = 不改`）。
+* ❓ **偏移相对什么基准**：有 `InitialBoneLocalPositions` / `InitialBoneWorldPositions`，
+  但公开面上**没有 `InitialBoneLocalRotations`**。
+* 判据：用探针**数值比对**同一根骨头的 `localPosition/position/localRotation/rotation`
+  与那几个数组同下标元素，相等即那个空间；都不等说明它是加载时抓的初始基准 ——
+  那正是我们算偏移要对齐的基准。
 
 ---
 
-## 8. 下一步（等 Warudo 侧实测结果）
+## 6. 明确不做 / 搁置
 
-1. 实测：**普通 mod 能不能每帧写它的 Tracking 层**（`Set Character Tracking BlendShapes` 那一层），
-   还是必须注册成 `CharacterTrackingTemplate` 才有这个位置 —— 这条决定处理链 mod 要不要注册模板。
-2. 实测：`Override Character Bone Rotation Offsets` 的坐标系/叠加语义，以及 `ResetBlendShapes` 与
-   `ResetBlendShapesNextFrame` 在丢脸交还时该用哪个。
-3. （低风险、顺手做）mod 里新建 Animator + 打包进去的 `.controller`，`SetFloat` 后形态键是否真的动。
-4. 定第三块产物要不要存在（接收器单独成 mod 的接口可行性）。
-5. 然后才动代码：`HoFaceTracking` 收薄 → 面板吃掉输入+中间层 → 处理链 mod（同核心外壳）。
+* **搁置**：注册 `CharacterTrackingTemplate` 让官方"面捕"下拉项一键生成我们的图。
+  机制是现成的（`Apply(CharacterAsset) → (List<Asset>, List<Graph>)`），但**先不碰自动生成**，
+  先把节点本身做对。
+* **不做** tracker asset（`GenericTrackerAsset` 子类）：那条路会在角色上建一份追踪器资源，
+  等于把中间层配置变**每角色一份**，与"中间层是设备/控制器级"冲突。
+* **不做**接收器里的改名 / 量纲 / 断流回中性：前两样在中间层配置里，最后一样在图上（3.2）。
+* **不依赖**官方那套"一个 mod 带一堆资源"的打包方式；我们只带**自己的控制器**。
+
+---
+
+## 7. 待办
+
+| # | 事项 | 判据 |
+|---|---|---|
+| 1 | ~~修 profile 读写~~ ✅ **已完成**（见 §4.5）：`HoFaceProfileJson.cs` + 离线往返测试 **52/52** | 沙箱里的 profile 读出来是 128 输入行 / 56 输出行 |
+| 2 | mod 里放一个 `.controller`，验证 `SharedAssets.AssetCount` 变正、`Load` 取得回 | 探针 `Mod 资产` 一节（已知 `AssetCount=2`，名字约定还没试出来） |
+| 3 | ~~量出骨骼数组的空间与偏移基准~~ ✅ **已量出**（见 §5） | 数组按 `HumanBodyBones` 索引、是**局部**的；基准 = `InitialBoneLocalPositions`，只有 Hips 会变 |
+| 4 | 中间层节点输出对齐 3.1 的 5 个端口，替换掉官方接收器节点后行为不变 | 图上换掉接收器后面部照常动 |
+| 5 | 影子 Animator：`AddComponent<Animator>()` + `Load<RuntimeAnimatorController>` + 反算 | 打参数进去、读回形态键权重与骨头旋转 |
+| 6 | Unity 侧调试面板：影子算 + 纯写入角色预制件，角色不挂任何组件 | 面板里算出来的值与 Warudo 里一致 |
+
+---
+
+## 8. 测试怎么跑
+
+| 测什么 | 怎么跑 | 现在的结果 |
+|---|---|---|
+| 中间层配置的 JSON 读写 + VTS 收包 | `dotnet run --project .research/profile-json-test` | **87/87 通过** |
+| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project .research/expression-coverage` | 19/19 |
+| mod 脚本能不能对着真机 DLL 编译 | `tools/compile-check.ps1`（BreakWarudo 工程里） | 全绿 |
+| Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log` | — |
+
+> **`Player.log` 这条很重要**：Warudo 没有界面控制台，但我们的 `Debug.Log` 会落到那儿，
+> 所以验证运行期行为不用截图，直接读文件就行（面板上的「查看值」节点是给人看的备份）。
+> 另外 `.research/` 下的离线测试跑的是**包里的真源码**（用桩件顶替 UnityEngine），
+> 所以"包里的代码到底对不对"不需要等 Warudo 构建就能验。

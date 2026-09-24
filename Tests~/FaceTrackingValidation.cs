@@ -6,7 +6,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using Hollow.HoUnityTools.Constraints;
 using Hollow.HoUnityTools.Editor.AnimationTools;
 using Hollow.HoUnityTools.Editor.FaceTracking;
@@ -20,14 +19,20 @@ using UnityEngine;
 public static class HoFaceTrackingValidation
 {
     private const string PhaseKey = "Ho.Face.Validation.Phase";
+    /// <summary>进播放之前把调试设置落在这儿，播放模式里再从它装回来（等价于面板存的那一份）。</summary>
+    private const string ValidationSettingsPath = "Assets/ValidationFaceDebug.json";
+    /// <summary>用例自己选的 VTS 本机监听端口。不用默认的 49984：真手机那条路可能正占着它。</summary>
+    private const int TestLocalPort = 49986;
     private static int stage;
     private static int frame;
     private static double deadline;
-    private static HoFaceTrackingDebugger rig;
+    private static HoFaceDebugSettings rig;
     private static SkinnedMeshRenderer renderer;
     private static HoShapeKeyWriter writer;
     private static int targetId;
     private static UdpClient sender;
+    /// <summary>stage 3（实时 UDP）里试了几帧 —— 只用来决定什么时候打那条体检日志。</summary>
+    private static int liveTries;
 
     static HoFaceTrackingValidation()
     {
@@ -44,7 +49,9 @@ public static class HoFaceTrackingValidation
         {
             if (!File.Exists(Path.Combine(Application.dataPath, "../.ho-face-validation"))) throw new Exception("Disposable project marker missing.");
             ParserTests();
-            ReceiverTests();
+            // ReceiverTests() 删掉了：iFacialMocap 接收端这个类已经不存在（只剩 VTS 一条路），
+            // 起 socket 的那几条断言没有对象了。协议解析的覆盖在 ParserTests 的 VTS 那一段，
+            // 以及离线台架 .research/profile-json-test（它连请求报文和 52 个键名一起验）。
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var root = new GameObject("HoFaceValidation");
             var animator = root.AddComponent<Animator>();
@@ -102,24 +109,24 @@ public static class HoFaceTrackingValidation
             Check(emptySlot != null && !emptySlot.Writes && emptySlot.Status == "缺",
                 "模板里摆着空片段、文件夹也没有的槽位会被报成「缺」（" + (emptySlot != null ? emptySlot.Status : "没有这个槽位") + "）");
 
-            rig = root.AddComponent<HoFaceTrackingDebugger>();
-            rig.targetAnimator = animator;
-            rig.treeTemplate = source;
+            // 调试设置现在是**一个普通对象**（不是组件）：目标角色 / 模板 / 控制器按引用或路径记下来，
+            // 角色上零组件 —— 和 Warudo 那边"角色身上不挂我们的东西"是同一条规矩。
+            rig = new HoFaceDebugSettings();
+            rig.SetCharacter(root);
+            rig.SetTreeTemplate(source, sourcePath);
             rig.animationFolder = ClipFolder;
-            rig.meshes = new System.Collections.Generic.List<SkinnedMeshRenderer> { renderer };
+            // 要驱动的网格不再是手工填的一张表：它就是"调试对象下所有 SkinnedMeshRenderer"。
+            // 下面一律现取 rig.Meshes() —— 它每次返回**新的表**，加一个删一个都只影响那一次调用。
             // 门控已经删掉了：哪些键算数由使用者自己的混合树决定。
             // 所以默认**不再排除任何键** —— 编译出来的绑定数就是控制器里那 52 个（含 8 个凝视键）。
             Check(rig.channels.Count == 52, "默认通道数 = 52 个形态键");
-            foreach (var c in rig.channels) c.mode = HoFaceInputMode.Manual;
-            Channel("jawOpen").manual = 0.6f;
-            Channel("mouthClose").manual = 0.25f;
-            Channel("mouthSmileLeft").manual = 0.8f;
-            Channel("eyeBlinkLeft").manual = 0.4f;
-            Channel("eyeLookInLeft").manual = 1;
+            // 夹具通道：全部 Manual + 五个手动值。stage 0 进播放之后会**再调一次同一个函数**
+            //（播放会重载脚本域，而设置文件里不存通道 —— 通道只是过渡期字段）。
+            ConfigureFixtureChannels(rig);
 
             string controllerPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller");
-            var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, ClipFolder);
-            rig.faceController = controller;
+            var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.Meshes(), animator, ClipFolder);
+            rig.SetFaceController(controller, controllerPath);
             Check(controller.layers.Length == source.layers.Length && controller.layers[0].name == source.layers[0].name,
                 "装配是整份复制：层与状态原样带过来");
             Check(controller.parameters.Length == source.parameters.Length,
@@ -155,7 +162,7 @@ public static class HoFaceTrackingValidation
             Check(ReferenceEquals(FindLeafMotion(FindTree(controller, "LipRegion"), "ARKit/mouthClose"), copiedExternal),
                 "树里指向的是复制出来的那份，不是别人那份");
 
-            var info = HoFaceAnimationAssets.Inspect(controller, rig.meshes);
+            var info = HoFaceAnimationAssets.Inspect(controller, rig.Meshes());
             Check(info.shapes.Contains("jawOpen") && info.missing.Contains("HoNotOnMesh"),
                 "结构摘要报得出哪些键这台模型没有（缺 " + info.missing.Count + " 个）");
             Check(info.layers == 1 && info.states == 1 && info.clips > 0,
@@ -186,26 +193,28 @@ public static class HoFaceTrackingValidation
             UnityEngine.Object.DestroyImmediate(second);
 
             // 一个键落在两个驱动对象上：两边都要写；把对象去掉再重绑要能回来（幂等）。
+            // 驱动对象列表就是"角色下所有 SkinnedMeshRenderer" —— `Meshes()` 是现取的，
+            // 所以刚挂上去的这张**已经在这个表里**了（此刻 = [Body, Meshes/Face]），不用再手工加。
             var alternate = new GameObject("Meshes");
             alternate.transform.SetParent(root.transform, false);
             var target = new GameObject("Face");
             target.transform.SetParent(alternate.transform, false);
             var alternateMesh = target.AddComponent<SkinnedMeshRenderer>();
             alternateMesh.sharedMesh = mesh;
-            rig.meshes.Add(alternateMesh);
-            HoFaceAnimationAssets.Retarget(controller, rig.meshes, animator);
+            var withAlternate = rig.Meshes();
+            HoFaceAnimationAssets.Retarget(controller, withAlternate, animator);
             Check(CountShapeCurves(controller, "jawOpen") == 2,
                 "同一个键在多个驱动对象上就写多个绑定（" + CountShapeCurves(controller, "jawOpen") + "）");
-            rig.meshes.Remove(alternateMesh);
-            HoFaceAnimationAssets.Retarget(controller, rig.meshes, animator);
+            withAlternate.Remove(alternateMesh);
+            HoFaceAnimationAssets.Retarget(controller, withAlternate, animator);
             Check(CountShapeCurves(controller, "jawOpen") == 1, "重绑跟着驱动对象列表走：去掉就回到一条");
             UnityEngine.Object.DestroyImmediate(alternate);
             // ── 覆盖式装配：真的把文件换掉，但**不改 GUID** ─────────────────────────
             // 改 GUID 的话，场景里引用过这个控制器的地方（窥视对象的 Animator）就全断了。
             int clipsBefore = CountClips(controllerPath);
             string guidBefore = AssetDatabase.AssetPathToGUID(controllerPath);
-            controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.meshes, animator, ClipFolder, true);
-            rig.faceController = controller;
+            controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.Meshes(), animator, ClipFolder, true);
+            rig.SetFaceController(controller, controllerPath);
             Check(AssetDatabase.AssetPathToGUID(controllerPath) == guidBefore,
                 "覆盖式装配保留资产 GUID —— 引用它的地方不会断");
             Check(CountClips(controllerPath) == clipsBefore, "覆盖式装配不堆子资产（" + clipsBefore + " 个片段）");
@@ -234,15 +243,9 @@ public static class HoFaceTrackingValidation
             Check(outputBindings == 52, "装配后的输出集合 = 控制器里那 52 个（门控已删，不再排除凝视）("
                 + outputBindings + " bindings)");
 
-            // ── 轴算术（中间层）：两根 0~1 的通道合成一根 -1~1 的单轴 ────────────────
-            // 混合树自己算不出新参数，只能消费 —— 所以轴必须在外面算（19 节定案）。
-            // 树那一半现在在控制器作品里（作者的资产），代码这边只剩这个纯函数。
-            Near(HoFaceAxis.Merge(0.8f, 0.3f), 0.5f, "axis merge is positive minus negative", 0.0001f);
-            Near(HoFaceAxis.Merge(0.2f, 0.9f), -0.7f, "axis merge goes negative when the other side wins", 0.0001f);
-            Near(HoFaceAxis.Merge(float.NaN, 0.4f), -0.4f, "axis merge swallows NaN instead of poisoning the axis", 0.0001f);
-            HoFaceAxis.Split(-0.7f, out float axisPositive, out float axisNegative);
-            Check(Mathf.Abs(axisPositive) < 0.0001f && Mathf.Abs(axisNegative - 0.7f) < 0.0001f,
-                "the axis splits back into two unsigned halves");
+            // ── 轴算术：**代码里的那个纯函数（HoFaceAxis）删掉了**。────────────────────
+            // "两根 0~1 的通道合成一根 -1~1 的单轴"现在是中间层的**一行表达式**
+            //（`eyeBlinkLeft - eyeWideLeft`，见下面表达式求值器那一段），不再有专门的类型。
 
             // 二：**建树这件事已经不在代码里了**。控制器是搬来的作品（§ 装配），
             // 它的树形/坐标/每格写什么由作者在混合树编辑器里定 —— 所以这里没有 Kit 可测。
@@ -303,52 +306,10 @@ public static class HoFaceTrackingValidation
                 "applying the other axis keeps the rows that are already there");
             UnityEngine.Object.DestroyImmediate(presetProbe);
 
-            // ── 双眼同步（中间层）：把左右合成一个值，压住"左右键各能闭双眼"导致的过眨眼 ──
-            int blinkLeft = HoFaceTrackingChannels.IndexOf("eyeBlinkLeft");
-            int blinkRight = HoFaceTrackingChannels.IndexOf("eyeBlinkRight");
-            int lookInLeft = HoFaceTrackingChannels.IndexOf("eyeLookInLeft");
-            int lookOutRight = HoFaceTrackingChannels.IndexOf("eyeLookOutRight");
-            int lookUpLeft = HoFaceTrackingChannels.IndexOf("eyeLookUpLeft");
-            int lookUpRight = HoFaceTrackingChannels.IndexOf("eyeLookUpRight");
-
-            var independent = new float[52];
-            independent[blinkLeft] = 0.9f;
-            independent[blinkRight] = 0.5f;
-            HoFaceEyeSync.Apply(independent, false, 0.5f);
-            Check(Mathf.Abs(independent[blinkLeft] - 0.9f) < 0.0001f && Mathf.Abs(independent[blinkRight] - 0.5f) < 0.0001f,
-                "eye sync off leaves the two eyes independent (wink still possible)");
-
-            var synced = new float[52];
-            synced[blinkLeft] = 0.9f;
-            synced[blinkRight] = 0.5f;
-            synced[lookInLeft] = 0.8f;
-            synced[lookOutRight] = 0.2f;
-            synced[lookUpLeft] = 0.9f;
-            synced[lookUpRight] = 0.1f;
-            HoFaceEyeSync.Apply(synced, true, 0.5f);
-            Check(Mathf.Abs(synced[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(synced[blinkRight] - 0.7f) < 0.0001f,
-                "eye sync puts both eyelids on the shared value (got " + synced[blinkLeft].ToString("F2") + ")");
-            Check(Mathf.Abs(synced[lookInLeft] - 0.5f) < 0.0001f && Mathf.Abs(synced[lookOutRight] - 0.5f) < 0.0001f,
-                "the horizontal gaze is synced across the pair that means the same world direction");
-            Check(Mathf.Abs(synced[lookUpLeft] - 0.9f) < 0.0001f && Mathf.Abs(synced[lookUpRight] - 0.1f) < 0.0001f,
-                "the vertical gaze is deliberately NOT synced (same scope as the reference)");
-
-            var mixed = new float[52];
-            mixed[blinkLeft] = 0.9f;
-            mixed[blinkRight] = 0.5f;
-            HoFaceEyeSync.Apply(mixed, true, 1f);
-            Check(Mathf.Abs(mixed[blinkLeft] - 0.5f) < 0.0001f && Mathf.Abs(mixed[blinkRight] - 0.5f) < 0.0001f,
-                "the mix chooses whose value wins (1 = 全用右眼)");
-
-            // 过眨眼的正解：模型上左右眨眼键**各自都能闭双眼**时，光合并值没用（形变还是写两遍），
-            // 必须只让一侧有值。
-            var single = new float[52];
-            single[blinkLeft] = 0.9f;
-            single[blinkRight] = 0.5f;
-            HoFaceEyeSync.Apply(single, true, 0.5f, true);
-            Check(Mathf.Abs(single[blinkLeft] - 0.7f) < 0.0001f && Mathf.Abs(single[blinkRight]) < 0.0001f,
-                "single-key mode keeps one side and zeroes the other, so the deformation is applied once ("
-                + single[blinkLeft].ToString("F2") + " / " + single[blinkRight].ToString("F2") + ")");
+            // ── 双眼同步（HoFaceEyeSync）**整块删掉了**。────────────────────────────────
+            // "把左右合成一个值 / 只留一侧"那点事，按定案属于**混合树**，不该在参数生产这一层做；
+            // 面板上的 eyeSync / eyeSyncMix / eyeSyncSingleKey 三个开关也一并退休。
+            // 所以这里没有它可测：左右要不要合并、合并成什么，由控制器作品里的树决定。
 
             // ── 表达式求值器（语法照 VBridger）：变量、优先级、函数、惰性 if、非有限折 0 ──────
             var facts = new System.Collections.Generic.Dictionary<string, float>(StringComparer.Ordinal)
@@ -465,11 +426,32 @@ public static class HoFaceTrackingValidation
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             AssetDatabase.SaveAssets();
             EditorSceneManager.SaveScene(root.scene, "Assets/Validation.unity");
+            // 播放会重载脚本域：静态的 rig 一定会没 —— 所以进播放之前把它**落盘**，
+            // stage 0 再从这份文件装回来（和面板走同一条路：HoFaceDebugSettings.LoadOrCreate）。
+            rig.settingsPath = ValidationSettingsPath;
+            rig.Save();
             SessionState.SetBool(PhaseKey, true);
             EditorApplication.isPlaying = true;
         }
         catch (Exception e) { Fail(e); }
     }
+
+    /// <summary>
+    /// 夹具用的通道配置：**全部 Manual + 五个手动值**。进播放会重载脚本域、而设置文件里**不存通道**
+    /// （通道只是过渡期字段），所以 RunBatch 与 stage 0 调的是这同一个函数，免得两处漂掉。
+    /// </summary>
+    private static void ConfigureFixtureChannels(HoFaceDebugSettings settings)
+    {
+        foreach (var channel in settings.channels) channel.mode = HoFaceInputMode.Manual;
+        Channel(settings, "jawOpen").manual = 0.6f;
+        Channel(settings, "mouthClose").manual = 0.25f;
+        Channel(settings, "mouthSmileLeft").manual = 0.8f;
+        Channel(settings, "eyeBlinkLeft").manual = 0.4f;
+        Channel(settings, "eyeLookInLeft").manual = 1f;
+    }
+
+    private static HoFaceChannel Channel(HoFaceDebugSettings settings, string name) =>
+        settings.channels.Find(c => c.shape == name);
 
     private static HoFaceChannel Channel(string name) => rig.channels.Find(c => c.shape == name);
     private static float Weight(string name) => renderer.GetBlendShapeWeight(renderer.sharedMesh.GetBlendShapeIndex(name));
@@ -656,15 +638,29 @@ public static class HoFaceTrackingValidation
         try
         {
             if (EditorApplication.timeSinceStartup > deadline) throw new Exception("Play tests timed out.");
+            // 组件没了，会话不再有人替我们推进：面板那边是 HoFaceDebugHost 在 update 里推，
+            // 用例这边就自己推 —— 而且必须**每次 update 都推**，不能只在"断言那一刻"推，
+            // 否则 Smooth 这类跟时间走的修饰符量不到东西。
+            if (rig != null)
+            {
+                HoFaceInputHub.Tick(rig);
+                HoFaceInputHub.LateTick(rig);
+            }
             if (Time.frameCount < frame) return;
             if (stage == 0)
             {
-                rig = UnityEngine.Object.FindFirstObjectByType<HoFaceTrackingDebugger>();
-                if (rig == null || Time.frameCount < 4) return;
-                renderer = rig.targetAnimator.transform.Find("Body").GetComponent<SkinnedMeshRenderer>();
+                // 播放重载脚本域 → 静态字段全清空：调试设置**从文件装回来**（通道也再配一遍）。
+                // 万一没重载（关掉了 Enter Play Mode 的域重载），rig 还在，那就照用。
+                if (rig == null)
+                {
+                    rig = HoFaceDebugSettings.LoadOrCreate(ValidationSettingsPath);
+                    ConfigureFixtureChannels(rig);
+                }
+                if (rig.TargetAnimator() == null || Time.frameCount < 4) return;
+                renderer = rig.TargetAnimator().transform.Find("Body").GetComponent<SkinnedMeshRenderer>();
                 // 记录接管前的 Animator 状态，作为 hasBoundPlayables 语义的实测证据。
-                Debug.Log("HO_BEFORE: hasBoundPlayables=" + rig.targetAnimator.hasBoundPlayables
-                    + " controller=" + (rig.targetAnimator.runtimeAnimatorController != null));
+                Debug.Log("HO_BEFORE: hasBoundPlayables=" + rig.TargetAnimator().hasBoundPlayables
+                    + " controller=" + (rig.TargetAnimator().runtimeAnimatorController != null));
                 HoFaceInputHub.Start(rig);
                 Check(HoFaceInputHub.Session(rig) != null, "start session: " + HoFaceInputHub.Error(rig));
                 stage++; frame = Time.frameCount + 6; return;
@@ -678,7 +674,7 @@ public static class HoFaceTrackingValidation
                 // 门控删掉之后，凝视键**也归面捕驱动**（这个通道是 Manual=1）→ 100。
                 // 要让基础动画拿回某个键，现在的做法是把那个通道设成「交还」（stage 2 验的就是它）。
                 Near(Weight("eyeLookInLeft"), 100, "凝视键同样由面捕驱动（门控已删）");
-                Near(rig.targetAnimator.transform.localPosition.x, 2, "body transform animation preserved");
+                Near(rig.TargetAnimator().transform.localPosition.x, 2, "body transform animation preserved");
                 writer = new HoShapeKeyWriter();
                 writer.BeginBuild(new System.Collections.Generic.List<Renderer> { renderer });
                 targetId = writer.RegisterTarget(HoShapeKeyTarget.CreateRuntime("jawOpen", 1));
@@ -697,30 +693,57 @@ public static class HoFaceTrackingValidation
                 Check(!HoFaceOutputOwnership.IsReserved(renderer, renderer.sharedMesh.GetBlendShapeIndex("mouthSmileLeft")), "release removes reservation");
                 Channel("jawOpen").mode = HoFaceInputMode.Live;
                 rig.staleSeconds = 0.3f; rig.neutralFadeSeconds = 0.1f;
+                // 只剩 VTS 一条协议了：源条目就是"VTS 手机 + 一个本机端口"，
+                // 载荷照官方形状（形态键是 iOS 原始值 0..1），量纲换算归中间层的输入行。
                 HoFaceInputHub.ConnectEntries(new System.Collections.Generic.List<HoFaceSourceEntry>
                 {
-                    new HoFaceSourceEntry { kind = HoFaceSourceKind.IFacialMocap, phoneIp = "127.0.0.2", localPort = IFacialMocapReceiver.Port }
+                    new HoFaceSourceEntry { kind = HoFaceSourceKind.VtsIphone, phoneIp = "127.0.0.2", localPort = TestLocalPort }
                 });
                 sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
-                Send("jawOpen-90|eyeBlink_L-10|");
+                SendPacket(Shape("JawOpen", 0.9f), Shape("EyeBlinkLeft", 0.1f));
                 stage++; frame = Time.frameCount + 3; return;
             }
             if (stage == 3)
             {
-                Send("jawOpen-90|eyeBlink_L-10|");
+                SendPacket(Shape("JawOpen", 0.9f), Shape("EyeBlinkLeft", 0.1f));
+                // 收包链路的体检：接收端统计 + 合并后的线名 + 输入行的落点。
+                // 只在这两个时刻打，免得每帧刷屏（第 5 帧够收包，第 120 帧够看出"一直没动静"）。
+                liveTries++;
+                if (liveTries == 5 || liveTries == 120)
+                {
+                    var receiver = HoFaceInputHub.Sources.Count > 0 ? HoFaceInputHub.Sources[0] : null;
+                    var inputs = rig.Inputs();
+                    int jawRow = -1;
+                    for (int i = 0; i < inputs.Count; i++)
+                        if (inputs[i].parameter == "jawOpen") jawRow = i;
+                    Debug.Log("HO_LIVE#" + liveTries
+                        + ": connected=" + HoFaceInputHub.Connected
+                        + " running=" + (receiver != null && receiver.Running)
+                        + " port=" + (receiver != null ? receiver.LocalPort : -1)
+                        + " packets=" + (receiver != null ? receiver.Packets : -1)
+                        + " invalid=" + (receiver != null ? receiver.Invalid : -1)
+                        + " rejected=" + (receiver != null ? receiver.Rejected : -1)
+                        + " rejectedSrc='" + (receiver != null ? receiver.RejectedSource : "") + "'"
+                        + " err='" + (receiver != null ? receiver.Error : "") + "'"
+                        + " hasJawWire=" + HoFaceInputHub.Has("JawOpen")
+                        + " hubJaw=" + HoFaceInputHub.Input("JawOpen")
+                        + " inputRows=" + inputs.Count + " jawRow=" + jawRow
+                        + " rowExpr='" + (jawRow >= 0 ? inputs[jawRow].expression : "?") + "'"
+                        + " weight=" + Weight("jawOpen"));
+                }
                 if (Mathf.Abs(Weight("jawOpen") - 90) > 0.2f) return;
-                Near(Weight("jawOpen"), 90, "local UDP packet drives actual blend tree");
+                Near(Weight("jawOpen"), 90, "local VTS UDP packet drives actual blend tree");
                 stage++; frame = Time.frameCount + 3; return;
             }
             if (stage == 4)
             {
-                if (IFacialMocapReceiver.Now - HoFaceInputHub.LastFrameTime < 0.6) return;
+                if (HoFaceInputHub.Now - HoFaceInputHub.LastFrameTime < 0.6) return;
                 Near(Weight("jawOpen"), 17, "stale stream releases to base animation");
                 HoFaceInputHub.Stop(rig);
-                Check(rig.targetAnimator.runtimeAnimatorController != null, "stop restores original controller");
+                Check(rig.TargetAnimator().runtimeAnimatorController != null, "stop restores original controller");
                 // 这条同时是"为什么不能用 hasBoundPlayables 判所有权"的实测证据：
                 // 恢复成普通 Animator + Controller 之后它又是 true。
-                Check(rig.targetAnimator.hasBoundPlayables, "plain animator with a controller reports hasBoundPlayables=true");
+                Check(rig.TargetAnimator().hasBoundPlayables, "plain animator with a controller reports hasBoundPlayables=true");
                 HoFaceInputHub.Disconnect();
                 sender.Close(); sender = null;
                 stage++; frame = Time.frameCount + 5; return;
@@ -779,6 +802,13 @@ public static class HoFaceTrackingValidation
                 System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
                 {
                     displayName = "validation",
+                    // 线名 → 规范名：这份配置是**唯一的映射表**（内置默认表只在"还没指配置文件"时兜底）。
+                    inputs = new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen", notes = "VTS 手机" },
+                        new HoFaceOutput { parameter = "mouthSmileLeft", expression = "MouthSmileLeft", notes = "VTS 手机" },
+                        new HoFaceOutput { parameter = "eyeBlinkLeft", expression = "EyeBlinkLeft", notes = "VTS 手机" }
+                    },
                     outputs = new System.Collections.Generic.List<HoFaceOutput>
                     {
                         new HoFaceOutput
@@ -800,10 +830,15 @@ public static class HoFaceTrackingValidation
                     }
                 }), new System.Text.UTF8Encoding(false));
                 AssetDatabase.ImportAsset(profileAsset);
-                rig.profile = AssetDatabase.LoadAssetAtPath<TextAsset>(profileAsset);
+                // 不再是 TextAsset 引用：设置里存的是**路径**，读的是磁盘上那个文件本身
+                //（Unity 侧和 Warudo 侧读同一份 *.hoface.json —— 这是"面板里是什么、Warudo 里就是什么"的物理保证）。
+                rig.profilePath = profileAssetPath;
                 rig.ReloadProfile();
                 Check(rig.Middleware != null && rig.Middleware.outputs.Count == 3,
-                    "组件从配置文件里读到了中间层（" + (rig.Middleware != null ? rig.Middleware.outputs.Count : -1) + " 行）");
+                    "设置对象从配置文件里读到了中间层（" + (rig.Middleware != null ? rig.Middleware.outputs.Count : -1) + " 行）");
+                Check(rig.Middleware != null && rig.Middleware.inputs.Count == 3,
+                    "输入行也是从配置文件读的（" + (rig.Middleware != null ? rig.Middleware.inputs.Count : -1)
+                    + " 行）—— 实时那条链的「线名 → 规范名」就靠它，不许拿内置默认来补");
                 HoFaceInputHub.Start(rig);
                 var smoothSession = HoFaceInputHub.Session(rig);
                 Check(smoothSession != null, "session started for the profile test: " + HoFaceInputHub.Error(rig));
@@ -844,6 +879,14 @@ public static class HoFaceTrackingValidation
                 System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
                 {
                     displayName = "validation·no-modifier",
+                    // 输入行：**指了配置文件之后，线名 → 规范名就只认这里**（不再拿内置默认来补 ——
+                    // 那正是"不做隐式处理"的意思）。所以后面那条"实时整条链"的断言需要它们。
+                    inputs = new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen", notes = "VTS 手机" },
+                        new HoFaceOutput { parameter = "mouthSmileLeft", expression = "MouthSmileLeft", notes = "VTS 手机" },
+                        new HoFaceOutput { parameter = "eyeBlinkLeft", expression = "EyeBlinkLeft", notes = "VTS 手机" }
+                    },
                     outputs = new System.Collections.Generic.List<HoFaceOutput>
                     {
                         new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "jawOpen" },
@@ -873,14 +916,14 @@ public static class HoFaceTrackingValidation
                 // 去掉修饰符之后直通：同一份配置、同一个输入，权重立刻到位。
                 Near(Weight("jawOpen"), 100, "去掉修饰符之后直通（参数 1.0 → 权重 100）");
 
-                // 实时输入那条路也在这里铺好：stage 17 会用它验证 UDP → 配置 → 混合树整条链。
+                // 实时输入那条路也在这里铺好：stage 17 会用它验证 VTS UDP → 配置 → 混合树整条链。
                 Channel("jawOpen").mode = HoFaceInputMode.Live;
                 HoFaceInputHub.ConnectEntries(new System.Collections.Generic.List<HoFaceSourceEntry>
                 {
-                    new HoFaceSourceEntry { kind = HoFaceSourceKind.IFacialMocap, phoneIp = "127.0.0.2", localPort = IFacialMocapReceiver.Port }
+                    new HoFaceSourceEntry { kind = HoFaceSourceKind.VtsIphone, phoneIp = "127.0.0.2", localPort = TestLocalPort }
                 });
                 sender = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0));
-                Send("jawOpen-60|");
+                SendPacket(Shape("JawOpen", 0.6f));
 
                 zeroProbeRoot = new GameObject("WdZeroProbe");
                 var zeroBody = new GameObject("Body");
@@ -954,15 +997,15 @@ public static class HoFaceTrackingValidation
             }
             if (stage == 17)
             {
-                Send("jawOpen-60|");
+                SendPacket(Shape("JawOpen", 0.6f));
                 if (Mathf.Abs(Weight("jawOpen") - 60f) > 0.6f) return;   // 等它被驱动上来
-                Check(true, "配置那条路端到端通了：UDP 0.6 → 表达式 → 曲线(0..100) → 参数 → 混合树 → 60");
+                Check(true, "配置那条路端到端通了：VTS UDP 0.6 → 表达式 → 曲线(0..100) → 参数 → 混合树 → 60");
                 HoFaceInputHub.Stop(rig);
                 HoFaceInputHub.Disconnect();
                 sender.Close(); sender = null;
-                rig.enabled = false;
-                Check(HoFaceInputHub.Session(rig) == null, "disable component disposes session immediately");
-                Debug.Log("HO_FACE_TESTS_ALL_PASSED" + (receiverSkipped ? "（receiver 段因端口被占用而跳过）" : ""));
+                // 原来这里还有一条"禁用组件就立刻收摊"的断言 —— 组件已经不存在了，那条跟着删。
+                // 现在收摊只有两条路：用户按停止（HoFaceInputHub.Stop）或退出播放（宿主在 ExitingPlayMode 里收）。
+                Debug.Log("HO_FACE_TESTS_ALL_PASSED");
                 SessionState.SetBool(PhaseKey, false);
                 EditorApplication.update -= PlayTests;
                 EditorApplication.Exit(0);
@@ -982,7 +1025,6 @@ public static class HoFaceTrackingValidation
     private static float smoothSampleA;
     /// <summary>中间层配置文件在工程里的路径（写文件用）/ 磁盘全路径（ImportAsset 用）。</summary>
     private static string profileAsset, profileFull;
-    private static bool receiverSkipped;
 
     private static float ZeroWeight(string shape) =>
         zeroProbeRenderer.GetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex(shape));
@@ -1067,10 +1109,18 @@ public static class HoFaceTrackingValidation
         return controller;
     }
 
-    private static void Send(string value)
+    /// <summary>一包 VTS 载荷里的一对形态键（官方写法 `{"k":…,"v":…}`，值是 iOS 原始值 0..1）。</summary>
+    private static string Shape(string wire, float value) =>
+        "{\"k\":\"" + wire + "\",\"v\":" + value.ToString("0.####", CultureInfo.InvariantCulture) + "}";
+
+    /// <summary>
+    /// 往本机 VTS 监听端口发一包**手机形状**的 JSON。只剩这一条协议了 —— iFacialMocap 的
+    /// `键-值|` 文本协议连着接收端一起删掉了。**值不换算**：0.9 就是 0.9，量纲归中间层的输入行。
+    /// </summary>
+    private static void SendPacket(params string[] shapes)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(value);
-        sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, IFacialMocapReceiver.Port));
+        byte[] bytes = Encoding.UTF8.GetBytes("{\"FaceFound\":true,\"BlendShapes\":[" + string.Join(",", shapes) + "]}");
+        sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, TestLocalPort));
     }
 
     /// <summary>
@@ -1151,84 +1201,42 @@ public static class HoFaceTrackingValidation
         Check(HoFaceMiddlewareDefaults.IFacialWire("eyeBlinkLeft") == "eyeBlink_L", "iFacialMocap 线名 = _L 后缀");
         Check(HoFaceMiddlewareDefaults.IFacialWire("mouthLeft") == "mouthLeft", "mouthLeft 不带后缀");
 
+        // ── 接收端的协议解析：**只剩 VTS 一条路**。iFacialMocap 的 `键-值|` 接收端连着那个类一起删了
+        //（它的线名映射还留在默认输入行里，但"怎么解一包"已经没有代码了）—— 所以原来那 8 条
+        // iFacialMocap 报文断言（值不除 100 / 线名不改 / head_0..5 / leftEye_1 / 缺键不补 0 /
+        // NaN 计数 / 未知线名照收 / 只有姿态也算一帧）跟着那份代码一起删掉，没有对象可测了。
+        // "接收端只交原样、不换算"这条规矩对 VTS 照样断言；键名与请求报文的逐条覆盖在
+        // .research/profile-json-test（离线台架，不用起 Unity）。
         var culture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
         try
         {
-            var parser = new IFacialMocapReceiver();
-            Check(parser.ParseForTest("jawOpen-60.5|eyeBlink_L-30|eyeBlink_R&42|=head#-20,5,-1,0.1,0.2,0.3|leftEye#1,-2,3|", out var p), "v1/v2 packet parsing");
-            Near(p.Get("jawOpen"), 60.5f, "值原样（不除 100，量纲归输入行）", 0.0001f);
-            Near(p.Get("eyeBlink_L"), 30f, "线名原样（不改名）", 0.0001f);
-            Near(p.Get("head_0"), -20, "头姿第 0 个分量（欧拉角 X）");
-            Near(p.Get("head_5"), 0.3f, "头姿第 5 个分量（位置 Z）");
-            Near(p.Get("leftEye_1"), -2, "左眼第 1 个分量");
-            Check(!p.Has("mouthClose"), "缺的键就是不出现（不会补 0）");
-            // 无效数值（NaN/Infinity）记一次无效；**不认识的线名不再是错误** —— 接收端不需要名字表，
-            // 它只交原样，"这个名字有没有用"由中间层的输入行决定。
-            Check(parser.ParseForTest("jawOpen-NaN|mouthClose-Infinity|eyeBlink_L-20|junk-3|", out p)
-                && p.InvalidCount == 2 && p.EntryCount == 2 && p.Has("junk"), "无效数值不影响好字段，未知线名照收");
-            Check(parser.ParseForTest("=head#0,0,0,0,0,0|", out p) && p.EntryCount == 6, "只有姿态也算有效帧（姿态真的被吃进来了）");
-
-            // VTS 手机那条：字段名照抄载荷，值不换算。
-            var vts = new VtsIphoneReceiver();
-            bool vtsOk = vts.ParseForTest("{\"Timestamp\":123,\"FaceFound\":true,\"Rotation\":{\"x\":1,\"y\":2,\"z\":3},"
-                + "\"Position\":{\"x\":0.1,\"y\":0.2,\"z\":0.3},\"Hotkey\":4,"
-                + "\"BlendShapes\":[{\"k\":\"EyeBlinkLeft\",\"v\":0.75},{\"k\":\"JawOpen\",\"v\":0.2}],"
-                + "\"EyeLeft\":{\"x\":9,\"y\":8,\"z\":7},\"EyeRight\":{\"x\":6,\"y\":5,\"z\":4},\"Future\":\"ignored\"}", out var v);
-            Check(vtsOk, "VTS JSON 包解析（未知字段不炸）");
-            Near(v.Get("EyeBlinkLeft"), 0.75f, "VTS 形态键原样（0..1）", 0.0001f);
-            Near(v.Get("Rotation_y"), 2f, "VTS 头旋转分量", 0.0001f);
-            Near(v.Get("Position_z"), 0.3f, "VTS 头位置分量", 0.0001f);
-            Near(v.Get("EyeLeft_x"), 9f, "VTS 左眼分量", 0.0001f);
-            Near(v.Get("FaceFound"), 1f, "VTS 有 faceFound 字段");
-            Near(v.Get("Hotkey"), 4f, "VTS 有热键字段");
+            // VTS 手机：字段名照抄载荷，值不换算。
+            using (var vts = new VtsIphoneReceiver())
+            {
+                bool vtsOk = vts.ParseForTest("{\"Timestamp\":123,\"FaceFound\":true,\"Rotation\":{\"x\":1,\"y\":2,\"z\":3},"
+                    + "\"Position\":{\"x\":0.1,\"y\":0.2,\"z\":0.3},\"Hotkey\":4,"
+                    + "\"BlendShapes\":[{\"k\":\"EyeBlinkLeft\",\"v\":0.75},{\"k\":\"JawOpen\",\"v\":0.2}],"
+                    + "\"EyeLeft\":{\"x\":9,\"y\":8,\"z\":7},\"EyeRight\":{\"x\":6,\"y\":5,\"z\":4},\"Future\":\"ignored\"}", out var v);
+                Check(vtsOk, "VTS JSON 包解析（未知字段不炸）");
+                Near(v.Get("EyeBlinkLeft"), 0.75f, "VTS 形态键原样（0..1）", 0.0001f);
+                Near(v.Get("Rotation_y"), 2f, "VTS 头旋转分量", 0.0001f);
+                Near(v.Get("Position_z"), 0.3f, "VTS 头位置分量", 0.0001f);
+                Near(v.Get("EyeLeft_x"), 9f, "VTS 左眼分量", 0.0001f);
+                Near(v.Get("FaceFound"), 1f, "VTS 有 faceFound 字段");
+                Near(v.Get("Hotkey"), 4f, "VTS 有热键字段");
+                Check(!vts.ParseForTest("", out _), "空载荷不算一帧");
+            }
         }
         finally { CultureInfo.CurrentCulture = culture; }
     }
 
-    private static void ReceiverTests()
-    {
-        using (var receiver = new IFacialMocapReceiver())
-        {
-            try
-            {
-                receiver.Start(IFacialEntry("127.0.0.2"));
-            }
-            catch (SocketException)
-            {
-                // 端口被别的程序占着 —— 实测很常见：Warudo 正连着手机，或本机的面捕面板在跑。
-                // iFacialMocap 只往一个 IP:端口发，所以同一台机器上只能有一个监听者。
-                // 环境问题不该让整套用例挂掉，但也**不假装通过**：显式跳过，并在最后一行里报出来。
-                receiverSkipped = true;
-                Debug.Log("HO_FACE_TEST_SKIPPED: receiver tests —— UDP " + IFacialMocapReceiver.Port
-                    + " 已被占用（通常是 Warudo 或本机的面捕面板在监听）");
-                return;
-            }
-
-            using (var device = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.2"), 0)))
-            {
-                byte[] data = Encoding.UTF8.GetBytes("jawOpen-37|");
-                device.Send(data, data.Length, new IPEndPoint(IPAddress.Loopback, IFacialMocapReceiver.Port));
-                double until = IFacialMocapReceiver.Now + 2;
-                HoFaceInputPacket p = null;
-                while (IFacialMocapReceiver.Now < until && p == null) { receiver.TryTake(out p, out _); Thread.Sleep(5); }
-                Check(p != null, "real UDP receiver accepts configured sender");
-                Near(p.Get("jawOpen"), 37f, "UDP payload survives receiver（原值，量纲归输入行）", 0.0001f);
-                bool busy = false;
-                using (var second = new IFacialMocapReceiver())
-                    try { second.Start(IFacialEntry("127.0.0.2")); } catch (SocketException) { busy = true; }
-                Check(busy, "second socket fails explicitly on occupied port");
-                receiver.Dispose(); receiver.Start(IFacialEntry("127.0.0.2"));
-                Check(receiver.Running, "socket can reopen after disposal");
-            }
-        }
-    }
-
-    /// <summary>验证用例用的 iFacialMocap 源条目（127.0.0.2 是本机回环的另一个地址）。</summary>
-    private static HoFaceSourceEntry IFacialEntry(string ip) => new HoFaceSourceEntry
-    {
-        kind = HoFaceSourceKind.IFacialMocap, phoneIp = ip, localPort = IFacialMocapReceiver.Port
-    };
+    // ── ReceiverTests() 与它用的 IFacialEntry() 一起删掉了。──────────────────────────────
+    // 那一段验的是"真的起一个 UDP socket、收一包、端口被占时报错、Dispose 之后能重开"，
+    // 对象是 iFacialMocap 接收端 —— 那个类已经不存在了（只剩 VTS，而 VTS 是**请求式**的：
+    // 它要主动往手机 21412 发续约包才收得到回包，本机自发自收量不到这条链路）。
+    // 那几条断言里真正属于我们的部分（来源校验 / 大小上限 / 瞬时错误容忍 / 丢旧帧计数）
+    // 现在都在 HoFaceReceiverBase 里，是"收包循环"那段代码的职责，不是协议解析的职责。
 
     private static void Near(float actual, float expected, string name, float tolerance = 0.15f) => Check(Mathf.Abs(actual - expected) < tolerance, name + " actual=" + actual + " expected=" + expected);
     private static void Check(bool condition, string name)
