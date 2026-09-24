@@ -84,11 +84,11 @@
 | 节点个数 | **3 个**（`NodeTypes` 列全） | 同上 `:38-43` |
 | 沙箱目录名 | `…/StreamingAssets/Plugins/Data/hollow.hofacetracking/`（= pluginId） | `Player.log`：`[Ho 面捕] 中间层配置目录：…（现有 2 份配置）` |
 
-| 节点（面板标题） | 状态 | 干什么 |
+| 节点（面板标题） | 状态 | 输出的口（2026-09-25 收口后） |
 |---|---|---|
-| `Ho Face 接收器（VTS 手机）` | **正式** | 收手机 UDP，**原样**交出"线名 → 原值" + 状态 |
-| `Ho Face 处理链` | **正式** | 中间层 + 控制器合一：读 `*.hoface.json`，产出与官方接收器**同形的 5 个端口** |
-| `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[FlowInput] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
+| `Ho Face 接收器（VTS 手机）` | **正式** | **3 个**：`原始值`（字典，列表语义，喂处理链）、`新鲜`（布尔，喂处理链「输入新鲜」——这是信号不是给人看的）、`状态`（一行文本：在不在收 / 状态说明 / 本帧键 / 帧·坏帧 / 距上帧，外加**只在真丢包时**出现的来源提示）。<br>砍掉的六个：`运行中` `本帧键数` `距上帧秒` `累计帧/坏帧` `外来来源` `本帧原始值` —— 都只是"给人看一眼"，不驱动任何节点，`本帧原始值` 还是 `原始值` 的文本版（想看就把 `原始值` 接「Ho调试日志」，那边摊成 `线名 = 值`）。 |
+| `Ho Face 处理链` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个合并后的 `状态`（四行：配置行 · 问题 · 沙箱路径 · 沙箱里现成的配置）。<br>砍掉的五个诊断口：`沙箱目录` `可用配置` `配置问题` `发出内容` `数值预览` —— 前四个并进 `状态`，`数值预览` 那份长文本仍在（点「重读配置」按钮会整份写进 `Player.log`）。 |
+| `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
 
 **2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「Ho调试日志」接替）：
 `Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
@@ -386,7 +386,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 `Plugin.PersistentData`（`PluginPersistentDataManager`）是沙箱化文件 API。
 ✅ 实测路径：`Warudo_Data/StreamingAssets/Plugins/Data/<pluginId>/`，
 本机已经在用：`…/Plugins/Data/hollow.hofacetracking/ho-2d-test1.hoface.json`（+ 一份 `ho-full-test.hoface.json`）。
-节点上的「沙箱目录」口直接给路径，不用猜 Warudo 的目录结构。
+节点上的「状态」口直接给路径，不用猜 Warudo 的目录结构（2026-09-25 之前是一个单独的「沙箱目录」口，收口时并进了「状态」的第二行）。
 
 ⚠️ **`GetFiles` 不能用**：它第三个参数是 `System.IO.SearchOption`，而 UMod 构建期审查禁止引用 `System.IO.*`
 （反射 `PluginPersistentDataManager` 确认签名）。只能用 `GetFileEntries(相对路径, 通配, Func<string,bool>)`。
@@ -427,7 +427,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 * **不是"手机主动推流"。** 手机不接受目标地址：它把数据发回**请求包的源 IP**，
   端口用请求里 `ports` 数组指定的。所以**手机上除了那个开关没有要填的东西**。
 * 我们这边填：`手机 IPv4` = 手机的局域网 IP（**必须填对**，源 IP 过滤会静默丢包 ——
-  所以接收器专门有个「外来来源」口把被丢的来源 IP:端口摆出来）、
+  所以接收器的「状态」口在**真丢包时**会把被丢的来源 IP:端口摆出来）、
   `手机端口` = `21412`（默认值，或 App 上显示的）、`本机端口` = 数据回来的落点（默认 `49985`）。
 * 请求包（`HoVtsPacket.BuildRequest`，离线测试断言了原文）：
   `{"messageType":"iOSTrackingDataRequest","time":5,"sentBy":"HoFaceTracking","ports":[49985]}`

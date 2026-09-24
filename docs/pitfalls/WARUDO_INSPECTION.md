@@ -131,8 +131,13 @@ Warudo 没有"自绘节点 UI"的口子（`Warudo.Core` 里没有自定义绘制
 | 部分 | 用什么 | 为什么 |
 |---|---|---|
 | 显示 | `[Markdown(20, false, false)] public string Text`（+`[Transient]`） | 照抄官方「查看值」那一行（`--attrs` 读出来是 `[Markdown(13, False, False)] public String Text`）：**控件由特性决定、不由类决定**，照抄特性就是复用同一个控件 |
-| 按钮 | `[FlowInput] public Continuation Copy()` | Warudo 没有"普通按钮"，Core / Plugins.Core 里**没有 `[Trigger]`**（`--find-attr Trigger` 两处都空）；能点的就是 `[FlowInput]`（返回 `Continuation`），接收器节点的「连接/断开」同款 |
+| 按钮 | `[Trigger(30)] [Label("复制")] public void Copy()` | Warudo 的**纯按钮**就是 `[Trigger(order)]`：官方节点一大堆（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），**而且不占任何口**。`[FlowInput]` 也能点（接收器的「连接/断开」就是它），但会多一个 flow 出口 socket —— 第一版用它，收口时换掉了 |
 | 剪贴板 | `UnityEngine.GUIUtility.systemCopyBuffer` | Warudo **自己没有剪贴板 API**（`--list Clipboard` 两处都空）；整个 Managed 目录里只有 `UnityEngine.IMGUIModule.dll` 带这个名字 → 本地编译检查的引用表为此要加 `UnityEngine.IMGUIModule.dll` |
+
+> ⚠️ **取证工具的坑（害我写出过一条错结论）**：`warudo-knobs --find-attr` 比的是**特性类型名**，
+> 所以要写 `--find-attr TriggerAttribute`（**带 `Attribute` 后缀**）。我第一次写 `Trigger`，
+> 两个 DLL 都**静默返回空** —— 于是把"Core 里没有 `[Trigger]`"写进了三份文档。
+> 实际它到处都是，而且对我们更合适。**查不到时先怀疑查询写法，再怀疑世界。**
 
 **"能不能直接继承官方那个节点、只加一个按钮"**：技术上可以 —— 反射确认
 `Warudo.Plugins.Core.Nodes.InspectValueNode` 是 **public、非 sealed**，`OnUpdate` 是 **public virtual**。

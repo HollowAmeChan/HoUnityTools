@@ -411,7 +411,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | --- | --- | --- | --- |
 | ① | 写 profile 只出 **342 字节**（只剩头部四个字段，`inputs` / `outputs` 两个数组整个没了，末尾 `}` 还是完整的） | `JsonUtility` 在**播放器里**静默丢掉 `List<嵌套类>` 字段（编辑器里是好的） | 配置读写走 `HoFaceProfileJson` + `HoJsonReader` |
 | ② | 读 profile 报"配置文件里一行输出都没有"，而可用配置明明列出了那两个文件 | 同一个原因，读路径也是坏的（解析出了空列表） | 同上 |
-| ③ | VTS 包"解析成功"、字段名也对，但**52 个形态键全丢**（运行期实测 `本帧键数=15`，12 个头眼分量全在） | 还是同一个原因 —— `BlendShapes` 是 `List<VTSTrackingDataEntry>` | 解析搬到 `HoVtsPacket.cs`（纯静态，所以能脱离 Unity 离线测） |
+| ③ | VTS 包"解析成功"、字段名也对，但**52 个形态键全丢**（运行期实测 `本帧键 15`，12 个头眼分量全在） | 还是同一个原因 —— `BlendShapes` 是 `List<VTSTrackingDataEntry>` | 解析搬到 `HoVtsPacket.cs`（纯静态，所以能脱离 Unity 离线测） |
 
 **规则（覆盖所有数据路径）：我们的数据一律不用 `JsonUtility`。** 详见 `Runtime/FaceTracking/HoJson.cs:7-24`。
 
