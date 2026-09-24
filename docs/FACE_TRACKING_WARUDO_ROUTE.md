@@ -88,7 +88,7 @@
 |---|---|---|
 | `Ho Face 接收器（VTS 手机）` | **正式** | 收手机 UDP，**原样**交出"线名 → 原值" + 状态 |
 | `Ho Face 处理链` | **正式** | 中间层 + 控制器合一：读 `*.hoface.json`，产出与官方接收器**同形的 5 个端口** |
-| `HoFace调试日志` | **正式（给人看的小工具）** | **形状照官方「查看值」抄**：`[DataInput] object A`（什么类型都能接）+ `[Markdown] string Text`（只读文本块）+ `OnUpdate` 里变了才重写并广播，**只多一个 `[Trigger] 复制到剪贴板`**（`GUIUtility.systemCopyBuffer`）。写显示字段**必须走端口**（`SetDataInput(key, text, broadcast: true)`）—— 只给 C# 字段赋值时，界面上那个块连占位文字都不显示（截图实测）。前两版的坑：`[Disabled]` 的口收不到上游写入；"可编辑多行框当显示行"界面不刷 |
+| `HoFace调试日志` | **正式（给人看的小工具）** | **形状照官方「查看值」抄**：`[DataInput] object A` + `[Markdown] string Text` + `OnUpdate` 里变了才重写并广播，**只多一个 `[Trigger] 复制到剪贴板`**（`GUIUtility.systemCopyBuffer`）。⚠️ **读、写都必须走"端口"**：写显示字段要 `SetDataInput(key, text, broadcast: true)`（只赋值字段时块里连占位文字都没有）；**读上游输入要 `GetDataInput<object>(nameof(A))`** —— 上游写在"端口"上，`object` 这种装箱类型的 **C# 字段始终是 null**（日志实测），而强类型口（中间层那个 `Dictionary<string,float>`）反而会被写进字段。前两版的坑：`[Disabled]` 的口收不到上游写入；"可编辑多行框当显示行"界面不刷 |
 
 **2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「HoFace调试日志」接替）：
 `Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
