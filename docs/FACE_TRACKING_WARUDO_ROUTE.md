@@ -18,7 +18,9 @@
 >    三处比对同一件事：**反射**（编译期真值、含继承）、场景里节点实例的 **`dataInputs`**（该实例未被连线的口）、**`dataConnections`**（被连线的口）。
 > 2. **本机场景文件**：`Warudo_Data/StreamingAssets/Scenes/DefaultScene.json` —— 官方那张图 `面部追踪 - iFacialMocap` 的
 >    节点、端口类型、每个口的当前值、全部 25 条数据连线与 5 条流程连线都在里面。
-> 3. **运行期探针输出**：`AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（2026-09-24）—— 角色探针那一整段报告。
+> 3. **运行期探针输出**：`AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（2026-09-24）—— 那时候那台
+>    **角色探针**打出来的整段报告。⚠️ 探针本身**已于 2026-09-25 删除**（§2.0），所以本文里凡是引
+>    「探针「X」一节」的地方，都是指**当时那份报告**（证据留在 `Player.log` 里），不是现在还能跑出来的东西。
 > 4. **mod 源码**：`Assets/HoWarudoModTests/Mods-Ho/HoFaceTracking/`（**另一个工程**，本文只读不改）。
 
 ---
@@ -79,16 +81,19 @@
 | 项 | 今天 | 依据 |
 |---|---|---|
 | mod 个数 | **1 个**：`[PluginType] Id = hollow.hofacetracking`，Name `Ho Face Tracking`，v`0.2.0` | `HoFaceTrackingPlugin.cs:32-46` |
-| 节点个数 | **5 个**（`NodeTypes` 列全），其中 **3 个是临时探针、待清理** | 同上 `:38-45` |
+| 节点个数 | **3 个**（`NodeTypes` 列全） | 同上 `:38-43` |
 | 沙箱目录名 | `…/StreamingAssets/Plugins/Data/hollow.hofacetracking/`（= pluginId） | `Player.log`：`[Ho 面捕] 中间层配置目录：…（现有 2 份配置）` |
 
 | 节点（面板标题） | 状态 | 干什么 |
 |---|---|---|
 | `Ho Face 接收器（VTS 手机）` | **正式** | 收手机 UDP，**原样**交出"线名 → 原值" + 状态 |
 | `Ho Face 处理链` | **正式** | 中间层 + 控制器合一：读 `*.hoface.json`，产出与官方接收器**同形的 5 个端口** |
-| `Ho Face 原始值（按线名）` | **临时探针，待清理** | 按线名读一个原值（调试入口） |
-| `Ho Face 调试台` | **临时探针，待清理** | `[MultilineInput]` 多行框：把一段文本变成能全选、能复制 |
-| `Ho Face 角色探针` | **临时探针，待清理** | 摸底：层级 / 空间 / ARKit 对照 / Mod 资产 / 复刻 |
+| `HoFace调试日志` | **正式（给人看的小工具）** | 两个口子：「写入」= 纯口子（不可编辑），上游一写，面板上那行「日志」就刷成能全选复制的新文本 |
+
+**2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「HoFace调试日志」接替）：
+`Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
+`Ho Face 角色探针`（结论已落进本文 §3–§5；**它的观察窗也一起没了** —— §7 待办 #2/#3 的判据要另找工具）、
+旧的 `Ho Face 调试台` 形态（多行框 + 抓取/追加/清空/摘要收成两个口子）。
 
 ⚠️ **轮询由接收器节点驱动**：`OnUpdate` 里调 `HoFaceInputState.Poll()`（`HoFaceReceiverStatusNode.cs:42-46`）——
 它不在图里，就**没有人收包**。
@@ -111,7 +116,7 @@
 * **应用端不碰 Warudo 的通用机械**（`SWITCH_*` / `SMOOTH_*` / `MERGE_*` / `EMPTY_*` / `DEFAULT_*` / `LOOK_AT`），
   只留那三个官方应用节点。
 * **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② "控制器"还是**数据树**（`Core/HoFaceChain.cs`）而不是
-  `.controller`；③ 多着 3 个临时节点；④ 今天的处理链端**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
+  `.controller`；③ 今天的处理链端**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
   目标形态那个合一节点直接输出"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
   offset，所以**语义**上今天已经是偏移了：单位四元数 = 不改那根骨头，见 §3.3 与 §3.4 第 3 条）。
 * **为什么现在没拆成两个 mod**：Warudo **每个 mod 各自编译成一个程序集**，同名类型跨 mod 是**不同的 `Type`**，
@@ -373,8 +378,8 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 ✅ 复刻（`Instantiate(GameObject)`）的结果也很干净：`SkinnedMeshRenderer 31，Animator 1，Transform 1000，组件总数 1112`；
 形态键 **副本 161 / 本体 161 → 对得上**；**骨骼重映射 29729/29729 根骨骼指向副本内部 → 完全重映射，副本能独立驱动**。
-⚠️ 副本会跑一次 `Awake`，带弹簧骨 / 布料 / 物理的角色可能在那一下注册到全局管理器（探针只在摸底时用，
-常驻影子实例要记得关掉它们）。
+⚠️ 副本会跑一次 `Awake`，带弹簧骨 / 布料 / 物理的角色可能在那一下注册到全局管理器（当时那台探针只在
+摸底时用；探针已删，这条留给以后真要做常驻影子实例时参考 —— 要记得关掉它们）。
 
 ### 4.4 中间层配置文件放插件沙箱 ✅（已跑通）
 
@@ -456,7 +461,8 @@ AvatarCloneParent：Character Avatar Clone Parent
      局部/世界两个数组与两个属性全都相等，区分不开。
   2. **这些数组是"当前姿态"还是"加载时抓的初始基准"** —— 那一次角色**静止**，当前姿态与初始姿态重合，
      同样区分不开。**所以"基准 = `InitialBoneLocalPositions`"这句目前只是名字给的暗示，不是实测。**
-* **判据（重跑一次就行）**：让角色**带上动画**（旋转非 identity、根有位移），再跑一次角色探针的「空间」一节 ——
+* **判据（得先加个临时观察窗）**：让角色**带上动画**（旋转非 identity、根有位移），再打一次「空间」那组读数
+  （原来那台角色探针**已删**，所以这段要先临时加回去、或者在做 `HoVtsTrackController` 时顺手量）——
   同一根骨头的 `localPosition` / `position` / `localRotation` / `rotation` 与四个数组同下标元素逐个比：
   跟哪个相等，那个数组就是那个空间；**都不等**说明它不是"当前姿态"而是别的基准。
   这正是我们算偏移要对齐的基准（对齐错了，写进去的旋转会整体歪一个常量）。
@@ -485,12 +491,12 @@ AvatarCloneParent：Character Avatar Clone Parent
 | # | 事项 | 判据 | 状态 |
 |---|---|---|---|
 | 1 | 修 profile 读写（换成自写 JSON） | 沙箱里的 profile 读出来是 128 输入行 / 56 输出行 | ✅ **已完成**（§4.5；离线 87/87，`Player.log` 已见 128/56） |
-| 2 | mod 里放一个 `.controller`，验证 `SharedAssets.AssetCount` 变正、`Load` 取得回 | 探针「Mod 资产」一节：`AssetCount=2` ✅ 已见，但 `Load("HoFaceTree")` **取不到** —— 先按 **assetID 0..AssetCount-1** 逐个试（§4.1 那条新发现），再回过头定名字约定 | ❓ **未实测** |
-| 3 | 骨骼数组的空间与偏移基准 | 一半已量出：**局部/世界**与**按 `HumanBodyBones` 索引** ✅（§5）。**基准那一半仍未测** —— 要带非 identity 旋转的角色重跑探针 | 🔶 **半条** |
+| 2 | mod 里放一个 `.controller`，验证 `SharedAssets.AssetCount` 变正、`Load` 取得回 | 当年那台探针的「Mod 资产」一节给过 `AssetCount=2` ✅，但 `Load("HoFaceTree")` **取不到** —— 先按 **assetID 0..AssetCount-1** 逐个试（§4.1 那条新发现），再回过头定名字约定。⚠️ **探针已删，观察窗要临时加** | ❓ **未实测** |
+| 3 | 骨骼数组的空间与偏移基准 | 一半已量出：**局部/世界**与**按 `HumanBodyBones` 索引** ✅（§5）。**基准那一半仍未测** —— 要带非 identity 旋转的角色再量一次（观察窗同上） | 🔶 **半条** |
 | 4 | 处理链节点替换掉官方接收器节点后行为不变 | 图上换掉接收器，面部照常动。**一次都没在 Warudo 里跑过** | ❓ **未实测** |
 | 5 | 影子 Animator：`AddComponent<Animator>()` + 控制器 + 反算 | Unity 侧 ✅ 已落地（`HoFaceAnimationSession.cs:119-127`，影子台 + 只写拥有的键）。**Warudo 侧不打算走这条路**（§6），改数据树 | ✅ Unity 侧完成 |
 | 6 | Unity 侧调试面板：影子算 + 纯写入角色预制件，角色不挂任何组件 | ✅ 已落地（全局面板 + `HoFaceDebugHost` 宿主；角色上零组件） | ✅ **已完成** |
-| 7 | 清掉 3 个临时节点 + 收缩 `NodeTypes` | 面板上只剩接收器 + 处理链 | ❓ 待做（**另一轮**） |
+| 7 | 清掉 3 个临时节点 + 收缩 `NodeTypes` | 面板上只剩接收器 + 处理链 + 调试日志 | ✅ **2026-09-25 完成**（§2.0） |
 | 8 | 按目标形态拆成 `HoVtsTrack` / `HoVtsTrackController` 两个 mod | 两个 `.warudo` 各自能加载、端口连起来能跑 | ❓ 待做 |
 
 ---
@@ -506,6 +512,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 | Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（会话日志另在 `Logs\WarudoLog-<启动时间>.log.gz`） | — |
 
 > **`Player.log` 这条很重要**：Warudo 没有界面控制台，但我们的 `Debug.Log` 会落到那儿，
-> 所以验证运行期行为不用截图，直接读文件就行（面板上的「调试台」节点是给人看的备份）。
+> 所以验证运行期行为不用截图，直接读文件就行（要看画在图上的文本，用「HoFace调试日志」节点 ——
+> 上游一写，它那行「日志」就能全选复制）。
 > 另外 `.research/` 下的离线测试跑的是**包里的真源码**（用桩件顶替 UnityEngine），
 > 所以"包里的代码到底对不对"不需要等 Warudo 构建就能验。
