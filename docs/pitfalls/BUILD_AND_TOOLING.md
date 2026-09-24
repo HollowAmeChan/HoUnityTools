@@ -51,6 +51,33 @@ methodInfo.Invoke(target, args)
 运行时错误用固定文本 + `Debug.LogException(exception)` 保留诊断。
 （FastBuild 自身在 `Editor` 程序集里可以反射调 UMod 入口 —— 两者必须保持程序集边界。）
 
+### 4.3 `System.IO` 整个命名空间也被禁（2026-09-25 实测：一句 `Path.GetFileName` 就毙）
+
+第一次跑"控制器模式"（`Core/HoFaceController.cs`）时，那次构建**只报了一个真因** ——
+状态文字里为了好看，顺手用了 `System.IO.Path.GetFileName(path)`：
+
+```
+Illegal reference to disallowed namespace: System.IO
+Illegal reference to disallowed type: System.IO.Path
+Referenced in method body: '…HoFaceController::Prepare(System.String)' at instruction:
+        'IL_0291: Call System.String System.IO.Path::GetFileName(System.String)'
+Illegal Namespace References = '1', Illegal Type References = '1', Illegal Member References = '1'
+```
+
+**它连"只为显示个文件名"都不放过。** 而这条其实早就写在 `Core/HoVtsIphoneReceiver.cs:30` 的注释里
+（"禁用 System.IO / 反射 / P-Invoke；System.Net.Sockets 官方 VMC 插件就在用，是允许的"）——
+只是没进本地 lint 名单，所以本地一路全绿、真机才红。**两条动作**：
+
+1. 显示文件名就**自己按分隔符切**（`LastIndexOf('/')` / `LastIndexOf('\\')`）；真要读写文件走插件的沙箱
+   API（`Plugin.PersistentData`，我们的 `HoFaceProfileStore` 就是这条路）。
+2. **本地 `compile-check.ps1` 的 lint 名单加上 `System\.IO\b`**（连同 `System.Reflection` 一族、`GetType()`、
+   `Activator.`、`DllImport` 等，见 [`compile-check.ps1`](../../../../Unity_Project/BreakWarudo/Assets/HoWarudoModTests/tools/compile-check.ps1) 的 `$bannedPatterns`）——
+   加完做了正负两个样本的自测：真代码行命中、注释行不命中（lint 会先剥注释与字符串）。
+
+> 附一条从这次报告里顺出来的结论：报告里 `Illegal Assembly Reference = '0'`，被点名的只有 `System.IO`，
+> 也就是说 **`UnityEngine.AssetBundle`（控制器模式要用）没有被安全校验拦** —— 这条 ❓ 有答案了；
+> 但它的**运行期**行为（能不能 `LoadFromFile`、影子 Animator 能不能跑）仍未验。
+
 ### 4.1 现场什么样（2026-09-25 实测，一次就够记住）
 
 「Ho调试日志」要读**上游节点那个口**，第一版用 `Type.GetMethod(name, ...)` + `MethodInfo.Invoke(...)` 实现 ——
@@ -118,7 +145,8 @@ BUILD FAILED!
 **只能当探针**（问"某命名空间在这个更严的集合里让不让"，拿一个**否定信号**），**绝不能当门禁** ——
 拿它当门禁会把能过真机的代码判死。要确认某个 API 合不合法，只有两条路：
 **看官方 mod 有没有在用**（`System.Net.Sockets` 就是这么确认的：官方 VMC/OSC 插件在用），或者**真机构建一次**
-（报错会点名到 IL 偏移）。⚠️ 顺带记一笔：`UnityEngine.AssetBundle` 至今**没有本地结论**（见 §4.1 同款问题）。
+（报错会点名到 IL 偏移）。⚠️ 顺带记一笔：`UnityEngine.AssetBundle` 的**审查**问题已经由一次真机构建回答
+（报告里 Assembly=0，只报了别的东西，见 §4.3）—— 本地那套规则问不出来，但它没被拦。
 
 ## 5. asmdef 与工作区目录
 
