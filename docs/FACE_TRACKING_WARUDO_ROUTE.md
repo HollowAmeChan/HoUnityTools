@@ -165,7 +165,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 **给控制求解** —— 连到官方三个应用节点的那 5 根线原样保住；参数处理用新 Id，只需重接接收器过来的那几根
 （3 根 < 5 根）。背景：Id 或口名一变，老连线就是孤儿线（[从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7）。
 
-**📖 第三条来源：让**已有的接收器**加一个"VTS 服务端"模式（2026-09-25 定，不加新节点）**
+**✅ 第三条来源已落地：接收器的「VTS 服务端模式」（2026-09-25 写进 mod，未在 Warudo 里跑过）**
 
 目标：用户**继续用 VB 原来的 VTS 输出模式**（不用为自己的用途换模式），我们把那份数据接过来。
 **关键事实：这不是"同一个 socket 上多收一种包"，两者方向是反的**：
@@ -175,19 +175,32 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 | 今天收的（手机） | **我们**发 `iOSTrackingDataRequest`，手机把数据发回我们 | UDP |
 | VB 的 VTS 模式 | **VB 当客户端**，连一个 VTS **服务端** | WebSocket（默认 `ws://localhost:8001`）+ 插件握手 + `InjectParameterDataRequest`（`.research/vts-creator-workflow/vts-api.md:124/1379`） |
 
-所以要加的是"接收器里的另一个模式"，它要实现的其实是 **VTS 公开 API 的服务端那一侧**（三条）：
-① UDP `47779` 上发一份 `VTubeStudioAPIStateBroadcast`（VTS 每 2 秒广播一次，**unsolicited**，不是请求应答 ——
+所以加的是"接收器里的另一个模式"，实现的是 **VTS 公开 API 的服务端那一侧**（三条）：
+
+① UDP `47779` 上每 2 秒发一份 `VTubeStudioAPIStateBroadcast`（VTS 就是这么广播的，**unsolicited**、不是请求应答 ——
 所以我们只要也广播一份，VB 的客户端列表里就会出现我们；`vts-api.md:183-204`）；
 ② WebSocket 服务端 + 插件握手（`AuthenticationTokenRequest` → 我们直接给 token；`AuthenticationRequest` → 回 authenticated）；
-③ 解析 `InjectParameterDataRequest`：`data.parameterValues[] = {id, value}` → **`参数`**（键就是 VB 的输出参数名，
-就是 ARKit 那套 ✓）、`data.faceFound` → **`有脸`**（VTS 自己就给了这个字段 ✓），并且**对任何参数都回成功、不报错**
-（真 VTS 对不存在的参数会报错，我们照收）。
+③ 解析 `InjectParameterDataRequest`：`data.parameterValues[] = {id, value}` → 一份字典、`data.faceFound` → **有脸**
+（VTS 自己就给了这个字段），并且**对任何参数都回成功、不报错**（真 VTS 对不存在的参数会报错，我们照收）。
 
-契约不变（还是 `参数` + `有脸`）→ 直接接 `HoFace控制求解`，**拆分计划完全不受影响**。
+**代码落在哪**：`Core/HoVtsApiServer.cs`（广播 + WebSocket 服务端 + 握手 + 收注入）+
+`Core/HoVtsApiPacket.cs`（报文解析/应答，纯静态）；节点上多一个勾选框与一个端口，**没有新节点**。
+细节与取舍（无线程、端口从 `8002` 起、参数名照收、`faceFound` 直接用）见 mod `README.md` §1.1.1。
 
-**❓ 做之前必须先验的一件事**：VB 的客户端列表**认不认一个"自称 VTS"的服务端**
-（它可能校验 `apiName`/`apiVersion`，或连上后先发某个请求核对）。便宜的验证法：先只写"假广播 + 最小 WS 服务端"，
-看 VB 列表里出不出得来 —— 通不过的话再退回 VMC（那条我们不主动做，理由见下）。
+**两条实现上的硬约束**（都是踩出来/查出来的）：
+
+* **握手要的 SHA-1 只能手写**：UMod 安全校验**禁 `System.Security.Cryptography`**
+  （本机实测：拿 `Trivial.CodeSecurity` 的默认规则集跑"只用 `SHA1.Create()`"的探针 → Illegal namespace = 1，
+  同条件控制组 = 0）。手写版用 RFC 6455 官方向量自证过（`dGhlIHNhbXBsZSBub25jZQ==` → `s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`）。
+  ⚠️ 顺带一条：**默认规则集比 UMod 实际用的严**（拿它跑我们今天在跑的那个 mod 会报 55 条，
+  而真机构建是过的），所以它**不能**当"本地验证器"用，只能当"探针问某个命名空间让不让用"。
+* **参数名不是 ARKit**：VB 的 VTS 兼容预设注入的是 **VTS 自己那套参数名**（`MouthOpen` / `EyeOpenLeft`…），
+  所以这份数据照旧要过**参数处理的输入行**改名 —— 别以为接上就与规范名对齐了（2026-09-25 更正）。
+
+**❓ 唯一的未验证项**：VB 的客户端列表**认不认一个"自称 VTS"的服务端**（代码该做的都做了：广播字段、
+握手、token、应答形态全照官方文档；但没在真机上让 VB 连一次）。**用户明确说不先验、直接写**，
+所以这一条留着 —— 第一次真机跑的时候看 VB 列表里有没有 `Ho Face Tracking (Warudo)`。
+
 **⚠️ VMC 那条不做**：Warudo 自带 VMC（`GET_VMC_RECEIVER_DATA` 节点，输出 `IsTracked` + `BlendShapes` 字典，
 形状正好对齐），技术上最省 —— **但它要用户把 VB 切到 VMC 模式**，等于把成本转嫁给用户、还可能弄断他原来的 VTS 用途，
 所以 2026-09-25 明确否掉（只作为假 VTS 走不通时的后备）。
@@ -200,7 +213,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
               （裸线名原样交出）        （中间层配置：裸线名→规范名，    （零配置：从参数反求         覆盖角色骨骼旋转偏移列表
                                         曲线/修饰符）                    动画输出）                  覆盖角色根位置
 
-  〔同一个接收器的另一个模式〕VTS 服务端模式：VB 的 VTS 输出 ──参数/有脸──▶ HoFace控制求解
+  〔同一个接收器的另一个模式，✅ 已实现〕VTS 服务端模式：VB 的 VTS 输出 ──参数/有脸──▶ HoFace控制求解
   〔别的源〕官方面捕源（iFacialMocap 等）→ 参数处理的内置输入行 ──▶ 同上
 ```
 
