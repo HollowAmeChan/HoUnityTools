@@ -81,3 +81,39 @@ SUBTRACT_FLOAT.A = 1.0，B ← SWITCH_FLOAT.Output    → Result = 1 − IsTrack
 
 怎么办：按行号取那一段（本机那份报告从第 1468 行起），或者读全文再切片。
 `Player.log` 的路径与"怎么读"见 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md)。
+
+## 7. "官方节点是**读**还是**等着被喂**" —— 去看它的方法体（IL）
+
+症状：我们自己写的调试节点收不到上游写的值（字段与 `GetDataInput` 都是空），
+而同一个上游接到官方「查看值」上就有值 —— 光看签名看不出差别。
+
+怎么办：`warudo-knobs` 现在有 `--il`（反射读 `MethodBody`，把 call/field/string 的 token 解析成名字）：
+
+```powershell
+dotnet run --project .research/warudo-knobs -- Warudo.Plugins.Core.dll InspectValueNode OnUpdate --il
+```
+
+官方 `InspectValueNode.OnUpdate` 的真身（2026-09-25 本机 DLL）：
+
+```csharp
+public override void OnUpdate()
+{
+    if (Graph != Context.OpenedScene.GetSelectedGraph()) return;          // 只在"当前打开的那张图"里更新
+    if (!Context.Service<WebSocketService>().HasConnectedSessions()) return;  // 只在本机有 WebSocket 会话时更新
+    InvokeFlow(null, false);
+    Text = JsonConvert.SerializeObject(A, serializerSettings);            // ← 读的是 **字段** A
+    BroadcastDataInput("Text");                                          // ← 只广播 Text
+}
+```
+
+结论（三条都很有用）：
+1. 官方节点**读字段、不拉端口**：`ldfld A` → 序列化 → `stfld Text` → `BroadcastDataInput("Text")`。
+   所以"上游把值写进下游字段"这条机制**是有的**；我们的字段是空 ⇒ **线根本没送到我们那个口上**。
+2. 它有两道 early-return：**只在自己那张图**（`GetSelectedGraph()`）、**只在本机有 WebSocket 会话**时更新。
+   自己写节点时别照抄这两条（我们不需要）。
+3. `BroadcastDataInput("Text")` 才是刷新文本块那一步 —— 与本文 § 那几条"读写都要走端口"的实测一致。
+
+**连带教训：改端口名/类型会让蓝图里已有的连线变成孤儿。** 我们的调试节点从 `Content`/`Source`(string)
+改成 `A`(object) 之后，旧连线指向的键在新类型上不存在 ——
+UI 上可能**还画着**那条线（看着接在「写入」上），但求值时找不到端口，值永远不进来；
+`Player.log` 只会显示"端口 空 · 字段 空"。遇到这种"看着接了却没值"，**删掉节点重新放一个**再接线。
