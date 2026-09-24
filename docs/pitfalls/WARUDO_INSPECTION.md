@@ -1,4 +1,4 @@
-﻿# 从蓝图里取证：会看漏的三件事
+﻿# 从蓝图里取证：会看漏的那些事
 
 正本：[面捕在 Warudo 的路线](../FACE_TRACKING_WARUDO_ROUTE.md)（官方那张图的逐节点解码）、
 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md)。
@@ -147,3 +147,54 @@ UI 上可能**还画着**那条线（看着接在「写入」上），但求值�
 两种接法都能用 —— 用户不用知道我们内部换了哪个字段名。
 
 （`DataConnection.OutputNode.Name` 拿到的是**标题还是内部名**没验过；只拿它认人，不参与逻辑。）
+
+**这件事的结论在 §8：别再赌"上游会推进来"，顺着连线直接调上游那个口。**
+
+## 8. 别赌"上游会把值推进来"：`[DataOutput]` 是**方法**，顺着连线自己调
+
+症状（2026-09-25 本机）：调试节点的线**确实接在**「写入」上，`Player.log` 里写得明明白白：
+
+```
+[Ho 调试日志] 输入连线：「A」←Ho Face 接收器（VTS 手机）.RawValues
+```
+
+可 `A` 就是空的，端口也是空的 —— 而同一根上游喂官方「查看值」有数据。
+前后查了两轮"是不是线接错了"，都不是。
+
+**先纠正一个误读**：官方 `InspectValueNode.OnUpdate` 里那句 `InvokeFlow(null, false)` **不是"把上游拉过来"**。
+`warudo-knobs --il` 顺着读下去：
+
+```csharp
+// Node.InvokeFlow(String key, Boolean invokeWhenDisabled)
+public void InvokeFlow(string key, bool invokeWhenDisabled)
+{
+    Graph.InvokeFlow(this, key, invokeWhenDisabled);              // 就一层转发
+}
+
+// Graph.InvokeFlow(Node node, String key, Boolean invokeWhenDisabled)：key == null 那一支
+if (key == null) { invokedFlow.Invoke(node, null); return; }      // 把自己接回流程
+```
+
+也就是说它是"**我这一帧有新东西，把我接回流程往下游传**"，跟"上游什么时候灌进我的字段"是两码事。
+（顺便：`Graph.InvokeFlow` 里有一处 0.4 s 节流 `lastInvokeFlowBroadcastTimestamps`，是给"广播活跃连线"用的。）
+
+**真正的定规** —— Warudo 的口**不是字段对字段的赋值**：
+
+> `[DataInput]` = public 字段；**`[DataOutput]` = public 无参方法**。
+
+我们的接收器节点正是这样：`public Dictionary<string, float> RawValues() => HoFaceInputState.Snapshot();`
+—— **纯读**，调一次就有值，根本不需要谁来推。
+
+**所以可靠的做法**（`Nodes/HoDebugLogNode.cs` 定案，"谁先跑、什么时候灌字段"一概不赌）：
+
+1. `Graph.GetInputDataConnections(this)` 拿到上游 `DataConnection`；
+2. 取 `connection.OutputNode` + `connection.OutputPort.Key`；
+3. **按口名在「上游节点的类型」上找那个 public 无参方法，直接调它**（属性/字段也顺手认一下）；
+4. 读到的就是这一帧的值。端口/字段那条老路留着当**兜底**（真被推过来时照样认）。
+
+副作用心里要有数：这等于**替流程图求值一次上游那个口**。对 `Snapshot()` 这种纯读无所谓；
+要是上游那个口本身有副作用，就得先想清楚（我们自己的节点都是"读状态"，安全）。
+
+**顺带一个好处**：直读对**孤儿线**照样有效 —— 只要 `OutputNode`/`OutputPort` 还在，
+哪怕线上挂的键已经不是我们的口，值也读得出来。所以"改端口名把老线弄成孤儿"不再致命
+（诊断日志照旧会提示，见 §7）。
