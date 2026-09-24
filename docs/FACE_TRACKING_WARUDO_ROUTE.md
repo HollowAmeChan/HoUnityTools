@@ -88,9 +88,9 @@
 |---|---|---|
 | `Ho Face 接收器（VTS 手机）` | **正式** | 收手机 UDP，**原样**交出"线名 → 原值" + 状态 |
 | `Ho Face 处理链` | **正式** | 中间层 + 控制器合一：读 `*.hoface.json`，产出与官方接收器**同形的 5 个端口** |
-| `HoFace调试日志` | **正式（给人看的小工具）** | **形状照官方「查看值」抄**：`[DataInput] object 写入` + `[Markdown] Text` + `OnUpdate` 里 `Text = 值; BroadcastDataInput(nameof(Text));`，另加 `[Trigger] 复制到剪贴板`（`GUIUtility.systemCopyBuffer`）与一个 `[CardSelect] 或直接看`（不接线也能看接收器状态）。**两条必须照抄**（实测）：① 显示文本要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7 |
+| `Ho调试日志` | **正式（通用件，跟面捕无关）** | 就两行：`[DataInput] object 写入`（什么类型都能接）+ `[DataInput] [MultilineInput] [Transient] 日志`（**能鼠标全选、能 Ctrl+C**）。没有按钮、没有说明文字。**为什么不用官方那种 `[Markdown]`**：那是只读渲染、选不中复制不出来；而 Warudo 没有"自绘节点 UI"的口子（`Warudo.Core` 里没有自定义绘制特性/基类方法），可编辑多行框是唯一自带文本选择的控件。**两条必须照抄**（实测）：① 写这个框要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7 |
 
-**2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「HoFace调试日志」接替）：
+**2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「Ho调试日志」接替）：
 `Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
 `Ho Face 角色探针`（结论已落进本文 §3–§5；**它的观察窗也一起没了** —— §7 待办 #2/#3 的判据要另找工具）、
 旧的 `Ho Face 调试台` 形态（多行框 + 抓取/追加/清空/摘要收成两个口子）。
@@ -512,7 +512,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 | Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（会话日志另在 `Logs\WarudoLog-<启动时间>.log.gz`） | — |
 
 > **`Player.log` 这条很重要**：Warudo 没有界面控制台，但我们的 `Debug.Log` 会落到那儿，
-> 所以验证运行期行为不用截图，直接读文件就行（要看画在图上的文本，用「HoFace调试日志」节点 ——
-> 上游一写，它那行「日志」就能全选复制）。
+> 所以验证运行期行为不用截图，直接读文件就行（想要屏上能复制的文本，用通用的「Ho调试日志」节点 ——
+> 上游接进去它就显示，按按钮整段复制）。
 > 另外 `.research/` 下的离线测试跑的是**包里的真源码**（用桩件顶替 UnityEngine），
 > 所以"包里的代码到底对不对"不需要等 Warudo 构建就能验。

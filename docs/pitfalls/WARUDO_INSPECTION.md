@@ -115,7 +115,13 @@ public override void OnUpdate()
    有一版用 `SetDataInput(key, value, broadcast: true)` 代替它，结果**端口里明明是新值
    （日志 `显示口 45 字符`）、界面上那块 `[Markdown]` 纹丝不动**（只显示创建时的初始文字）。
    把官方那两句（`Text = 值; BroadcastDataInput(nameof(Text));`）补回去，同一份代码立刻就画出来了。
-   → 写"只读文本块"的节点，照抄这两句；`SetDataInput` 只影响端口值，不等于界面会重画。
+   → 这段显示字段，照抄这两句；`SetDataInput` 只影响端口值，不等于界面会重画。
+
+**顺带一个"想要能复制的文本"的结论**：`[Markdown]` 是**只读渲染**（官方「查看值」也复制不出来），
+而 Warudo 没有"自绘节点 UI"的口子（`Warudo.Core` 里没有自定义绘制特性、也没有相关基类方法，
+反射 `--list Custom/Draw/UI` 全空）。所以"能鼠标选中、能 Ctrl+C 的框"只有一个选择：
+**`[DataInput]` + `[MultilineInput]` 的可编辑多行框**（同样是"字段赋值 + `BroadcastDataInput`"去写它）。
+我们最终的「Ho调试日志」就是这个形态：一个入口 + 一个能复制的框，没有按钮、没有说明文字。
 
 **连带教训：改端口名/类型会让蓝图里已有的连线变成孤儿。** 我们的调试节点从 `Content`/`Source`(string)
 改成 `A`(object) 之后，旧连线指向的键在新类型上不存在 ——
