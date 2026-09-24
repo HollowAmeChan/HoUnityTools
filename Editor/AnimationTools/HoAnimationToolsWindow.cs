@@ -186,7 +186,10 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 using (new EditorGUI.DisabledScope(!CanBuild))
                 {
                     if (HoConstraintEditorControls.Button("生成",
-                        "每个形态键一份 `<键名>.anim`：值 100 常量，一个片段写所有有这个键的网格。", true))
+                        "每个形态键一份 `<键名>.anim`：值 100 常量，一个片段写所有有这个键的网格。\n"
+                        + "**已有的同名片段会被覆盖**：保留资产本身（GUID 不变，控制器里的引用不会断），"
+                        + "但那个片段里的曲线会被**整份清掉再重写** —— 所以这个文件夹只放它自己的产物。\n"
+                        + "已经不需要的旧片段不会被自动删（报告里会列出来）。", true))
                         Build();
                 }
 
@@ -334,6 +337,8 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 report = "生成 " + built.created + " 个 / 更新 " + built.updated + " 个 · 曲线 " + built.curves
                     + " 条 → " + built.folder
                     + (built.renamed.Count > 0 ? "（文件名被改写过：" + string.Join("、", built.renamed) + "）" : "");
+                string stale = StaleClips(built.names);
+                if (!string.IsNullOrEmpty(stale)) report += "\n" + stale;
                 reportNames.Clear();
                 reportNames.AddRange(built.names);
             }
@@ -343,6 +348,29 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 report = e.Message;
                 reportNames.Clear();
             }
+        }
+
+        /// <summary>
+        /// 输出文件夹里**这次没写到的**片段（键改名了、网格删了都会留下这种）。
+        /// **只报不删** —— 删资产是破坏性操作，交给用户自己决定；这里的作用是别让人以为"跑完就干净了"。
+        /// </summary>
+        private string StaleClips(List<string> written)
+        {
+            if (string.IsNullOrEmpty(folder) || !AssetDatabase.IsValidFolder(folder)) return "";
+            var keep = new HashSet<string>(written, StringComparer.Ordinal);
+            var stale = new List<string>();
+            foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { folder }))
+            {
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(AssetDatabase.GUIDToAssetPath(guid));
+                if (clip == null || keep.Contains(clip.name)) continue;
+                stale.Add(clip.name);
+            }
+
+            if (stale.Count == 0) return "";
+            stale.Sort(StringComparer.Ordinal);
+            string shown = string.Join("、", stale.GetRange(0, Math.Min(6, stale.Count)));
+            return "另有 " + stale.Count + " 个片段这次没写（旧键/旧网格留下的，**不会自动删**）："
+                + shown + (stale.Count > 6 ? "…" : "");
         }
 
         // ══════════════════════════════════════════════════════════════
