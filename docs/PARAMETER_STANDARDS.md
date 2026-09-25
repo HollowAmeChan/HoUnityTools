@@ -258,7 +258,7 @@ App 侧开关：VTS 手机版设置第一页底部的 "3rd Party PC Clients"（R
 | 字段 | 官方类型与注释 | 落到线名空间后叫什么 |
 | --- | --- | --- |
 | `Timestamp` | `long` —— "Current UNIX millisecond timestamp" | `Timestamp`（⚠️ float 只有约 7 位有效数字，**只够调试看个大概**） |
-| `Hotkey` | `int`，**初值 `-1`** —— "Last pressed on-screen hotkey"（README：按键值是 **1–8**） | `Hotkey`（我们原样交出去，**没解释 `-1` 的语义**） |
+| `Hotkey` | `int`，**初值 `-1`** —— "Last pressed on-screen hotkey"（README：按键值是 **1–8**） | `Hotkey`（原样交出去）。见下面那段"`Hotkey` 到底怎么触发" |
 | `FaceFound` | `bool` —— "Whether or not face has been found" | `FaceFound`（1/0）—— **这是我们选它而不选 iFacialMocap 的那个字段**（§6） |
 | `Rotation` / `Position` | `Vector3` —— "Current face rotation" / "Current face position" | `Rotation_x/_y/_z`、`Position_x/_y/_z` |
 | `EyeLeft` / `EyeRight` | `Vector3` —— "Left/Right eye rotation" | `EyeLeft_x/…`、`EyeRight_x/…` |
@@ -277,6 +277,39 @@ App 侧开关：VTS 手机版设置第一页底部的 "3rd Party PC Clients"（R
 
 > ⚠️ **官方示例仓库这个名字有点误导**：它演示的是**同一台 iPhone 上 VTS App 转发 iOS blendshape 数据**
 > （VSeeFace 也吃这条，见 §4.5），而不是"手机从 VTS 拿追踪参数"。**它是 PC 客户端收包，不是 PC 客户端读 VTS 的参数**。
+
+#### `Hotkey` 到底怎么触发（2026-09-25 联网复核官方源码）
+
+两个官方来源合起来才能读全这个字段：
+
+1. **载荷定义的官方注释**（`VTubeStudioRawTrackingData.cs`）：
+   ```csharp
+   /// <summary>
+   /// Last pressed on-screen hotkey.
+   /// </summary>
+   public int Hotkey = -1;
+   ```
+2. **官方 README 的字段清单**：`Any on-screen hotkey pressed? (int between 1 and 8)`。
+3. **官方接收端示例**（`VTubeStudioBlendshapeDataReceiver.cs`）说明了**怎么用**它：
+   ```csharp
+   if (receivedTrackingData.Hotkey != -1)
+   {
+       HotkeyReceived?.Invoke(receivedTrackingData.Hotkey);
+   }
+   ```
+   ⇒ 官方自己就是**把 `≠ -1` 当成"有人按了热键"这个事件**，`-1` 是"没有"。
+
+**结论（能确定的）**：
+* `-1` = **没有热键值**（类型定义里的初值）；**1–8 = 最后按下的那个屏幕热键的编号**。
+* 它是**事件语义**，不是"当前状态"：**没有"松开"这个信号**，只有"最近按过第 N 个"。
+  要拿它做事，判据是 `Hotkey != -1`、并自己处理"同一个键连按两下"（值不会变，得配时间/去抖）。
+* **它跟"键盘按键"无关** —— 是 **on-screen hotkey**，即 VTube Studio app 里的热键按钮。
+
+**未能确认的**：官方 wiki（`DenchiSoft/VTubeStudio` 的 Home / 各页）**没有**写手机版（iOS/Android）
+上屏幕热键具体怎么按、手机版有没有这个界面。所以"手机版能不能触发这条"必须**实测**。
+本机安卓实测：**整场 173 帧日志里 `Hotkey` 只出现过 `-1`**（对照：同一份日志里 `FaceFound`
+有 0/1 两值、`Rotation_x` 有 2422 种取值）——即**这次捕捉里它一次都没被触发过**，原因未知
+（没按 / 手机版没有该界面 / 手机版不填这个字段，三者未区分）。
 
 **来源与时间**：官方示例仓库 `DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest` 的 README
 （`raw.githubusercontent.com/.../main/README.md`）与载荷类型定义
