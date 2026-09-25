@@ -11,7 +11,38 @@
 
 日期：2026-09-26
 
+> ⚠️ **这份规范落在两个仓库上 —— 改一处必须两边都验，一边绿了不算验过**（§0.0）。
+
 ## 0. 一句话与范围
+
+### 0.0 ⚠️ 跨仓：这套东西落在**两个**仓库上，改一处必须两边都验
+
+**这条链不是单仓功能。** 包定词表与主本，mod 是同一套逻辑的运行期；两边各有一个验证口。
+
+| 仓库 | 是什么 | 承载这一系列的哪一层 |
+|---|---|---|
+| **包** `D:\Unity_Fork\HoUnityTools`（分支 `master`） | Unity 包 `com.hollow.hounitytools`。**主本在这儿** | 本文整份规范；`Runtime/FaceTracking/`（求值器 / 中间层 / 通道名 / 语义 Hub 与资产）；`Editor/FaceTracking/`（面板 / 会话 / `Profiles/*.hoface.json`）；`Tests~/` |
+| **mod** `D:\Unity_Project\BreakWarudo\Assets\HoWarudoModTests`（**它自己的仓库**，分支 `main`） | Warudo mod（Mod Tool 0.14.4.8 / Unity 2021.3.45f2） | `Mods-Ho/HoFaceTracking/`：接收器 / 参数层 / 控制器 / 节点 / 配置 store；**外加从包里搬过去的 10 份 `Core/` 副本** |
+
+**为什么只能搬、不能引用**：两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码；
+而"Unity 面板里预览到什么，Warudo 里就输出什么"要求求值器**是同一份** ⇒ 只能搬 + 同步，
+代价就是"两边不一致"这个失败模式。清单与同步办法：mod 侧 `Mods-Ho/HoFaceTracking/Core/PORTED.md`。
+⚠️ **"两边各写一份"是本项目的既定做法，而且不止这一处**（两边都要存在的类型、角色预制件上的资产…）——
+所以别为某一处单独找"少写一份"的路子（不引用包侧、也不开子 asmdef），靠**清单 + 同步**保证不漂。
+
+| 改了哪一层 | 包侧怎么验 | mod 侧怎么验 |
+|---|---|---|
+| `Runtime/FaceTracking/` 里**搬过去的那 10 份** | `dotnet run --project .research/profile-json-test`（154 条）+ `.research/expression-coverage`（19 条）+ `.research/compile-check-pkg.ps1`（整包三遍：Runtime 玩家视图 / Runtime+Editor / `Tests~`） | **先跑 `.research/sync-modcore.ps1`**，再 `Assets/HoWarudoModTests/tools/compile-check.ps1`；最后**人要真构建一次**（FastBuild → `.warudo`） |
+| 只动编辑器面板 / 会话 / 配置 | 批处理 Unity 用例（成功标记 `HO_FACE_TESTS_ALL_PASSED`，见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）+ `.warudo-mod-research/.tools/compile-check-editor.ps1` | 不涉及；但改了 `*.hoface.json` 要重导进沙箱（节点上的 `重读配置`） |
+| 只动 mod 的节点 / 接收器 / 控制器 | 不涉及（但别把包侧的公共类型改名，会连带崩 mod） | `tools/compile-check.ps1` —— **它的 UMod 沙箱 lint 只有 mod 侧有**：Roslyn 放过 `System.Reflection` / `System.IO`，UMod 的 `RunCodeValidation` 会让你**真构建失败** |
+
+**两条会静默出错的跨仓规矩**（同 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7）：
+
+1. 改了包侧那 10 份却**没跑同步** ⇒ mod 侧还是旧语义，**而且编译照样过**；表现是"Warudo 里和面板里不一样"。
+2. 直接在 mod 的 `Core/` 副本里改 ⇒ 下次同步**无声覆盖**（那 6 行文件头就是提醒）。
+
+⚠️ `.research/` 与 `.warudo-mod-research/` 都**不入库**：上面这些脚本只有本机有，
+**别把脚本当成唯一出处** —— 清单以 mod 侧 `Core/PORTED.md` §1 那张表为准。
 
 **这份规范覆盖"我们这条链上出去什么"**：出口是**两份并行 + 一套额外**，共 **90 行**。
 

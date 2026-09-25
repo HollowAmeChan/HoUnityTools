@@ -12,14 +12,14 @@
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：静态姿势树的代数边界与完整Animator的区别；已更正“不能写Animator参数”的旧结论，原生参数曲线在两个Unity版本实测可用。
 - [**控制器完整输出与物理阶段设计**](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)：Animator参数回写、跨Layer求值时序、组件/显隐/材质MPB/引用切换的双版本实测，以及Warudo属性帧、绑定清单和果冻物理调度方案。**已按"组件值全部走 Hub"修订**：控制器只吐姿态（形态键+骨骼）与语义（Hub），材质/显隐/对象引用不再是我们写的目标。
-- [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条全绿 + 怎么重跑）。
+- [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条断言 + 怎么重跑；⚠️ 2026-09-26 改过夹具后**还没重跑**）。
 - [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
 - [**VTS → VB → 高质量混合树全量契约（当前设计入口）**](VTS_HIGH_QUALITY_FACE_CONTRACT.md)：98个公开VTS固定参数、52原始形变、34个原装VB V3输出、39个拟定HQ扩展和42个高级树族；含全量矩阵、条件轴及选择性填动画的fallback规则，不限定格数。[机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json)。
 - [**VTS / VB 参数空间与轴来源**](VTS_FACE_PARAMETER_SPACES.md)：哪些参数组成2D、哪些是高维空间的条件切片、哪些应先保留1D；逐轴给出来源公式，不规定采样格数。
 - [**VTS / VB 创作者路线调查**](VTS_CREATOR_WORKFLOW_RESEARCH.md)：十份预设差异、麦克风契约、官方示例实际映射与教程证据；其中动画预算仅为演算示例，采样由作者决定。
-- [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：那一边的产物划分（**2 mod / 5 节点**）、为什么要走它的 **Tracking 层**、Warudo 的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）。
+- [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：那一边的产物划分（**2 mod / 5 节点**）、为什么要走它的 **Tracking 层**、Warudo 的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）。⚠️ **面捕这一系列横跨两个仓库**（本包 + 另一个仓库里的 mod `Assets/HoWarudoModTests/Mods-Ho/`）：**单边绿不算验过** —— 两边各自那一关、以及两条会静默出错的规矩，见 §8 与 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7。
 - [**参数标准表**](PARAMETER_STANDARDS.md)：**下游到底认哪些名字**的权威依据（逐行表格 + 官方 URL + 未验证标记）—— VTS 追踪参数/语音/手部/控制器、VTS API 与注入规则、自定义参数、Cubism 标准参数与参数组、ARKit 52、iFacialMocap 线协议、VMC 协议地址与 HumanBodyBones、VRM 0.x/1.0、VRCFT Unified Expressions（附录）。**写任何参数名之前先查它。**
-- [**HO 参数规范**](PARAMETER_HO.md)：**我们自己选什么** —— 出口是**两份并行 + 一套额外**，共 **90 行**：**原始 ARKit 52**（无损直通，**裸规范名** `eyeBlinkLeft`/`jawOpen`）+ **官方 VTS 追踪参数 20**（合成、有损）+ VB 自造 5 + 姿态向量 12 + 信号 `FaceFound`。含输入契约（iPhone 实测 67 线，52 个形态量**全部在动**）、**三个词汇表与那条换算规则**、值域约定（官方只规定两个参数的范围；**0.5 中立位是 VB 私有的**）、逐参数公式全表（机械提取，不手抄）、**算不出来的 9 行 / 11 个及原因**。跟标准表的分工：那份记外部怎么定，这份记我们选什么。
+- [**HO 参数规范**](PARAMETER_HO.md)：**我们自己选什么** —— 出口是**两份并行 + 一套额外**，共 **90 行**：**原始 ARKit 52**（无损直通，**裸规范名** `eyeBlinkLeft`/`jawOpen`）+ **官方 VTS 追踪参数 20**（合成、有损）+ VB 自造 5 + 姿态向量 12 + 信号 `FaceFound`。含输入契约（iPhone 实测 67 线，52 个形态量**全部在动**）、**三个词汇表与那条换算规则**、值域约定（官方只规定两个参数的范围；**0.5 中立位是 VB 私有的**）、逐参数公式全表（机械提取，不手抄）、**算不出来的 9 行 / 11 个及原因**。跟标准表的分工：那份记外部怎么定，这份记我们选什么。⚠️ **§0.0 是跨仓规矩**：这套功能落在**两个仓库**上（本包 + mod），**改一处必须两边都验**。
 
 ## 其他工具
 

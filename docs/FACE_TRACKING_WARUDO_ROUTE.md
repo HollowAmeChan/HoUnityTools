@@ -48,7 +48,8 @@
   指定了配置文件就**只认它的两类行**，**没有内置默认兜底**（这是刻意的，不是 bug：
   `docs/pitfalls/FACE_TRACKING_PIPELINE.md` §3）。
   ⚠️ **Warudo 侧口径一致**：mod 的「HoFace参数处理」节点上「配置文件」留空 = **这一层不做事**（不输出任何参数），
-  **没有内置默认**（见 §2.0 / §2.0.1）—— 2026-09-25 起两边统一为"空 = 空表"。
+  **没有内置默认**（见 §2.0 / §2.0.1）—— 2026-09-25 起两边统一为"空 = 空表"，
+  **2026-09-26 起连那份内置默认表本身也删了**（仓库里不存在任何默认配置，见 [中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md)）。
 * **控制器用「控制器编辑」在工程里就地装配**（菜单 `HoUnityTools/面捕/控制器编辑`）：
   先把预置目录里的控制器**复制一份到工程**，再拖进来按槽位名填片段、按形态键名重绑曲线。
   装配**不新建资产、不改名、不移动、不动 GUID**，也不碰层与参数
@@ -66,7 +67,7 @@
 | 曾经的东西 | 现在的状态 | 依据 |
 |---|---|---|
 | 挂在角色上的 `HoFaceTrackingDebugger` **组件** | **已删**。现在是全局面板 + `HoFaceDebugHost` 宿主 | `FACE_TRACKING_DESIGN.md:9`、`HoFaceDebugHost.cs:10-15` |
-| iFacialMocap 作为**现行输入** | **已删**，只剩 VTS 手机。⚠️ 它的线名还留在**内置默认配置的输入行**里当退役字段（没有任何接收端会产出那些名字，所以那几行永远是"缺键、保持上一帧"） | `HoFaceInputEnvironment.cs:13-21`；`Runtime/FaceTracking/HoFaceMiddleware.cs:205,209-219` |
+| iFacialMocap 作为**现行输入** | **已删**，只剩 VTS 手机。⚠️ 它的**线名**（`_L/_R` 那套）当年还以"退役字段"形式留在内置默认配置的输入行里；**2026-09-26 连那份内置默认表也删了**，所以它现在只活在这份文档与 `PARAMETER_STANDARDS` §6 里（⚠️ 但**安卓版 VTS 发的形态键就是这套拼写**，要接它就在自己的配置里写那些行） | `HoFaceInputEnvironment.cs:13-21`；[中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md) |
 | 区域门控（把"哪块脸算数"做成注入的开关） | **已删**。改由使用者自己的混合树决定 | `HoFaceAnimationSession.cs:205`、`FACE_TRACKING_DESIGN.md:145` |
 | 双眼同步（`HoFaceEyeSync`） | **已删**，那属于混合树的事 | `HoFaceAnimationSession.cs:224`、`Tests~/FaceTrackingValidation.cs:309` |
 | `assemblyOutputPath` | **不存在了**（全仓库搜不到这个字段） | 全仓库无匹配 |
@@ -557,7 +558,9 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 `Plugin.PersistentData`（`PluginPersistentDataManager`）是沙箱化文件 API。
 ✅ 实测路径：`Warudo_Data/StreamingAssets/Plugins/Data/<pluginId>/`，
-本机已经在用：`…/Plugins/Data/hollow.hofacetracking/ho-2d-test1.hoface.json`（+ 一份 `ho-full-test.hoface.json`）。
+本机已经在用：`…/Plugins/Data/hollow.hofacetracking/ho-debug-android.hoface.json`。
+（当年沙箱里还有一份 `ho-2d-test1.hoface.json` —— 那是插件**自动写**的内置默认样板，2026-09-25 取消自动写、
+2026-09-26 连那份默认表本身也删了；它还躺在那儿的话是旧文件，删掉不会再生成。）
 节点上的「状态」口直接给路径，不用猜 Warudo 的目录结构（2026-09-25 之前是一个单独的「沙箱目录」口，收口时并进了「状态」的第二行）。
 
 ⚠️ **`GetFiles` 不能用**：它第三个参数是 `System.IO.SearchOption`，而 UMod 构建期审查禁止引用 `System.IO.*`
@@ -578,10 +581,11 @@ AvatarCloneParent：Character Avatar Clone Parent
 **现在的做法**：`Runtime/FaceTracking/HoFaceProfileJson.cs` —— 自己写的读写器
 （`HoFaceProfile` 退化成"格式的名字 + 入口"）。顺带多了两件事：未知字段统一跳过（向前兼容照旧）、**报错带字符位置**。
 
-✅ **验证**：`.research/profile-json-test` 离线跑**包里的真源码**（桩件顶替 UnityEngine）→ **87/87 通过**
-（本次复核重跑过），含 `写→读→写 文本完全一致（字节稳定）`、128 输入行 / 56 输出行、曲线关键点与修饰符**顺序**往返、
+✅ **验证**：`.research/profile-json-test` 离线跑**包里的真源码**（桩件顶替 UnityEngine）→ **154/154 通过**
+（2026-09-26 复核重跑），含 `写→读→写 文本完全一致（字节稳定）`、行数与曲线关键点、修饰符**顺序**往返、
 转义与 Unicode 往返、坏 JSON 报字符位置。
-✅ **线上判据**：`Player.log` 里处理链状态行 = `ho-2d-test1.hoface.json#… · 输入行 128 / 输出行 56`。
+✅ **线上判据（历史）**：`Player.log` 里处理链状态行 = `ho-2d-test1.hoface.json#… · 输入行 128 / 输出行 56`
+—— 那是当时沙箱里那份自动写的样板表（已删）。
 
 ### 4.6 规则：我们的数据一律不用 `JsonUtility`
 
@@ -607,8 +611,9 @@ AvatarCloneParent：Character Avatar Clone Parent
 * ✅ 运行期实测：`状态=监听 49985 ← 192.168.1.92:21412`，`本帧键` 在 `0 / 15 / 65` 之间跳
   （**65 = 有脸的帧，15 = 丢追的帧**，见 §4.6 与 `FaceFound`）。
 * **线名拼写 = PascalCase**：官方 `VTSARKitBlendshape.cs` 那份枚举里 52 个名字是
-  `EyeBlinkLeft` / `JawOpen` / `MouthSmileLeft` / `TongueOut`…，我们内置默认里"首字母大写"的规则
-  （`Runtime/FaceTracking/HoFaceMiddleware.cs:190-192`）**逐个对得上**（离线测试覆盖了 52 个）。
+  `EyeBlinkLeft` / `JawOpen` / `MouthSmileLeft` / `TongueOut`…，与"规范名首字母大写"这条规则
+  **逐个对得上**（离线测试覆盖了 52 个；那条规则当年写成 `HoFaceMiddlewareDefaults.VtsWire`，
+  随内置默认表 2026-09-26 一起删了 —— 现在它只活在发车配置的输入行与本文档里）。
   ⚠️ 规范名（`eyeBlinkLeft`）与线名（`EyeBlinkLeft`）是两套拼写，别混。
   ⚠️⚠️ **但"VTS 手机 = PascalCase"只对官方那台 iOS App 成立，别当普适规律**（2026-09-25 实测反例）：
   **安卓版 VTS**（用户实测那台）**形态键发的是 iFacialMocap 命名**（`jawOpen` / `eyeBlink_L` / `mouthSmile_L` / `browInnerUp_R`…），
@@ -676,7 +681,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 | # | 事项 | 判据 | 状态 |
 |---|---|---|---|
-| 1 | 修 profile 读写（换成自写 JSON） | 沙箱里的 profile 读出来是 128 输入行 / 56 输出行 | ✅ **已完成**（§4.5；离线 87/87，`Player.log` 已见 128/56） |
+| 1 | 修 profile 读写（换成自写 JSON） | 沙箱里的 profile 读出来是 128 输入行 / 56 输出行 | ✅ **已完成**（§4.5；离线用例 154/154（当时 87/87），`Player.log` 已见 128/56） |
 | 2 | mod 里放一个 `.controller`，验证 `SharedAssets.AssetCount` 变正、`Load` 取得回 | 当年那台探针的「Mod 资产」一节给过 `AssetCount=2` ✅，但 `Load("HoFaceTree")` **取不到** —— 先按 **assetID 0..AssetCount-1** 逐个试（§4.1 那条新发现），再回过头定名字约定。⚠️ **探针已删，观察窗要临时加** | ❓ **未实测** |
 | 3 | 骨骼数组的空间与偏移基准 | 一半已量出：**局部/世界**与**按 `HumanBodyBones` 索引** ✅（§5）。**基准那一半仍未测** —— 要带非 identity 旋转的角色再量一次（观察窗同上） | 🔶 **半条** |
 | 4 | 处理链节点替换掉官方接收器节点后行为不变 | 图上换掉接收器，面部照常动。**一次都没在 Warudo 里跑过** | ❓ **未实测** |
@@ -687,13 +692,27 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 ---
 
-## 8. 测试怎么跑
+## 8. 测试怎么跑（⚠️ **这条链横跨两个仓库：单边绿不算验过**）
+
+**面捕这一系列不是单仓功能**：包（本仓库）定词表与主本，mod（`Assets/HoWarudoModTests`，**另一个仓库**）
+是同一套逻辑的运行期 —— 两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码，
+所以求值器那 10 份是**搬**过去的（清单在 mod 侧 `Core/PORTED.md`）。
+⇒ 改了其中任何一份，**两边都要重新过一遍**，而且两边各有**只有它有**的那一关：
+
+* **只有包侧有**：离线用例（下面的 1、2 行，跑的是**包里的真源码**）、批处理 Unity 用例、整包编译检查。
+* **只有 mod 侧有**：`tools/compile-check.ps1` 里的 **UMod 沙箱 lint** —— Roslyn 放过 `System.Reflection` / `System.IO`，
+  UMod 的 `RunCodeValidation` 才拦，**拦下来就是真构建失败**（为此白费过两次构建，见 `pitfalls/BUILD_AND_TOOLING.md` §4）。
+* **搬过去的那 10 份改完必须先跑 `.research/sync-modcore.ps1`**，否则 mod 侧还是旧语义 ——
+  而且**编译照样过**，表现是"Warudo 里和面板里不一样"。在 mod 的副本里改则会被下次同步**无声覆盖**。
+  完整规矩见 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7 与 [HO 参数规范](PARAMETER_HO.md) §0.0。
 
 | 测什么 | 怎么跑 | 现在的结果 |
 |---|---|---|
-| 中间层配置的 JSON 读写 + VTS 收包解析 | `dotnet run --project .research/profile-json-test` | **87/87 通过**（本次复核重跑） |
-| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project .research/expression-coverage` | **19/19 通过**（本次复核重跑） |
-| mod 脚本能不能对着真机 DLL 编译 | `Assets/HoWarudoModTests/tools/compile-check.ps1`（**mod 工程里**，`-ModsRoots Mods,Mods-Ho`） | 全绿（引用表含 `UMod.dll` / `UMod-Interface.dll`） |
+| 中间层配置的 JSON 读写 + VTS 收包解析 | `dotnet run --project .research/profile-json-test` | **154/154 通过**（2026-09-26 复核重跑；做法与包侧 `Tests~/` 无关，跑的是真源码 + 桩件） |
+| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project .research/expression-coverage` | **19/19 通过**（2026-09-26 复核重跑） |
+| 包侧整体能不能编译（含编辑器） | `.warudo-mod-research/.tools/compile-check-package.ps1`（整包）/ `compile-check-editor.ps1` | 全绿（引用表是显式列框架 + `UnityEditor.dll`；**别改成通配所有 dll** —— 会淹出约 2000 条假 `CS0433`） |
+| mod 脚本能不能对着真机 DLL 编译 | `Assets/HoWarudoModTests/tools/compile-check.ps1`（**mod 工程里**，`-ModsRoots Mods,Mods-Ho`） | 全绿（引用表含 `UMod.dll` / `UMod-Interface.dll`；含 UMod 沙箱 lint） |
+| Warudo 侧会话级行为（面板 / 影子台 / 断流回中性） | `Tests~/FaceTrackingValidation.cs` 拷进一次性工程批处理跑（[批处理验证](pitfalls/VALIDATION_LOOP.md)） | 成功标记 `HO_FACE_TESTS_ALL_PASSED` |
 | 官方节点的类型 / 端口 / 字段 | `dotnet run --project .research/warudo-knobs -- Warudo.Plugins.Core.dll <类型名>`（真机 DLL 在 `D:\steam\...\Warudo_Data\Managed`；`--attrs` 连特性一起打） | 本文 §2 / §3 的字段表就是这么来的 |
 | Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（会话日志另在 `Logs\WarudoLog-<启动时间>.log.gz`） | — |
 
