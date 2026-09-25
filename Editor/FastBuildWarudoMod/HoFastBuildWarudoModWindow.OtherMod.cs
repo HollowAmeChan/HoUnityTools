@@ -31,6 +31,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             Character,
             OtherMod,
+            HoFT,
         }
 
         /// <summary>决定产物落点目录与入口资产命名。不写进包，只是构建期约定。</summary>
@@ -103,9 +104,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 GUILayout.FlexibleSpace();
                 int selected = GUILayout.Toolbar(
                     (int)currentPage,
-                    new[] { "角色 Mod", "其他 Mod" },
+                    new[] { "角色 Mod", "其他 Mod", "HoFT" },
                     EditorStyles.toolbarButton,
-                    GUILayout.Width(280f));
+                    GUILayout.Width(360f));
                 GUILayout.FlexibleSpace();
 
                 if (selected != (int)currentPage)
@@ -113,6 +114,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     currentPage = (ModBuildPage)selected;
                     if (sdkAvailable)
                         RefreshExportSettingsPreview();
+                    if (currentPage == ModBuildPage.HoFT)
+                        LoadHoFTPreferences();
+                    else
+                        SaveHoFTPreferences();
                     GUI.FocusControl(null);
                 }
             }

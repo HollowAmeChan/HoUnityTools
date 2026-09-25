@@ -1,4 +1,4 @@
-﻿# 预置控制器（Controllers）
+# 预置控制器（Controllers）
 
 这里放**我们做好的控制器**（`*.controller`），当成一个仓库用。
 
@@ -23,3 +23,10 @@
 还没有。第一份控制器（中间层参数 → 混合树 → 形态键）做完之后放进来。
 在此之前，「控制器编辑」页可以做「只重绑网格」：拿任意一份现成控制器，
 把它的形态键曲线重绑到你当前的调试对象上。
+
+## 打完包往哪儿走
+
+装配好的控制器要给 Warudo 用，得打成 **AssetBundle**（运行时读不了 `.controller`，而且包里必须带
+它绑定的那套 rig）。那一步在 **`HoUnityTools / FastBuildWarudoMod` 的 `HoFT` 页**：
+选控制器 → 选**它驱动的那个预制体** → 选输出目录（通常是 Warudo 的插件沙箱）→ 打包。
+详见 [Warudo FastBuild 设计与验证](../../docs/WARUDO_FAST_BUILD.md) 的 `HoFT 页` 一节。

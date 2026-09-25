@@ -1,0 +1,1137 @@
+{
+    "format":  "ho-face-middleware",
+    "version":  2,
+    "displayName":  "ho-vts-default",
+    "notes":  "Default middleware profile shipped in the package (HoUnityTools/Editor/FaceTracking/Profiles/).\nWarudo cannot read the package: COPY this file into the plugin sandbox (the node\u0027s \"open folder\"\nbutton opens exactly that directory) and edit it there.\n\nWHAT IT DOES\n  wire name -\u003e canonical name for the two dialects we have actually observed, plus\n  canonical -\u003e output (52 ARKit pass-through + the 6 reserved Head names).\n\nWHAT IT IS NOT\n  It is NOT calibrated. VBridger\u0027s own input-curve store is 68 rows of identity (0-\u003e0 / 1-\u003e1),\n  and its preset numbers describe VBridger\u0027s own channel set, not ARKit pass-through. Per\n  docs/VTS_FACE_PARAMETER_SPACES.md: the expression value, the saved default and the model\u0027s\n  final neutral need not be equal. Calibration is per-actor/per-device work and belongs here,\n  in YOUR copy.\n\nOVERRIDE RULE\n  Same-name multiple rows = LAST row wins, and a row whose wire is missing does NOT fall back\n  (that cell is simply 0). So the two shape dialects WOULD fight over the same canonical name.\n  Only use one device at a time: delete the rows you do not need. Keeping both is safe only\n  because \"missing wire\" rows stay frozen -- but it is much easier to misread.\n\nUNITS\n  Head rotation is degrees; head position units are NOT calibrated (raw phone values pass\n  through). Both are clamped to the curve range, which is why those rows carry +/-180.\n\nCALIBRATION STARTING POINTS (measured from VBridger AdvancedARKit V3, seconds, its \"smooth\"):\n  jawOpen 0.10 | mouth* 0.10 | eyeLook* 0.10 | eyeBlink+eyeWide 0.10 | browInnerUp 0.32\n  browOuterUp-browDown 0.40 | cheekPuff / tongueOut / eyeSquint 0 (no filtering)\n  Add {\"kind\":\"smooth\",\"seconds\":0.1} to that row\u0027s modifiers.",
+    "inputs":  [
+                   {
+                       "parameter":  "eyeBlinkLeft",
+                       "expression":  "eyeBlink_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookDownLeft",
+                       "expression":  "eyeLookDown_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookInLeft",
+                       "expression":  "eyeLookIn_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookOutLeft",
+                       "expression":  "eyeLookOut_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookUpLeft",
+                       "expression":  "eyeLookUp_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeSquintLeft",
+                       "expression":  "eyeSquint_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeWideLeft",
+                       "expression":  "eyeWide_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeBlinkRight",
+                       "expression":  "eyeBlink_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookDownRight",
+                       "expression":  "eyeLookDown_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookInRight",
+                       "expression":  "eyeLookIn_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookOutRight",
+                       "expression":  "eyeLookOut_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeLookUpRight",
+                       "expression":  "eyeLookUp_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeSquintRight",
+                       "expression":  "eyeSquint_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeWideRight",
+                       "expression":  "eyeWide_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "jawForward",
+                       "expression":  "jawForward",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "jawLeft",
+                       "expression":  "jawLeft",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "jawRight",
+                       "expression":  "jawRight",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "jawOpen",
+                       "expression":  "jawOpen",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthClose",
+                       "expression":  "mouthClose",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthFunnel",
+                       "expression":  "mouthFunnel",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthPucker",
+                       "expression":  "mouthPucker",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthLeft",
+                       "expression":  "mouthLeft",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthRight",
+                       "expression":  "mouthRight",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthSmileLeft",
+                       "expression":  "mouthSmile_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthSmileRight",
+                       "expression":  "mouthSmile_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthFrownLeft",
+                       "expression":  "mouthFrown_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthFrownRight",
+                       "expression":  "mouthFrown_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthDimpleLeft",
+                       "expression":  "mouthDimple_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthDimpleRight",
+                       "expression":  "mouthDimple_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthStretchLeft",
+                       "expression":  "mouthStretch_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthStretchRight",
+                       "expression":  "mouthStretch_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthRollLower",
+                       "expression":  "mouthRollLower",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthRollUpper",
+                       "expression":  "mouthRollUpper",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthShrugLower",
+                       "expression":  "mouthShrugLower",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthShrugUpper",
+                       "expression":  "mouthShrugUpper",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthPressLeft",
+                       "expression":  "mouthPress_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthPressRight",
+                       "expression":  "mouthPress_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownLeft",
+                       "expression":  "mouthLowerDown_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownRight",
+                       "expression":  "mouthLowerDown_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpLeft",
+                       "expression":  "mouthUpperUp_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpRight",
+                       "expression":  "mouthUpperUp_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "browDownLeft",
+                       "expression":  "browDown_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "browDownRight",
+                       "expression":  "browDown_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "browInnerUp",
+                       "expression":  "browInnerUp",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "browOuterUpLeft",
+                       "expression":  "browOuterUp_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "browOuterUpRight",
+                       "expression":  "browOuterUp_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "cheekPuff",
+                       "expression":  "cheekPuff",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "cheekSquintLeft",
+                       "expression":  "cheekSquint_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "cheekSquintRight",
+                       "expression":  "cheekSquint_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "noseSneerLeft",
+                       "expression":  "noseSneer_L",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "noseSneerRight",
+                       "expression":  "noseSneer_R",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "tongueOut",
+                       "expression":  "tongueOut",
+                       "notes":  "observed device dialect (lowercase + _L/_R), e.g. jawOpen / mouthSmile_L"
+                   },
+                   {
+                       "parameter":  "eyeBlinkLeft",
+                       "expression":  "EyeBlinkLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookDownLeft",
+                       "expression":  "EyeLookDownLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookInLeft",
+                       "expression":  "EyeLookInLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookOutLeft",
+                       "expression":  "EyeLookOutLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookUpLeft",
+                       "expression":  "EyeLookUpLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeSquintLeft",
+                       "expression":  "EyeSquintLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeWideLeft",
+                       "expression":  "EyeWideLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeBlinkRight",
+                       "expression":  "EyeBlinkRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookDownRight",
+                       "expression":  "EyeLookDownRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookInRight",
+                       "expression":  "EyeLookInRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookOutRight",
+                       "expression":  "EyeLookOutRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeLookUpRight",
+                       "expression":  "EyeLookUpRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeSquintRight",
+                       "expression":  "EyeSquintRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "eyeWideRight",
+                       "expression":  "EyeWideRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "jawForward",
+                       "expression":  "JawForward",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "jawLeft",
+                       "expression":  "JawLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "jawRight",
+                       "expression":  "JawRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "jawOpen",
+                       "expression":  "JawOpen",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthClose",
+                       "expression":  "MouthClose",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthFunnel",
+                       "expression":  "MouthFunnel",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthPucker",
+                       "expression":  "MouthPucker",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthLeft",
+                       "expression":  "MouthLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthRight",
+                       "expression":  "MouthRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthSmileLeft",
+                       "expression":  "MouthSmileLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthSmileRight",
+                       "expression":  "MouthSmileRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthFrownLeft",
+                       "expression":  "MouthFrownLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthFrownRight",
+                       "expression":  "MouthFrownRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthDimpleLeft",
+                       "expression":  "MouthDimpleLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthDimpleRight",
+                       "expression":  "MouthDimpleRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthStretchLeft",
+                       "expression":  "MouthStretchLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthStretchRight",
+                       "expression":  "MouthStretchRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthRollLower",
+                       "expression":  "MouthRollLower",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthRollUpper",
+                       "expression":  "MouthRollUpper",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthShrugLower",
+                       "expression":  "MouthShrugLower",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthShrugUpper",
+                       "expression":  "MouthShrugUpper",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthPressLeft",
+                       "expression":  "MouthPressLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthPressRight",
+                       "expression":  "MouthPressRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownLeft",
+                       "expression":  "MouthLowerDownLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownRight",
+                       "expression":  "MouthLowerDownRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpLeft",
+                       "expression":  "MouthUpperUpLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpRight",
+                       "expression":  "MouthUpperUpRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "browDownLeft",
+                       "expression":  "BrowDownLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "browDownRight",
+                       "expression":  "BrowDownRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "browInnerUp",
+                       "expression":  "BrowInnerUp",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "browOuterUpLeft",
+                       "expression":  "BrowOuterUpLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "browOuterUpRight",
+                       "expression":  "BrowOuterUpRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "cheekPuff",
+                       "expression":  "CheekPuff",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "cheekSquintLeft",
+                       "expression":  "CheekSquintLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "cheekSquintRight",
+                       "expression":  "CheekSquintRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "noseSneerLeft",
+                       "expression":  "NoseSneerLeft",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "noseSneerRight",
+                       "expression":  "NoseSneerRight",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "tongueOut",
+                       "expression":  "TongueOut",
+                       "notes":  "VTS PascalCase, e.g. JawOpen / MouthSmileLeft"
+                   },
+                   {
+                       "parameter":  "headRotX",
+                       "expression":  "Rotation_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "headRotY",
+                       "expression":  "Rotation_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "headRotZ",
+                       "expression":  "Rotation_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "headPosX",
+                       "expression":  "Position_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "headPosY",
+                       "expression":  "Position_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "headPosZ",
+                       "expression":  "Position_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeLeftX",
+                       "expression":  "EyeLeft_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeLeftY",
+                       "expression":  "EyeLeft_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeLeftZ",
+                       "expression":  "EyeLeft_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeRightX",
+                       "expression":  "EyeRight_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeRightY",
+                       "expression":  "EyeRight_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "eyeRightZ",
+                       "expression":  "EyeRight_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "phone head/eye vector component (VTS fixed name)"
+                   },
+                   {
+                       "parameter":  "faceFound",
+                       "expression":  "FaceFound",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "liveness, not an art axis"
+                   }
+               ],
+    "outputs":  [
+                    {
+                        "parameter":  "ARKit/eyeBlinkLeft",
+                        "expression":  "eyeBlinkLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownLeft",
+                        "expression":  "eyeLookDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInLeft",
+                        "expression":  "eyeLookInLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutLeft",
+                        "expression":  "eyeLookOutLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpLeft",
+                        "expression":  "eyeLookUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintLeft",
+                        "expression":  "eyeSquintLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideLeft",
+                        "expression":  "eyeWideLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeBlinkRight",
+                        "expression":  "eyeBlinkRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownRight",
+                        "expression":  "eyeLookDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInRight",
+                        "expression":  "eyeLookInRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutRight",
+                        "expression":  "eyeLookOutRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpRight",
+                        "expression":  "eyeLookUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintRight",
+                        "expression":  "eyeSquintRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideRight",
+                        "expression":  "eyeWideRight"
+                    },
+                    {
+                        "parameter":  "ARKit/jawForward",
+                        "expression":  "jawForward"
+                    },
+                    {
+                        "parameter":  "ARKit/jawLeft",
+                        "expression":  "jawLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/jawRight",
+                        "expression":  "jawRight"
+                    },
+                    {
+                        "parameter":  "ARKit/jawOpen",
+                        "expression":  "jawOpen"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthClose",
+                        "expression":  "mouthClose"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFunnel",
+                        "expression":  "mouthFunnel"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPucker",
+                        "expression":  "mouthPucker"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLeft",
+                        "expression":  "mouthLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRight",
+                        "expression":  "mouthRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileLeft",
+                        "expression":  "mouthSmileLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileRight",
+                        "expression":  "mouthSmileRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownLeft",
+                        "expression":  "mouthFrownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownRight",
+                        "expression":  "mouthFrownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleLeft",
+                        "expression":  "mouthDimpleLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleRight",
+                        "expression":  "mouthDimpleRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchLeft",
+                        "expression":  "mouthStretchLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchRight",
+                        "expression":  "mouthStretchRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollLower",
+                        "expression":  "mouthRollLower"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollUpper",
+                        "expression":  "mouthRollUpper"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugLower",
+                        "expression":  "mouthShrugLower"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugUpper",
+                        "expression":  "mouthShrugUpper"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressLeft",
+                        "expression":  "mouthPressLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressRight",
+                        "expression":  "mouthPressRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownLeft",
+                        "expression":  "mouthLowerDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownRight",
+                        "expression":  "mouthLowerDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpLeft",
+                        "expression":  "mouthUpperUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpRight",
+                        "expression":  "mouthUpperUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/browDownLeft",
+                        "expression":  "browDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/browDownRight",
+                        "expression":  "browDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/browInnerUp",
+                        "expression":  "browInnerUp"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpLeft",
+                        "expression":  "browOuterUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpRight",
+                        "expression":  "browOuterUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekPuff",
+                        "expression":  "cheekPuff"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintLeft",
+                        "expression":  "cheekSquintLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintRight",
+                        "expression":  "cheekSquintRight"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerLeft",
+                        "expression":  "noseSneerLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerRight",
+                        "expression":  "noseSneerRight"
+                    },
+                    {
+                        "parameter":  "ARKit/tongueOut",
+                        "expression":  "tongueOut"
+                    },
+                    {
+                        "parameter":  "Head/RotX",
+                        "expression":  "headRotX",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    },
+                    {
+                        "parameter":  "Head/RotY",
+                        "expression":  "headRotY",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    },
+                    {
+                        "parameter":  "Head/RotZ",
+                        "expression":  "headRotZ",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    },
+                    {
+                        "parameter":  "Head/PosX",
+                        "expression":  "headPosX",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    },
+                    {
+                        "parameter":  "Head/PosY",
+                        "expression":  "headPosY",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    },
+                    {
+                        "parameter":  "Head/PosZ",
+                        "expression":  "headPosZ",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it to 0/1"
+                    }
+                ]
+}

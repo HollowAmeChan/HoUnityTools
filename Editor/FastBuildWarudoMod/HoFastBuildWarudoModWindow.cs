@@ -269,6 +269,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return;
             }
 
+            if (currentPage == ModBuildPage.HoFT)
+            {
+                DrawHoFTPage();
+                return;
+            }
+
             SynchronizeSourcePrefab();
             pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
             GUILayout.Space(8f);
