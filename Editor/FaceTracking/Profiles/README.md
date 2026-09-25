@@ -18,13 +18,19 @@
 | `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的调试配置（单方言，65 输入 / 58 输出） |
 | `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的调试配置（单方言，67 输入 / 58 输出） |
 
-三份都由脚本生成，名字全部取自源码与 `docs/VTS_HIGH_QUALITY_FACE_CATALOG.json`（**不手抄**）：
+三份都由脚本生成，名字全部取自源码与**实测真值**（**不手抄、不按命名规则推断**）：
 
 ```powershell
 & .warudo-mod-research\.tools\gen-default-profile.ps1
 & .warudo-mod-research\.tools\gen-device-profile.ps1 -Device iphoneVTS  -Notes $n -ShapeNote '…'
 & .warudo-mod-research\.tools\gen-device-profile.ps1 -Device androidVTS -Notes $n -ShapeNote '…'
 ```
+
+⚠️ **设备那两份的线名来自 `docs/measurements/<device>.keys`** —— 那是从真实 payload dump 抄下来的真值清单。
+为什么不能推断：第一版安卓配置照 iFacialMocap 的 `_L/_R` 规则拼出 `browInnerUp`，
+而设备发的是 `browInnerUp_L/R` ⇒ 那一格永远没数据，另有 12 行指向设备**根本不发**的键。
+**这类错误不报错、只是静默不动**，所以真值清单是必须的。见
+[面捕输入实测记录](../..//docs/measurements/README.md)。
 
 ⚠️ 生成器是**纯 ASCII** 的（Windows PowerShell 5.1 把无 BOM 的 `.ps1` 当 ANSI 读，脚本里放中文会炸），
 所以中文 `notes` 从命令行 `-Notes` 传进去。
@@ -34,7 +40,7 @@
 | 设备 | 键数 | 形状那半边 | 标量那半边 |
 |---|---|---|---|
 | **iPhone VTS** | 67 | **干净的 VTS PascalCase**：`JawOpen` / `MouthSmileLeft`… —— 52 个形状**全部到位、0 个对不上** | `Rotation_x`… / `Position_x`… / `EyeLeft_x`… / `FaceFound` / `Hotkey` / `Timestamp` |
-| **安卓 VTS** | 65 | **iFacialMocap 小驼峰 + `_L/_R`**：`jawOpen` / `mouthSmile_L`…，**但眨眼那一对两种都发**（`eyeBlink_L/R` **和** `EyeBlinkLeft/Right`） | 同上（**两台同名**） |
+| **安卓 VTS** | 65 | 形状主体是 **iFacialMocap 小驼峰 + `_L/_R`**（`jawOpen` / `mouthSmile_L`），但**内眉/外眉带后缀**（`browInnerUp_L/R`）、**眨眼两种拼写都发** ⇒ 只有 **44 / 52** 个规范名有源 | 同上（**两台同名**） |
 
 ⚠️ **安卓那条"眨眼两种都发"是有来历的**：最早那次调试里"只有头系和眨眼在动"，
 真因就是别的形状行**没有数据**、而眨眼恰好有 PascalCase 那对在喂。
@@ -80,8 +86,10 @@ dotnet run --project .research\profile-json-test
 这条会用**我们自己的解析器**（不是肉眼看 JSON）验这三份文件：
 
 * 默认配置：52 个规范名与三种方言拼写是否都在、输出行有没有重复、`Head/*` 宽曲线是否真的透明；
-* 设备配置：**实测键清单里的每一个**是否都有行（`Hotkey`/`Timestamp` 故意豁免）、
-  是不是**单一方言**（成对通道的两种拼写不能同时出现，眨眼那一对是已知例外）、
+* 设备配置：**真值清单（`docs/measurements/*.keys`）与原始 dump 逐名一致**、
+  清单里每个映射键是否都有行、**没有把未映射的键也写进去**（`Hotkey`/`Timestamp`/安卓那 6 个 `head*`）、
+  **每条线的规范名与真值一致**、是不是**单一方言**（成对通道的两种拼写不能同时出现，
+  眨眼那一对与安卓的眉后缀是设备事实、属已知例外）、
   输出行是否 52 + 6 且无重复、`Head/*` 曲线是否透明。
 
-它是"改了生成器或 catalog 之后忘了重新生成"的唯一守门人。当前：**107 passed / 0 failed**。
+它是"改了生成器或真值清单之后忘了重新生成"的唯一守门人。当前：**113 passed / 0 failed**。

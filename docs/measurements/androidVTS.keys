@@ -1,0 +1,88 @@
+# androidVTS.keys -- 安卓 VTS 实发键清单（真值，不是推断）
+#
+# 来源：用户从 Warudo「HoFaceVTS接收器」节点的调试输出里粘贴的完整 payload dump（2026-09-25，两次）。
+# 为什么单独存一份：**安卓这套拼写不遵守任何统一规则**（下面标了），照"命名规则推断"生成配置
+# 会拼出设备根本不发的键 —— 那一行就静默永不触发。所以「配置从这份真值生成」。
+#
+# 每一行： `<线名> = <规范名>`；`<规范名>` 为 `-` 表示**不映射**（不是美术轴）。
+# 尾部 `#` 注释是给人看的说明，解析时忽略。
+#
+# 方言要点（两次 dump 一致）：
+#   * 形状主体是小驼峰 + `_L/_R`（`jawOpen` / `mouthSmile_L`）—— 但**内眉/外眉带后缀**
+#     （`browInnerUp_L/R`、`browOuterUp_L/R`），而规范名 `browInnerUp` **只有一个**（左右两条线并到它）。
+#   * `jawLeft/jawRight/mouthLeft/mouthRight` **不带后缀**（规范名也不带）。
+#   * 眨眼**两种都发**：`eyeBlink_L/R` **和** `EyeBlinkLeft/Right`（同一条通道，两次都在）。
+#   * 16 个标量走 VTS 固定名（`Rotation_x` / `Position_x` / `EyeLeft_x` / `FaceFound` / `Hotkey` / `Timestamp`）。
+#   * 另有 6 个 `headUp/headDown/headLeft/headRight/headRollLeft/headRollRight` —— **另一条通道**，
+#     与 `Rotation_*` 不是一回事，本次**不映射**（等确认它到底是什么语义再接）。
+#
+# --- 形状（53 条线） ---
+browDown_L = browDownLeft
+browDown_R = browDownRight
+browInnerUp_L = browInnerUp          # 左右并到同一个规范名
+browInnerUp_R = browInnerUp
+browOuterUp_L = browOuterUpLeft
+browOuterUp_R = browOuterUpRight
+cheekPuff = cheekPuff
+eyeBlink_L = eyeBlinkLeft
+eyeBlink_R = eyeBlinkRight
+eyeLookDown_L = eyeLookDownLeft
+eyeLookDown_R = eyeLookDownRight
+eyeLookIn_L = eyeLookInLeft
+eyeLookIn_R = eyeLookInRight
+eyeLookOut_L = eyeLookOutLeft
+eyeLookOut_R = eyeLookOutRight
+eyeLookUp_L = eyeLookUpLeft
+eyeLookUp_R = eyeLookUpRight
+eyeSquint_L = eyeSquintLeft
+eyeSquint_R = eyeSquintRight
+eyeWide_L = eyeWideLeft
+eyeWide_R = eyeWideRight
+jawLeft = jawLeft
+jawOpen = jawOpen
+jawRight = jawRight
+mouthFrown_L = mouthFrownLeft
+mouthFrown_R = mouthFrownRight
+mouthFunnel = mouthFunnel
+mouthLeft = mouthLeft
+mouthLowerDown_L = mouthLowerDownLeft
+mouthLowerDown_R = mouthLowerDownRight
+mouthPucker = mouthPucker
+mouthRight = mouthRight
+mouthRollLower = mouthRollLower
+mouthRollUpper = mouthRollUpper
+mouthShrugUpper = mouthShrugUpper
+mouthSmile_L = mouthSmileLeft
+mouthSmile_R = mouthSmileRight
+mouthUpperUp_L = mouthUpperUpLeft
+mouthUpperUp_R = mouthUpperUpRight
+noseSneer_L = noseSneerLeft
+noseSneer_R = noseSneerRight
+tongueOut = tongueOut
+EyeBlinkLeft = eyeBlinkLeft           # 眨眼另一套拼写；与 eyeBlink_L 同一条通道
+EyeBlinkRight = eyeBlinkRight
+#
+# --- 标量（16 条线） ---
+Rotation_x = headRotX
+Rotation_y = headRotY
+Rotation_z = headRotZ
+Position_x = headPosX
+Position_y = headPosY
+Position_z = headPosZ
+EyeLeft_x = eyeLeftX
+EyeLeft_y = eyeLeftY
+EyeLeft_z = eyeLeftZ
+EyeRight_x = eyeRightX
+EyeRight_y = eyeRightY
+EyeRight_z = eyeRightZ
+FaceFound = faceFound
+Hotkey = -
+Timestamp = -
+#
+# --- 另一条通道，本次不映射（保留记录，等确认语义） ---
+headUp = -
+headDown = -
+headLeft = -
+headRight = -
+headRollLeft = -
+headRollRight = -

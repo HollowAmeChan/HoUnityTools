@@ -2,267 +2,267 @@
     "format":  "ho-face-middleware",
     "version":  2,
     "displayName":  "ho-debug-iphoneVTS",
-    "notes":  "**iPhone 上的 VTS** 的调试配置（单一方言，透传）。\n\n它是什么：线名 -\u003e 规范名，一行一个，**只有这台设备的拼写**。\n  · 形状 = 干净的 VTS PascalCase（JawOpen / MouthSmileLeft…）—— 实测 67 个键里 **52 个形状全部到位、0 个对不上**。\n  · 标量 = VTS 固定名（Rotation_* / Position_* / EyeLeft_* / EyeRight_* / FaceFound），**两台设备同名**，所以那 13 行两边一样。\n  · 输出行：52 个 ARKit/ 直通 + 6 个 Head/ 保留名 ⇒ BlendShapes 与输入逐键对照，头姿/头位真的会动。\n\n⚠️ 为什么单方言：同名多行 = **最后一行生效**，而且**缺数据不回退**。同一格混两种方言时，\n后声明的那行没数据会把有数据的那行顶掉 ⇒ 那一格恒 0，症状极具误导性（我们为此查过一整轮）。\n一台设备一份文件，换设备就换文件（安卓那份是 ho-debug-androidVTS.hoface.json）。\n\n⚠️ 没标定：形状值本来就是 0..1（实测 JawOpen = 0.032 / MouthPucker = 0.432），所以形状行不乘 0.01；\n但头姿/头位的**符号与量纲没标定**（VTS 裸值直通），头位单位尤其可疑 —— 调试要看的是\"有没有流过去\"。\n头/眼那 12 行**必须带自己的宽曲线**，否则会被默认 0..1 夹成 0/1（症状：头姿恒 (0,0,0)° 而形态键一切正常）。\n\n⚠️ 未接的两根线：Hotkey、Timestamp **故意不映射**（一个是触发、一个是时间戳，都不是美术轴）。\n\n标定起点（抄 VBridger AdvancedARKit V3 实测的滤波时间，单位秒）：\n  JawOpen 0.10 | Mouth* 0.10 | EyeLook* 0.10 | EyeBlink+EyeWide 0.10 | BrowInnerUp 0.32\n  BrowOuterUp-BrowDown 0.40 | CheekPuff / TongueOut / EyeSquint 0（不滤）\n写法：那一行加 {\"kind\":\"smooth\",\"seconds\":0.1}。",
+    "notes":  "**iPhone 上的 VTS** 的调试配置。⚠️ **由实测键清单生成**（`docs/measurements/iphoneVTS.keys`），不是按命名规则推断的。\n\n它是什么：线名 -\u003e 规范名，一行一个，**只有这台设备的拼写**。\n  · 形状 = 干净的 VTS PascalCase（JawOpen / MouthSmileLeft…）—— 实测 52 个规范名**全部到位、0 个对不上**。\n  · 标量 = VTS 固定名（Rotation_* / Position_* / EyeLeft_* / EyeRight_* / FaceFound），**两台设备同名**。\n  · 输出行：52 个 ARKit/ 直通 + 6 个 Head/ 保留名 ⇒ BlendShapes 与输入逐键对照，头姿/头位真的会动。\n  · 未映射：Hotkey、Timestamp（触发与时间戳，不是美术轴）。\n\n⚠️ 为什么单方言、为什么一份文件一台设备：同名多行 = **最后一行生效**、而且**缺数据不回退**。\n同一格混两种通道时，后声明的那行没数据会把有数据的那行顶掉 ⇒ 那一格恒 0（我们为此查过一整轮）。\n安卓那份是 ho-debug-androidVTS.hoface.json。\n\n⚠️ 没标定：形状值本来就是 0..1（实测 JawOpen = 0.032 / MouthPucker = 0.432），所以形状行不乘 0.01；\n但头姿/头位的**符号与量纲没标定**（VTS 裸值直通），头位单位尤其可疑 —— 调试要看的是\"有没有流过去\"。\n头/眼那 12 行**必须带自己的宽曲线**，否则会被默认 0..1 夹成 0/1（症状：头姿恒 (0,0,0)° 而形态键一切正常）。\n\n标定起点（抄 VBridger AdvancedARKit V3 实测的滤波时间，单位秒）：\n  JawOpen 0.10 | Mouth* 0.10 | EyeLook* 0.10 | EyeBlink+EyeWide 0.10 | BrowInnerUp 0.32\n  BrowOuterUp-BrowDown 0.40 | CheekPuff / TongueOut / EyeSquint 0（不滤）\n写法：那一行加 {\"kind\":\"smooth\",\"seconds\":0.1}。",
     "inputs":  [
-                   {
-                       "parameter":  "eyeBlinkLeft",
-                       "expression":  "EyeBlinkLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookDownLeft",
-                       "expression":  "EyeLookDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookInLeft",
-                       "expression":  "EyeLookInLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookOutLeft",
-                       "expression":  "EyeLookOutLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookUpLeft",
-                       "expression":  "EyeLookUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeSquintLeft",
-                       "expression":  "EyeSquintLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeWideLeft",
-                       "expression":  "EyeWideLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeBlinkRight",
-                       "expression":  "EyeBlinkRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookDownRight",
-                       "expression":  "EyeLookDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookInRight",
-                       "expression":  "EyeLookInRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookOutRight",
-                       "expression":  "EyeLookOutRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeLookUpRight",
-                       "expression":  "EyeLookUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeSquintRight",
-                       "expression":  "EyeSquintRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "eyeWideRight",
-                       "expression":  "EyeWideRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "jawForward",
-                       "expression":  "JawForward",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "jawLeft",
-                       "expression":  "JawLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "jawRight",
-                       "expression":  "JawRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "jawOpen",
-                       "expression":  "JawOpen",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthClose",
-                       "expression":  "MouthClose",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthFunnel",
-                       "expression":  "MouthFunnel",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthPucker",
-                       "expression":  "MouthPucker",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthLeft",
-                       "expression":  "MouthLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthRight",
-                       "expression":  "MouthRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthSmileLeft",
-                       "expression":  "MouthSmileLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthSmileRight",
-                       "expression":  "MouthSmileRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthFrownLeft",
-                       "expression":  "MouthFrownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthFrownRight",
-                       "expression":  "MouthFrownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthDimpleLeft",
-                       "expression":  "MouthDimpleLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthDimpleRight",
-                       "expression":  "MouthDimpleRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthStretchLeft",
-                       "expression":  "MouthStretchLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthStretchRight",
-                       "expression":  "MouthStretchRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthRollLower",
-                       "expression":  "MouthRollLower",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthRollUpper",
-                       "expression":  "MouthRollUpper",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthShrugLower",
-                       "expression":  "MouthShrugLower",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthShrugUpper",
-                       "expression":  "MouthShrugUpper",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthPressLeft",
-                       "expression":  "MouthPressLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthPressRight",
-                       "expression":  "MouthPressRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthLowerDownLeft",
-                       "expression":  "MouthLowerDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthLowerDownRight",
-                       "expression":  "MouthLowerDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthUpperUpLeft",
-                       "expression":  "MouthUpperUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
-                   {
-                       "parameter":  "mouthUpperUpRight",
-                       "expression":  "MouthUpperUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
-                   },
                    {
                        "parameter":  "browDownLeft",
                        "expression":  "BrowDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "browDownRight",
                        "expression":  "BrowDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "browInnerUp",
                        "expression":  "BrowInnerUp",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "browOuterUpLeft",
                        "expression":  "BrowOuterUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "browOuterUpRight",
                        "expression":  "BrowOuterUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "cheekPuff",
                        "expression":  "CheekPuff",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "cheekSquintLeft",
                        "expression":  "CheekSquintLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "cheekSquintRight",
                        "expression":  "CheekSquintRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeBlinkLeft",
+                       "expression":  "EyeBlinkLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeBlinkRight",
+                       "expression":  "EyeBlinkRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookDownLeft",
+                       "expression":  "EyeLookDownLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookDownRight",
+                       "expression":  "EyeLookDownRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookInLeft",
+                       "expression":  "EyeLookInLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookInRight",
+                       "expression":  "EyeLookInRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookOutLeft",
+                       "expression":  "EyeLookOutLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookOutRight",
+                       "expression":  "EyeLookOutRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookUpLeft",
+                       "expression":  "EyeLookUpLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeLookUpRight",
+                       "expression":  "EyeLookUpRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeSquintLeft",
+                       "expression":  "EyeSquintLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeSquintRight",
+                       "expression":  "EyeSquintRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeWideLeft",
+                       "expression":  "EyeWideLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "eyeWideRight",
+                       "expression":  "EyeWideRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "jawForward",
+                       "expression":  "JawForward",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "jawLeft",
+                       "expression":  "JawLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "jawOpen",
+                       "expression":  "JawOpen",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "jawRight",
+                       "expression":  "JawRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthClose",
+                       "expression":  "MouthClose",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthDimpleLeft",
+                       "expression":  "MouthDimpleLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthDimpleRight",
+                       "expression":  "MouthDimpleRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthFrownLeft",
+                       "expression":  "MouthFrownLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthFrownRight",
+                       "expression":  "MouthFrownRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthFunnel",
+                       "expression":  "MouthFunnel",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthLeft",
+                       "expression":  "MouthLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownLeft",
+                       "expression":  "MouthLowerDownLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownRight",
+                       "expression":  "MouthLowerDownRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthPressLeft",
+                       "expression":  "MouthPressLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthPressRight",
+                       "expression":  "MouthPressRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthPucker",
+                       "expression":  "MouthPucker",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthRight",
+                       "expression":  "MouthRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthRollLower",
+                       "expression":  "MouthRollLower",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthRollUpper",
+                       "expression":  "MouthRollUpper",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthShrugLower",
+                       "expression":  "MouthShrugLower",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthShrugUpper",
+                       "expression":  "MouthShrugUpper",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthSmileLeft",
+                       "expression":  "MouthSmileLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthSmileRight",
+                       "expression":  "MouthSmileRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthStretchLeft",
+                       "expression":  "MouthStretchLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthStretchRight",
+                       "expression":  "MouthStretchRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpLeft",
+                       "expression":  "MouthUpperUpLeft",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpRight",
+                       "expression":  "MouthUpperUpRight",
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "noseSneerLeft",
                        "expression":  "NoseSneerLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "noseSneerRight",
                        "expression":  "NoseSneerRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "tongueOut",
                        "expression":  "TongueOut",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase（实测 52/52 命中）"
+                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
                    },
                    {
                        "parameter":  "headRotX",
@@ -535,7 +535,7 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "liveness gate, not an art axis"
+                       "notes":  "VTS fixed name (same on both devices)"
                    }
                ],
     "outputs":  [

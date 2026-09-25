@@ -1,0 +1,86 @@
+# iphoneVTS.keys -- iPhone VTS 实发键清单（真值，不是推断）
+#
+# 来源：用户从 Warudo「HoFaceVTS接收器」节点的调试输出里粘贴的完整 payload dump（2026-09-25）。
+# 为什么单独存一份：配置必须按**设备实际发的键**生成 —— 照命名规则推断会拼出设备根本不发的行，
+# 那一行就静默永不触发（安卓那份就栽在这上面）。
+#
+# 每一行： `<线名> = <规范名>`；`<规范名>` 为 `-` 表示**不映射**（不是美术轴）。
+# 尾部 `#` 注释是给人看的说明，解析时忽略。
+#
+# 方言要点：
+#   * 形状那一半是**干净的 VTS PascalCase**（`JawOpen` / `MouthSmileLeft`）——
+#     实测 52 个规范名**全部到位、0 个对不上、一个不缺**（与 check-device-keys.ps1 的结果一致）。
+#   * 内眉只有一条线（`BrowInnerUp`），不像安卓那样左右分两条。
+#   * 16 个标量与安卓**同名同量纲**（`EyeLeft_x` 也是度数）。
+#   * **没有** `headUp/headDown/...` 那 6 个。
+#
+# --- 形状（52 条线） ---
+BrowDownLeft = browDownLeft
+BrowDownRight = browDownRight
+BrowInnerUp = browInnerUp
+BrowOuterUpLeft = browOuterUpLeft
+BrowOuterUpRight = browOuterUpRight
+CheekPuff = cheekPuff
+CheekSquintLeft = cheekSquintLeft
+CheekSquintRight = cheekSquintRight
+EyeBlinkLeft = eyeBlinkLeft
+EyeBlinkRight = eyeBlinkRight
+EyeLookDownLeft = eyeLookDownLeft
+EyeLookDownRight = eyeLookDownRight
+EyeLookInLeft = eyeLookInLeft
+EyeLookInRight = eyeLookInRight
+EyeLookOutLeft = eyeLookOutLeft
+EyeLookOutRight = eyeLookOutRight
+EyeLookUpLeft = eyeLookUpLeft
+EyeLookUpRight = eyeLookUpRight
+EyeSquintLeft = eyeSquintLeft
+EyeSquintRight = eyeSquintRight
+EyeWideLeft = eyeWideLeft
+EyeWideRight = eyeWideRight
+JawForward = jawForward
+JawLeft = jawLeft
+JawOpen = jawOpen
+JawRight = jawRight
+MouthClose = mouthClose
+MouthDimpleLeft = mouthDimpleLeft
+MouthDimpleRight = mouthDimpleRight
+MouthFrownLeft = mouthFrownLeft
+MouthFrownRight = mouthFrownRight
+MouthFunnel = mouthFunnel
+MouthLeft = mouthLeft
+MouthLowerDownLeft = mouthLowerDownLeft
+MouthLowerDownRight = mouthLowerDownRight
+MouthPressLeft = mouthPressLeft
+MouthPressRight = mouthPressRight
+MouthPucker = mouthPucker
+MouthRight = mouthRight
+MouthRollLower = mouthRollLower
+MouthRollUpper = mouthRollUpper
+MouthShrugLower = mouthShrugLower
+MouthShrugUpper = mouthShrugUpper
+MouthSmileLeft = mouthSmileLeft
+MouthSmileRight = mouthSmileRight
+MouthStretchLeft = mouthStretchLeft
+MouthStretchRight = mouthStretchRight
+MouthUpperUpLeft = mouthUpperUpLeft
+MouthUpperUpRight = mouthUpperUpRight
+NoseSneerLeft = noseSneerLeft
+NoseSneerRight = noseSneerRight
+TongueOut = tongueOut
+#
+# --- 标量（16 条线） ---
+Rotation_x = headRotX
+Rotation_y = headRotY
+Rotation_z = headRotZ
+Position_x = headPosX
+Position_y = headPosY
+Position_z = headPosZ
+EyeLeft_x = eyeLeftX
+EyeLeft_y = eyeLeftY
+EyeLeft_z = eyeLeftZ
+EyeRight_x = eyeRightX
+EyeRight_y = eyeRightY
+EyeRight_z = eyeRightZ
+FaceFound = faceFound
+Hotkey = -
+Timestamp = -
