@@ -1,4 +1,4 @@
-# 从蓝图里取证：会看漏的那些事
+﻿# 从蓝图里取证：会看漏的那些事
 
 正本：[面捕在 Warudo 的路线](../FACE_TRACKING_WARUDO_ROUTE.md)（官方那张图的逐节点解码）、
 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md)。

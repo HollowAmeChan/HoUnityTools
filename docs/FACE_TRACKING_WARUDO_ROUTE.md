@@ -1,4 +1,4 @@
-# 面捕方案总览：VTS 裸输入 → 中间层反算 → 喂进 Warudo 官方面捕蓝图
+﻿# 面捕方案总览：VTS 裸输入 → 中间层反算 → 喂进 Warudo 官方面捕蓝图
 
 > **这份文档只讲 Warudo 侧的落地**：产物怎么划分（几个 mod / 几个节点）、Tracking 层怎么用、节点之间怎么连线。
 > Unity 侧的机制 → [面捕设计：已验证的机制层](FACE_TRACKING_DESIGN.md)；怎么用 → [面捕工作流](FACE_TRACKING_WORKFLOW.md)；
@@ -45,9 +45,10 @@
   iFacialMocap 的接收端**已删**（它给不出 `FaceFound`，而"丢追回中性"整条机制就靠它）。
 * **中间层 `*.hoface.json` 是必填总闸**（Unity 侧）：`profilePath` 空着时面板下面全锁住
   （`HoFaceDebugSettings.cs:65-66`、`:86-87`）。它同时是**"线名 → 规范名"的唯一映射表** ——
-  指定了配置文件就**只认它的输入行**，不再拿内置默认表来补（这是刻意的，不是 bug：
+  指定了配置文件就**只认它的两类行**，**没有内置默认兜底**（这是刻意的，不是 bug：
   `docs/pitfalls/FACE_TRACKING_PIPELINE.md` §3）。
-  ⚠️ **Warudo 侧不同**：mod 的处理链节点上「配置文件」留空 = 用内置默认（见 §2.0），别把两边混起来。
+  ⚠️ **Warudo 侧口径一致**：mod 的「HoFace参数处理」节点上「配置文件」留空 = **这一层不做事**（不输出任何参数），
+  **没有内置默认**（见 §2.0 / §2.0.1）—— 2026-09-25 起两边统一为"空 = 空表"。
 * **控制器用「控制器编辑」在工程里就地装配**（菜单 `HoUnityTools/面捕/控制器编辑`）：
   先把预置目录里的控制器**复制一份到工程**，再拖进来按槽位名填片段、按形态键名重绑曲线。
   装配**不新建资产、不改名、不移动、不动 GUID**，也不碰层与参数
@@ -168,7 +169,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 
 | 节点（面板标题） | 拿什么 | 吐什么 | 配置 |
 |---|---|---|---|
-| **`HoFace参数处理`** | `原始值`（裸线名字典）+ `新鲜` + `配置文件` | **`参数`**（dict）+ **`有脸`**（bool） | **有**：`*.hoface.json`，输入行 + 输出行的曲线 / 修饰符 |
+| **`HoFace参数处理`** | `原始值`（裸线名字典）+ `新鲜` + `配置文件` | **`参数`**（dict）+ **`有脸`**（bool） | **有**：`*.hoface.json`，输入行 + 输出行的曲线 / 修饰符。⚠️ **「配置文件」留空 = 这一层不做事**（不输出任何参数，**没有内置默认**） |
 | **`HoFace控制求解`** | **`参数`**（dict）+ **`有脸`**（bool） | 官方同形 5 个：`Is Tracked` / `BlendShapes` / `Head Position` / `Root Position` / `Bone Rotations`（外加一个 `状态`） | **零配置**（红线，见第 2 条） |
 
 **名字的含义**：`HoFace控制求解` 的"求解"是**从参数反求动画输出**（骨骼旋转偏移 / 头位 / 根位 / 融合形状），
@@ -205,7 +206,8 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 * **允许用户不接中间层**：VB 那一路几乎与我们的中间层配置平行，用户直接喂求解；
 * 与 Unity 侧两份文档**一对一**：`FACE_TRACKING_MIDDLE_LAYER.md` ↔ 参数处理、
   `FACE_TRACKING_CONTROLLER_STRUCTURE.md` ↔ 控制求解 —— 一份文档一个节点；
-* 第三个输入源只需要新增"源 → 参数"，**不碰求解**（iFacialMocap 的内置输入行已经在了）。
+* 第三个输入源只需要新增"源 → 参数"，**不碰求解**（给它一份带 iFacialMocap 输入行的配置文件即可 ——
+  参数处理**自己不带内置输入行**：`配置文件` 留空就什么都不输出）。
 
 **代价（要认的）**：中间那份字典从"内部实现"变成**公开接口**（要冻结、写进文档 —— 好在就是输出行词汇，成本低）；
 图上多一个节点、多两根线；两个节点各有一份帧护栏与诊断。
@@ -264,7 +266,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
                                         曲线/修饰符）                    动画输出）                  覆盖角色根位置
 
   〔同一个接收器的另一个模式，✅ 已实现〕VTS 服务端模式：VB 的 VTS 输出 ──参数/有脸──▶ HoFace控制求解
-  〔别的源〕官方面捕源（iFacialMocap 等）→ 参数处理的内置输入行 ──▶ 同上
+  〔别的源〕官方面捕源（iFacialMocap 等）→ 参数处理（须先给它配置文件；留空 = 这层不做事）──▶ 同上
 ```
 
 * **6 = 我们的 3 个 + 官方那 3 个**（`Ho调试日志` 是可选调试件，不算在内）。

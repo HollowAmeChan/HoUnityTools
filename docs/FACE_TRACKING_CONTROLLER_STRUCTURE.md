@@ -289,7 +289,8 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
 3. 同一个 0.75 有**三种来源**要分清：C# 公式给、作者摆坐标给、参数默认值给（同厂商内部都不一致）。
 
 ⇒ 于是"照哪种血统编控制器"这件事被证据定住了。**控制器侧没有预设**（模板那套已删除，见 §3），
-但**中间层有一份内置默认**（没配置文件时用它：`HoFaceMiddlewareDefaults`，`HoFaceMiddleware.cs:176-272`），
+但**中间层有一份默认内容**（`HoFaceMiddlewareDefaults`，`Runtime/FaceTracking/HoFaceMiddleware.cs`：
+只是「新建配置的初始内容 / 导出文本 / 验证夹具」，**运行期不走它**），
 眼睑那两根轴就在里面 —— 想照哪个血统，改那几行、或者写自己的配置文件即可。这三条留着是因为它们决定**你该抄谁的形状**：
 
 - **VRCFT 官方模板 ARKit 支**：每眼一根 `0..1`（中性 0.75）+ 5 姿势 `FreeformCartesian2D`（含 squint）。

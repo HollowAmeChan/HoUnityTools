@@ -45,8 +45,10 @@ Direct 树对**每一个属性**的结果是：
   影子上没有别的写入者，所以 **Direct 树 + Write Defaults 开**是安全组合，不必要求 WD 关
   （见 [控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §Direct × WD 判别性实验）。
 - **参数由会话写**（`shadow.SetFloat`，且**只写控制器里真有的名字**，`HoFaceAnimationSession.cs:242`）。
-  参数来自中间层配置的输出行（面板把配置文件当必填总闸；**没指定时两侧都吃内置默认表**，
-  指定之后输入行只认它的 —— `Editor/FaceTracking/HoFaceDebugSettings.cs:327-341`）。
+  参数来自中间层配置的输出行（面板把配置文件当必填总闸；**留空 / 没指定 ⇒ 空表，这一层不做事**、
+  **没有内置默认兜底** —— 指定之后输入行只认它的，`Editor/FaceTracking/HoFaceDebugSettings.cs` 的
+  `Inputs()` / `Outputs()`。⚠️ **Unity 侧与 Warudo 侧口径一致**：参数处理节点上「配置文件」留空
+  同样 = **这一层不做事**、**没有内置默认**）。
 - **只写自己拥有的键**：抄回时按 `HoFaceOutputOwnership` 的占用表过一遍
   （`Runtime/FaceTracking/HoFaceOutputOwnership.cs:10`）—— 别的写入者（LookAt / 眨眼约束）占着的键不会被覆盖。
   **桌面 Unity 侧这一条是本仓库可读的实测**（`Tests~/FaceTrackingValidation.cs` 的占用/交还断言）；

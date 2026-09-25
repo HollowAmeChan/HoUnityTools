@@ -116,28 +116,30 @@ HoFaceInputHub.Merged       按环境顺序合并（逐线名判新鲜度）
 顺序就是优先级，某个线名由"排在最前、且这一帧带来了它的新鲜源"胜出（`HoFaceInputHub.cs:280-288`）。
 现在只有 VTS 一项；加设备的形状是固定的（加一个接收端子类 + 在工厂里加一行），差异只在接收端那个 `TryParsePacket` 里。
 
-### 4.5 中间层配置：面板当它必填，代码有内置默认兜底
+### 4.5 中间层配置：面板当它必填，留空 = 空表、这一层不做事
 
-`*.hoface.json` 是**映射表的唯一来源**，面板把它当**必填总闸**（空着就把下面各栏锁住）。
-但代码里的语义要精确到两类行 —— 它们是**不一样的**（`HoFaceDebugSettings`，`Editor/FaceTracking/HoFaceDebugSettings.cs:327-341`）：
+`*.hoface.json` 是**映射表的唯一来源**，面板把它当**必填总闸**（空着就把下面各栏锁住）：
+**留空 / 没指定配置文件 ⇒ 两类行都是空表，这一层不做事**，**没有内置默认兜底**
+（2026-09-25 起与 Warudo 侧统一为"空 = 空表"）。
+两类行都只认配置文件（`HoFaceDebugSettings.Inputs()` / `Outputs()`）：
 
 | 行 | 取哪一份 | 有配置文件但**那一类是空的**时 |
 | --- | --- | --- |
-| **输入行** `Inputs()` | `有配置文件 ? 它的 inputs : 内置默认表` | 用它的空表 ⇒ **等于不做改名**（规范名必须与线名同名） |
-| **输出行** `Outputs()` | 有配置文件**且它至少有一行**才用它，否则内置默认表 | 退回内置默认表（52 个 `ARKit/<规范名>` 直通 + 4 根眼睑轴） |
+| **输入行** `Inputs()` | 只认配置文件的 `inputs`；没指定配置文件 ⇒ **空表** | 空表 ⇒ **等于不做改名**（规范名必须与线名同名） |
+| **输出行** `Outputs()` | 只认配置文件的 `outputs`；没指定配置文件 ⇒ **空表** | 空表 ⇒ **不写任何参数**（52 个 `ARKit/<规范名>` 直通 + 4 根眼睑轴只是「新建配置」的初始内容） |
 
-所以"没指定配置文件"**不是不能跑**：那时两类行都吃内置默认表，会话照样起得来、实时输入也能走
-（内置默认表的输入行两种协议都有，含 VTS 的 PascalCase 线名）。真正的坑在**指定之后**：
+所以"没指定配置文件"**就是这一层不做事**：会话压根起不来，运行期也不会自动起
+（那等于"什么都不做还每秒重试一次"）。真正的坑在**指定之后**：
 输入行**只认配置文件里的那一份**，配置里漏了一条线名，那条链就静默失效（见
 [踩过的坑 · 面捕流水线](pitfalls/FACE_TRACKING_PIPELINE.md) §3）。
 
 - 两类行同一套形状：**输入行** `规范名 = 曲线(表达式(线名…))` + 有序修饰符；**输出行** `参数名 = 曲线(表达式(规范名…))` + 有序修饰符（`Runtime/FaceTracking/HoFaceMiddleware.cs:124-130`）。
 - 表达式取变量分三级：① 52 个规范名（走通道整形后的值）→ ② 其它输入行的结果（`headRotX`…）→ ③ 合并后的**原始线名**（`EyeBlinkLeft`、`Rotation_x`…）（`HoFaceAnimationSession.Lookup`，`HoFaceAnimationSession.cs:304-311`）。
-- **同名多行：最后一行生效**（内置默认表刻意让 VTS 那半套排在 iFacialMocap 后面，
-  所以两套协议的行同时存在时，VTS 的行赢 —— 见 `HoFaceMiddlewareDefaults.Inputs()`，`HoFaceMiddleware.cs:200-207`）。
-- 内置默认表里**还留着 iFacialMocap 那套行**（`HoFaceMiddlewareDefaults.IFacialWire`，`HoFaceMiddleware.cs:181`）：
-  "新建配置文件"时生成初始文本用它，**没指定配置文件时运行时也用它**；但接收端只有 VTS 一条，
-  那半套行永远不会有数据进来（引用到的线名不来 ⇒ 这一行不写）。
+- **同名多行：最后一行生效**（「新建配置」的初始内容刻意让 VTS 那半套排在 iFacialMocap 后面，
+  所以两套协议的行同时存在时，VTS 的行赢 —— 见 `HoFaceMiddlewareDefaults.Inputs()`，`Runtime/FaceTracking/HoFaceMiddleware.cs`）。
+- 那份初始内容里**还留着 iFacialMocap 那套行**（`HoFaceMiddlewareDefaults.IFacialWire`，`Runtime/FaceTracking/HoFaceMiddleware.cs`）：
+  "新建配置文件"时生成初始文本用它，**运行期不走它**（它只剩「新建配置的初始内容 / 导出文本 / 验证夹具」这三个角色）；
+  但接收端只有 VTS 一条，那半套行永远不会有数据进来（引用到的线名不来 ⇒ 这一行不写）。
 
 ## 5. 为什么没有门控
 
@@ -345,7 +347,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoFaceNaming.cs` | 参数命名规则的**唯一出处**（`Ho/Drive/...`）。只剩"要有哪些参数"；树的形状、每格写什么键不由代码规定 |
 | `HoFaceTrackingChannels.cs` | 52 个 ARKit 规范名、`_L/_R` 别名表、区域与平滑分组、**输入通道**（模式 / 手动 / 中性 / 输入曲线） |
 | `HoFaceExpression.cs` | 表达式求值器（递归下降；语法照 VBridger：函数表 / 惰性 `if` / 非有限折 0） |
-| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 分档；以及**内置默认表**（只在没指定配置文件时兜底） |
+| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 分档；以及 `HoFaceMiddlewareDefaults`（只剩「新建配置的初始内容 / 导出文本 / 验证夹具」三个角色，**运行期不走它**） |
 | `HoFaceProfile.cs` | 配置文件（`.hoface.json`）的格式名与入口（`format: ho-face-middleware` / `version: 2`） |
 | `HoFaceProfileJson.cs` | 配置文件的**自写 JSON 读写器**（`JsonUtility` 已咬过三次，见 §9.2） |
 | `HoJson.cs` | 极小的 JSON **读取器**：我们所有数据路径共用的那一份；未知字段跳过、报错带字符位置、数字用不变文化、容忍 BOM |

@@ -12,8 +12,8 @@
 
 **现状一句话（2026-09-25，代码是唯一真相）**：**输入只剩 VTS 手机**那一条请求式协议（§1.8）；
 `iFacialMocap` 已整个删掉（§6 只作**官方协议记录**保留，我们不再接）；
-中间层 `*.hoface.json` 是**映射表的唯一来源**（面板把它当必填总闸；没指定时两类行都吃内置默认表，
-指定之后输入行只认它 —— §8 逐条给代码出处）。
+中间层 `*.hoface.json` 是**映射表的唯一来源**（面板把它当必填总闸；**留空 / 没指定 ⇒ 空表，这一层不做事**，
+**没有内置默认兜底** —— 与 Warudo 侧口径一致；指定之后两类行都只认它 —— §8 逐条给代码出处）。
 
 **三条铁律**（后面所有内容都是这三条的展开）
 
@@ -24,11 +24,11 @@
    名字空间属于收方模型，大小写敏感。面捕场景里事实上的通用词汇是 **Apple ARKit 52**。
 3. **Unity Animator 参数名完全是我们自己的。** 正因为自由，**建议直接采用第 1、2 条里的名字**
    （追踪参数名或 ARKit 名）当 Animator 参数名 —— 这样 `SetFloat` 的名字与下游一致，省掉一张映射表。
-   **我们的现状**：内置默认表用的就是这套约定 —— 输出行 = 52 个 `ARKit/<规范名>` 直通
+   **我们的现状**：「新建配置」的初始内容（`HoFaceMiddlewareDefaults`）用的就是这套约定 —— 输出行 = 52 个 `ARKit/<规范名>` 直通
    （`ARKit/jawOpen`…）+ 眼睑两根轴 `Ho/Drive/Lid/{Left,Right}/{BlinkWide,Squint}`
-   （`Runtime/FaceTracking/HoFaceMiddleware.cs:234`、`Runtime/FaceTracking/HoFaceNaming.cs:29`）。
-   这只是**默认表与内置约定**，不是强制：输出行的 `parameter` 由使用者自己的配置文件定，
-   控制器里没有那个名字就跳过（不猜也不补）。
+   （`Runtime/FaceTracking/HoFaceMiddleware.cs` 的 `Outputs()`、`Runtime/FaceTracking/HoFaceNaming.cs:29`）。
+   这只是**初始内容与内置约定**，不是强制：输出行的 `parameter` 由使用者自己的配置文件定，
+   控制器里没有那个名字就跳过（不猜也不补）。**运行期不走它** —— 没指定配置文件就是空表。
 
 ---
 
@@ -266,7 +266,7 @@ App 侧开关：VTS 手机版设置第一页底部的 "3rd Party PC Clients"（R
 
 **形态键线名是 PascalCase**（`EyeBlinkLeft`、`JawOpen`），与 §3.1 的 PascalCase 列、VTS 的
 `VTSARKitBlendshape` 枚举一致；**数值是 iOS 的原始 0..1，接收端不换算**（`HoVtsPacket.cs:160`）。
-所以内置默认输入行里 VTS 那一套是原样直通，只有 iFacialMocap 那一套要 `× 0.01`。
+所以「新建配置」的初始输入行里 VTS 那一套是原样直通，只有 iFacialMocap 那一套要 `× 0.01`。
 ⚠️ **载荷里的 `k` 是字符串、不是枚举**：官方类型里那个
 `Dictionary<VTSARKitBlendshape, float> BlendShapeDictionary` 是**收方自己填的**（注释：
 "Not sent over network, filled on receiver side"）—— 别以为线上传的是枚举序号。
@@ -390,7 +390,7 @@ while a coefficient of one represents the fully articulated position." → **0 =
 Unity 枚举与 VTS 枚举的拼写（也是 **VTS 手机包发来的形态键线名**，§1.8）。
 ⚠️ **iFacialMocap 的线名是第三套**：它把左右后缀写成 `_L/_R`（`eyeBlink_L`），
 而 `jawLeft` / `jawRight` / `mouthLeft` / `mouthRight` 这 4 个**不带后缀、保持 camelCase**
-（`HoFaceMiddlewareDefaults.IFacialWire`，`HoFaceMiddleware.cs:181`）。
+（`HoFaceMiddlewareDefaults.IFacialWire`，`Runtime/FaceTracking/HoFaceMiddleware.cs`）。
 
 | # | camelCase（Apple / VMC / 我们的规范名） | PascalCase（Unity / VTS / VTS 手机线名） | 中文语义（照抄 Unity 官方描述） |
 | --- | --- | --- | --- |
@@ -824,8 +824,8 @@ mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.03065341
 | 未消费：`trackingStatus` | 当年只会计入 `UnknownCount`；它的语义官方未说明，先不猜 |
 
 > ⚠️ **一处容易看漏的现状**：`IFacialWire`（`eyeBlinkLeft` → `eyeBlink_L`）**还在代码里活着** ——
-> 它生成的是**内置默认表的输入行**（`× 0.01`），未指配置文件时会生效
-> （`Runtime/FaceTracking/HoFaceMiddleware.cs:181`、`Tests~/FaceTrackingValidation.cs:1201`）。
+> 它生成的是**「新建配置」的初始输入行**（`× 0.01`），**运行期不走它**（它只剩「新建配置的初始内容 / 导出文本 / 验证夹具」这三个角色）
+> （`HoFaceMiddlewareDefaults.IFacialWire`，`Runtime/FaceTracking/HoFaceMiddleware.cs`、`Tests~/FaceTrackingValidation.cs:1201`）。
 > 也就是说：**解析 iFacialMocap 报文的代码没了，但"iFacialMocap 线名 → 规范名"这张映射表还在**。
 > 要接第三种协议，写自己的输入行即可。
 
@@ -833,7 +833,7 @@ mouthSmile_R-0|…|mouthLeft-0|=head#-21.488958,-6.038993,-6.6019735,-0.03065341
 
 | 坑 | 说明 |
 | --- | --- |
-| **0~100 不是 0~1** | 忘了换会让所有值大 100 倍（VBridger 在源码里 `/100f`；我们**不写死代码**，内置默认输入行的写法是表达式 `jawOpen * 0.01`，`HoFaceMiddleware.cs:205`） |
+| **0~100 不是 0~1** | 忘了换会让所有值大 100 倍（VBridger 在源码里 `/100f`；我们**不写死代码**，「新建配置」初始输入行的写法是表达式 `jawOpen * 0.01`，`HoFaceMiddlewareDefaults.Inputs()`） |
 | head 那 6 个数的顺序 | 官方是 **欧拉角在前、位置在后**；和我们平时"位置+旋转"的直觉相反 |
 | 变换块不要按位置找 | 网页样例是 rightEye 在前，官方蓝牙参考实现是 leftEye 在前 —— **按名字找**（§6.2） |
 | **不能假设每帧 52 键齐全** | 官方样例帧只有 50 个互异键，且带粘连/孤立字段（§6.2）→ **缺键 ≠ 0**，把缺键当 0 会让表情间歇抽动 |
@@ -959,14 +959,14 @@ UDP 载荷上限、每帧键数是否有任何保障。
 | 我们的设计 | 依据 | 具体引用 |
 | --- | --- | --- |
 | 中间层**不声明**它读什么、也不声明写什么，只等着被喂 | §1.4 两个命名空间 | 模型参数 `Param*` 逐模型、**VTS 插件协议不提供直写请求**；追踪参数才是可写面 |
-| 写入侧的唯一映射表是 **`*.hoface.json` 配置文件**（面板把它当必填总闸） | §1.4 / §1.5 | 它装"输入行（线名 → 规范名）+ 输出行（参数名 = 曲线(表达式)）"。**没指定配置文件也能跑**：那时两类行都吃内置默认表；但**一旦指定，输入行就只认它的**（漏一条线名那条链静默失效），输出行则要求它至少有一行（`Editor/FaceTracking/HoFaceDebugSettings.cs:327-341`）。**没有"组件替我们决定吃哪些键"这回事了** |
+| 写入侧的唯一映射表是 **`*.hoface.json` 配置文件**（面板把它当必填总闸） | §1.4 / §1.5 | 它装"输入行（线名 → 规范名）+ 输出行（参数名 = 曲线(表达式)）"。**留空 / 没指定 ⇒ 空表，这一层不做事**（**没有内置默认兜底**，「开始驱动」也因此被 gate 住）；**一旦指定，两类行就都只认它的**（漏一条线名那条链静默失效，那一类为空也是空表）（`Editor/FaceTracking/HoFaceDebugSettings.cs` 的 `Inputs()` / `Outputs()`）。**没有"组件替我们决定吃哪些键"这回事了** |
 | 输出行名字按**下游分表** | §1.1 / §3.2 | 现在默认那套下游是我们自己的控制器（`ARKit/<规范名>` + 眼睑两根轴）；要喂 L2D 或 VMC 就在配置里另加一套 —— 同一个语义在不同下游是**不同名字**（L2D 追踪参数是 `MouthOpen`/`JawOpen` 这类，VMC 是 `jawOpen`），共用一份映射表一定会错 |
 | 每个输出参数**只能有一个写入者**（占用表） | §1.1 官方约束 + §1.5 `mode` | VTS 官方："Each output parameter can only be chosen once"；`mode:set` 同参数同时只能一个插件写 |
-| 面捕输入用 ARKit 52 名当**规范名**，姿态分量与线名换算全交给输入行 | §3.1 / §3.2 | 52 个规范名 = §3.1 的 camelCase 列（`HoFaceTrackingChannels.cs:46`）；线名三套（VTS 手机 PascalCase / iFacialMocap `_L/_R` / 同名直通）都在输入行里换算（`HoFaceMiddlewareDefaults.Inputs`，`HoFaceMiddleware.cs:200`） |
+| 面捕输入用 ARKit 52 名当**规范名**，姿态分量与线名换算全交给输入行 | §3.1 / §3.2 | 52 个规范名 = §3.1 的 camelCase 列（`HoFaceTrackingChannels.cs:46`）；线名三套（VTS 手机 PascalCase / iFacialMocap `_L/_R` / 同名直通）都在输入行里换算（`HoFaceMiddlewareDefaults.Inputs()`，`Runtime/FaceTracking/HoFaceMiddleware.cs`；那是「新建配置」的初始内容，**运行期不走它**） |
 | 形态键量纲在**输入行**里换算：iFacialMocap `× 0.01`、VTS 手机原样 | §6.2 / §1.8 | 官方文法写明 iFacialMocap 形态键是 **0~100**；VTS 手机包是 iOS 原始 **0..1**。⚠️ **接收端只交原样，不在 C# 里除法**（`HoVtsPacket.cs:160`） |
 | 值进树的量纲：**参数是 0..1 的权重、clip 里写 100** | §3 值域 + §5.2 clamp | ARKit / VRM1 都是 `[0-1]`；**VRM0 文件里是 0–100**（schema `maximum: 100`）；Cubism 眼/嘴"闭 0 开 1"。⚠️ 详见 `pitfalls/SHAPE_KEY_OUTPUT.md` §6（写成百分比会得到 210 这种值） |
-| **眼睑轴的"中性点"必须显式写在配置里，不能硬编码** | §7.3 | VBridger 用 `0.5`，VRCFT 用 `0.75`（0.75 才 = 正常睁开）—— 两种约定都真实存在。内置默认表给的是**双向轴**：`BlinkWide = eyeBlink − eyeWide`（+1 闭 / −1 睁大 / 0 中性，`HoFaceNaming.cs:20`、`HoFaceMiddleware.cs:244`） |
-| "睁大 / 闭 / 眯"合成两根轴 | §3.1 `eyeBlink` × `eyeWide` × `eyeSquint` | ARKit 把它们拆成三个独立键，没有现成的"睁眼度"轴；内置默认把前两个压成一根双向轴、`squint` 一根单端轴 |
+| **眼睑轴的"中性点"必须显式写在配置里，不能硬编码** | §7.3 | VBridger 用 `0.5`，VRCFT 用 `0.75`（0.75 才 = 正常睁开）—— 两种约定都真实存在。「新建配置」的初始内容给的是**双向轴**：`BlinkWide = eyeBlink − eyeWide`（+1 闭 / −1 睁大 / 0 中性，`HoFaceNaming.cs:20`、`HoFaceMiddlewareDefaults.Outputs()`，`Runtime/FaceTracking/HoFaceMiddleware.cs`） |
+| "睁大 / 闭 / 眯"合成两根轴 | §3.1 `eyeBlink` × `eyeWide` × `eyeSquint` | ARKit 把它们拆成三个独立键，没有现成的"睁眼度"轴；「新建配置」的初始内容把前两个压成一根双向轴、`squint` 一根单端轴 |
 | 做"张嘴"用 `jawOpen`，做"抿唇"用 `mouthClose`，不混 | §3.3 | `mouthClose` 官方语义是"双唇闭合，独立于下颌" |
 | 合成"眼睛 X / Y"轴时必须定符号 | §3.3 `eyeLookIn/Out` | In/Out 是**相对鼻子**的方向，直接相减会把左右弄反 |
 | 输出行**不声明** `min/max/default`：曲线关键点的范围就是定义域 | §1.6 | VTS 的 `min/max/default` 是"默认映射范围"而非钳制；现在输出行只有 `parameter`/`expression`/`curve`/`modifiers`/`notes`（`HoFaceMiddleware.cs:92`） |
