@@ -70,6 +70,9 @@ namespace Hollow.HoUnityTools.FaceTracking
             text.Append("{\n");
             text.Append(inner).Append("\"parameter\": ").Append(Quote(row.parameter)).Append(",\n");
             text.Append(inner).Append("\"expression\": ").Append(Quote(row.expression)).Append(",\n");
+            // 默认值**每一行都写**（照 VBridger 的做法）：它是"没东西驱动它时是多少"，
+            // 显式写出来才有可能被 diff / 被审 —— "全量默认值"要的就是这个。
+            text.Append(inner).Append("\"defaultValue\": ").Append(Num(row.defaultValue)).Append(",\n");
             text.Append(inner).Append("\"notes\": ").Append(Quote(row.notes)).Append(",\n");
 
             text.Append(inner).Append("\"curve\": {");
@@ -277,6 +280,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     {
                         case "parameter": row.parameter = r.ReadString(); break;
                         case "expression": row.expression = r.ReadString(); break;
+                        case "defaultValue": row.defaultValue = r.ReadFloat(); break;
                         case "notes": row.notes = r.ReadString(); break;
                         case "curve": ReadCurve(r, row); break;
                         case "modifiers": ReadModifiers(r, row, warnings); break;

@@ -260,10 +260,11 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 [踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §3 与 [混合树能力边界](BLEND_TREE_LIMITS.md) §2。
 这条规矩说的是**不要那样用**，不是"做不到"。）
 
-> **"行侧 gate"（在配置文件里声明 gate 与默认值）这一版不做。** 要做就得先补"每个输入值的默认值"这套规则
-> （现在 profile 的输入行只有 `parameter + expression`，输出行的缺省靠曲线默认值）—— 见
-> [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md) 的欠账，以及 `Ho合并字典` 为什么把"手填"做成**元组行**
-> （[路线图](FACE_TRACKING_WARUDO_ROUTE.md) §3.5：官方图里字典口从来是接的，不是填的）。
+> **"行侧 gate" 现在可以做了**（2026-09-26 补完"每行的默认值"之后）：在配置文件里写一行**常量行**
+> —— `parameter = Ho/Drive/Gate/Lip`、`expression` **留空**、`defaultValue = 1` —— 中间层每帧就把 1
+> 写进去，控制器那边连 `m_DefaultFloat` 都不用管（"控制器只是混合器"这条终于闭环）。
+> 语义见 [中间层 · 每行的默认值](FACE_TRACKING_MIDDLE_LAYER.md) §5.3。
+> 用户想临时关掉某一块，仍然走**合并字典的覆盖行**（同一次写入里改值，不产生第二个写者）。
 
 ## 4. 参考实现里我们抄了 / 还没抄的
 

@@ -1076,9 +1076,58 @@ public static class HoFaceTrackingValidation
                 Check(slot >= 0 && published > 0.5f,
                     "会话把中间层算出来的输出行**按名字**写进了角色 Hub（ARKit/jawOpen=" + published + "）");
 
+                // ── 每行的默认值（照 VBridger 的 `defaultValue`，2026-09-26 补）──────────────────
+                // 这一组**不需要任何输入**（下面先把发送端停掉），考的就是"没有东西驱动它时这一行是多少"。
                 HoFaceInputHub.Stop(rig);
                 HoFaceInputHub.Disconnect();
                 sender.Close(); sender = null;
+
+                // ① 输出行：**表达式留空 + defaultValue** = 常量行（门控那种"不需要输入、总有默认值"的东西）
+                WriteValidationProfile(
+                    new System.Collections.Generic.List<HoFaceOutput>(),
+                    new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "", defaultValue = 0.42f }
+                    });
+                HoFaceInputHub.Start(rig);
+                stage++; frame = Time.frameCount + 4; return;
+            }
+            if (stage == 19)
+            {
+                var session = HoFaceInputHub.Session(rig);
+                float constant = session != null ? session.OutputValue("ARKit/jawOpen") : float.NaN;
+                Debug.Log("HO_DEFAULT_CONST: ARKit/jawOpen = " + constant.ToString("0.###", CultureInfo.InvariantCulture)
+                    + "（期望 0.42 = 常量行的 defaultValue；一个输入行都没有）");
+                Check(Mathf.Abs(constant - 0.42f) < 0.01f,
+                    "输出行留空表达式 ⇒ 写它自己的 defaultValue（常量行，不需要任何输入）"
+                    + "（实际 " + constant + "）");
+
+                // ② 输入行：**defaultValue** = 那条线名一帧都没来过时的值（这里故意不接来源）
+                WriteValidationProfile(
+                    new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen", defaultValue = 0.25f }
+                    },
+                    new System.Collections.Generic.List<HoFaceOutput>
+                    {
+                        new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "jawOpen" }
+                    });
+                HoFaceInputHub.Stop(rig);
+                HoFaceInputHub.Start(rig);
+                stage++; frame = Time.frameCount + 30; return;   // 等它爬完 neutralFadeSeconds
+            }
+            if (stage == 20)
+            {
+                var session = HoFaceInputHub.Session(rig);
+                float resting = session != null ? session.OutputValue("ARKit/jawOpen") : float.NaN;
+                Debug.Log("HO_DEFAULT_INPUT: ARKit/jawOpen = " + resting.ToString("0.###", CultureInfo.InvariantCulture)
+                    + "（期望 0.25 = 那条永远不来的输入行的 defaultValue；0 就是老的「隐式 0」行为）");
+                Check(Mathf.Abs(resting - 0.25f) < 0.02f,
+                    "输入行没数据时取它自己的 defaultValue（不再等于隐式 0）"
+                    + "（实际 " + resting + "）");
+
+                HoFaceInputHub.Stop(rig);
+                HoFaceInputHub.Disconnect();
                 // 原来这里还有一条"禁用组件就立刻收摊"的断言 —— 组件已经不存在了，那条跟着删。
                 // 现在收摊只有两条路：用户按停止（HoFaceInputHub.Stop）或退出播放（宿主在 ExitingPlayMode 里收）。
                 Debug.Log("HO_FACE_TESTS_ALL_PASSED");
@@ -1104,6 +1153,24 @@ public static class HoFaceTrackingValidation
 
     private static float ZeroWeight(string shape) =>
         zeroProbeRenderer.GetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex(shape));
+
+    /// <summary>
+    /// 把一份中间层配置写进用例那份 `ValidationProfile.hoface.json` 并让设置重读它。
+    /// 「每行的默认值」那两条断言（stage 18-20）各要一份**没有输入**的配置，所以单独抽出来。
+    /// </summary>
+    private static void WriteValidationProfile(
+        System.Collections.Generic.List<HoFaceOutput> inputs,
+        System.Collections.Generic.List<HoFaceOutput> outputs)
+    {
+        System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
+        {
+            displayName = "validation-defaults",
+            inputs = inputs,
+            outputs = outputs
+        }), new System.Text.UTF8Encoding(false));
+        AssetDatabase.ImportAsset(profileAsset);
+        rig.ReloadProfile();
+    }
 
     private static float ProbeWeight(string shape) =>
         probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));

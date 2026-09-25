@@ -219,17 +219,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (channel.mode != lastModes[index] && channel.mode == HoFaceInputMode.Hold) held[index] = Effective[index];
                 lastModes[index] = channel.mode;
                 float neutral = Finite01(channel.neutral);
+                // **这一格"没有东西驱动它"时的值**：优先用**输入行自己声明的默认值**
+                // （照 VBridger 的 `defaultValue`），没有对应输入行时才退回通道自己的 `neutral`
+                // （历史字段）。⚠️ 没人声明非 0 默认时两者都是 0 ⇒ 这条对现有配置**零行为变化**。
+                float resting = hasValue && inputRows[inputRow] != null
+                    ? Finite01(inputRows[inputRow].defaultValue)
+                    : neutral;
                 float raw = hasValue ? inputValues[inputRow] : 0f;
                 switch (channel.mode)
                 {
                     case HoFaceInputMode.Manual: Effective[index] = Finite01(channel.manual); break;
                     case HoFaceInputMode.Hold: Effective[index] = held[index]; break;
-                    case HoFaceInputMode.Neutral: Effective[index] = neutral; break;
+                    case HoFaceInputMode.Neutral: Effective[index] = resting; break;
                     case HoFaceInputMode.Release: break;
                     default:
                         // 输入曲线只作用在实时输入上：手动滑杆是调试用的，不该被它整形。
                         float live = HoFaceCurve.Transfer(channel.inputCurve, Finite01(raw));
-                        Effective[index] = fresh ? live : Mathf.MoveTowards(Effective[index], neutral, deltaTime / fade);
+                        Effective[index] = fresh ? live : Mathf.MoveTowards(Effective[index], resting, deltaTime / fade);
                         break;
                 }
 
@@ -272,8 +278,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 var output = outputs[row];
                 if (output == null) continue;
-                float value = expressions[row] != null ? expressions[row].Evaluate(Lookup) : 0f;
-                value = output.Transform(value);
+                // 表达式留空 = **常量行**（门控那种"不需要输入、总有默认值"的东西就靠它）；
+                // 表达式写了但解析不了时也退回这个作者声明过的默认值（比魔法 0 诚实）。
+                // ⚠️ 常量行**不过曲线**：作者填 1 就该得 1（曲线是给"算出来的值"整形用的）。
+                // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
+                float value = expressions[row] != null
+                    ? output.Transform(expressions[row].Evaluate(Lookup))
+                    : output.defaultValue;
                 value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
                 outputValues[row] = value;
                 if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
@@ -621,6 +632,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 inputRows[i] = inputList[i];
                 if (inputList[i] == null || string.IsNullOrEmpty(inputList[i].parameter)) continue;
+                // **这一行的默认值**（照 VBridger 的 `defaultValue`）：那条线名一帧都没来过时，
+                // 这个规范名就是它 —— 摆成初值，于是"没数据"不再等于隐式 0。
+                inputValues[i] = inputList[i].defaultValue;
                 if (HoFaceExpression.TryParse(inputList[i].expression, out var parsed, out string inputError))
                     inputExpressions[i] = parsed;
                 else

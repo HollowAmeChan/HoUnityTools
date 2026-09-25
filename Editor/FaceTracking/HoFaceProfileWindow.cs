@@ -883,6 +883,24 @@ HoFaceOutput output = ActiveRows()[index];
                 }
             }
 
+            // **默认值**（照 VBridger 每行都带的 `defaultValue`）："没有东西驱动它时，这一行是多少"。
+            // 输入行 = 那条线名一帧都没来过时的值；输出行 = 表达式留空时的**常量行**值（门控靠它）。
+            using (HoConstraintEditorControls.Row())
+            {
+                HoConstraintEditorControls.Label("默认值", HoConstraintEditorTheme.LabelWidth,
+                    "**没有东西驱动它时**这一行是多少（默认 0）。\n"
+                    + "· 输入行：那条设备线名**一帧都没来过**时的值；\n"
+                    + "· 输出行：**表达式留空**时这一行就写它（常量行 —— 门控那种"
+                    + "「不需要输入、总有一个默认值」的东西就靠这个）；表达式解析不了时也退回它。");
+                output.defaultValue = EditorGUI.FloatField(
+                    HoConstraintEditorControls.NextFlexible(60.0f),
+                    output.defaultValue,
+                    HoConstraintEditorTheme.Field);
+                HoConstraintEditorControls.Flex();
+                HoConstraintEditorControls.CaptionTrim(output.defaultValue == 0f ? "中性（0）" : "非 0", 96.0f,
+                    "缺省就是 0（= 中性）。想表达「这块默认开着」就填 1。");
+            }
+
             DrawVariableList(parsed);
 
             CurveField(output);
