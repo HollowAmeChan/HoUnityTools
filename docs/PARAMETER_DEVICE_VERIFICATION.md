@@ -55,6 +55,94 @@
   **那是配置的残留，不是设备发的东西。**
 * 头姿就用 `Rotation_x/y/z`、头位用 `Position_x/y/z`（都是标量行）。
 
+### 0.2 逐键语义与触发情况（两台并集）
+
+语义一列**照抄 PARAMETER_STANDARDS.md §3.1 的 Unity 官方描述**（不另写）；
+"触发情况"是实测总结出来的**怎么才会让它动**（空格子＝普通表情照常做就有）。
+ange 是两台的实测范围（**NEVER-MOVES** / **WEAK** 只是"这批采样里没见到它动"，见下）。
+
+<!-- BEGIN GENERATED SEMANTICS -->
+| 规范名（ARKit） | 语义 | 触发情况 | 安卓线名 / range | 苹果线名 / range |
+|---|---|---|---|---|
+| `browDownLeft` | 左眉外端下压 |  | `browDown_L` 0.610 | `BrowDownLeft` 0.657 |
+| `browDownRight` | 右眉外端下压 |  | `browDown_R` 0.610 | `BrowDownRight` 0.657 |
+| `browInnerUp` | 双眉内端上抬 |  | `browInnerUp_L` 0.053 + `browInnerUp_R` 0.053 | `BrowInnerUp` 0.296 |
+| `browOuterUpLeft` | 左眉外端上抬 | 要明显挑眉（90%+ 帧贴地） | `browOuterUp_L` 0.320 | `BrowOuterUpLeft` 0.110 |
+| `browOuterUpRight` | 右眉外端上抬 | 要明显挑眉（90%+ 帧贴地） | `browOuterUp_R` 0.203 | `BrowOuterUpRight` 0.104 |
+| `cheekPuff` | 双颊向外鼓 |  | `cheekPuff` 0.109 | `CheekPuff` 0.514 |
+| `eyeBlinkLeft` | 左眼睑闭合 |  | `eyeBlink_L` 0.999 + `EyeBlinkLeft` 0.804 | `EyeBlinkLeft` 0.513 |
+| `eyeBlinkRight` | 右眼睑闭合 |  | `eyeBlink_R` 0.999 + `EyeBlinkRight` 0.801 | `EyeBlinkRight` 0.511 |
+| `eyeLeft_x` | 左眼水平转角（度） |  | `EyeLeft_x` 27.730 | `EyeLeft_x` 30.923 |
+| `eyeLeft_y` | 左眼垂直转角（度） |  | `EyeLeft_y` 50.390 | `EyeLeft_y` 46.834 |
+| `eyeLeft_z` | 左眼深度分量 | **安卓不填**（恒 0）；苹果会填 | `EyeLeft_z` 0.000 **NEVER-MOVES** | `EyeLeft_z` 5.871 |
+| `eyeLookDownLeft` | 左眼向下看 |  | `eyeLookDown_L` 0.347 | `EyeLookDownLeft` 0.559 |
+| `eyeLookDownRight` | 右眼向下看 |  | `eyeLookDown_R` 0.346 | `EyeLookDownRight` 0.556 |
+| `eyeLookInLeft` | 左眼向**右**看（向鼻侧） |  | `eyeLookIn_L` 0.840 | `EyeLookInLeft` 0.503 |
+| `eyeLookInRight` | 右眼向**左**看（向鼻侧） |  | `eyeLookIn_R` 0.872 | `EyeLookInRight` 0.911 |
+| `eyeLookOutLeft` | 左眼向**左**看（向颞侧） |  | `eyeLookOut_L` 0.869 | `EyeLookOutLeft` 0.822 |
+| `eyeLookOutRight` | 右眼向**右**看（向颞侧） | 要明显外看（96% 帧贴地） | `eyeLookOut_R` 0.823 | `EyeLookOutRight` 0.380 |
+| `eyeLookUpLeft` | 左眼向上看 | 要明显抬眼看（90%+ 帧贴地） | `eyeLookUp_L` 0.596 | `EyeLookUpLeft` 0.332 |
+| `eyeLookUpRight` | 右眼向上看 | 要明显抬眼看（90%+ 帧贴地） | `eyeLookUp_R` 0.596 | `EyeLookUpRight` 0.331 |
+| `eyeRight_x` | 右眼水平转角（度） |  | `EyeRight_x` 27.728 | `EyeRight_x` 30.647 |
+| `eyeRight_y` | 右眼垂直转角（度） |  | `EyeRight_y` 49.944 | `EyeRight_y` 45.552 |
+| `eyeRight_z` | 右眼深度分量 | **安卓不填**（恒 0）；苹果会填 | `EyeRight_z` 0.000 **NEVER-MOVES** | `EyeRight_z` 6.111 |
+| `eyeSquintLeft` | 左眼周围收缩（眯） |  | `eyeSquint_L` 0.788 | `EyeSquintLeft` 0.322 |
+| `eyeSquintRight` | 右眼周围收缩（眯） |  | `eyeSquint_R` 0.828 | `EyeSquintRight` 0.322 |
+| `eyeWideLeft` | 左眼上下眼睑张开 | 要明显睁大眼（65–75% 帧贴地） | `eyeWide_L` 0.123 | `EyeWideLeft` 0.328 |
+| `eyeWideRight` | 右眼上下眼睑张开 | 要明显睁大眼（65–75% 帧贴地） | `eyeWide_R` 0.117 | `EyeWideRight` 0.279 |
+| `faceFound` | 有脸 1 / 丢脸 0 |  | `FaceFound` 0.000 **CONSTANT-NONZERO** | `FaceFound` 0.000 **CONSTANT-NONZERO** |
+| `headDown` | 头向下（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headDown` 0.081 | — **不发** |
+| `headLeft` | 头向左（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headLeft` 0.319 | — **不发** |
+| `headRight` | 头向右（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRight` 0.707 | — **不发** |
+| `headRollLeft` | 头左倾（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRollLeft` 0.158 | — **不发** |
+| `headRollRight` | 头右倾（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRollRight` 0.177 | — **不发** |
+| `headUp` | 头向上（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headUp` 0.395 | — **不发** |
+| `hotkey` | 最后按下的屏幕热键编号（1–8；−1＝没按过） | 按 VTS app 内的屏幕热键才给 1–8；实测两台都恒 −1 | `Hotkey` 0.000 **CONSTANT-NONZERO** | `Hotkey` 0.000 **CONSTANT-NONZERO** |
+| `jawLeft` | 下颌向左 | **要张嘴**（闭嘴时几乎不给值） | `jawLeft` 0.386 | `JawLeft` 0.344 |
+| `jawOpen` | 下颌张开 | **要张嘴**（闭嘴时几乎不给值） | `jawOpen` 0.702 | `JawOpen` 0.803 |
+| `jawRight` | 下颌向右 | **要张嘴**（闭嘴时几乎不给值） | `jawRight` 0.216 | `JawRight` 0.600 |
+| `mouthFrownLeft` | 左嘴角向下 | 要明显撇嘴（70–90% 帧贴地） | `mouthFrown_L` 0.820 | `MouthFrownLeft` 0.230 |
+| `mouthFrownRight` | 右嘴角向下 | 要明显撇嘴（70–90% 帧贴地） | `mouthFrown_R` 0.797 | `MouthFrownRight` 0.224 |
+| `mouthFunnel` | 双唇收成"O 形张开" | 圆唇（"o 嘴"；pucker 峰值最高） | `mouthFunnel` 0.666 | `MouthFunnel` 0.329 |
+| `mouthLeft` | 双唇整体向左 | **要用力拉**（轻拉常年 0） | `mouthLeft` 0.866 | `MouthLeft` 0.965 |
+| `mouthLowerDownLeft` | 左侧下唇向下 |  | `mouthLowerDown_L` 0.211 | `MouthLowerDownLeft` 0.724 |
+| `mouthLowerDownRight` | 右侧下唇向下 |  | `mouthLowerDown_R` 0.211 | `MouthLowerDownRight` 0.704 |
+| `mouthPucker` | 双唇收拢压紧（嘟嘴） | 圆唇（"o 嘴"；pucker 峰值最高） | `mouthPucker` 0.948 | `MouthPucker` 0.885 |
+| `mouthRight` | 双唇整体向右 | **要用力拉**（轻拉常年 0） | `mouthRight` 0.197 | `MouthRight` 0.956 |
+| `mouthRollLower` | 下唇向内卷 |  | `mouthRollLower` 0.165 | `MouthRollLower` 0.488 |
+| `mouthRollUpper` | 上唇向内卷 |  | `mouthRollUpper` 0.159 | `MouthRollUpper` 0.243 |
+| `mouthShrugUpper` | 上唇向外（耸） | 安卓：**基本不动**（噪声底）；苹果：正常 | `mouthShrugUpper` 0.039 **WEAK** | `MouthShrugUpper` 0.556 |
+| `mouthSmileLeft` | 左嘴角向上 |  | `mouthSmile_L` 0.911 | `MouthSmileLeft` 0.739 |
+| `mouthSmileRight` | 右嘴角向上 |  | `mouthSmile_R` 0.842 | `MouthSmileRight` 0.741 |
+| `mouthUpperUpLeft` | 左侧上唇向上 |  | `mouthUpperUp_L` 0.163 | `MouthUpperUpLeft` 0.384 |
+| `mouthUpperUpRight` | 右侧上唇向上 |  | `mouthUpperUp_R` 0.168 | `MouthUpperUpRight` 0.386 |
+| `noseSneerLeft` | 左侧鼻翼上提 |  | `noseSneer_L` 0.076 | `NoseSneerLeft` 0.414 |
+| `noseSneerRight` | 右侧鼻翼上提 |  | `noseSneer_R` 0.076 | `NoseSneerRight` 0.369 |
+| `position_x` | 头位 X（单位未标定） |  | `Position_x` 36.710 | `Position_x` 15.760 |
+| `position_y` | 头位 Y（单位未标定） |  | `Position_y` 14.004 | `Position_y` 5.949 |
+| `position_z` | 头位 Z（单位未标定） |  | `Position_z` 15.578 | `Position_z` 4.753 |
+| `rotation_x` | 头姿 X（度） |  | `Rotation_x` 102.529 | `Rotation_x` 39.119 |
+| `rotation_y` | 头姿 Y（度） |  | `Rotation_y` 67.435 | `Rotation_y` 48.029 |
+| `rotation_z` | 头姿 Z（度） |  | `Rotation_z` 33.430 | `Rotation_z` 26.411 |
+| `timestamp` | UNIX 毫秒时间戳（float 装不下，只够看大概） |  | `Timestamp` 3000000.000 | `Timestamp` 1000000.000 |
+| `tongueOut` | 伸舌 | **要明显伸到位**（95%+ 帧贴地，但能到 1.0） | `tongueOut` 0.330 | `TongueOut` 1.000 |
+| `cheekSquintLeft` | 左眼下方/周围颊部上抬 |  | — **不发** | `CheekSquintLeft` 0.338 |
+| `cheekSquintRight` | 右眼下方/周围颊部上抬 |  | — **不发** | `CheekSquintRight` 0.315 |
+| `jawForward` | 下颌前伸 | **要张嘴**（闭嘴时几乎不给值） | — **不发** | `JawForward` 0.420 |
+| `mouthClose` | **双唇闭合**（与下颌无关，独立于 jawOpen） |  | — **不发** | `MouthClose` 0.130 |
+| `mouthDimpleLeft` | 左嘴角向后拉（酒窝） |  | — **不发** | `MouthDimpleLeft` 0.382 |
+| `mouthDimpleRight` | 右嘴角向后拉 |  | — **不发** | `MouthDimpleRight` 0.367 |
+| `mouthPressLeft` | 左侧下唇向上压 |  | — **不发** | `MouthPressLeft` 0.414 |
+| `mouthPressRight` | 右侧下唇向上压 |  | — **不发** | `MouthPressRight` 0.421 |
+| `mouthShrugLower` | 下唇向外（耸） |  | — **不发** | `MouthShrugLower` 0.638 |
+| `mouthStretchLeft` | 左嘴角向左 |  | — **不发** | `MouthStretchLeft` 0.713 |
+| `mouthStretchRight` | 右嘴角向右（⚠️ Unity 官方英文描述写成 "left corner"，是官方笔误） |  | — **不发** | `MouthStretchRight` 0.815 |
+<!-- END GENERATED SEMANTICS -->
+
+⚠️ **两条判据的坑**（同一个坑踩了三次，别再踩）：
+JawRight 在 114 帧时 range 只有 0.043（判 WEAK），到 120 帧变成 **0.600**；
+MouthRight 同样 0.020 → **0.480**；TongueOut 更早还被判过"不给值"，实际能到 **1.000**。
+⇒ **看到 WEAK / NEVER-MOVES 要连着"我做了那个动作没有、有没有配对做、采了多少帧"一起看。**
 ---
 
 ## 1. 安卓 VTS（`androidVTS`）
@@ -342,7 +430,50 @@
 
 ---
 
-## 3. 怎么刷新这张表
+## 3. 两台设备对比（安卓 VTS ↔ 苹果 VTS）
+
+> 这一节把"两台到底差在哪"收在一处。§2.2 是同一个结论在苹果语境下的展开，两边内容一致。
+
+### 3.1 线名集合：**同一条通道，两台经常叫不同名字**
+
+| | 安卓 | 苹果 |
+|---|---|---|
+| 实测条数 | **65** | **67** |
+| 形状的拼写 | `_L/_R` 后缀 + camelCase（`browDown_L`） | **纯 PascalCase**（`BrowDownLeft`） |
+| 标量 | `Rotation_x` / `Position_y` / `EyeLeft_x` / `FaceFound` / `Hotkey` / `Timestamp` | **同名** |
+| `head*` 那 6 条 | **有**（`headLeft` 等） | **没有** |
+
+**归并之后**（把 `_L/_R` 折成 `Left/Right`、大小写无关）：**52 组同义通道**，另有：
+
+* **只有安卓有**（9 组）：6 个 `head*` + `browInnerUp` 拆成 `browInnerUp_L` / `_R` 两条（苹果是一条 `BrowInnerUp`）
+* **只有苹果有**（12 组）：`cheekSquintLeft/Right`、`jawForward`、`mouthClose`、
+  `mouthDimpleLeft/Right`、`mouthPressLeft/Right`、`mouthShrugLower`、`mouthStretchLeft/Right`
+
+### 3.2 数值：**同一条通道，两台的量级与零点也不同**
+
+| 通道 | 安卓 range | 苹果 range | 备注 |
+|---|---|---|---|
+| `tongueOut` | 0.330 | **1.000** | 苹果能到满 |
+| `mouthStretchLeft` / `Right` | — **不发** | 0.713 / 0.815 | |
+| `mouthShrugLower` | — **不发** | 0.638 | |
+| `jawRight`（张嘴做） | 0.216 | **0.600** | |
+| `cheekSquintLeft` / `Right` | — **不发** | 0.338 / 0.315 | |
+| `eyeLeft_z` / `eyeRight_z` | **0.000（恒 0）** | **5.871 / 6.111** | 安卓不填这个分量 |
+| `mouthShrugUpper` | **0.039（噪声底）** | 0.556 | 安卓基本不动 |
+
+**方向/零点**：苹果 `rotation_y` mean **+19.8**、`eyeLeft_x` mean **+12.5**；
+安卓 `rotation_y` mean **−23.5**、`eyeLeft_x` mean **−0.71**。
+⇒ **符号和零点都不一样，连"标定"都不能跨设备抄。**
+
+### 3.3 结论：**必须一台设备一份配置**
+
+* 名字不同 ⇒ 用错那份配置时，那一行**永远没数据、且不报错**（静默失效）；
+* 名字相同但**某台不发**的（12 组）⇒ 那一格在那台上恒 0；
+* 名字相同、都发的，**量级与零点也可能差很远** ⇒ 曲线/换算不能共用。
+
+⚠️ 所以包里是**两份参考预设**（`ho-debug-androidVTS` / `ho-debug-iphoneVTS`），
+各自**只列自己做实测发过的线**。往中间层加"真实转化"时，**两边各写一套**。
+## 4. 怎么刷新这张表
 
 ```powershell
 # 从 Player.log 的自动 dump 统计（-Markdown 直接产出可粘贴的表格块）
