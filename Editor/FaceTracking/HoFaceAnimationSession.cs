@@ -261,9 +261,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 mappingStamp = stamp;
                 configured = true;
             }
-            // 双眼同步（`HoFaceEyeSync`）已经删掉了：那是**混合树的事**，不该在参数生产这一层做。
-            // 面板上那三个开关（eyeSync / eyeSyncMix / eyeSyncSingleKey）也一并退休 ——
-            // 需要在树里合并就画在树里，这样"面板里看到什么 = Warudo 里是什么"才成立。
+            // 双眼同步：**删掉的是那个组件（`HoFaceEyeSync`）与面板上那三个开关**
+            // （eyeSync / eyeSyncMix / eyeSyncSingleKey），不是"这件事"。
+            //
+            // ⚠️ 2026-09-26 更正：以前这里写的理由是"那是**混合树的事**" —— **那是错的**。
+            // 混合树只能"按权重把若干**姿势**混起来"，**做不了"把两个输入合成一个数"**（平均、
+            // 取一侧、按另一个量压缩…都做不了）。所以左右整形本来就在**参数生产**这一层。
+            // 当年真正不对的是**形状**：三个硬编码开关 + 一个专门组件；现在的写法就是**普通的一行**：
+            //     eyeBlink = (eyeBlinkLeft + eyeBlinkRight) * 0.5
+            // 再让两根眼睑轴都引用它（曲线 / 修饰符照常按行配）。不需要任何专用机制。
             // 这里曾经是：HoFaceEyeSync.Apply(Input, Settings.eyeSync, Settings.eyeSyncMix, Settings.eyeSyncSingleKey);
 
             // ── 参数生产：每一行 = 曲线(表达式(源键…))，再走它自己那串有序修饰符 ──────────

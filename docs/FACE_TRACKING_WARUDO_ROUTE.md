@@ -16,6 +16,8 @@
 > **取证来源**（本文每条结论都指回这里之一）：
 > 1. **真机程序集反射**：`.research/warudo-knobs`（`dotnet run -- <dll> <类型名>`；DLL 在 `D:\steam\steamapps\common\Warudo\Warudo_Data\Managed`）——
 >    三处比对同一件事：**反射**（编译期真值、含继承）、场景里节点实例的 **`dataInputs`**（该实例未被连线的口）、**`dataConnections`**（被连线的口）。
+>    另有 `--ports`（**全量 port 类型词汇表**：这套程序集里每个 `[NodeType]` 的数据/流程口用了哪些类型，§3.5 就是这么来的）、
+>    `--il`（读方法体）、`--find-attr`（找特性用在哪）、`--ids`（typeId → 类型名）、`--list`（按名字找类型）。
 > 2. **本机场景文件**：`Warudo_Data/StreamingAssets/Scenes/DefaultScene.json` —— 官方那张图 `面部追踪 - iFacialMocap` 的
 >    节点、端口类型、每个口的当前值、全部 25 条数据连线与 5 条流程连线都在里面。
 > 3. **运行期探针输出**：`AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（2026-09-24）—— 那时候那台
@@ -69,7 +71,7 @@
 | 挂在角色上的 `HoFaceTrackingDebugger` **组件** | **已删**。现在是全局面板 + `HoFaceDebugHost` 宿主 | `FACE_TRACKING_DESIGN.md:9`、`HoFaceDebugHost.cs:10-15` |
 | iFacialMocap 作为**现行输入** | **已删**，只剩 VTS 手机。⚠️ 它的**线名**（`_L/_R` 那套）当年还以"退役字段"形式留在内置默认配置的输入行里；**2026-09-26 连那份内置默认表也删了**，所以它现在只活在这份文档与 `PARAMETER_STANDARDS` §6 里（⚠️ 但**安卓版 VTS 发的形态键就是这套拼写**，要接它就在自己的配置里写那些行） | `HoFaceInputEnvironment.cs:13-21`；[中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md) |
 | 区域门控（把"哪块脸算数"做成注入的开关） | **已删**。改由使用者自己的混合树决定 | `HoFaceAnimationSession.cs:205`、`FACE_TRACKING_DESIGN.md:145` |
-| 双眼同步（`HoFaceEyeSync`） | **已删**，那属于混合树的事 | `HoFaceAnimationSession.cs:224`、`Tests~/FaceTrackingValidation.cs:309` |
+| 双眼同步（`HoFaceEyeSync`、面板上那三个开关） | **删掉的是组件**，事情没删：左右整形（平均 / 取一侧 / 按另一个量压缩）是**参数生产**的活 —— 混合树只能按权重混**姿势**，"把两个输入合成一个数"它做不了。现在就是普通一行 `eyeBlink = (eyeBlinkLeft + eyeBlinkRight) * 0.5`（⚠️ 2026-09-26 更正：这里原来写"那属于混合树的事"，**是错的**） | `HoFaceAnimationSession.cs`（那段注释）、`FACE_TRACKING_CONTROLLER_STRUCTURE.md` §1.4 / §3.2 |
 | `assemblyOutputPath` | **不存在了**（全仓库搜不到这个字段） | 全仓库无匹配 |
 
 ---
@@ -450,6 +452,61 @@ ON_UPDATE ─flow→ SET_CHARACTER_TRACKING_BLENDSHAPES ─→ OVERRIDE_CHARACTE
 3. **骨骼那条路是"偏移"，不是"绝对"。** 我们自己算出来的东西应该以 **offset（相对基准的增量）**
    的形式交出去；`DEFAULT = 不改` 这个语义是整套设计的基线。
 
+### 3.5 图能搬什么：全量 port 词汇表，以及官方的"元组"机制
+
+（2026-09-26 取证：`.research/warudo-knobs <dll> --ports` 全量枚举 + `DefaultScene.json` 的 `typeKind` 统计。
+起因：设计"合并/覆盖"节点时要回答"官方有没有键值对/元组这种口"。）
+
+**词汇表比想象的窄。** 两套程序集里所有 `[NodeType]` 的数据/流程口类型去重之后：
+`Warudo.Core.dll` **一个节点都没有**（节点全在 `Warudo.Plugins.Core.dll` 与 `Assembly-CSharp.dll` 里）。
+常见的就是 `Single` / `String` / `Boolean` / `Int32` / `Vector3` / `Quaternion` / `Continuation`（流程）
+与它们的数组（`Single[]` / `String[]` / `Vector3[]` / `Quaternion[]`）、一堆 enum、资产类型
+（`CharacterAsset` / `PropAsset` / `CameraAsset`…）、一个 `Object`（23 个口，当"什么都能接"的旁路）、
+`JToken`（1 个口，原始 JSON），以及两类"成组"的东西：**`Dictionary<String,Single>`** 与 **`StructuredData`**。
+
+⚠️ **没有 `Tuple` / `KeyValuePair`，也没有第二种字典。** 全图只有 `Dictionary<string,float>` 一种字典
+（`Warudo.Plugins.Core` 28 个口 + `Assembly-CSharp` 13 个口 = **41 个**），而且这 41 个**全是 BlendShape 语义**
+（键 = 角色身上真实的形态键名，从 `Override Character BlendShapes` 到 `Smooth/Map/Scale/Binarize/Trigger BlendShape`）。
+→ 所以"我们的字典 = 任意动画参数名"跟它是**同一个 CLR 类型、完全不同的语义**：
+**类型相同只说明技术上插得上，别把这当"能互相喂"。**
+
+**那"手填一组一组的值"官方怎么做？** 看官方场景里每个口的 `typeKind` 统计（这是序列化层的事实）：
+
+| `typeKind` | 数量 | 能手填 | 例 |
+|---|---|---|---|
+| `Value` | 222 | ✅ | `float` / `bool` / `string` / `Vector3` |
+| `Enum` | 9 | ✅ | `Ease` = `{"label":"InOutSine","value":4}` |
+| `Asset` | 11 | ✅ | 选角色 / 相机 / 道具 |
+| `ValueArray` | 6 | ✅ | `string[]`（例：一个 guid 列表） |
+| `StructuredData` | 14 | ✅ | `TransformData` / `HeadTiltData`（一行一个对象） |
+| `StructuredDataArray` | 9 | ✅ | `RagdollMuscleData[]` / `MeshData<T>[]`（面板加/删行） |
+| `Reference` | 18 | ❌ **官方全空** | `object`(9) · `GameObject`(1) · **`Dictionary<string,float>`(8)** |
+
+→ **`Dictionary<string,float>` 落在 `Reference` 类，而官方图里 8 个字典口全是 `null`：官方从不手填字典，
+字典一律是"接过来的"**（`Switch BlendShape List` 的 `IfTrue`/`IfFalse` 就是空的，靠 `Empty BlendShape List`
+这类节点喂）。**"手填一个字典口"没有证据支持 —— 别那样设计。**
+
+**官方的"元组" = `StructuredData` 行。** 机制（反射真值）：`class Xxx : StructuredData<所属节点>`，
+字段加 `[DataInput]`；节点上声明 `Xxx[] Rows`，可选 `[StructuredDataInitializer(nameof(Init))]`
+（新加一行时回调，给这行设默认值 —— 例：`OnContactNode.InitializeReceiver` 的整个方法体就是
+`receiver.IsReceiver = true`）。官方用例：`ContactSource : StructuredData<OnContactNode>`、
+`ParameterData : StructuredData<DefineFunctionNode>`、`BlendShapeEntryData`（名字 + 值 + 权重）、
+`WeightedRandomEntryData`、`RunJavascriptOnWebView+InputVar`。
+行类型**不需要预先注册**：`StructuredDataTypeRegistry.GetTypeMeta` 第一次被问到时才 `RegisterType`
+（读 IL 确认：没有"扫描全程序集"那一步）。想给折叠的行一个标题就实现
+`ICollapsibleStructuredData.GetHeader()`。
+
+→ **对我们的后果**：`Ho合并字典` 的覆盖入口做成 `基础`(字典，接) → `覆盖字典`(字典，接) →
+**`覆盖行`（`StructuredData` 元组行，手填）**；这条也说明"元组支持"不是可选项，而是**手填的唯一形态**
+（细节与端口表见 mod README §1.1）。
+❓ **仍未验证**：mod 自己定义的 `StructuredData<>` 行类型在 Warudo 的面板里能不能正常渲染/增删 ——
+**只能在 Warudo 里验**（Unity 侧测不到，属跨仓验证项）。
+
+**顺带两条 IL 取证（设计字典节点时会撞上）**：
+① 官方字典口输出**复用内部实例** —— `OffsetBlendShapeNode.lastBlendShapes` 每帧 `Clear()` + 重填 + 返回自己，
+`EmptyBlendShapeListNode` 直接返回缓存字段 ⇒ 返回值"别跨帧留着"是这套图本来的约定，不是我们的怪癖；
+② 输入字典为 `null` 时官方**返回 `null`**（不是空表）—— 所以我们的节点自己判空、自己兜底是必要的。
+
 ---
 
 ## 4. 已确证的机制与硬边界
@@ -714,6 +771,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 | mod 脚本能不能对着真机 DLL 编译 | `Assets/HoWarudoModTests/tools/compile-check.ps1`（**mod 工程里**，`-ModsRoots Mods,Mods-Ho`） | 全绿（引用表含 `UMod.dll` / `UMod-Interface.dll`；含 UMod 沙箱 lint） |
 | Warudo 侧会话级行为（面板 / 影子台 / 断流回中性） | `Tests~/FaceTrackingValidation.cs` 拷进一次性工程批处理跑（[批处理验证](pitfalls/VALIDATION_LOOP.md)） | 成功标记 `HO_FACE_TESTS_ALL_PASSED` |
 | 官方节点的类型 / 端口 / 字段 | `dotnet run --project .research/warudo-knobs -- Warudo.Plugins.Core.dll <类型名>`（真机 DLL 在 `D:\steam\...\Warudo_Data\Managed`；`--attrs` 连特性一起打） | 本文 §2 / §3 的字段表就是这么来的 |
+| **图能搬哪些类型**（全量 port 词汇表）/ 有没有元组 | `dotnet run --project .research/warudo-knobs -- <dll> --ports`（配 `DefaultScene.json` 的口 `typeKind` 统计） | §3.5：只有一种字典（`Dictionary<string,float>`，41 个口全是 BlendShape 语义）；**没有 Tuple/KeyValuePair**；手填的"元组"= `StructuredData` 行 |
 | Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（会话日志另在 `Logs\WarudoLog-<启动时间>.log.gz`） | — |
 
 > **`Player.log` 这条很重要**：Warudo 没有界面控制台，但我们的 `Debug.Log` 会落到那儿，
