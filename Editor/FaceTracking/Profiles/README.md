@@ -23,6 +23,20 @@
 （`parameter = expression = 线名`，两层曲线恒等），它是**实测表**的落盘形式，职责只有记录；
 `ho-iPhoneVTS` 才是**真在加工**的那一层（改名 / 表达式 / 曲线）。
 
+⚠️ **`ho-debug-*` 不能当能跑的配置用**。中间层是靠**输入行的 `parameter`** 去
+`HoFaceTrackingChannels.IndexOf` 解析通道的，而那个索引表是 **88 条**（52 个规范名 +
+`Left`/`Right` 结尾者的 `_L`/`_R` 别名），比较是 `StringComparer.Ordinal`（**逐字**）。
+实测（走真的 `IndexOf`）：
+
+| 配置 | 输入行 | 解析到的通道 | 为什么 |
+|---|---|---|---|
+| `ho-iPhoneVTS` | 67 | **52 / 52** ✅ | 形状行的 `parameter` 就是规范名 |
+| `ho-debug-iphoneVTS` | 67 | **0 / 52** | 线名是 PascalCase `JawOpen`，规范名与别名都是 camelCase |
+| `ho-debug-androidVTS` | 65 | **40 / 52** | 小驼峰 + `_L/_R` 命中别名表；剩 12 个它不发 |
+
+⚠️ **核这类事别用 PowerShell**：它的 `-contains`/`-eq`/`-match` 默认**忽略大小写**，会把
+iPhone 那份假报成 52/52；而"只比 52 个规范名"又会漏掉别名表、把安卓报成 12/52。两个坑都踩过。
+
 它同时是 **Unity 那套验证用例的夹具**（`Tests~/FaceTrackingValidation.cs` 的 `PrepareValidationProfile`）：
 读它、原样写成验证工程里的 `Assets/ValidationProfile.hoface.json`。所以**改它的输入行会连带影响那套用例**——
 夹具会当场查 `jawOpen` 那一路在不在（行为用例靠它串"包 → 参数"整条链），缺了就直接抛。
@@ -73,11 +87,10 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 `FaceAngleX` 是官方标量（`±90` 不缩放），`Face/Angle/X` 是 VB 向量分量（`±30` 带 `0.66` 阻尼）。
 ⚠️ `Head/*` 是**已删的 `ho-vts-default`** 的保留名，别再用。
 
-**大小写不影响区分**：全部字典都是 `StringComparer.Ordinal`（大小写敏感），所以
-`tongueOut` 与 `TongueOut` 是两个不同的键、两个不同的参数。有 5 对只差大小写
-（`cheekPuff`/`CheekPuff`、`mouthFunnel`/`MouthFunnel`、`mouthPucker`/`MouthPucker`、
-`browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`），**留着是有意的**——
-改名就等于发明 VTS 词表里没有的名字。
+**大小写不用管**：全部字典都是 `StringComparer.Ordinal`（大小写敏感），所以出口里有 5 对只差
+大小写的名字（`cheekPuff`/`CheekPuff`、`mouthFunnel`/`MouthFunnel`、`mouthPucker`/`MouthPucker`、
+`browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`）**是两个不同的键、两个不同的参数**，
+程序里区分得开。两套并存是故意的（原始裸名 + VB 的合成名），改名就等于发明 VTS 词表里没有的名字。
 
 **不出的**：`MousePositionX/Y`（没有鼠标）、`Voice*` / `VoiceA..O`（这条链上没有麦克风）、
 `FaceAngry`（官方标 EXPERIMENTAL、且没有对应的 ARKit 形态量）；

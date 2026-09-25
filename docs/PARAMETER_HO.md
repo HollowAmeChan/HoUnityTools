@@ -118,11 +118,26 @@ iPhone 那 203 帧里 52 个形态量**全部 MOVES**，逐个对应 ARKit 52 �
 没有任何东西拿它们去 `IndexOf`，所以没有改名可做也没有改名必要。
 
 > 由此推出一条判据：**一份"纯直通"（`parameter == expression`）的配置能不能真跑起来，
-> 完全取决于那台设备的线名是否恰好等于规范名**（忽略大小写）。
-> 实测：`ho-debug-iphoneVTS` 覆盖 52/52（PascalCase 恰好只差首字母，能跑）；
-> `ho-debug-androidVTS` 只覆盖 14/52（`browDown_L` 那种与 `browDownLeft` 差得远）。
-> 所以那两份的定位是**实测记录**，不是"能跑的配置"——见
+> 完全取决于那台设备的线名能不能逐字命中通道索引表。**
+>
+> 那个索引表**不是只有 52 个规范名**：`HoFaceTrackingChannels.BuildIndices()` 还给每个
+> `Left`/`Right` 结尾的规范名**额外注册了 `_L`/`_R` 别名**（`eyeBlinkLeft` ←→ `eyeBlink_L`），
+> 共 **88 条**；比较是 `StringComparer.Ordinal`（**逐字**，`JawOpen` ≠ `jawOpen`）。
+>
+> 实测（走真的 `IndexOf`）：
+>
+> | 配置 | 输入行 | 解析到的通道 | 为什么 |
+> |---|---|---|---|
+> | `ho-iPhoneVTS` | 67 | **52 / 52** ✅ | 52 条形状行的 `parameter` 就是规范名 |
+> | `ho-debug-iphoneVTS` | 67 | **0 / 52** | 线名是 PascalCase `JawOpen`，规范名与别名都是 camelCase |
+> | `ho-debug-androidVTS` | 65 | **40 / 52** | 小驼峰 + `_L/_R` 命中别名表；剩 12 个它不发 |
+>
+> 所以那两份调试配置的定位是**实测记录**，不是"能跑的配置"——见
 > [Profiles/README.md](../Editor/FaceTracking/Profiles/README.md)。
+>
+> ⚠️ **核这类事别用 PowerShell**：它的 `-contains`/`-eq`/`-match` **默认忽略大小写**，
+> 会让上面第二行假报成 52/52；而"只比 52 个规范名"又会漏掉别名表、把第三行报成 12/52。
+> 我两个坑都踩过。**要核就照 C# 的 `Ordinal` + 真 `IndexOf`**（测试里已经这么做了）。
 
 ---
 
@@ -198,12 +213,11 @@ VB 有一整族参数用 **0.5 = 中立**：`Brows`、`BrowLeftY`、`BrowRightY`
 
 这是**两个不同的量**，同名会打架。`Head/*` 是**已删的 `ho-vts-default`** 的保留名，别再用。
 
-**大小写不影响区分**：整条链每个字典都是 `StringComparer.Ordinal`（大小写敏感），控制器匹配
-也走 `parameters.TryGetValue(参数名)` + Animator 参数名，所以 `tongueOut` 与 `TongueOut`
-是两个不同的键、两个不同的参数。这 5 对（`cheekPuff`/`CheekPuff`、`mouthFunnel`/`MouthFunnel`、
-`mouthPucker`/`MouthPucker`、`browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`）**留着是有意的**——
-改名就等于发明 VTS 词表里没有的名字。唯一要留意的是控制器作者**别故意同时声明两个**，
-那会让它们写同一个形态键槽（后写的赢），但那是作者的选择，不是这一层的缺陷。
+⚠️ 顺带记一笔：出口里有 5 对名字只差大小写（`cheekPuff`/`CheekPuff`、`mouthFunnel`/`MouthFunnel`、
+`mouthPucker`/`MouthPucker`、`browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`）——
+**这是正常的，不是问题**：整条链每个字典都是 `StringComparer.Ordinal`（大小写敏感），
+所以它们是不同的键、不同的参数，程序里区分得开，不会互相覆盖。
+两套名字并存是**故意的**（原始裸名 + VB 的合成名），改名就等于发明 VTS 词表里没有的名字。
 
 ### 3.1 G1 原始 ARKit 52（无损直通）
 
