@@ -505,11 +505,27 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static void ValidateMachine(AnimatorStateMachine machine)
         {
-            if (machine.behaviours.Length != 0) throw new InvalidOperationException("不支持 StateMachineBehaviour：" + machine.name);
+            // ⚠️ 这里的规矩是"只放过**我们自己的**语义写手，其余 Behaviour 一律拒绝"。
+            //
+            // 为什么原来一概拒绝：控制器的 Behaviour 会在**影子台**上真的跑起来，而影子台只是一台
+            // "照原样跑出一帧姿态"的机器 —— 别人的 Behaviour 可能建对象、改全局、读盘，那些副作用
+            // 我们既没承诺过也不想要。
+            //
+            // 为什么现在必须放开一个：`HoFaceSemanticWriterBehaviour`（状态机行为）**就是**这套设计里
+            // "控制器把中间值交出来"的那一层（2026-09-26 从动画曲线改成它，理由见
+            // docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md §5）。它只往影子 Hub 里写值，没有别的副作用。
+            // 2026-09-26 现场：没放开之前，带写手的控制器会让会话**起不来**（报"面部状态不能带 Behaviour"），
+            // 表现是"脸不动、Hub 空"，而面板上那句话很容易被忽略。
+            if (machine.behaviours.Length != 0)
+                throw new InvalidOperationException("不支持 StateMachineBehaviour（状态机上）：" + machine.name
+                    + " —— 语义写手要挂在**状态**上（状态机上没有每帧回调）");
             foreach (var child in machine.states)
             {
-                if (child.state.behaviours.Length != 0)
-                    throw new InvalidOperationException("面部状态不能带 Behaviour：" + child.state.name);
+                foreach (var behaviour in child.state.behaviours)
+                    if (!(behaviour is HoFaceSemanticWriterBehaviour))
+                        throw new InvalidOperationException("面部状态不能带 Behaviour：" + child.state.name
+                            + " / " + (behaviour == null ? "（空）" : behaviour.GetType().Name)
+                            + "（只放过 HoFaceSemanticWriterBehaviour）");
                 // Direct 树靠"权重和不足 1 时那部分与基准值混合"工作。写默认值关掉时，那个基准值取的是
                 // "当前值"且永不复位——实测会逐帧发散（0.6 的输入 → 98.98 → 246.28 → 1059.33）。
                 // 这个组合直接拒绝，不留给运气。
