@@ -47,11 +47,11 @@ git commit -F ".research\commit-msg-<主题>.txt"
 是同一个功能的两半：包定词表与主本（`Runtime/FaceTracking/` + `Editor/FaceTracking/`），
 mod 是同一套逻辑的**运行期**（`Mods-Ho/HoFaceTracking/`）。
 两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码 ⇒
-求值器那 **11 份是"搬"过去的**（不是引用），清单在 mod 侧 `Mods-Ho/HoFaceTracking/Core/PORTED.md` §1。
+求值器那 **10 份是"搬"过去的**（不是引用），清单在 mod 侧 `Mods-Ho/HoFaceTracking/Core/PORTED.md` §1。
 
 | 你改了什么 | 必须顺手做什么 | 不做会怎样 |
 |---|---|---|
-| 包里那 11 份（`HoFaceMiddleware` / `HoFaceProfile` / `HoFaceProfileJson` / `HoJson` / `HoVtsPacket` / `HoFaceTrackingChannels` / `HoFaceExpression` / `HoFaceNaming` / `HoFaceSemanticHub` / `HoFaceSemanticConnector` / `HoFaceSemanticWriterBehaviour`） | 跑 `.research/sync-modcore.ps1`，再两边各过一遍编译（包：`.research/compile-check-pkg.ps1`；mod：`tools/compile-check.ps1`） | mod 侧还是**旧语义**，**而且编译照样过** —— 表现是"Warudo 里和面板里不一样"，最难查 |
+| 包里那 10 份（`HoFaceMiddleware` / `HoFaceProfile` / `HoFaceProfileJson` / `HoJson` / `HoVtsPacket` / `HoFaceTrackingChannels` / `HoFaceExpression` / `HoFaceNaming` / `HoFaceSemanticHub` / `HoFaceSemanticConnector`） | 跑 `.research/sync-modcore.ps1`，再两边各过一遍编译（包：`.research/compile-check-pkg.ps1`；mod：`tools/compile-check.ps1`）；`.research/drift-check.ps1` 能逐字节核"同步过没有" | mod 侧还是**旧语义**，**而且编译照样过** —— 表现是"Warudo 里和面板里不一样"，最难查 |
 | 直接改 mod 的 `Core/` 副本 | **别改**（那 6 行文件头就是提醒），改包侧再同步 | 下次同步**无声覆盖** |
 | 包侧的公共类型 / 命名空间 / 菜单名 | 两边都重编译一遍 | mod 是**另一份源码**，包侧改了它不会自动跟过去 |
 | mod 的节点 / 接收器 / 控制器 | `Assets/HoWarudoModTests/tools/compile-check.ps1` | Roslyn 全绿也可能**真构建失败**：`System.Reflection` / `System.IO` 只有 UMod 的 `RunCodeValidation` 拦（§4.1 of [构建与工具](BUILD_AND_TOOLING.md)） |

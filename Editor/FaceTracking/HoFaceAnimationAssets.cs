@@ -505,27 +505,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static void ValidateMachine(AnimatorStateMachine machine)
         {
-            // ⚠️ 这里的规矩是"只放过**我们自己的**语义写手，其余 Behaviour 一律拒绝"。
+            // ⚠️ **任何 `StateMachineBehaviour` 都不接受**（状态机上的、状态上的，一视同仁）。
             //
-            // 为什么原来一概拒绝：控制器的 Behaviour 会在**影子台**上真的跑起来，而影子台只是一台
+            // 为什么：控制器的 Behaviour 会在**影子台**上真的跑起来，而影子台只是一台
             // "照原样跑出一帧姿态"的机器 —— 别人的 Behaviour 可能建对象、改全局、读盘，那些副作用
             // 我们既没承诺过也不想要。
             //
-            // 为什么现在必须放开一个：`HoFaceSemanticWriterBehaviour`（状态机行为）**就是**这套设计里
-            // "控制器把中间值交出来"的那一层（2026-09-26 从动画曲线改成它，理由见
-            // docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md §5）。它只往影子 Hub 里写值，没有别的副作用。
-            // 2026-09-26 现场：没放开之前，带写手的控制器会让会话**起不来**（报"面部状态不能带 Behaviour"），
-            // 表现是"脸不动、Hub 空"，而面板上那句话很容易被忽略。
+            // ⚠️ **曾经放开过唯一一个**（2026-09-26 上午 → 下午就删了）：我们自己的「语义写手」
+            // `HoFaceSemanticWriterBehaviour`（挂在状态上、按表达式把 Animator 参数写进影子 Hub）。
+            // 删掉它的理由：那些值**中间层本来就算得出来**（它就是写参数的那个人），让控制器再算一遍
+            // = 两份真相 + 一个只在 bundle 里跑、编辑器里看不见的写者。现在中间层算完直接写角色上的 Hub
+            // （Unity 侧 `HoFaceAnimationSession.PublishSemantics`，Warudo 侧「HoFace写动态参数」节点）。
+            // 于是这条校验又回到"一律拒绝"，也不再需要"只放过某一个"这种例外。
             if (machine.behaviours.Length != 0)
                 throw new InvalidOperationException("不支持 StateMachineBehaviour（状态机上）：" + machine.name
-                    + " —— 语义写手要挂在**状态**上（状态机上没有每帧回调）");
+                    + " —— 面捕的树只有「参数 + 树」，不要挂行为（见 docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md §5）");
             foreach (var child in machine.states)
             {
                 foreach (var behaviour in child.state.behaviours)
-                    if (!(behaviour is HoFaceSemanticWriterBehaviour))
+                    if (behaviour != null)
                         throw new InvalidOperationException("面部状态不能带 Behaviour：" + child.state.name
-                            + " / " + (behaviour == null ? "（空）" : behaviour.GetType().Name)
-                            + "（只放过 HoFaceSemanticWriterBehaviour）");
+                            + " / " + behaviour.GetType().Name
+                            + "（面捕的树只有「参数 + 树」；动态参数由中间层算完直接写 Hub）");
                 // Direct 树靠"权重和不足 1 时那部分与基准值混合"工作。写默认值关掉时，那个基准值取的是
                 // "当前值"且永不复位——实测会逐帧发散（0.6 的输入 → 98.98 → 246.28 → 1059.33）。
                 // 这个组合直接拒绝，不留给运气。

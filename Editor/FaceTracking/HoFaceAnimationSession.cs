@@ -79,34 +79,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private GameObject shadowRoot;
         private Animator shadow;
 
-        /// <summary>
-        /// 影子上的**语义 Hub**：控制器里的「语义写手」（`HoFaceSemanticWriterBehaviour`）写它。
-        /// ⚠️ 写手是**跑在影子 Animator 上**的（那是唯一在跑控制器的地方），而消费方读的是**角色身上**那片
-        /// Hub —— 所以影子根上必须有一片，且每帧由 <see cref="RelaySemantics"/> 搬到角色那边。
-        /// </summary>
-        private HoFaceSemanticHub shadowHub;
-
-        /// <summary>角色身上的 Connector（转发时按它的槽表解释名字）。换角色 / 换表时重新找。</summary>
+        /// <summary>角色身上的 Connector（中间层算出来的参数往它指向的 Hub 里写）。换角色 / 换引用时重新找。</summary>
         private HoFaceSemanticConnector semanticConnector;
         private GameObject semanticOwner;
-        /// <summary>转发时被跳过的名字（不在槽表里的），只留前几个用来点名。</summary>
+        /// <summary>这一轮**新声明**的名字（角色 Hub 上刚开出来的槽），只留前几个用来点名。</summary>
         private readonly List<string> semanticSkipped = new List<string>();
-        /// <summary>上一次报过的转发状态（结构变了才重算字符串 + 报一次，免得每帧刷屏）。</summary>
+        /// <summary>上一次报过的发布状态（结构变了才重算字符串 + 报一次，免得每帧刷屏）。</summary>
         private string semanticReported;
 
         /// <summary>
-        /// 语义转发的**结构**摘要（写几个、跳过几个、跳过谁）。面板直接读它 —— 值本身去读 Hub。
+        /// **语义输出的结构摘要**（写了几个槽、新声明了哪几个名字）。面板直接读它 —— 值本身去读 Hub。
         /// 只在结构变化时更新，所以不用担心每帧分配字符串。
         /// </summary>
         public string SemanticStatus { get; private set; }
 
         /// <summary>
-        /// 影子 Hub 上有几个槽（给面板的"链路走到哪一步"用）。
-        /// **−1 = 连影子 Hub 都不存在**（会话建影子时没加 Hub ⇒ 多半是包代码没重编译），
-        /// **0 = 影子 Hub 在、但写手一格都没声明过**（= 状态机行为没被调用，或条目是空的）。
-        /// 这两种在界面上本来长得一样，所以这里分开报。
+        /// 这一帧往**角色 Hub** 写了几个槽（给面板的"链路走到哪一步"用）。
+        /// **−1 = 没有可写的目标**（角色上没有 Connector，或它没填 Hub）；**0 = 有目标但一行输出都没有**。
         /// </summary>
-        public int ShadowHubSlotCount { get { return shadowHub != null ? shadowHub.SlotCount : -1; } }
+        public int SemanticPublishedCount { get; private set; } = -1;
 
         private RuntimeAnimatorController runningController;
         private string mappingStamp;
@@ -158,9 +149,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             shadowRoot = new GameObject("Ho Face Shadow") { hideFlags = HideFlags.HideAndDontSave };
             shadow = shadowRoot.AddComponent<Animator>();
             shadow.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            // 影子根上放一片**语义 Hub**：控制器里的「语义写手」用 `GetComponentInChildren` 找它，
-            // 找不到就什么都写不进去（只报一句）。见 RelaySemantics() —— 它是"影子 → 角色"的中转站。
-            shadowHub = shadowRoot.AddComponent<HoFaceSemanticHub>();
+            // ⚠️ 影子根上**没有** Hub —— 中间层算出来的参数直接写**角色身上**那片 Hub
+            // （见 PublishSemantics）。曾经这里放过一片"影子 Hub"，那是给控制器里的状态机行为写的，
+            // 那条路 2026-09-26 整个删掉了。
             // 登记给调试器（混合树观察台）：影子台是隐藏对象，调试组件自己找不到它。
             // 这是调试接入的全部代价 —— 一行，且不改任何生产逻辑。
             HoFaceShadowLink.Register(shadow);
@@ -300,25 +291,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // （影子是 AlwaysAnimate 的活动对象，Unity 之后还会再算一次 —— 参数没变，无害。）
             shadow.Update(0f);
 
-            // 影子算完 → 控制器里的语义写手也写完了 → 把它搬到角色身上那片 Hub（Warudo 侧由节点做同一件事）。
-            RelaySemantics();
+            // 影子算完 → 中间层这一帧的输出行都定了 → 按名字写进角色身上那片 Hub
+            // （Warudo 侧由「HoFace写动态参数」节点做同一件事：写的是参数处理/合并字典那份字典）。
+            PublishSemantics();
         }
 
         /// <summary>
-        /// 把影子 Hub 上的语义值**按名字**搬到角色身上那片 Hub（<see cref="HoFaceSemanticConnector.hub"/>）。
+        /// 把**中间层这一帧算出来的输出行**按名字写进**角色身上**那片 Hub
+        /// （<see cref="HoFaceSemanticConnector.hub"/>）。
         ///
-        /// 【为什么需要这一步】控制器里的「语义写手」跑在**影子**上（那是唯一在跑控制器的地方），
-        /// 而消费方读的是**角色**上那片 Hub。Warudo 侧这同一件事由「HoFace写动态参数」节点做
-        /// （`HoFaceHubWriteNode`）—— 两边都按**角色 Connector 的槽表**解释名字，所以"面板里看到什么
-        /// = Warudo 里是什么"这条规矩在语义值上也成立。
+        /// 【为什么是中间层写】（2026-09-26 清理）
+        /// 这些值本来就是这里算出来的（每一行 = `曲线(表达式(源键…))`，值就在 `outputValues` 里）。
+        /// 以前绕一圈：控制器里的状态机行为从 Animator 参数再算一遍、写进**影子** Hub，再由会话中转到角色 ——
+        /// 那是**两份真相**，而且那个写者只在 bundle 里跑、编辑器里根本看不见。
+        /// Warudo 侧由「HoFace写动态参数」节点做同一件事（写的是参数处理 / 合并字典那份字典），
+        /// 所以"面板里看到什么 = Warudo 里是什么"这条规矩在动态参数上也成立。
         ///
-        /// ⚠️ **名字对不上**（写手填的 `slot` 不在槽表里）是这套设计里最阴的失败：它完全不报错，
-        /// 只表现为"某个语义永远不动"。所以这里会点名，而且只在结构变化时报一次。
+        /// 【写的是**全部**输出行】不按"控制器里有没有这个参数"过滤：Hub 是"中间层算出来的动态参数"
+        /// 本身（跟面板的「参数输出」栏同一份）。控制器里没那些口时它们不驱动动画，但仍然是这份配置的输出。
+        /// 调试滑条（<see cref="SetPreview"/>）盖掉同名行时，Hub 里也跟着是那个值 —— 它驱的是影子那棵树。
+        ///
+        /// ⚠️ **名字对不上**现在只有一个来源：输出行的 `parameter` 写错了（敲成别的名字）。
+        /// 没有表就没有校验点，所以"新声明"（Hub 上刚开出来的槽）会点名报一次。
         /// </summary>
-        private void RelaySemantics()
+        private void PublishSemantics()
         {
-            if (shadowHub == null) return;
-
             GameObject character = Settings.Character();
             if (semanticConnector == null || semanticOwner != character)
             {
@@ -331,62 +328,55 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             if (semanticConnector == null || semanticConnector.hub == null)
             {
+                SemanticPublishedCount = -1;
                 if (semanticReported != "no-connector")
                 {
                     semanticReported = "no-connector";
-                    SemanticStatus = "⚠ 角色上没有 Connector（或它没填 Hub）⇒ 语义值没有地方落";
+                    SemanticStatus = "⚠ 角色上没有 Connector（或它没填 Hub）⇒ 中间层算出来的参数没有地方落";
                 }
                 return;
             }
 
             HoFaceSemanticHub target = semanticConnector.hub;
 
-            if (shadowHub.SlotCount == 0)
-            {
-                // 写手一格都没声明过。这一条**必须明说**：它和"值恒为 0"在面板上看起来一样，
-                // 但原因完全不同（状态机行为没被调用 / 条目是空的 vs 参数本来就是 0）。
-                if (semanticReported != "empty-shadow")
-                {
-                    semanticReported = "empty-shadow";
-                    SemanticStatus = "⚠ 影子 Hub 还是空的 ⇒ 控制器里的「语义写手」没被调用，或它的条目是空的"
-                        + "（写手挂在状态上、`OnStateUpdate` 每帧跑）";
-                }
-                return;
-            }
-
             int written = 0;
             int claimed = 0;
-            semanticSkipped.Clear();      // 这一轮里"新声明"的名字（表删了之后，这里就是唯一的"名字从哪来"记录）
-            for (int i = 0; i < shadowHub.SlotCount; i++)
+            semanticSkipped.Clear();      // 这一轮的"新声明"（名字从输出行来，这是唯一的来源记录）
+            for (int row = 0; row < outputs.Length; row++)
             {
-                string name = shadowHub.NameAt(i);
-                if (string.IsNullOrEmpty(name)) continue;      // 空位：写手还没声明过这一格
+                var output = outputs[row];
+                if (output == null || string.IsNullOrEmpty(output.parameter)) continue;
 
-                int index = target.IndexOfName(name);
+                float value;
+                if (!previews.TryGetValue(output.parameter, out value)) value = outputValues[row];
+
+                int index = target.IndexOfName(output.parameter);
                 if (index < 0)
                 {
-                    index = target.ClaimSlot(name);            // 名字由写的人声明，不是由某张表定义
+                    index = target.ClaimSlot(output.parameter);   // 名字由写的人声明（谁写谁开）
                     if (index >= 0)
                     {
                         claimed++;
-                        if (semanticSkipped.Count < 6) semanticSkipped.Add(name);
+                        if (semanticSkipped.Count < 6) semanticSkipped.Add(output.parameter);
                     }
                 }
                 if (index < 0) continue;
 
-                target.SetFloat(index, shadowHub.GetFloat(i));
+                target.SetFloat(index, value);
                 written++;
             }
+
+            SemanticPublishedCount = written;
 
             string state = written + "|" + claimed + "|" + string.Join(",", semanticSkipped);
             if (state == semanticReported) return;
             semanticReported = state;
 
-            SemanticStatus = "语义转发：写 " + written + " 个"
+            SemanticStatus = "动态参数：写 " + written + " 个槽"
                 + (claimed > 0 ? " · **新声明 " + claimed + " 个**（" + string.Join("、", semanticSkipped) + "）" : " · 名字都在");
             if (claimed > 0)
-                Debug.Log("[Ho 面捕] 语义转发：控制器声明了 " + claimed + " 个新名字（"
-                    + string.Join("、", semanticSkipped) + "）⇒ 它们是这个名字表里的新槽。");
+                Debug.Log("[Ho 面捕] 动态参数：角色 Hub 上开了 " + claimed + " 个新槽（"
+                    + string.Join("、", semanticSkipped) + "）—— 名字就是中间层输出行的 `parameter`。");
         }
 
         /// <summary>

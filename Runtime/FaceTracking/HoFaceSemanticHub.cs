@@ -4,30 +4,33 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
-    /// **动态参数 Hub**：某个角色实例上、这些语义参数**当前**是多少的那片**纯存值区域**。
+    /// **动态参数 Hub**：某个角色实例上、这些参数**当前**是多少的那片**纯存值区域**。
     ///
     /// 【它只干两件事】
     /// 存值、记名字。**它没有槽表、没有资产、没有配置** —— 槽是**写的人**在运行期开的：
     /// 谁写谁开（<see cref="ClaimSlot"/>），名字也是写的人填的（`names[i]`）。
     /// "这些名字是什么意思"那份给人看的表在 <see cref="HoFaceSemanticConnector"/> 上。
     ///
-    /// 【为什么是"运行期开槽"而不是"事先预留固定数量"】
-    /// 以前预留 128 个槽，是因为**控制器曲线**要写 `values.<i>`：曲线绑定是静态字符串，
-    /// 越界写**不报错、值就是不动**，所以长度必须在打包前就猜对，而且作者得先知道下标。
-    /// 现在改成 **`HoFaceSemanticWriterBehaviour`（状态机行为）用代码写**（见那份文件的说明）：
-    /// 它是普通 C#，可以自己开槽、自己记名字 ⇒ **没有魔法数字、也不用任何人预先知道下标**。
-    /// 于是"128 到底合不合适"这个问题**不存在了**：槽数就是控制器实际声明过的名字数。
+    /// 【谁写：中间层，算完顺手写】（2026-09-26 清理）
+    ///   · **Unity 侧**：调试会话（`HoFaceAnimationSession`）每帧把**中间层算出来的输出行**
+    ///     （配置文件里那些 `参数名 = 曲线(表达式(源键…))`）按名字写进来；
+    ///   · **Warudo 侧**：「HoFace写动态参数」节点（`HoFaceHubWriteNode`）把**参数处理 / 合并字典**
+    ///     那份字典按名字写进来。
+    /// 两边写的是**同一份东西**（中间层的输出 = 那些 `参数名`），所以"面板里看到什么、Warudo 里就是什么"。
+    ///
+    /// ⚠️ **曾经不是这样**：槽一度是由控制器里的一个**状态机行为**（`HoFaceSemanticWriterBehaviour`）
+    /// 按表达式从 Animator 参数算出来、再写进**影子上**那片 Hub，然后由会话/节点中转到角色上的。
+    /// 那条路 2026-09-26 **整个删掉**了 —— 理由：中间层本来就能算出那些值（它就是写参数的人），
+    /// 让控制器再算一遍 = 两份真相 + 一个只在 bundle 里跑、编辑器里看不见的写者。
+    /// 于是"预留 128 个槽"这个问题也彻底不存在了（它当年只是为了让动画曲线能写 `values.<i>`）。
     ///
     /// 【为什么值还是 `float[]` 而不是一堆 `public float MouthX`】
     /// ① **运行期读不能反射**（UMod 禁 `System.Reflection`）：一堆字段名读不出来，下标可以；
-    /// ② 语义表是**每个角色自己定义的**、不是编译期固定的集合 ⇒ 字段名没法在编译期写出来；
-    /// ③ 加一个语义 = 控制器多声明一个名字，**两边代码一行不动**。
+    /// ② 参数是**每份配置自己定义的**、不是编译期固定的集合 ⇒ 字段名没法在编译期写出来；
+    /// ③ 加一个参数 = 中间层多一行输出，**两边代码一行不动**。
     ///
-    /// 【谁写、谁读】
-    ///   · **写**：控制器里的 <see cref="HoFaceSemanticWriterBehaviour"/>（bundle 里跑，按名字开槽写值）、
-    ///     Unity 侧调试会话（`SetFloat(i, v)`）、Warudo 侧的「HoFace写动态参数」节点（按下标写）。
-    ///   · **读**：Warudo 侧按**下标 + 名字**采出来（见 `HoFaceController`）；
-    ///     消费方（作者的脚本 / 材质控制 / 蓝图）通过 <see cref="HoFaceSemanticConnector"/> 按名字读。
+    /// 【谁读】
+    /// 消费方（作者的脚本 / 材质控制 / 蓝图）通过 <see cref="HoFaceSemanticConnector"/> 按名字读。
     ///
     /// 【值不属于任何资产】
     /// 值就是运行期状态，进程结束就没了；这个组件不会把值写到盘上，也没有"退出播放时存回去"这回事。
@@ -49,10 +52,11 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         /// <summary>
         /// 名字：与 <see cref="values"/> **一一对应**，由**写的人**在开槽时填。
-        /// 空串 = 这个槽没有名字（老式纯按下标写的路径会留这种槽）。
+        /// 空串 = 这个槽没有名字（正常路径不会出现：<see cref="ClaimSlot"/> 不收空名字；
+        /// 只有在 Inspector 里手工改过数组长度时才会留下没名字的格子）。
         ///
-        /// 它不是"配置"：它是**写的人当场声明的**（"我这个值叫 MouthX"），
-        /// 所以两边（bundle 里的代理 Hub 与角色上的 Hub）各自声明各自的，谁也不需要事先约定顺序。
+        /// 它不是"配置"：它是**写的人当场声明的**（"我这个值叫 `jawOpen`"），
+        /// 所以每个角色各自声明各自的，谁也不需要事先约定顺序。
         /// </summary>
         [Tooltip("名字（与 values 一一对应），由写的人运行期填。空 = 这一格没有名字。")]
         public string[] names = new string[0];
@@ -97,7 +101,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         /// <summary>
         /// **开一个槽**（或复用已有的同名槽）：有这个名字就返回它的下标，没有就追加一格。
-        /// 这是"写的人声明自己有什么语义"的唯一入口 —— 所以**不需要任何人预先知道下标**。
+        /// 这是"写的人声明自己有什么参数"的唯一入口 —— 所以**不需要任何人预先知道下标**。
         /// 名字为空返回 −1（没有名字的槽没法被对上下，宁可不写）。
         /// </summary>
         public int ClaimSlot(string name)
@@ -112,17 +116,6 @@ namespace Hollow.HoUnityTools.FaceTracking
             Array.Resize(ref names, index + 1);
             names[index] = name;
             return index;
-        }
-
-        /// <summary>
-        /// 保证至少有 <paramref name="count"/> 个槽（**只增不减**，已有的值与名字都留着）。
-        /// 给"按下标写"的那条路用（Warudo 侧写动态参数节点按角色的槽表选址）。
-        /// </summary>
-        public void Reserve(int count)
-        {
-            if (count <= SlotCount) return;
-            Array.Resize(ref values, count);
-            Array.Resize(ref names, count);
         }
 
         /// <summary>把所有槽清零（丢脸 / 进场 / 手动重置）。</summary>

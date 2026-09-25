@@ -1033,156 +1033,47 @@ public static class HoFaceTrackingValidation
                 Check(nested > 0f, "nested Direct gates produce a value at all (actual=" + nested + ")");
                 stage++; return;
             }
-            // ── Hub 写入路径的能力实测（2026-09-26）────────────────────────────────
-            // 为什么要测：`docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md` §5 断言"曲线写 `values.<i>` 是普通动画"，
-            // 但同一份文档 §3 那张能力表里**没有"数组元素"这一行**（测过的是脚本 float/bool/int、
-            // Vector/Color 分量、开关、材质、对象引用）—— 那条断言是**推断**。
-            // 数组元素的 SerializedProperty 路径通常是 `values.Array.data[i]`，与注释/文档里写的
-            // `values.<i>` 是**两个不同的字符串**；错一个就**静默不写**（Unity 不报错、值就是不动）。
-            // 这一组同时回答"槽位长度该不该预留一个固定值"：越界写到底会怎样，只有实测知道 ——
-            // 控制器曲线在运行期枚举不了（`HoFaceController.cs:23`），所以长度必须在打包前就定对。
+            // ── 说明：这里曾经有两组"Hub 写入路径"探针（2026-09-26 删）────────────────
+            // ① 曲线写 Hub 数组元素（`values.Array.data[i]` vs `values.<i>`，越界写会不会静默失败）；
+            // ② 控制器状态上的「语义写手」（StateMachineBehaviour）按名字开槽写影子 Hub。
+            // 两条路都是**旧的"控制器把中间值交出来"**那套设计的一部分，2026-09-26 整个删掉：
+            // 那些值中间层本来就算得出来（它就是写参数的人），现在由会话把输出行**按名字**直接写进
+            // 角色 Hub（`HoFaceAnimationSession.PublishSemantics`）—— 见下面 stage 18 的用例。
             if (stage == 17)
-            {
-                hubProbeOnLog = HubProbeLog;
-                Application.logMessageReceived += hubProbeOnLog;
-
-                hubProbeRoot = new GameObject("HubProbe");
-                hubProbeAnimator = hubProbeRoot.AddComponent<Animator>();
-                hubProbeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-
-                var hubGo = new GameObject("SemanticHub");
-                hubGo.transform.SetParent(hubProbeRoot.transform, false);
-                hubProbeHub = hubGo.AddComponent<HoFaceSemanticHub>();
-                // 曲线那条路要**预先有槽**（曲线是静态绑定，越界写不报错）—— 这里显式给旧的 128 预留，
-                // 把"为什么以前必须预留"这件事留在用例里。**主线不走它**（见 stage 20 结尾的说明）。
-                hubProbeHub.Reserve(128);
-
-                var markerGo = new GameObject("Marker");
-                markerGo.transform.SetParent(hubProbeRoot.transform, false);
-                hubProbeMarker = markerGo.transform;
-
-                // ① 先问编辑器自己：这两个字符串哪个真能寻址到 `values[0]`（生成器将来也用这套字符串）。
-                var serialized = new SerializedObject(hubProbeHub);
-                var arrayProperty = serialized.FindProperty("values");
-                var dotted = serialized.FindProperty("values.Array.data[0]");
-                var plain = serialized.FindProperty("values.0");
-                Debug.Log("HO_HUB_PATH: \"values.Array.data[0]\" → "
-                    + (dotted != null ? dotted.propertyPath : "**找不到这个属性**")
-                    + " ; \"values.0\" → " + (plain != null ? plain.propertyPath : "**找不到这个属性**")
-                    + " ; values 是数组=" + (arrayProperty != null && arrayProperty.isArray)
-                    + " 长度=" + (arrayProperty != null ? arrayProperty.arraySize : -1));
-
-                HubProbeReset();
-                hubProbeAnimator.runtimeAnimatorController = HubProbeController(
-                    AssetDatabase.GenerateUniqueAssetPath("Assets/HubProbeA.controller"), "values.Array.data[0]");
-                stage++; frame = Time.frameCount + 12; return;
-            }
-            if (stage == 18)
-            {
-                hubProbeAPlayed = Mathf.Abs(hubProbeMarker.localPosition.x - 1.234f) < 0.01f;
-                hubProbeAWorked = Mathf.Abs(hubProbeHub.GetFloat(0) - 0.75f) < 0.001f;
-                Debug.Log(HubProbeText("A 路径 values.Array.data[0]"));
-
-                HubProbeReset();
-                hubProbeAnimator.runtimeAnimatorController = HubProbeController(
-                    AssetDatabase.GenerateUniqueAssetPath("Assets/HubProbeB.controller"), "values.0");
-                stage++; frame = Time.frameCount + 12; return;
-            }
-            if (stage == 19)
-            {
-                hubProbeBPlayed = Mathf.Abs(hubProbeMarker.localPosition.x - 1.234f) < 0.01f;
-                hubProbeBWorked = Mathf.Abs(hubProbeHub.GetFloat(0) - 0.75f) < 0.001f;
-                Debug.Log(HubProbeText("B 路径 values.0（注释与文档里一直写的那个）"));
-
-                // ③ 越界：数组一共 128 个槽，让曲线去写第 200 个。
-                HubProbeReset();
-                hubProbeLogs.Clear();
-                try
-                {
-                    hubProbeAnimator.runtimeAnimatorController = HubProbeController(
-                        AssetDatabase.GenerateUniqueAssetPath("Assets/HubProbeOut.controller"),
-                        "values.Array.data[200]");
-                    hubProbeOutNote = "编辑器**接受了**这条越界绑定";
-                }
-                catch (Exception e)
-                {
-                    // 编辑器直接拒绝也是一种结论，而且是**最好的**那种（能在打包前就拦住）。
-                    hubProbeAnimator.runtimeAnimatorController = null;
-                    hubProbeOutNote = "编辑器**直接拒绝了**这条越界绑定：" + e.GetType().Name + " " + e.Message;
-                }
-                stage++; frame = Time.frameCount + 12; return;
-            }
-            if (stage == 20)
-            {
-                hubProbeOutPlayed = Mathf.Abs(hubProbeMarker.localPosition.x - 1.234f) < 0.01f;
-                hubProbeOutSlot0 = hubProbeHub.GetFloat(0);
-                Debug.Log(HubProbeText("越界 values.Array.data[200]（数组只有 128 个槽）")
-                    + "\n      → " + hubProbeOutNote
-                    + "；槽0 有没有被顺手改掉：" + (Mathf.Abs(hubProbeOutSlot0 + 1f) < 0.001f
-                        ? "没有（好）" : "被改成了 " + hubProbeOutSlot0));
-                Debug.Log("HO_HUB_VERDICT: 写进槽0 的路径 = "
-                    + (hubProbeAWorked ? "values.Array.data[0]" : "")
-                    + (hubProbeAWorked && hubProbeBWorked ? " 与 " : "")
-                    + (hubProbeBWorked ? "values.0" : "")
-                    + (hubProbeAWorked || hubProbeBWorked ? "" : "**一个都不行**")
-                    + " ; 对照组（标记物）动过=" + (hubProbeAPlayed || hubProbeBPlayed || hubProbeOutPlayed));
-
-                // ⚠️ 这一段**只报告、不断言**：曲线写数组元素这条路**已经不是主线**了
-                //（2026-09-26 改成"状态机行为按名字开槽"，作者不必预先知道下标）。
-                // 上面那几行 `HO_HUB_PROBE` 仍然有用 —— 万一以后想拿曲线当备选，答案就在日志里。
-                Application.logMessageReceived -= hubProbeOnLog;
-                hubProbeOnLog = null;
-                UnityEngine.Object.Destroy(hubProbeRoot);
-
-                // ── 主线：语义写手（状态机行为）──────────────────────────────────
-                // 这才是地基：**手动 `Animator.Update()` 求值时，挂在该状态上的 `OnStateUpdate`
-                // 到底会不会被调用**，以及它按名字开的槽我们能不能读出来。
-                // 单独搭一个干净的场地（Hub 从空开始，才看得出"槽是写手开的"，而不是预留出来的）。
-                hubProbeRoot = new GameObject("HubWriterProbe");
-                hubProbeAnimator = hubProbeRoot.AddComponent<Animator>();
-                hubProbeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-
-                var writerHubGo = new GameObject("SemanticHub");
-                writerHubGo.transform.SetParent(hubProbeRoot.transform, false);
-                hubProbeHub = writerHubGo.AddComponent<HoFaceSemanticHub>();
-
-                var writerMarkerGo = new GameObject("Marker");
-                writerMarkerGo.transform.SetParent(hubProbeRoot.transform, false);
-                hubProbeMarker = writerMarkerGo.transform;
-
-                hubProbeAnimator.runtimeAnimatorController = HubWriterProbeController(
-                    AssetDatabase.GenerateUniqueAssetPath("Assets/HubWriter.controller"));
-                hubProbeAnimator.SetFloat("P/A", 0.6f);
-                stage++; frame = Time.frameCount + 12; return;
-            }
-            if (stage == 21)
-            {
-                float marker = hubProbeMarker.localPosition.x;
-                string name0 = hubProbeHub.NameAt(0);
-                string name1 = hubProbeHub.NameAt(1);
-                float value0 = hubProbeHub.GetFloat(0);
-                float value1 = hubProbeHub.GetFloat(1);
-                Debug.Log("HO_HUB_WRITER: 槽0 = `" + name0 + "` = " + value0.ToString("0.###", CultureInfo.InvariantCulture)
-                    + "（期望 MouthX = 0.6）· 槽1 = `" + name1 + "` = " + value1.ToString("0.###", CultureInfo.InvariantCulture)
-                    + "（期望 MouthY = 1.2）· 槽数 = " + hubProbeHub.SlotCount
-                    + " · 标记物 x = " + marker.ToString("0.###", CultureInfo.InvariantCulture) + "（1.234 = 状态在跑）");
-
-                // 对照组：状态没跑起来的话，"没写进去"就什么都说明不了。
-                Check(Mathf.Abs(marker - 1.234f) < 0.01f,
-                    "语义写手那套的状态确实在求值（片段里的标记物曲线动了）—— 否则这一条测不到东西");
-                Check(name0 == "MouthX" && name1 == "MouthY"
-                    && Mathf.Abs(value0 - 0.6f) < 0.01f && Mathf.Abs(value1 - 1.2f) < 0.01f,
-                    "语义写手（状态机行为）在手动 Animator.Update 求值时被调用，并按**名字**开槽写进了影子 Hub"
-                    + "（实际：" + name0 + "=" + value0 + " / " + name1 + "=" + value1 + "）");
-
-                UnityEngine.Object.Destroy(hubProbeRoot);
-                stage++; return;
-            }
-            if (stage == 22)
             {
                 SendPacket(Shape("JawOpen", 0.6f));
                 if (Mathf.Abs(Weight("jawOpen") - 60f) > 0.6f) return;   // 等它被驱动上来
                 Check(true, "配置那条路端到端通了：VTS UDP 0.6 → 表达式 → 曲线(0..100) → 参数 → 混合树 → 60");
+
+                // ── 动态参数：中间层算完**直接写角色 Hub**（2026-09-26 起是这条链）──────────
+                // 在角色上现挂一片 Hub + Connector（真项目里由作者挂；测试里现挂，才不用改预制件）。
+                // ⚠️ 引用要**显式填**：`AddComponent` 不走 `Reset()`（那是编辑器里加组件时的回调）。
+                var semanticGo = new GameObject("SemanticHub");
+                semanticGo.transform.SetParent(rig.Character().transform, false);
+                var semanticHub = semanticGo.AddComponent<HoFaceSemanticHub>();
+                var semanticConnector = semanticGo.AddComponent<HoFaceSemanticConnector>();
+                semanticConnector.hub = semanticHub;
+                stage++; frame = Time.frameCount + 3; return;
+            }
+            if (stage == 18)
+            {
+                var connector = rig.Character().GetComponentInChildren<HoFaceSemanticConnector>(true);
+                var hub = connector != null ? connector.hub : null;
+                int slot = hub != null ? hub.IndexOfName("ARKit/jawOpen") : -1;
+                float published = slot >= 0 ? hub.GetFloat(slot) : float.NaN;
+                Debug.Log("HO_HUB_PUBLISH: 槽数=" + (hub != null ? hub.SlotCount : -1)
+                    + " · 槽0=`" + (hub != null ? hub.NameAt(0) : "") + "`="
+                    + (hub != null ? hub.GetFloat(0).ToString("0.###", CultureInfo.InvariantCulture) : "—")
+                    + " · ARKit/jawOpen=" + published.ToString("0.###", CultureInfo.InvariantCulture)
+                    + "（期望 ≈0.6）· 会话报：" + HoFaceInputHub.Session(rig).SemanticStatus);
+
+                Check(hub != null, "角色上能找到 Connector，且它指向 Hub（会话每帧按名字往这里写）");
+                Check(hub != null && hub.SlotCount == 3,
+                    "Hub 的槽数 = 配置里输出行的行数（3）—— 槽是中间层按名字开的，没有预留长度这回事"
+                    + "（实际 " + (hub != null ? hub.SlotCount : -1) + "）");
+                Check(slot >= 0 && published > 0.5f,
+                    "会话把中间层算出来的输出行**按名字**写进了角色 Hub（ARKit/jawOpen=" + published + "）");
+
                 HoFaceInputHub.Stop(rig);
                 HoFaceInputHub.Disconnect();
                 sender.Close(); sender = null;
@@ -1209,135 +1100,11 @@ public static class HoFaceTrackingValidation
     /// <summary>中间层配置文件在工程里的路径（写文件用）/ 磁盘全路径（ImportAsset 用）。</summary>
     private static string profileAsset, profileFull;
 
-    // ── Hub 写入路径的能力实测（2026-09-26）──────────────────────────────────────
-    // 见 PlayTests 里 stage 17-20 的说明：这一组只回答"曲线到底能不能写进 Hub 的槽、
-    // 用哪个路径字符串写、写越界会怎样"。结论会在 `HO_HUB_PROBE` / `HO_HUB_PATH` 两行里。
-    private static GameObject hubProbeRoot;
-    private static Animator hubProbeAnimator;
-    private static HoFaceSemanticHub hubProbeHub;
-    private static Transform hubProbeMarker;
-    private static Application.LogCallback hubProbeOnLog;
-    private static readonly System.Collections.Generic.List<string> hubProbeLogs =
-        new System.Collections.Generic.List<string>();
-    /// <summary>三个候选路径里哪几个真把值写进了槽 0（"标记物动了"证明那一帧动画确实在跑）。</summary>
-    private static bool hubProbeAPlayed, hubProbeAWorked, hubProbeBPlayed, hubProbeBWorked, hubProbeOutPlayed;
-    /// <summary>越界那一次，槽 0 有没有被顺手改掉（期望：没有）。</summary>
-    private static float hubProbeOutSlot0;
-    /// <summary>越界那条绑定是被编辑器接受还是直接拒绝（两种都是结论，后者更好）。</summary>
-    private static string hubProbeOutNote = "";
-
     private static float ZeroWeight(string shape) =>
         zeroProbeRenderer.GetBlendShapeWeight(zeroProbeRenderer.sharedMesh.GetBlendShapeIndex(shape));
 
     private static float ProbeWeight(string shape) =>
         probeRenderer.GetBlendShapeWeight(probeRenderer.sharedMesh.GetBlendShapeIndex(shape));
-
-    /// <summary>
-    /// 给 Hub 写入路径的能力实测造一份最小控制器：**一个图层、一个状态、一个片段**，片段里两条曲线 ——
-    /// ① 标记物的 `m_LocalPosition.x` 写 `1.234`（**对照组**：它证明这一帧动画确实在求值）；
-    /// ② Hub 的某个数组元素写 `0.75`（**被测**：`slotProperty` 是候选的 SerializedProperty 路径字符串）。
-    ///
-    /// 为什么必须有对照组：只看到"槽 0 没变"分不清两种完全不同的原因 —— 路径字符串写错了，
-    /// 还是这段动画压根没跑起来。两者要采取的行动完全不同（改文档/改生成器 vs 改测试台）。
-    /// </summary>
-    private static AnimatorController HubProbeController(string assetPath, string slotProperty)
-    {
-        var clip = new AnimationClip { name = "HubProbe", frameRate = 60f };
-
-        AnimationUtility.SetEditorCurve(clip,
-            EditorCurveBinding.FloatCurve(
-                AnimationUtility.CalculateTransformPath(hubProbeMarker, hubProbeAnimator.transform),
-                typeof(Transform), "m_LocalPosition.x"),
-            AnimationCurve.Constant(0f, 1f / 60f, 1.234f));
-
-        AnimationUtility.SetEditorCurve(clip,
-            EditorCurveBinding.FloatCurve(
-                AnimationUtility.CalculateTransformPath(hubProbeHub.transform, hubProbeAnimator.transform),
-                typeof(HoFaceSemanticHub), slotProperty),
-            AnimationCurve.Constant(0f, 1f / 60f, 0.75f));
-
-        var controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
-        AssetDatabase.AddObjectToAsset(clip, controller);
-        var state = controller.layers[0].stateMachine.AddState("HubProbe");
-        state.motion = clip;
-        EditorUtility.SetDirty(controller);
-        AssetDatabase.SaveAssets();
-        return controller;
-    }
-
-    /// <summary>
-    /// 给**主线**（语义写手）造一份最小控制器：一个图层、一个状态、一个空片段（只用来让状态"在跑"），
-    /// 状态上挂一个 <see cref="HoFaceSemanticWriterBehaviour"/>，写两条语义：
-    /// `MouthX = P/A`、`MouthY = P/A * 2` —— 都靠**名字**，一个下标都不出现。
-    /// 片段里还画了一条标记物曲线（对照组：它动了才证明状态真的在求值）。
-    /// </summary>
-    private static AnimatorController HubWriterProbeController(string assetPath)
-    {
-        var controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
-        controller.AddParameter("P/A", AnimatorControllerParameterType.Float);
-
-        var clip = new AnimationClip { name = "Idle", frameRate = 60f };
-        AnimationUtility.SetEditorCurve(clip,
-            EditorCurveBinding.FloatCurve(
-                AnimationUtility.CalculateTransformPath(hubProbeMarker, hubProbeAnimator.transform),
-                typeof(Transform), "m_LocalPosition.x"),
-            AnimationCurve.Constant(0f, 1f, 1.234f));
-        AssetDatabase.AddObjectToAsset(clip, controller);
-
-        var state = controller.layers[0].stateMachine.AddState("Writer");
-        state.motion = clip;
-
-        var behaviour = state.AddStateMachineBehaviour(typeof(HoFaceSemanticWriterBehaviour));
-        var serialized = new SerializedObject(behaviour);
-        var entries = serialized.FindProperty("entries");
-        entries.arraySize = 2;
-        entries.GetArrayElementAtIndex(0).FindPropertyRelative("slot").stringValue = "MouthX";
-        entries.GetArrayElementAtIndex(0).FindPropertyRelative("expression").stringValue = "P/A";
-        entries.GetArrayElementAtIndex(1).FindPropertyRelative("slot").stringValue = "MouthY";
-        entries.GetArrayElementAtIndex(1).FindPropertyRelative("expression").stringValue = "P/A * 2";
-        serialized.ApplyModifiedProperties();
-
-        EditorUtility.SetDirty(controller);
-        AssetDatabase.SaveAssets();
-        return controller;
-    }
-
-    /// <summary>捕获这一段里 Unity 自己打的日志（我们自己的 `HO_*` 标记与 `[Ho 面捕]` 日志不算）。</summary>
-    private static void HubProbeLog(string condition, string stackTrace, LogType type)
-    {
-        if (string.IsNullOrEmpty(condition)) return;
-        if (condition.StartsWith("HO_", StringComparison.Ordinal)) return;
-        if (condition.IndexOf("[Ho 面捕]", StringComparison.Ordinal) >= 0) return;
-        if (hubProbeLogs.Count < 20) hubProbeLogs.Add(type + " | " + condition);
-    }
-
-    /// <summary>把捕获到的日志摊成几行（**这是"Unity 有没有抱怨"的唯一证据**）。</summary>
-    private static string HubProbeLogText()
-    {
-        if (hubProbeLogs.Count == 0) return "\n      Unity 自己：一条日志都没打";
-        var text = new StringBuilder("\n      Unity 自己打了 " + hubProbeLogs.Count + " 条：");
-        for (int i = 0; i < hubProbeLogs.Count && i < 6; i++) text.Append("\n      · ").Append(hubProbeLogs[i]);
-        if (hubProbeLogs.Count > 6) text.Append("\n      · …（还有 ").Append(hubProbeLogs.Count - 6).Append(" 条）");
-        return text.ToString();
-    }
-
-    /// <summary>一行观测文本：标记物 x（对照）+ 槽 0 的值（被测）+ Unity 自己打的日志。</summary>
-    private static string HubProbeText(string label)
-    {
-        float marker = hubProbeMarker != null ? hubProbeMarker.localPosition.x : float.NaN;
-        float slot = hubProbeHub != null ? hubProbeHub.GetFloat(0) : float.NaN;
-        return "HO_HUB_PROBE: " + label
-            + " → 标记物 x=" + marker.ToString("0.###", CultureInfo.InvariantCulture)
-            + "（1.234 = 动画在跑）· 槽0=" + slot.ToString("0.###", CultureInfo.InvariantCulture)
-            + "（0.75 = 写进去了；-1 = 没动）" + HubProbeLogText();
-    }
-
-    /// <summary>每次尝试前把两个可观测量摆回初值：标记物 x = 0、槽 0 = −1。</summary>
-    private static void HubProbeReset()
-    {
-        hubProbeMarker.localPosition = Vector3.zero;
-        hubProbeHub.values[0] = -1f;
-    }
 
     private static AnimatorState FindState(AnimatorController controller, string layerName)
     {
