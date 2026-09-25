@@ -615,8 +615,12 @@ AvatarCloneParent：Character Avatar Clone Parent
   而**标量发的才是 VTS 命名**（`Rotation_x` / `Position_x` / `EyeLeft_x` / `FaceFound`…），另加 PascalCase 的
   `EyeBlinkLeft/Right` —— 一份 payload 里两套方言并存。56 键的"PascalCase 形态键"照样一个都没有 ⇒ 当时按
   PascalCase 写的那份调试配置读出来全是 `缺`（原始字典里根本没那些键）。**教训：输入行按"设备实际发的"
-  写，内置默认表给每个规范名配两行（iFacialMocap + VTS）不是啰嗦，是方言兼容层。** 完整的 65 键实测清单抄在（调试配置也按它命名：`ho-debug-android.hoface.json`）
-  mod `README.md` §1.4。
+  写 —— 现在一台设备一份单方言配置，不再靠"给每个规范名配两行"当兼容层。**
+  完整的 65 键实测清单抄在 mod `README.md` §1.4；对应的调试配置叫 `ho-debug-androidVTS.hoface.json`。
+* **iPhone VTS 是另一种（干净的）方言**（2026-09-25 实测 67 键）：形状那一半是**纯 VTS PascalCase**
+  （`JawOpen` / `MouthSmileLeft`…），**52 个形状全部到位、0 个对不上**；标量那半边两台**同名**。
+  对应配置：`ho-debug-iphoneVTS.hoface.json`。两者都在包内 `Editor/FaceTracking/Profiles/`，
+  由 `.warudo-mod-research/.tools/gen-device-profile.ps1` 生成（名字取自源码与 catalog，不手抄）。
 * **出处**：协议来自官方仓库 <https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest>
   （README 原话 "Apps like VSeeFace and VBridger use this."；载荷定义 `VTubeStudioRawTrackingData.cs`）——
   **是官方给的，不是逆向出来的**（原记录见 `Core/HoVtsIphoneReceiver.cs:8-20`）；

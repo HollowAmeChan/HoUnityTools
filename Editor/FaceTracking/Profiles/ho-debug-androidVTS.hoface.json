@@ -1,0 +1,887 @@
+{
+    "format":  "ho-face-middleware",
+    "version":  2,
+    "displayName":  "ho-debug-androidVTS",
+    "notes":  "**安卓手机上的 VTS** 的调试配置（透传）。改动记录见本文件的 displayName 与 Profiles/README.md。\n\n它是什么：线名 -\u003e 规范名，一行一个，**只有这一台设备的拼写**。\n  · 形状主体 = **iFacialMocap 小驼峰 + _L/_R**（jawOpen / mouthSmile_L…），但**眨眼那一对两种都发**\n    （`eyeBlink_L/R` **和** `EyeBlinkLeft/Right`）—— 实测 65 键，所以这里给了两行、指向同一条通道。\n    ⚠️ 早前那次\"只有头系和眨眼在动\"就是因为别的行没数据、而眨眼恰好有 PascalCase 那对在喂。\n  · 标量 = VTS 固定名（Rotation_* / Position_* / EyeLeft_* / EyeRight_* / FaceFound），**两台设备同名**。\n  · 输出行：52 个 ARKit/ 直通 + 6 个 Head/ 保留名 ⇒ BlendShapes 与输入逐键对照，头姿/头位真的会动。\n\n⚠️ 为什么一台设备一份文件：同名多行 = **最后一行生效**，而且**缺数据不回退**。同一格混两种**通道**时，\n后声明的那行没数据会把有数据的那行顶掉 ⇒ 那一格恒 0（我们为此查过一整轮）。\niPhone 那份是 ho-debug-iphoneVTS.hoface.json。\n\n⚠️ 没标定：形状值本来就是 0..1（实测 jawOpen = 0.069 / mouthSmile_L = 0.164），所以形状行不乘 0.01；\n但头姿/头位的**符号与量纲没标定**（VTS 裸值直通），头位单位尤其可疑。\n头/眼那 12 行**必须带自己的宽曲线**，否则会被默认 0..1 夹成 0/1。\n\n⚠️ 未接的两根线：Hotkey、Timestamp **故意不映射**（触发与时间戳，不是美术轴）。\n\n标定起点（抄 VBridger AdvancedARKit V3 实测的滤波时间，单位秒）：\n  jawOpen 0.10 | mouth* 0.10 | eyeLook* 0.10 | eyeBlink+eyeWide 0.10 | browInnerUp 0.32\n  browOuterUp-browDown 0.40 | cheekPuff / tongueOut / eyeSquint 0（不滤）\n写法：那一行加 {\"kind\":\"smooth\",\"seconds\":0.1}。",
+    "inputs":  [
+                   {
+                       "parameter":  "eyeBlinkLeft",
+                       "expression":  "eyeBlink_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookDownLeft",
+                       "expression":  "eyeLookDown_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookInLeft",
+                       "expression":  "eyeLookIn_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookOutLeft",
+                       "expression":  "eyeLookOut_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookUpLeft",
+                       "expression":  "eyeLookUp_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeSquintLeft",
+                       "expression":  "eyeSquint_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeWideLeft",
+                       "expression":  "eyeWide_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeBlinkRight",
+                       "expression":  "eyeBlink_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookDownRight",
+                       "expression":  "eyeLookDown_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookInRight",
+                       "expression":  "eyeLookIn_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookOutRight",
+                       "expression":  "eyeLookOut_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeLookUpRight",
+                       "expression":  "eyeLookUp_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeSquintRight",
+                       "expression":  "eyeSquint_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeWideRight",
+                       "expression":  "eyeWide_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "jawForward",
+                       "expression":  "jawForward",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "jawLeft",
+                       "expression":  "jawLeft",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "jawRight",
+                       "expression":  "jawRight",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "jawOpen",
+                       "expression":  "jawOpen",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthClose",
+                       "expression":  "mouthClose",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthFunnel",
+                       "expression":  "mouthFunnel",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthPucker",
+                       "expression":  "mouthPucker",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthLeft",
+                       "expression":  "mouthLeft",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthRight",
+                       "expression":  "mouthRight",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthSmileLeft",
+                       "expression":  "mouthSmile_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthSmileRight",
+                       "expression":  "mouthSmile_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthFrownLeft",
+                       "expression":  "mouthFrown_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthFrownRight",
+                       "expression":  "mouthFrown_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthDimpleLeft",
+                       "expression":  "mouthDimple_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthDimpleRight",
+                       "expression":  "mouthDimple_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthStretchLeft",
+                       "expression":  "mouthStretch_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthStretchRight",
+                       "expression":  "mouthStretch_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthRollLower",
+                       "expression":  "mouthRollLower",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthRollUpper",
+                       "expression":  "mouthRollUpper",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthShrugLower",
+                       "expression":  "mouthShrugLower",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthShrugUpper",
+                       "expression":  "mouthShrugUpper",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthPressLeft",
+                       "expression":  "mouthPress_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthPressRight",
+                       "expression":  "mouthPress_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownLeft",
+                       "expression":  "mouthLowerDown_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthLowerDownRight",
+                       "expression":  "mouthLowerDown_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpLeft",
+                       "expression":  "mouthUpperUp_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "mouthUpperUpRight",
+                       "expression":  "mouthUpperUp_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "browDownLeft",
+                       "expression":  "browDown_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "browDownRight",
+                       "expression":  "browDown_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "browInnerUp",
+                       "expression":  "browInnerUp",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "browOuterUpLeft",
+                       "expression":  "browOuterUp_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "browOuterUpRight",
+                       "expression":  "browOuterUp_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "cheekPuff",
+                       "expression":  "cheekPuff",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "cheekSquintLeft",
+                       "expression":  "cheekSquint_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "cheekSquintRight",
+                       "expression":  "cheekSquint_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "noseSneerLeft",
+                       "expression":  "noseSneer_L",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "noseSneerRight",
+                       "expression":  "noseSneer_R",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "tongueOut",
+                       "expression":  "tongueOut",
+                       "notes":  "安卓 VTS：iFacialMocap 小驼峰 + _L/_R（实测 65 键里的形状那一半）"
+                   },
+                   {
+                       "parameter":  "eyeBlinkLeft",
+                       "expression":  "EyeBlinkLeft",
+                       "notes":  "androidVTS: the blink pair also arrives in VTS PascalCase (measured)"
+                   },
+                   {
+                       "parameter":  "eyeBlinkRight",
+                       "expression":  "EyeBlinkRight",
+                       "notes":  "androidVTS: the blink pair also arrives in VTS PascalCase (measured)"
+                   },
+                   {
+                       "parameter":  "headRotX",
+                       "expression":  "Rotation_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "headRotY",
+                       "expression":  "Rotation_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "headRotZ",
+                       "expression":  "Rotation_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "headPosX",
+                       "expression":  "Position_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "headPosY",
+                       "expression":  "Position_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "headPosZ",
+                       "expression":  "Position_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeLeftX",
+                       "expression":  "EyeLeft_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeLeftY",
+                       "expression":  "EyeLeft_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeLeftZ",
+                       "expression":  "EyeLeft_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeRightX",
+                       "expression":  "EyeRight_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeRightY",
+                       "expression":  "EyeRight_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "eyeRightZ",
+                       "expression":  "EyeRight_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "VTS fixed name (same on both devices)"
+                   },
+                   {
+                       "parameter":  "faceFound",
+                       "expression":  "FaceFound",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "liveness gate, not an art axis"
+                   }
+               ],
+    "outputs":  [
+                    {
+                        "parameter":  "ARKit/eyeBlinkLeft",
+                        "expression":  "eyeBlinkLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownLeft",
+                        "expression":  "eyeLookDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInLeft",
+                        "expression":  "eyeLookInLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutLeft",
+                        "expression":  "eyeLookOutLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpLeft",
+                        "expression":  "eyeLookUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintLeft",
+                        "expression":  "eyeSquintLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideLeft",
+                        "expression":  "eyeWideLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeBlinkRight",
+                        "expression":  "eyeBlinkRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownRight",
+                        "expression":  "eyeLookDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInRight",
+                        "expression":  "eyeLookInRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutRight",
+                        "expression":  "eyeLookOutRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpRight",
+                        "expression":  "eyeLookUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintRight",
+                        "expression":  "eyeSquintRight"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideRight",
+                        "expression":  "eyeWideRight"
+                    },
+                    {
+                        "parameter":  "ARKit/jawForward",
+                        "expression":  "jawForward"
+                    },
+                    {
+                        "parameter":  "ARKit/jawLeft",
+                        "expression":  "jawLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/jawRight",
+                        "expression":  "jawRight"
+                    },
+                    {
+                        "parameter":  "ARKit/jawOpen",
+                        "expression":  "jawOpen"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthClose",
+                        "expression":  "mouthClose"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFunnel",
+                        "expression":  "mouthFunnel"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPucker",
+                        "expression":  "mouthPucker"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLeft",
+                        "expression":  "mouthLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRight",
+                        "expression":  "mouthRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileLeft",
+                        "expression":  "mouthSmileLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileRight",
+                        "expression":  "mouthSmileRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownLeft",
+                        "expression":  "mouthFrownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownRight",
+                        "expression":  "mouthFrownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleLeft",
+                        "expression":  "mouthDimpleLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleRight",
+                        "expression":  "mouthDimpleRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchLeft",
+                        "expression":  "mouthStretchLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchRight",
+                        "expression":  "mouthStretchRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollLower",
+                        "expression":  "mouthRollLower"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollUpper",
+                        "expression":  "mouthRollUpper"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugLower",
+                        "expression":  "mouthShrugLower"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugUpper",
+                        "expression":  "mouthShrugUpper"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressLeft",
+                        "expression":  "mouthPressLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressRight",
+                        "expression":  "mouthPressRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownLeft",
+                        "expression":  "mouthLowerDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownRight",
+                        "expression":  "mouthLowerDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpLeft",
+                        "expression":  "mouthUpperUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpRight",
+                        "expression":  "mouthUpperUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/browDownLeft",
+                        "expression":  "browDownLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/browDownRight",
+                        "expression":  "browDownRight"
+                    },
+                    {
+                        "parameter":  "ARKit/browInnerUp",
+                        "expression":  "browInnerUp"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpLeft",
+                        "expression":  "browOuterUpLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpRight",
+                        "expression":  "browOuterUpRight"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekPuff",
+                        "expression":  "cheekPuff"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintLeft",
+                        "expression":  "cheekSquintLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintRight",
+                        "expression":  "cheekSquintRight"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerLeft",
+                        "expression":  "noseSneerLeft"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerRight",
+                        "expression":  "noseSneerRight"
+                    },
+                    {
+                        "parameter":  "ARKit/tongueOut",
+                        "expression":  "tongueOut"
+                    },
+                    {
+                        "parameter":  "Head/RotX",
+                        "expression":  "headRotX",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    },
+                    {
+                        "parameter":  "Head/RotY",
+                        "expression":  "headRotY",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    },
+                    {
+                        "parameter":  "Head/RotZ",
+                        "expression":  "headRotZ",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    },
+                    {
+                        "parameter":  "Head/PosX",
+                        "expression":  "headPosX",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    },
+                    {
+                        "parameter":  "Head/PosY",
+                        "expression":  "headPosY",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    },
+                    {
+                        "parameter":  "Head/PosZ",
+                        "expression":  "headPosZ",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                    }
+                ]
+}
