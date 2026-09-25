@@ -9,7 +9,8 @@
 
 - [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 三个页各管什么、首次接线、什么会写盘、排查清单（症状 → 先看哪）。**§2.1 是方向：终点是"动画 = 状态"，现在这套 ARKit 映射是过渡件。**
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
-- [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：它能算的是一台"以参数为变量的多项式机器"（乘积、加权平均都能做），做不到 `min`/`max`/除法/需要记忆的东西，**而且写不了 Animator 参数**。含实测证据与"该放树里还是放外面"的判断流程。
+- [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：静态姿势树的代数边界与完整Animator的区别；已更正“不能写Animator参数”的旧结论，原生参数曲线在两个Unity版本实测可用。
+- [**控制器完整输出与物理阶段设计**](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)：Animator参数回写、跨Layer求值时序、组件/显隐/材质MPB/引用切换的双版本实测，以及Warudo属性帧、批量应用node、绑定清单和果冻物理调度方案。
 - [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条全绿 + 怎么重跑）。
 - [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
 - [**VTS → VB → 高质量混合树全量契约（当前设计入口）**](VTS_HIGH_QUALITY_FACE_CONTRACT.md)：98个公开VTS固定参数、52原始形变、34个原装VB V3输出、39个拟定HQ扩展和42个高级树族；含全量矩阵、条件轴及选择性填动画的fallback规则，不限定格数。[机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json)。

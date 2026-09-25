@@ -456,7 +456,11 @@ ON_UPDATE ─flow→ SET_CHARACTER_TRACKING_BLENDSHAPES ─→ OVERRIDE_CHARACTE
 **先把最硬的那条摆前面**（📖 `Assets/HoWarudoModTests/docs/打包与脚本规范.md` §6，本机 mod 构建实测）：
 UMod 在编译后做 API 引用审查，命中即**构建失败** ——
 禁用 `System.IO.*` / `System.Reflection`（`exception.GetType().Name` 也会被拒，IL 里是 `MemberInfo.Name`）/
-`UnityEditor` / P/Invoke / `UMod-ModTools`；**不支持 `.asmdef` / ScriptableObject / 已编译 DLL / 第三方 NuGet**。
+`UnityEditor` / P/Invoke / `UMod-ModTools`；**不支持 `.asmdef` / 已编译 DLL / 第三方 NuGet**。
+⚠️ **"不支持 ScriptableObject"这条要读准**（2026-09-25 实测）：它指的是**UMod 不替你加载 `.asset` 资源**；
+`ScriptableObject` / `MonoBehaviour` 这两个**类型**在 mod 程序集里**能编译、本地 lint 也 clean**。
+所以"跟着角色预制件一起发的组件"（例如动态参数 Hub）是可行的 —— 那类 mod 打包本来就是既有能力
+（FastBuild 复制源码进包、UMod 编译）。详见 [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
 → **推论：跨 mod 只能传 Unity 原生类型与 Warudo 自有类型**（同名类型在不同 mod 里是不同 `Type`，
 既不能反射对方的类型，也不能共享我们自己的类型）。这正是 §2.0 那个拆法的可行性边界。
 
