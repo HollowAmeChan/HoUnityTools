@@ -74,7 +74,72 @@ iPhone 那 203 帧里 52 个形态量**全部 MOVES**，逐个对应 ARKit 52 �
 | 鼠标 / 触摸 | `MousePositionX`、`MousePositionY` |
 | 生气脸的专用分类器 | `FaceAngry` |
 
-### 1.3 三个词汇表，一条转换规则
+### 1.3 能力边界：这一层**只吃 VTS 输入**
+
+把中间层当一台机器看，它的规格是：
+
+| | |
+|---|---|
+| **输入** | **只有一条**：VTS 手机协议（`iOSTrackingDataRequest` 那个 JSON） |
+| **能吃到的字段** | 52 个形态键 + `Rotation_*` / `Position_*` / `EyeLeft_*` / `EyeRight_*` + `FaceFound` / `Hotkey` / `Timestamp` = **67 条线** |
+| **不会做的事** | 不读麦克风、不读鼠标、不读键盘、不自己算音素、不自己采样音频 |
+| **输出** | 一份 `Dictionary<string,float>`（§3 那 90 行，控制器声明什么就写什么） |
+
+**所以凡是"需要 VTS 协议之外的输入"的东西，这一层都给不出来**：
+
+| 类别 | 缺什么 | 本规范的处置 |
+|---|---|---|
+| 15 个音素权重 + 15 个硬判（`viseme_*` / `viseme_*_abs`） | **声学/视觉音素识别**（VB 用的是它自己进程内的 OVRLipSync + 麦克风，见下 §1.5） | ❌ 没有源 |
+| `volume` | 麦克风采样 | ❌ 没有源 |
+| `Voice*`（`VoiceA/I/U/E/O`、`VoiceSilence`、`VoiceVolume`、`VoiceFrequency` 及各 `Plus` 变体） | 麦克风 + uLipSync（VTS 自己算，不通过手机协议外发） | ❌ 没有源 |
+| `MousePositionX/Y` | 鼠标 / 触摸 | ❌ 没有源 |
+| `Hotkey` | 手机的屏幕热键 | ⚠️ **有源但恒为 −1**（实测：安卓 173 帧日志里只出现过 `-1`；你手机上的三个快捷键不输出） |
+
+**这是有意的边界，不是暂时没做。** 要接麦克风就是**新增一条输入**（另一个接收端 + 新的线名），
+而不是在这一层里塞音频代码 —— 那会毁掉"换个协议只改配置"这条性质。
+
+### 1.4 为什么 VB 有音素输入（而 VTS 开了麦克风口型也不出新参数）
+
+**VB 的音素是它自己算的，跟 VTS 无关。** 本机 `Assembly-CSharp.decompiled.cs`：
+
+* 组件 `LipSyncContextTextureFlip` 持有 **`OVRLipSyncContextBase`** 与 **`uLipSyncMicrophone`**
+  （L4776-L4779），`Update()` 里 `lipsyncContext.GetCurrentPhonemeFrame()` 拿 15 个音素权重，
+  再按 `smoothAmount` 做 EMA（L4806-L4814）。
+* `SetVisemeToParams()`（L4855-4885）把它们写进**表达式变量**：
+
+```
+volume      = inputCurves["volume"].curve( 10 帧滑动平均的采样 )      ← 自己算音量
+viseme_XX   = inputCurves["viseme_XX"].curve( oldFrame.Visemes[i] )   ← 15 个权重，各自过输入曲线
+viseme_XX_abs = 1.0 / 0.0                                             ← 15 个硬判（argmax 那一个为 1）
+```
+
+所以 VB 那 100 个输入变量里有 **31 个（15+15+1）是它自己的麦克风管线产出的**，
+不是从哪个追踪协议收来的。**VB 既是中间层，也是音频前端。**
+
+**为什么 VTS 开了麦克风口型之后"没有新参数"** —— 这是**设计如此**，官方文档写得很直白
+（`vts-lipsync.md` L44、L88-L99）：
+
+> The lipsync system outputs the following voice tracking parameters. You can use them as inputs
+> for **ANY** Live2D parameter, not just the mouth parameters.
+>
+> `ParamMouthOpen` and `ParamMouthForm` are set up just like usual. In addition, set up a
+> `ParamSilence`. This parameter will later be hooked up to `VoiceSilence`, so it will be `1`
+> when the microphone detects no or almost no sound.
+
+拆开说，三件事各归各位：
+
+| 你以为会变的 | 实际 | 为什么 |
+|---|---|---|
+| API 参数**列表** | **不变** | `VoiceA/I/U/E/O`、`VoiceSilence`、`VoiceVolume`… 是**固定内置清单**，本来就在（没麦克风时恒 0）。加了麦克风只是**有了数据**，不是**多了名字** |
+| API 参数**值** | 变了 | 开麦后由 VTS 内部的 uLipSync 产出 0..1 的元音/静音/音量 |
+| 模型内部**怎么接** | **这才是你看到的那件事** | 官方推荐做法是把 `VoiceSilence` 接到 `ParamSilence`，由它决定"有声走元音、无声走面捕"——**改的是模型参数的映射，不是 API 的载荷** |
+
+补一条你观察到的现象：**手机侧开麦克风口型也不会往协议里加字段**。
+官方手机协议的载荷只有 `Timestamp` / `Hotkey` / `FaceFound` / `BlendShapes[]` /
+`Rotation`/`Position`/`EyeLeft`/`EyeRight`（[参数标准表 §1.8](PARAMETER_STANDARDS.md)），
+**没有音频通道**。麦克风口型是 VTS 在自己进程里对麦克风做的，跟发什么包无关。
+
+### 1.5 三个词汇表，一条转换规则
 
 这是整份规范**最容易搞错**的地方：同一个形态量有三套名字在流动，而"哪一层用哪一套"是**固定的**，不是口味问题。
 
@@ -390,7 +455,7 @@ V3.0 版没有。我们用 V3.0。
 
 提取器：`.research/vbridger/one_formula_each.ps1`（按预设优先级选一条，输出名 → 公式）。
 下面的公式是**照抄 VB 的原文**，所以变量名是 **VB 内部拼写**（`eyeBlink_L`、`mouthSmile_L`，
-即 `SceneData.shapekeys`）；配置文件里实际写的是**我们的规范名**，见 §1.3 的换算：
+即 `SceneData.shapekeys`）；配置文件里实际写的是**我们的规范名**，见 §1.5 的换算：
 
 | 本文档（VB 原文） | 配置文件里要写的（我们的规范名） |
 |---|---|
