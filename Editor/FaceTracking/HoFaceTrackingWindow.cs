@@ -86,8 +86,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
                     else
                     {
-                        HoConstraintEditorControls.Caption(connector.hub.SlotCount + " 个槽 · 表 "
-                            + connector.Count + " 项");
+                        // ⚠️ 编辑期 Hub 是**空的**，这是新设计的常态（槽由写手在运行期按名字开），
+                        // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
+                        HoConstraintEditorControls.Caption(Application.isPlaying
+                            ? connector.hub.SlotCount + " 个槽 · 表 " + connector.Count + " 项"
+                            : "表 " + connector.Count + " 项 · 槽在运行期由写手开（编辑期是空的，正常）");
                     }
                 }
                 else

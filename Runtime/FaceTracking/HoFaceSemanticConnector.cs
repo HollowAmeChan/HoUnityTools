@@ -121,7 +121,12 @@ namespace Hollow.HoUnityTools.FaceTracking
             return GetFloat(IndexOf(key));
         }
 
-        /// <summary>按下标写（越界什么都不做）。</summary>
+        /// <summary>
+        /// 按下标写（越界什么都不做）。
+        /// ⚠️ 槽要**先被开出来**才写得进去：写手用 <see cref="HoFaceSemanticHub.ClaimSlot"/> 开，
+        /// 节点/中继用 <see cref="HoFaceSemanticHub.Reserve"/> 开。编辑期 Hub 是空的（那是常态），
+        /// 这时候直接写会**静默丢掉** —— 消费方要写就先自己 `hub.Reserve(i + 1)`。
+        /// </summary>
         public void SetFloat(int index, float value)
         {
             if (hub != null) hub.SetFloat(index, value);
@@ -173,32 +178,33 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void OnValidate()
         {
-            // 重名会静默毁掉"名字 → 下标"，而这类错误在运行期表现为"某个参数永远不动"。
+            // 这里**只查重名**（那会静默毁掉"名字 → 下标"，运行期表现是"某个参数永远不动"）。
             //
             // ⚠️ 这里**故意不放在 `#if UNITY_EDITOR` 里**：这个文件要**逐字节**同步进 mod 程序集，
             // 条件编译块会让两边不一致。`OnValidate` 在播放器里不会被调用，留着无害。
-            if (slots != null)
+            //
+            // ⚠️ **曾经还在这里报过两件事，都删了**（2026-09-26 现场）：
+            // ① "表比 Hub 的槽多" —— 那是**旧设计**的约束（Hub 要预先按表定长）。现在槽是
+            //    **写的人在运行期按名字开的**（写手 `ClaimSlot`、节点与中继 `Reserve`），
+            //    所以**编辑期 Hub 是空的才是常态**；这条警告每次都误报，还给了错的建议
+            //    （"把 values 调大"）。
+            // ② "没填 Hub" —— 一呢，`Reset()` 之外用户拖 Hub 之前它必然报一次；二呢，
+            //    **检查器插件会偷偷 new 一个本组件**去读字段默认值（vInspector 的
+            //    "Dummy object for fetching default variable values…"），那种临时对象上
+            //    永远没填 Hub，于是每画一次检查器就刷一条跟用户无关的警告。
+            //    真正要紧的那两处本来就会报：面板那一栏的黄字、以及中继/节点的状态行
+            //    （"角色上没有 Connector（或它没填 Hub）"）—— 在**它真的挡住事**的时候报。
+            if (slots == null) return;
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < slots.Count; i++)
             {
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                for (int i = 0; i < slots.Count; i++)
-                {
-                    var slot = slots[i];
-                    if (slot == null || string.IsNullOrEmpty(slot.key)) continue;
-                    if (!seen.Add(slot.key))
-                        Debug.LogError("[Ho 面捕] 动态参数连接器「" + name + "」有重名 key：" + slot.key
-                            + "（第 " + i + " 项）。重名会让「名字 → 下标」指向错的那个槽。", this);
-                }
-
-                // 表比槽多：多出来的那几项**没有槽可写**。这不是致命错误（Hub 的数组可以调大），
-                // 但一定要说出来 —— 否则表现是"最后几个语义永远不动"。
-                if (hub != null && slots.Count > hub.SlotCount)
-                    Debug.LogWarning("[Ho 面捕] 动态参数连接器「" + name + "」声明了 " + slots.Count
-                        + " 项，但 Hub「" + hub.name + "」只有 " + hub.SlotCount + " 个槽：第 "
-                        + hub.SlotCount + " 项之后没有槽可写（把 Hub 的 values 调大，或删掉多余的表项）。", this);
+                var slot = slots[i];
+                if (slot == null || string.IsNullOrEmpty(slot.key)) continue;
+                if (!seen.Add(slot.key))
+                    Debug.LogError("[Ho 面捕] 动态参数连接器「" + name + "」有重名 key：" + slot.key
+                        + "（第 " + i + " 项）。重名会让「名字 → 下标」指向错的那个槽。", this);
             }
-
-            if (hub == null)
-                Debug.LogWarning("[Ho 面捕] 动态参数连接器「" + name + "」没有填 Hub ⇒ 消费方读不到值。", this);
         }
     }
 }
