@@ -43,11 +43,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         private bool draggingSplitter;
 
         /// <summary>
-        /// 左列一行的**整行高度**估计：名字行 20 + 表达式行 18 + 卡片上下内边距 12 + 余量 4。
-        /// 用它先占位，曲线背景才能画在卡片背景上、行内容之下 —— 数值偏大无害（只是多留一点白），
-        /// 偏小则背景会在底部截断，所以按偏大取。
+        /// 左列行内那 3 个图标按钮大概占的宽度（↑ ↓ ✕ + 间距）。
+        /// 用来把"整行可点区"和"曲线背景"让开它们。
         /// </summary>
-        private const float RowFullHeight = 20.0f + 18.0f + 12.0f + 4.0f;
+        private const float ListButtonsWidth = 70.0f;
 
         [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
         private static void Open()
@@ -93,14 +92,18 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void DrawColumnSplit()
         {
+            // 左列最多占窗口的一半 —— 拖到头也不该把右边挤没（右边还要放曲线编辑器）。
+            float limit = Mathf.Max(LeftWidthMin, position.width * 0.5f);
+            float width = Mathf.Clamp(leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
+
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(leftWidth), GUILayout.ExpandHeight(true)))
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(width), GUILayout.ExpandHeight(true)))
                 {
                     DrawLeftColumn();
                 }
 
-                DrawSplitter(ref leftWidth, LeftWidthMin, LeftWidthMax);
+                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
                 {
@@ -266,12 +269,14 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
-                // 只有滚动区吃掉余下的高度，状态行才不会被长列表推出窗口
+                // 只有滚动区吃掉余下的高度，状态行才不会被长列表推出窗口。
+                // ⚠️ `alwaysShowHorizontal: false` —— 左列的每一行都自己算好宽度（见 DrawLeftRow），
+                // 内容永远不该比列宽还宽；出现横向滚动条一定是宽度算错了，不该让用户滚着看。
                 if (middleware != null && middleware.outputs != null)
                 {
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
                     {
-                        listScroll = EditorGUILayout.BeginScrollView(listScroll);
+                        listScroll = EditorGUILayout.BeginScrollView(listScroll, false, true);
                         for (int i = 0; i < middleware.outputs.Count; i++)
                         {
                             if (Matches(middleware.outputs[i], search)) DrawLeftRow(i);
@@ -297,35 +302,28 @@ namespace Hollow.HoUnityTools.FaceTracking
             bool delayed = HasDelay(output);
             string name = string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter;
 
-            // 整行（含卡片内边距）先量出来：曲线缩略图要画在卡片背景上、行内容之下。
-            Rect rowRect = GUILayoutUtility.GetRect(0.0f, 4000.0f, RowFullHeight, RowFullHeight, GUILayout.ExpandWidth(true));
-            if (Event.current.type == EventType.Repaint)
-            {
-                DrawRowCurveBackground(rowRect, index, output, bad);
-            }
+            // ⚠️ 绘制顺序很关键：IMGUI 是"后画的盖先画的"。
+            // 卡片（含它的底色）是在下面那个 using 里画的，所以**整行的曲线背景必须等卡片画完
+            // 再画**（用 GetLastRect 拿卡片真实矩形）。第一版我在卡片**之前**用 GetRect 占位再画，
+            // 结果就是被卡片整个盖住 —— 看起来"曲线根本不是背景"。
+            // 文字最后画，所以压在曲线上也读得清；墨色是白 + 阴影，在淡色曲线上对比度够。
+            Rect cardRect = new Rect();
 
             using (HoConstraintEditorControls.Card(index == selected))
             {
                 using (HoConstraintEditorControls.Row())
                 {
-                    // 整条名字都是点选区：自己画按钮 + 自己判点击（选中态由卡片底色给出）
+                    // **第一行左对齐**：名字在左、三个按钮在右。
+                    // 名字只画**文字**，不画按钮底 —— 整行都能点（见下面），再画个按钮底会
+                    // 让人以为"只有这里是热区"。
                     Rect nameRect = HoConstraintEditorControls.NextFlexible(60.0f);
                     GUIStyle nameStyle = index == selected ? HoConstraintEditorTheme.ButtonPrimary : HoConstraintEditorTheme.Button;
-                    Event evt = Event.current;
-                    bool hover = nameRect.Contains(evt.mousePosition);
-                    if (evt.type == EventType.Repaint)
+                    if (Event.current.type == EventType.Repaint)
                     {
-                        nameStyle.Draw(nameRect, new GUIContent(name, output.expression), false, hover, false, false);
+                        nameStyle.Draw(nameRect, new GUIContent(name, output.expression), false, false, false, false);
                     }
 
-                    if (evt.type == EventType.MouseDown && evt.button == 0 && hover)
-                    {
-                        selected = index;
-                        GUI.FocusControl(null);
-                        evt.Use();
-                    }
-
-                    // ⚠ / 延迟 画在名字按钮上面（同一 IMGUI 趟里后画的在上）
+                    // ⚠ / 延迟 画在名字上面
                     if (bad || delayed)
                     {
                         Rect note = new Rect(nameRect.xMax - 74.0f, nameRect.y, 70.0f, nameRect.height);
@@ -346,7 +344,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                         if (HoConstraintEditorControls.IconButton("↓", "下移一行（往后生效）。")) MoveOutput(index, index + 1);
                     }
 
-                    if (HoConstraintEditorControls.IconButton("✕", "删掉这一行。"))
+                    // 删掉这一行。⚠️ 它在右面板也有一份（"✕ 删除这一行"），所以行内这个
+                    // 按钮被点歪也不至于没法删。
+                    if (HoConstraintEditorControls.IconButton("✕", "删掉这一行。（右面板也有一个）"))
                     {
                         middleware.outputs.RemoveAt(index);
                         if (selected > index) selected--;
@@ -355,23 +355,50 @@ namespace Hollow.HoUnityTools.FaceTracking
                     }
                 }
 
-                // 第二行：**表达式原文**（不再只是"曲线(N 个变量)"）。
-                // 一行配置的核心就是"这个参数 = 那个表达式"，把它摊在这里，左边扫一眼就知道
-                // 每一行在干什么，不必逐行点开右边。解析不过时显示错误原因。
+                // 第二行：**表达式原文，居中**。一行配置的核心就是"这个参数 = 那个表达式"，
+                // 摊在列表里扫一眼就知道每行在干什么，不必逐行点开右边。
+                // 居中是为了跟上面左对齐的名字**错开**，两行一眼能分开；解析不过时显示 ⚠ + 原因。
                 using (HoConstraintEditorControls.Row(true))
                 {
+                    var style = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleCenter };
+                    string text = output.expression;
+                    string tip = output.expression;
                     if (bad)
                     {
-                        GUIStyle errorStyle = new GUIStyle(HoConstraintEditorTheme.Caption);
-                        errorStyle.normal.textColor = HoConstraintEditorTheme.ErrorColor;
-                        GUILayout.Label(new GUIContent("⚠ " + output.expression, "表达式解析不过。"), errorStyle);
+                        style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                        text = "⚠ " + output.expression;
+                        tip = "表达式解析不过。";
                     }
-                    else
-                    {
-                        GUILayout.Label(new GUIContent(output.expression, output.expression),
-                            HoConstraintEditorTheme.Caption, GUILayout.ExpandWidth(true));
-                    }
+
+                    GUILayout.Label(new GUIContent(text, tip), style, GUILayout.ExpandWidth(true));
                 }
+            }
+
+            // ⚠️ 必须在 `Card` 的 using **之外**读：在里面读拿到的是最后一行（表达式那行）的矩形，
+            // 不是整张卡片的。卡片是最后一个布局组，出了它之后 `GetLastRect` 才是卡片本身。
+            if (Event.current.type == EventType.Repaint)
+            {
+                cardRect = GUILayoutUtility.GetLastRect();
+            }
+
+            if (Event.current.type == EventType.Repaint && cardRect.height > 0.0f)
+            {
+                // 曲线背景画在卡片内容**之上**、但**不进按钮**（右边那 3 个按钮留干净）。
+                Rect safe = new Rect(cardRect.x + 1.0f, cardRect.y + 1.0f,
+                    Mathf.Max(0.0f, cardRect.width - 2.0f - ListButtonsWidth), cardRect.height - 2.0f);
+                DrawRowCurveBackground(safe, index, output, bad, selected == index);
+            }
+
+            // **整行可点**：卡片范围内、按钮以外的地方点一下都选中这一行。
+            // ⚠️ 放在最后判：按钮（`IconButton`）在这一趟里已经处理过自己的点击并 `Use()` 掉了，
+            // 所以这里不会跟它们抢。
+            Rect click = new Rect(cardRect.x, cardRect.y, Mathf.Max(0.0f, cardRect.width - ListButtonsWidth), cardRect.height);
+            if (Event.current.type == EventType.MouseDown && Event.current.button == 0
+                && click.width > 0.0f && click.Contains(Event.current.mousePosition))
+            {
+                selected = index;
+                GUI.FocusControl(null);
+                Event.current.Use();
             }
         }
 
@@ -388,16 +415,17 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// （第一版我用 `Texture2D` + 签名缓存，那是"程序化贴图"的做法，
         ///  平白多了一整套缓存、销毁、泄漏要考虑，见 git 历史。）
         /// </summary>
-        private void DrawRowCurveBackground(Rect rowRect, int index, HoFaceOutput output, bool bad)
+        /// <param name="area">已经让开右侧按钮区的可用矩形（调用方算好）。</param>
+        private void DrawRowCurveBackground(Rect area, int index, HoFaceOutput output, bool bad, bool selected)
         {
-            Rect area = new Rect(rowRect.x + 1.0f, rowRect.y + 1.0f, rowRect.width - 2.0f, rowRect.height - 2.0f);
             if (area.width < 16.0f || area.height < 8.0f) return;
 
             Color accent = bad ? HoConstraintEditorTheme.ErrorColor : AccentForRow(output);
 
             // 极淡的底色：给"这一行属于哪一堆"一个氛围，不影响读字。
+            // 选中的那行多压一点，让"整行可点"在视觉上说得通。
             Color tint = accent;
-            tint.a = bad ? 0.16f : 0.07f;
+            tint.a = bad ? 0.16f : (selected ? 0.13f : 0.07f);
             EditorGUI.DrawRect(area, tint);
 
             AnimationCurve curve = output.curve;
@@ -414,24 +442,29 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (key.value < min) min = key.value;
                 if (key.value > max) max = key.value;
             }
-            if (max - min < 1e-4f) return;      // 平线画出来就是一条边线，没有信息
+
+            // ⚠️ **不跳过平线**：恒等曲线（`0..1 → 0..1`）恰恰是大多数行，它画出来是一条对角线，
+            // 正是"这行是直通"的形状。真正没信息的是**值域为零**（min == max）的曲线，那时没得画。
+            if (max - min < 1e-4f) return;
 
             // 采样密度：整行一个点太糙、每像素一个点太费；约 3px 一个点对"看形状"足够。
-            int samples = Mathf.Clamp(Mathf.RoundToInt(area.width / 3.0f), 8, 160);
+            int samples = Mathf.Clamp(Mathf.RoundToInt(area.width / 3.0f), 8, 200);
             var points = new Vector3[samples];
             for (int i = 0; i < samples; i++)
             {
                 float t = lo + (hi - lo) * (i / (float)(samples - 1));
                 float v = curve.Evaluate(t);
-                float y = area.yMax - (v - min) / (max - min) * area.height;
+                // 上下各留 1px，免得线贴着卡片边框看成一整块。
+                float inner = Mathf.Max(1.0f, area.height - 2.0f);
+                float y = area.yMax - 1.0f - (v - min) / (max - min) * inner;
                 points[i] = new Vector3(area.x + area.width * (i / (float)(samples - 1)), y, 0.0f);
             }
 
             Color line = accent;
-            line.a = bad ? 0.75f : 0.55f;
+            line.a = bad ? 0.80f : (selected ? 0.72f : 0.55f);
             Color previous = Handles.color;
             Handles.color = line;
-            Handles.DrawAAPolyLine(bad ? 2.0f : 1.5f, points);
+            Handles.DrawAAPolyLine(bad ? 2.0f : 1.6f, points);
             Handles.color = previous;
         }
 
