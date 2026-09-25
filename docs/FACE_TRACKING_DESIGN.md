@@ -451,6 +451,6 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 - **真机联调**：手机 App 的实际包率、多网卡路由、App 退后台 / 锁屏时的行为、手机那边"目标地址"在真实版本里的表现。现在只有官方样例仓库的依据。
 - **人形 Avatar 相关**：眼球骨骼 60 秒无累计漂移；同一帧多个 IK Pass 只推进一次平滑状态；HoBlink 高光键的保留。验证工程里没有 humanoid Avatar。
 - **Unity 2021.3**：package 声明的最低版本，只在 6000.3.15f1 上验证过。
-- **Warudo 侧的 .controller 打包与 5 节点连线**：mod 里放 `.controller`、`SharedAssets.Load<RuntimeAnimatorController>` 取回、`HoVtsTrack` / `HoVtsTrackController` 两个 mod 与官方三个 apply 节点的实际连线与行为。见 [面捕方案总览](FACE_TRACKING_WARUDO_ROUTE.md) §2 与 §7 的待办。
+- **Warudo 侧的节点连线与行为**：bundle 打包、`HoVtsTrack` / `HoVtsTrackController` 两个 mod（**仍是目标，没拆**）与官方三个 apply 节点的实际连线与行为；**今天这一边 10 个节点一次都没在图里跑过**。见 [面捕方案总览](FACE_TRACKING_WARUDO_ROUTE.md) §2 与 §7 的待办。
 - **带 Behaviour / 同步图层 / 非形态键曲线的控制器**：装配不拦，**开始驱动会被拒**（§6.1 的接受范围）；把这类控制器放到影子台上跑还没试过。
 - **组合姿势片段的来源**：动画工具的「形态键动画」只会出"一个键一份 100"的基础片段；眼睑 2D 树那种组合姿势（`眯 = blink 90 + squint 100`）要作者自己做，「控制器编辑」只负责报"哪个槽位缺"。

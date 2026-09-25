@@ -42,7 +42,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     ///   · **别人也能写**：作者自己挂在角色上的组件、别的 mod 的脚本，`SetFloat(名字, 值)` 就行。
     ///     所以"Hub 里能有什么"是**产品边界**（我们提供中间层这一条），不是**机制边界**。
     ///   · ⚠️ **唯一写不进去的是动画 clip**：曲线写 `values.<i>` 那条路 2026-09-26 删了
-    ///     （绑定是静态字符串 ⇒ 作者必须先知道下标，细节见 `docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md` §5.1）。
+    ///     （绑定是静态字符串 ⇒ 作者必须先知道下标，细节见 `docs/pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md` §1）。
     ///
     /// 【曾经还有一个"跑在控制器里"的写者】控制器状态上的状态机行为
     /// （`HoFaceSemanticWriterBehaviour`，2026-09-26 上午加、下午删）：它的活中间层本来就能干，

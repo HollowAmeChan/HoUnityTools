@@ -14,7 +14,7 @@
 - 值是怎么被加工的 → [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)
 - 控制器长什么样、怎么装配 → [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md)
 - 机制层（影子台 / 占用表 / 线程与生命周期） → [面捕设计与已验证机制](FACE_TRACKING_DESIGN.md)
-- Warudo 那边（2 mod / 5 节点） → [面捕在 Warudo 的路线](FACE_TRACKING_WARUDO_ROUTE.md)
+- Warudo 那边（**现在是 1 个 mod / 10 个节点**；"2 mod"是目标） → [面捕在 Warudo 的路线](FACE_TRACKING_WARUDO_ROUTE.md)
 
 ## 0. 一句话
 
