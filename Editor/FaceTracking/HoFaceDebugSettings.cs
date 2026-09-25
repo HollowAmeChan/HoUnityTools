@@ -63,8 +63,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public string animationFolder = "";
 
         /// <summary>
-        /// 中间层配置（`*.hoface.json`）的路径。面板把它当**必填总闸**（空着就把下面各栏锁住），
-        /// 但运行时**没指定也有内置默认表兜底**（`Inputs()/Outputs()`）—— 语义精确到两类行的差异见那两个方法。
+        /// 中间层配置（`*.hoface.json`）的路径。**必填**：留空 ⇒ 这一层不做事（`Inputs()/Outputs()` 给空表），
+        /// 面板会拦住「开始驱动」。
+        /// ⚠️ **没有内置默认兜底**（2026-09-25 改，与 Warudo 侧统一）—— 静默兜底等于"没填也能动脸"，
+        /// 而动的是一份谁也没看过的表。想开一份现成的：用「配置文件」页的「新建」，
+        /// 或从包里 `Editor/FaceTracking/Profiles/` 拿那一份复制过来。
         /// </summary>
         public string profilePath = "";
 
@@ -324,23 +327,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 这台角色要跑的**输出行**：指了配置文件就**只用它里面的**，否则用内置默认。
-        /// 和输入行一样，不许悄悄拿默认来补（那会变成隐式处理）。
+        /// 这台角色要跑的**输出行**：**只认配置文件里的**。没指定配置文件 ⇒ **空表**（这一层不做事）。
+        ///
+        /// ⚠️ **不再退回内置默认表**（2026-09-25 改，与 Warudo 侧统一）。那次改动的理由是：
+        /// 静默兜底 = "没填也能动脸"，而动的是一份**谁也没看过**的表 —— 最难查的那种。
+        /// 现在两边口径一致：**空 = 空表**。内置默认表（`HoFaceMiddlewareDefaults`）只剩
+        /// "**新建配置时的初始内容**"和"导出文本"这两个角色，运行期一律不走它。
         /// </summary>
         public List<HoFaceOutput> Outputs()
         {
             var loaded = Middleware;
-            return loaded != null && loaded.outputs.Count > 0 ? loaded.outputs : HoFaceMiddlewareDefaults.Outputs();
+            return loaded != null ? loaded.outputs : new List<HoFaceOutput>();
         }
 
         /// <summary>
-        /// 这台角色要跑的**输入行**（线名 → 规范名 + 量纲 + 输入曲线）。指了配置文件就只用它里面的 ——
-        /// 一条都没有就是"不做改名"，规范名必须与线名同名。
+        /// 这台角色要跑的**输入行**（线名 → 规范名 + 量纲 + 输入曲线）：**只认配置文件里的**。
+        /// 配置里一条都没有就是"不做改名"（规范名必须与线名同名）；没指定配置文件 ⇒ 空表。
+        /// ⚠️ 同样**不再退回内置默认表** —— 理由见 <see cref="Outputs"/>。
         /// </summary>
         public List<HoFaceOutput> Inputs()
         {
             var loaded = Middleware;
-            return loaded != null ? loaded.inputs : HoFaceMiddlewareDefaults.Inputs();
+            return loaded != null ? loaded.inputs : new List<HoFaceOutput>();
         }
 
         // ── 落盘 ────────────────────────────────────────────────────────────────

@@ -309,7 +309,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    using (new EditorGUI.DisabledScope(!Application.isPlaying || settings == null))
+                    // ⚠️ 必须 gate `HasProfile`：没有配置文件 ⇒ 输入/输出行都是**空表**，
+                    // 会话能起来但什么都不做（还会占用形态键）。这正是"空 = 空表"那条口径要拦住的东西。
+                    bool canDrive = Application.isPlaying && settings != null && settings.HasProfile;
+                    using (new EditorGUI.DisabledScope(!canDrive))
                     {
                         if (HoConstraintEditorControls.Button(session == null ? "开始驱动" : "停止并交还", "播放模式下面捕才真正驱动混合树。停止会把占用的形态键还回去。", session == null, 84.0f))
                         {

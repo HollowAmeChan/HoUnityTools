@@ -158,6 +158,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         public static void Start(HoFaceDebugSettings settings)
         {
+            // 没有配置文件 ⇒ 输入/输出行都是**空表**，会话起来也什么都不做（还会占用形态键）。
+            // 面板那个按钮已经 gate 了；这里再拦一道是因为 **`Start` 还有别的调用方**。
+            if (settings == null || !settings.HasProfile)
+            {
+                Fail(settings, "没指定中间层配置（`*.hoface.json`）—— 不留内置默认，所以这一层不做事。");
+                return;
+            }
+
             DisposeSession(settings);
             UserStopped.Remove(settings);
             try
@@ -203,7 +211,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             UpdateInput();
 
             // 「运行时自动开始」：进播放就自动驱动；**失败后自动重试**（用户自己停过的不再拉起）。
-            if (settings.startOnPlay && !UserStopped.Contains(settings) && !Sessions.ContainsKey(settings)
+            // ⚠️ 没指定配置文件时不自动起：那是"空 = 空表"，起来什么都不做，而且每秒重试一次等于刷屏。
+            if (settings.startOnPlay && settings.HasProfile && !UserStopped.Contains(settings) && !Sessions.ContainsKey(settings)
                 && (!NextTry.TryGetValue(settings, out double next) || Now >= next))
             {
                 NextTry[settings] = Now + 1.0;

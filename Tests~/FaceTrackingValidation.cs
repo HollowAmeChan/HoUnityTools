@@ -127,6 +127,12 @@ public static class HoFaceTrackingValidation
             string controllerPath = AssetDatabase.GenerateUniqueAssetPath("Assets/ValidationFace.controller");
             var controller = HoFaceAnimationAssets.Adopt(source, controllerPath, rig.Meshes(), animator, ClipFolder);
             rig.SetFaceController(controller, controllerPath);
+
+            // 指向那份**发货的默认配置**（包内 `Editor/FaceTracking/Profiles/`），并就地补上下面这些用例
+            // 断言的口径要求的 `notes`（`iFacialMocap` / `VTS 手机`）。这一步现在是**必须的**：
+            // 2026-09-25 起 Unity 侧也**没有内置默认兜底**了（与 Warudo 侧统一："空 = 空表"），
+            // 不指配置的话 `rig.Inputs()` 给空表，这一套用例会全塌。
+            PrepareValidationProfile(rig);
             Check(controller.layers.Length == source.layers.Length && controller.layers[0].name == source.layers[0].name,
                 "装配是整份复制：层与状态原样带过来");
             Check(controller.parameters.Length == source.parameters.Length,
@@ -813,7 +819,9 @@ public static class HoFaceTrackingValidation
                 System.IO.File.WriteAllText(profileFull, HoFaceProfile.Write(new HoFaceMiddleware
                 {
                     displayName = "validation",
-                    // 线名 → 规范名：这份配置是**唯一的映射表**（内置默认表只在"还没指配置文件"时兜底）。
+                    // 线名 → 规范名：这份配置是**唯一的映射表**。
+                    // ⚠️ 两边**都没有内置默认兜底**了（2026-09-25 改，Unity 侧与 Warudo 侧统一为"空 = 空表"），
+                    // 所以这份用例配置必须自带全部输入行，不能靠任何默认表补。
                     inputs = new System.Collections.Generic.List<HoFaceOutput>
                     {
                         new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen", notes = "VTS 手机" },
@@ -1188,6 +1196,85 @@ public static class HoFaceTrackingValidation
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
         return controller;
+    }
+
+    /// <summary>
+    /// 把**包内那份发货的默认配置**复制成这个验证工程里的一份，并补上用例断言要的 `notes` 口径
+    /// （`iFacialMocap` / `VTS 手机`），然后把 `rig.profilePath` 指过去。
+    ///
+    /// 【为什么不再用内置默认表】
+    /// 2026-09-25 起 Unity 侧也取消了"没指定配置文件就用内置默认表"的兜底（与 Warudo 侧统一：
+    /// **空 = 空表**）。所以这个夹具必须有一份真配置，否则 `rig.Inputs()` 是空表，整套用例全塌。
+    ///
+    /// 【为什么要补 notes】
+    /// `HoFaceMiddlewareDefaults.Inputs()` 用 `notes = "iFacialMocap"` / `"VTS 手机"` 当钥匙，
+    /// 而发货配置里那些行的 `notes` 是说明性文字。用例按 `notes` 找行，所以这里就地改写，
+    /// 而不是去改发货文件（那份文件的 notes 是给用户看的）。
+    ///
+    /// 找不到发货配置时**抛异常**：验证工程的价值就在"覆盖真实文件"，静默退回内置默认会让这条用例失去意义
+    /// （而且那条路已经没了）。
+    /// </summary>
+    private static void PrepareValidationProfile(HoFaceDebugSettings settings)
+    {
+        string shipped = ShippedDefaultProfileFullPath();
+        if (string.IsNullOrEmpty(shipped) || !File.Exists(shipped))
+            throw new Exception("找不到包内发货的默认配置（Editor/FaceTracking/Profiles/ho-vts-default.hoface.json）。");
+
+        HoFaceMiddleware middleware;
+        string error;
+        if (!HoFaceProfile.TryParse(File.ReadAllText(shipped), out middleware, out error))
+            throw new Exception("读不了发货的默认配置：" + error);
+
+        // 用例要的两把 notes 钥匙。
+        for (int i = 0; i < middleware.inputs.Count; i++)
+        {
+            var row = middleware.inputs[i];
+            if (row == null) continue;
+            if (row.expression == "jawOpen" || row.expression.EndsWith("_L", StringComparison.Ordinal)
+                || row.expression.EndsWith("_R", StringComparison.Ordinal))
+                row.notes = "iFacialMocap";
+            else if (row.expression == "JawOpen" || row.expression.EndsWith("Left", StringComparison.Ordinal)
+                || row.expression.EndsWith("Right", StringComparison.Ordinal))
+                row.notes = "VTS 手机";
+            // 头/眼/faceFound 那几行保持原 notes（用例不按它们找行）
+        }
+
+        string assetPath = "Assets/ValidationProfile" + HoFaceProfile.Extension;
+        string fullPath = System.IO.Path.Combine(Application.dataPath, "ValidationProfile" + HoFaceProfile.Extension);
+        System.IO.File.WriteAllText(fullPath, HoFaceProfile.Write(middleware));
+        AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+        settings.profilePath = assetPath;
+    }
+
+    /// <summary>包内发货配置的绝对路径（允许用 `HOUNITYTOOLS_ROOT` 环境变量覆盖包位置）。</summary>
+    private static string ShippedDefaultProfileFullPath()
+    {
+        var roots = new System.Collections.Generic.List<string>();
+        string fromEnv = Environment.GetEnvironmentVariable("HOUNITYTOOLS_ROOT");
+        if (!string.IsNullOrEmpty(fromEnv)) roots.Add(fromEnv);
+        roots.Add("D:/Unity_Fork/HoUnityTools");
+
+        foreach (string root in roots)
+        {
+            string candidate = Path.Combine(root, "Editor/FaceTracking/Profiles/ho-vts-default" + HoFaceProfile.Extension);
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        // 兜底：从 Packages/manifest.json 的 file: 引用里找。
+        string packages = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages/manifest.json");
+        if (File.Exists(packages))
+        {
+            foreach (string line in File.ReadAllLines(packages))
+            {
+                int at = line.IndexOf("file:", StringComparison.OrdinalIgnoreCase);
+                if (at < 0) continue;
+                string value = line.Substring(at + 5).Trim().TrimEnd(',', '"').Replace('\\', '/');
+                string candidate = Path.Combine(value, "Editor/FaceTracking/Profiles/ho-vts-default" + HoFaceProfile.Extension);
+                if (File.Exists(candidate)) return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static void ParserTests()
