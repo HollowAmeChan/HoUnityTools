@@ -8,7 +8,7 @@
 角色预制件上**零组件** —— 调试状态落在 `Assets/HoFaceDebugSettings.json`，每帧由菜单宿主推。
 
 - [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 三个页各管什么、首次接线、什么会写盘、排查清单（症状 → 先看哪）。**§2.1 是方向：终点是"动画 = 状态"，现在这套 ARKit 映射是过渡件。**
-- [**面捕输入实测记录（真值）**](measurements/README.md)：设备真实发过来的 payload 整段 —— 方言、键名、量纲、两台设备的差异。**配置生成器与守门用例都读这里的 `.keys` 文件**（文档即生成来源）。
+- [**参数实机验证表**](PARAMETER_DEVICE_VERIFICATION.md)：**设备实测哪些参数真的在动** —— 逐条给 `MOVES` / `WEAK` / `CONSTANT-NONZERO` / `NEVER-MOVES` 与统计量。**协议里有、设备也发、读数却永远不变的，只有这张表能告诉你。**
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：静态姿势树的代数边界与完整Animator的区别；已更正“不能写Animator参数”的旧结论，原生参数曲线在两个Unity版本实测可用。
 - [**控制器完整输出与物理阶段设计**](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)：Animator参数回写、跨Layer求值时序、组件/显隐/材质MPB/引用切换的双版本实测，以及Warudo属性帧、绑定清单和果冻物理调度方案。**已按"组件值全部走 Hub"修订**：控制器只吐姿态（形态键+骨骼）与语义（Hub），材质/显隐/对象引用不再是我们写的目标。

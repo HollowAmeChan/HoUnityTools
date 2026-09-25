@@ -2,270 +2,1102 @@
     "format":  "ho-face-middleware",
     "version":  2,
     "displayName":  "ho-debug-iphoneVTS",
-    "notes":  "**iPhone 上的 VTS** 的调试配置。⚠️ **由实测键清单生成**（`docs/measurements/iphoneVTS.keys`），不是按命名规则推断的。\n\n它是什么：线名 -\u003e 规范名，一行一个，**只有这台设备的拼写**。\n  · 形状 = 干净的 VTS PascalCase（JawOpen / MouthSmileLeft…）—— 实测 52 个规范名**全部到位、0 个对不上**。\n  · 标量 = VTS 固定名（Rotation_* / Position_* / EyeLeft_* / EyeRight_* / FaceFound），**两台设备同名**。\n  · 输出行：52 个 ARKit/ 直通 + 6 个 Head/ 保留名 ⇒ BlendShapes 与输入逐键对照，头姿/头位真的会动。\n  · 未映射：Hotkey、Timestamp，以及 headUp/headDown/headLeft/headRight/headRollLeft/headRollRight\n    —— 那 6 个**这台设备也发**（用户实测看到），但语义未确认，与安卓那份保持一致地先不接。\n\n⚠️ **安卓那份不是同一份**：两台设备的线名有 20 处对不上（安卓内眉是 **左右两条** browInnerUp_L/R，\n另有 6 个 head*；苹果内眉是**一条** BrowInnerUp，另有 CheekSquint* / JawForward / MouthClose /\nMouthDimple* / MouthPress* / MouthShrugLower / MouthStretch* 那 12 个形状）。\n⇒ **别用一份配置通吃两台**：线名对不上的行**不报错、只是永远没数据**。\n\n⚠️ 为什么单方言、为什么一份文件一台设备：同名多行 = **最后一行生效**、而且**缺数据不回退**。\n安卓那份是 ho-debug-androidVTS.hoface.json。\n\n⚠️ 没标定：形状值本来就是 0..1（实测 JawOpen = 0.032 / MouthPucker = 0.432），所以形状行不乘 0.01；\n但头姿/头位的**符号与量纲没标定**（VTS 裸值直通），头位单位尤其可疑 —— 调试要看的是\"有没有流过去\"。\n头/眼那 12 行**必须带自己的宽曲线**，否则会被默认 0..1 夹成 0/1（症状：头姿恒 (0,0,0)° 而形态键一切正常）。\n\n标定起点（抄 VBridger AdvancedARKit V3 实测的滤波时间，单位秒）：\n  JawOpen 0.10 | Mouth* 0.10 | EyeLook* 0.10 | EyeBlink+EyeWide 0.10 | BrowInnerUp 0.32\n  BrowOuterUp-BrowDown 0.40 | CheekPuff / TongueOut / EyeSquint 0（不滤）\n写法：那一行加 {\"kind\":\"smooth\",\"seconds\":0.1}。",
+    "notes":  "iPhone VTS 的**权威参考**：一条线一行，`parameter = expression = 设备线名`。\n\n· **没有任何改名**（不改 `browDown_L` → `browDownLeft`、不改 `Rotation_y` → `headRotY`）；\n· **没有单位换算、没有比例、没有滤波**；\n· 出口字典 = 同样的名字配同样的值 —— 所以可以和接收器的原始 dump **逐条对值**。\n  （核对工具：`.warudo-mod-research/.tools/reconcile-auto-dump.ps1`）\n\n⚠️ 它**不为下游服务**：里面没有 `ARKit/`，也没有 `Head/*` 保留名 —— 求解器认不出它。\n   这是**有意**的：那两套名字是\"给求解器用的标准\"，而标准现在还不存在，以后按用途在**副本**上定。\n\n⚠️ 每条线都带 `-180..180` 的宽曲线：默认那条 `0..1` 曲线会把值**夹到 [0,1]**\n   （`HoFaceCurve.Transfer` 只夹不外推），实测 `Rotation_x`、`Position_y` 都不是 0..1 的量级。\n   形状本来就 0..1，宽曲线对它们是恒等。",
     "inputs":  [
                    {
-                       "parameter":  "browDownLeft",
+                       "parameter":  "BrowDownLeft",
                        "expression":  "BrowDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "browDownRight",
+                       "parameter":  "BrowDownRight",
                        "expression":  "BrowDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "browInnerUp",
+                       "parameter":  "BrowInnerUp",
                        "expression":  "BrowInnerUp",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "browOuterUpLeft",
+                       "parameter":  "BrowOuterUpLeft",
                        "expression":  "BrowOuterUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "browOuterUpRight",
+                       "parameter":  "BrowOuterUpRight",
                        "expression":  "BrowOuterUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "cheekPuff",
+                       "parameter":  "CheekPuff",
                        "expression":  "CheekPuff",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "cheekSquintLeft",
+                       "parameter":  "CheekSquintLeft",
                        "expression":  "CheekSquintLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "cheekSquintRight",
+                       "parameter":  "CheekSquintRight",
                        "expression":  "CheekSquintRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeBlinkLeft",
+                       "parameter":  "EyeBlinkLeft",
                        "expression":  "EyeBlinkLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeBlinkRight",
+                       "parameter":  "EyeBlinkRight",
                        "expression":  "EyeBlinkRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookDownLeft",
+                       "parameter":  "EyeLookDownLeft",
                        "expression":  "EyeLookDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookDownRight",
+                       "parameter":  "EyeLookDownRight",
                        "expression":  "EyeLookDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookInLeft",
+                       "parameter":  "EyeLookInLeft",
                        "expression":  "EyeLookInLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookInRight",
+                       "parameter":  "EyeLookInRight",
                        "expression":  "EyeLookInRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookOutLeft",
+                       "parameter":  "EyeLookOutLeft",
                        "expression":  "EyeLookOutLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookOutRight",
+                       "parameter":  "EyeLookOutRight",
                        "expression":  "EyeLookOutRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookUpLeft",
+                       "parameter":  "EyeLookUpLeft",
                        "expression":  "EyeLookUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLookUpRight",
+                       "parameter":  "EyeLookUpRight",
                        "expression":  "EyeLookUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeSquintLeft",
+                       "parameter":  "EyeSquintLeft",
                        "expression":  "EyeSquintLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeSquintRight",
+                       "parameter":  "EyeSquintRight",
                        "expression":  "EyeSquintRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeWideLeft",
+                       "parameter":  "EyeWideLeft",
                        "expression":  "EyeWideLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeWideRight",
+                       "parameter":  "EyeWideRight",
                        "expression":  "EyeWideRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "jawForward",
+                       "parameter":  "JawForward",
                        "expression":  "JawForward",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "jawLeft",
+                       "parameter":  "JawLeft",
                        "expression":  "JawLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "jawOpen",
+                       "parameter":  "JawOpen",
                        "expression":  "JawOpen",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "jawRight",
+                       "parameter":  "JawRight",
                        "expression":  "JawRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthClose",
+                       "parameter":  "MouthClose",
                        "expression":  "MouthClose",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthDimpleLeft",
+                       "parameter":  "MouthDimpleLeft",
                        "expression":  "MouthDimpleLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthDimpleRight",
+                       "parameter":  "MouthDimpleRight",
                        "expression":  "MouthDimpleRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthFrownLeft",
+                       "parameter":  "MouthFrownLeft",
                        "expression":  "MouthFrownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthFrownRight",
+                       "parameter":  "MouthFrownRight",
                        "expression":  "MouthFrownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthFunnel",
+                       "parameter":  "MouthFunnel",
                        "expression":  "MouthFunnel",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthLeft",
+                       "parameter":  "MouthLeft",
                        "expression":  "MouthLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthLowerDownLeft",
+                       "parameter":  "MouthLowerDownLeft",
                        "expression":  "MouthLowerDownLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthLowerDownRight",
+                       "parameter":  "MouthLowerDownRight",
                        "expression":  "MouthLowerDownRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthPressLeft",
+                       "parameter":  "MouthPressLeft",
                        "expression":  "MouthPressLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthPressRight",
+                       "parameter":  "MouthPressRight",
                        "expression":  "MouthPressRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthPucker",
+                       "parameter":  "MouthPucker",
                        "expression":  "MouthPucker",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthRight",
+                       "parameter":  "MouthRight",
                        "expression":  "MouthRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthRollLower",
+                       "parameter":  "MouthRollLower",
                        "expression":  "MouthRollLower",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthRollUpper",
+                       "parameter":  "MouthRollUpper",
                        "expression":  "MouthRollUpper",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthShrugLower",
+                       "parameter":  "MouthShrugLower",
                        "expression":  "MouthShrugLower",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthShrugUpper",
+                       "parameter":  "MouthShrugUpper",
                        "expression":  "MouthShrugUpper",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthSmileLeft",
+                       "parameter":  "MouthSmileLeft",
                        "expression":  "MouthSmileLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthSmileRight",
+                       "parameter":  "MouthSmileRight",
                        "expression":  "MouthSmileRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthStretchLeft",
+                       "parameter":  "MouthStretchLeft",
                        "expression":  "MouthStretchLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthStretchRight",
+                       "parameter":  "MouthStretchRight",
                        "expression":  "MouthStretchRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthUpperUpLeft",
+                       "parameter":  "MouthUpperUpLeft",
                        "expression":  "MouthUpperUpLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "mouthUpperUpRight",
+                       "parameter":  "MouthUpperUpRight",
                        "expression":  "MouthUpperUpRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "noseSneerLeft",
+                       "parameter":  "NoseSneerLeft",
                        "expression":  "NoseSneerLeft",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "noseSneerRight",
+                       "parameter":  "NoseSneerRight",
                        "expression":  "NoseSneerRight",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "tongueOut",
+                       "parameter":  "TongueOut",
                        "expression":  "TongueOut",
-                       "notes":  "iPhone VTS：干净的 VTS PascalCase"
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headRotX",
+                       "parameter":  "Rotation_x",
                        "expression":  "Rotation_x",
                        "curve":  {
                                      "keys":  [
@@ -283,10 +1115,10 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headRotY",
+                       "parameter":  "Rotation_y",
                        "expression":  "Rotation_y",
                        "curve":  {
                                      "keys":  [
@@ -304,10 +1136,10 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headRotZ",
+                       "parameter":  "Rotation_z",
                        "expression":  "Rotation_z",
                        "curve":  {
                                      "keys":  [
@@ -325,10 +1157,10 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headPosX",
+                       "parameter":  "Position_x",
                        "expression":  "Position_x",
                        "curve":  {
                                      "keys":  [
@@ -346,10 +1178,10 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headPosY",
+                       "parameter":  "Position_y",
                        "expression":  "Position_y",
                        "curve":  {
                                      "keys":  [
@@ -367,10 +1199,10 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "headPosZ",
+                       "parameter":  "Position_z",
                        "expression":  "Position_z",
                        "curve":  {
                                      "keys":  [
@@ -388,368 +1220,328 @@
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLeftX",
+                       "parameter":  "EyeLeft_x",
                        "expression":  "EyeLeft_x",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLeftY",
+                       "parameter":  "EyeLeft_y",
                        "expression":  "EyeLeft_y",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeLeftZ",
+                       "parameter":  "EyeLeft_z",
                        "expression":  "EyeLeft_z",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeRightX",
+                       "parameter":  "EyeRight_x",
                        "expression":  "EyeRight_x",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeRightY",
+                       "parameter":  "EyeRight_y",
                        "expression":  "EyeRight_y",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "eyeRightZ",
+                       "parameter":  "EyeRight_z",
                        "expression":  "EyeRight_z",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
                    },
                    {
-                       "parameter":  "faceFound",
+                       "parameter":  "FaceFound",
                        "expression":  "FaceFound",
                        "curve":  {
                                      "keys":  [
                                                   {
-                                                      "t":  -1,
-                                                      "v":  -1,
+                                                      "t":  -180,
+                                                      "v":  -180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   },
                                                   {
-                                                      "t":  1,
-                                                      "v":  1,
+                                                      "t":  180,
+                                                      "v":  180,
                                                       "inT":  1,
                                                       "outT":  1
                                                   }
                                               ]
                                  },
-                       "notes":  "VTS fixed name (same on both devices)"
+                       "notes":  "device wire name, verbatim (no rename)"
+                   },
+                   {
+                       "parameter":  "Hotkey",
+                       "expression":  "Hotkey",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "Timestamp",
+                       "expression":  "Timestamp",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headUp",
+                       "expression":  "headUp",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headDown",
+                       "expression":  "headDown",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headLeft",
+                       "expression":  "headLeft",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headRight",
+                       "expression":  "headRight",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headRollLeft",
+                       "expression":  "headRollLeft",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
+                   },
+                   {
+                       "parameter":  "headRollRight",
+                       "expression":  "headRollRight",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "device wire name, verbatim (measured, semantics unconfirmed)"
                    }
                ],
     "outputs":  [
                     {
-                        "parameter":  "ARKit/eyeBlinkLeft",
-                        "expression":  "eyeBlinkLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookDownLeft",
-                        "expression":  "eyeLookDownLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookInLeft",
-                        "expression":  "eyeLookInLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookOutLeft",
-                        "expression":  "eyeLookOutLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookUpLeft",
-                        "expression":  "eyeLookUpLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeSquintLeft",
-                        "expression":  "eyeSquintLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeWideLeft",
-                        "expression":  "eyeWideLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeBlinkRight",
-                        "expression":  "eyeBlinkRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookDownRight",
-                        "expression":  "eyeLookDownRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookInRight",
-                        "expression":  "eyeLookInRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookOutRight",
-                        "expression":  "eyeLookOutRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeLookUpRight",
-                        "expression":  "eyeLookUpRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeSquintRight",
-                        "expression":  "eyeSquintRight"
-                    },
-                    {
-                        "parameter":  "ARKit/eyeWideRight",
-                        "expression":  "eyeWideRight"
-                    },
-                    {
-                        "parameter":  "ARKit/jawForward",
-                        "expression":  "jawForward"
-                    },
-                    {
-                        "parameter":  "ARKit/jawLeft",
-                        "expression":  "jawLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/jawRight",
-                        "expression":  "jawRight"
-                    },
-                    {
-                        "parameter":  "ARKit/jawOpen",
-                        "expression":  "jawOpen"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthClose",
-                        "expression":  "mouthClose"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthFunnel",
-                        "expression":  "mouthFunnel"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthPucker",
-                        "expression":  "mouthPucker"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthLeft",
-                        "expression":  "mouthLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthRight",
-                        "expression":  "mouthRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthSmileLeft",
-                        "expression":  "mouthSmileLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthSmileRight",
-                        "expression":  "mouthSmileRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthFrownLeft",
-                        "expression":  "mouthFrownLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthFrownRight",
-                        "expression":  "mouthFrownRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthDimpleLeft",
-                        "expression":  "mouthDimpleLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthDimpleRight",
-                        "expression":  "mouthDimpleRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthStretchLeft",
-                        "expression":  "mouthStretchLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthStretchRight",
-                        "expression":  "mouthStretchRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthRollLower",
-                        "expression":  "mouthRollLower"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthRollUpper",
-                        "expression":  "mouthRollUpper"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthShrugLower",
-                        "expression":  "mouthShrugLower"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthShrugUpper",
-                        "expression":  "mouthShrugUpper"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthPressLeft",
-                        "expression":  "mouthPressLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthPressRight",
-                        "expression":  "mouthPressRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthLowerDownLeft",
-                        "expression":  "mouthLowerDownLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthLowerDownRight",
-                        "expression":  "mouthLowerDownRight"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthUpperUpLeft",
-                        "expression":  "mouthUpperUpLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/mouthUpperUpRight",
-                        "expression":  "mouthUpperUpRight"
-                    },
-                    {
-                        "parameter":  "ARKit/browDownLeft",
-                        "expression":  "browDownLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/browDownRight",
-                        "expression":  "browDownRight"
-                    },
-                    {
-                        "parameter":  "ARKit/browInnerUp",
-                        "expression":  "browInnerUp"
-                    },
-                    {
-                        "parameter":  "ARKit/browOuterUpLeft",
-                        "expression":  "browOuterUpLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/browOuterUpRight",
-                        "expression":  "browOuterUpRight"
-                    },
-                    {
-                        "parameter":  "ARKit/cheekPuff",
-                        "expression":  "cheekPuff"
-                    },
-                    {
-                        "parameter":  "ARKit/cheekSquintLeft",
-                        "expression":  "cheekSquintLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/cheekSquintRight",
-                        "expression":  "cheekSquintRight"
-                    },
-                    {
-                        "parameter":  "ARKit/noseSneerLeft",
-                        "expression":  "noseSneerLeft"
-                    },
-                    {
-                        "parameter":  "ARKit/noseSneerRight",
-                        "expression":  "noseSneerRight"
-                    },
-                    {
-                        "parameter":  "ARKit/tongueOut",
-                        "expression":  "tongueOut"
-                    },
-                    {
-                        "parameter":  "Head/RotX",
-                        "expression":  "headRotX",
+                        "parameter":  "BrowDownLeft",
+                        "expression":  "BrowDownLeft",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -765,12 +1557,11 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
                     },
                     {
-                        "parameter":  "Head/RotY",
-                        "expression":  "headRotY",
+                        "parameter":  "BrowDownRight",
+                        "expression":  "BrowDownRight",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -786,12 +1577,11 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
                     },
                     {
-                        "parameter":  "Head/RotZ",
-                        "expression":  "headRotZ",
+                        "parameter":  "BrowInnerUp",
+                        "expression":  "BrowInnerUp",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -807,12 +1597,11 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
                     },
                     {
-                        "parameter":  "Head/PosX",
-                        "expression":  "headPosX",
+                        "parameter":  "BrowOuterUpLeft",
+                        "expression":  "BrowOuterUpLeft",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -828,12 +1617,11 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
                     },
                     {
-                        "parameter":  "Head/PosY",
-                        "expression":  "headPosY",
+                        "parameter":  "BrowOuterUpRight",
+                        "expression":  "BrowOuterUpRight",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -849,12 +1637,11 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
                     },
                     {
-                        "parameter":  "Head/PosZ",
-                        "expression":  "headPosZ",
+                        "parameter":  "CheekPuff",
+                        "expression":  "CheekPuff",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -870,8 +1657,1347 @@
                                                        "outT":  1
                                                    }
                                                ]
-                                  },
-                        "notes":  "wide curve on BOTH layers, else the 0..1 default clamps it"
+                                  }
+                    },
+                    {
+                        "parameter":  "CheekSquintLeft",
+                        "expression":  "CheekSquintLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "CheekSquintRight",
+                        "expression":  "CheekSquintRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeBlinkLeft",
+                        "expression":  "EyeBlinkLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeBlinkRight",
+                        "expression":  "EyeBlinkRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookDownLeft",
+                        "expression":  "EyeLookDownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookDownRight",
+                        "expression":  "EyeLookDownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookInLeft",
+                        "expression":  "EyeLookInLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookInRight",
+                        "expression":  "EyeLookInRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookOutLeft",
+                        "expression":  "EyeLookOutLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookOutRight",
+                        "expression":  "EyeLookOutRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookUpLeft",
+                        "expression":  "EyeLookUpLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLookUpRight",
+                        "expression":  "EyeLookUpRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeSquintLeft",
+                        "expression":  "EyeSquintLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeSquintRight",
+                        "expression":  "EyeSquintRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeWideLeft",
+                        "expression":  "EyeWideLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeWideRight",
+                        "expression":  "EyeWideRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "JawForward",
+                        "expression":  "JawForward",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "JawLeft",
+                        "expression":  "JawLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "JawOpen",
+                        "expression":  "JawOpen",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "JawRight",
+                        "expression":  "JawRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthClose",
+                        "expression":  "MouthClose",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthDimpleLeft",
+                        "expression":  "MouthDimpleLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthDimpleRight",
+                        "expression":  "MouthDimpleRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthFrownLeft",
+                        "expression":  "MouthFrownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthFrownRight",
+                        "expression":  "MouthFrownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthFunnel",
+                        "expression":  "MouthFunnel",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthLeft",
+                        "expression":  "MouthLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthLowerDownLeft",
+                        "expression":  "MouthLowerDownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthLowerDownRight",
+                        "expression":  "MouthLowerDownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthPressLeft",
+                        "expression":  "MouthPressLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthPressRight",
+                        "expression":  "MouthPressRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthPucker",
+                        "expression":  "MouthPucker",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthRight",
+                        "expression":  "MouthRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthRollLower",
+                        "expression":  "MouthRollLower",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthRollUpper",
+                        "expression":  "MouthRollUpper",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthShrugLower",
+                        "expression":  "MouthShrugLower",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthShrugUpper",
+                        "expression":  "MouthShrugUpper",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthSmileLeft",
+                        "expression":  "MouthSmileLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthSmileRight",
+                        "expression":  "MouthSmileRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthStretchLeft",
+                        "expression":  "MouthStretchLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthStretchRight",
+                        "expression":  "MouthStretchRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthUpperUpLeft",
+                        "expression":  "MouthUpperUpLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "MouthUpperUpRight",
+                        "expression":  "MouthUpperUpRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "NoseSneerLeft",
+                        "expression":  "NoseSneerLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "NoseSneerRight",
+                        "expression":  "NoseSneerRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "TongueOut",
+                        "expression":  "TongueOut",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Rotation_x",
+                        "expression":  "Rotation_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Rotation_y",
+                        "expression":  "Rotation_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Rotation_z",
+                        "expression":  "Rotation_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Position_x",
+                        "expression":  "Position_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Position_y",
+                        "expression":  "Position_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Position_z",
+                        "expression":  "Position_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLeft_x",
+                        "expression":  "EyeLeft_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLeft_y",
+                        "expression":  "EyeLeft_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeLeft_z",
+                        "expression":  "EyeLeft_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeRight_x",
+                        "expression":  "EyeRight_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeRight_y",
+                        "expression":  "EyeRight_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "EyeRight_z",
+                        "expression":  "EyeRight_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "FaceFound",
+                        "expression":  "FaceFound",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Hotkey",
+                        "expression":  "Hotkey",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "Timestamp",
+                        "expression":  "Timestamp",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headUp",
+                        "expression":  "headUp",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headDown",
+                        "expression":  "headDown",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headLeft",
+                        "expression":  "headLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headRight",
+                        "expression":  "headRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headRollLeft",
+                        "expression":  "headRollLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
+                    },
+                    {
+                        "parameter":  "headRollRight",
+                        "expression":  "headRollRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -180,
+                                                       "v":  -180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  180,
+                                                       "v":  180,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  }
                     }
                 ]
 }

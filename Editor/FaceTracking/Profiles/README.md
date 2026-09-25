@@ -22,15 +22,15 @@
 
 ```powershell
 & .warudo-mod-research\.tools\gen-default-profile.ps1
-& .warudo-mod-research\.tools\gen-device-profile.ps1 -Device iphoneVTS  -Notes $n -ShapeNote '…'
-& .warudo-mod-research\.tools\gen-device-profile.ps1 -Device androidVTS -Notes $n -ShapeNote '…'
+$wires = @('BrowDownLeft', 'BrowDownRight', '…')   # 从 PARAMETER_DEVICE_VERIFICATION.md 的 wire 列抄
+& .warudo-mod-research\.tools\gen-device-profile.ps1 -Device androidVTS -Wires $wires -Notes $n
 ```
 
-⚠️ **设备那两份的线名来自 `docs/measurements/<device>.keys`** —— 那是从真实 payload dump 抄下来的真值清单。
-为什么不能推断：第一版安卓配置照 iFacialMocap 的 `_L/_R` 规则拼出 `browInnerUp`，
+⚠️ **设备那两份的线名是实测抄下来的**（`docs/PARAMETER_DEVICE_VERIFICATION.md` 的 `wire` 列），
+**不能推断**：第一版安卓配置照 iFacialMocap 的 `_L/_R` 规则拼出 `browInnerUp`，
 而设备发的是 `browInnerUp_L/R` ⇒ 那一格永远没数据，另有 12 行指向设备**根本不发**的键。
-**这类错误不报错、只是静默不动**，所以真值清单是必须的。见
-[面捕输入实测记录](../..//docs/measurements/README.md)。
+**这类错误不报错、只是静默不动**，所以线名必须来自实测。
+**一份设备一份**：两台设备的名字集合不同（安卓 65 / 苹果 73 个键），互相套用就会静默失效。
 
 ⚠️ 生成器是**纯 ASCII** 的（Windows PowerShell 5.1 把无 BOM 的 `.ps1` 当 ANSI 读，脚本里放中文会炸），
 所以中文 `notes` 从命令行 `-Notes` 传进去。
@@ -86,10 +86,7 @@ dotnet run --project .research\profile-json-test
 这条会用**我们自己的解析器**（不是肉眼看 JSON）验这三份文件：
 
 * 默认配置：52 个规范名与三种方言拼写是否都在、输出行有没有重复、`Head/*` 宽曲线是否真的透明；
-* 设备配置：**真值清单（`docs/measurements/*.keys`）与原始 dump 逐名一致**、
-  清单里每个映射键是否都有行、**没有把未映射的键也写进去**（`Hotkey`/`Timestamp`/安卓那 6 个 `head*`）、
-  **每条线的规范名与真值一致**、是不是**单一方言**（成对通道的两种拼写不能同时出现，
-  眨眼那一对与安卓的眉后缀是设备事实、属已知例外）、
-  输出行是否 52 + 6 且无重复、`Head/*` 曲线是否透明。
+* 设备配置：**零改名**（`parameter` 必须等于 `expression`）、出口键与输入线名逐一对应、
+  **没有 `ARKit/` 前缀与 `Head/*` 保留名**、**进出口两层曲线都恒等**（不恒等会把值静默夹掉）。
 
-它是"改了生成器或真值清单之后忘了重新生成"的唯一守门人。当前：**113 passed / 0 failed**。
+它是"改了生成器之后忘了重新生成"的唯一守门人。当前：**111 passed / 0 failed**。
