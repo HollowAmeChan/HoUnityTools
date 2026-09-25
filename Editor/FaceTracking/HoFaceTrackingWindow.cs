@@ -45,69 +45,83 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private string lastProblem = "";
 
         /// <summary>
-        /// **动态参数 Hub**：在调试对象的子层级里**自动找**一个 <see cref="HoFaceSemanticHub"/>。
+        /// **动态参数 Connector**：在调试对象的子层级里**自动找**一个 <see cref="HoFaceSemanticConnector"/>。
         ///
-        /// 与 Warudo 侧的关键区别：那边找不到会**自动建一个**（`HoFaceHubWriteNode` 里
-        /// `owner.AddComponent<HoFaceSemanticHub>()`）；**我们这边绝不自动建** ——
-        /// 动态参数 Hub 是**角色资产的一部分**（挂在哪个物体、指向哪份资产，都是作者的编排），
-        /// 编辑器顺手替他在场景里塞一个新物体，既不进预制体也不落盘，只会让人困惑。
+        /// 找的是 Connector 而不是 Hub：**Hub 只是一片纯存值的区域**（`float[]`，128 个槽，不认识名字），
+        /// 名字 ↔ 下标 的规矩在 Connector 上；而且 Connector 自己指向 Hub，所以找到它就等于两个都找到了。
+        /// 这也与 Warudo 侧一致：那边写动态参数的节点同样是在角色层级里找 Connector。
         ///
-        /// **拖动调试对象就够，这一栏不用手填** —— Hub 是每帧从那个对象推出来的，
-        /// 所以它是"自动寻找"，不是一个要维护的第二个引用。
+        /// ⚠️ **两边都不会自动建**：动态参数是**角色资产的一部分**（挂在哪个物体、表里写什么名字，
+        /// 都是作者的编排），顺手在场景里塞一个新物体，既不进预制体也不落盘，只会让人困惑。
+        ///
+        /// **拖动调试对象就够，这一栏不用手填** —— 每帧从那个对象推出来，所以它是"自动寻找"，
+        /// 不是一个要维护的第二个引用。
         /// </summary>
         private void DrawHubRow()
         {
             using (HoConstraintEditorControls.Row())
             {
-                HoConstraintEditorControls.Label("动态参数 Hub", HoConstraintEditorTheme.LabelWidth,
-                    "控制器把「动态参数」写进它。约定挂在角色子层级（例如 Character/SemanticHub）。");
+                HoConstraintEditorControls.Label("动态参数 Connector", HoConstraintEditorTheme.LabelWidth,
+                    "控制器把「动态参数」写进它下面的 Hub。约定挂在角色子层级（例如 Character/SemanticHub）。");
 
                 GameObject character = settings.Character();
-                HoFaceSemanticHub hub = FindSemanticHub(character);
+                HoFaceSemanticConnector connector = FindSemanticConnector(character);
 
-                if (hub != null)
+                if (connector != null)
                 {
                     // **灰的引用行**：找到的东西只读地摆出来，让人核对"认的是不是这一个"。
                     // 用 DisabledScope 而不是 Label：它长得就是那一栏本来的样子（可拖可点选），
-                    // 只是不许改 —— 改它没有意义，Hub 是从角色推出来的。
+                    // 只是不许改 —— 改它没有意义，Connector 是从角色推出来的。
                     using (new EditorGUI.DisabledScope(true))
                     {
-                        EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), hub,
-                            typeof(HoFaceSemanticHub), true);
+                        EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), connector,
+                            typeof(HoFaceSemanticConnector), true);
                     }
 
                     HoConstraintEditorControls.Flex();
-                    int slots = hub.values != null ? hub.values.Length : 0;
-                    HoConstraintEditorControls.Caption(slots + " 个槽 · "
-                        + (hub.asset != null ? hub.asset.Summary() : "没挂资产（只有下标、没有名字）"));
+
+                    if (connector.hub == null)
+                    {
+                        Warning("Connector 没填 Hub ⇒ 值没地方存（在 Connector 上把同一个物体上的 Hub 拖进去）");
+                    }
+                    else
+                    {
+                        HoConstraintEditorControls.Caption(connector.hub.SlotCount + " 个槽 · 表 "
+                            + connector.Count + " 项");
+                    }
                 }
                 else
                 {
                     // **黄字**：说清后果（写不了动态参数），并给一句"怎么修"。
-                    var style = new GUIStyle(HoConstraintEditorTheme.Caption);
-                    style.normal.textColor = HoConstraintEditorTheme.WarningColor;
-                    string text = character == null
+                    Warning(character == null
                         ? "先填「调试对象」"
-                        : "这个对象上没有 HoFaceSemanticHub ⇒ 控制器写不进动态参数";
-                    GUILayout.Label(new GUIContent(text,
-                        character == null
-                            ? "Hub 是在调试对象的子层级里找的，所以得先指定调试对象。"
-                            : "在角色的子层级里挂一个 HoFaceSemanticHub（约定叫 SemanticHub）并指向那份动态参数资产。\n"
-                              + "⚠️ 编辑器**不会**替你建 —— 那是角色资产的一部分，该由作者编排。\n"
-                              + "（Warudo 侧的对应节点找不到时会自动建一个，那是运行期、不影响资产；我们这边不跟。）"),
-                        style);
+                        : "这个对象上没有 HoFaceSemanticConnector ⇒ 控制器写不进动态参数");
                 }
             }
         }
 
         /// <summary>
-        /// 在角色子层级里找 Hub。**找不到返回 null，绝不创建**（见 <see cref="DrawHubRow"/> 的说明）。
-        /// `includeInactive: true` —— Hub 可能挂在一个被禁用的空物体上，那也算找到了。
+        /// 那一栏的黄字。`detail` 是这次具体是哪种情况（而不是一句笼统的提示）。
         /// </summary>
-        private static HoFaceSemanticHub FindSemanticHub(GameObject character)
+        private static void Warning(string detail)
+        {
+            var style = new GUIStyle(HoConstraintEditorTheme.Caption);
+            style.normal.textColor = HoConstraintEditorTheme.WarningColor;
+            GUILayout.Label(new GUIContent(detail,
+                "在角色的子层级里放一个空物体（约定叫 SemanticHub），挂上 **Ho Face Semantic Hub**（存值，"
+                + "一开始就预留 128 个槽）与 **Ho Face Semantic Connector**（名字表 + 指向那个 Hub）。\n"
+                + "⚠️ 编辑器**不会**替你建 —— 那是角色资产的一部分，该由作者编排；"
+                + "Warudo 侧的节点同样只找不建。"), style);
+        }
+
+        /// <summary>
+        /// 在角色子层级里找 Connector。**找不到返回 null，绝不创建**（见 <see cref="DrawHubRow"/> 的说明）。
+        /// `includeInactive: true` —— 它可能挂在一个被禁用的空物体上，那也算找到了。
+        /// </summary>
+        private static HoFaceSemanticConnector FindSemanticConnector(GameObject character)
         {
             if (character == null) return null;
-            return character.GetComponentInChildren<HoFaceSemanticHub>(true);
+            return character.GetComponentInChildren<HoFaceSemanticConnector>(true);
         }
 
         /// <summary>把绝对路径尽量转成工程相对路径（`Assets/...`），这样设置文件里存的是可移植路径。</summary>
