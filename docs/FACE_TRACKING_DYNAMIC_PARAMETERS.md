@@ -9,7 +9,7 @@
 > ⚠️ 本文是**设计 + 未验证清单**。代码已落的是**三个类型**
 > （`HoFaceSemanticHub` / `HoFaceSemanticConnector` / `HoFaceSemanticWriterBehaviour`，
 > 两边程序集各一份、同一个实现、走 `.research/sync-modcore.ps1` 同步，共 11 份）。
-> 已验的是"能编译 + lint clean"；**运行期那两条还没在真机上跑过**，见 §5.2。
+> **Unity 侧那条链已经现场跑通**（见 §5.2）；**Warudo 侧还没跑过**（bundle 里的类型解析），见 §5.2 末尾。
 >
 > ✅ **已经实测掉的**（2026-09-25）：
 > ① `MonoBehaviour` 与 `ScriptableObject` **能在 mod 程序集里编译、且 lint clean** ——
@@ -153,14 +153,33 @@ Hub 的 `values` / `names` 出厂就是**空数组**（`Reserve(count)` 只增�
 `Tests~/FaceTrackingValidation.cs` 的 `stage 17-20` 仍然把这三种情况跑一遍并**只报告不断言**
 （`HO_HUB_PATH` / `HO_HUB_PROBE` / `HO_HUB_VERDICT`）：万一以后想拿曲线当备选，答案就在日志里。
 
-### 5.2 ⚠️ 运行期**还没验**的两条（SMB 方案的地基）
+### 5.2 ✅ 地基已经实测通了（2026-09-26 现场，Unity 里跑通）+ ⚠️ 还剩一条
 
-1. **`OnStateUpdate` 在手动 `Animator.Update()` 求值时会不会被调用** —— 我们两边（Unity 影子台、
-   Warudo 的 `HoFaceController`）都是手动推 Animator 的，所以这条不成立的话整个方案不成立。
-   批处理用例 `stage 20-21` 就是测它：状态上挂写手、`P/A = 0.6` ⇒ 断言 Hub 里出现
-   `MouthX = 0.6` / `MouthY = 1.2`（外加一条标记物曲线当对照组）。**还没跑过**（本机 Unity 编辑器占着）。
-2. **bundle 里的控制器能不能解析到写手这个类型** —— 和"bundle 里的 Hub"是同一类依赖
-   （我们程序集里要有这个类型，mod 侧靠同步的那 11 份），但这套东西**从来没在 Warudo 里跑过**。
+**✅ 实测：`OnStateUpdate` 在手动 `Animator.Update()` 求值时会被调用，整条链在 Unity 里跑通。**
+现场是"土豆"角色 + 旧 ARKit 直通控制器（`PTP_CTR_Face_ARKit`）+ `ho-iPhoneVTS` 配置：
+
+* 控制器基座层默认状态上挂写手，10 条语义（`jawOpen` / `mouthSmile` / `LidLeft` …）；
+* 会话（影子台）每帧 `shadow.Update(0f)` ⇒ 写手在**影子 Hub** 上按名字开槽写值
+  ⇒ 中继按角色 Connector 的槽表镜像到**角色那片 Hub**；
+* 证据：面板「参数输出」栏逐行显示中间层的求值结果（`N 行 · 非零 M · 不在控制器里 K`），
+  角色 `面捕动态参数` 的 Hub 里 10 个槽**都带着名字与实时值**
+  （`jawOpen=0.032 · mouthRound=0.559 · LidLeft=0.242 …`）。
+
+⚠️ 那次现场还顺手暴露了两个**我们自己挖的坑**（都已修，记着别再犯）：
+
+1. `HoFaceAnimationAssets.ValidateMachine` 原来"控制器里**任何** StateMachineBehaviour 都一票否决"
+   ⇒ 挂上写手的控制器**会让会话起不来**，表现是"脸不动、Hub 空"，而报错只是一条容易被略过的红框。
+   现在**只放过 `HoFaceSemanticWriterBehaviour`**，其余 Behaviour 照旧拒绝
+   （别人的 Behaviour 会在影子台上真跑，可能有副作用）。改代码后**一定要让 Unity 重编译**
+   —— 现场第一次报"毫无变化"，就是因为修复还没进编译。
+2. 面板原来**看不到中间层的输出值**（只有"参数输入"那一栏的裸线名）⇒ 分不清"配置没算出值"和
+   "算出来了但写不进去"。现在「参数输出」栏逐行摊开，并把**参数不在控制器里**的行单独标出来。
+
+**⚠️ 还剩一条没验**：**bundle 里的控制器能不能解析到写手这个类型** ——
+和"bundle 里的 Hub"是同一类依赖（我们程序集里要有这个类型，mod 侧靠同步的那 11 份），
+但这套东西**从来没在 Warudo 里跑过**。批处理用例 `stage 20-21`（状态上挂写手、`P/A=0.6`
+⇒ 断言 Hub 里 `MouthX=0.6` / `MouthY=1.2`，外加标记物曲线当对照组）是它的**回归门**，
+留着防以后改坏；顺带它也是"手动 `Update` 会调 SMB"那条的机器化版本。
 
 ### 5.3 写手现在**读不到姿态**（明确记着）
 
