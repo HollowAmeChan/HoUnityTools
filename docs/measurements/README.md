@@ -155,7 +155,74 @@ TongueOut = 0.000
 
 ---
 
-## 3. 两台设备对照
+## 3. 两个调试输出是什么关系（"会不会两处不一样"）
+
+**同一个进程里，"接收器的 `原始值`" 与调试日志看到的那份是同一份数据的前后两棒**，不是两份独立读数：
+
+| 你看到的地方 | 它到底是什么 | 键长什么样 |
+|---|---|---|
+| 「HoFaceVTS接收器」的 `原始值`（= 旧「HoFace调试台」的 A 口） | `HoFaceReceiverStatusNode.RawValues()` → `HoFaceInputState.Snapshot()` —— **收到什么就交什么** | 设备**原样**的线名（`EyeBlinkLeft` / `Rotation_x` / `eyeBlink_L`…） |
+| 「HoFace参数处理」的 `参数`（或 `状态`/日志里的 `写入`） | `Parameters()` → `HoFaceChain.Parameters` 的副本 —— 输出行算完之后的值 | **规范名**（`eyeBlinkLeft` / `headRotX`…），`ARKit/` 前缀已去掉 |
+
+⇒ 两处**不可能**是"两份不同的值"：后者是前者按配置文件那一层算出来的。
+**节点不同是设计如此**（一个交原样、一个改名/换算），不是重复实现。
+如果同一个通道在两处对不上，只有两种可能：**那一行没写**、或者**表达式写错了** —— 用下面的表点着比。
+
+### 核对表：iPhone VTS（65 条映射）
+
+```
+BrowDownLeft -> browDownLeft        BrowDownRight -> browDownRight      BrowInnerUp -> browInnerUp
+BrowOuterUpLeft -> browOuterUpLeft  BrowOuterUpRight -> browOuterUpRight
+CheekPuff -> cheekPuff              CheekSquintLeft -> cheekSquintLeft  CheekSquintRight -> cheekSquintRight
+EyeBlinkLeft -> eyeBlinkLeft        EyeBlinkRight -> eyeBlinkRight
+EyeLookDownLeft -> eyeLookDownLeft  EyeLookDownRight -> eyeLookDownRight
+EyeLookInLeft -> eyeLookInLeft      EyeLookInRight -> eyeLookInRight
+EyeLookOutLeft -> eyeLookOutLeft    EyeLookOutRight -> eyeLookOutRight
+EyeLookUpLeft -> eyeLookUpLeft      EyeLookUpRight -> eyeLookUpRight
+EyeSquintLeft -> eyeSquintLeft      EyeSquintRight -> eyeSquintRight
+EyeWideLeft -> eyeWideLeft          EyeWideRight -> eyeWideRight
+JawForward -> jawForward            JawLeft -> jawLeft                  JawOpen -> jawOpen
+JawRight -> jawRight                MouthClose -> mouthClose
+MouthDimpleLeft -> mouthDimpleLeft  MouthDimpleRight -> mouthDimpleRight
+MouthFrownLeft -> mouthFrownLeft    MouthFrownRight -> mouthFrownRight
+MouthFunnel -> mouthFunnel          MouthLeft -> mouthLeft
+MouthLowerDownLeft -> mouthLowerDownLeft   MouthLowerDownRight -> mouthLowerDownRight
+MouthPressLeft -> mouthPressLeft    MouthPressRight -> mouthPressRight
+MouthPucker -> mouthPucker          MouthRight -> mouthRight
+MouthRollLower -> mouthRollLower    MouthRollUpper -> mouthRollUpper
+MouthShrugLower -> mouthShrugLower  MouthShrugUpper -> mouthShrugUpper
+MouthSmileLeft -> mouthSmileLeft    MouthSmileRight -> mouthSmileRight
+MouthStretchLeft -> mouthStretchLeft  MouthStretchRight -> mouthStretchRight
+MouthUpperUpLeft -> mouthUpperUpLeft  MouthUpperUpRight -> mouthUpperUpRight
+NoseSneerLeft -> noseSneerLeft      NoseSneerRight -> noseSneerRight
+TongueOut -> tongueOut
+Rotation_x -> headRotX   Rotation_y -> headRotY   Rotation_z -> headRotZ
+Position_x -> headPosX   Position_y -> headPosY   Position_z -> headPosZ
+EyeLeft_x -> eyeLeftX    EyeLeft_y -> eyeLeftY    EyeLeft_z -> eyeLeftZ
+EyeRight_x -> eyeRightX  EyeRight_y -> eyeRightY  EyeRight_z -> eyeRightZ
+FaceFound -> faceFound
+Hotkey -> （不映射）     Timestamp -> （不映射）
+```
+
+**56 个形状的规范名还会再进一层输出行**，变成 `ARKit/<规范名>`（好让 `BlendShapes` 与输入逐键对照）；
+头/眼那 6 + 6 个走保留名 `Head/RotX|Y|Z`、`Head/PosX|Y|Z`。
+
+安卓那份的表**现生成**，不要手抄：
+
+```powershell
+& .warudo-mod-research\.tools\compare-receiver-dump.ps1 -KeyFile docs\measurements\androidVTS.keys -Dump $你的粘贴
+```
+
+### 一个用过就删的教训
+
+我一度**凭截图手抄**键名去比，结果把安卓的 `_L` 拼写和 iPhone 的 PascalCase 混在了一起，
+得出的"对不上"全是抄错。**这类核对永远用真值文件，不要手抄。**
+`compare-receiver-dump.ps1` 就是为这个留的：把粘贴的 dump 丢给它，它按**大小写敏感**报差异
+（"清单有 dump 没有" / "dump 有清单没有" / "同名不同大小写"）。
+
+---
+
+## 4. 两台设备对照
 
 | | 安卓 VTS | iPhone VTS |
 |---|---|---|
@@ -172,7 +239,7 @@ TongueOut = 0.000
 
 ---
 
-## 4. 相关文件
+## 5. 相关文件
 
 * 配置：`Editor/FaceTracking/Profiles/ho-debug-androidVTS.hoface.json` / `ho-debug-iphoneVTS.hoface.json`
 * 生成器：`.warudo-mod-research/.tools/gen-device-profile.ps1`（**读这里的 `.keys`**，不推断名字）
