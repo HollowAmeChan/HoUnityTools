@@ -42,6 +42,27 @@ namespace Hollow.HoUnityTools.FaceTracking
         private float leftWidth = 300.0f;
         private bool draggingSplitter;
 
+        /// <summary>
+        /// 正在编辑**哪一类行**。左列一次只列一类（输入行或输出行），右面板编辑它。
+        /// 输入行是"线名 → 规范名"，输出行是"规范名 → 控制器参数"，混在一张列表里会看不清。
+        /// </summary>
+        private bool editingInputs;
+
+        private static readonly string[] RowKindNames = { "输出行", "输入行" };
+
+        /// <summary>当前正在编辑的那一类行（输入 / 输出）。整套 UI 都通过它取行。</summary>
+        private List<HoFaceOutput> ActiveRows()
+        {
+            if (middleware == null) return null;
+            return editingInputs ? middleware.inputs : middleware.outputs;
+        }
+
+        /// <summary>交给「需要的输入值」那个窗口扫的配置（它只读，不写）。</summary>
+        public HoFaceMiddleware Middleware => middleware;
+
+        /// <summary>当前选中的行号（-1 = 没选）。给「只改选中行」用。</summary>
+        public int SelectedIndex => selected;
+
         [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
         private static void Open()
         {
@@ -84,37 +105,44 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
         }
 
+        /// <summary>
+        /// 两列：**右列是目录，左列是详情**（按你的要求左右交换过）。
+        ///
+        /// 交换不只是"挪一下"：目录放右边之后，鼠标从右面板指向某一行时视线不用横跨整个窗口，
+        /// 而详情（表达式 + 曲线编辑器）占的是更宽的那半边。
+        /// </summary>
         private void DrawColumnSplit()
         {
-            // 左列最多占窗口的一半 —— 拖到头也不该把右边挤没（右边还要放曲线编辑器）。
+            // 目录列最多占窗口的一半 —— 拖到头也不该把详情列挤没（那边还要放曲线编辑器）。
             float limit = Mathf.Max(LeftWidthMin, position.width * 0.5f);
             float width = Mathf.Clamp(leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
 
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(width), GUILayout.ExpandHeight(true)))
-                {
-                    DrawLeftColumn();
-                }
-
-                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
-
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
                 {
+                    List<HoFaceOutput> rows = ActiveRows();
                     if (middleware == null)
                     {
                         HoConstraintEditorControls.CaptionTrim("（还没载入配置）", 190.0f,
                             "上面选一份 .hoface.json 文本资产，或点「新建配置…」。");
                     }
-                    else if (selected < 0 || selected >= middleware.outputs.Count)
+                    else if (rows == null || selected < 0 || selected >= rows.Count)
                     {
-                        HoConstraintEditorControls.CaptionTrim("（左边选一行）", 190.0f,
-                            "点左边的参数名看它的表达式、曲线与修饰符。");
+                        HoConstraintEditorControls.CaptionTrim("（右边选一行）", 190.0f,
+                            "点右边的参数名看它的表达式、曲线与修饰符。");
                     }
                     else
                     {
                         DrawRightColumn(selected);
                     }
+                }
+
+                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
+
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(width), GUILayout.ExpandHeight(true)))
+                {
+                    DrawLeftColumn();
                 }
             }
         }
@@ -208,6 +236,23 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
+                    // ── 编哪一类行：切换放**左边这一排**（跟配置/保存同一行区），不挤右边目录 ──
+                    // 输入行是"设备线名 → 规范名"、输出行是"规范名 → 控制器参数"，
+                    // 两类契约不同，混在一张列表里看不清，所以一次只编一类。
+                    int mode = HoConstraintEditorControls.Segmented(
+                        HoConstraintEditorControls.Next(120.0f),
+                        editingInputs ? 1 : 0, RowKindNames,
+                        "输出行：规范名 → 控制器参数。\n输入行：设备线名 → 规范名。");
+                    bool next = mode == 1;
+                    if (next != editingInputs)
+                    {
+                        editingInputs = next;
+                        selected = -1;      // 两类的行号不通，换类必须清选中
+                        listScroll = Vector2.zero;
+                        GUI.FocusControl(null);
+                    }
+
+                    HoConstraintEditorControls.Gap();
                     if (HoConstraintEditorControls.Button("新建配置…", "在工程里新建一份内置默认表。「保存」写文件。「重新载入」从磁盘重读。"))
                         NewProfile();
                     HoConstraintEditorControls.Gap();
@@ -233,28 +278,36 @@ namespace Hollow.HoUnityTools.FaceTracking
                     // 对用户说错话比不说更糟：他会以为没选配置也在跑。
                     string path = profile == null ? "（未选配置 · 这一层不做事）" : AssetDatabase.GetAssetPath(profile);
                     HoConstraintEditorControls.Caption(path, "配置文件在工程里的路径。");
-                    if (middleware != null && middleware.outputs != null)
+                    if (middleware != null)
                     {
                         HoConstraintEditorControls.Gap();
-                        HoConstraintEditorControls.Caption("· " + middleware.outputs.Count + " 行");
+                        HoConstraintEditorControls.Caption("· " + middleware.inputs.Count + " 输入 / "
+                            + middleware.outputs.Count + " 输出");
                     }
                 }
             }
         }
 
         // ══════════════════════════════════════════════════════════════
-        // 左列：搜索 + 行目录
+        // 目录列（在窗口右侧）：搜索 + 行目录 + 全表动作
         // ══════════════════════════════════════════════════════════════
 
         private void DrawLeftColumn()
         {
             using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
             {
+                // 「输入行 / 输出行」的切换在**左边那一排**（见 DrawTopBar），这里不重复放。
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("搜索", HoConstraintEditorTheme.LabelWidthSm, "按参数名过滤（不区分大小写）。");
-                    // 最小宽度取小：这一行也在左列那个 ScrollView 里，撑宽了就出横向滚动条。
+                    // 最小宽度取小：这一行也在那个 ScrollView 里，撑宽了就出横向滚动条。
                     search = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(40.0f), search, HoConstraintEditorTheme.Field);
+                    HoConstraintEditorControls.Flex();
+                    List<HoFaceOutput> counted = ActiveRows();
+                    if (counted != null)
+                    {
+                        HoConstraintEditorControls.Caption("· " + counted.Count + " 行");
+                    }
                 }
 
                 using (HoConstraintEditorControls.Row())
@@ -264,24 +317,33 @@ namespace Hollow.HoUnityTools.FaceTracking
                         AddOutput();
                     }
 
-                    HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.CaptionTrim("顺序 = 写参数顺序", 130.0f,
-                        "上面的行先写；重复写同一个参数时后面的覆盖前面的。");
+                    HoConstraintEditorControls.Gap(4.0f);
+                    if (HoConstraintEditorControls.Button("批量改名…", "对参数名做查找替换 / 加前后缀。先出预览，确认了才应用。"))
+                    {
+                        HoFaceBatchRenameWindow.Open(ActiveRows(), () => dirty = true, selected);
+                    }
+
+                    HoConstraintEditorControls.Gap(4.0f);
+                    if (HoConstraintEditorControls.Button("需要的输入…", "扫全部规则（输入行 + 输出行）的表达式，列出用到的所有键，可一键复制。"))
+                    {
+                        HoFaceInputsWindow.Open(this);
+                    }
                 }
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
                 // 只有滚动区吃掉余下的高度，状态行才不会被长列表推出窗口。
-                // ⚠️ `alwaysShowHorizontal: false` —— 左列的每一行都自己算好宽度（见 DrawLeftRow），
+                // ⚠️ `alwaysShowHorizontal: false` —— 每一行都自己算好宽度（见 DrawLeftRow），
                 // 内容永远不该比列宽还宽；出现横向滚动条一定是宽度算错了，不该让用户滚着看。
-                if (middleware != null && middleware.outputs != null)
+                List<HoFaceOutput> rows = ActiveRows();
+                if (rows != null)
                 {
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
                     {
                         listScroll = EditorGUILayout.BeginScrollView(listScroll, false, true);
-                        for (int i = 0; i < middleware.outputs.Count; i++)
+                        for (int i = 0; i < rows.Count; i++)
                         {
-                            if (Matches(middleware.outputs[i], search)) DrawLeftRow(i);
+                            if (Matches(rows[i], search)) DrawLeftRow(i);
                         }
 
                         EditorGUILayout.EndScrollView();
@@ -313,7 +375,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// </summary>
         private void DrawLeftRow(int index)
         {
-            HoFaceOutput output = middleware.outputs[index];
+HoFaceOutput output = ActiveRows()[index];
             if (output == null)
             {
                 return;
@@ -402,14 +464,14 @@ namespace Hollow.HoUnityTools.FaceTracking
                 MoveOutput(index, index - 1);
                 handled = true;
             }
-            if (DrawRowButton(downRect, "↓", "下移一行（往后生效）。", index < middleware.outputs.Count - 1))
+if (DrawRowButton(downRect, "↓", "下移一行（往后生效）。", index < ActiveRows().Count - 1))
             {
                 MoveOutput(index, index + 1);
                 handled = true;
             }
             if (DrawRowButton(removeRect, "✕", "删掉这一行。", true))
             {
-                middleware.outputs.RemoveAt(index);
+ActiveRows().RemoveAt(index);
                 if (selected > index) selected--;
                 else if (selected == index) selected = -1;
                 dirty = true;
@@ -421,6 +483,10 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 selected = index;
                 GUI.FocusControl(null);
+                // 顺手把名字复制到系统剪贴板 —— 这一列最常见的动作就是"拿这个名字去别处用"
+                // （写进控制器、发给别人核对），省掉一次手选。
+                EditorGUIUtility.systemCopyBuffer = name;
+                SetMessage("已复制 " + name, false);
                 Event.current.Use();
             }
         }
@@ -535,15 +601,16 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void DrawStatusLine()
         {
-            int rows = middleware != null && middleware.outputs != null ? middleware.outputs.Count : 0;
+            List<HoFaceOutput> rows = ActiveRows();
+            int count = rows != null ? rows.Count : 0;
             int bad = 0;
             var duplicates = new HashSet<string>();
-            if (middleware != null && middleware.outputs != null)
+            if (rows != null)
             {
                 var seen = new HashSet<string>();
-                for (int i = 0; i < middleware.outputs.Count; i++)
+                for (int i = 0; i < rows.Count; i++)
                 {
-                    HoFaceOutput output = middleware.outputs[i];
+                    HoFaceOutput output = rows[i];
                     if (output == null) continue;
                     if (!HoFaceExpression.TryParse(output.expression, out _, out _)) bad++;
                     if (!string.IsNullOrEmpty(output.parameter) && !seen.Add(output.parameter)) duplicates.Add(output.parameter);
@@ -552,7 +619,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             using (HoConstraintEditorControls.Row(true))
             {
-                string text = rows + " 行 · " + bad + " 行表达式有错 · " + duplicates.Count + " 个重复参数名";
+                string text = (editingInputs ? "输入行 " : "输出行 ") + count + " 行 · " + bad
+                    + " 行表达式有错 · " + duplicates.Count + " 个重复参数名";
                 GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
                 if (bad > 0 || duplicates.Count > 0) style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                 GUI.Label(HoConstraintEditorControls.NextAuto(text, style), text, style);
@@ -573,7 +641,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void DrawRightColumn(int index)
         {
-            HoFaceOutput output = middleware.outputs[index];
+HoFaceOutput output = ActiveRows()[index];
             if (output == null)
             {
                 return;
@@ -581,7 +649,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             HoConstraintEditorControls.Title(
                 string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter,
-                "第 " + (index + 1) + " / " + middleware.outputs.Count + " 行",
+"第 " + (index + 1) + " / " + ActiveRows().Count + " 行",
                 new (string, bool)[] { ("表达式", !string.IsNullOrEmpty(output.expression)) });
 
             DrawRightScroll(output);
@@ -910,8 +978,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         private void AddOutput()
         {
             EnsureMiddleware();
-            middleware.outputs.Add(new HoFaceOutput { parameter = "", expression = "" });
-            selected = middleware.outputs.Count - 1;
+ActiveRows().Add(new HoFaceOutput { parameter = "", expression = "" });
+selected = ActiveRows().Count - 1;
             dirty = true;
         }
 
@@ -927,14 +995,14 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void MoveOutput(int from, int to)
         {
-            if (to < 0 || to >= middleware.outputs.Count)
+if (to < 0 || to >= ActiveRows().Count)
             {
                 return;
             }
 
-            HoFaceOutput moved = middleware.outputs[from];
-            middleware.outputs.RemoveAt(from);
-            middleware.outputs.Insert(to, moved);
+HoFaceOutput moved = ActiveRows()[from];
+ActiveRows().RemoveAt(from);
+ActiveRows().Insert(to, moved);
             selected = to;
             dirty = true;
         }
