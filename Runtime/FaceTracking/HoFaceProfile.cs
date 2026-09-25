@@ -27,13 +27,12 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// {
     ///   "format": "ho-face-middleware",
     ///   "version": 2,
-    ///   "displayName": "ho-2d-test1",
+    ///   "displayName": "my-face",
     ///   "inputs": [
-    ///     { "parameter": "jawOpen", "expression": "jawOpen * 0.01", "notes": "iFacialMocap" },
-    ///     { "parameter": "jawOpen", "expression": "JawOpen", "notes": "VTS 手机" }
+    ///     { "parameter": "jawOpen", "expression": "JawOpen", "notes": "VTS 手机：线名首字母大写" }
     ///   ],
     ///   "outputs": [
-    ///     { "parameter": "ARKit/jawOpen", "expression": "jawOpen",
+    ///     { "parameter": "JawOpen", "expression": "jawOpen",
     ///       "curve": { "keys": [ { "t": 0, "v": 0, "inT": 0, "outT": 0 },
     ///                            { "t": 1, "v": 1, "inT": 0, "outT": 0 } ] },
     ///       "modifiers": [ { "kind": "smooth", "seconds": 0.03 } ] }
@@ -41,6 +40,8 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// }
     /// </code>
     /// 未知字段会被跳过（向前兼容）；`kind` 不认识时那一条修饰符被丢掉，并在面板上点名。
+    /// ⚠️ **没有"内置默认配置"这回事**：这个仓库里不存在任何一份默认表，
+    /// 也没人会在"没指定文件"时替作者编一张出来（统一口径：**空 = 空表**）。
     /// </summary>
     public static class HoFaceProfile
     {
@@ -61,19 +62,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         public static string Write(HoFaceMiddleware middleware)
         {
             return HoFaceProfileJson.Write(middleware);
-        }
-
-        /// <summary>
-        /// 内置默认表的文本（52 个 ARKit 出口 + 眼睑两根轴）。
-        ///
-        /// ⚠️ **"新建配置"不再用它**（2026-09-26 起新建出来是**空**的）——
-        /// 从零建一份配置时替作者决定映射什么是越界，而且这张表的血统（`ARKit/` 前缀）
-        /// 正是我们判定不该往发货配置里写的那个形状。现在它只剩两个用途：
-        /// 导出/查看默认表、以及验证用例的夹具。
-        /// </summary>
-        public static string WriteDefaults()
-        {
-            return Write(HoFaceMiddlewareDefaults.Create());
         }
     }
 }

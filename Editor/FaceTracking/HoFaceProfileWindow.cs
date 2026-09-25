@@ -27,7 +27,11 @@ namespace Hollow.HoUnityTools.FaceTracking
         private const float LeftWidthMax = 560.0f;
         private const float SplitterWidth = 6.0f;
         private const float CurveHeight = 90.0f;
-        private const string NewProfileName = "ho-2d-test1.hoface.json";
+        /// <summary>
+        /// 「新建」时保存对话框里预填的文件名。**只是个占位名，不是任何一份默认配置的名字**
+        /// （以前这里填的是内置默认表的名字 `ho-2d-test1.hoface.json`，那张表已经删了）。
+        /// </summary>
+        private const string NewProfileName = "my-face.hoface.json";
         private const string LeftWidthPref = "HoUnityTools.FaceProfile.LeftWidth";
 
         private TextAsset profile;
@@ -416,7 +420,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     }
 
                     HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("新建配置…", "在工程里新建一份内置默认表。「保存」写文件。「重新载入」从磁盘重读。"))
+                    if (HoConstraintEditorControls.Button("新建配置…", "在工程里新建一份**空**配置（没有任何默认行，输入行/输出行都从零开始）。「保存」写文件。「重新载入」从磁盘重读。"))
                         NewProfile();
                     HoConstraintEditorControls.Gap();
                     using (new EditorGUI.DisabledScope(profile == null))
@@ -1241,7 +1245,15 @@ ActiveRows().Insert(to, moved);
         {
             if (middleware == null)
             {
-                middleware = HoFaceMiddlewareDefaults.Create();
+                // ⚠️ **兜底也必须是空的**：这里以前会 `HoFaceMiddlewareDefaults.Create()`
+                // 编一张 52 个 `ARKit/` 出口 + 眼睑两根轴的表出来 —— 那就是"没指定配置也能动脸"的
+                // 静默兜底，动的还是谁也没看过的一张表。现在**任何路径都不造默认表**：
+                // 真没有配置就是空表（这一层不做事），状态行会如实说"什么都还没有"。
+                middleware = new HoFaceMiddleware
+                {
+                    displayName = "",
+                    notes = "（空：没有配置被加载）"
+                };
             }
 
             if (middleware.outputs == null)

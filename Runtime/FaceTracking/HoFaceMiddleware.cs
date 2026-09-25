@@ -123,7 +123,12 @@ namespace Hollow.HoUnityTools.FaceTracking
     [Serializable]
     public sealed class HoFaceMiddleware
     {
-        public string displayName = "ho-2d";
+        /// <summary>
+        /// 配置的显示名。**默认是空串，不是任何一份具体表的名字** —— 这里以前写死 `"ho-2d"`
+        /// （那份内置默认表的名字，已删）；留一个默认名等于让"没填名字"看起来像"填了某份表"。
+        /// 名字该来自文件本身（`HoFaceProfileWindow` 新建时用文件名，读盘时用 JSON 里的 `displayName`）。
+        /// </summary>
+        public string displayName = "";
         public string notes;
         /// <summary>线名 → 规范名（+ 量纲）。引用到的线名这帧没来时，这一行**保持上一帧**（照 VBridger 的语义）。</summary>
         public List<HoFaceOutput> inputs = new List<HoFaceOutput>();
@@ -162,115 +167,4 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
     }
 
-    /// <summary>
-    /// **「新建配置」的初始内容**（一份可用的中间层长什么样）。两份内容：
-    /// · **输入行**：把两种内置协议的线名映射成规范名并换算量纲（iFacialMocap ×0.01、VTS ×1）。
-    ///   两种协议的行**同时存在也没关系** —— 输入行的规矩是"引用到的线名这帧没来就保持上一帧"，
-    ///   所以哪个源在发，就只有那一套行会动。
-    /// · **输出行**：52 个 `ARKit/&lt;键&gt;` 直通 + 4 根眼睑轴。
-    ///
-    /// ⚠️ **它只有两个角色，运行期一律不走它**（2026-09-25 定稿；2026-09-26 去掉第三个）：
-    /// ① `HoFaceProfile.WriteDefaults()` 的导出文本；② 验证用例的夹具。
-    /// **没有"没指定配置文件就拿它兜底"这回事了** —— Unity 面板与 Warudo 节点两边统一为**空 = 空表**：
-    /// 静默兜底等于"没填也能动脸"，而动的是一份谁也没看过的表，最难查。
-    /// <see cref="IFacialWire"/> / <see cref="VtsWire"/> 这两个函数也是给 ① 用的；运行时只认 JSON 里的输入行。
-    /// 想接第三种协议，写自己的输入行即可，不用碰这里。
-    /// </summary>
-    public static class HoFaceMiddlewareDefaults
-    {
-        public const string DisplayName = "ho-2d-test1";
-
-        /// <summary>iFacialMocap 的线名：`eyeBlinkLeft` → `eyeBlink_L`（四个不带后缀的键除外）。</summary>
-        public static string IFacialWire(string canonical)
-        {
-            if (canonical == "mouthLeft" || canonical == "mouthRight" || canonical == "jawLeft" || canonical == "jawRight")
-                return canonical;
-            if (canonical.EndsWith("Left", StringComparison.Ordinal)) return canonical.Substring(0, canonical.Length - 4) + "_L";
-            if (canonical.EndsWith("Right", StringComparison.Ordinal)) return canonical.Substring(0, canonical.Length - 5) + "_R";
-            return canonical;
-        }
-
-        /// <summary>VTS 手机的线名：`eyeBlinkLeft` → `EyeBlinkLeft`（首字母大写，其余原样）。</summary>
-        public static string VtsWire(string canonical) =>
-            string.IsNullOrEmpty(canonical) ? canonical : char.ToUpperInvariant(canonical[0]) + canonical.Substring(1);
-
-        /// <summary>
-        /// 输入行：两种协议各一套。iFacialMocap 的形态键是 0..100（官方文法）所以要 `* 0.01`；
-        /// VTS 手机的是 iOS 原始值 0..1，所以原样。
-        /// 头/眼姿态只给最朴素的对应（iFacialMocap 的 `=head#` 6 个数 → `head_0..5`、`leftEye#`/`rightEye#` → 各 3 个；
-        /// VTS 的 `Rotation`/`Position`/`EyeLeft`/`EyeRight` → `_x/_y/_z`），单位换算留给使用者按自己的设备定。
-        /// </summary>
-        public static List<HoFaceOutput> Inputs()
-        {
-            var list = new List<HoFaceOutput>();
-            foreach (string shape in HoFaceTrackingChannels.Names)
-            {
-                list.Add(new HoFaceOutput { parameter = shape, expression = IFacialWire(shape) + " * 0.01", notes = "iFacialMocap" });
-                list.Add(new HoFaceOutput { parameter = shape, expression = VtsWire(shape), notes = "VTS 手机" });
-            }
-
-            // iFacialMocap：`=head#` 6 个数（欧拉角在前、位置在后，单位度），两只眼各 3 个数。
-            string[] headAxes = { "headRotX", "headRotY", "headRotZ", "headPosX", "headPosY", "headPosZ" };
-            for (int i = 0; i < headAxes.Length; i++)
-                list.Add(new HoFaceOutput { parameter = headAxes[i], expression = "head_" + i, notes = "iFacialMocap" });
-            string[] eyeAxes = { "X", "Y", "Z" };
-            for (int side = 0; side < 2; side++)
-            {
-                string eye = side == 0 ? "leftEye" : "rightEye";
-                string canonical = side == 0 ? "eyeLeft" : "eyeRight";
-                for (int i = 0; i < 3; i++)
-                    list.Add(new HoFaceOutput { parameter = canonical + eyeAxes[i], expression = eye + "_" + i, notes = "iFacialMocap" });
-            }
-
-            // VTS 手机：Rotation / Position / EyeLeft / EyeRight 各 3 个分量。
-            for (int i = 0; i < 3; i++)
-            {
-                list.Add(new HoFaceOutput { parameter = headAxes[i], expression = "Rotation_" + "xyz"[i], notes = "VTS 手机" });
-                list.Add(new HoFaceOutput { parameter = headAxes[3 + i], expression = "Position_" + "xyz"[i], notes = "VTS 手机" });
-                list.Add(new HoFaceOutput { parameter = "eyeLeft" + eyeAxes[i], expression = "EyeLeft_" + "xyz"[i], notes = "VTS 手机" });
-                list.Add(new HoFaceOutput { parameter = "eyeRight" + eyeAxes[i], expression = "EyeRight_" + "xyz"[i], notes = "VTS 手机" });
-            }
-
-            return list;
-        }
-
-        public static List<HoFaceOutput> Outputs()
-        {
-            var list = new List<HoFaceOutput>();
-            foreach (string shape in HoFaceTrackingChannels.Names)
-                list.Add(new HoFaceOutput { parameter = "ARKit/" + shape, expression = shape });
-
-            for (int side = 0; side < 2; side++)
-            {
-                string suffix = side == 0 ? "Left" : "Right";
-                // 双向轴：表达式自己带正负，曲线是 −1..1 的恒等曲线（超出按端点算）。
-                list.Add(new HoFaceOutput
-                {
-                    parameter = HoFaceNaming.LidAxis(side, true),
-                    expression = "eyeBlink" + suffix + " - eyeWide" + suffix,
-                    curve = HoFaceCurve.SignedIdentity()
-                });
-                list.Add(new HoFaceOutput
-                {
-                    parameter = HoFaceNaming.LidAxis(side, false),
-                    expression = "eyeSquint" + suffix
-                });
-            }
-
-            return list;
-        }
-
-        public static HoFaceMiddleware Create()
-        {
-            return new HoFaceMiddleware
-            {
-                displayName = DisplayName,
-                notes = "内置默认。\n"
-                    + "输入行：把两种内置协议的线名映射成规范名（iFacialMocap 形态键 ×0.01、VTS 手机原样）。\n"
-                    + "输出行：52 个 ARKit 直通 + 眼睑两根轴（开合 = blink − wide、眯眼 = squint）。",
-                inputs = Inputs(),
-                outputs = Outputs()
-            };
-        }
-    }
 }

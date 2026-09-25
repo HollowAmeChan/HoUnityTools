@@ -366,25 +366,44 @@ public static class HoFaceTrackingValidation
             var curveRow = new HoFaceOutput { parameter = "ARKit/jawOpen", expression = "jawOpen", curve = AnimationCurve.Linear(0f, 0f, 1f, 50f) };
             Near(curveRow.Transform(0.6f), 30f, "一行输出用曲线换标度（60% → 30）", 0.01f);
 
-            // ── 默认中间层 + 配置文件读写（我们自己的 JSON）────────────────────────
-            var defaults = HoFaceMiddlewareDefaults.Create();
-            var parameterNames = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
-            bool defaultsParse = true;
-            foreach (var output in defaults.outputs)
+            // ── 配置文件读写（我们自己的 JSON）────────────────────────────────────
+            // ⚠️ 这里**自己搭夹具**，不用任何"内置默认表" —— 仓库里已经不存在默认配置了
+            //（2026-09-26 删掉 `HoFaceMiddlewareDefaults`，因为"没指定配置也能动脸"是静默兜底）；
+            // 夹具本来就该待在用例里，而不是长在发货代码里。
+            var fixture = new HoFaceMiddleware
             {
-                if (!parameterNames.Add(output.parameter)) defaultsParse = false;
-                if (!HoFaceExpression.TryParse(output.expression, out _, out _)) defaultsParse = false;
+                displayName = "test-fixture",
+                inputs = new System.Collections.Generic.List<HoFaceOutput>
+                {
+                    new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen", notes = "VTS 手机" }
+                },
+                outputs = new System.Collections.Generic.List<HoFaceOutput>
+                {
+                    new HoFaceOutput { parameter = "jawOpen", expression = "jawOpen" },
+                    new HoFaceOutput
+                    {
+                        parameter = "eyeBlinkLeft", expression = "eyeBlinkLeft",
+                        curve = AnimationCurve.Linear(0f, 0f, 1f, 1f)
+                    }
+                }
+            };
+            var parameterNames = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+            bool fixtureParses = true;
+            foreach (var output in fixture.outputs)
+            {
+                if (!parameterNames.Add(output.parameter)) fixtureParses = false;
+                if (!HoFaceExpression.TryParse(output.expression, out _, out _)) fixtureParses = false;
             }
-            Check(defaults.outputs.Count == 56 && defaultsParse,
-                "默认中间层 = 52 个 ARKit 直通 + 4 根眼睑轴，表达式全部可解析（" + defaults.outputs.Count + "）");
+            Check(fixtureParses && parameterNames.Count == fixture.outputs.Count,
+                "夹具的输出行参数名不重复、表达式全部可解析（" + fixture.outputs.Count + "）");
 
-            string profileJson = HoFaceProfile.Write(defaults);
+            string profileJson = HoFaceProfile.Write(fixture);
             Check(profileJson.Contains("\"format\": \"ho-face-middleware\"") && profileJson.Contains("jawOpen") && profileJson.Contains("keys"),
                 "写出来的是带 format 头的可读 JSON");
             Check(HoFaceProfile.TryParse(profileJson, out var roundTrip, out _)
-                && roundTrip.outputs.Count == defaults.outputs.Count
-                && roundTrip.outputs[0].parameter == defaults.outputs[0].parameter
-                && roundTrip.outputs[0].curve.length == defaults.outputs[0].curve.length,
+                && roundTrip.outputs.Count == fixture.outputs.Count
+                && roundTrip.outputs[0].parameter == fixture.outputs[0].parameter
+                && roundTrip.outputs[0].curve.length == fixture.outputs[0].curve.length,
                 "写出去再读回来是一致的（行数 + 参数名 + 曲线关键点）");
             Check(HoFaceProfile.TryParse("{\"outputs\":[{\"parameter\":\"ARKit/jawOpen\",\"expression\":\"jawOpen\",\"modifiers\":[{\"kind\":\"nope\"}]}]}",
                 out var forgiving, out string kindError) && forgiving.outputs.Count == 1
@@ -1231,7 +1250,7 @@ public static class HoFaceTrackingValidation
         foreach (var row in middleware.inputs)
             if (row != null && row.parameter == "jawOpen") { hasJaw = true; break; }
         if (!hasJaw)
-            throw new Exception("夹具配置里没有 `jawOpen` 这一路 —— 行为用例靠它串"包 → 参数"整条链，缺了会以一堆中性值的形式失败。");
+            throw new Exception("夹具配置里没有 `jawOpen` 这一路 —— 行为用例靠它串「包 → 参数」整条链，缺了会以一堆中性值的形式失败。");
 
         string assetPath = "Assets/ValidationProfile" + HoFaceProfile.Extension;
         string fullPath = System.IO.Path.Combine(Application.dataPath, "ValidationProfile" + HoFaceProfile.Extension);
@@ -1277,27 +1296,20 @@ public static class HoFaceTrackingValidation
     {
         Check(HoFaceTrackingChannels.Names.Length == 52, "ARKit channel count");
 
-        // 中间层内置输入行：线名 → 规范名 + 量纲。这两条断言读的是 **C# 内置的 `Inputs()`**
-        //（「新建配置」写出来的初始内容），**不是**发货配置 —— 所以它们跟夹具换成哪一份无关。
-        // ⚠️ 这一层实际只剩 VTS 一条路（iFacialMocap 接收端连着那个类一起删了），
-        //    内置 `Inputs()` 里那族 `_L/_R` 行现在没有活的生产者。留着不影响运行（缺线的那行会冻结），
-        //    但"新建配置"会照样把它们写进用户的初始表里。
-        var defaults = HoFaceMiddlewareDefaults.Inputs();
-        Check(defaults.Count > 52, "内置输入行覆盖两种拼写（VTS 是活的，_L/_R 那族已无生产者）");
-        float converted = float.NaN;
-        float vtsConverted = float.NaN;
-        foreach (var row in defaults)
-        {
-            if (row.parameter != "jawOpen") continue;
-            if (!HoFaceExpression.TryParse(row.expression, out var parsed, out _)) continue;
-            if (row.notes == "iFacialMocap") converted = parsed.Evaluate(name => name == "jawOpen" ? 90f : 0f);
-            if (row.notes == "VTS 手机") vtsConverted = parsed.Evaluate(name => name == "JawOpen" ? 0.9f : 0f);
-        }
-        Near(converted, 0.9f, "iFacialMocap 0..100 由输入行换算成 0..1", 0.0001f);
-        Near(vtsConverted, 0.9f, "VTS 0..1 由输入行原样通过", 0.0001f);
-        Check(HoFaceMiddlewareDefaults.VtsWire("eyeBlinkLeft") == "EyeBlinkLeft", "VTS 线名 = PascalCase");
-        Check(HoFaceMiddlewareDefaults.IFacialWire("eyeBlinkLeft") == "eyeBlink_L", "iFacialMocap 线名 = _L 后缀");
-        Check(HoFaceMiddlewareDefaults.IFacialWire("mouthLeft") == "mouthLeft", "mouthLeft 不带后缀");
+        // 中间层输入行：线名 → 规范名 + 量纲。**这一层已经没有"内置默认表"了**
+        //（2026-09-26 删掉 `HoFaceMiddlewareDefaults` —— 仓库里不允许存在默认配置），
+        // 所以这里只断言**输入行语义本身**：量纲换算是表达式的事，跟哪一份具体配置无关。
+        // ⚠️ iFacialMocap 的 `_L/_R` 拼写规则现在**只在文档与发货配置里**（`PARAMETER_STANDARDS` §6），
+        //    代码里没有它了 —— 那族线名是安卓版 VTS 自己发出来的（见 mod `README.md` §1.4），
+        //    不是我们算出来的。
+        Check(HoFaceExpression.TryParse("jawOpen * 0.01", out var ifacialRow, out _),
+            "输入行能解析 iFacialMocap 那种 ×0.01 的换算写法");
+        Near(ifacialRow.Evaluate(name => name == "jawOpen" ? 90f : 0f), 0.9f,
+            "iFacialMocap 0..100 由输入行换算成 0..1", 0.0001f);
+        Check(HoFaceExpression.TryParse("JawOpen", out var vtsRow, out _),
+            "输入行能解析 VTS 那种原样通过的写法");
+        Near(vtsRow.Evaluate(name => name == "JawOpen" ? 0.9f : 0f), 0.9f,
+            "VTS 0..1 由输入行原样通过", 0.0001f);
 
         // ── 接收端的协议解析：**只剩 VTS 一条路**。iFacialMocap 的 `键-值|` 接收端连着那个类一起删了
         //（它的线名映射还留在默认输入行里，但"怎么解一包"已经没有代码了）—— 所以原来那 8 条

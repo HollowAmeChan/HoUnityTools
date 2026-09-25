@@ -120,26 +120,25 @@ HoFaceInputHub.Merged       按环境顺序合并（逐线名判新鲜度）
 
 `*.hoface.json` 是**映射表的唯一来源**，面板把它当**必填总闸**（空着就把下面各栏锁住）：
 **留空 / 没指定配置文件 ⇒ 两类行都是空表，这一层不做事**，**没有内置默认兜底**
-（2026-09-25 起与 Warudo 侧统一为"空 = 空表"）。
+（2026-09-25 起与 Warudo 侧统一为"空 = 空表"；**2026-09-26 起连那份默认表本身都删了** ——
+仓库里不存在任何一份默认配置，见 [中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md)）。
 两类行都只认配置文件（`HoFaceDebugSettings.Inputs()` / `Outputs()`）：
 
 | 行 | 取哪一份 | 有配置文件但**那一类是空的**时 |
 | --- | --- | --- |
 | **输入行** `Inputs()` | 只认配置文件的 `inputs`；没指定配置文件 ⇒ **空表** | 空表 ⇒ **等于不做改名**（规范名必须与线名同名） |
-| **输出行** `Outputs()` | 只认配置文件的 `outputs`；没指定配置文件 ⇒ **空表** | 空表 ⇒ **不写任何参数**（52 个 `ARKit/<规范名>` 直通 + 4 根眼睑轴只是「新建配置」的初始内容） |
+| **输出行** `Outputs()` | 只认配置文件的 `outputs`；没指定配置文件 ⇒ **空表** | 空表 ⇒ **不写任何参数**（"新建配置"写出来的就是空的） |
 
 所以"没指定配置文件"**就是这一层不做事**：会话压根起不来，运行期也不会自动起
 （那等于"什么都不做还每秒重试一次"）。真正的坑在**指定之后**：
 输入行**只认配置文件里的那一份**，配置里漏了一条线名，那条链就静默失效（见
 [踩过的坑 · 面捕流水线](pitfalls/FACE_TRACKING_PIPELINE.md) §3）。
 
-- 两类行同一套形状：**输入行** `规范名 = 曲线(表达式(线名…))` + 有序修饰符；**输出行** `参数名 = 曲线(表达式(规范名…))` + 有序修饰符（`Runtime/FaceTracking/HoFaceMiddleware.cs:124-130`）。
+- 两类行同一套形状：**输入行** `规范名 = 曲线(表达式(线名…))` + 有序修饰符；**输出行** `参数名 = 曲线(表达式(规范名…))` + 有序修饰符（`Runtime/FaceTracking/HoFaceMiddleware.cs` 的 `HoFaceMiddleware` / `HoFaceOutput`）。
 - 表达式取变量分三级：① 52 个规范名（走通道整形后的值）→ ② 其它输入行的结果（`headRotX`…）→ ③ 合并后的**原始线名**（`EyeBlinkLeft`、`Rotation_x`…）（`HoFaceAnimationSession.Lookup`，`HoFaceAnimationSession.cs:304-311`）。
-- **同名多行：最后一行生效**（「新建配置」的初始内容刻意让 VTS 那半套排在 iFacialMocap 后面，
-  所以两套协议的行同时存在时，VTS 的行赢 —— 见 `HoFaceMiddlewareDefaults.Inputs()`，`Runtime/FaceTracking/HoFaceMiddleware.cs`）。
-- 那份初始内容里**还留着 iFacialMocap 那套行**（`HoFaceMiddlewareDefaults.IFacialWire`，`Runtime/FaceTracking/HoFaceMiddleware.cs`）：
-  "新建配置文件"时生成初始文本用它，**运行期不走它**（它只剩「新建配置的初始内容 / 导出文本 / 验证夹具」这三个角色）；
-  但接收端只有 VTS 一条，那半套行永远不会有数据进来（引用到的线名不来 ⇒ 这一行不写）。
+- **同名输入行：最后一行生效**（`HoFaceAnimationSession.cs:496` 的 `inputIndex[...] = i` 顺着覆盖 —— 有意的覆盖 / 优先级机制，想在别人的表上盖一行就写在后面）。
+  ⚠️ 因为"后写的赢、且缺数据不回退"，**同一格别混两种方言**：以后声明的那行没数据时会把有数据的行顶掉 ⇒ 值恒 0
+  （2026-09-25 现场：调试配置混写安卓 + iPhone 命名，表现为"只有 head 系和眨眼在动"）。**一份配置对一台设备。**
 
 ## 5. 为什么没有门控
 
@@ -347,7 +346,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoFaceNaming.cs` | 参数命名规则的**唯一出处**（`Ho/Drive/...`）。只剩"要有哪些参数"；树的形状、每格写什么键不由代码规定 |
 | `HoFaceTrackingChannels.cs` | 52 个 ARKit 规范名、`_L/_R` 别名表、区域与平滑分组、**输入通道**（模式 / 手动 / 中性 / 输入曲线） |
 | `HoFaceExpression.cs` | 表达式求值器（递归下降；语法照 VBridger：函数表 / 惰性 `if` / 非有限折 0） |
-| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 维持；以及 `HoFaceMiddlewareDefaults`（只剩「新建配置的初始内容 / 导出文本 / 验证夹具」三个角色，**运行期不走它**） |
+| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 维持。**没有"内置默认表"了**（`HoFaceMiddlewareDefaults` 2026-09-26 删，见 [中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md)），`HoFaceMiddleware.displayName` 的默认值也从 `"ho-2d"` 改成**空串** |
 | `HoFaceProfile.cs` | 配置文件（`.hoface.json`）的格式名与入口（`format: ho-face-middleware` / `version: 2`） |
 | `HoFaceProfileJson.cs` | 配置文件的**自写 JSON 读写器**（`JsonUtility` 已咬过三次，见 §9.2） |
 | `HoJson.cs` | 极小的 JSON **读取器**：我们所有数据路径共用的那一份；未知字段跳过、报错带字符位置、数字用不变文化、容忍 BOM |
@@ -385,7 +384,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | 文件 | 是什么 |
 | --- | --- |
 | `Editor/AnimationTools/HoBlendShapeClipBuilder.cs`（生成逻辑）+ `HoAnimationToolsWindow.cs`（菜单 `HoUnityTools/动画工具` 的「形态键动画」栏） | 形态键动画：每个形态键一份 `<键名>.anim`（值 100 常量，一个片段写所有有这个键的网格）；重跑**覆盖同名片段**（保留资产、GUID 不变，只重写曲线），并可一并**清掉这次没写到的旧片段**（面板上默认开；那个文件夹是产物目录）。**不属于面捕**，只是它的上游 —— 同一个页面里还挂着「轨道处理」（旧「动画处理」：只留 Float 曲线的 YAML 处理，`HoAnimationClipProcessor.cs`） |
-| `Tests~/FaceTrackingValidation.cs` | 独立验证工程的批处理用例（**116 条断言**，2026-09-25 Unity 6000.3.15f1 全绿） |
+| `Tests~/FaceTrackingValidation.cs` | 独立验证工程的批处理用例（**116 条断言**；2026-09-25 Unity 6000.3.15f1 全绿，**2026-09-26 改过夹具之后还没重跑** —— 当天 Unity 编辑器都开着、批处理起不来；已验的是它能编译 + 离线两套用例全绿） |
 | `Tests~/AnimationClipPreviewValidation.cs` | 另一套用例（动画剪辑预览），与面捕无关 |
 
 网络接收与调试启动**只存在于编辑器流程**：接收端、宿主、面板全在 `Editor/` 下，所以它们不进玩家构建。

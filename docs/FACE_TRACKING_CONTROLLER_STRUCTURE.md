@@ -26,7 +26,11 @@
 
 - **角色预制件上零组件**：调试状态全在上面那两个文件里（不是组件）。
 - 要驱动的网格 = 调试对象下**所有** `SkinnedMeshRenderer`（`HoFaceDebugSettings.Meshes()`，`HoFaceDebugSettings.cs:115-121`；每次调用返回**新表**）。
-- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**116 条断言全绿**（用例里 116 处 `Check(`/`Near(` 调用，定义在 `Tests~/FaceTrackingValidation.cs:1241-1245`）；跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)。
+- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**116 条断言**（用例里 116 处 `Check(`/`Near(` 调用；跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）。
+  ⚠️ **2026-09-26 那次改动之后还没重跑过**：删掉内置默认表时改了这份用例（夹具改成用例自己搭），
+  当时本机的 Unity 编辑器都开着（授权互斥量），批处理起不来。已验的是它**能编译**
+  （`.research/compile-check-pkg.ps1` 的第三遍专门编 `Tests~`）与离线那两套用例
+  （[面捕在 Warudo 的路线 §8](FACE_TRACKING_WARUDO_ROUTE.md) 有全部验证口）。
 
 ## 1. 参考实现：Jerry 的 ARKit 控制器长什么样
 
@@ -289,9 +293,10 @@ VRCFT C# 经 OSC 写入**（模板 README 明写"不要拿 `FT/v2/` 当输入，
 3. 同一个 0.75 有**三种来源**要分清：C# 公式给、作者摆坐标给、参数默认值给（同厂商内部都不一致）。
 
 ⇒ 于是"照哪种血统编控制器"这件事被证据定住了。**控制器侧没有预设**（模板那套已删除，见 §3），
-但**中间层有一份默认内容**（`HoFaceMiddlewareDefaults`，`Runtime/FaceTracking/HoFaceMiddleware.cs`：
-只是「新建配置的初始内容 / 导出文本 / 验证夹具」，**运行期不走它**），
-眼睑那两根轴就在里面 —— 想照哪个血统，改那几行、或者写自己的配置文件即可。这三条留着是因为它们决定**你该抄谁的形状**：
+**中间层也没有任何默认内容了**（那张内置默认表 2026-09-26 整个删掉，见
+[中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md)）——
+眼睑那两根轴当时就在那张表里（`BlinkWide = eyeBlink − eyeWide`、`Squint = eyeSquint`，`HoFaceNaming.LidAxis`），
+**现在是你要在自己的配置文件里写的几行**。下面这三条留着是因为它们决定**你该抄谁的形状**：
 
 - **VRCFT 官方模板 ARKit 支**：每眼一根 `0..1`（中性 0.75）+ 5 姿势 `FreeformCartesian2D`（含 squint）。
   姿势数值已一手测出，且**只写** `eyeBlink*/eyeWide*/eyeSquint*` 三键（层 Override/weight 1，值是 0~100 绝对值）：

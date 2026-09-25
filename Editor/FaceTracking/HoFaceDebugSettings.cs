@@ -331,8 +331,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///
         /// ⚠️ **不再退回内置默认表**（2026-09-25 改，与 Warudo 侧统一）。那次改动的理由是：
         /// 静默兜底 = "没填也能动脸"，而动的是一份**谁也没看过**的表 —— 最难查的那种。
-        /// 现在两边口径一致：**空 = 空表**。内置默认表（`HoFaceMiddlewareDefaults`）只剩三个角色 ——
-        /// 「`WriteDefaults()` 的导出文本」「验证用例的夹具」，**运行期一律不走它**。
+        /// 现在两边口径一致：**空 = 空表**。
+        /// ⚠️ 而且**内置默认表本身已经删掉了**（2026-09-26，`HoFaceMiddlewareDefaults` 整个类）：
+        /// 它当时的两个角色（`WriteDefaults()` 的导出文本、验证用例的夹具）一个没了对象、
+        /// 一个搬进用例里自己搭 —— **仓库里现在不存在任何一份默认配置**。
         /// </summary>
         public List<HoFaceOutput> Outputs()
         {
