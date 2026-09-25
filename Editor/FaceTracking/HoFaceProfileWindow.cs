@@ -42,6 +42,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         private float leftWidth = 300.0f;
         private bool draggingSplitter;
 
+        /// <summary>
+        /// 左列一行的**整行高度**估计：名字行 20 + 表达式行 18 + 卡片上下内边距 12 + 余量 4。
+        /// 用它先占位，曲线背景才能画在卡片背景上、行内容之下 —— 数值偏大无害（只是多留一点白），
+        /// 偏小则背景会在底部截断，所以按偏大取。
+        /// </summary>
+        private const float RowFullHeight = 20.0f + 18.0f + 12.0f + 4.0f;
+
         [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
         private static void Open()
         {
@@ -290,6 +297,13 @@ namespace Hollow.HoUnityTools.FaceTracking
             bool delayed = HasDelay(output);
             string name = string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter;
 
+            // 整行（含卡片内边距）先量出来：曲线缩略图要画在卡片背景上、行内容之下。
+            Rect rowRect = GUILayoutUtility.GetRect(0.0f, 4000.0f, RowFullHeight, RowFullHeight, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+            {
+                DrawRowCurveBackground(rowRect, index, output, bad);
+            }
+
             using (HoConstraintEditorControls.Card(index == selected))
             {
                 using (HoConstraintEditorControls.Row())
@@ -341,18 +355,92 @@ namespace Hollow.HoUnityTools.FaceTracking
                     }
                 }
 
-                // 变量个数只是提示，不参与布局
-                if (!bad)
+                // 第二行：**表达式原文**（不再只是"曲线(N 个变量)"）。
+                // 一行配置的核心就是"这个参数 = 那个表达式"，把它摊在这里，左边扫一眼就知道
+                // 每一行在干什么，不必逐行点开右边。解析不过时显示错误原因。
+                using (HoConstraintEditorControls.Row(true))
                 {
-                    var variables = new List<string>();
-                    parsed.CollectVariables(variables);
-                    using (HoConstraintEditorControls.Row(true))
+                    if (bad)
                     {
-                        HoConstraintEditorControls.CaptionTrim("曲线(" + variables.Count + " 个变量)", 140.0f,
-                            "曲线有 " + variables.Count + " 个变量的定义域要照顾；右边会把它们逐个列出。");
+                        GUIStyle errorStyle = new GUIStyle(HoConstraintEditorTheme.Caption);
+                        errorStyle.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                        GUILayout.Label(new GUIContent("⚠ " + output.expression, "表达式解析不过。"), errorStyle);
+                    }
+                    else
+                    {
+                        GUILayout.Label(new GUIContent(output.expression, output.expression),
+                            HoConstraintEditorTheme.Caption, GUILayout.ExpandWidth(true));
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// **整行背景直接画曲线**：一条横贯整行的曲线 + 一层极淡的底色。
+        ///
+        /// 为什么这么画：左边一列原来是"名字 + 一行小字"，看不出任何形状。而"这一行是恒等直线、
+        /// 是宽范围、还是 0..1 默认"这件事，**形状差别一眼就看得出来**，比读数有用。
+        /// 底色按语义分：**原始量绿**（那是"没被动过的源"）、**合成量蓝**。
+        ///
+        /// 用 `Handles.DrawAAPolyLine` 直接画折线 —— **不生成贴图、不缓存**。
+        /// 这条窗口本来就是 IMGUI（`EditorGUILayout` + 自定义 `GUIStyle`），
+        /// 曲线也该走同一条路：采样若干点、连成线，抗锯齿由 `Handles` 负责。
+        /// （第一版我用 `Texture2D` + 签名缓存，那是"程序化贴图"的做法，
+        ///  平白多了一整套缓存、销毁、泄漏要考虑，见 git 历史。）
+        /// </summary>
+        private void DrawRowCurveBackground(Rect rowRect, int index, HoFaceOutput output, bool bad)
+        {
+            Rect area = new Rect(rowRect.x + 1.0f, rowRect.y + 1.0f, rowRect.width - 2.0f, rowRect.height - 2.0f);
+            if (area.width < 16.0f || area.height < 8.0f) return;
+
+            Color accent = bad ? HoConstraintEditorTheme.ErrorColor : AccentForRow(output);
+
+            // 极淡的底色：给"这一行属于哪一堆"一个氛围，不影响读字。
+            Color tint = accent;
+            tint.a = bad ? 0.16f : 0.07f;
+            EditorGUI.DrawRect(area, tint);
+
+            AnimationCurve curve = output.curve;
+            if (curve == null || curve.length == 0) return;
+
+            Keyframe[] keys = curve.keys;
+            float lo = keys[0].time;
+            float hi = keys[keys.Length - 1].time;
+            if (hi <= lo) return;
+
+            float min = float.MaxValue, max = float.MinValue;
+            foreach (Keyframe key in keys)
+            {
+                if (key.value < min) min = key.value;
+                if (key.value > max) max = key.value;
+            }
+            if (max - min < 1e-4f) return;      // 平线画出来就是一条边线，没有信息
+
+            // 采样密度：整行一个点太糙、每像素一个点太费；约 3px 一个点对"看形状"足够。
+            int samples = Mathf.Clamp(Mathf.RoundToInt(area.width / 3.0f), 8, 160);
+            var points = new Vector3[samples];
+            for (int i = 0; i < samples; i++)
+            {
+                float t = lo + (hi - lo) * (i / (float)(samples - 1));
+                float v = curve.Evaluate(t);
+                float y = area.yMax - (v - min) / (max - min) * area.height;
+                points[i] = new Vector3(area.x + area.width * (i / (float)(samples - 1)), y, 0.0f);
+            }
+
+            Color line = accent;
+            line.a = bad ? 0.75f : 0.55f;
+            Color previous = Handles.color;
+            Handles.color = line;
+            Handles.DrawAAPolyLine(bad ? 2.0f : 1.5f, points);
+            Handles.color = previous;
+        }
+
+        /// <summary>行颜色：**原始量绿**（没被动过的源）、**合成量蓝**，选自主题强调色。</summary>
+        private static Color AccentForRow(HoFaceOutput output)
+        {
+            if (output == null) return HoConstraintEditorTheme.AccentOutput;
+            bool raw = !string.IsNullOrEmpty(output.parameter) && output.parameter == output.expression;
+            return raw ? HoConstraintEditorTheme.AccentOutput : HoConstraintEditorTheme.AccentDriver;
         }
 
         private void DrawStatusLine()
