@@ -44,42 +44,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool hintExpanded;
         private string lastProblem = "";
 
-        /// <summary>
-        /// 把一条**路径**解析成工程里的 `TextAsset`，解不出来就返回 null。
-        ///
-        /// 为什么要三步：`settings.profilePath` 历史上存过三种形状 ——
-        /// ① 工程相对（`Assets/...` / `Packages/...`）：`LoadAssetAtPath` 直接认；
-        /// ② **绝对路径**（设置文件比资产选择器早，`MakeProjectRelative` 是后来才加的）：
-        ///    `LoadAssetAtPath` 对绝对路径**一律返回 null**，得先转相对；
-        /// ③ 工程**之外**的文件：本来就没有资产，返回 null 是对的（调用方改成只读显示路径）。
-        ///
-        /// ⚠️ 拿到 null 时**不要**当成"用户清空了路径"（那会把设置洗掉，真踩过）。
-        /// </summary>
-        private static TextAsset ResolveProfileAsset(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return null;
-
-            TextAsset asset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
-            if (asset != null) return asset;
-
-            // 绝对路径 → 工程相对
-            string relative = MakeProjectRelative(path);
-            if (!string.Equals(relative, path, StringComparison.Ordinal))
-            {
-                asset = AssetDatabase.LoadAssetAtPath<TextAsset>(relative);
-                if (asset != null) return asset;
-            }
-
-            // 最后一道：拿 GUID 兜（对 `Packages/...` 之类的链接路径有效）
-            string guid = AssetDatabase.AssetPathToGUID(relative);
-            if (!string.IsNullOrEmpty(guid))
-            {
-                asset = AssetDatabase.LoadAssetAtPath<TextAsset>(AssetDatabase.GUIDToAssetPath(guid));
-            }
-
-            return asset;
-        }
-
         /// <summary>把绝对路径尽量转成工程相对路径（`Assets/...`），这样设置文件里存的是可移植路径。</summary>
         private static string MakeProjectRelative(string path)
         {
@@ -253,52 +217,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Label("配置文件对象", HoConstraintEditorTheme.LabelWidth,
                         "**必须**。中间层配置（*.hoface.json）—— Unity 侧与 Warudo 侧读的是同一个文件。");
-                    // 存进 `settings` 的**始终是路径**（Warudo 读的就是文件路径）；
-                    // 资产只是"填"的便利控件。
-                    TextAsset currentAsset = ResolveProfileAsset(settings.profilePath);
-
-                    if (currentAsset != null)
+                    // 用**资产选择器**而不是让人手打路径：手打路径是这栏最容易出错的地方
+                    // （相对路径的基准、扩展名、拼错一个字母都只是"读不出来"，看不出错在哪）。
+                    // 存进 `settings` 的仍然是**路径**（Warudo 那边读的就是文件路径）。
+                    TextAsset currentAsset = string.IsNullOrEmpty(settings.profilePath)
+                        ? null
+                        : AssetDatabase.LoadAssetAtPath<TextAsset>(settings.profilePath);
+                    EditorGUI.BeginChangeCheck();
+                    var pickedAsset = (TextAsset)EditorGUI.ObjectField(
+                        HoConstraintEditorControls.NextFlexible(70.0f), currentAsset, typeof(TextAsset), false);
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        // 工程里的配置：资产选择器（拖/点选，打不出错路径）。
-                        EditorGUI.BeginChangeCheck();
-                        var pickedAsset = (TextAsset)EditorGUI.ObjectField(
-                            HoConstraintEditorControls.NextFlexible(70.0f), currentAsset, typeof(TextAsset), false);
-                        if (EditorGUI.EndChangeCheck())
-                        {
-                            // ⚠️ **只在真的选到东西、或真的清空过一个已解析的资产时才改路径。**
-                            // 否则会踩这个坑（真踩过）：路径是绝对/工程外时 `LoadAssetAtPath` 给 null
-                            // ⇒ 选择器显示 None ⇒ 它一次无意的交互/重绘触发 EndChangeCheck
-                            // ⇒ `profilePath = ""` 被洗掉，然后「窗口」按钮跟着变灰。
-                            if (pickedAsset != null) settings.profilePath = AssetDatabase.GetAssetPath(pickedAsset);
-                            else settings.profilePath = "";
-                            settings.ReloadProfile();
-                            HoFaceDebugHost.Save();
-                        }
-                    }
-                    else
-                    {
-                        // 工程外 / 绝对路径：**没有资产可以表示它**，所以不摆选择器（摆了就是个坑：
-                        // 空框看着像"没填"，一点就把路径洗没了）。改为把路径摊出来只读显示。
-                        string shown = string.IsNullOrEmpty(settings.profilePath)
-                            ? "（未指定 · 这一层不做事）"
-                            : settings.profilePath;
-                        GUI.Label(HoConstraintEditorControls.NextFlexible(70.0f),
-                            new GUIContent(shown, "这份配置不在工程里（或者是绝对路径），所以没有资产可摆。"
-                                + "路径有效，Unity 与 Warudo 都按它读；要换就点右边的「选…」。"),
-                            HoConstraintEditorTheme.Caption);
-                    }
-
-                    HoConstraintEditorControls.Gap();
-                    // 「窗口」= 打开配置文件窗口盯着**这一份**。新建也归那边
-                    // （从零建一份是编辑器的活，这一栏只管"用哪一份"）。
-                    // ⚠️ 不按"有没有资产"置灰 —— 配置窗口现在以**路径**为准，
-                    // 工程外的文件照样能开（见 `HoFaceProfileWindow.Open(string)`）。
-                    using (new EditorGUI.DisabledScope(!settings.HasProfile))
-                    {
-                        if (HoConstraintEditorControls.Button("窗口", "打开配置文件窗口编辑这一份（输入行 / 输出行、曲线、修饰符）。", false, 40.0f))
-                        {
-                            HoFaceProfileWindow.Open(settings.FullProfilePath());
-                        }
+                        settings.profilePath = pickedAsset != null ? AssetDatabase.GetAssetPath(pickedAsset) : "";
+                        settings.ReloadProfile();
+                        HoFaceDebugHost.Save();
                     }
 
                     HoConstraintEditorControls.Gap();
@@ -321,8 +253,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     if (!settings.HasProfile) HoConstraintEditorControls.Caption("必填；空着下面三栏都锁住");
                     else if (settings.Middleware == null) HoConstraintEditorControls.Caption("读不出来：" + settings.ProfileError);
-                    // 路径填了、但不在工程里 ⇒ 上面那一格已经不摆选择器、改成只读显示路径了，
-                    // 所以这里不用再补一句（补了就是同一件事说两遍）。
+                    // 路径填了、但不在工程里 ⇒ 资产框会显示 None。说清那是正常的，别让人以为丢了。
+                    else if (currentAsset == null) HoConstraintEditorControls.CaptionTrim("工程外文件：" + settings.profilePath, 240.0f,
+                        "这份配置在工程之外，所以资产框是空的；路径本身有效，Unity 与 Warudo 都按它读。");
                 }
 
                 using (HoConstraintEditorControls.Row(true))
