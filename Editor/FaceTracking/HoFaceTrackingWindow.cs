@@ -93,8 +93,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         // ⚠️ 编辑期 Hub 是**空的**，这是新设计的常态（槽由写手在运行期按名字开），
                         // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
                         HoConstraintEditorControls.Caption(Application.isPlaying
-                            ? connector.hub.SlotCount + " 个槽 · 表 " + connector.Count + " 项"
-                            : "表 " + connector.Count + " 项 · 槽在运行期由写手开（编辑期是空的，正常）");
+                            ? connector.hub.SlotCount + " 个槽"
+                            : "槽在运行期由写手按名字开（编辑期是空的，正常）");
                     }
                 }
                 else
@@ -148,25 +148,30 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 前几个**声明过**的槽的当前值（最多 6 个）。名字来自槽表，值来自 Hub —— 全是运行期状态。
-        /// ⚠️ 一个都没声明过时明说"写手还没声明过任何槽"，而不是显示一片 0（那会被误读成"写手坏了"）。
+        /// 前几个**有名字**的槽的当前值（最多 6 个）。名字与值都来自 Hub（名字是写手在运行期声明的，
+        /// Connector 现在只是一根把手、没有表）。
+        /// ⚠️ 一个名字都没有时明说"写手还没声明过名字"，而不是显示一片 0（那会被误读成"写手坏了"）。
         /// </summary>
         private static string SemanticReadout(HoFaceSemanticConnector connector)
         {
             var hub = connector.hub;
-            if (hub == null || connector.Count == 0) return "（槽表是空的：没有任何名字，写手写的值不会被认领）";
+            if (hub == null || hub.SlotCount == 0) return "（Hub 里还没有槽：控制器里的语义写手还没跑过）";
 
             var text = new System.Text.StringBuilder();
             int shown = 0;
-            for (int i = 0; i < connector.Count && shown < 6; i++)
+            int named = 0;
+            for (int i = 0; i < hub.SlotCount; i++)
             {
-                string key = connector.KeyAt(i);
+                string key = hub.NameAt(i);
                 if (string.IsNullOrEmpty(key)) continue;
+                named++;
+                if (shown >= 6) continue;
                 if (shown > 0) text.Append("  ·  ");
-                text.Append(key).Append('=').Append(connector.GetFloat(i).ToString("0.###"));
+                text.Append(key).Append('=').Append(hub.GetFloat(i).ToString("0.###"));
                 shown++;
             }
-            if (connector.Count > shown) text.Append("  …（共 ").Append(connector.Count).Append(" 项）");
+            if (named == 0) return "（Hub 里 " + hub.SlotCount + " 个槽都还没有名字：写手还没声明过）";
+            if (named > shown) text.Append("  …（共 ").Append(named).Append(" 个名字）");
             return text.ToString();
         }
 

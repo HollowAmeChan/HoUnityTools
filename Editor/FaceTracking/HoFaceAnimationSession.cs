@@ -334,7 +334,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             HoFaceSemanticHub target = semanticConnector.hub;
-            target.Reserve(semanticConnector.Count);
 
             if (shadowHub.SlotCount == 0)
             {
@@ -350,37 +349,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             int written = 0;
-            int skipped = 0;
-            semanticSkipped.Clear();
+            int claimed = 0;
+            semanticSkipped.Clear();      // 这一轮里"新声明"的名字（表删了之后，这里就是唯一的"名字从哪来"记录）
             for (int i = 0; i < shadowHub.SlotCount; i++)
             {
                 string name = shadowHub.NameAt(i);
                 if (string.IsNullOrEmpty(name)) continue;      // 空位：写手还没声明过这一格
-                int index = semanticConnector.IndexOf(name);
-                if (index < 0 || index >= target.SlotCount)
+
+                int index = target.IndexOfName(name);
+                if (index < 0)
                 {
-                    skipped++;
-                    if (semanticSkipped.Count < 4) semanticSkipped.Add(name);
-                    continue;
+                    index = target.ClaimSlot(name);            // 名字由写的人声明，不是由某张表定义
+                    if (index >= 0)
+                    {
+                        claimed++;
+                        if (semanticSkipped.Count < 6) semanticSkipped.Add(name);
+                    }
                 }
+                if (index < 0) continue;
+
                 target.SetFloat(index, shadowHub.GetFloat(i));
-                // 顺手把名字也镜像到角色那片 Hub 上：它在 Inspector 里就会自己说明"第 i 格是什么"，
-                // 而不用去对照 Connector 的槽表。（名字来自槽表，顺序与它一致。）
-                target.names[index] = name;
                 written++;
             }
 
-            string state = written + "|" + skipped + "|" + string.Join(",", semanticSkipped);
+            string state = written + "|" + claimed + "|" + string.Join(",", semanticSkipped);
             if (state == semanticReported) return;
             semanticReported = state;
 
             SemanticStatus = "语义转发：写 " + written + " 个"
-                + (skipped > 0
-                    ? " · **跳过 " + skipped + " 个**（不在槽表里：" + string.Join("、", semanticSkipped) + "）"
-                    : " · 全部对上");
-            if (skipped > 0)
-                Debug.LogWarning("[Ho 面捕] 语义转发：有 " + skipped + " 个名字不在角色的 Connector 槽表里（"
-                    + string.Join("、", semanticSkipped) + "）⇒ 那几个语义永远不动。");
+                + (claimed > 0 ? " · **新声明 " + claimed + " 个**（" + string.Join("、", semanticSkipped) + "）" : " · 名字都在");
+            if (claimed > 0)
+                Debug.Log("[Ho 面捕] 语义转发：控制器声明了 " + claimed + " 个新名字（"
+                    + string.Join("、", semanticSkipped) + "）⇒ 它们是这个名字表里的新槽。");
         }
 
         /// <summary>
