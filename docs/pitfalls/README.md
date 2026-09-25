@@ -16,7 +16,7 @@
 | [鼠标与指针输入](INPUT_AND_MOUSE.md) | 注视约束的鼠标目标：失焦、基准方向、射线交点、参考系 |
 | [液体 shader 契约](LIQUID_SHADER.md) | 摆锤/液面：长帧 NaN、atan2、坐标系、MPB、缩放 |
 | [Unity 资产与编辑器](UNITY_ASSET_PITFALLS.md) | 复制或重写资产、改别人的 `.anim`、按名字对资产 |
-| [编辑器 UI 与 Playable API](EDITOR_UI_AND_API.md) | 面板排版不对齐、`[Header]` 画两遍、`PlayableGraph.IsValid()` |
+| [编辑器 UI 与 Playable API](EDITOR_UI_AND_API.md) | 面板排版不对齐、`[Header]` 画两遍、`PlayableGraph.IsValid()`、`OnValidate` 里重建刷屏、两个预览器抢骨架 |
 | [批处理验证](VALIDATION_LOOP.md) | 跑 `Tests~/` 那套用例，或结果不对劲时 |
 | [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md) | Mod 产物 Missing Script、`.csproj`、UMod 安全审查、提权脚本 |
 | [从蓝图里取证](WARUDO_INSPECTION.md) | 反射/场景文件/`Player.log` 读官方节点：端口表、节点归属、开关方向、资产清单 |

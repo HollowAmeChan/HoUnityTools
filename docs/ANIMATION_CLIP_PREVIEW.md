@@ -51,21 +51,16 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
 以及令牌、手感、图标生成方式的说明）。视觉令牌在 `HoAnimationPreviewTheme`，
 走带控件在 `HoAnimationPreviewTimeline` —— 与约束面板同一套色值，改面板时不要另写颜色和宽度。
 
-### 改这个面板时必须守的三条（都踩过）
+### 改这个面板时必须守的三条
 
-**1. 每一格都要显式定宽，布局自己算矩形。** 走带行**不交给 GUILayout 分配宽度**，
-原因和 `docs/EDITOR_UI_SYSTEM.md` 里写的同一条：GUILayout 按剩余宽度百分比分空间，
-没有 `GUILayout.Width` 的按钮会被压成几个像素的小点（表现是"图标变成一排小点，
-时间轴吃掉整行"）。走带里每个图标都是 `new Rect(x, y, size, size)` 手算，
-只有时间轴吃剩下的全部。
+1. **每一格显式定宽，布局自己算矩形** —— 走带行不给 GUILayout 分配宽度（同 `EDITOR_UI_SYSTEM.md` 那条：
+   GUILayout 按剩余宽度百分比分空间，没有 `GUILayout.Width` 的按钮会被压成几个像素的小点）。
+   走带里每个图标都是 `new Rect(x, y, size, size)` 手算，只有时间轴吃剩下的全部。
+2. **不要在 `GUIStyle` 里做内边距**：`padding` 会让内容被重新分配（同样把图标压扁），
+   而且 `BeginVertical` 返回的是内边距**之内**的矩形，拿它当背景会画错位置。用 `Inset` 手动收边距。
+3. **别把方法叫 `DrawHeader`**：会遮蔽 `Editor.DrawHeader()`（CS0108），标题栏被顶掉。这里叫 `DrawTitle()`。
 
-**2. 不要在 `GUIStyle` 里做内边距。** 卡片的 `padding` 会让内容被 GUILayout 重新分配，
-同样会把图标压扁；而且 `EditorGUILayout.BeginVertical` 返回的是**内边距之内**的矩形，
-拿它当背景就会画错位置。走带是先用 `EditorGUILayout.GetControlRect` 拿到整行矩形自己画背景，
-再用 `Inset` 手动收边距。
-
-**3. 自定义 Inspector 里别把方法叫 `DrawHeader`。** 那会遮蔽 `Editor.DrawHeader()`
-（CS0108），Unity 默认的组件标题栏会被顶掉、tooltip 也挂到错的地方。这里叫 `DrawTitle()`。
+三条的现场（症状 / 为什么 / 怎么改）收在[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §1 / §12。
 
 面板上没写进 Inspector 的部分：`FrameCount` / `CurrentFrame` / `CurrentTime` / `NormalizedTime`
 是一套完整的时间和帧换算，`Play()` / `Pause()` / `TogglePlay()` / `SetFrame()` / `SetTime()` /
@@ -98,46 +93,27 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
   对"看一眼 clip"没有影响，但要知道这个先后。
 - **仅单条 clip。** 过渡、混合树、多状态不在范围内。
 
-## 为什么不能拿 `graph.IsValid()` 当"可以推时间"的判据
+## 就绪判据：`graph.IsValid()` 不够
 
-`PlayableGraph.IsValid()` 只看图自己的版本号。**图存在而 playable 句柄已经失效**时它照样
-返回 true，于是下一步的 `clipPlayable.SetTime(...)` 会抛：
+`PlayableGraph.IsValid()` 只看图自己的版本号；**图存在而 playable 句柄已经失效**时它照样返回 `true`，
+下一步 `SetTime(...)` 会抛 `ArgumentNullException: … The Playable is null.`。
+所以闸门是 **`clipPlayable.IsValid()`**（对 `default` 句柄返回 false），组件把 `IsPlayableReady` 铺在所有
+会推时间的入口上（`Play` / `SetTime` / `AdvanceBy` / `Update` / `EvaluateNow`），句柄失效时**收干净状态而不是抛异常**；
+失败原因写进 `LastError`，同一个错误只往 Console 写一次，并在面板上以红色提示框显示。
+现场见[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §4。
 
-```
-ArgumentNullException: Value cannot be null.
-Parameter name: The Playable is null.
-```
+## 实现上的四条硬规矩
 
-判据必须是 `AnimationClipPlayable.IsValid()`（对 `default` 句柄返回 false）。组件现在：
+1. **绝不在 `OnValidate` 里重建**：那里禁止 `SendMessage`，重建会 `SetActive`/销毁图 ⇒ 带
+   `OnBecameInvisible` 的蒙皮网格刷屏。改走 `RequestRebuild()`（只置标记，下次编辑器 update 才真做）。
+2. **一个 Animator 只能有一个预览器**：两个组件挂同一棵骨架上会互相覆盖姿势、极难排查。
+   组件维护静态归属表，第二个接管者被拒绝并点名是谁占着。
+3. **预览链路被外力破坏就收摊**：有些 clip 的 `m_IsActive` 曲线会关掉物体；若关掉的正是 Animator 自己
+   所在的物体（或父级），图就废了而组件还是"启用"—— 每帧体检整个祖先链的启用状态，断了就结束预览。
+4. **批量验证前先关编辑器**：Unity 的授权客户端有全局互斥量，已开着编辑器时 `-batchmode` 起不来
+   （`Failed to acquire global mutex Unity-LicenseClient-…`）。
 
-- 建图后立刻验 `clipPlayable.IsValid()`，不成立就**撤销接管并说明原因**，不留"自称在预览"的空壳；
-- 所有会推时间的入口（`Play` / `SetTime` / `AdvanceBy` / `Update` / `EvaluateNow`）都以
-  `IsPlayableReady` 为闸门，句柄失效时**收干净状态而不是抛异常**；
-- 失败原因写进 `LastError`，同一个错误只往 Console 写一次，并在面板上以红色提示框显示 ——
-  不会变成每帧刷屏。
-
-## 另外三条踩过的坑
-
-**1. 绝不能在 `OnValidate` 里重建。** `OnValidate` 期间 Unity 禁止 `SendMessage`，而重建会
-`SetActive`、销毁图。场景里只要有一个带 `OnBecameVisible`/`OnBecameInvisible` 的物体
-（蒙皮网格几乎都有），就会刷屏：
-
-```
-SendMessage cannot be called during Awake, CheckConsistency, or OnValidate (mesh_X: OnBecameInvisible)
-```
-
-所以面板上直接改 clip / Animator 触发的重建走 `RequestRebuild()`：
-`OnValidate` 里只置一个待办标记，落到下一次编辑器 `update`（`delayCall` + 面板的 update 回调）
-才真做。**没有这一步，只要选中物体改一次字段就会刷屏。**
-
-**2. 一个 Animator 只能有一个预览器。** 两个组件挂在同一棵骨架上时，后建立的图会把先建立的
-姿势覆盖掉 —— 表现是两个面板互相打架，极难排查。组件维护一张静态的 Animator 归属表，
-第二个接管者会被拒绝并说明是谁占着。切场景/重编译时静态表由 Unity 的 domain reload 清掉。
-
-**3. 预览链路被外力破坏要主动收摊。** 有些 clip 的 `m_IsActive` 曲线会关掉物体；
-如果它关掉的正是 Animator 自己所在的物体（或父级），图就再也驱动不了任何东西，
-而组件本身还是"启用"状态 —— 静默失效最难查。组件每帧体检**整个祖先链**的启用状态，
-一旦断了就结束预览并把原因写进 `LastError`。
+四条的症状与现场同样收在[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §8–§11。
 
 ## 验证
 
@@ -164,9 +140,7 @@ SendMessage cannot be called during Awake, CheckConsistency, or OnValidate (mesh
 ```
 
 结果落在工程根的 `preview_result.txt`，首行是 `HO_PREVIEW_ALL_PASSED (n)` 或 `HO_PREVIEW_FAILED (m/n)`。
-
-**注意**：Unity 的授权客户端有全局互斥量，**已经开着一个 Unity 编辑器时跑不了 batchmode**
-（症状：`Failed to acquire global mutex Unity-LicenseClient-<用户>`）。跑之前先关掉编辑器。
+⚠️ 跑之前先关掉编辑器（授权互斥量，见上「实现上的四条硬规矩」第 4 条）。
 
 ## 参考实现（开源）
 
