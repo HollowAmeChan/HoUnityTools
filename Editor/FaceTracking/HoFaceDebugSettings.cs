@@ -89,6 +89,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>进入播放后自动开会话（**不会**自动连手机）。</summary>
         public bool startOnPlay;
 
+        /// <summary>
+        /// **可选**：把中间层算出来的值写进角色身上那片**动态参数 Hub**（**默认关**，2026-09-26 用户定）。
+        ///
+        /// 【为什么默认关】Hub 是"把值挂出去给**别的**脚本 / 材质 / 蓝图读"的出口，
+        /// 而**调试台自己不需要它** —— 面板的「参数输出」栏看的就是同一份值；
+        /// Warudo 侧也不靠它（那边由「HoFace写动态参数」节点写同一份字典）。
+        /// 所以默认不往外写东西：谁需要谁打开，下一帧生效。
+        ///
+        /// 【打开之后写什么】**全部输出行**（含"控制器里没有那些参数"的行）—— 见
+        /// `HoFaceAnimationSession.PublishSemantics`。名字就是输出行的 `parameter`。
+        /// </summary>
+        public bool writeParameterHub;
+
         /// <summary>配置文件填了没有 —— 这是"下面能不能改"的总闸。</summary>
         public bool HasProfile { get { return !string.IsNullOrEmpty(profilePath); } }
 
@@ -371,7 +384,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             text.Append("  \"profilePath\": ").Append(HoFaceProfileJson.Quote(profilePath)).Append(",\n");
             text.Append("  \"staleSeconds\": ").Append(HoFaceProfileJson.Num(staleSeconds)).Append(",\n");
             text.Append("  \"neutralFadeSeconds\": ").Append(HoFaceProfileJson.Num(neutralFadeSeconds)).Append(",\n");
-            text.Append("  \"startOnPlay\": ").Append(startOnPlay ? "true" : "false").Append('\n');
+            text.Append("  \"startOnPlay\": ").Append(startOnPlay ? "true" : "false").Append(",\n");
+            text.Append("  \"writeParameterHub\": ").Append(writeParameterHub ? "true" : "false").Append('\n');
             text.Append("}\n");
             return text.ToString();
         }
@@ -406,6 +420,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         case "staleSeconds": result.staleSeconds = r.ReadFloat(); break;
                         case "neutralFadeSeconds": result.neutralFadeSeconds = r.ReadFloat(); break;
                         case "startOnPlay": result.startOnPlay = r.ReadBool(); break;
+                        case "writeParameterHub": result.writeParameterHub = r.ReadBool(); break;
                         default: r.SkipValue(); break;
                     }
                 });

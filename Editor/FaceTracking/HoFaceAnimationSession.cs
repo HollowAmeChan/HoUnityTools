@@ -300,6 +300,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 把**中间层这一帧算出来的输出行**按名字写进**角色身上**那片 Hub
         /// （<see cref="HoFaceSemanticConnector.hub"/>）。
         ///
+        /// ⚠️ **默认不写**：由调试设置的 `writeParameterHub` 开关决定（2026-09-26 用户定）——
+        /// 调试台不需要这个出口（面板「参数输出」栏就是同一份值），Warudo 侧由「HoFace写动态参数」节点写。
+        /// 打开时才走下面这条链。
+        ///
         /// 【为什么是中间层写】（2026-09-26 清理）
         /// 这些值本来就是这里算出来的（每一行 = `曲线(表达式(源键…))`，值就在 `outputValues` 里）。
         /// 以前绕一圈：控制器里的状态机行为从 Animator 参数再算一遍、写进**影子** Hub，再由会话中转到角色 ——
@@ -316,6 +320,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private void PublishSemantics()
         {
+            // 调试台**默认不写 Hub**（2026-09-26 用户定）：Hub 是"把值挂出去给别的脚本/蓝图读"的出口，
+            // 调试台自己不需要（面板「参数输出」栏看的是同一份值），Warudo 侧也不靠它。
+            // 开关在调试设置里（`HoFaceDebugSettings.writeParameterHub`），下一帧生效。
+            if (!Settings.writeParameterHub)
+            {
+                SemanticPublishedCount = -1;
+                if (semanticReported != "off")
+                {
+                    semanticReported = "off";
+                    SemanticStatus = "动态参数：没往 Hub 写（「写动态参数 Hub」关着 —— 默认就是关的）";
+                }
+                return;
+            }
+
             GameObject character = Settings.Character();
             if (semanticConnector == null || semanticOwner != character)
             {

@@ -68,9 +68,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             using (HoConstraintEditorControls.Row())
             {
-                HoConstraintEditorControls.Label("动态参数 Connector", HoConstraintEditorTheme.LabelWidth,
-                    "中间层算出来的参数写进它下面的 Hub。约定挂在角色子层级（例如 Character/SemanticHub）。");
+                HoConstraintEditorControls.Label("动态参数 Hub", HoConstraintEditorTheme.LabelWidth,
+                    "**可选**：打开才会把中间层算出来的值写进角色身上那片 Hub（给别的脚本 / 材质 / 蓝图读）。"
+                    + "调试台自己不需要它 —— 上面「参数输出」栏看的就是同一份值；"
+                    + "Warudo 侧也不靠它（那边由「HoFace写动态参数」节点写）。");
 
+                EditorGUI.BeginChangeCheck();
+                bool write = HoConstraintEditorControls.Toggle("写动态参数 Hub", settings.writeParameterHub,
+                    "默认关。打开后：**全部输出行**（含「控制器里没有那些参数」的行）按名字写进角色 Hub，下一帧生效。");
+                if (EditorGUI.EndChangeCheck())
+                {
+                    settings.writeParameterHub = write;
+                    HoFaceDebugHost.Save();
+                }
+
+                HoConstraintEditorControls.Gap();
                 if (connector != null)
                 {
                     // **灰的引用行**：找到的东西只读地摆出来，让人核对"认的是不是这一个"。
@@ -86,7 +98,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     if (connector.hub == null)
                     {
-                        Warning("Connector 没填 Hub ⇒ 值没地方存（在 Connector 上把同一个物体上的 Hub 拖进去）");
+                        // 没打开时这不是问题（压根不写），所以只有打开时才亮黄字。
+                        if (settings.writeParameterHub)
+                            Warning("Connector 没填 Hub ⇒ 值没地方存（在 Connector 上把同一个物体上的 Hub 拖进去）");
+                        else
+                            HoConstraintEditorControls.Caption("（开关关着，不用管这一栏）");
                     }
                     else
                     {
@@ -99,16 +115,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
                 else
                 {
-                    // **黄字**：说清后果（写不了动态参数），并给一句"怎么修"。
-                    Warning(character == null
-                        ? "先填「调试对象」"
-                        : "这个对象上没有 HoFaceSemanticConnector ⇒ 中间层算出来的参数没地方落");
+                    // **黄字**：只有"打开开关却没有落点"才是问题；关着时它只是可选件没挂。
+                    if (settings.writeParameterHub)
+                    {
+                        Warning(character == null
+                            ? "先填「调试对象」"
+                            : "开关开着，但这个对象上没有 HoFaceSemanticConnector ⇒ 值没地方落");
+                    }
+                    else
+                    {
+                        HoConstraintEditorControls.Caption(character == null
+                            ? "先填「调试对象」"
+                            : "（这个对象上没有 Connector；开关关着，正常）");
+                    }
                 }
             }
 
-            // 播放时的**实时读数**：中间层算完就把值写进角色那片 Hub，这里直接把前几个声明过的槽
+            // 播放时的**实时读数**：开关打开后中间层算完就写进角色那片 Hub，这里把前几个声明过的槽
             // 摊出来 —— 这是"动态参数到底有没有在走"最直接的观察面（Hub 是运行期槽，值不在任何资产里）。
-            if (connector != null && connector.hub != null && Application.isPlaying)
+            if (connector != null && connector.hub != null && Application.isPlaying && settings.writeParameterHub)
             {
                 HoConstraintEditorControls.Caption(ChainStatus(connector));
                 HoConstraintEditorControls.Caption(SemanticReadout(connector));
@@ -137,7 +162,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 : "输入在收（" + HoFaceInputHub.SourceCount + " 条源）";
 
             string publish;
-            if (session == null) publish = "**会话没起**（点「开始驱动」）";
+            if (!settings.writeParameterHub) publish = "没写（「写动态参数 Hub」关着，默认就是关的）";
+            else if (session == null) publish = "**会话没起**（点「开始驱动」）";
             else if (session.SemanticPublishedCount < 0) publish = "**写不进去**（角色上没有 Connector / 它没填 Hub）";
             else if (session.SemanticPublishedCount == 0) publish = "**一行输出都没有**（配置文件没有输出行？）";
             else publish = "写入 " + session.SemanticPublishedCount + " 个槽";

@@ -1048,6 +1048,8 @@ public static class HoFaceTrackingValidation
                 // ── 动态参数：中间层算完**直接写角色 Hub**（2026-09-26 起是这条链）──────────
                 // 在角色上现挂一片 Hub + Connector（真项目里由作者挂；测试里现挂，才不用改预制件）。
                 // ⚠️ 引用要**显式填**：`AddComponent` 不走 `Reset()`（那是编辑器里加组件时的回调）。
+                // ⚠️ 写 Hub 是**可选开关**（默认关，调试台自己不需要它）—— 用例要先把开关打开。
+                rig.writeParameterHub = true;
                 var semanticGo = new GameObject("SemanticHub");
                 semanticGo.transform.SetParent(rig.Character().transform, false);
                 var semanticHub = semanticGo.AddComponent<HoFaceSemanticHub>();

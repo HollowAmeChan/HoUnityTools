@@ -148,8 +148,12 @@ Hub 的 `values` / `names` 出厂就是**空数组**；`Reserve(count)`（给老
 
 | 谁 | 怎么写 | 名字从哪来 |
 |---|---|---|
-| **Unity 侧**：调试会话 | 每帧算完输出行后 `PublishSemantics()`：`hub.ClaimSlot(parameter)` + `hub.SetFloat(index, value)` | 配置文件里**输出行的 `parameter`** |
+| **Unity 侧**：调试会话 | **可选开关**（调试设置里的 `writeParameterHub`，**默认关**）：打开后每帧算完输出行就 `hub.ClaimSlot(parameter)` + `hub.SetFloat(index, value)` | 配置文件里**输出行的 `parameter`** |
 | **Warudo 侧**：「HoFace写动态参数」节点 | 每帧把 `参数处理.参数`（或「Ho合并字典」的 `字典`）按名字写进角色 Hub | 同一份字典的**键** |
+
+⚠️ **Unity 侧默认关**（2026-09-26 用户定）：Hub 是"把值挂出去给**别的**脚本 / 材质 / 蓝图读"的出口，
+**调试台自己不需要它** —— 面板的「参数输出」栏看的就是同一份值；Warudo 侧也不靠它。
+所以默认不往外写东西，需要时在面板「对象」段把「写动态参数 Hub」打开（下一帧生效）。
 
 写的是**全部输出行**（不按"控制器里有没有这个参数"过滤）—— 面板的「参数输出」栏摊开的就是这一份，
 所以"面板里看到什么 = Warudo 里是什么"这条规矩在动态参数上也成立。
