@@ -238,13 +238,15 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 
 ## 10. 手搭清单（在混合树编辑器里照这个建；动画留空）
 
-**第 0 步 · 参数（全部 Float，名字见 §7 与[命名权威](FACE_TRACKING_NAMING.md)）**
+**第 0 步 · 参数（全部 Float）**：**一共 39 个** = 下面这 **37 个由发货 profile 每帧写**
+（逐行的表达式与曲线见 [HO 参数规范](PARAMETER_HO.md) §3.7）+ **2 个表情门**（profile **不写**，
+留给按键来源）。不写全的名字以后查[命名权威](FACE_TRACKING_NAMING.md) §6。
 
 | 组 | 参数 | 默认值 |
 | --- | --- | --- |
 | 区域门（5） | `Ho/Drive/Gate/Mouth` · `EyeLeft` · `EyeRight` · `Brow` · `Cheek` | **1** |
-| 表情门（2） | `Ho/Drive/Gate/Expr/Smile` · `Ho/Drive/Gate/Expr/Angry` | **0** |
-| 轴 | `Mouth/Form` `Open` `Funnel` `Press` `Jaw` `Forward` `Pucker` `X` `TongueL` `TongueR`；`Lid/Left\|Right/BlinkWide` `Squint`；`Gaze/Left\|Right/X` `Y`；`Brow/Left\|Right/Y` `InnerUp`；`Cheek/Left\|Right/Squint` `Puff`；`Nose/Left\|Right/Sneer`（前缀都是 `Ho/Drive/`） | 0（`BlinkWide` 也是 0） |
+| 表情门（2，profile 不写） | `Ho/Drive/Gate/Expr/Smile` · `Ho/Drive/Gate/Expr/Angry` | **0** |
+| 轴（28） | `Mouth/Form` `Open` `Funnel` `Press` `Jaw` `Forward` `Pucker` `X` `TongueL` `TongueR`；`Lid/Left\|Right/BlinkWide` `Squint`；`Gaze/Left\|Right/X` `Y`；`Brow/Left\|Right/Y` `InnerUp`；`Cheek/Left\|Right/Squint` `Puff`；`Nose/Left\|Right/Sneer`（前缀都是 `Ho/Drive/`） | 0（`BlinkWide` 也是 0） |
 | 切片权重（4） | `Ho/Drive/Slice/MouthCore/{Funnel0Press0, Funnel1Press0, Funnel0Press1, Funnel1Press1}` | 0 |
 
 **第 1 步 · 层与状态**：一层（现控制器是 `Ho/00 Drive`）+ 一个状态；**Write Defaults 开**。
