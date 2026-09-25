@@ -343,7 +343,18 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             return Dropdown(rect, index, options, tooltip);
         }
 
-        /// <summary>下拉菜单（选项很多时用，比如 ramp 预设）。</summary>
+        /// <summary>
+        /// 下拉菜单（选项很多时用，比如 ramp 预设）。
+        ///
+        /// ⚠️⚠️ **本方法拿不到用户的选择**，不要用它表达"值可以被改"的控件。
+        /// `EditorUtility.DisplayCustomMenu` 是**异步**的：它把菜单弹出去就返回，
+        /// 回调在**下一帧甚至更晚**才跑，而这里的 `result` 是局部变量、函数早就返回了 ——
+        /// 闭包里那句 `result = selected` 改的是一个没人再读的变量。所以本方法**永远返回入参**。
+        ///
+        /// 要"能改"的枚举控件用 <see cref="Segmented"/>（同步、当场返回 index），
+        /// 或把 `EnumControl` 的 `segmented` 传 `true`。这个坑真踩过：
+        /// 修饰符类型切不动，就是因为调用处传了 `segmented: false`。
+        /// </summary>
         public static int Dropdown(Rect rect, int index, string[] options, string tooltip = null)
         {
             int result = index;

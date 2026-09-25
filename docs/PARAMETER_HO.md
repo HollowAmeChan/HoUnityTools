@@ -596,7 +596,7 @@ VB 每行有三个**独立开关**（`smoothOn` / `stepOn` / `delayOn`），我�
 | 平滑**语义** | `Lerp(prev, 输入, 1 − smooth)`，**每帧一次** | `1 − exp(−dt / seconds)` | **单位不同**，见下 |
 | 平滑**时间基准** | **按帧**（无时间单位，帧率变了手感就变） | **按秒**（时间常数） | 我们帧率无关，**更稳** |
 | 平滑**用量** | `V3.0`: 20/26 行；`VisemesARKit`: 20/34；`VMC-Face-Head`: 2 行 | **23 / 90 行**（照 VB 换算） | 已对齐 |
-| **延迟** | 帧 FIFO，`delayCount = round(delay × 0.06)`；10 份预设里 `delayOn` **全 false** | 字段留位、**未实现**（面板标注） | 都等于没有 |
+| **延迟** | 帧 FIFO，`delayCount = round(delay × 0.06)`；10 份预设里 `delayOn` **全 false** | **每行一条 FIFO，单位秒**（不跟帧率绑定） | 我们做了，但 VB 从没启用过 |
 | **分档** | `[trigger, target, threshold, hold_ms]`，hold 走 `round(ms × 0.06)` 帧 | `trigger/target/hold/threshold`，hold 用**秒**；有迟滞与最短保持 | 语义接近，单位不同 |
 | 分档**用量** | `V2.0_Stepped`: 24/26 行；`PNGTuber`: 9/10 | **0 行** | 未采用 |
 | **曲线** | 逐行，通常恒等 | 逐行，90 行**全直线** | 一致 |

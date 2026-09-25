@@ -52,6 +52,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private float[] inputSmooth = new float[0];
         private int[] inputStepIndex = new int[0];
         private double[] inputStepUntil = new double[0];
+
+        /// <summary>延迟用的 FIFO，每行一条。元素是 <c>(到期时刻, 值)</c>。</summary>
+        private Queue<(double At, float Value)>[] inputDelay = new Queue<(double At, float Value)>[0];
         /// <summary>规范名 → 输入行号（同名多行时**最后一行**生效，方便用户覆盖）。</summary>
         private readonly Dictionary<string, int> inputIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string> touched = new List<string>();
@@ -61,6 +64,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private float[] outputSmooth = new float[0];
         private int[] stepIndex = new int[0];
         private double[] stepUntil = new double[0];
+
+        /// <summary>延迟用的 FIFO，每行一条。见 <see cref="inputDelay"/>。</summary>
+        private Queue<(double At, float Value)>[] outputDelay = new Queue<(double At, float Value)>[0];
         private readonly HoFaceInputMode[] lastModes = new HoFaceInputMode[52];
         private readonly bool[] selected = new bool[52];
         private readonly float[] held = new float[52];
@@ -287,7 +293,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 value = inputRows[row].Transform(value);
                 value = ApplyModifiers(row, inputRows[row], value, deltaTime, now,
-                    inputSmooth, inputStepIndex, inputStepUntil);
+                    inputSmooth, inputStepIndex, inputStepUntil, inputDelay);
                 inputValues[row] = value;
                 inputFresh[row] = true;
             }
@@ -316,7 +322,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 输入行与输出行共用这一套实现，只是状态数组各带一份（<paramref name="smooth"/> 等）。
         /// </summary>
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now,
-            float[] smooth, int[] stepRows, double[] stepUntil)
+            float[] smooth, int[] stepRows, double[] stepUntil,
+            Queue<(double At, float Value)>[] delay)
         {
             if (output.modifiers == null || output.modifiers.Count == 0) return value;
             for (int i = 0; i < output.modifiers.Count; i++)
@@ -335,8 +342,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     case HoFaceModifierKind.Steps:
                         value = Step(row, modifier, value, now, stepRows, stepUntil);
                         break;
+                    case HoFaceModifierKind.Delay:
+                        value = Delay(row, modifier, value, now, delay);
+                        break;
                     default:
-                        break;   // 延迟：数据留位，未实现（面板上标出来）
+                        break;
                 }
             }
 
@@ -344,7 +354,44 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now) =>
-            ApplyModifiers(row, output, value, deltaTime, now, outputSmooth, stepIndex, stepUntil);
+            ApplyModifiers(row, output, value, deltaTime, now, outputSmooth, stepIndex, stepUntil, outputDelay);
+
+        /// <summary>
+        /// 延迟：一个**每行一条的 FIFO**，进去的值等 <c>seconds</c> 秒之后再出来。
+        ///
+        /// 单位是**秒**（与平滑一致）。VBridger 那份是"帧数"、由它用 `round(delay*0.06)` 从毫秒折出来，
+        /// 与帧率绑定；我们统一走秒，换机器手感不变。
+        ///
+        /// 几个刻意的决定：
+        /// * **不推入 NaN / 无穷** —— 放进去会让整条队列的值都变成 NaN，而且是永久性的。
+        /// * **首帧先垫**：队列为空时直接返回 <paramref name="value"/>，不先垫一个 0，
+        ///   否则会话一开始会从 0 爬上来（跟平滑那边 `primed` 的道理一样）。
+        /// * **队列超时上限**：读数时间戳有抖动时，防止一条永远取不出来的队列无限长大。
+        /// </summary>
+        private float Delay(int row, HoFaceModifier modifier, float value, double now,
+            Queue<(double At, float Value)>[] delay)
+        {
+            float seconds = Mathf.Max(0.0001f, modifier.seconds);
+            Queue<(double At, float Value)> queue = delay[row];
+            if (queue == null)
+            {
+                queue = new Queue<(double At, float Value)>();
+                delay[row] = queue;
+            }
+
+            if (!float.IsNaN(value) && !float.IsInfinity(value))
+            {
+                queue.Enqueue((now + seconds, value));
+            }
+
+            float result = queue.Count > 0 ? queue.Peek().Value : value;
+            while (queue.Count > 0 && (queue.Peek().At <= now || queue.Count > 512))
+            {
+                result = queue.Dequeue().Value;
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// 分档：参数过 <c>trigger</c> 就跳到 <c>target</c>，往下掉超过 <c>threshold</c> 才退回去，
@@ -435,6 +482,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             inputSmooth = new float[inputList.Count];
             inputStepIndex = new int[inputList.Count];
             inputStepUntil = new double[inputList.Count];
+            inputDelay = new Queue<(double At, float Value)>[inputList.Count];
             inputIndex.Clear();
             for (int i = 0; i < inputStepIndex.Length; i++) inputStepIndex[i] = -1;
             for (int i = 0; i < inputList.Count; i++)
@@ -455,6 +503,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             outputSmooth = new float[rows.Count];
             stepIndex = new int[rows.Count];
             stepUntil = new double[rows.Count];
+            outputDelay = new Queue<(double At, float Value)>[rows.Count];
             outputIndex.Clear();
             for (int i = 0; i < 52; i++) arkitRow[i] = -1;
             for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档

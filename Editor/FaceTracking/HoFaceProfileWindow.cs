@@ -384,7 +384,6 @@ HoFaceOutput output = ActiveRows()[index];
             }
 
             bool bad = !HoFaceExpression.TryParse(output.expression, out _, out _);
-            bool delayed = HasDelay(output);
             string name = string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter;
 
             // ⚠️ 横向滚动条的**真正来源**就在这一行。
@@ -414,8 +413,12 @@ HoFaceOutput output = ActiveRows()[index];
                 DrawRowCurveBackground(content, output, bad, isSelected, accent);
             }
 
-            // ── 第一行：名字**左对齐**，右端接 ⚠ / 延迟 标记 ──────────────────────
-            Rect nameRect = new Rect(content.x + 4.0f, content.y, content.width - 8.0f, RowHeaderHeight);
+            // 角标占掉右上角（名字与表达式都让开它，免得压字）。
+            float badgeWidth = ModifierBadgeWidth(output);
+            Rect badgeRect = new Rect(content.xMax - badgeWidth, content.y, badgeWidth, RowHeaderHeight);
+
+            // ── 第一行：名字**左对齐** ───────────────────────────────────────────
+            Rect nameRect = new Rect(content.x + 4.0f, content.y, content.width - badgeWidth - 8.0f, RowHeaderHeight);
             if (Event.current.type == EventType.Repaint)
             {
                 var nameStyle = new GUIStyle(index == selected ? HoConstraintEditorTheme.Bold : HoConstraintEditorTheme.Label)
@@ -428,13 +431,14 @@ HoFaceOutput output = ActiveRows()[index];
                     : (index == selected ? HoConstraintEditorTheme.TextBrightColor : HoConstraintEditorTheme.TextColor);
                 GUI.Label(nameRect, new GUIContent(name, output.expression), nameStyle);
 
-                if (bad || delayed)
+                if (bad)
                 {
                     var noteStyle = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleRight };
-                    noteStyle.normal.textColor = bad ? HoConstraintEditorTheme.ErrorColor : HoConstraintEditorTheme.WarningColor;
-                    string glyph = (bad ? "⚠" : "") + (delayed ? " 延迟" : "");
-                    GUI.Label(nameRect, new GUIContent(glyph, bad ? "表达式解析不过：" + output.expression : "这行有延迟修饰符（未实现）。"), noteStyle);
+                    noteStyle.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                    GUI.Label(nameRect, new GUIContent("⚠", "表达式解析不过：" + output.expression), noteStyle);
                 }
+
+                DrawModifierBadges(badgeRect, output);
             }
 
             // ── 第二行：表达式**居中** ───────────────────────────────────────────
@@ -838,7 +842,7 @@ HoFaceOutput output = ActiveRows()[index];
                             HoConstraintEditorControls.Next(150.0f),
                             (int)modifier.kind,
                             ModifierKindNames,
-                            false,
+                            true,       // ⚠️ 必须 true：false 会走 `Dropdown`，而它是**异步**的（见那里的注释），选了不生效
                             "平滑 / 延迟 / 分档。按从上到下的顺序生效。");
                         modifier.kind = (HoFaceModifierKind)kind;
 
@@ -884,9 +888,8 @@ HoFaceOutput output = ActiveRows()[index];
                             using (HoConstraintEditorControls.Row(true))
                             {
                                 HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidthSm);
-                                GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
-                                style.normal.textColor = HoConstraintEditorTheme.WarningColor;
-                                GUI.Label(HoConstraintEditorControls.NextAuto("还没实现，装配时会跳过", style), new GUIContent("还没实现，装配时会跳过"), style);
+                                HoConstraintEditorControls.CaptionTrim("值等这么久才出来（每行一条队列）", 200.0f,
+                                    "进去的值等「时长」秒之后再出来。与平滑同一个单位（秒），不跟帧率绑定。");
                             }
                         }
                     }
@@ -942,7 +945,7 @@ HoFaceOutput output = ActiveRows()[index];
             }
         }
 
-        private static readonly string[] ModifierKindNames = { "平滑", "延迟（未实现）", "分档" };
+        private static readonly string[] ModifierKindNames = { "平滑", "延迟", "分档" };
 
         // ══════════════════════════════════════════════════════════════
         // 数据操作
@@ -959,22 +962,61 @@ HoFaceOutput output = ActiveRows()[index];
                 && output.parameter.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static bool HasDelay(HoFaceOutput output)
+        /// <summary>
+        /// **修饰符角标**：这一行挂了哪些修饰符，就在右上角站几个小字。
+        ///
+        /// 为什么要它：底色只说了"这是原始量（绿）/ 合成量（蓝）"，**说不出这行被加工过什么**。
+        /// 而"这行带平滑、那行带分档"恰恰是调参时最想一眼扫到的（VBridger 也是用角标标在行角上）。
+        ///
+        /// `平` = 平滑、`延` = 延迟、`档` = 分档。**修饰符链按顺序列出，所以角标也按顺序排** ——
+        /// 顺序本身是有意义的（先平滑再分档 ≠ 先分档再平滑），角标顺序就是它。
+        /// 不起作用的那些（`seconds = 0` 或分档里一步都没有）画暗一档：在链里但没在干活。
+        /// </summary>
+        private static void DrawModifierBadges(Rect rect, HoFaceOutput output)
         {
-            if (output.modifiers == null)
-            {
-                return false;
-            }
+            if (output.modifiers == null || output.modifiers.Count == 0) return;
 
+            const float badge = 13.0f;
+            float x = rect.xMax - badge;
+            for (int i = output.modifiers.Count - 1; i >= 0; i--)
+            {
+                HoFaceModifier modifier = output.modifiers[i];
+                if (modifier == null) continue;
+                if (x < rect.x) break;      // 位置不够就不画了（不叠字）
+
+                string glyph;
+                string what;
+                switch (modifier.kind)
+                {
+                    case HoFaceModifierKind.Smooth: glyph = "平"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
+                    case HoFaceModifierKind.Delay: glyph = "延"; what = "延迟 " + modifier.seconds.ToString("0.###") + " 秒"; break;
+                    default: glyph = "档"; what = "分档 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 档"; break;
+                }
+
+                Rect cell = new Rect(x, rect.y + 1.0f, badge, Mathf.Max(10.0f, rect.height - 2.0f));
+                var style = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleCenter };
+                style.normal.textColor = modifier.Active
+                    ? HoConstraintEditorTheme.TextBrightColor
+                    : HoConstraintEditorTheme.TextFaintColor;
+
+                // 深色小底：角标要压在曲线背景上，没底会跟线糊在一起。
+                EditorGUI.DrawRect(cell, new Color(0.0f, 0.0f, 0.0f, modifier.Active ? 0.34f : 0.18f));
+                GUI.Label(cell, new GUIContent(glyph, what + (modifier.Active ? "" : "（现在不起作用）")), style);
+                x -= badge + 1.0f;
+            }
+        }
+
+        /// <summary>角标要占多宽（名字与表达式据此让位）。</summary>
+        private static float ModifierBadgeWidth(HoFaceOutput output)
+        {
+            if (output.modifiers == null || output.modifiers.Count == 0) return 0.0f;
+            int count = 0;
             for (int i = 0; i < output.modifiers.Count; i++)
             {
-                if (output.modifiers[i] != null && output.modifiers[i].kind == HoFaceModifierKind.Delay)
-                {
-                    return true;
-                }
+                if (output.modifiers[i] != null) count++;
             }
 
-            return false;
+            return count == 0 ? 0.0f : count * 14.0f + 2.0f;
         }
 
         private void AddOutput()
