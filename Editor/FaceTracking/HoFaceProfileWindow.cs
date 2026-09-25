@@ -106,10 +106,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// 两列：**右列是目录，左列是详情**（按你的要求左右交换过）。
+        /// 两列：**左列是目录，右列是详情**。
         ///
-        /// 交换不只是"挪一下"：目录放右边之后，鼠标从右面板指向某一行时视线不用横跨整个窗口，
-        /// 而详情（表达式 + 曲线编辑器）占的是更宽的那半边。
+        /// 目录（名字 + 表达式 + 曲线）在左，详情（表达式编辑 + 曲线编辑器 + 修饰符）在右 ——
+        /// 详情占更宽的那半边，因为它要放整条曲线编辑器。
         /// </summary>
         private void DrawColumnSplit()
         {
@@ -119,6 +119,13 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
             {
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(width), GUILayout.ExpandHeight(true)))
+                {
+                    DrawLeftColumn();
+                }
+
+                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
+
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
                 {
                     List<HoFaceOutput> rows = ActiveRows();
@@ -129,20 +136,13 @@ namespace Hollow.HoUnityTools.FaceTracking
                     }
                     else if (rows == null || selected < 0 || selected >= rows.Count)
                     {
-                        HoConstraintEditorControls.CaptionTrim("（右边选一行）", 190.0f,
-                            "点右边的参数名看它的表达式、曲线与修饰符。");
+                        HoConstraintEditorControls.CaptionTrim("（左边选一行）", 190.0f,
+                            "点左边的参数名看它的表达式、曲线与修饰符。");
                     }
                     else
                     {
                         DrawRightColumn(selected);
                     }
-                }
-
-                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(width), GUILayout.ExpandHeight(true)))
-                {
-                    DrawLeftColumn();
                 }
             }
         }
@@ -191,6 +191,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                 case EventType.MouseDrag:
                     if (draggingSplitter)
                     {
+                        // 往右拖 = 列表列变宽（列表在**左**，中线跟着鼠标走）。
+                        // ⚠️ 这个符号与"列表在哪一列"绑定：哪天再把两列换边，这里要取反。
                         width = Mathf.Clamp(width + Event.current.delta.x, min, max);
                         Event.current.Use();
                         Repaint();
