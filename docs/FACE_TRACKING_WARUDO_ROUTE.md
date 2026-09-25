@@ -696,13 +696,13 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 **面捕这一系列不是单仓功能**：包（本仓库）定词表与主本，mod（`Assets/HoWarudoModTests`，**另一个仓库**）
 是同一套逻辑的运行期 —— 两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码，
-所以求值器那 10 份是**搬**过去的（清单在 mod 侧 `Core/PORTED.md`）。
+所以求值器那 11 份是**搬**过去的（清单在 mod 侧 `Core/PORTED.md`）。
 ⇒ 改了其中任何一份，**两边都要重新过一遍**，而且两边各有**只有它有**的那一关：
 
 * **只有包侧有**：离线用例（下面的 1、2 行，跑的是**包里的真源码**）、批处理 Unity 用例、整包编译检查。
 * **只有 mod 侧有**：`tools/compile-check.ps1` 里的 **UMod 沙箱 lint** —— Roslyn 放过 `System.Reflection` / `System.IO`，
   UMod 的 `RunCodeValidation` 才拦，**拦下来就是真构建失败**（为此白费过两次构建，见 `pitfalls/BUILD_AND_TOOLING.md` §4）。
-* **搬过去的那 10 份改完必须先跑 `.research/sync-modcore.ps1`**，否则 mod 侧还是旧语义 ——
+* **搬过去的那 11 份改完必须先跑 `.research/sync-modcore.ps1`**，否则 mod 侧还是旧语义 ——
   而且**编译照样过**，表现是"Warudo 里和面板里不一样"。在 mod 的副本里改则会被下次同步**无声覆盖**。
   完整规矩见 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7 与 [HO 参数规范](PARAMETER_HO.md) §0.0。
 

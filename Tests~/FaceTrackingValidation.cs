@@ -1053,7 +1053,9 @@ public static class HoFaceTrackingValidation
                 var hubGo = new GameObject("SemanticHub");
                 hubGo.transform.SetParent(hubProbeRoot.transform, false);
                 hubProbeHub = hubGo.AddComponent<HoFaceSemanticHub>();
-                hubProbeHub.EnsureSlots();
+                // 曲线那条路要**预先有槽**（曲线是静态绑定，越界写不报错）—— 这里显式给旧的 128 预留，
+                // 把"为什么以前必须预留"这件事留在用例里。**主线不走它**（见 stage 20 结尾的说明）。
+                hubProbeHub.Reserve(128);
 
                 var markerGo = new GameObject("Marker");
                 markerGo.transform.SetParent(hubProbeRoot.transform, false);
@@ -1125,19 +1127,58 @@ public static class HoFaceTrackingValidation
                     + (hubProbeAWorked || hubProbeBWorked ? "" : "**一个都不行**")
                     + " ; 对照组（标记物）动过=" + (hubProbeAPlayed || hubProbeBPlayed || hubProbeOutPlayed));
 
-                // 对照组：没有它，"槽 0 没变"这件事分不清是"路径错了"还是"动画没跑"。
-                Check(hubProbeAPlayed || hubProbeBPlayed || hubProbeOutPlayed,
-                    "对照组成立：同一个片段里的曲线推动了标记物（否则这一组实验什么都没测到）");
-                Check(hubProbeAWorked || hubProbeBWorked,
-                    "曲线能写进 Hub 的槽 —— 两种路径都没写进去；若 HO_HUB_PROBE 里对照组是动的，"
-                    + "那就说明**数组元素根本不能被曲线驱动**（存储形状要重新设计，不是改个字符串的事）");
-
+                // ⚠️ 这一段**只报告、不断言**：曲线写数组元素这条路**已经不是主线**了
+                //（2026-09-26 改成"状态机行为按名字开槽"，作者不必预先知道下标）。
+                // 上面那几行 `HO_HUB_PROBE` 仍然有用 —— 万一以后想拿曲线当备选，答案就在日志里。
                 Application.logMessageReceived -= hubProbeOnLog;
                 hubProbeOnLog = null;
                 UnityEngine.Object.Destroy(hubProbeRoot);
-                stage++; return;
+
+                // ── 主线：语义写手（状态机行为）──────────────────────────────────
+                // 这才是地基：**手动 `Animator.Update()` 求值时，挂在该状态上的 `OnStateUpdate`
+                // 到底会不会被调用**，以及它按名字开的槽我们能不能读出来。
+                // 单独搭一个干净的场地（Hub 从空开始，才看得出"槽是写手开的"，而不是预留出来的）。
+                hubProbeRoot = new GameObject("HubWriterProbe");
+                hubProbeAnimator = hubProbeRoot.AddComponent<Animator>();
+                hubProbeAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+                var writerHubGo = new GameObject("SemanticHub");
+                writerHubGo.transform.SetParent(hubProbeRoot.transform, false);
+                hubProbeHub = writerHubGo.AddComponent<HoFaceSemanticHub>();
+
+                var writerMarkerGo = new GameObject("Marker");
+                writerMarkerGo.transform.SetParent(hubProbeRoot.transform, false);
+                hubProbeMarker = writerMarkerGo.transform;
+
+                hubProbeAnimator.runtimeAnimatorController = HubWriterProbeController(
+                    AssetDatabase.GenerateUniqueAssetPath("Assets/HubWriter.controller"));
+                hubProbeAnimator.SetFloat("P/A", 0.6f);
+                stage++; frame = Time.frameCount + 12; return;
             }
             if (stage == 21)
+            {
+                float marker = hubProbeMarker.localPosition.x;
+                string name0 = hubProbeHub.NameAt(0);
+                string name1 = hubProbeHub.NameAt(1);
+                float value0 = hubProbeHub.GetFloat(0);
+                float value1 = hubProbeHub.GetFloat(1);
+                Debug.Log("HO_HUB_WRITER: 槽0 = `" + name0 + "` = " + value0.ToString("0.###", CultureInfo.InvariantCulture)
+                    + "（期望 MouthX = 0.6）· 槽1 = `" + name1 + "` = " + value1.ToString("0.###", CultureInfo.InvariantCulture)
+                    + "（期望 MouthY = 1.2）· 槽数 = " + hubProbeHub.SlotCount
+                    + " · 标记物 x = " + marker.ToString("0.###", CultureInfo.InvariantCulture) + "（1.234 = 状态在跑）");
+
+                // 对照组：状态没跑起来的话，"没写进去"就什么都说明不了。
+                Check(Mathf.Abs(marker - 1.234f) < 0.01f,
+                    "语义写手那套的状态确实在求值（片段里的标记物曲线动了）—— 否则这一条测不到东西");
+                Check(name0 == "MouthX" && name1 == "MouthY"
+                    && Mathf.Abs(value0 - 0.6f) < 0.01f && Mathf.Abs(value1 - 1.2f) < 0.01f,
+                    "语义写手（状态机行为）在手动 Animator.Update 求值时被调用，并按**名字**开槽写进了影子 Hub"
+                    + "（实际：" + name0 + "=" + value0 + " / " + name1 + "=" + value1 + "）");
+
+                UnityEngine.Object.Destroy(hubProbeRoot);
+                stage++; return;
+            }
+            if (stage == 22)
             {
                 SendPacket(Shape("JawOpen", 0.6f));
                 if (Mathf.Abs(Weight("jawOpen") - 60f) > 0.6f) return;   // 等它被驱动上来
@@ -1219,6 +1260,43 @@ public static class HoFaceTrackingValidation
         AssetDatabase.AddObjectToAsset(clip, controller);
         var state = controller.layers[0].stateMachine.AddState("HubProbe");
         state.motion = clip;
+        EditorUtility.SetDirty(controller);
+        AssetDatabase.SaveAssets();
+        return controller;
+    }
+
+    /// <summary>
+    /// 给**主线**（语义写手）造一份最小控制器：一个图层、一个状态、一个空片段（只用来让状态"在跑"），
+    /// 状态上挂一个 <see cref="HoFaceSemanticWriterBehaviour"/>，写两条语义：
+    /// `MouthX = P/A`、`MouthY = P/A * 2` —— 都靠**名字**，一个下标都不出现。
+    /// 片段里还画了一条标记物曲线（对照组：它动了才证明状态真的在求值）。
+    /// </summary>
+    private static AnimatorController HubWriterProbeController(string assetPath)
+    {
+        var controller = AnimatorController.CreateAnimatorControllerAtPath(assetPath);
+        controller.AddParameter("P/A", AnimatorControllerParameterType.Float);
+
+        var clip = new AnimationClip { name = "Idle", frameRate = 60f };
+        AnimationUtility.SetEditorCurve(clip,
+            EditorCurveBinding.FloatCurve(
+                AnimationUtility.CalculateTransformPath(hubProbeMarker, hubProbeAnimator.transform),
+                typeof(Transform), "m_LocalPosition.x"),
+            AnimationCurve.Constant(0f, 1f, 1.234f));
+        AssetDatabase.AddObjectToAsset(clip, controller);
+
+        var state = controller.layers[0].stateMachine.AddState("Writer");
+        state.motion = clip;
+
+        var behaviour = state.AddStateMachineBehaviour(typeof(HoFaceSemanticWriterBehaviour));
+        var serialized = new SerializedObject(behaviour);
+        var entries = serialized.FindProperty("entries");
+        entries.arraySize = 2;
+        entries.GetArrayElementAtIndex(0).FindPropertyRelative("slot").stringValue = "MouthX";
+        entries.GetArrayElementAtIndex(0).FindPropertyRelative("expression").stringValue = "P/A";
+        entries.GetArrayElementAtIndex(1).FindPropertyRelative("slot").stringValue = "MouthY";
+        entries.GetArrayElementAtIndex(1).FindPropertyRelative("expression").stringValue = "P/A * 2";
+        serialized.ApplyModifiedProperties();
+
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
         return controller;

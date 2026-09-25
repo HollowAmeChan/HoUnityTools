@@ -12,7 +12,7 @@
 - [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
 - [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：静态姿势树的代数边界与完整Animator的区别；已更正“不能写Animator参数”的旧结论，原生参数曲线在两个Unity版本实测可用。
 - [**控制器完整输出与物理阶段设计**](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)：Animator参数回写、跨Layer求值时序、组件/显隐/材质MPB/引用切换的双版本实测，以及Warudo属性帧、绑定清单和果冻物理调度方案。**已按"组件值全部走 Hub"修订**：控制器只吐姿态（形态键+骨骼）与语义（Hub + Connector），材质/显隐/对象引用不再是我们写的目标。
-- [**动态参数（语义输出）**](FACE_TRACKING_DYNAMIC_PARAMETERS.md)：控制器那条**很薄的第二输出**怎么走 —— 值在 `HoFaceSemanticHub`（纯存值、预留槽位）、名字在 `HoFaceSemanticConnector`（槽表 + 直接引用 Hub）、`P/` 前缀只在生成期用。含"为什么删掉那个 ScriptableObject 资产"（实测：它那半边**从来没有过消费者**）与 ⚠️ **未实测**的一条：曲线到底用哪个字符串写进数组元素（`values.Array.data[i]` 还是 `values.<i>` —— 它决定槽位长度怎么定）。
+- [**动态参数（语义输出）**](FACE_TRACKING_DYNAMIC_PARAMETERS.md)：控制器那条**很薄的第二输出**怎么走 —— 值在 `HoFaceSemanticHub`（纯存值，槽由写手运行期按名字开）、名字表在 `HoFaceSemanticConnector`、**写手是状态机行为** `HoFaceSemanticWriterBehaviour`（填"语义名 + 表达式"，**不用知道下标**）、`P/` 前缀只在生成期用。含"为什么删掉那个 ScriptableObject 资产"（实测：它那半边**从来没有过消费者**）、"为什么把动画曲线换成状态机行为"（绑定是静态字符串 ⇒ 作者必须先知道下标、Animation 窗口里数组元素没有名字、表重排会静默写错槽），以及 ⚠️ **还没验**的两条：手动 `Animator.Update` 会不会调 `OnStateUpdate`、bundle 里能不能解析到写手类型。
 - [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条断言 + 怎么重跑；⚠️ 2026-09-26 改过夹具后**还没重跑**）。
 - [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
 - [**VTS → VB → 高质量混合树全量契约（当前设计入口）**](VTS_HIGH_QUALITY_FACE_CONTRACT.md)：98个公开VTS固定参数、52原始形变、34个原装VB V3输出、39个拟定HQ扩展和42个高级树族；含全量矩阵、条件轴及选择性填动画的fallback规则，不限定格数。[机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json)。
