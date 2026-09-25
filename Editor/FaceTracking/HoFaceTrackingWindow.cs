@@ -724,13 +724,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var session = HoFaceInputHub.Session(settings);
             var rows = settings.Outputs();
 
+            // ⚠️ **没有会话 ≠ 参数不在控制器里**（2026-09-26 修）：会话没起时 `Compiled` 是 null，
+            // 那时"查不到这个参数"只说明没人问过控制器，不是"名字对不上"。以前这两件事混在一起，
+            // 表现是"没点开始驱动"时那一栏直接报 `不在控制器里 94`（红黄一片），把人往错的方向带。
+            bool hasSession = session != null && session.Compiled != null;
+
             int named = 0, live = 0, missing = 0;
             for (int i = 0; i < rows.Count; i++)
             {
                 if (rows[i] == null || string.IsNullOrEmpty(rows[i].parameter)) continue;
                 named++;
-                bool inController = session != null && session.Compiled != null
-                    && session.Compiled.floatParameters.Contains(rows[i].parameter);
+                bool inController = !hasSession
+                    || session.Compiled.floatParameters.Contains(rows[i].parameter);
                 if (!inController) missing++;
                 float value = session != null ? session.OutputValue(rows[i].parameter) : float.NaN;
                 if (!float.IsNaN(value) && Mathf.Abs(value) > 0.0001f) live++;
@@ -738,11 +743,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             string summary = named == 0
                 ? "没有输出行"
-                : named + " 行 · 非零 " + live + (missing > 0 ? " · **不在控制器里 " + missing + "**" : "");
+                : named + " 行 · 非零 " + live
+                  + (hasSession
+                      ? (missing > 0 ? " · **不在控制器里 " + missing + "**" : "")
+                      : " · **会话没起**");
 
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
                 ref outputExpanded, "参数输出", summary,
-                missing > 0 ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver))
+                hasSession && missing > 0 ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver))
             {
                 return;
             }
@@ -759,15 +767,29 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Label("筛选", HoConstraintEditorTheme.LabelWidthSm);
                     outputSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), outputSearch, HoConstraintEditorTheme.Field);
-                    if (missing > 0)
+                    if (hasSession && missing > 0)
                     {
                         HoConstraintEditorControls.Gap();
                         GUILayout.Label(missing + " 行的参数不在控制器里", InlineWarning());
                     }
                 }
 
-                if (session == null)
-                    HoConstraintEditorControls.Caption("（进播放模式并点「开始驱动」后这里才有值；现在只能看名字与表达式）");
+                if (!hasSession)
+                {
+                    // 会话没起时这一栏**永远是空的** —— 而「开始驱动」那个按钮在折叠的「对象」段里，
+                    // 所以这里放一个等价入口（2026-09-26：用户就是在这儿找"为什么没输出"）。
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        HoConstraintEditorControls.Caption("（进播放模式并点「开始驱动」后这里才有值；现在只能看名字与表达式）");
+                        bool canDrive = Application.isPlaying && settings != null && settings.HasProfile;
+                        if (HoConstraintEditorControls.Button("开始驱动",
+                            "等同「对象」段里那个按钮：一次只算一次（谁先读谁触发），所以点一下就开始算参数与驱动。",
+                            !canDrive, 84.0f))
+                        {
+                            HoFaceInputHub.Start(settings);
+                        }
+                    }
+                }
 
                 outputScroll = EditorGUILayout.BeginScrollView(outputScroll, GUILayout.Height(180.0f));
                 using (HoConstraintEditorControls.Row(true))
@@ -788,7 +810,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     float value = session != null ? session.OutputValue(row.parameter) : float.NaN;
                     bool has = !float.IsNaN(value) && session != null;
-                    bool inController = session == null || session.Compiled == null
+                    bool inController = !hasSession
                         || session.Compiled.floatParameters.Contains(row.parameter);
 
                     using (HoConstraintEditorControls.Row(true))
