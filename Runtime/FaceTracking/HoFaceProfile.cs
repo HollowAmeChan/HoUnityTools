@@ -63,7 +63,14 @@ namespace Hollow.HoUnityTools.FaceTracking
             return HoFaceProfileJson.Write(middleware);
         }
 
-        /// <summary>内置默认的配置文本（"新建配置文件"与包内那份默认配置都用它）。</summary>
+        /// <summary>
+        /// 内置默认表的文本（52 个 ARKit 出口 + 眼睑两根轴）。
+        ///
+        /// ⚠️ **"新建配置"不再用它**（2026-09-26 起新建出来是**空**的）——
+        /// 从零建一份配置时替作者决定映射什么是越界，而且这张表的血统（`ARKit/` 前缀）
+        /// 正是我们判定不该往发货配置里写的那个形状。现在它只剩两个用途：
+        /// 导出/查看默认表、以及验证用例的夹具。
+        /// </summary>
         public static string WriteDefaults()
         {
             return Write(HoFaceMiddlewareDefaults.Create());

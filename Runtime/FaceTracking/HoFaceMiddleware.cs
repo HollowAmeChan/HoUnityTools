@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -169,8 +169,8 @@ namespace Hollow.HoUnityTools.FaceTracking
     ///   所以哪个源在发，就只有那一套行会动。
     /// · **输出行**：52 个 `ARKit/&lt;键&gt;` 直通 + 4 根眼睑轴。
     ///
-    /// ⚠️ **它只有三个角色，运行期一律不走它**（2026-09-25 定稿）：
-    /// ① 「新建配置」写出来的初始内容；② `HoFaceProfile.WriteDefaults()` 的导出文本；③ 验证用例的夹具。
+    /// ⚠️ **它只有两个角色，运行期一律不走它**（2026-09-25 定稿；2026-09-26 去掉第三个）：
+    /// ① `HoFaceProfile.WriteDefaults()` 的导出文本；② 验证用例的夹具。
     /// **没有"没指定配置文件就拿它兜底"这回事了** —— Unity 面板与 Warudo 节点两边统一为**空 = 空表**：
     /// 静默兜底等于"没填也能动脸"，而动的是一份谁也没看过的表，最难查。
     /// <see cref="IFacialWire"/> / <see cref="VtsWire"/> 这两个函数也是给 ① 用的；运行时只认 JSON 里的输入行。

@@ -234,6 +234,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
 
                     HoConstraintEditorControls.Gap();
+                    // 「窗口」= 打开配置文件窗口盯着**这一份**。新建也归那边
+                    // （从零建一份是编辑器的活，这一栏只管"用哪一份"）。
+                    // ⚠️ 只有**工程里的资产**能开：那个窗口是围绕 `TextAsset` 转的，
+                    // 工程外的文件没有资产可指（它照样能驱动，只是不能在编辑器里改）。
+                    using (new EditorGUI.DisabledScope(currentAsset == null))
+                    {
+                        if (HoConstraintEditorControls.Button("窗口", "打开配置文件窗口编辑这一份（输入行 / 输出行、曲线、修饰符）。", false, 40.0f))
+                        {
+                            HoFaceProfileWindow.Open(currentAsset);
+                        }
+                    }
+
+                    HoConstraintEditorControls.Gap();
                     // 「选…」留着：工程**之外**的文件没有资产可拖（Warudo 只看路径，那种也合法）。
                     if (HoConstraintEditorControls.Button("选…", "选一个 .hoface.json。工程里的直接拖上面那个框就行；这个按钮留给工程外的文件。", false, 34.0f))
                     {
@@ -246,19 +259,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         }
                     }
 
-                    if (HoConstraintEditorControls.Button("新建", "在工程里写一份内置默认配置。", false, 40.0f))
-                    {
-                        string path = EditorUtility.SaveFilePanelInProject(
-                            "新建中间层配置", "ho-2d.hoface.json", "json", "写一份内置默认");
-                        if (!string.IsNullOrEmpty(path))
-                        {
-                            System.IO.File.WriteAllText(path, HoFaceProfile.WriteDefaults());
-                            AssetDatabase.Refresh();
-                            settings.profilePath = path;
-                            settings.ReloadProfile();
-                            HoFaceDebugHost.Save();
-                        }
-                    }
+                    // 「新建」**不在这里** —— 从零建一份配置是「配置文件」窗口的活
+                    // （菜单 `HoUnityTools/面捕/配置文件`）。这一栏只管"用哪一份"。
+                    // 两个窗口都能建的话，两份实现会各自漂移，而且这里建出来的还带一整套
+                    // 内置默认表 —— 那是"作者的活"，不该由"选文件"顺手替他决定。
 
                     if (!settings.HasProfile) HoConstraintEditorControls.Caption("必填；空着下面三栏都锁住");
                     else if (settings.Middleware == null) HoConstraintEditorControls.Caption("读不出来：" + settings.ProfileError);

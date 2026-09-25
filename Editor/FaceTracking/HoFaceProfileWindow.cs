@@ -1254,20 +1254,43 @@ ActiveRows().Insert(to, moved);
         // 新建 / 保存 / 重载
         // ══════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// 新建一份**空**配置。
+        ///
+        /// **不带任何默认行**（以前写的是 `HoFaceProfile.WriteDefaults()`，那是一整套
+        /// 52 个 ARKit 出口 + 眼睑两根轴的示例表）。理由：
+        /// * "这一层不做事"就是**空表**（见 `HoFaceMiddleware` 的语义），空配置是合法起点；
+        /// * 带上默认表等于**替作者决定**了他要映射什么 —— 而这份默认表的血统（`ARKit/` 前缀）
+        ///   恰恰是我们已经判定不该往发货配置里写的那个形状；
+        /// * 从空开始，`输入行 N / 输出行 M` 与状态行会如实说"什么都还没有"，
+        ///   比"建出来就 52 行、不知道哪来的"好查。
+        /// </summary>
         private void NewProfile()
         {
-            string path = EditorUtility.SaveFilePanelInProject("新建面捕配置", NewProfileName, "hoface.json", "新建一份中间层配置（内容 = 内置默认表）。");
+            string path = EditorUtility.SaveFilePanelInProject("新建面捕配置", NewProfileName, "hoface.json",
+                "新建一份**空**中间层配置（输入行 / 输出行都从零开始）。");
             if (string.IsNullOrEmpty(path))
             {
                 return;
             }
 
-            WriteText(path, HoFaceProfile.WriteDefaults());
+            var empty = new HoFaceMiddleware
+            {
+                displayName = System.IO.Path.GetFileNameWithoutExtension(path)
+                    .Replace(HoFaceProfile.Extension, ""),
+                notes = "空配置。输入行 = 线名 → 规范名；输出行 = 规范名 → 控制器参数。\n"
+                    + "两边都从零开始：这一层现在什么都不做。"
+            };
+            WriteText(path, HoFaceProfile.Write(empty));
             AssetDatabase.ImportAsset(path);
 
             // 直接把新文件接上来，免得"建好了还要再选一次"
             profile = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            selected = -1;
+            editingInputs = false;
+            ClearHistory();
             ReloadProfile(true);
+            SetMessage("已新建空配置 " + path, false);
         }
 
         private void SaveProfile()
