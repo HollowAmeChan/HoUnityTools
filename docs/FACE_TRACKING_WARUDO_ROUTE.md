@@ -85,7 +85,7 @@
 | 项 | 今天 | 依据 |
 |---|---|---|
 | mod 个数 | **1 个**：`[PluginType] Id = hollow.hofacetracking`，Name `Ho Face Tracking`，v`0.2.0` | `HoFaceTrackingPlugin.cs:32-46` |
-| 节点个数 | **6 个**（`NodeTypes` 列全）：接收器 / `HoFace参数处理` / `HoFace控制求解` / `写动态参数` / 调试日志 / **`Ho合并字典`**（2026-09-25 拆完；后两个是**通用件**，跟面捕无关，只是暂时放在这个 mod 里 —— 见 mod `README.md` §1.1） | `HoFaceTrackingPlugin.cs:38-52` |
+| 节点个数 | **7 个**（`NodeTypes` 列全）：接收器 / `HoFace参数处理` / `HoFace控制求解` / `写动态参数` / 调试日志 / **`HoStringFloat`** / **`Ho合并字典`**（2026-09-25 拆完；最后三个是**通用件**，跟面捕无关，只是暂时放在这个 mod 里 —— 见 mod `README.md` §1.1） | `HoFaceTrackingPlugin.cs:38-56` |
 | 沙箱目录名 | `…/StreamingAssets/Plugins/Data/hollow.hofacetracking/`（= pluginId） | `Player.log`：`[Ho 面捕] 中间层配置目录：…（现有 2 份配置）` |
 
 | 节点（面板标题） | 状态 | 输出的口（2026-09-25 收口 + 拆分后） |
@@ -94,7 +94,7 @@
 | `HoFace参数处理` | **正式** | **3 个**：`参数`（字典，列表语义 —— 输出行的结果，**键已去掉 `ARKit/` 前缀**）+ `有脸`（布尔）+ `状态`（四行：配置行 · 问题 · 沙箱路径 · 沙箱里现成的配置）。<br>这就是两层之间**唯一的接口**；`数值预览` 那份长文本按「重读配置」按钮写进 `Player.log`（摊开的就是出口那份参数）。 |
 | `HoFace控制求解` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个 `状态`（多行：参数几个键 · 形状几个 · 有脸 · 头姿；+ `控制器：…`）。**零配置**（唯一那个"配置"是必填的 `控制器` bundle 选择 —— 它是求值场所，不是映射）；输入 = `参数`（字典）+ `有脸`（布尔，**默认 true**）+ `控制器`（**必填**，沙箱 `*.bundle` 下拉，见下面的 §2.0.2）。<br>⚠️ **没有可用的控制器就不吐任何输出**（5 个口全中性，`状态` 里点名原因）—— 见 §2.0.3。<br>⚠️ 它的 `NodeType.Id` **沿用旧「Ho Face 处理链」那个** `7c3a91d6-…`，所以升级时指官方三个节点的 5 根线不会断。 |
 | `HoFace写动态参数` | **正式（2026-09-26 加）** | **2 个**：`写入数` / `状态`。输入 = `角色`（**必填**，`HoFaceSemanticHub` 挂在它的子层级里）+ `动态参数`（字典 ← **参数处理的 `参数`**，或「Ho合并字典」的 `字典`）。把**中间层那份参数**按**名字**写进角色 Hub（`SetFloat`，**没有表**）。⚠️ 它**只找不建**：角色上没有 Hub 就只在 `状态` 里报一句。 |
-| `Ho合并字典` | **正式（通用件，跟面捕无关，2026-09-26 加）** | **2 个**：`字典` / `状态`。输入 = `基础`(字典) + `覆盖字典`(字典) + **`覆盖行`（`StructuredData` 元组行，面板手填）** + `只补缺失`(bool)。官方没有"两块 名字→浮点 表合并"的节点（合并只给了骨骼旋转 / 权重），这个补空缺；典型用法是把控制器里恒 1 的门控用一行覆盖成 0。取证实录见 §3.5 与 mod `README.md` §1.1。 |
+| `HoStringFloat` | **正式（通用件，跟面捕无关，2026-09-27 加）** | **2 个**：`字典` / `状态`。输入 = `行`（`(名字, 值)` 的 `StructuredData` 元组行，**面板手填**）。用途：图里没有"手填字典"这回事（见 §3.5），所以"手填一张 `名字→浮点` 表"只能做成节点；输出是**字典**，直接插合并字典的 `覆盖` / 控制求解 / 写动态参数。 |\n| `Ho合并字典` | **正式（通用件，跟面捕无关，2026-09-26 加）** | **2 个**：`字典` / `状态`。输入 = `基础`(字典) + `覆盖字典`(字典) + **`覆盖行`（`StructuredData` 元组行，面板手填）** + `只补缺失`(bool)。官方没有"两块 名字→浮点 表合并"的节点（合并只给了骨骼旋转 / 权重），这个补空缺；典型用法是把控制器里恒 1 的门控用一行覆盖成 0。取证实录见 §3.5 与 mod `README.md` §1.1。 |
 | `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制；⑥ **显示认几类值**（`Describe`）：字符串原样、名→值的表（排序摊平）、**数组/列表逐项**（`[i] = (x, y, z, w)`）、`Vector3`/`Quaternion` 用 F3 —— ⚠️ 数组这条修过：`object` 口拿到 `Bone Rotations`（`Quaternion[]`）时只靠 `ToString()` 屏上只有 `UnityEngine.Quaternion[]` 一行，而官方「检查值」把数组序列化成 JSON，所以"官方的能出值"，差的不是口、是显示。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
 
 **📖 §2.0.2 控制器模式（**必填**，2026-09-25 加 / 当天改成必填）**：`HoFace控制求解` 有一个**必填**输入 —— 一个
@@ -508,6 +508,41 @@ ON_UPDATE ─flow→ SET_CHARACTER_TRACKING_BLENDSHAPES ─→ OVERRIDE_CHARACTE
 ① 官方字典口输出**复用内部实例** —— `OffsetBlendShapeNode.lastBlendShapes` 每帧 `Clear()` + 重填 + 返回自己，
 `EmptyBlendShapeListNode` 直接返回缓存字段 ⇒ 返回值"别跨帧留着"是这套图本来的约定，不是我们的怪癖；
 ② 输入字典为 `null` 时官方**返回 `null`**（不是空表）—— 所以我们的节点自己判空、自己兜底是必要的。
+
+#### 3.5.1 接线时 Warudo 怎么判类型：多态只有"`object`"和"转换器"两条路（2026-09-27 IL 取证）
+
+起因：问"合并字典的输入口能不能**同时**吃字典和元组"。答案在这一段里。
+一个口的类型只有一个（`DataInputPort.Type` / `DataOutputPort.Type`，**没有 union / 泛型口**）；
+兼容性由 `Graph.AddDataConnection` 在**接线那一刻**判，IL 逐条读出来是四条，任意一条成立就放行：
+
+| # | 判据（IL） | 意思 |
+|---|---|---|
+| 1 | `outputPort.Type.InheritsFrom(inputPort.Type)` | 子类型 → 基类型；因为一切都是 `object` 的子类 ⇒ "**任何输出 → `object` 输入**"天然成立 |
+| 2 | **任一侧的类型正好是 `System.Object`** | 所以 `object` **输出**也能插进任何 typed 输入（运行期下转）。token 已核实（`ldtoken` + `newarr Object`） |
+| 3 | `DataConverters.CanConvert(out, in)` | 查一张 `(from, to)` 表 |
+| 4 | 都不成立 | **抛 `ArgumentException("{输出节点}::{口} is not compatible with {输入节点}::{口}")`** —— 接线当场就报，不静默 |
+
+**内置转换器只有 5 个**（`DataConverters.Initialize` 的 IL）：`IntToFloat`、`FloatToInt`、
+`IntToString`、`FloatToString`、`BoolToString` —— **没有任何容器类转换**。但可以自己注册，
+而且 API 是 public、注册后还会同步给客户端（编辑器里也认这条转换）：
+
+```csharp
+public static void RegisterConverter<T1,T2>(DataConverter<T1,T2> converter);
+public static void RegisterGenericConverter(Type fromType, Type toType, IDataConverter converter);  // IDataConverter { object Convert(object data) }
+```
+
+**我们自己的两条实测/结论**：
+* **多态口用 `object` 是可行的**：`Ho调试日志` 的 `[DataInput] object 写入` 什么都能接（字典 / 数组 /
+  字符串都进得来，已实测）—— 走的就是第 1 条。代价是**丢掉接线时的类型检查**，只能在运行期自己
+  `is` 判断（UMod 允许 `is` / 强转，`GetType()` 那类反射不行）。
+* **但我们不用它**：合并字典 / 控制求解 / 写动态参数 / `HoStringFloat` 的口全是
+  `Dictionary<string,float>`，**类型完全相同、直接能插**；而"别的类型不许接"由第 4 条在接线时执行，
+  比运行期白名单严格得多。真要"两个类型共用一个口"的场合，干净做法是**注册一个转换器**
+  （只放行那一种类型对，其它照旧抛错）。
+
+**于是"手填一张表"这件事的结论**：官方字典口从来不手填（见上一段），所以手填只能做成节点 ——
+`HoStringFloat`（`(名字, 值)` 行 → 字典）就是这个通用件；它输出**字典**而不是某种"元组类型"，
+正是为了让上面这条"类型完全相同直接插 + 接线时拦错"成立。
 
 ---
 

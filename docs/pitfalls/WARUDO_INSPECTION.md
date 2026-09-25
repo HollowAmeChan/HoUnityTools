@@ -272,3 +272,16 @@ Rethrow as Exception: Could not register node type HoFaceTracking.Nodes.HoFacePa
 方法（`LoadPendulumPhysicsProfileNode.AutoCompleteProfile`）的真实签名是
 `UniTask<AutoCompleteList>`。**列 API 时要把参数/返回的完整类型打出来**，别只看名字。
 
+## 10. 反射工具曾经看不见**静态成员**（静态类会 dump 成"一个成员都没有"）
+
+症状：`warudo-knobs Warudo.Core.dll DataConverters --attrs` 打出 `== DataConverters (base: Object)`
+**下面一行都没有** —— 看起来像这个类是个空壳。差点据此回答"Warudo 没有类型转换表"。
+
+真因：默认 dump 那三个循环用的是
+`GetFields/GetProperties/GetMethods(BindingFlags.Public | NonPublic | Instance | DeclaredOnly)` ——
+**漏了 `BindingFlags.Static`**。所以**纯静态类**（`DataConverters`、以及任何 `static class`）看起来是空的，
+静态字段/属性也一律不显示。`--il` 那条路是带 `Static` 的，所以同一份信息在 IL 里反而看得到。
+
+已修（2026-09-27）：三个循环都加上 `Static`，并在输出里给字段/属性/方法标上 `static`。
+教训跟 §9 是同一条：**工具给出"没有"之前，先确认它问的方式对**。
+
