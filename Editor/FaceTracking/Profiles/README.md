@@ -14,27 +14,76 @@
 
 | 文件 | 是什么 |
 |---|---|
-| `ho-vts-default.hoface.json` | **默认配置层**（骨架）：三种方言的线名 → 规范名 + 58 条输出行。给人复制当起点用 |
-| `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的调试配置（单方言，65 输入 / 58 输出） |
-| `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的调试配置（单方言，67 输入 / 58 输出） |
+| `ho-iPhoneVTS.hoface.json` | **正式中间层的第一份**：67 条 iPhone 线名 + 21 条出口。出口**不是直通**，是**从 ARKit 形态量合成 VTS 官方追踪参数**（`FaceAngleX` / `MouthOpen` / `Brows`…）。公式机械取自本机 VBridger，见下 |
+| `ho-vts-default.hoface.json` | **旧骨架**：三种方言的线名 → 规范名 + 58 条 `ARKit/*` 直通出口，给人复制当起点用。⚠️ 它的出口写 `ARKit/*`——**等于假设控制器做 ARKit 语义**，而这并不保证 |
+| `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的**纯直通参考**：67 输入 / 67 输出，零改名、零曲线 |
+| `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的**纯直通参考**：65 输入 / 65 输出，同上 |
 
-三份都由脚本生成，名字全部取自源码与**实测真值**（**不手抄、不按命名规则推断**）：
+**"直通参考"和"中间层"是两件事**，别混：`ho-debug-*` 只负责"原样记录这台设备发了什么"
+（`parameter = expression = 线名`，两层曲线恒等），它是**实测表**的落盘形式，职责只有记录；
+`ho-iPhoneVTS` 才是**真在加工**的那一层（改名 / 表达式 / 曲线）。
+
+旧三份由 `gen-default-profile.ps1` 生成，名字全部取自源码与**实测真值**（**不手抄、不按命名规则推断**）：
 
 ```powershell
-& .warudo-mod-research\.tools\gen-default-profile.ps1
+& .warudo-mod-research\.tools\gen-default-profile.ps1    # ho-vts-default
 # 设备那两份（纯直通参考预设）的内容 = PARAMETER_DEVICE_VERIFICATION.md 里对应表的 wire 列。
 # 改线名就改那份文档的实测表，然后：
-& .warudo-mod-research\.tools\gen-verif-tables.ps1     # 刷新文档里的生成表
+& .warudo-mod-research\.tools\gen-verif-tables.ps1       # 刷新文档里的生成表
+
+# 正式中间层：公式从本机 VBridger 机械提取，不手抄
+& .warudo-mod-research\.tools\gen-iphone-vts-profile.ps1
 ```
 
 ⚠️ **设备那两份的线名是实测抄下来的**（`docs/PARAMETER_DEVICE_VERIFICATION.md` 的 `wire` 列），
 **不能推断**：第一版安卓配置照 iFacialMocap 的 `_L/_R` 规则拼出 `browInnerUp`，
 而设备发的是 `browInnerUp_L/R` ⇒ 那一格永远没数据，另有 12 行指向设备**根本不发**的键。
 **这类错误不报错、只是静默不动**，所以线名必须来自实测。
-**一份设备一份**：两台设备的名字集合不同（安卓 65 / 苹果 73 个键），互相套用就会静默失效。
+**一份设备一份**：两台设备的名字集合不同（安卓 65 / 苹果 67 个键），互相套用就会静默失效。
 
 ⚠️ 生成器是**纯 ASCII** 的（Windows PowerShell 5.1 把无 BOM 的 `.ps1` 当 ANSI 读，脚本里放中文会炸），
 所以中文 `notes` 从命令行 `-Notes` 传进去。
+
+## `ho-iPhoneVTS` 的口径（正式中间层）
+
+| 层 | 做什么 | 为什么 |
+|---|---|---|
+| **输入行**（67） | `parameter = expression = 设备线名`，**零改名** | 这一份的**规范名词表就是设备线名词表**。再发明一套名字＝加一层里面什么都没有的映射 |
+| **出口**（21） | **ARKit 形态量 → VTS 官方追踪参数** | 出口左值是**控制器参数名**。控制器不保证做 ARKit 语义，所以不写 `ARKit/*`；VTS 追踪参数是**外部有文档的标准**（[参数标准表 §1.1](../../../docs/PARAMETER_STANDARDS.md)），跨模型稳定 |
+
+出口那 21 条 = 官方追踪参数里**我们喂得动**的那 22 个面/鼠标/音频参数去掉鼠标的：
+
+* 头姿 6：`FaceAngleX/Y/Z`、`FacePositionX/Y/Z`
+* 眼睑 2：`EyeOpenLeft/Right` ｜ 注视 4：`EyeLeftX/Y`、`EyeRightX/Y`
+* 眉 3：`Brows`、`BrowLeftY`、`BrowRightY`
+* 嘴 4 + 其它 2：`MouthOpen`、`MouthSmile`、`MouthX`、`TongueOut`、`CheekPuff`、`FaceFound`
+
+**不写的**：`MousePositionX/Y`（没有鼠标）、`Voice*` / `VoiceA..O`（这条链上没有麦克风）、
+`FaceAngry`（官方标 EXPERIMENTAL、且没有对应的 ARKit 形态量）。
+
+⚠️ **VBridger 自己的那批自定义出口一个都不抄**：`MouthFunnel`、`MouthPucker`、`MouthShrug`、
+`Eye_Squint_L/R`、`MouthPressLipOpen`、`BrowInnerUp` 都是 VB 私有名（要靠
+`ParameterCreationRequest` 注册），**不是 VTS 标准**。别看到 VB 预设里有就以为是规范。
+
+### 公式从哪来（不手抄）
+
+`.research/vbridger/extract_vts_formulas.ps1` 从本机安装的 10 份已解密预设里按**出口名**提出全部候选式。
+**选公式按"哪份预设"，不按"出口名"**——VB V3.0 的 `EyeRightX` 是用 `eyeLookIn_L`/`eyeLookOut_L`
+算的、`EyeRightY` 还加了 `browOuterUp_L`，**名字根本不描述来源**。每条出口的 `notes` 里都记了用的是哪份。
+
+一处例外：`EyeLeftX/Y` 与 `EyeRightX/Y` **不用 VB 的合成**——iPhone 本来就在发
+`EyeLeft_x/y/z` / `EyeRight_x/y/z` 原始眼球标量，直接引设备值。
+
+### 还没标定的地方（**别当它已经对了**）
+
+* `FaceAngle*` / `FacePosition*` 的正负号与轴向是 **VBridger 的**（`-headRotY`、`headPosX*-1`），
+  属于**照抄结构**——它吃的那两根设备轴（`Rotation_*` / `Position_*`）**还没在实机上核过**。
+* 头位**单位未标定**（手机原始值直通）。
+* 两者都在**你自己的副本**上修：配置文件窗口里改表达式，或翻转符号后看实时读数。
+
+曲线：每条出口都写了自己的曲线，**纵轴是参数值不是百分数**（写成 `0..100` 会把权重放大 100 倍）。
+`Brows` / `MouthOpen` / `MouthSmile` / `EyeOpen*` / `Brow*Y` 是静息 0.5 的**合成量**、能出 `[0,1]`，
+所以它们的曲线**故意比 0..1 宽**——用默认 0..1 会把合法值**静默夹掉**。
 
 ## 两台设备的**实测**方言（2026-09-25，各一次完整 dump）
 
@@ -47,7 +96,8 @@
 真因就是别的形状行**没有数据**、而眨眼恰好有 PascalCase 那对在喂。
 所以安卓那份**刻意给眨眼两行**（指向同一条通道，不存在互相顶掉的问题）。
 
-核对用的工具：`.warudo-mod-research/.tools/check-device-keys.ps1`（拿一份设备键清单去比规范名，报"对不上"和"没发"）。
+核对用的工具：`.warudo-mod-research\.tools\gen-verif-tables.ps1`（把设备统计表从
+`analyze-dump-stats.ps1` 的输出刷进 `PARAMETER_DEVICE_VERIFICATION.md`）。
 
 ## 怎么用（⚠️ Warudo 读不到这个包）
 
@@ -69,7 +119,7 @@
 
 ## 这些配置**不是**校准过的
 
-它们只做名字映射，**没有**曲线校准、没有滤波：
+`ho-debug-*` 只做原样记录，`ho-iPhoneVTS` 只做**合成**，两份都**没有**曲线校准、没有滤波：
 
 * VBridger 自己的输入曲线仓（`.research/vbridger/decrypted/InputCurvesBck...`）是 **68 条全直通**
   （0→0 / 1→1，min/max 0..1），里面没有可搬的校准；
@@ -84,10 +134,16 @@
 dotnet run --project .research\profile-json-test
 ```
 
-这条会用**我们自己的解析器**（不是肉眼看 JSON）验这三份文件：
+这条会用**我们自己的解析器**（不是肉眼看 JSON）验这四份文件：
 
 * 默认配置：52 个规范名与三种方言拼写是否都在、输出行有没有重复、`Head/*` 宽曲线是否真的透明；
 * 设备配置：**零改名**（`parameter` 必须等于 `expression`）、出口键与输入线名逐一对应、
-  **没有 `ARKit/` 前缀与 `Head/*` 保留名**、**进出口两层曲线都恒等**（不恒等会把值静默夹掉）。
+  **没有 `ARKit/` 前缀与 `Head/*` 保留名**、**进出口两层曲线都恒等**（不恒等会把值静默夹掉）；
+* 正式中间层（`ho-iPhoneVTS`）：输入行**零改名且正好 67 条**、每条出口表达式**能被我们的解析器读**、
+  出口引用的**每个变量都是设备真发的线名**、出口无重复、曲线是恒等直线、
+  **静息 0.5 的合成量没有用 0..1 曲线**、出口不写 `ARKit/*` 或 `Head/*`。
 
-它是"改了生成器之后忘了重新生成"的唯一守门人。当前：**111 passed / 0 failed**。
+⚠️ 那条"出口引用的变量必须是真发线名"是这批断言里最值钱的：写成 ARKit 小驼峰（`jawOpen`）
+而设备发 PascalCase（`JawOpen`）时，那一段**恒为 0 且毫无提示**——正是我们踩过一次的坑。
+
+它是"改了生成器之后忘了重新生成"的唯一守门人。当前：**120 passed / 0 failed**。

@@ -1,0 +1,1026 @@
+{
+    "format":  "ho-face-middleware",
+    "version":  2,
+    "displayName":  "ho-iPhoneVTS",
+    "notes":  "Formal middleware profile -- APPLE / iPhone VTS input.\n\nUnlike the two ho-debug-* profiles (which are pure pass-through references: zero renaming, no\ncurves, parameter = expression = the raw wire name), THIS file is a real middle layer: it takes\nthe device\u0027s ARKit shape values and SYNTHESISES the official VTubeStudio tracking parameters\nfrom them, the way VBridger does for its VTS relay.\n\nINPUT SIDE -- long-lived, per-device\n  One row per iPhone VTS wire, parameter = expression = the wire name. There is no renaming in\n  this profile on purpose: the canonical vocabulary here IS the device\u0027s wire vocabulary, so\n  inventing a second set of names would add a layer with nothing in it.\n  67 wires, measured (docs/PARAMETER_DEVICE_VERIFICATION.md, section 2). Do not derive wire\n  names from a spelling rule -- doing that once produced 12 rows pointing at keys the phone\n  never sends, and that failure mode is silent.\n\nOUTPUT SIDE -- the controller contract\n  Writes the 22 official VTS tracking parameters we can derive, plus FaceFound.\n  VTS\u0027s tracking list is a fixed built-in set of 98 names (33 face/mouse/audio, 26 hand,\n  39 controller); the 22 here are the face ones our input can actually feed.\n  Explicitly NOT written: MousePositionX/Y (no mouse), Voice* and VoiceA..O (no microphone on\n  this link), FaceAngry (experimental, iOS only, and no ARKit shape maps onto it).\n  Also NOT written: VBridger\u0027s own custom outputs (MouthFunnel, MouthPucker, MouthShrug,\n  Eye_Squint_L/R, MouthPressLipOpen, BrowInnerUp). Those are VB-private names that need a\n  ParameterCreationRequest on the receiving end -- they are not VTS standard.\n\nWHERE THE FORMULAS CAME FROM\n  Extracted mechanically from the local VBridger install, never hand-transcribed -- see\n  .research/vbridger/extract_vts_formulas.ps1. Each row\u0027s notes name the preset it came from.\n  Formulas are picked by PRESET, not by output name: VB\u0027s V3.0 EyeRightX is built from\n  eyeLookIn_L / eyeLookOut_L and its EyeRightY adds browOuterUp_L, so the name does not\n  describe the source.\n  Exception: EyeLeftX/Y and EyeRightX/Y come straight from the device\u0027s own raw eye scalars,\n  because the iPhone sends them and VB\u0027s synthesis reads a different axis than its name claims.\n\nWHAT IS NOT CALIBRATED\n  Shaping, not calibration. VBridger\u0027s own input-curve store is 68 rows of identity\n  (0-\u003e0 / 1-\u003e1), so there is no calibration to copy from it, and its preset numbers describe\n  its own channel set, not this one.\n  The FaceAngle* / FacePosition* sign flips are VBridger\u0027s, transcribed structurally: the\n  device axes they consume (Rotation_*, Position_*) have NOT been verified against them on\n  hardware. Head position units are also uncalibrated (raw phone values pass through).\n  Fix both on YOUR copy -- this file is the starting point, not the answer.\n\nCURVES\n  Every row carries an explicit curve. The vertical axis is the PARAMETER VALUE, not a\n  percentage: writing 0..100 on an output row multiplies the blend-tree weight by 100.\n  A row whose expression is a synthesis formula (Brows, MouthOpen, MouthSmile) has a 0.5-ish\n  neutral and can leave 0..1, so its curve is deliberately wider than the nominal range.\n  The device scalars are given +/-180 on BOTH layers -- a 0..1 default curve would silently\n  clamp head rotation to 0/1 and look like \"head pose was never wired up\".",
+    "inputs":  [
+                   {
+                       "parameter":  "BrowDownLeft",
+                       "expression":  "BrowDownLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "BrowDownRight",
+                       "expression":  "BrowDownRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "BrowInnerUp",
+                       "expression":  "BrowInnerUp",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "BrowOuterUpLeft",
+                       "expression":  "BrowOuterUpLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "BrowOuterUpRight",
+                       "expression":  "BrowOuterUpRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "CheekPuff",
+                       "expression":  "CheekPuff",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "CheekSquintLeft",
+                       "expression":  "CheekSquintLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "CheekSquintRight",
+                       "expression":  "CheekSquintRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeBlinkLeft",
+                       "expression":  "EyeBlinkLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeBlinkRight",
+                       "expression":  "EyeBlinkRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookDownLeft",
+                       "expression":  "EyeLookDownLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookDownRight",
+                       "expression":  "EyeLookDownRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookInLeft",
+                       "expression":  "EyeLookInLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookInRight",
+                       "expression":  "EyeLookInRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookOutLeft",
+                       "expression":  "EyeLookOutLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookOutRight",
+                       "expression":  "EyeLookOutRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookUpLeft",
+                       "expression":  "EyeLookUpLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLookUpRight",
+                       "expression":  "EyeLookUpRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeSquintLeft",
+                       "expression":  "EyeSquintLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeSquintRight",
+                       "expression":  "EyeSquintRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeWideLeft",
+                       "expression":  "EyeWideLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeWideRight",
+                       "expression":  "EyeWideRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "JawForward",
+                       "expression":  "JawForward",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "JawLeft",
+                       "expression":  "JawLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "JawOpen",
+                       "expression":  "JawOpen",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "JawRight",
+                       "expression":  "JawRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthClose",
+                       "expression":  "MouthClose",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthDimpleLeft",
+                       "expression":  "MouthDimpleLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthDimpleRight",
+                       "expression":  "MouthDimpleRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthFrownLeft",
+                       "expression":  "MouthFrownLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthFrownRight",
+                       "expression":  "MouthFrownRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthFunnel",
+                       "expression":  "MouthFunnel",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthLeft",
+                       "expression":  "MouthLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthLowerDownLeft",
+                       "expression":  "MouthLowerDownLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthLowerDownRight",
+                       "expression":  "MouthLowerDownRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthPressLeft",
+                       "expression":  "MouthPressLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthPressRight",
+                       "expression":  "MouthPressRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthPucker",
+                       "expression":  "MouthPucker",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthRight",
+                       "expression":  "MouthRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthRollLower",
+                       "expression":  "MouthRollLower",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthRollUpper",
+                       "expression":  "MouthRollUpper",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthShrugLower",
+                       "expression":  "MouthShrugLower",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthShrugUpper",
+                       "expression":  "MouthShrugUpper",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthSmileLeft",
+                       "expression":  "MouthSmileLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthSmileRight",
+                       "expression":  "MouthSmileRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthStretchLeft",
+                       "expression":  "MouthStretchLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthStretchRight",
+                       "expression":  "MouthStretchRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthUpperUpLeft",
+                       "expression":  "MouthUpperUpLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "MouthUpperUpRight",
+                       "expression":  "MouthUpperUpRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "NoseSneerLeft",
+                       "expression":  "NoseSneerLeft",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "NoseSneerRight",
+                       "expression":  "NoseSneerRight",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "TongueOut",
+                       "expression":  "TongueOut",
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Rotation_x",
+                       "expression":  "Rotation_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Rotation_y",
+                       "expression":  "Rotation_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Rotation_z",
+                       "expression":  "Rotation_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Position_x",
+                       "expression":  "Position_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Position_y",
+                       "expression":  "Position_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Position_z",
+                       "expression":  "Position_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLeft_x",
+                       "expression":  "EyeLeft_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLeft_y",
+                       "expression":  "EyeLeft_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeLeft_z",
+                       "expression":  "EyeLeft_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeRight_x",
+                       "expression":  "EyeRight_x",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeRight_y",
+                       "expression":  "EyeRight_y",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "EyeRight_z",
+                       "expression":  "EyeRight_z",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -180,
+                                                      "v":  -180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  180,
+                                                      "v":  180,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "FaceFound",
+                       "expression":  "FaceFound",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Hotkey",
+                       "expression":  "Hotkey",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   },
+                   {
+                       "parameter":  "Timestamp",
+                       "expression":  "Timestamp",
+                       "curve":  {
+                                     "keys":  [
+                                                  {
+                                                      "t":  -1,
+                                                      "v":  -1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  },
+                                                  {
+                                                      "t":  1,
+                                                      "v":  1,
+                                                      "inT":  1,
+                                                      "outT":  1
+                                                  }
+                                              ]
+                                 },
+                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                   }
+               ],
+    "outputs":  [
+                    {
+                        "parameter":  "FaceAngleX",
+                        "expression":  "-Rotation_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (-headRotY*1); sign/axis NOT verified on device"
+                    },
+                    {
+                        "parameter":  "FaceAngleY",
+                        "expression":  "-Rotation_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (-headRotX*1); sign/axis NOT verified on device"
+                    },
+                    {
+                        "parameter":  "FaceAngleZ",
+                        "expression":  "Rotation_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (headRotZ*1); sign/axis NOT verified on device"
+                    },
+                    {
+                        "parameter":  "FacePositionX",
+                        "expression":  "-Position_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (headPosX*-1); sign NOT verified; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "FacePositionY",
+                        "expression":  "Position_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (headPosY*1); sign NOT verified; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "FacePositionZ",
+                        "expression":  "-Position_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger VTS_Compatible (headPosZ*-.5); VB halves Z; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "EyeLeftX",
+                        "expression":  "EyeLeft_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger device EyeLeft_x (VB synthesises instead)"
+                    },
+                    {
+                        "parameter":  "EyeLeftY",
+                        "expression":  "EyeLeft_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger device EyeLeft_y (VB synthesises instead)"
+                    },
+                    {
+                        "parameter":  "EyeRightX",
+                        "expression":  "EyeRight_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger device EyeRight_x (VB synthesises instead)"
+                    },
+                    {
+                        "parameter":  "EyeRightY",
+                        "expression":  "EyeRight_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -90,
+                                                       "v":  -90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  90,
+                                                       "v":  90,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger device EyeRight_y (VB synthesises instead)"
+                    },
+                    {
+                        "parameter":  "EyeOpenLeft",
+                        "expression":  ".5 + (EyeBlinkLeft * -.8) + (EyeWideLeft * .8)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "EyeOpenRight",
+                        "expression":  ".5 + (EyeBlinkRight * -.8) + (EyeWideRight * .8)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "Brows",
+                        "expression":  ".5 + (BrowOuterUpLeft + BrowOuterUpRight - BrowDownLeft - BrowDownRight) / 4",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "BrowLeftY",
+                        "expression":  ".5 + (BrowOuterUpLeft - BrowDownLeft) + ((MouthRight - MouthLeft) / 8)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "BrowRightY",
+                        "expression":  ".5 + (BrowOuterUpRight - BrowDownRight) + ((MouthLeft - MouthRight) / 8)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthOpen",
+                        "expression":  "(JawOpen - MouthClose) - ((MouthRollUpper + MouthRollLower) * .2) + (MouthFunnel * .2)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthSmile",
+                        "expression":  "(2 - (MouthFrownLeft + MouthFrownRight + MouthPucker) + (MouthSmileRight + MouthSmileLeft + ((MouthDimpleLeft + MouthDimpleRight) / 2))) / 4",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1.5,
+                                                       "v":  -1.5,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1.5,
+                                                       "v":  1.5,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthX",
+                        "expression":  "((MouthLeft - MouthRight) + (MouthSmileLeft - MouthSmileRight))",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -2,
+                                                       "v":  -2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  2,
+                                                       "v":  2,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "CheekPuff",
+                        "expression":  "CheekPuff",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger all presets (identity)"
+                    },
+                    {
+                        "parameter":  "TongueOut",
+                        "expression":  "TongueOut",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger all presets (identity)"
+                    },
+                    {
+                        "parameter":  "FaceFound",
+                        "expression":  "FaceFound",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "from VBridger device (identity)"
+                    }
+                ]
+}
