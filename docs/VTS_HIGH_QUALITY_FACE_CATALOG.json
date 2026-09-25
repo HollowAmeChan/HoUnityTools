@@ -1,5 +1,5 @@
 {
-  "date": "2026-09-25",
+  "date": "2026-09-27",
   "status": "design catalog; not a runnable profile/controller",
   "sampling_policy": "author-defined; no leaf count fixed",
   "native": [
@@ -16,7 +16,7 @@
       ],
       "meaning": "头部横移",
       "range": "运行时查询",
-      "template_target": "H02"
+      "template_target": "HeadPos"
     },
     {
       "name": "FacePositionY",
@@ -31,7 +31,7 @@
       ],
       "meaning": "头部升降",
       "range": "运行时查询",
-      "template_target": "H02"
+      "template_target": "HeadPos"
     },
     {
       "name": "FacePositionZ",
@@ -46,7 +46,7 @@
       ],
       "meaning": "头部远近",
       "range": "运行时查询",
-      "template_target": "H02条件"
+      "template_target": "HeadPos条件"
     },
     {
       "name": "FaceAngleX",
@@ -61,7 +61,7 @@
       ],
       "meaning": "左右转头",
       "range": "运行时查询",
-      "template_target": "H01"
+      "template_target": "HeadAim"
     },
     {
       "name": "FaceAngleY",
@@ -76,7 +76,7 @@
       ],
       "meaning": "抬低头",
       "range": "运行时查询",
-      "template_target": "H01"
+      "template_target": "HeadAim"
     },
     {
       "name": "FaceAngleZ",
@@ -91,7 +91,7 @@
       ],
       "meaning": "歪头",
       "range": "运行时查询",
-      "template_target": "H01条件/姿态"
+      "template_target": "HeadAim条件/姿态"
     },
     {
       "name": "MouthSmile",
@@ -106,7 +106,7 @@
       ],
       "meaning": "综合嘴型",
       "range": "运行时查询",
-      "template_target": "校准为Form → M01等"
+      "template_target": "校准为Form → MouthCore等"
     },
     {
       "name": "MouthOpen",
@@ -121,7 +121,7 @@
       ],
       "meaning": "嘴唇开口",
       "range": "0..1",
-      "template_target": "Open → M01等"
+      "template_target": "Open → MouthCore等"
     },
     {
       "name": "Brows",
@@ -181,7 +181,7 @@
       ],
       "meaning": "伸舌",
       "range": "运行时查询",
-      "template_target": "M14/C03"
+      "template_target": "MouthTongue/CheekPuffTongue（分侧用HQTongueL/R）"
     },
     {
       "name": "EyeOpenLeft",
@@ -196,7 +196,7 @@
       ],
       "meaning": "左眼睁开",
       "range": "运行时查询",
-      "template_target": "LidLeft → E01L等"
+      "template_target": "LidLeft → LidL等"
     },
     {
       "name": "EyeOpenRight",
@@ -211,7 +211,7 @@
       ],
       "meaning": "右眼睁开",
       "range": "运行时查询",
-      "template_target": "LidRight → E01R等"
+      "template_target": "LidRight → LidR等"
     },
     {
       "name": "EyeLeftX",
@@ -226,7 +226,7 @@
       ],
       "meaning": "左眼水平",
       "range": "运行时查询",
-      "template_target": "E02L/E03L的替代来源"
+      "template_target": "GazeL/LidGazeL的替代来源"
     },
     {
       "name": "EyeLeftY",
@@ -241,7 +241,7 @@
       ],
       "meaning": "左眼垂直",
       "range": "运行时查询",
-      "template_target": "E02L/E03L的替代来源"
+      "template_target": "GazeL/LidGazeL的替代来源"
     },
     {
       "name": "EyeRightX",
@@ -256,7 +256,7 @@
       ],
       "meaning": "右眼水平",
       "range": "运行时查询",
-      "template_target": "E02R/E03R的替代来源"
+      "template_target": "GazeR/LidGazeR的替代来源"
     },
     {
       "name": "EyeRightY",
@@ -271,7 +271,7 @@
       ],
       "meaning": "右眼垂直",
       "range": "运行时查询",
-      "template_target": "E02R/E03R的替代来源"
+      "template_target": "GazeR/LidGazeR的替代来源"
     },
     {
       "name": "CheekPuff",
@@ -286,7 +286,7 @@
       ],
       "meaning": "鼓腮",
       "range": "运行时查询",
-      "template_target": "C02/C03"
+      "template_target": "CheekPuff/CheekPuffTongue（分侧用HQCheekPuffL/R）"
     },
     {
       "name": "BrowLeftY",
@@ -301,7 +301,7 @@
       ],
       "meaning": "左眉高",
       "range": "运行时查询",
-      "template_target": "B02L；可降级代理B01L"
+      "template_target": "BrowEyeL；可降级代理BrowCoreL"
     },
     {
       "name": "BrowRightY",
@@ -316,7 +316,7 @@
       ],
       "meaning": "右眉高",
       "range": "运行时查询",
-      "template_target": "B02R；可降级代理B01R"
+      "template_target": "BrowEyeR；可降级代理BrowCoreR"
     },
     {
       "name": "VoiceFrequency",
@@ -481,7 +481,7 @@
       ],
       "meaning": "偏嘴",
       "range": "运行时查询",
-      "template_target": "M04/M15/E04L/E04R"
+      "template_target": "MouthWidth/MouthJawSide/LidMouthL/LidMouthR"
     },
     {
       "name": "FaceAngry",
@@ -551,7 +551,7 @@
       ],
       "meaning": "左手位置X",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandLeftPositionY",
@@ -562,7 +562,7 @@
       ],
       "meaning": "左手位置Y",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandLeftPositionZ",
@@ -573,7 +573,7 @@
       ],
       "meaning": "左手位置Z",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandRightPositionX",
@@ -584,7 +584,7 @@
       ],
       "meaning": "右手位置X",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandRightPositionY",
@@ -595,7 +595,7 @@
       ],
       "meaning": "右手位置Y",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandRightPositionZ",
@@ -606,7 +606,7 @@
       ],
       "meaning": "右手位置Z",
       "range": "见轴定义",
-      "template_target": "P01"
+      "template_target": "HandPos"
     },
     {
       "name": "HandLeftAngleX",
@@ -617,7 +617,7 @@
       ],
       "meaning": "左手角度X",
       "range": "±180",
-      "template_target": "P01条件"
+      "template_target": "HandPos条件"
     },
     {
       "name": "HandLeftAngleZ",
@@ -628,7 +628,7 @@
       ],
       "meaning": "左手角度Z",
       "range": "±180",
-      "template_target": "P01条件"
+      "template_target": "HandPos条件"
     },
     {
       "name": "HandRightAngleX",
@@ -639,7 +639,7 @@
       ],
       "meaning": "右手角度X",
       "range": "±180",
-      "template_target": "P01条件"
+      "template_target": "HandPos条件"
     },
     {
       "name": "HandRightAngleZ",
@@ -650,7 +650,7 @@
       ],
       "meaning": "右手角度Z",
       "range": "±180",
-      "template_target": "P01条件"
+      "template_target": "HandPos条件"
     },
     {
       "name": "HandLeftOpen",
@@ -661,7 +661,7 @@
       ],
       "meaning": "左手整体张开",
       "range": "0..1",
-      "template_target": "P02整体手形来源"
+      "template_target": "HandFinger整体手形来源"
     },
     {
       "name": "HandRightOpen",
@@ -672,7 +672,7 @@
       ],
       "meaning": "右手整体张开",
       "range": "0..1",
-      "template_target": "P02整体手形来源"
+      "template_target": "HandFinger整体手形来源"
     },
     {
       "name": "HandLeftFinger_1_Thumb",
@@ -683,7 +683,7 @@
       ],
       "meaning": "左拇指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandLeftFinger_2_Index",
@@ -694,7 +694,7 @@
       ],
       "meaning": "左食指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandLeftFinger_3_Middle",
@@ -705,7 +705,7 @@
       ],
       "meaning": "左中指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandLeftFinger_4_Ring",
@@ -716,7 +716,7 @@
       ],
       "meaning": "左无名指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandLeftFinger_5_Pinky",
@@ -727,7 +727,7 @@
       ],
       "meaning": "左小指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandRightFinger_1_Thumb",
@@ -738,7 +738,7 @@
       ],
       "meaning": "右拇指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandRightFinger_2_Index",
@@ -749,7 +749,7 @@
       ],
       "meaning": "右食指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandRightFinger_3_Middle",
@@ -760,7 +760,7 @@
       ],
       "meaning": "右中指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandRightFinger_4_Ring",
@@ -771,7 +771,7 @@
       ],
       "meaning": "右无名指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "HandRightFinger_5_Pinky",
@@ -782,7 +782,7 @@
       ],
       "meaning": "右小指",
       "range": "0..1",
-      "template_target": "P02对应手指"
+      "template_target": "HandFinger对应手指"
     },
     {
       "name": "ControllerStickLeftX",
@@ -792,7 +792,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerStickLeftY",
@@ -802,7 +802,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerStickRightX",
@@ -812,7 +812,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerStickRightY",
@@ -822,7 +822,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerStickPressLeft",
@@ -832,7 +832,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerStickPressRight",
@@ -842,7 +842,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerDPadX",
@@ -852,7 +852,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerDPadY",
@@ -862,7 +862,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTriangle",
@@ -872,7 +872,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerCross",
@@ -882,7 +882,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerSquare",
@@ -892,7 +892,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerCircle",
@@ -902,7 +902,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerShoulderLeft",
@@ -912,7 +912,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerShoulderRight",
@@ -922,7 +922,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTriggerLeft",
@@ -932,7 +932,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTriggerRight",
@@ -942,7 +942,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerOptionLeft",
@@ -952,7 +952,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerOptionRight",
@@ -962,7 +962,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerHome",
@@ -972,7 +972,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadPress",
@@ -982,7 +982,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerButtonsAnyLeft",
@@ -992,7 +992,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerButtonsAnyRight",
@@ -1002,7 +1002,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerButtonCountLeft",
@@ -1012,7 +1012,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerButtonCountRight",
@@ -1022,7 +1022,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerLean",
@@ -1032,7 +1032,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerThumbPosLeft",
@@ -1042,7 +1042,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerThumbPosRight",
@@ -1052,7 +1052,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerFingerPosLeft",
@@ -1062,7 +1062,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerFingerPosRight",
@@ -1072,7 +1072,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadTouchCount",
@@ -1082,7 +1082,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerLeftActive",
@@ -1092,7 +1092,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerRightActive",
@@ -1102,7 +1102,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerLeftX",
@@ -1112,7 +1112,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerLeftY",
@@ -1122,7 +1122,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerRightX",
@@ -1132,7 +1132,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerTouchPadFingerRightY",
@@ -1142,7 +1142,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerOrientationX",
@@ -1152,7 +1152,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerOrientationY",
@@ -1162,7 +1162,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     },
     {
       "name": "ControllerOrientationZ",
@@ -1172,7 +1172,7 @@
       "platforms": [
         "desktop controller"
       ],
-      "template_target": "P03 / 作者指定的演出参数来源"
+      "template_target": "CtrlStick / 作者指定的演出参数来源"
     }
   ],
   "raw_arkit": [
@@ -1666,7 +1666,9 @@
       "vb_internal": "cheekPuff",
       "range": "0..1",
       "processed_outputs": [
-        "CheekPuff"
+        "CheekPuff",
+        "HQCheekPuffLeft",
+        "HQCheekPuffRight"
       ]
     },
     {
@@ -1711,7 +1713,9 @@
       "vb_internal": "tongueOut",
       "range": "0..1",
       "processed_outputs": [
-        "TongueOut"
+        "TongueOut",
+        "HQTongueLeft",
+        "HQTongueRight"
       ]
     }
   ],
@@ -1764,7 +1768,7 @@
       },
       "smooth": 0.67,
       "smooth_on": true,
-      "trees": "H01"
+      "trees": "HeadAim"
     },
     {
       "name": "FaceAngleY",
@@ -1814,7 +1818,7 @@
       },
       "smooth": 0.67,
       "smooth_on": true,
-      "trees": "H01"
+      "trees": "HeadAim"
     },
     {
       "name": "FaceAngleZ",
@@ -1864,7 +1868,7 @@
       },
       "smooth": 0.67,
       "smooth_on": true,
-      "trees": "H01条件/姿态"
+      "trees": "HeadAim条件/姿态"
     },
     {
       "name": "BodyAngleX",
@@ -1904,7 +1908,7 @@
       },
       "smooth": 0.14,
       "smooth_on": true,
-      "trees": "H03"
+      "trees": "BodyAim"
     },
     {
       "name": "BodyAngleY",
@@ -1944,7 +1948,7 @@
       },
       "smooth": 0.14,
       "smooth_on": true,
-      "trees": "H03"
+      "trees": "BodyAim"
     },
     {
       "name": "BodyAngleZ",
@@ -1984,7 +1988,7 @@
       },
       "smooth": 0.14,
       "smooth_on": true,
-      "trees": "H03条件"
+      "trees": "BodyAim条件"
     },
     {
       "name": "FacePositionX",
@@ -2024,7 +2028,7 @@
       },
       "smooth": 0.19,
       "smooth_on": true,
-      "trees": "H02"
+      "trees": "HeadPos"
     },
     {
       "name": "FacePositionY",
@@ -2064,7 +2068,7 @@
       },
       "smooth": 0.19,
       "smooth_on": true,
-      "trees": "H02"
+      "trees": "HeadPos"
     },
     {
       "name": "FacePositionZ",
@@ -2104,7 +2108,7 @@
       },
       "smooth": 0.19,
       "smooth_on": true,
-      "trees": "H02条件"
+      "trees": "HeadPos条件"
     },
     {
       "name": "BodyPositionX",
@@ -2144,7 +2148,7 @@
       },
       "smooth": 0.22,
       "smooth_on": true,
-      "trees": "H04"
+      "trees": "BodyPos"
     },
     {
       "name": "BodyPositionY",
@@ -2184,7 +2188,7 @@
       },
       "smooth": 0.22,
       "smooth_on": true,
-      "trees": "H04"
+      "trees": "BodyPos"
     },
     {
       "name": "BodyPositionZ",
@@ -2224,7 +2228,7 @@
       },
       "smooth": 0.22,
       "smooth_on": true,
-      "trees": "H04条件"
+      "trees": "BodyPos条件"
     },
     {
       "name": "EyeRightX",
@@ -2264,7 +2268,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze"
+      "trees": "共享注视兼容来源 → 两侧Gaze/LidGaze；高档用独立HQGaze"
     },
     {
       "name": "EyeRightY",
@@ -2314,7 +2318,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze"
+      "trees": "共享注视兼容来源 → 两侧Gaze/LidGaze；高档用独立HQGaze"
     },
     {
       "name": "EyeOpenLeft",
@@ -2354,7 +2358,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "LidLeft → E01L等"
+      "trees": "LidLeft → LidL等"
     },
     {
       "name": "EyeOpenRight",
@@ -2394,7 +2398,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "LidRight → E01R等"
+      "trees": "LidRight → LidR等"
     },
     {
       "name": "EyeSquintLeft",
@@ -2434,7 +2438,7 @@
       },
       "smooth": 0.0,
       "smooth_on": false,
-      "trees": "E01L/E03L/B02L"
+      "trees": "LidL/LidGazeL/BrowEyeL"
     },
     {
       "name": "EyeSquintRight",
@@ -2474,7 +2478,7 @@
       },
       "smooth": 0.0,
       "smooth_on": false,
-      "trees": "E01R/E03R/B02R"
+      "trees": "LidR/LidGazeR/BrowEyeR"
     },
     {
       "name": "JawOpen",
@@ -2514,7 +2518,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "M02/M03/M14等"
+      "trees": "MouthJaw/MouthSeal/MouthTongue等"
     },
     {
       "name": "MouthOpen",
@@ -2554,7 +2558,7 @@
       },
       "smooth": 0.15,
       "smooth_on": true,
-      "trees": "Open → M01等"
+      "trees": "Open → MouthCore等"
     },
     {
       "name": "VoiceVolumePlusMouthOpen",
@@ -2634,7 +2638,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "校准为Form → M01等"
+      "trees": "校准为Form → MouthCore等"
     },
     {
       "name": "VoiceFrequencyPlusMouthSmile",
@@ -2714,7 +2718,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "Funnel → M01/M13等"
+      "trees": "Funnel → MouthCore/MouthRawRound等"
     },
     {
       "name": "MouthPressLipOpen",
@@ -2764,7 +2768,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "Press → M01/M07/M08等"
+      "trees": "Press → MouthCore/MouthUpperRaise/MouthLowerDrop等"
     },
     {
       "name": "MouthPucker",
@@ -2804,7 +2808,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "M04/C02等"
+      "trees": "MouthWidth/CheekPuff等"
     },
     {
       "name": "MouthX",
@@ -2844,7 +2848,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "M04/M15/E04L/E04R"
+      "trees": "MouthWidth/MouthJawSide/LidMouthL/LidMouthR"
     },
     {
       "name": "CheekPuff",
@@ -2884,7 +2888,7 @@
       },
       "smooth": 0.0,
       "smooth_on": false,
-      "trees": "C02/C03"
+      "trees": "CheekPuff/CheekPuffTongue（分侧用HQCheekPuffL/R）"
     },
     {
       "name": "TongueOut",
@@ -2924,7 +2928,7 @@
       },
       "smooth": 0.0,
       "smooth_on": false,
-      "trees": "M14/C03"
+      "trees": "MouthTongue/CheekPuffTongue（分侧用HQTongueL/R）"
     },
     {
       "name": "MouthShrug",
@@ -2964,7 +2968,7 @@
       },
       "smooth": 0.1,
       "smooth_on": true,
-      "trees": "M16基础，M05细分"
+      "trees": "MouthShrugBase基础，MouthShrugSplit细分"
     },
     {
       "name": "Brows",
@@ -3044,7 +3048,7 @@
       },
       "smooth": 0.4,
       "smooth_on": true,
-      "trees": "B02L；可降级代理B01L"
+      "trees": "BrowEyeL；可降级代理BrowCoreL"
     },
     {
       "name": "BrowRightY",
@@ -3084,7 +3088,7 @@
       },
       "smooth": 0.4,
       "smooth_on": true,
-      "trees": "B02R；可降级代理B01R"
+      "trees": "BrowEyeR；可降级代理BrowCoreR"
     },
     {
       "name": "BrowInnerUp",
@@ -3124,7 +3128,7 @@
       },
       "smooth": 0.32,
       "smooth_on": true,
-      "trees": "B01L/B01R/B02L/B02R条件"
+      "trees": "BrowCoreL/BrowCoreR/BrowEyeL/BrowEyeR条件"
     }
   ],
   "hq_extensions": [
@@ -3133,8 +3137,8 @@
       "equation": "eyeLookIn_L - eyeLookOut_L",
       "meaning": "Left眼水平注视",
       "trees": [
-        "E02L",
-        "E03L"
+        "GazeL",
+        "LidGazeL"
       ],
       "range": "-1..1",
       "note": "以演员自身右方为正；模型镜像在校准映射处理"
@@ -3144,8 +3148,8 @@
       "equation": "eyeLookUp_L - eyeLookDown_L",
       "meaning": "Left眼垂直注视",
       "trees": [
-        "E02L",
-        "E03L"
+        "GazeL",
+        "LidGazeL"
       ],
       "range": "-1..1",
       "note": "直接保留原始自由度"
@@ -3155,9 +3159,9 @@
       "equation": "mouthSmile_L",
       "meaning": "Left笑眼造型代理",
       "trees": [
-        "E01L",
-        "E03L",
-        "E04L"
+        "LidL",
+        "LidGazeL",
+        "LidMouthL"
       ],
       "range": "0..1",
       "note": "从嘴角笑映射；是作者联动，不是独立眼部笑观测"
@@ -3167,7 +3171,7 @@
       "equation": "clamp(mouthSmile_L - mouthFrown_L, -1, 1)",
       "meaning": "Left嘴角欣/悲造型轴",
       "trees": [
-        "M06"
+        "MouthCorner"
       ],
       "range": "-1..1",
       "note": "这是造型轴，不是心理情绪识别"
@@ -3177,7 +3181,7 @@
       "equation": "mouthUpperUp_L",
       "meaning": "Left上唇展开",
       "trees": [
-        "M07"
+        "MouthUpperRaise"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3187,7 +3191,7 @@
       "equation": "mouthLowerDown_L",
       "meaning": "Left下唇下拉",
       "trees": [
-        "M08"
+        "MouthLowerDrop"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3197,7 +3201,7 @@
       "equation": "mouthPress_L",
       "meaning": "Left压唇",
       "trees": [
-        "M10"
+        "MouthLipPress"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3207,7 +3211,7 @@
       "equation": "mouthStretch_L",
       "meaning": "Left横拉嘴角",
       "trees": [
-        "M11"
+        "MouthStretch"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3217,7 +3221,7 @@
       "equation": "mouthDimple_L",
       "meaning": "Left酒窝/嘴角收紧",
       "trees": [
-        "M12"
+        "MouthDimple"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3227,7 +3231,7 @@
       "equation": "cheekSquint_L",
       "meaning": "Left颊收紧",
       "trees": [
-        "C01"
+        "CheekSquint"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3237,7 +3241,7 @@
       "equation": "noseSneer_L",
       "meaning": "Left鼻翼抬起",
       "trees": [
-        "N01"
+        "NoseSneer"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3247,7 +3251,7 @@
       "equation": "browDown_L",
       "meaning": "Left压眉",
       "trees": [
-        "B01L"
+        "BrowCoreL"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3257,7 +3261,7 @@
       "equation": "browOuterUp_L",
       "meaning": "Left外眉抬起",
       "trees": [
-        "B01L"
+        "BrowCoreL"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3267,18 +3271,40 @@
       "equation": "clamp((browInnerUp + browOuterUp_L) * .5, 0, 1) - browDown_L",
       "meaning": "Left眉情绪造型",
       "trees": [
-        "B03"
+        "BrowCenter"
       ],
       "range": "-1..1",
       "note": "借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT"
+    },
+    {
+      "name": "HQCheekPuffLeft",
+      "equation": "cheekPuff",
+      "meaning": "Left鼓腮（分侧）",
+      "trees": [
+        "CheekPuff",
+        "CheekPuffTongue"
+      ],
+      "range": "0..1",
+      "note": "分侧自由度：先两侧同跟单侧原值 cheekPuff；有分侧来源时直接驱动，树不动"
+    },
+    {
+      "name": "HQTongueLeft",
+      "equation": "tongueOut",
+      "meaning": "Left伸舌（分侧）",
+      "trees": [
+        "MouthTongue",
+        "CheekPuffTongue"
+      ],
+      "range": "0..1",
+      "note": "分侧自由度：先两侧同跟单侧原值 tongueOut；有分侧来源时直接驱动，树不动"
     },
     {
       "name": "HQGazeRightX",
       "equation": "eyeLookOut_R - eyeLookIn_R",
       "meaning": "Right眼水平注视",
       "trees": [
-        "E02R",
-        "E03R"
+        "GazeR",
+        "LidGazeR"
       ],
       "range": "-1..1",
       "note": "以演员自身右方为正；模型镜像在校准映射处理"
@@ -3288,8 +3314,8 @@
       "equation": "eyeLookUp_R - eyeLookDown_R",
       "meaning": "Right眼垂直注视",
       "trees": [
-        "E02R",
-        "E03R"
+        "GazeR",
+        "LidGazeR"
       ],
       "range": "-1..1",
       "note": "直接保留原始自由度"
@@ -3299,9 +3325,9 @@
       "equation": "mouthSmile_R",
       "meaning": "Right笑眼造型代理",
       "trees": [
-        "E01R",
-        "E03R",
-        "E04R"
+        "LidR",
+        "LidGazeR",
+        "LidMouthR"
       ],
       "range": "0..1",
       "note": "从嘴角笑映射；是作者联动，不是独立眼部笑观测"
@@ -3311,7 +3337,7 @@
       "equation": "clamp(mouthSmile_R - mouthFrown_R, -1, 1)",
       "meaning": "Right嘴角欣/悲造型轴",
       "trees": [
-        "M06"
+        "MouthCorner"
       ],
       "range": "-1..1",
       "note": "这是造型轴，不是心理情绪识别"
@@ -3321,7 +3347,7 @@
       "equation": "mouthUpperUp_R",
       "meaning": "Right上唇展开",
       "trees": [
-        "M07"
+        "MouthUpperRaise"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3331,7 +3357,7 @@
       "equation": "mouthLowerDown_R",
       "meaning": "Right下唇下拉",
       "trees": [
-        "M08"
+        "MouthLowerDrop"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3341,7 +3367,7 @@
       "equation": "mouthPress_R",
       "meaning": "Right压唇",
       "trees": [
-        "M10"
+        "MouthLipPress"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3351,7 +3377,7 @@
       "equation": "mouthStretch_R",
       "meaning": "Right横拉嘴角",
       "trees": [
-        "M11"
+        "MouthStretch"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3361,7 +3387,7 @@
       "equation": "mouthDimple_R",
       "meaning": "Right酒窝/嘴角收紧",
       "trees": [
-        "M12"
+        "MouthDimple"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3371,7 +3397,7 @@
       "equation": "cheekSquint_R",
       "meaning": "Right颊收紧",
       "trees": [
-        "C01"
+        "CheekSquint"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3381,7 +3407,7 @@
       "equation": "noseSneer_R",
       "meaning": "Right鼻翼抬起",
       "trees": [
-        "N01"
+        "NoseSneer"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3391,7 +3417,7 @@
       "equation": "browDown_R",
       "meaning": "Right压眉",
       "trees": [
-        "B01R"
+        "BrowCoreR"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3401,7 +3427,7 @@
       "equation": "browOuterUp_R",
       "meaning": "Right外眉抬起",
       "trees": [
-        "B01R"
+        "BrowCoreR"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3411,17 +3437,39 @@
       "equation": "clamp((browInnerUp + browOuterUp_R) * .5, 0, 1) - browDown_R",
       "meaning": "Right眉情绪造型",
       "trees": [
-        "B03"
+        "BrowCenter"
       ],
       "range": "-1..1",
       "note": "借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT"
+    },
+    {
+      "name": "HQCheekPuffRight",
+      "equation": "cheekPuff",
+      "meaning": "Right鼓腮（分侧）",
+      "trees": [
+        "CheekPuff",
+        "CheekPuffTongue"
+      ],
+      "range": "0..1",
+      "note": "分侧自由度：先两侧同跟单侧原值 cheekPuff；有分侧来源时直接驱动，树不动"
+    },
+    {
+      "name": "HQTongueRight",
+      "equation": "tongueOut",
+      "meaning": "Right伸舌（分侧）",
+      "trees": [
+        "MouthTongue",
+        "CheekPuffTongue"
+      ],
+      "range": "0..1",
+      "note": "分侧自由度：先两侧同跟单侧原值 tongueOut；有分侧来源时直接驱动，树不动"
     },
     {
       "name": "HQUpperLipRoll",
       "equation": "mouthRollUpper",
       "meaning": "上卷唇",
       "trees": [
-        "M09"
+        "MouthLipRoll"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3431,7 +3479,7 @@
       "equation": "mouthRollLower",
       "meaning": "下卷唇",
       "trees": [
-        "M09"
+        "MouthLipRoll"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3441,7 +3489,7 @@
       "equation": "mouthShrugUpper",
       "meaning": "上耸唇",
       "trees": [
-        "M05"
+        "MouthShrugSplit"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3451,7 +3499,7 @@
       "equation": "mouthShrugLower",
       "meaning": "下耸唇",
       "trees": [
-        "M05"
+        "MouthShrugSplit"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3461,7 +3509,7 @@
       "equation": "jawForward",
       "meaning": "下颌前伸",
       "trees": [
-        "M02"
+        "MouthJaw"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3471,8 +3519,8 @@
       "equation": "mouthClose",
       "meaning": "独立唇闭合",
       "trees": [
-        "M03",
-        "C02"
+        "MouthSeal",
+        "CheekPuff"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3482,7 +3530,7 @@
       "equation": "mouthFunnel",
       "meaning": "原始漏斗形变",
       "trees": [
-        "M13"
+        "MouthRawRound"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3492,7 +3540,7 @@
       "equation": "mouthPucker",
       "meaning": "原始嘟嘴形变",
       "trees": [
-        "M13"
+        "MouthRawRound"
       ],
       "range": "0..1",
       "note": "直接保留原始自由度"
@@ -3502,8 +3550,8 @@
       "equation": "jawRight - jawLeft",
       "meaning": "下颌侧移",
       "trees": [
-        "M02",
-        "M15"
+        "MouthJaw",
+        "MouthJawSide"
       ],
       "range": "-1..1",
       "note": "直接保留原始自由度"
@@ -3513,7 +3561,7 @@
       "equation": "clamp((mouthSmile_L + mouthSmile_R - mouthFrown_L - mouthFrown_R) / 2, -1, 1)",
       "meaning": "音素库的欣/悲造型代理",
       "trees": [
-        "A01"
+        "AudioPhoneme"
       ],
       "range": "-1..1",
       "note": "保留给语音嘴的表情条件，不是心理情绪识别"
@@ -3523,7 +3571,7 @@
       "equation": "audio amplitude after calibration",
       "meaning": "音素库的发音幅度",
       "trees": [
-        "A01"
+        "AudioPhoneme"
       ],
       "range": "0..1",
       "note": "音频适配层输出；不引用未接入的原始音量作为假数据"
@@ -3531,8 +3579,8 @@
   ],
   "tree_families": [
     {
-      "id": "M01",
-      "region": "外嘴核心",
+      "name": "MouthCore",
+      "region": "Mouth",
       "axes": [
         "Form",
         "Open"
@@ -3547,8 +3595,8 @@
       "samples": null
     },
     {
-      "id": "M02",
-      "region": "下颌/口内",
+      "name": "MouthJaw",
+      "region": "Mouth",
       "axes": [
         "JawOpen",
         "HQJawForward"
@@ -3556,14 +3604,14 @@
       "condition_axes": [
         "HQJawX"
       ],
-      "role": "基础姿势；下颌、牙/口内，明确与M01绑定分工",
+      "role": "基础姿势；下颌、牙/口内，明确与MouthCore绑定分工",
       "missing_animation": "复用低维基础姿势/中性，不放空Motion",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "M03",
-      "region": "唇闭合与下颌",
+      "name": "MouthSeal",
+      "region": "Mouth",
       "axes": [
         "HQMouthSeal",
         "JawOpen"
@@ -3579,8 +3627,8 @@
       "samples": null
     },
     {
-      "id": "M04",
-      "region": "横向嘴型",
+      "name": "MouthWidth",
+      "region": "Mouth",
       "axes": [
         "MouthPucker",
         "MouthX"
@@ -3589,14 +3637,14 @@
         "Open",
         "Form"
       ],
-      "role": "对M01的嘴宽/偏嘴修正；不重复写完整外嘴",
+      "role": "对MouthCore的嘴宽/偏嘴修正；不重复写完整外嘴",
       "missing_animation": "零修正；保留基础输出",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "M05",
-      "region": "上下耸唇",
+      "name": "MouthShrugSplit",
+      "region": "Mouth",
       "axes": [
         "HQUpperLipShrug",
         "HQLowerLipShrug"
@@ -3605,14 +3653,14 @@
         "Open",
         "MouthPucker"
       ],
-      "role": "对合并MouthShrug基础的细分修正",
+      "role": "对合并MouthShrugBase的细分修正",
       "missing_animation": "零修正；保留基础输出",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "M06",
-      "region": "左右嘴角表情",
+      "name": "MouthCorner",
+      "region": "Mouth",
       "axes": [
         "HQSmileFrownLeft",
         "HQSmileFrownRight"
@@ -3622,14 +3670,14 @@
         "Funnel",
         "Press"
       ],
-      "role": "不对称/局部嘴角修正；先扣除M01已表达部分",
+      "role": "不对称/局部嘴角修正；先扣除MouthCore已表达部分",
       "missing_animation": "零修正；保留基础输出",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "M07",
-      "region": "上唇左右展开",
+      "name": "MouthUpperRaise",
+      "region": "Mouth",
       "axes": [
         "HQUpperLipRaiseLeft",
         "HQUpperLipRaiseRight"
@@ -3644,8 +3692,8 @@
       "samples": null
     },
     {
-      "id": "M08",
-      "region": "下唇左右展开",
+      "name": "MouthLowerDrop",
+      "region": "Mouth",
       "axes": [
         "HQLowerLipDropLeft",
         "HQLowerLipDropRight"
@@ -3660,8 +3708,8 @@
       "samples": null
     },
     {
-      "id": "M09",
-      "region": "上下卷唇",
+      "name": "MouthLipRoll",
+      "region": "Mouth",
       "axes": [
         "HQUpperLipRoll",
         "HQLowerLipRoll"
@@ -3676,8 +3724,8 @@
       "samples": null
     },
     {
-      "id": "M10",
-      "region": "左右压唇",
+      "name": "MouthLipPress",
+      "region": "Mouth",
       "axes": [
         "HQLipPressLeft",
         "HQLipPressRight"
@@ -3692,8 +3740,8 @@
       "samples": null
     },
     {
-      "id": "M11",
-      "region": "左右横向拉伸",
+      "name": "MouthStretch",
+      "region": "Mouth",
       "axes": [
         "HQLipStretchLeft",
         "HQLipStretchRight"
@@ -3708,8 +3756,8 @@
       "samples": null
     },
     {
-      "id": "M12",
-      "region": "左右酒窝/嘴角收紧",
+      "name": "MouthDimple",
+      "region": "Mouth",
       "axes": [
         "HQMouthDimpleLeft",
         "HQMouthDimpleRight"
@@ -3724,8 +3772,8 @@
       "samples": null
     },
     {
-      "id": "M13",
-      "region": "原始圆口与嘟嘴",
+      "name": "MouthRawRound",
+      "region": "Mouth",
       "axes": [
         "HQLipFunnel",
         "HQLipPucker"
@@ -3741,26 +3789,27 @@
       "samples": null
     },
     {
-      "id": "M14",
-      "region": "伸舌与口内",
+      "name": "MouthTongue",
+      "region": "Mouth",
       "axes": [
-        "TongueOut",
-        "JawOpen"
+        "HQTongueLeft",
+        "HQTongueRight"
       ],
       "condition_axes": [
+        "JawOpen",
         "Open",
         "MouthPucker",
         "Funnel",
         "Press"
       ],
-      "role": "舌基础＋必要的唇/齿接触修正",
+      "role": "舌基础（分左右）＋必要的唇/齿接触修正",
       "missing_animation": "复用低维基础姿势/中性，不放空Motion",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "M15",
-      "region": "下颌偏移与偏嘴",
+      "name": "MouthJawSide",
+      "region": "Mouth",
       "axes": [
         "HQJawX",
         "MouthX"
@@ -3775,8 +3824,8 @@
       "samples": null
     },
     {
-      "id": "M16",
-      "region": "合并耸唇基础",
+      "name": "MouthShrugBase",
+      "region": "Mouth",
       "axes": [
         "MouthShrug"
       ],
@@ -3784,14 +3833,14 @@
         "Open",
         "MouthPucker"
       ],
-      "role": "给V3兼容来源的合并耸唇基础；M05做细分残差",
+      "role": "给V3兼容来源的合并耸唇基础；MouthShrugSplit做细分残差",
       "missing_animation": "复用低维基础姿势/中性，不放空Motion",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "E01L",
-      "region": "Left眼睑",
+      "name": "LidL",
+      "region": "Lid",
       "axes": [
         "LidLeft",
         "EyeSquintLeft"
@@ -3805,8 +3854,8 @@
       "samples": null
     },
     {
-      "id": "E02L",
-      "region": "Left眼球注视",
+      "name": "GazeL",
+      "region": "Gaze",
       "axes": [
         "HQGazeLeftX",
         "HQGazeLeftY"
@@ -3818,8 +3867,8 @@
       "samples": null
     },
     {
-      "id": "E03L",
-      "region": "Left眼睑随视线",
+      "name": "LidGazeL",
+      "region": "Lid",
       "axes": [
         "LidLeft",
         "HQGazeLeftY"
@@ -3835,8 +3884,8 @@
       "samples": null
     },
     {
-      "id": "E04L",
-      "region": "Left眼睑随偏嘴",
+      "name": "LidMouthL",
+      "region": "Lid",
       "axes": [
         "MouthX",
         "LidLeft"
@@ -3850,8 +3899,8 @@
       "samples": null
     },
     {
-      "id": "B01L",
-      "region": "Left眉核心",
+      "name": "BrowCoreL",
+      "region": "Brow",
       "axes": [
         "HQBrowDownLeft",
         "HQBrowOuterUpLeft"
@@ -3865,8 +3914,8 @@
       "samples": null
     },
     {
-      "id": "B02L",
-      "region": "Left眉眼接触",
+      "name": "BrowEyeL",
+      "region": "Brow",
       "axes": [
         "BrowLeftY",
         "LidLeft"
@@ -3881,8 +3930,8 @@
       "samples": null
     },
     {
-      "id": "E01R",
-      "region": "Right眼睑",
+      "name": "LidR",
+      "region": "Lid",
       "axes": [
         "LidRight",
         "EyeSquintRight"
@@ -3896,8 +3945,8 @@
       "samples": null
     },
     {
-      "id": "E02R",
-      "region": "Right眼球注视",
+      "name": "GazeR",
+      "region": "Gaze",
       "axes": [
         "HQGazeRightX",
         "HQGazeRightY"
@@ -3909,8 +3958,8 @@
       "samples": null
     },
     {
-      "id": "E03R",
-      "region": "Right眼睑随视线",
+      "name": "LidGazeR",
+      "region": "Lid",
       "axes": [
         "LidRight",
         "HQGazeRightY"
@@ -3926,8 +3975,8 @@
       "samples": null
     },
     {
-      "id": "E04R",
-      "region": "Right眼睑随偏嘴",
+      "name": "LidMouthR",
+      "region": "Lid",
       "axes": [
         "MouthX",
         "LidRight"
@@ -3941,8 +3990,8 @@
       "samples": null
     },
     {
-      "id": "B01R",
-      "region": "Right眉核心",
+      "name": "BrowCoreR",
+      "region": "Brow",
       "axes": [
         "HQBrowDownRight",
         "HQBrowOuterUpRight"
@@ -3956,8 +4005,8 @@
       "samples": null
     },
     {
-      "id": "B02R",
-      "region": "Right眉眼接触",
+      "name": "BrowEyeR",
+      "region": "Brow",
       "axes": [
         "BrowRightY",
         "LidRight"
@@ -3972,8 +4021,8 @@
       "samples": null
     },
     {
-      "id": "E05",
-      "region": "双眼非对称协调",
+      "name": "LidBoth",
+      "region": "Lid",
       "axes": [
         "LidLeft",
         "LidRight"
@@ -3988,21 +4037,21 @@
       "samples": null
     },
     {
-      "id": "B03",
-      "region": "左右眉中央协同",
+      "name": "BrowCenter",
+      "region": "Brow",
       "axes": [
         "HQBrowExpressionLeft",
         "HQBrowExpressionRight"
       ],
       "condition_axes": [],
-      "role": "中央眉/额头修正；不与B01重复整眉基础",
+      "role": "中央眉/额头修正；不与BrowCore重复整眉基础",
       "missing_animation": "零修正；保留基础输出",
       "evidence": "本地Jerry有该2D；作为残差的分工为本次设计",
       "samples": null
     },
     {
-      "id": "C01",
-      "region": "双颊收紧",
+      "name": "CheekSquint",
+      "region": "Cheek",
       "axes": [
         "HQCheekSquintLeft",
         "HQCheekSquintRight"
@@ -4018,40 +4067,43 @@
       "samples": null
     },
     {
-      "id": "C02",
-      "region": "鼓腮嘴型",
+      "name": "CheekPuff",
+      "region": "Cheek",
       "axes": [
-        "CheekPuff",
-        "MouthPucker"
+        "HQCheekPuffLeft",
+        "HQCheekPuffRight"
       ],
       "condition_axes": [
         "Open",
         "HQMouthSeal",
-        "Form"
+        "Form",
+        "MouthPucker"
       ],
-      "role": "鼓腮基础＋闭口/嘴型接触修正",
+      "role": "鼓腮基础（分左右）＋闭口/嘴型接触修正",
       "missing_animation": "复用低维基础姿势/中性，不放空Motion",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "C03",
-      "region": "鼓腮与伸舌",
+      "name": "CheekPuffTongue",
+      "region": "Cheek",
       "axes": [
-        "CheekPuff",
-        "TongueOut"
+        "HQTongueLeft",
+        "HQTongueRight"
       ],
       "condition_axes": [
+        "HQCheekPuffLeft",
+        "HQCheekPuffRight",
         "JawOpen"
       ],
-      "role": "极端组合残差",
+      "role": "鼓腮×伸舌的极端组合残差（分侧）",
       "missing_animation": "零修正；保留基础输出",
       "evidence": "本次高级模板设计，非VB原装树",
       "samples": null
     },
     {
-      "id": "N01",
-      "region": "鼻翼/鼻唇",
+      "name": "NoseSneer",
+      "region": "Nose",
       "axes": [
         "HQNoseSneerLeft",
         "HQNoseSneerRight"
@@ -4067,8 +4119,8 @@
       "samples": null
     },
     {
-      "id": "H01",
-      "region": "头部朝向",
+      "name": "HeadAim",
+      "region": "Head",
       "axes": [
         "FaceAngleX",
         "FaceAngleY"
@@ -4082,8 +4134,8 @@
       "samples": null
     },
     {
-      "id": "H02",
-      "region": "头部位置",
+      "name": "HeadPos",
+      "region": "Head",
       "axes": [
         "FacePositionX",
         "FacePositionY"
@@ -4097,8 +4149,8 @@
       "samples": null
     },
     {
-      "id": "H03",
-      "region": "身体朝向",
+      "name": "BodyAim",
+      "region": "Body",
       "axes": [
         "BodyAngleX",
         "BodyAngleY"
@@ -4112,8 +4164,8 @@
       "samples": null
     },
     {
-      "id": "H04",
-      "region": "身体位置",
+      "name": "BodyPos",
+      "region": "Body",
       "axes": [
         "BodyPositionX",
         "BodyPositionY"
@@ -4127,8 +4179,8 @@
       "samples": null
     },
     {
-      "id": "A01",
-      "region": "显式音素嘴库",
+      "name": "AudioPhoneme",
+      "region": "Audio",
       "axes": [
         "HQAudioStrength",
         "HQEmotion"
@@ -4142,8 +4194,8 @@
       "samples": null
     },
     {
-      "id": "P01",
-      "region": "手位置",
+      "name": "HandPos",
+      "region": "Hand",
       "axes": [
         "HandPositionX",
         "HandPositionY"
@@ -4159,8 +4211,8 @@
       "samples": null
     },
     {
-      "id": "P02",
-      "region": "手指姿态",
+      "name": "HandFinger",
+      "region": "Hand",
       "axes": [
         "FingerCurl"
       ],
@@ -4174,8 +4226,8 @@
       "samples": null
     },
     {
-      "id": "P03",
-      "region": "控制器造型",
+      "name": "CtrlStick",
+      "region": "Ctrl",
       "axes": [
         "StickX",
         "StickY"

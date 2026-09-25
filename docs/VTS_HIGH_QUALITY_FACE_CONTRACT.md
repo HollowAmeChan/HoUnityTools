@@ -1,6 +1,9 @@
 ﻿# VTS → VB高质量加工 → 高级混合树：全量契约表
 
-日期：2026-09-25。**本表是当前设计入口。目标为完整的高质量模板，允许大量树；降配通过选择性填写动画完成，轴、条件和树族保持稳定。**
+日期：2026-09-25；**2026-09-27 修订**：树族不再用编号（`M01`…），改成**树名 = 部位 + 语义 + 侧别**（`MouthCore`…）；
+HQ 扩展加 4 根**分侧**轴（`HQCheekPuffLeft/Right`、`HQTongueLeft/Right`，鼓腮与吐舌在模型上本来就是左右两组键）⇒ 43 项。
+名字规则与全表见 [面捕命名权威](FACE_TRACKING_NAMING.md)。
+**本表是当前设计入口。目标为完整的高质量模板，允许大量树；降配通过选择性填写动画完成，轴、条件和树族保持稳定。**
 不规定9格、25格或任何固定叶子数。矩阵可以非方阵、按条件切片、共享姿势、采用不同采样密度。
 
 交付范围：① VTS公开固定追踪参数逐名清单；② 手机原始ARKit逐名清单；③ 本机VB V3全部展开输出；④ 保留细节的高质量扩展输出；⑤ 高级树族、轴、条件、输出职责与缺省规则。
@@ -13,7 +16,7 @@
 | **VTS固定追踪参数** | 官方三个页面明确列出的98个名字：33面部/鼠标/音频，26手部，39控制器；表A逐名列出 |
 | **手机原始ARKit** | 52路原始观测，另有头眼向量、健康/热键信息；与桌面追踪参数不是一个接口，表B |
 | **VB原装V3** | 本机预设26个存档行，向量展开后34个标量；表C是实际字段/公式，不虚构新增能力 |
-| **HQ扩展** | 为完整高质量模板提出的39个输出，需作者在VB Editor或我们的中间层实现；表D不是原装V3参数清单 |
+| **HQ扩展** | 为完整高质量模板提出的43个输出，需作者在VB Editor或我们的中间层实现；表D不是原装V3参数清单 |
 | **树族** | 表E的42项设计单元，内部可包含许多条件切片/子树；不是42个Unity节点或42份动画 |
 | **可扩展集合** | VTS插件自定义参数与每个模型的Live2D参数ID可变化，名字集合无法静态穷举；应运行时枚举 |
 
@@ -35,27 +38,27 @@
 
 | 参数（逐名） | 语义 | 范围 | 高级模板接点 | iOS/Android/普通/NVIDIA/MediaPipe |
 | --- | --- | --- | --- | --- |
-| FacePositionX | 头部横移 | 运行时查询 | H02 | ✔️/✔️/✔️/✔️/✔️ |
-| FacePositionY | 头部升降 | 运行时查询 | H02 | ✔️/✔️/✔️/✔️/✔️ |
-| FacePositionZ | 头部远近 | 运行时查询 | H02条件 | ✔️/✔️/✔️/✔️/✔️ |
-| FaceAngleX | 左右转头 | 运行时查询 | H01 | ✔️/✔️/✔️/✔️/✔️ |
-| FaceAngleY | 抬低头 | 运行时查询 | H01 | ✔️/✔️/✔️/✔️/✔️ |
-| FaceAngleZ | 歪头 | 运行时查询 | H01条件/姿态 | ✔️/✔️/✔️/✔️/✔️ |
-| MouthSmile | 综合嘴型 | 运行时查询 | 校准为Form → M01等 | ✔️/✔️/✔️/✔️/✔️ |
-| MouthOpen | 嘴唇开口 | 0..1 | Open → M01等 | ✔️/✔️/✔️/✔️/✔️ |
+| FacePositionX | 头部横移 | 运行时查询 | HeadPos | ✔️/✔️/✔️/✔️/✔️ |
+| FacePositionY | 头部升降 | 运行时查询 | HeadPos | ✔️/✔️/✔️/✔️/✔️ |
+| FacePositionZ | 头部远近 | 运行时查询 | HeadPos条件 | ✔️/✔️/✔️/✔️/✔️ |
+| FaceAngleX | 左右转头 | 运行时查询 | HeadAim | ✔️/✔️/✔️/✔️/✔️ |
+| FaceAngleY | 抬低头 | 运行时查询 | HeadAim | ✔️/✔️/✔️/✔️/✔️ |
+| FaceAngleZ | 歪头 | 运行时查询 | HeadAim条件/姿态 | ✔️/✔️/✔️/✔️/✔️ |
+| MouthSmile | 综合嘴型 | 运行时查询 | 校准为Form → MouthCore等 | ✔️/✔️/✔️/✔️/✔️ |
+| MouthOpen | 嘴唇开口 | 0..1 | Open → MouthCore等 | ✔️/✔️/✔️/✔️/✔️ |
 | Brows | 双眉合并 | 运行时查询 | 眉代理来源；高档优先左右信息 | ✔️/✔️/✔️/✔️/✔️ |
 | MousePositionX | 鼠标/触摸横向 | 运行时查询 | Gaze/头姿/作者演出轴的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
 | MousePositionY | 鼠标/触摸纵向 | 运行时查询 | 同上，与X成2D | ✔️/✔️/✔️/✔️/✔️ |
-| TongueOut | 伸舌 | 运行时查询 | M14/C03 | ✔️/✔️/❌/❌/❌ |
-| EyeOpenLeft | 左眼睁开 | 运行时查询 | LidLeft → E01L等 | ✔️/✔️/✔️/✔️/✔️ |
-| EyeOpenRight | 右眼睁开 | 运行时查询 | LidRight → E01R等 | ✔️/✔️/✔️/✔️/✔️ |
-| EyeLeftX | 左眼水平 | 运行时查询 | E02L/E03L的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
-| EyeLeftY | 左眼垂直 | 运行时查询 | E02L/E03L的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
-| EyeRightX | 右眼水平 | 运行时查询 | E02R/E03R的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
-| EyeRightY | 右眼垂直 | 运行时查询 | E02R/E03R的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
-| CheekPuff | 鼓腮 | 运行时查询 | C02/C03 | ✔️/❌/❌/❌/❌ |
-| BrowLeftY | 左眉高 | 运行时查询 | B02L；可降级代理B01L | ✔️/✔️/✔️/✔️/✔️ |
-| BrowRightY | 右眉高 | 运行时查询 | B02R；可降级代理B01R | ✔️/✔️/✔️/✔️/✔️ |
+| TongueOut | 伸舌 | 运行时查询 | MouthTongue/CheekPuffTongue（分侧用HQTongueL/R） | ✔️/✔️/❌/❌/❌ |
+| EyeOpenLeft | 左眼睁开 | 运行时查询 | LidLeft → LidL等 | ✔️/✔️/✔️/✔️/✔️ |
+| EyeOpenRight | 右眼睁开 | 运行时查询 | LidRight → LidR等 | ✔️/✔️/✔️/✔️/✔️ |
+| EyeLeftX | 左眼水平 | 运行时查询 | GazeL/LidGazeL的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
+| EyeLeftY | 左眼垂直 | 运行时查询 | GazeL/LidGazeL的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
+| EyeRightX | 右眼水平 | 运行时查询 | GazeR/LidGazeR的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
+| EyeRightY | 右眼垂直 | 运行时查询 | GazeR/LidGazeR的替代来源 | ✔️/✔️/✔️/✔️/✔️ |
+| CheekPuff | 鼓腮 | 运行时查询 | CheekPuff/CheekPuffTongue（分侧用HQCheekPuffL/R） | ✔️/❌/❌/❌/❌ |
+| BrowLeftY | 左眉高 | 运行时查询 | BrowEyeL；可降级代理BrowCoreL | ✔️/✔️/✔️/✔️/✔️ |
+| BrowRightY | 右眉高 | 运行时查询 | BrowEyeR；可降级代理BrowCoreR | ✔️/✔️/✔️/✔️/✔️ |
 | VoiceFrequency | 合成语音嘴型 | 0..1 | Form的音频来源，非Hz | ✔️/✔️/✔️/✔️/✔️ |
 | VoiceVolume | 音量 | 0..1 | Open/Jaw/HQAudioStrength的音频来源 | ✔️/✔️/✔️/✔️/✔️ |
 | VoiceVolumePlusMouthOpen | 音量辅助开合 | 0..1 | Open替代来源，不与原Open重复相加 | ✔️/✔️/✔️/✔️/✔️ |
@@ -66,7 +69,7 @@
 | VoiceE | E元音权重 | 0..1 | 音频→既有嘴轴；或A01音素分支权重 | ✔️/✔️/✔️/✔️/✔️ |
 | VoiceO | O元音权重 | 0..1 | 音频→既有嘴轴；或A01音素分支权重 | ✔️/✔️/✔️/✔️/✔️ |
 | VoiceSilence | 静音量 | 0..1 | 音频/视觉供值比例；不作为美术坐标 | ✔️/✔️/✔️/✔️/✔️ |
-| MouthX | 偏嘴 | 运行时查询 | M04/M15/E04L/E04R | ✔️/✔️/❌/✔️/✔️ |
+| MouthX | 偏嘴 | 运行时查询 | MouthWidth/MouthJawSide/LidMouthL/LidMouthR | ✔️/✔️/❌/✔️/✔️ |
 | FaceAngry | 实验性生气量 | 运行时查询 | 保留可绑定；不用它替代可靠的眉/唇观测 | ✔️/❌/❌/❌/❌ |
 
 <!-- END:VTS_FACE -->
@@ -87,28 +90,28 @@
 | HandRightFound | 追踪可用性 | 0/1 | 控制来源可用性 |
 | BothHandsFound | 追踪可用性 | 0/1 | 控制来源可用性 |
 | HandDistance | 双手距离 | 未公开 | 作者自定义演出轴 |
-| HandLeftPositionX | 左手位置X | 见轴定义 | P01 |
-| HandLeftPositionY | 左手位置Y | 见轴定义 | P01 |
-| HandLeftPositionZ | 左手位置Z | 见轴定义 | P01 |
-| HandRightPositionX | 右手位置X | 见轴定义 | P01 |
-| HandRightPositionY | 右手位置Y | 见轴定义 | P01 |
-| HandRightPositionZ | 右手位置Z | 见轴定义 | P01 |
-| HandLeftAngleX | 左手角度X | ±180 | P01条件 |
-| HandLeftAngleZ | 左手角度Z | ±180 | P01条件 |
-| HandRightAngleX | 右手角度X | ±180 | P01条件 |
-| HandRightAngleZ | 右手角度Z | ±180 | P01条件 |
-| HandLeftOpen | 左手整体张开 | 0..1 | P02整体手形来源 |
-| HandRightOpen | 右手整体张开 | 0..1 | P02整体手形来源 |
-| HandLeftFinger_1_Thumb | 左拇指 | 0..1 | P02对应手指 |
-| HandLeftFinger_2_Index | 左食指 | 0..1 | P02对应手指 |
-| HandLeftFinger_3_Middle | 左中指 | 0..1 | P02对应手指 |
-| HandLeftFinger_4_Ring | 左无名指 | 0..1 | P02对应手指 |
-| HandLeftFinger_5_Pinky | 左小指 | 0..1 | P02对应手指 |
-| HandRightFinger_1_Thumb | 右拇指 | 0..1 | P02对应手指 |
-| HandRightFinger_2_Index | 右食指 | 0..1 | P02对应手指 |
-| HandRightFinger_3_Middle | 右中指 | 0..1 | P02对应手指 |
-| HandRightFinger_4_Ring | 右无名指 | 0..1 | P02对应手指 |
-| HandRightFinger_5_Pinky | 右小指 | 0..1 | P02对应手指 |
+| HandLeftPositionX | 左手位置X | 见轴定义 | HandPos |
+| HandLeftPositionY | 左手位置Y | 见轴定义 | HandPos |
+| HandLeftPositionZ | 左手位置Z | 见轴定义 | HandPos |
+| HandRightPositionX | 右手位置X | 见轴定义 | HandPos |
+| HandRightPositionY | 右手位置Y | 见轴定义 | HandPos |
+| HandRightPositionZ | 右手位置Z | 见轴定义 | HandPos |
+| HandLeftAngleX | 左手角度X | ±180 | HandPos条件 |
+| HandLeftAngleZ | 左手角度Z | ±180 | HandPos条件 |
+| HandRightAngleX | 右手角度X | ±180 | HandPos条件 |
+| HandRightAngleZ | 右手角度Z | ±180 | HandPos条件 |
+| HandLeftOpen | 左手整体张开 | 0..1 | HandFinger整体手形来源 |
+| HandRightOpen | 右手整体张开 | 0..1 | HandFinger整体手形来源 |
+| HandLeftFinger_1_Thumb | 左拇指 | 0..1 | HandFinger对应手指 |
+| HandLeftFinger_2_Index | 左食指 | 0..1 | HandFinger对应手指 |
+| HandLeftFinger_3_Middle | 左中指 | 0..1 | HandFinger对应手指 |
+| HandLeftFinger_4_Ring | 左无名指 | 0..1 | HandFinger对应手指 |
+| HandLeftFinger_5_Pinky | 左小指 | 0..1 | HandFinger对应手指 |
+| HandRightFinger_1_Thumb | 右拇指 | 0..1 | HandFinger对应手指 |
+| HandRightFinger_2_Index | 右食指 | 0..1 | HandFinger对应手指 |
+| HandRightFinger_3_Middle | 右中指 | 0..1 | HandFinger对应手指 |
+| HandRightFinger_4_Ring | 右无名指 | 0..1 | HandFinger对应手指 |
+| HandRightFinger_5_Pinky | 右小指 | 0..1 | HandFinger对应手指 |
 
 <!-- END:VTS_HAND -->
 
@@ -123,45 +126,45 @@
 
 | 参数（逐名） | 范围 | 模板接点 |
 | --- | --- | --- |
-| ControllerStickLeftX | -1 to 1 | P03 / 作者指定的演出参数来源 |
-| ControllerStickLeftY | -1 to 1 | P03 / 作者指定的演出参数来源 |
-| ControllerStickRightX | -1 to 1 | P03 / 作者指定的演出参数来源 |
-| ControllerStickRightY | -1 to 1 | P03 / 作者指定的演出参数来源 |
-| ControllerStickPressLeft | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerStickPressRight | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerDPadX | -1, 0, or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerDPadY | -1, 0, or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerTriangle | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerCross | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerSquare | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerCircle | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerShoulderLeft | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerShoulderRight | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerTriggerLeft | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerTriggerRight | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerOptionLeft | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerOptionRight | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerHome | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadPress | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerButtonsAnyLeft | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerButtonsAnyRight | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerButtonCountLeft | 0+ | P03 / 作者指定的演出参数来源 |
-| ControllerButtonCountRight | 0+ | P03 / 作者指定的演出参数来源 |
-| ControllerLean | -1 to 1 | P03 / 作者指定的演出参数来源 |
-| ControllerThumbPosLeft | 0–3 | P03 / 作者指定的演出参数来源 |
-| ControllerThumbPosRight | 0–3 | P03 / 作者指定的演出参数来源 |
-| ControllerFingerPosLeft | 0–2 | P03 / 作者指定的演出参数来源 |
-| ControllerFingerPosRight | 0–2 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadTouchCount | 0–2 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerLeftActive | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerRightActive | 0 or 1 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerLeftX | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerLeftY | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerRightX | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerTouchPadFingerRightY | 0.0 to 1.0 | P03 / 作者指定的演出参数来源 |
-| ControllerOrientationX | -60.0 to 60.0 | P03 / 作者指定的演出参数来源 |
-| ControllerOrientationY | -60.0 to 60.0 | P03 / 作者指定的演出参数来源 |
-| ControllerOrientationZ | -60.0 to 60.0 | P03 / 作者指定的演出参数来源 |
+| ControllerStickLeftX | -1 to 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerStickLeftY | -1 to 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerStickRightX | -1 to 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerStickRightY | -1 to 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerStickPressLeft | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerStickPressRight | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerDPadX | -1, 0, or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerDPadY | -1, 0, or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTriangle | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerCross | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerSquare | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerCircle | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerShoulderLeft | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerShoulderRight | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTriggerLeft | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTriggerRight | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerOptionLeft | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerOptionRight | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerHome | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadPress | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerButtonsAnyLeft | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerButtonsAnyRight | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerButtonCountLeft | 0+ | CtrlStick / 作者指定的演出参数来源 |
+| ControllerButtonCountRight | 0+ | CtrlStick / 作者指定的演出参数来源 |
+| ControllerLean | -1 to 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerThumbPosLeft | 0–3 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerThumbPosRight | 0–3 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerFingerPosLeft | 0–2 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerFingerPosRight | 0–2 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadTouchCount | 0–2 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerLeftActive | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerRightActive | 0 or 1 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerLeftX | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerLeftY | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerRightX | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerTouchPadFingerRightY | 0.0 to 1.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerOrientationX | -60.0 to 60.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerOrientationY | -60.0 to 60.0 | CtrlStick / 作者指定的演出参数来源 |
+| ControllerOrientationZ | -60.0 to 60.0 | CtrlStick / 作者指定的演出参数来源 |
 
 <!-- END:VTS_CONTROLLER -->
 
@@ -236,12 +239,12 @@ VTS模型参数的值提供者优先级见[官方交互说明](https://github.co
 | browInnerUp | BrowInnerUp | browInnerUp | BrowInnerUp, HQBrowExpressionLeft, HQBrowExpressionRight |
 | browOuterUpLeft | BrowOuterUpLeft | browOuterUp_L | EyeRightY, Brows, BrowLeftY, HQBrowOuterUpLeft, HQBrowExpressionLeft |
 | browOuterUpRight | BrowOuterUpRight | browOuterUp_R | Brows, BrowRightY, HQBrowOuterUpRight, HQBrowExpressionRight |
-| cheekPuff | CheekPuff | cheekPuff | CheekPuff |
+| cheekPuff | CheekPuff | cheekPuff | CheekPuff, HQCheekPuffLeft, HQCheekPuffRight |
 | cheekSquintLeft | CheekSquintLeft | cheekSquint_L | HQCheekSquintLeft |
 | cheekSquintRight | CheekSquintRight | cheekSquint_R | HQCheekSquintRight |
 | noseSneerLeft | NoseSneerLeft | noseSneer_L | HQNoseSneerLeft |
 | noseSneerRight | NoseSneerRight | noseSneer_R | HQNoseSneerRight |
-| tongueOut | TongueOut | tongueOut | TongueOut |
+| tongueOut | TongueOut | tongueOut | TongueOut, HQTongueLeft, HQTongueRight |
 
 <!-- END:RAW -->
 
@@ -259,40 +262,40 @@ ARKit只有共享的`browInnerUp`、共享的`cheekPuff`以及一个`tongueOut`�
 
 | VB V3输出（展开后逐名） | 声明范围 | 存档默认 | 表达式（曲线前） | 高级模板接点 |
 | --- | --- | --- | --- | --- |
-| FaceAngleX | -30…30 | 0 | - headRotY * .66 | H01 |
-| FaceAngleY | -30…30 | 0 | ( - headRotX * .66)  | H01 |
-| FaceAngleZ | -30…30 | 0 | headRotZ * .66 | H01条件/姿态 |
-| BodyAngleX | -30…30 | 0 | - headRotY * .66 | H03 |
-| BodyAngleY | -30…30 | 0 | ( - headRotX * .66)  | H03 |
-| BodyAngleZ | -30…30 | 0 | headRotZ * .66 | H03条件 |
-| FacePositionX | -15…15 | 0 | headPosX * - 1 | H02 |
-| FacePositionY | -15…15 | 0 | headPosY | H02 |
-| FacePositionZ | -15…15 | 0 | headPosZ | H02条件 |
-| BodyPositionX | -15…15 | 0 | headPosX * - 1 | H04 |
-| BodyPositionY | -15…15 | 0 | headPosY | H04 |
-| BodyPositionZ | -15…15 | 0 | headPosZ | H04条件 |
-| EyeRightX | -1…1 | 0 | (eyeLookIn_L - .1) - eyeLookOut_L | 共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze |
-| EyeRightY | -1…1 | 0 | (eyeLookUp_L - eyeLookDown_L) + (browOuterUp_L * .15) | 共享注视兼容来源 → 两侧E02/E03；高档用独立HQGaze |
-| EyeOpenLeft | 0…1 | 0 | .5 + ((eyeBlink_L * - .8) + (eyeWide_L * .8)) | LidLeft → E01L等 |
-| EyeOpenRight | 0…1 | 0 | .5 + ((eyeBlink_R * - .8) + (eyeWide_R * .8)) | LidRight → E01R等 |
-| EyeSquintLeft | 0…1 | 0 | eyeSquint_L | E01L/E03L/B02L |
-| EyeSquintRight | 0…1 | 0 | eyeSquint_R | E01R/E03R/B02R |
-| JawOpen | 0…1 | 0 | jawOpen | M02/M03/M14等 |
-| MouthOpen | 0…1 | 0 | ((jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)) | Open → M01等 |
+| FaceAngleX | -30…30 | 0 | - headRotY * .66 | HeadAim |
+| FaceAngleY | -30…30 | 0 | ( - headRotX * .66)  | HeadAim |
+| FaceAngleZ | -30…30 | 0 | headRotZ * .66 | HeadAim条件/姿态 |
+| BodyAngleX | -30…30 | 0 | - headRotY * .66 | BodyAim |
+| BodyAngleY | -30…30 | 0 | ( - headRotX * .66)  | BodyAim |
+| BodyAngleZ | -30…30 | 0 | headRotZ * .66 | BodyAim条件 |
+| FacePositionX | -15…15 | 0 | headPosX * - 1 | HeadPos |
+| FacePositionY | -15…15 | 0 | headPosY | HeadPos |
+| FacePositionZ | -15…15 | 0 | headPosZ | HeadPos条件 |
+| BodyPositionX | -15…15 | 0 | headPosX * - 1 | BodyPos |
+| BodyPositionY | -15…15 | 0 | headPosY | BodyPos |
+| BodyPositionZ | -15…15 | 0 | headPosZ | BodyPos条件 |
+| EyeRightX | -1…1 | 0 | (eyeLookIn_L - .1) - eyeLookOut_L | 共享注视兼容来源 → 两侧Gaze/LidGaze；高档用独立HQGaze |
+| EyeRightY | -1…1 | 0 | (eyeLookUp_L - eyeLookDown_L) + (browOuterUp_L * .15) | 共享注视兼容来源 → 两侧Gaze/LidGaze；高档用独立HQGaze |
+| EyeOpenLeft | 0…1 | 0 | .5 + ((eyeBlink_L * - .8) + (eyeWide_L * .8)) | LidLeft → LidL等 |
+| EyeOpenRight | 0…1 | 0 | .5 + ((eyeBlink_R * - .8) + (eyeWide_R * .8)) | LidRight → LidR等 |
+| EyeSquintLeft | 0…1 | 0 | eyeSquint_L | LidL/LidGazeL/BrowEyeL |
+| EyeSquintRight | 0…1 | 0 | eyeSquint_R | LidR/LidGazeR/BrowEyeR |
+| JawOpen | 0…1 | 0 | jawOpen | MouthJaw/MouthSeal/MouthTongue等 |
+| MouthOpen | 0…1 | 0 | ((jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)) | Open → MouthCore等 |
 | VoiceVolumePlusMouthOpen | 0…1 | 0 | ((jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)) | Open替代来源，不与原Open重复相加 |
-| MouthSmile | -1…1 | 0 | (2 - ((mouthFrown_L + mouthFrown_R + mouthPucker) / 1) + ((mouthSmile_R + mouthSmile_L + ((mouthDimple_L + mouthDimple_R) / 2)) / 1)) / 4 | 校准为Form → M01等 |
+| MouthSmile | -1…1 | 0 | (2 - ((mouthFrown_L + mouthFrown_R + mouthPucker) / 1) + ((mouthSmile_R + mouthSmile_L + ((mouthDimple_L + mouthDimple_R) / 2)) / 1)) / 4 | 校准为Form → MouthCore等 |
 | VoiceFrequencyPlusMouthSmile | 0…1 | 0.5 | (2 - ((mouthFrown_L + mouthFrown_R + mouthPucker) / 1) + ((mouthSmile_R + mouthSmile_L + ((mouthDimple_L + mouthDimple_R) / 2)) / 1)) / 4 | Form替代来源，不与原Form重复相加 |
-| MouthFunnel | 0…1 | 0 | mouthFunnel - (jawOpen * .2) | Funnel → M01/M13等 |
-| MouthPressLipOpen | -1.3…1.3 | 0 | (((mouthUpperUp_R + mouthUpperUp_L + mouthLowerDown_R + mouthLowerDown_L) / 1.8) - (mouthRollLower + mouthRollUpper)) | Press → M01/M07/M08等 |
-| MouthPucker | -1…1 | 0 | (((mouthDimple_R + mouthDimple_L) * 2) - mouthPucker) | M04/C02等 |
-| MouthX | -1…1 | 0 | ((mouthLeft - mouthRight) + (mouthSmile_L - mouthSmile_R))  | M04/M15/E04L/E04R |
-| CheekPuff | 0…1 | 0 | cheekPuff | C02/C03 |
-| TongueOut | 0…1 | 0 | tongueOut | M14/C03 |
-| MouthShrug | 0…1 | 0 | ((mouthShrugUpper + mouthShrugLower + mouthPress_R + mouthPress_L) / 4) | M16基础，M05细分 |
+| MouthFunnel | 0…1 | 0 | mouthFunnel - (jawOpen * .2) | Funnel → MouthCore/MouthRawRound等 |
+| MouthPressLipOpen | -1.3…1.3 | 0 | (((mouthUpperUp_R + mouthUpperUp_L + mouthLowerDown_R + mouthLowerDown_L) / 1.8) - (mouthRollLower + mouthRollUpper)) | Press → MouthCore/MouthUpperRaise/MouthLowerDrop等 |
+| MouthPucker | -1…1 | 0 | (((mouthDimple_R + mouthDimple_L) * 2) - mouthPucker) | MouthWidth/CheekPuff等 |
+| MouthX | -1…1 | 0 | ((mouthLeft - mouthRight) + (mouthSmile_L - mouthSmile_R))  | MouthWidth/MouthJawSide/LidMouthL/LidMouthR |
+| CheekPuff | 0…1 | 0 | cheekPuff | CheekPuff/CheekPuffTongue（分侧用HQCheekPuffL/R） |
+| TongueOut | 0…1 | 0 | tongueOut | MouthTongue/CheekPuffTongue（分侧用HQTongueL/R） |
+| MouthShrug | 0…1 | 0 | ((mouthShrugUpper + mouthShrugLower + mouthPress_R + mouthPress_L) / 4) | MouthShrugBase基础，MouthShrugSplit细分 |
 | Brows | 0…1 | 0.5 | .5 + (browOuterUp_R + browOuterUp_L - browDown_L - browDown_R) / 4 | 眉代理来源；高档优先左右信息 |
-| BrowLeftY | 0…1 | 0 | .5 + (browOuterUp_L - browDown_L) + ((mouthRight - mouthLeft) / 8) | B02L；可降级代理B01L |
-| BrowRightY | 0…1 | 0 | .5 + (browOuterUp_R - browDown_R) + ((mouthLeft - mouthRight) / 8) | B02R；可降级代理B01R |
-| BrowInnerUp | 0…1 | 0 | browInnerUp | B01L/B01R/B02L/B02R条件 |
+| BrowLeftY | 0…1 | 0 | .5 + (browOuterUp_L - browDown_L) + ((mouthRight - mouthLeft) / 8) | BrowEyeL；可降级代理BrowCoreL |
+| BrowRightY | 0…1 | 0 | .5 + (browOuterUp_R - browDown_R) + ((mouthLeft - mouthRight) / 8) | BrowEyeR；可降级代理BrowCoreR |
+| BrowInnerUp | 0…1 | 0 | browInnerUp | BrowCoreL/BrowCoreR/BrowEyeL/BrowEyeR条件 |
 
 <!-- END:VB -->
 
@@ -307,7 +310,7 @@ ARKit只有共享的`browInnerUp`、共享的`cheekPuff`以及一个`tongueOut`�
 
 ## D. 高质量扩展输出：完整保留局部自由度
 
-以下39项是**建议在VB Editor或我们的中间层产生的输出契约**，统一用`HQ`前缀标识，避免冒充V3原装参数。
+以下43项是**建议在VB Editor或我们的中间层产生的输出契约**，统一用`HQ`前缀标识，避免冒充V3原装参数。
 公式以VB内部已校准输入为变量；移入我们配置时换成对应规范名。若表达式需要复用中间结果，应按现有中间层支持程度展开公式，不假定已支持任意行间引用。
 所有名称均检查为4–32位字母数字，适合VTS自定义参数命名规则。
 
@@ -315,45 +318,49 @@ ARKit只有共享的`browInnerUp`、共享的`cheekPuff`以及一个`tongueOut`�
 
 | 建议扩展输出名 | 语义 | 表达式/生产规则 | 建议范围 | 树族 | 来源性质 |
 | --- | --- | --- | --- | --- | --- |
-| HQGazeLeftX | 左眼水平注视 | eyeLookIn_L - eyeLookOut_L | -1..1 | E02L,E03L | 以演员自身右方为正；模型镜像在校准映射处理 |
-| HQGazeLeftY | 左眼垂直注视 | eyeLookUp_L - eyeLookDown_L | -1..1 | E02L,E03L | 直接保留原始自由度 |
-| HQEyeSmileLeft | 左笑眼造型代理 | mouthSmile_L | 0..1 | E01L,E03L,E04L | 从嘴角笑映射；是作者联动，不是独立眼部笑观测 |
-| HQSmileFrownLeft | 左嘴角欣/悲造型轴 | clamp(mouthSmile_L - mouthFrown_L, -1, 1) | -1..1 | M06 | 这是造型轴，不是心理情绪识别 |
-| HQUpperLipRaiseLeft | 左上唇展开 | mouthUpperUp_L | 0..1 | M07 | 直接保留原始自由度 |
-| HQLowerLipDropLeft | 左下唇下拉 | mouthLowerDown_L | 0..1 | M08 | 直接保留原始自由度 |
-| HQLipPressLeft | 左压唇 | mouthPress_L | 0..1 | M10 | 直接保留原始自由度 |
-| HQLipStretchLeft | 左横拉嘴角 | mouthStretch_L | 0..1 | M11 | 直接保留原始自由度 |
-| HQMouthDimpleLeft | 左酒窝/嘴角收紧 | mouthDimple_L | 0..1 | M12 | 直接保留原始自由度 |
-| HQCheekSquintLeft | 左颊收紧 | cheekSquint_L | 0..1 | C01 | 直接保留原始自由度 |
-| HQNoseSneerLeft | 左鼻翼抬起 | noseSneer_L | 0..1 | N01 | 直接保留原始自由度 |
-| HQBrowDownLeft | 左压眉 | browDown_L | 0..1 | B01L | 直接保留原始自由度 |
-| HQBrowOuterUpLeft | 左外眉抬起 | browOuterUp_L | 0..1 | B01L | 直接保留原始自由度 |
-| HQBrowExpressionLeft | 左眉情绪造型 | clamp((browInnerUp + browOuterUp_L) * .5, 0, 1) - browDown_L | -1..1 | B03 | 借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT |
-| HQGazeRightX | 右眼水平注视 | eyeLookOut_R - eyeLookIn_R | -1..1 | E02R,E03R | 以演员自身右方为正；模型镜像在校准映射处理 |
-| HQGazeRightY | 右眼垂直注视 | eyeLookUp_R - eyeLookDown_R | -1..1 | E02R,E03R | 直接保留原始自由度 |
-| HQEyeSmileRight | 右笑眼造型代理 | mouthSmile_R | 0..1 | E01R,E03R,E04R | 从嘴角笑映射；是作者联动，不是独立眼部笑观测 |
-| HQSmileFrownRight | 右嘴角欣/悲造型轴 | clamp(mouthSmile_R - mouthFrown_R, -1, 1) | -1..1 | M06 | 这是造型轴，不是心理情绪识别 |
-| HQUpperLipRaiseRight | 右上唇展开 | mouthUpperUp_R | 0..1 | M07 | 直接保留原始自由度 |
-| HQLowerLipDropRight | 右下唇下拉 | mouthLowerDown_R | 0..1 | M08 | 直接保留原始自由度 |
-| HQLipPressRight | 右压唇 | mouthPress_R | 0..1 | M10 | 直接保留原始自由度 |
-| HQLipStretchRight | 右横拉嘴角 | mouthStretch_R | 0..1 | M11 | 直接保留原始自由度 |
-| HQMouthDimpleRight | 右酒窝/嘴角收紧 | mouthDimple_R | 0..1 | M12 | 直接保留原始自由度 |
-| HQCheekSquintRight | 右颊收紧 | cheekSquint_R | 0..1 | C01 | 直接保留原始自由度 |
-| HQNoseSneerRight | 右鼻翼抬起 | noseSneer_R | 0..1 | N01 | 直接保留原始自由度 |
-| HQBrowDownRight | 右压眉 | browDown_R | 0..1 | B01R | 直接保留原始自由度 |
-| HQBrowOuterUpRight | 右外眉抬起 | browOuterUp_R | 0..1 | B01R | 直接保留原始自由度 |
-| HQBrowExpressionRight | 右眉情绪造型 | clamp((browInnerUp + browOuterUp_R) * .5, 0, 1) - browDown_R | -1..1 | B03 | 借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT |
-| HQUpperLipRoll | 上卷唇 | mouthRollUpper | 0..1 | M09 | 直接保留原始自由度 |
-| HQLowerLipRoll | 下卷唇 | mouthRollLower | 0..1 | M09 | 直接保留原始自由度 |
-| HQUpperLipShrug | 上耸唇 | mouthShrugUpper | 0..1 | M05 | 直接保留原始自由度 |
-| HQLowerLipShrug | 下耸唇 | mouthShrugLower | 0..1 | M05 | 直接保留原始自由度 |
-| HQJawForward | 下颌前伸 | jawForward | 0..1 | M02 | 直接保留原始自由度 |
-| HQMouthSeal | 独立唇闭合 | mouthClose | 0..1 | M03,C02 | 直接保留原始自由度 |
-| HQLipFunnel | 原始漏斗形变 | mouthFunnel | 0..1 | M13 | 直接保留原始自由度 |
-| HQLipPucker | 原始嘟嘴形变 | mouthPucker | 0..1 | M13 | 直接保留原始自由度 |
-| HQJawX | 下颌侧移 | jawRight - jawLeft | -1..1 | M02,M15 | 直接保留原始自由度 |
-| HQEmotion | 音素库的欣/悲造型代理 | clamp((mouthSmile_L + mouthSmile_R - mouthFrown_L - mouthFrown_R) / 2, -1, 1) | -1..1 | A01 | 保留给语音嘴的表情条件，不是心理情绪识别 |
-| HQAudioStrength | 音素库的发音幅度 | audio amplitude after calibration | 0..1 | A01 | 音频适配层输出；不引用未接入的原始音量作为假数据 |
+| HQGazeLeftX | 左眼水平注视 | eyeLookIn_L - eyeLookOut_L | -1..1 | GazeL,LidGazeL | 以演员自身右方为正；模型镜像在校准映射处理 |
+| HQGazeLeftY | 左眼垂直注视 | eyeLookUp_L - eyeLookDown_L | -1..1 | GazeL,LidGazeL | 直接保留原始自由度 |
+| HQEyeSmileLeft | 左笑眼造型代理 | mouthSmile_L | 0..1 | LidL,LidGazeL,LidMouthL | 从嘴角笑映射；是作者联动，不是独立眼部笑观测 |
+| HQSmileFrownLeft | 左嘴角欣/悲造型轴 | clamp(mouthSmile_L - mouthFrown_L, -1, 1) | -1..1 | MouthCorner | 这是造型轴，不是心理情绪识别 |
+| HQUpperLipRaiseLeft | 左上唇展开 | mouthUpperUp_L | 0..1 | MouthUpperRaise | 直接保留原始自由度 |
+| HQLowerLipDropLeft | 左下唇下拉 | mouthLowerDown_L | 0..1 | MouthLowerDrop | 直接保留原始自由度 |
+| HQLipPressLeft | 左压唇 | mouthPress_L | 0..1 | MouthLipPress | 直接保留原始自由度 |
+| HQLipStretchLeft | 左横拉嘴角 | mouthStretch_L | 0..1 | MouthStretch | 直接保留原始自由度 |
+| HQMouthDimpleLeft | 左酒窝/嘴角收紧 | mouthDimple_L | 0..1 | MouthDimple | 直接保留原始自由度 |
+| HQCheekSquintLeft | 左颊收紧 | cheekSquint_L | 0..1 | CheekSquint | 直接保留原始自由度 |
+| HQNoseSneerLeft | 左鼻翼抬起 | noseSneer_L | 0..1 | NoseSneer | 直接保留原始自由度 |
+| HQBrowDownLeft | 左压眉 | browDown_L | 0..1 | BrowCoreL | 直接保留原始自由度 |
+| HQBrowOuterUpLeft | 左外眉抬起 | browOuterUp_L | 0..1 | BrowCoreL | 直接保留原始自由度 |
+| HQBrowExpressionLeft | 左眉情绪造型 | clamp((browInnerUp + browOuterUp_L) * .5, 0, 1) - browDown_L | -1..1 | BrowCenter | 借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT |
+| HQCheekPuffLeft | 左鼓腮（分侧） | cheekPuff | 0..1 | CheekPuff,CheekPuffTongue | 分侧自由度：先两侧同跟单侧原值 cheekPuff；有分侧来源时直接驱动，树不动 |
+| HQTongueLeft | 左伸舌（分侧） | tongueOut | 0..1 | MouthTongue,CheekPuffTongue | 分侧自由度：先两侧同跟单侧原值 tongueOut；有分侧来源时直接驱动，树不动 |
+| HQGazeRightX | 右眼水平注视 | eyeLookOut_R - eyeLookIn_R | -1..1 | GazeR,LidGazeR | 以演员自身右方为正；模型镜像在校准映射处理 |
+| HQGazeRightY | 右眼垂直注视 | eyeLookUp_R - eyeLookDown_R | -1..1 | GazeR,LidGazeR | 直接保留原始自由度 |
+| HQEyeSmileRight | 右笑眼造型代理 | mouthSmile_R | 0..1 | LidR,LidGazeR,LidMouthR | 从嘴角笑映射；是作者联动，不是独立眼部笑观测 |
+| HQSmileFrownRight | 右嘴角欣/悲造型轴 | clamp(mouthSmile_R - mouthFrown_R, -1, 1) | -1..1 | MouthCorner | 这是造型轴，不是心理情绪识别 |
+| HQUpperLipRaiseRight | 右上唇展开 | mouthUpperUp_R | 0..1 | MouthUpperRaise | 直接保留原始自由度 |
+| HQLowerLipDropRight | 右下唇下拉 | mouthLowerDown_R | 0..1 | MouthLowerDrop | 直接保留原始自由度 |
+| HQLipPressRight | 右压唇 | mouthPress_R | 0..1 | MouthLipPress | 直接保留原始自由度 |
+| HQLipStretchRight | 右横拉嘴角 | mouthStretch_R | 0..1 | MouthStretch | 直接保留原始自由度 |
+| HQMouthDimpleRight | 右酒窝/嘴角收紧 | mouthDimple_R | 0..1 | MouthDimple | 直接保留原始自由度 |
+| HQCheekSquintRight | 右颊收紧 | cheekSquint_R | 0..1 | CheekSquint | 直接保留原始自由度 |
+| HQNoseSneerRight | 右鼻翼抬起 | noseSneer_R | 0..1 | NoseSneer | 直接保留原始自由度 |
+| HQBrowDownRight | 右压眉 | browDown_R | 0..1 | BrowCoreR | 直接保留原始自由度 |
+| HQBrowOuterUpRight | 右外眉抬起 | browOuterUp_R | 0..1 | BrowCoreR | 直接保留原始自由度 |
+| HQBrowExpressionRight | 右眉情绪造型 | clamp((browInnerUp + browOuterUp_R) * .5, 0, 1) - browDown_R | -1..1 | BrowCenter | 借鉴VRCFT轴形状的ARKit适配；不是逐值等同VRCFT |
+| HQCheekPuffRight | 右鼓腮（分侧） | cheekPuff | 0..1 | CheekPuff,CheekPuffTongue | 分侧自由度：先两侧同跟单侧原值 cheekPuff；有分侧来源时直接驱动，树不动 |
+| HQTongueRight | 右伸舌（分侧） | tongueOut | 0..1 | MouthTongue,CheekPuffTongue | 分侧自由度：先两侧同跟单侧原值 tongueOut；有分侧来源时直接驱动，树不动 |
+| HQUpperLipRoll | 上卷唇 | mouthRollUpper | 0..1 | MouthLipRoll | 直接保留原始自由度 |
+| HQLowerLipRoll | 下卷唇 | mouthRollLower | 0..1 | MouthLipRoll | 直接保留原始自由度 |
+| HQUpperLipShrug | 上耸唇 | mouthShrugUpper | 0..1 | MouthShrugSplit | 直接保留原始自由度 |
+| HQLowerLipShrug | 下耸唇 | mouthShrugLower | 0..1 | MouthShrugSplit | 直接保留原始自由度 |
+| HQJawForward | 下颌前伸 | jawForward | 0..1 | MouthJaw | 直接保留原始自由度 |
+| HQMouthSeal | 独立唇闭合 | mouthClose | 0..1 | MouthSeal,CheekPuff | 直接保留原始自由度 |
+| HQLipFunnel | 原始漏斗形变 | mouthFunnel | 0..1 | MouthRawRound | 直接保留原始自由度 |
+| HQLipPucker | 原始嘟嘴形变 | mouthPucker | 0..1 | MouthRawRound | 直接保留原始自由度 |
+| HQJawX | 下颌侧移 | jawRight - jawLeft | -1..1 | MouthJaw,MouthJawSide | 直接保留原始自由度 |
+| HQEmotion | 音素库的欣/悲造型代理 | clamp((mouthSmile_L + mouthSmile_R - mouthFrown_L - mouthFrown_R) / 2, -1, 1) | -1..1 | AudioPhoneme | 保留给语音嘴的表情条件，不是心理情绪识别 |
+| HQAudioStrength | 音素库的发音幅度 | audio amplitude after calibration | 0..1 | AudioPhoneme | 音频适配层输出；不引用未接入的原始音量作为假数据 |
 
 <!-- END:HQ -->
 
@@ -384,50 +391,50 @@ HQEyeSmile与HQEmotion是造型代理，其来源性质已标明；不伪装成�
 
 <!-- AUTO:TREES -->
 
-| 树族ID | 部位 | 二维主轴/1D轴 | 条件轴 | 输出职责 | 未填动画语义 | 依据 |
+| 树名 | 部位 | 二维主轴/1D轴 | 条件轴 | 输出职责 | 未填动画语义 | 依据 |
 | --- | --- | --- | --- | --- | --- | --- |
-| M01 | 外嘴核心 | Form × Open | Funnel, Press | 基础姿势；嘴唇轮廓/口孔 | 复用低维基础姿势/中性，不放空Motion | 创作者证实该耦合；此处Unity组织为设计 |
-| M02 | 下颌/口内 | JawOpen × HQJawForward | HQJawX | 基础姿势；下颌、牙/口内，明确与M01绑定分工 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| M03 | 唇闭合与下颌 | HQMouthSeal × JawOpen | Open, Form, Funnel | 条件修正；闭唇时保留下颌运动 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M04 | 横向嘴型 | MouthPucker × MouthX | Open, Form | 对M01的嘴宽/偏嘴修正；不重复写完整外嘴 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M05 | 上下耸唇 | HQUpperLipShrug × HQLowerLipShrug | Open, MouthPucker | 对合并MouthShrug基础的细分修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M06 | 左右嘴角表情 | HQSmileFrownLeft × HQSmileFrownRight | Open, Funnel, Press | 不对称/局部嘴角修正；先扣除M01已表达部分 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M07 | 上唇左右展开 | HQUpperLipRaiseLeft × HQUpperLipRaiseRight | Open, Press | 独立上唇/露齿修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M08 | 下唇左右展开 | HQLowerLipDropLeft × HQLowerLipDropRight | Open, Press | 独立下唇/露齿修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M09 | 上下卷唇 | HQUpperLipRoll × HQLowerLipRoll | Open, JawOpen | 对合并Press的卷唇细分修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M10 | 左右压唇 | HQLipPressLeft × HQLipPressRight | Open, MouthPucker | 局部压唇修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M11 | 左右横向拉伸 | HQLipStretchLeft × HQLipStretchRight | Open, Form | 拉伸修正，保留区别于Smile的形变 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M12 | 左右酒窝/嘴角收紧 | HQMouthDimpleLeft × HQMouthDimpleRight | Open, Form | 酒窝/嘴角细节修正，扣除Form/Pucker已覆盖部分 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M13 | 原始圆口与嘟嘴 | HQLipFunnel × HQLipPucker | Open, Form, Press | 恢复V3整形/合并丢失的圆口组合残差 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M14 | 伸舌与口内 | TongueOut × JawOpen | Open, MouthPucker, Funnel, Press | 舌基础＋必要的唇/齿接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| M15 | 下颌偏移与偏嘴 | HQJawX × MouthX | JawOpen, Open | 下颌/嘴角错位修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| M16 | 合并耸唇基础 | MouthShrug | Open, MouthPucker | 给V3兼容来源的合并耸唇基础；M05做细分残差 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| E01L | 左眼睑 | LidLeft × EyeSquintLeft | HQEyeSmileLeft | 核心眼睑完整姿势；笑眼是第三维 | 复用低维基础姿势/中性，不放空Motion | 眼睑2D本地资产已证实；笑眼条件为高级扩展设计 |
-| E02L | 左眼球注视 | HQGazeLeftX × HQGazeLeftY | 无 | 眼球注视基础 | 复用低维基础姿势/中性，不放空Motion | 2D本地资产已证实 |
-| E03L | 左眼睑随视线 | LidLeft × HQGazeLeftY | HQGazeLeftX, EyeSquintLeft, HQEyeSmileLeft | 眼睑跟随/极端视线残差；不再次写完整眼球基础 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
-| E04L | 左眼睑随偏嘴 | MouthX × LidLeft | HQEyeSmileLeft | 偏嘴带动眼周修正 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
-| B01L | 左眉核心 | HQBrowDownLeft × HQBrowOuterUpLeft | BrowInnerUp | 眉毛基础；完整保留压眉/外眉抬起/内眉抬起 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| B02L | 左眉眼接触 | BrowLeftY × LidLeft | BrowInnerUp, EyeSquintLeft | 眉压/睁大重叠修正 | 零修正；保留基础输出 | 官方教程有联动章节；此处为设计 |
-| E01R | 右眼睑 | LidRight × EyeSquintRight | HQEyeSmileRight | 核心眼睑完整姿势；笑眼是第三维 | 复用低维基础姿势/中性，不放空Motion | 眼睑2D本地资产已证实；笑眼条件为高级扩展设计 |
-| E02R | 右眼球注视 | HQGazeRightX × HQGazeRightY | 无 | 眼球注视基础 | 复用低维基础姿势/中性，不放空Motion | 2D本地资产已证实 |
-| E03R | 右眼睑随视线 | LidRight × HQGazeRightY | HQGazeRightX, EyeSquintRight, HQEyeSmileRight | 眼睑跟随/极端视线残差；不再次写完整眼球基础 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
-| E04R | 右眼睑随偏嘴 | MouthX × LidRight | HQEyeSmileRight | 偏嘴带动眼周修正 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
-| B01R | 右眉核心 | HQBrowDownRight × HQBrowOuterUpRight | BrowInnerUp | 眉毛基础；完整保留压眉/外眉抬起/内眉抬起 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| B02R | 右眉眼接触 | BrowRightY × LidRight | BrowInnerUp, EyeSquintRight | 眉压/睁大重叠修正 | 零修正；保留基础输出 | 官方教程有联动章节；此处为设计 |
-| E05 | 双眼非对称协调 | LidLeft × LidRight | EyeSquintLeft, EyeSquintRight | 仅鼻根/眼周非对称残差；同步算法在中间层 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| B03 | 左右眉中央协同 | HQBrowExpressionLeft × HQBrowExpressionRight | 无 | 中央眉/额头修正；不与B01重复整眉基础 | 零修正；保留基础输出 | 本地Jerry有该2D；作为残差的分工为本次设计 |
-| C01 | 双颊收紧 | HQCheekSquintLeft × HQCheekSquintRight | Form, LidLeft, LidRight | 脸颊肌肉基础/修正；与眼睑绑定分工 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| C02 | 鼓腮嘴型 | CheekPuff × MouthPucker | Open, HQMouthSeal, Form | 鼓腮基础＋闭口/嘴型接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| C03 | 鼓腮与伸舌 | CheekPuff × TongueOut | JawOpen | 极端组合残差 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
-| N01 | 鼻翼/鼻唇 | HQNoseSneerLeft × HQNoseSneerRight | HQUpperLipRaiseLeft, HQUpperLipRaiseRight, Form | 鼻翼基础＋鼻唇接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| H01 | 头部朝向 | FaceAngleX × FaceAngleY | FaceAngleZ | 姿态输出；需要绘制透视造型时再采姿势表 | 复用低维基础姿势/中性，不放空Motion | VB有数据；3D宿主通常走姿态链 |
-| H02 | 头部位置 | FacePositionX × FacePositionY | FacePositionZ | 姿态输出/透视造型 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| H03 | 身体朝向 | BodyAngleX × BodyAngleY | BodyAngleZ | 姿态输出/造型，VB可从头姿推导 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| H04 | 身体位置 | BodyPositionX × BodyPositionY | BodyPositionZ | 姿态输出/造型，非独立身体观测 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| A01 | 显式音素嘴库 | HQAudioStrength × HQEmotion | phoneme_category | 每个音素一张幅度×表情二维表；音素类别不插成数字轴 | 复用低维基础姿势/中性，不放空Motion | VTS显式元音能力＋本次情绪化库设计 |
-| P01 | 手位置 | HandPositionX × HandPositionY | HandPositionZ, HandAngleX, HandAngleZ | 左右各自展开，送手部姿态或造型空间 | 复用低维基础姿势/中性，不放空Motion | VTS手部公开参数；模板组织为设计 |
-| P02 | 手指姿态 | FingerCurl | hand_side, finger_category | 每指独立，或手形组合；类别不作连续轴 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
-| P03 | 控制器造型 | StickX × StickY | Trigger, ButtonState | 外设驱动演出/手部；不占用面部形态键输出 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| MouthCore | Mouth | Form × Open | Funnel, Press | 基础姿势；嘴唇轮廓/口孔 | 复用低维基础姿势/中性，不放空Motion | 创作者证实该耦合；此处Unity组织为设计 |
+| MouthJaw | Mouth | JawOpen × HQJawForward | HQJawX | 基础姿势；下颌、牙/口内，明确与MouthCore绑定分工 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| MouthSeal | Mouth | HQMouthSeal × JawOpen | Open, Form, Funnel | 条件修正；闭唇时保留下颌运动 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthWidth | Mouth | MouthPucker × MouthX | Open, Form | 对MouthCore的嘴宽/偏嘴修正；不重复写完整外嘴 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthShrugSplit | Mouth | HQUpperLipShrug × HQLowerLipShrug | Open, MouthPucker | 对合并MouthShrugBase的细分修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthCorner | Mouth | HQSmileFrownLeft × HQSmileFrownRight | Open, Funnel, Press | 不对称/局部嘴角修正；先扣除MouthCore已表达部分 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthUpperRaise | Mouth | HQUpperLipRaiseLeft × HQUpperLipRaiseRight | Open, Press | 独立上唇/露齿修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthLowerDrop | Mouth | HQLowerLipDropLeft × HQLowerLipDropRight | Open, Press | 独立下唇/露齿修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthLipRoll | Mouth | HQUpperLipRoll × HQLowerLipRoll | Open, JawOpen | 对合并Press的卷唇细分修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthLipPress | Mouth | HQLipPressLeft × HQLipPressRight | Open, MouthPucker | 局部压唇修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthStretch | Mouth | HQLipStretchLeft × HQLipStretchRight | Open, Form | 拉伸修正，保留区别于Smile的形变 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthDimple | Mouth | HQMouthDimpleLeft × HQMouthDimpleRight | Open, Form | 酒窝/嘴角细节修正，扣除Form/Pucker已覆盖部分 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthRawRound | Mouth | HQLipFunnel × HQLipPucker | Open, Form, Press | 恢复V3整形/合并丢失的圆口组合残差 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthTongue | Mouth | HQTongueLeft × HQTongueRight | JawOpen, Open, MouthPucker, Funnel, Press | 舌基础（分左右）＋必要的唇/齿接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| MouthJawSide | Mouth | HQJawX × MouthX | JawOpen, Open | 下颌/嘴角错位修正 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| MouthShrugBase | Mouth | MouthShrug | Open, MouthPucker | 给V3兼容来源的合并耸唇基础；MouthShrugSplit做细分残差 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| LidL | Lid | LidLeft × EyeSquintLeft | HQEyeSmileLeft | 核心眼睑完整姿势；笑眼是第三维 | 复用低维基础姿势/中性，不放空Motion | 眼睑2D本地资产已证实；笑眼条件为高级扩展设计 |
+| GazeL | Gaze | HQGazeLeftX × HQGazeLeftY | 无 | 眼球注视基础 | 复用低维基础姿势/中性，不放空Motion | 2D本地资产已证实 |
+| LidGazeL | Lid | LidLeft × HQGazeLeftY | HQGazeLeftX, EyeSquintLeft, HQEyeSmileLeft | 眼睑跟随/极端视线残差；不再次写完整眼球基础 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
+| LidMouthL | Lid | MouthX × LidLeft | HQEyeSmileLeft | 偏嘴带动眼周修正 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
+| BrowCoreL | Brow | HQBrowDownLeft × HQBrowOuterUpLeft | BrowInnerUp | 眉毛基础；完整保留压眉/外眉抬起/内眉抬起 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| BrowEyeL | Brow | BrowLeftY × LidLeft | BrowInnerUp, EyeSquintLeft | 眉压/睁大重叠修正 | 零修正；保留基础输出 | 官方教程有联动章节；此处为设计 |
+| LidR | Lid | LidRight × EyeSquintRight | HQEyeSmileRight | 核心眼睑完整姿势；笑眼是第三维 | 复用低维基础姿势/中性，不放空Motion | 眼睑2D本地资产已证实；笑眼条件为高级扩展设计 |
+| GazeR | Gaze | HQGazeRightX × HQGazeRightY | 无 | 眼球注视基础 | 复用低维基础姿势/中性，不放空Motion | 2D本地资产已证实 |
+| LidGazeR | Lid | LidRight × HQGazeRightY | HQGazeRightX, EyeSquintRight, HQEyeSmileRight | 眼睑跟随/极端视线残差；不再次写完整眼球基础 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
+| LidMouthR | Lid | MouthX × LidRight | HQEyeSmileRight | 偏嘴带动眼周修正 | 零修正；保留基础输出 | 官方教程有联动章节；具体切片设计为本次提出 |
+| BrowCoreR | Brow | HQBrowDownRight × HQBrowOuterUpRight | BrowInnerUp | 眉毛基础；完整保留压眉/外眉抬起/内眉抬起 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| BrowEyeR | Brow | BrowRightY × LidRight | BrowInnerUp, EyeSquintRight | 眉压/睁大重叠修正 | 零修正；保留基础输出 | 官方教程有联动章节；此处为设计 |
+| LidBoth | Lid | LidLeft × LidRight | EyeSquintLeft, EyeSquintRight | 仅鼻根/眼周非对称残差；同步算法在中间层 | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| BrowCenter | Brow | HQBrowExpressionLeft × HQBrowExpressionRight | 无 | 中央眉/额头修正；不与BrowCore重复整眉基础 | 零修正；保留基础输出 | 本地Jerry有该2D；作为残差的分工为本次设计 |
+| CheekSquint | Cheek | HQCheekSquintLeft × HQCheekSquintRight | Form, LidLeft, LidRight | 脸颊肌肉基础/修正；与眼睑绑定分工 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| CheekPuff | Cheek | HQCheekPuffLeft × HQCheekPuffRight | Open, HQMouthSeal, Form, MouthPucker | 鼓腮基础（分左右）＋闭口/嘴型接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| CheekPuffTongue | Cheek | HQTongueLeft × HQTongueRight | HQCheekPuffLeft, HQCheekPuffRight, JawOpen | 鼓腮×伸舌的极端组合残差（分侧） | 零修正；保留基础输出 | 本次高级模板设计，非VB原装树 |
+| NoseSneer | Nose | HQNoseSneerLeft × HQNoseSneerRight | HQUpperLipRaiseLeft, HQUpperLipRaiseRight, Form | 鼻翼基础＋鼻唇接触修正 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| HeadAim | Head | FaceAngleX × FaceAngleY | FaceAngleZ | 姿态输出；需要绘制透视造型时再采姿势表 | 复用低维基础姿势/中性，不放空Motion | VB有数据；3D宿主通常走姿态链 |
+| HeadPos | Head | FacePositionX × FacePositionY | FacePositionZ | 姿态输出/透视造型 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| BodyAim | Body | BodyAngleX × BodyAngleY | BodyAngleZ | 姿态输出/造型，VB可从头姿推导 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| BodyPos | Body | BodyPositionX × BodyPositionY | BodyPositionZ | 姿态输出/造型，非独立身体观测 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| AudioPhoneme | Audio | HQAudioStrength × HQEmotion | phoneme_category | 每个音素一张幅度×表情二维表；音素类别不插成数字轴 | 复用低维基础姿势/中性，不放空Motion | VTS显式元音能力＋本次情绪化库设计 |
+| HandPos | Hand | HandPositionX × HandPositionY | HandPositionZ, HandAngleX, HandAngleZ | 左右各自展开，送手部姿态或造型空间 | 复用低维基础姿势/中性，不放空Motion | VTS手部公开参数；模板组织为设计 |
+| HandFinger | Hand | FingerCurl | hand_side, finger_category | 每指独立，或手形组合；类别不作连续轴 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
+| CtrlStick | Ctrl | StickX × StickY | Trigger, ButtonState | 外设驱动演出/手部；不占用面部形态键输出 | 复用低维基础姿势/中性，不放空Motion | 本次高级模板设计，非VB原装树 |
 
 <!-- END:TREES -->
 
@@ -436,34 +443,40 @@ HQEyeSmile与HQEmotion是造型代理，其来源性质已标明；不伪装成�
 ```text
 高级面部模板
   嘴部基础
-    M01 外嘴：Form×Open | Funnel,Press
-    M02 下颌/口内：JawOpen×Forward | JawX
-    M14 舌、M16 合并耸唇基础
+    MouthCore 外嘴：Form×Open | Funnel,Press
+    MouthJaw 下颌/口内：JawOpen×Forward | JawX
+    MouthTongue 舌（分左右）、MouthShrugBase 合并耸唇基础
   嘴部细分与组合修正
-    M03…M13、M15（包含M04嘴宽/偏嘴修正）
+    MouthSeal / MouthWidth / MouthShrugSplit / MouthCorner / MouthUpperRaise / MouthLowerDrop
+    MouthLipRoll / MouthLipPress / MouthStretch / MouthDimple / MouthRawRound / MouthJawSide
   左右眼
-    E01 核心眼睑 | EyeSmile
-    E02 眼球XY
-    E03 眼睑随视线、E04 偏嘴眼周、E05 双眼非对称修正
+    LidL/LidR 核心眼睑 | EyeSmile
+    GazeL/GazeR 眼球XY
+    LidGazeL/LidGazeR 眼睑随视线、LidMouthL/LidMouthR 偏嘴眼周、LidBoth 双眼非对称修正
   眉、颊、鼻
-    B01 基础；B02/B03 协同修正
-    C01/C02/N01 基础与接触修正；C03 极端组合
+    BrowCoreL/BrowCoreR 基础；BrowEyeL/BrowEyeR 与 BrowCenter 协同修正
+    CheekSquint / CheekPuff（分左右）/ NoseSneer 基础与接触修正；CheekPuffTongue 极端组合
   音频兼容能力
     默认：供给上面同一批嘴部语义轴
-    显式音素库：A01仍位于同一嘴部求值/输出职责内
+    显式音素库：AudioPhoneme 仍位于同一嘴部求值/输出职责内
   姿态与外设能力
-    H01…H04、P01…P03 → 姿态/演出，按宿主实现映射
+    HeadAim / HeadPos / BodyAim / BodyPos、HandPos / HandFinger / CtrlStick → 姿态/演出，按宿主实现映射
 ```
 
 这里的“基础/修正”是**姿势资产的角色**，不表示一定要做成多个Animator Layer。
 可以在同一个受控Direct根下组织，或在上级条件混合中选完整姿势；沿用本项目影子求值、WD On约束。
 头身和手部的骨骼/材质类曲线目前不能直接塞进只允许形态键曲线的面部会话；保留这些契约与宿主姿态出口，不宣称已有运行时支持。
 
-**高质量不等于重复叠加同一动作。** M01的Form/Press已经包含笑、唇抬起和roll等信息；M06–M13必须是相对现有基础的残差，或者在明确选择的分支中替代相应基础。
-例如作者完成单侧上唇姿势后，应减去当前M01已实现的部分，再把残差放入M07；不能把“完整上唇展开”再全量加一次。
+**树名即标识**（`部位 + 语义 + 侧别`，ASCII、CamelCase）：树名的前两段与**参数路径**用同一批词（`MouthCore` ↔ `Ho/Drive/Mouth/*`、
+`LidL` ↔ `Ho/Drive/Lid/Left/*`），所以"树名 → 参数 → 片段名"三段机械对得上，不需要另一张对照词典。
+完整规则与 42 个树名见 [面捕命名权威](FACE_TRACKING_NAMING.md)。
+
+**高质量不等于重复叠加同一动作。** `MouthCore` 的 Form/Press 已经包含笑、唇抬起和roll等信息；
+`MouthCorner` … `MouthJawSide` 必须是相对现有基础的残差，或者在明确选择的分支中替代相应基础。
+例如作者完成单侧上唇姿势后，应减去当前 `MouthCore` 已实现的部分，再把残差放入 `MouthUpperRaise`；不能把“完整上唇展开”再全量加一次。
 残差在概念上是 `目标姿势 − 当前基础姿势`；落到Unity可用专门修正形态键、受控权重差或完整条件姿势，必须按目标网格与本项目求值约束选择实现。
 
-此外，M02的下颌基础与M01的外嘴必须划清曲线绑定职责。若现有一个jawOpen形态键同时包含嘴唇和下巴，作者需要拆分或提供组合修正；树多不会自动分离网格形变。
+此外，`MouthJaw` 的下颌基础与 `MouthCore` 的外嘴必须划清曲线绑定职责。若现有一个jawOpen形态键同时包含嘴唇和下巴，作者需要拆分或提供组合修正；树多不会自动分离网格形变。
 
 ## F. 选择性填动画：高级模板怎样下放
 
@@ -478,7 +491,7 @@ HQEyeSmile与HQEmotion是造型代理，其来源性质已标明；不伪装成�
 | 某参数来源缺失 | 选已声明的代理供值或中性，并保留“真实/代理/缺失”状态 | 更好的来源接入时仍用同一套树 |
 
 例如：完整模板已经有`Form×Open | Funnel,Press`。低配模型只做了Form×Open时，各Funnel/Press切片复用同一基础嘴表；之后只替换精修的条件姿势。
-独立上/下唇修正没做时，M07–M10为零残差，不破坏M01现有嘴型。
+独立上/下唇与卷压唇的修正没做时，`MouthUpperRaise` / `MouthLowerDrop` / `MouthLipRoll` / `MouthLipPress` 为零残差，不破坏 `MouthCore` 现有嘴型。
 
 **这条fallback契约是本次设计要求，不是现有装配器已具备的“自动补洞”功能。** 当前装配器只做同名片段替换、保留模板片段和报告缺项；需要模板本身正确布置fallback，或以后显式实现装配规则。
 不能把未填槽留为任意null Motion并假定Unity会自动按低维高质量结果降级。
@@ -510,7 +523,7 @@ VTS自身对Voice*的权重约束不自动适用于我们重新合成的数值�
 
 ## H. 可核对的交付与证据
 
-- [配套机器可读全表](VTS_HIGH_QUALITY_FACE_CATALOG.json)：98个VTS固定名字、52个原始ARKit、34个VB V3输出及曲线/平滑、39个HQ扩展、42个树族；所有`sample`均未指定。
+- [配套机器可读全表](VTS_HIGH_QUALITY_FACE_CATALOG.json)：98个VTS固定名字、52个原始ARKit、34个VB V3输出及曲线/平滑、43个HQ扩展、42个树族；所有`sample`均未指定。
 - `.research/vts-creator-workflow/build_hq_catalog.py`：从当日官方页面快照和本机预设生成表；检查去重、分类计数、52输入无遗漏、扩展命名及树族引用。
 - [旧官方样例映射审计](../.research/vts-creator-workflow/official-sample-audit.json)：同一模型的VB/普通VTS两套映射，证明供值能力变化与模型资产可分离；为2022样例，不冒充V3当前模板。
 - [原装预设逐字段审计](../.research/vts-creator-workflow/preset-audit.json)：本机十份预设的完整字段与差异。
