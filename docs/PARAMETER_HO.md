@@ -21,7 +21,7 @@
 
 | 仓库 | 是什么 | 承载这一系列的哪一层 |
 |---|---|---|
-| **包** `D:\Unity_Fork\HoUnityTools`（分支 `master`） | Unity 包 `com.hollow.hounitytools`。**主本在这儿** | 本文整份规范；`Runtime/FaceTracking/`（求值器 / 中间层 / 通道名 / 语义 Hub 与资产）；`Editor/FaceTracking/`（面板 / 会话 / `Profiles/*.hoface.json`）；`Tests~/` |
+| **包** `D:\Unity_Fork\HoUnityTools`（分支 `master`） | Unity 包 `com.hollow.hounitytools`。**主本在这儿** | 本文整份规范；`Runtime/FaceTracking/`（求值器 / 中间层 / 通道名 / 语义 Hub 与 Connector 两个组件）；`Editor/FaceTracking/`（面板 / 会话 / `Profiles/*.hoface.json`）；`Tests~/` |
 | **mod** `D:\Unity_Project\BreakWarudo\Assets\HoWarudoModTests`（**它自己的仓库**，分支 `main`） | Warudo mod（Mod Tool 0.14.4.8 / Unity 2021.3.45f2） | `Mods-Ho/HoFaceTracking/`：接收器 / 参数层 / 控制器 / 节点 / 配置 store；**外加从包里搬过去的 10 份 `Core/` 副本** |
 
 **为什么只能搬、不能引用**：两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码；

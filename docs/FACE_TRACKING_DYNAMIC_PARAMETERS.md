@@ -1,20 +1,23 @@
-﻿# 动态参数（语义输出）：Hub + 资产 + 前缀
+﻿# 动态参数（语义输出）：Hub + Connector + 前缀
 
-2026-09-25 定稿。来源：用户与 GPT 的《Unity控制器链式用法》调查（导出稿）+ 本仓库现状核对。
+2026-09-25 定稿；**2026-09-26 改了设计**（词表从 ScriptableObject 资产改成组件，见 §2.1）。
+来源：用户与 GPT 的《Unity控制器链式用法》调查（导出稿）+ 本仓库现状核对。
 **这份文档只讲"语义参数"这一条新通道**；面捕的输入侧（线名 → 规范名 → 曲线）仍见
 [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)。
 
-> ⚠️ 本文是**设计 + 未验证清单**。代码已经落的是两个类型（`HoFaceSemanticAsset` / `HoFaceSemanticHub`，
-> 两边程序集各一份、同一个实现、走 `sync-modcore.ps1` 同步），**控制器的写入路径还没有实现**，
-> 卡在一个必须实测的问题上（见 §5）。
+> ⚠️ 本文是**设计 + 未验证清单**。代码已落的是两个**组件**
+> （`HoFaceSemanticHub` / `HoFaceSemanticConnector`，两边程序集各一份、同一个实现、走
+> `.research/sync-modcore.ps1` 同步）。**控制器的写入路径仍未实测** —— 见 §5.1，那一条决定
+> "槽位长度怎么定"（§4.1），所以 §4.1 现在是**悬着的**。
 >
-> ✅ **已经实测掉的三条**（2026-09-25）：
+> ✅ **已经实测掉的**（2026-09-25）：
 > ① `MonoBehaviour` 与 `ScriptableObject` **能在 mod 程序集里编译、且 lint clean** ——
->    `docs/FACE_TRACKING_WARUDO_ROUTE.md:459` 那条"不支持 ScriptableObject"说的是
->    "**UMod 不替你加载 `.asset` 资源**"，不是"这个类型不能出现"；
+>    `docs/FACE_TRACKING_WARUDO_ROUTE.md` 那条"不支持 ScriptableObject"说的是
+>    "**UMod 不替你加载 `.asset` 资源**"，不是"这个类型不能出现"（2026-09-26 之后更用不上了：
+>    资产已经删掉）；
 > ② **带自定义脚本的 Warudo 角色 mod 打包是既有能力**（FastBuild 把源码复制进包、UMod 编译，
 >    另有产物校验器专门查"复制的脚本有没有进程序集"）—— 用户确认"这条路绝对 ok"；
-> ③ 这两个类型同步进 mod 之后，mod 侧 `compile-check` 通过（23 个源文件 / lint clean）。
+> ③ 这两个类型同步进 mod 之后，mod 侧 `compile-check` 通过（24 个源文件 / lint clean）。
 
 ## 1. 为什么要有它
 
@@ -34,22 +37,43 @@ Face Capture → Animator Controller ─┬─→ 动画姿态（形态键 / 骨
 * **语义值走 Hub**，任何脚本 / 材质 / 蓝图读 Hub 就够；
 * 换面捕方案（ARKit → 手机 → 手动 → 另一个控制器）时，**消费方一行都不用改**。
 
-## 2. 三个角色，各管一件事
+## 2. 四个角色，各管一件事
 
 | 角色 | 是什么 | 负责 |
 |---|---|---|
-| `HoFaceSemanticAsset`（**定义**） | ScriptableObject，包内类型 | **这些名字代表什么**：`MouthOpen` / `MouthX` / …，各自中性值与范围、**顺序即下标** |
-| `HoFaceSemanticHub`（**值**） | MonoBehaviour，挂在角色 mod 的一个空物体上 | **这一帧是多少**：`float[] values`，下标与资产一一对应 |
-| 控制器（**要控制什么**） | 作者的 `AnimatorController` | 它的曲线写进 Hub（怎么写在 §5） |
+| `HoFaceSemanticHub`（**值**） | MonoBehaviour，挂在角色 mod 的一个空物体上 | **这一帧是多少**：`public float[] values`，**预留固定槽位**（默认 128）。**它不认识任何名字** |
+| `HoFaceSemanticConnector`（**名字**） | MonoBehaviour，挂在同一个物体上（或任何方便编排的地方），并**直接引用**那个 Hub | **这些槽是什么意思**：槽表（`key` / `note`）+ **顺序即下标**。它也是消费方的入口 |
+| 控制器（**要控制什么**） | 作者的 `AnimatorController` | 它的曲线按**下标**写进 Hub（怎么写在 §5） |
+| 消费方 | 作者的脚本 / 材质控制 / 蓝图 | 填 **Connector**，按名字读（`connector.GetFloat("MouthOpen")`） |
 
-**为什么定义放资产、值放组件**：`ScriptableObject` 是 Project 里的**共享定义**，天然适合描述接口；
-但它**不适合当"某个角色实例当前帧 `MouthX = 0.73`"的容器** —— 那是每个角色各自的运行期状态。
-把值写回资产 = 所有角色共用一个当前值，是错的。
+**为什么值和名字要分在两个组件上**：
+① **bundle 里的那份 Hub 不能带名字** —— 控制器在 bundle 里跑，bundle 里放不了我们自己写的组件类型，
+给控制器用的是一份**代理 Hub**（只有 `float[]`）。名字要是长在 Hub 上，代理那份就得带一张"假表"，
+两边迟早对不上；② 表和值分开之后，**值可以随便清零、表可以慢慢改**（改名字不动值，清值不动名字）；
+③ 消费方**只需要一个引用**（Connector 自己指向 Hub），不用同时维护两个。
 
 **为什么值是 `float[]` 而不是一堆 `public float MouthX`**：三个理由缺一不可 ——
 ① 控制器在 bundle 里跑，bundle 里放不了我们自己写的组件类型 ⇒ 给控制器的是一份**代理**，
 代理上没有名字、只有值；② 运行期读**不能反射**（UMod 禁 `System.Reflection`），字段名读不出来、下标可以；
-③ 加减语义 = 资产里加一项，**代码一行不动**。
+③ 加减语义 = 表里加一项，**代码一行不动**。
+
+### 2.1 为什么**不再有**那个 ScriptableObject 资产（2026-09-26 用户定）
+
+原来还有第三个类型 `HoFaceSemanticAsset`（词表放资产、值放 Hub）。删掉它的理由**是实测的**：
+
+* 资产那半边**从来没有过消费者**：`IndexOf / KeyAt / NeutralAt / BuildKeySnapshot / FillNeutral`
+  的外部调用点 **0 个**；`HoFaceSemanticHub.GetFloat(string) / SetFloat(string) / ResetToNeutral()`
+  的外部调用点也是 **0 个**；`AlignToAsset()` 只有写动态参数节点那一处。
+* 资产存在的**公开理由也不成立**："bundle 里放不了组件类型 ⇒ 名字必须放在双方都能引用的东西上"
+  —— 可 bundle 里那份 Hub **本来就没有资产**，控制器从头到尾**按下标**读（`HoFaceController.cs` 的
+  采样段），名字那条路它一次都没走过。
+* 用户定：**不做跨角色共享词表**（N 个角色 = N 份表拷贝，这是有意的，不是缺陷），
+  所以资产剩下的唯一价值也没了。
+
+⇒ 词表变成**组件上的槽表**：少一个文件、少一步"预制件挂资产引用"，
+而类型清单不变（还是 Hub + Connector 两个，同步面积不变）。
+⚠️ **中性值不在表里**：中性 = `0`，是**静态规则**（`Connector.ApplyNeutral()` 就是 `hub.Zero()`）。
+`0.5` 那种"中立位"是 VBridger 私有的约定，我们**不采用**（[HO 参数规范](PARAMETER_HO.md) §2）。
 
 ## 3. 命名前缀：只给"生成预制动画"那一步用
 
@@ -76,40 +100,87 @@ P/xxx    → 动态参数（写进 Hub）
 
 ### 为什么不把 `P/` 后半段直接当属性名
 
-`P/MouthX` 应该解释成**语义 = `MouthX`**，再由 Hub 去解析，而**不是**硬绑成
+`P/MouthX` 应该解释成**语义 = `MouthX`**，再由槽表去解析，而**不是**硬绑成
 `HoFaceSemanticHub.MouthX`。这样 Hub 以后从"数组 + 下标"换成"字典 + 键"、
 甚至换成另一套存储，**已经生成的控制器语义命名都不用变**。
 
 ## 4. 已知的落点约定
 
-* Hub 挂在一个**单独的空物体**上（不是塞进角色模型层级里），例如 `Character/SemanticHub`。
-* 生成器要**额外知道 Hub 的路径**（它要生成 `path = "SemanticHub"` 的曲线）。
-* 消费方（作者的脚本 / 材质控制 / 蓝图）**也填同一个资产**，运行时按名字解析一次下标、
-  之后按下标读 `GetFloat(int)`。
+* **Hub 与 Connector 都挂在同一个空物体上**（不是塞进角色模型层级里），例如 `Character/SemanticHub`。
+* 生成器要**额外知道 Hub 所在的路径**（它要生成 `path = "SemanticHub"` 的曲线）。
+* 消费方填 **Connector**，运行时按名字解析一次下标、之后按下标读 `GetFloat(int)`。
+* **表长在预制件上**：N 个角色 = N 份拷贝（有意的）。改一处不影响别的角色。
+
+### 4.1 ⚠️ 槽位长度：**预留**（当前 128），但"128 好不好"还没定
+
+`HoFaceSemanticHub` 一开始就预留 `DefaultSlotCount = 128` 个槽，**Connector 不改 Hub 的长度**
+（那会让两个组件耦合，而且代理那份 Hub 没有表、长度就没人定）。两条硬约束逼出"预留"这个形状：
+
+1. **数组这个形状躲不掉**：Unity 动画只能写字段/数组元素、写不了字典（§5 的能力表）；
+   mod 侧禁反射 ⇒ 读不出字段名，只能按下标读。能选的只有**长度政策**。
+2. **越界写是静默的，而且运行期查不出来**：控制器曲线绑定在运行期**枚举不了**
+   （`HoFaceController.cs`：`AnimationUtility` 是编辑器专属）⇒ Warudo 侧无法知道"控制器写到第几个槽"，
+   长度**必须在 bundle 跑起来之前就定对**，而真值**只有编辑期知道**。
+
+三个候选政策（**未定，等 §5.1 的实测**）：
+
+| | 做法 | 代价 / 失败模式 |
+|---|---|---|
+| A | 硬编码常量 128 | 最省事、零耦合；但数字藏起来了，作者编控制器时不知道上限，写超了**静默无效果** |
+| B | Hub 上一个**可见字段**（默认 128） | 数字在 Inspector 里、可调；调小之后控制器还写更大下标 ⇒ 又静默了，得有告警 |
+| C | **编辑期**从控制器曲线推真值（`AnimationUtility.GetCurveBindings` 取最大下标 +1） | 不猜；代价是多一个编辑期工具，而且它只知道我们自己的 clip |
+
+**不论选哪个，写入口都要自己拦住越界并在状态里报出来** —— 写动态参数节点现在就是这么做的
+（`#<下标>` 越界 ⇒ 计入"跳过"；槽表没声明却有**非零**值 ⇒ 单独一行点名并列出下标）。
 
 ## 5. 控制器怎么把值写进 Hub
 
 **已经成立**：Unity 的动画曲线**能写任何可动画的字段**（本轮实测，见
 [控制器完整输出](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §3）：脚本 `float`/`bool`/`int`、`Vector`/`Color` 分量、
 `GameObject.m_IsActive`、`Renderer.m_Enabled`、材质属性、**对象引用**都能被曲线驱动。
-所以 `path = "SemanticHub" / type = HoFaceSemanticHub / propertyName = "values.<i>"` 这条写法是**普通动画**，
-没有新机制。
 
 **两条执行路径，各收各的口**：
 
 | 在哪 | 控制器跑在哪 | 谁把值写进 Hub |
 |---|---|---|
 | **Unity 侧调试** | 角色上的影子台 | 调试会话**直接写**角色上的 Hub（`SetFloat(i, v)`）——我们在这个进程里有全部权限 |
-| **Warudo 侧** | bundle 里那套原配 rig | 控制器曲线写**影子上的 Hub**，求值后由我们采出来、交给应用节点写进角色的 Hub |
+| **Warudo 侧** | bundle 里那套原配 rig | 控制器曲线写**影子上的 Hub**，求值后由我们采出来、交给「HoFace写动态参数」节点写进角色的 Hub |
 
 第二条正是 [控制器完整输出](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §8 说的"**导出时把动画字段曲线重绑到已知类型的纯数据代理**"。
-`HoFaceSemanticHub` 的 `float[]` 就是那个代理形态：**它只有值、没有名字**，所以影子上的那份不需要资产就能工作
-（`asset == null` 时 `Count` 退化成数组长度、`KeyAt` 返回空串 —— 见类型注释）。
+`HoFaceSemanticHub` 的 `float[]` 就是那个代理形态：**它只有值、没有名字**。
 
 ⚠️ **这条不需要运行时反射**：我们按**下标**读 `values[i]`，不去枚举字段名。
-名字 ↔ 下标 的解析在编辑器/生成期做一次（`asset.IndexOf(key)`），运行期只用下标。
+名字 ↔ 下标 的解析在编辑器/生成期做一次（`connector.IndexOf(key)`），运行期只用下标。
 
-### 5.1 但 Hub 不是全部：完整输出还有别的类
+### 5.1 ❓ **未实测**：曲线到底怎么写进 `values[i]`
+
+本文原来写的是 `path = "SemanticHub" / type = HoFaceSemanticHub / propertyName = "values.<i>"`
+"是普通动画，没有新机制" —— **那是推断**：
+
+* §3 那张能力表里测过的是**脚本 float/bool/int、`Vector`/`Color` 分量、开关、材质、对象引用**，
+  **没有"数组元素"这一行**；
+* 而**数组元素的 SerializedProperty 路径通常是 `values.Array.data[i]`**（`values` 是数组属性，
+  元素挂在 `Array.data` 下面），与 `values.<i>` 是**两个不同的字符串**；
+  路径错一个字符，`AnimationUtility.SetEditorCurve` 会拒绝/忽略，表现是**静默不写**（值就是不动）。
+
+**已经写好的三条能力用例**（`Tests~/FaceTrackingValidation.cs` 的 `stage 17-20`，
+跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）：
+
+| # | 用的是什么 | 看哪一行 |
+|---|---|---|
+| ① | 编辑器自己认哪个字符串：`SerializedObject.FindProperty("values.Array.data[0]")` vs `("values.0")` | `HO_HUB_PATH:` |
+| ② | 曲线写槽 0：分别用 `values.Array.data[0]` 与 `values.0` 各来一次，**同一个片段的另一条曲线写标记物的位置当对照组** | `HO_HUB_PROBE:` / `HO_HUB_VERDICT:` |
+| ③ | **越界**：数组 128 个槽，让曲线写第 200 个（编辑器接不接受？值会不会动？有没有日志？） | `HO_HUB_PROBE:` 的第三行 |
+
+⚠️ 对照组是必须的：只看到"槽 0 没变"分不清是**路径写错了**还是**这段动画压根没跑**。
+**三种结果对应三种行动**：
+① 若 `values.Array.data[i]` 能写、`values.<i>` 不能 ⇒ 改文档与生成器（**小改**，Hub 形状不动）；
+② 若两个都不能写 ⇒ **数组元素根本不能被曲线驱动**，Hub 的存储形状要重新设计（**大改**）；
+③ 越界若被编辑器直接拒绝 ⇒ 那正是最好的拦截点（打包前就知道，不用等运行期）。
+
+**结论会追加到本节**（记下是哪一个字符串、以及越界的行为）。
+
+### 5.2 但 Hub 不是全部：完整输出还有别的类
 
 [控制器完整输出](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §6 定了更完整的一份"求值帧"，Hub 只是其中
 **`signals`（导出语义）**那一格。其余（`properties`：显隐 / 组件 float / 材质 MPB / 对象引用）
@@ -125,12 +196,14 @@ P/xxx    → 动态参数（写进 Hub）
   语义值走 Hub 已经覆盖了"下游要读"这件事。
 * ❌ **不让控制器的语义依赖名字**。名字只进生成器。
 * ❌ **不提前扩展前缀**（`M/` 材质、`C/` 组件这些），三个够用。
+* ❌ **不做跨角色共享词表**（2026-09-26 定）：表跟着预制件走，一个角色一份。
+* ❌ **不让 Connector 去改 Hub 的数组长度**（组件之间不耦合，见 §4.1）。
 
 ## 7. 与既有设计的关系
 
-* `HoFaceSemanticHub` 是**新挂在角色上的组件** ⇒ 与"角色预制件零组件"那条老规矩**冲突**：
+* `HoFaceSemanticHub` / `HoFaceSemanticConnector` 是**新挂在角色上的组件** ⇒ 与"角色预制件零组件"那条老规矩**冲突**：
   那是**调试状态**的规矩（调试状态在 `Assets/HoFaceDebugSettings.json`，不进预制件），
-  而 Hub 是**产品内容**、本来就必须在角色上。用户 2026-09-25 确认"可以接受角色 mod 制作时挂新脚本"
+  而这两个是**产品内容**、本来就必须在角色上。用户 2026-09-25 确认"可以接受角色 mod 制作时挂新脚本"
   （而且**带自定义脚本的角色 mod 打包这条路早就跑通了**），所以老规矩按"只约束调试状态"重新表述，不是被推翻。
 * 求解节点目前的出口不变（官方同形的 5 个 + `状态`），**`P/` 语义值先作为新的一个出口**，
   不替换既有四个 —— 等作者的控制器做出来之后再评估要不要并。
