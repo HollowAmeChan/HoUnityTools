@@ -207,21 +207,34 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 * 采样允许**稀疏、非方阵**，多个采样点可以共用同一份片段（闭眼时不同 Squint 可以是同一个闭眼姿势）。
 * 非方阵的插值语义由 2D Freeform Cartesian 定，**先摆点看结果**，不要假设。
 
-## 9. 土豆那份配置怎么改（改造清单）
+## 9. 配置改造：**发货那份 profile 已经改好了**（2026-09-27）
 
-| 动作 | 内容 |
-| --- | --- |
-| **改名** | 20+ 行 VB 语义的 `parameter` 换成 §7 的轴名（`MouthOpen` → `Ho/Drive/Mouth/Open`、`MouthSmile` → `…/Form`、`MouthPressLipOpen` → `…/Press`…） |
-| **补曲线** | `Form` 要 0…1 → **−1…1**（现在那行是直通，中性 0 的树不能用）；`Open`/`Funnel`/`Press` 各自标定端点 |
-| **保留** | 4 根 `Ho/Drive/Lid/*`（已经是这套坐标）、52 行裸 ARKit 直通（进 Hub，进不进树由树决定） |
-| **新增** | 区域门常量行 5 行；tranche 1 还缺的轴行（`HQJawForward`、`HQJawX`、颊/鼻那几根直通行） |
-| **不写** | `Gate/Expr/*`：**留给表情来源**（§3.3）。参数在控制器里默认 `0`，中间层**一行都不写它** —— 写了就等于我们把它锁死 |
-| **切片权重行** | `MouthCore` 先 4 行（双线性、和恒 1）。**副本不需要权重行**（1D 树自己补齐，§3.1） |
-| **以后再说** | `HQEyeSmileL/R`：本版"笑眼"走副本，不需要它（§4 末） |
-| **不改** | `FaceAngle*` / `Body*` / `FacePosition*` / `FaceFound` / `EyeLeftXY`：**走 Hub 给下游**（姿态链、别的脚本），不是面部树的轴 |
-| **清过期话** | 文件头 `notes` 里那段"Also NOT written: VBridger's own custom outputs（MouthFunnel/MouthPucker/MouthShrug/Eye_Squint_L/R/MouthPressLipOpen/BrowInnerUp）"**已经不成立了**（这些行后来加上去了），迁移时一并改写 |
+包里的 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 从 67 输入 / 90 输出变成 **67 / 127**：
+**90 行出口原样保留**，**另加 37 行控制器轴**（逐行清单见 [HO 参数规范](PARAMETER_HO.md) §3.7）。
+**改造 = 追加，不是重命名** —— 三条查出来的硬约束决定了这个形状：
 
-判据：**要进树的轴一个都不许落在"不在控制器里"**；其余行保持 output-only 并在 notes 里写清"故意不进树"。
+| # | 约束（都有代码/文档判据） | 后果 |
+| --- | --- | --- |
+| 1 | **输出行之间不能互相引用**：求值器只查输入行（`HoFaceChain.EvaluateOutputs` → `inputIndex` / 原始线名） | 切片权重行**把轴公式内联展开**；要收短得先改那条链 |
+| 2 | **G1–G3 那 90 行是下游契约**：VTS 生态、Hub 消费者、离线台架（`.research/profile-json-test` 的 §3 表格核对）都按名字守它们 | 轴行**新增**而不是把出口名改掉；`§0` 的"出口行总数 90"也保持不变 |
+| 3 | **4 根 `Ho/Drive/Lid/*` 早就不是代码内置的了**（`HoFaceMiddleware` 里那段注入已删） | 它们**必须写在 profile 里** —— 发货那份以前**缺这 4 行**（只有土豆那份 rig 副本有），现在补齐 |
+
+细节与坑（都写进了 §3.7 的备注）：
+
+* `Form` = **2×`MouthSmile` − 1**、`Brow/*/Y` = **2×VB `Brow*Y` − 1**：VB 那两条的静息是 0.5，
+  轴要"0 = 中性"就得重映射（两条都用宽曲线，别用 0..1 的默认曲线，否则静息负半边被夹掉）。
+* **区域门是常量行**（`expression` 留空 + `defaultValue = 1`）：**常量行不过曲线**（`HoFaceAnimationSession.cs:283`），
+  所以写 1 就是 1。
+* **`Gate/Expr/*` 一行都不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 / VTS API 适配器）；
+  控制器里默认 `0`。我们每帧写它 = 把它锁死。
+* **分侧轴先两侧同跟单侧原值**（`TongueL`/`TongueR` ← `tongueOut`；`Cheek/*/Puff` ← `cheekPuff`），
+  有分侧来源时直接驱动、树不动。
+* **文件头 `notes` 那段"没写 VB 自造输出"是过期的**（那些行后来加了）—— 顺手在 §3.7 里说清，改 profile 时一并改写。
+* 土豆那份 **rig 副本**（`BREAK_URP/.../ho-iPhoneVTS.hoface.json`，94 行）与发货那份**已经漂了**：
+  它多 4 行显式眼睑轴（现在发货那份也有了），没有 33 行新轴 —— **把它换成发货那份**即可对齐（沙箱里那份同理）。
+
+判据（面板「参数输出」栏）：**要进树的轴一个都不许落在"不在控制器里"** —— 骨架没搭好之前，这 37 行会全部
+显示"不在控制器里"，那正是"还没接上"的可视化。其余出口行保持 output-only。
 
 ## 10. 手搭清单（在混合树编辑器里照这个建；动画留空）
 

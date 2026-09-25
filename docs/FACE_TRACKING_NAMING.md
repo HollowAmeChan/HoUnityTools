@@ -23,6 +23,11 @@
    **区域子树** = `MouthRegion` / `EyeLeftRegion` / `EyeRightRegion` / `BrowRegion` / `CheekRegion`。
 6. **轴名"正端在前"**（老规矩，继续用）：`BlinkWide` = +1 闭 / −1 睁大、`UpDown` = +1 上 / −1 下。
    轴名只表达**观测语义**；模型镜像/方向是**校准映射**的事（写在各行的曲线里），不靠改名解决。
+7. **中性约定（2026-09-27 定，作者摆采样点全照它）**：
+   * **双向轴**（`Form` `Press` `Pucker` `LeftRight` `BlinkWide` `InOut` `UpDown` `Height`）：**0 = 静息**，两端约 ±1；
+   * **单端轴**（`Open` `Funnel` `Jaw` `Forward` `Squint` `InnerUp` `CheekL/R` `PuffL/R` `TongueL/R` `SneerL/R`）：**0 = 静息**、+1 = 满；
+   * VB 那些**静息 0.5** 的量（`MouthSmile`、`BrowLeftY`/`BrowRightY`）**进控制器前必须重映射**（`2x − 1`）——
+     否则"中性在哪"会一棵树一个说法，而 0..1 的默认曲线还会把负半边**静默夹掉**（[HO 参数规范](PARAMETER_HO.md) §3.7 有那两行的实际写法）。
 
 ## 2. 42 个树名（权威表）
 
@@ -95,7 +100,9 @@
 ```
 
 代码只认其中 4 个名字（`HoFaceNaming.cs`：`Ho/Drive` 根、`BlinkWide`、`Squint`、`LidAxis()`），
-其余全是**作者约定** + 中间层配置文件里的行名。
+其余全是**作者约定** + 中间层配置文件里的行名。**这些行现在真的写出来了**：发货那份
+`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 37 行 `Ho/Drive/*`（逐行清单见
+[HO 参数规范](PARAMETER_HO.md) §3.7）。
 
 ## 5. 槽位名（= 片段名）
 
@@ -128,7 +135,7 @@
 | `BlinkWide` | `Lid/*/BlinkWide` | **+1 闭 / −1 睁大** | `eyeBlink − eyeWide`（代码里唯一认的轴名之一） |
 | `Squint` | `Lid/*/Squint` | +1 眯 / 0 不眯 | `eyeSquint`（单端） |
 | `InOut` / `UpDown` | `Gaze/*/X`、`Y` | +1 内/+1 上 | `eyeLookIn − eyeLookOut` / `eyeLookUp − eyeLookDown` |
-| `Height` | `Brow/*/Y` | +1 抬眉 | VB `BrowLeftY`/`BrowRightY`（里面已经掺了偏嘴联动） |
+| `Height` | `Brow/*/Y` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `BrowLeftY`/`BrowRightY` − 1（VB 静息 0.5，里面还掺了偏嘴联动） |
 | `InnerUp` | `Brow/*/InnerUp` | +1 内眉抬起 | `browInnerUp` |
 | `CheekL` / `CheekR`、`SneerL` / `SneerR` | `Cheek/*`、`Nose/*` | 0…1 | 直通（分侧本来就是两个键） |
 | `AngleX/Y/Z`、`PosX/Y/Z` | `Head/*`、`Body/*` | — | 姿态链的轴，**不进面部矩阵** |

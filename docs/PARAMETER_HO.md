@@ -44,7 +44,8 @@
 ⚠️ `.research/` 与 `.warudo-mod-research/` 都**不入库**：上面这些脚本只有本机有，
 **别把脚本当成唯一出处** —— 清单以 mod 侧 `Core/PORTED.md` §1 那张表为准。
 
-**这份规范覆盖"我们这条链上出去什么"**：出口是**两份并行 + 一套额外**，共 **90 行**。
+**这份规范覆盖"我们这条链上出去什么"**：出口是**两份并行 + 一套额外**，共 **90 行**；
+**外加**喂新控制器的**控制器轴** `Ho/Drive/*` **37 行**（§3.7，那是"口径"不是"出口组"，不计入 90）。
 
 | 组 | 行数 | 在哪 | 是什么 |
 |---|---|---|---|
@@ -54,6 +55,7 @@
 | **G3b 姿态向量** | **12** | §3.4 | 4 组 × XYZ |
 | **G3c 协议层信号** | **1** | §3.5 | `FaceFound` |
 | | **90** | | **出口行总数** |
+| **C 控制器轴** | **37** | §3.7 | `Ho/Drive/*`：轴 + 区域门 + 切片权重（喂控制器，**不计入上面 90**） |
 
 **还算不出来**（输入契约里没有源）：**11 个**（9 行），逐条列在 §5。
 
@@ -479,6 +481,50 @@ V3.0 版没有。我们用 V3.0。
 我们**按用途**微调时要在配置的 `notes` 里写明"改过什么、为什么"。本文件的实际偏离只有两处，
 都写在对应行的 `notes` 里：`FaceAngle*`/`FacePosition*` 取 `VTS_Compatible` 的官方标量拼法、
 向量组取 V3.0 的简洁公式。
+
+### 3.7 控制器轴：`Ho/Drive/*`（**37 行，不计入上面的 90**）
+
+**这一组不是"给下游的出口"，是"喂控制器的口径"**（2026-09-27 加，见
+[控制器 2D 规划](VTS_HQ_CONTROLLER.md) 与[命名权威](FACE_TRACKING_NAMING.md)）：
+发货那份 profile 现在**同时**写两份东西 —— 上面 G1–G3 那些**出口名**（VTS 生态照旧按那些名字读），
+外加这一组 `Ho/Drive/<部位>/<轴>`，让新控制器直接按名取轴。
+
+⚠️ **为什么是"新增"而不是"把出口名改掉"**：G1–G3 的名字是**下游契约**（VTS 生态、Hub 消费者、
+离线台架 `.research/profile-json-test` 的 §3 表格核对都按名字守它们）。改名的收益只是少一份重复，
+代价是把一条对外契约改掉 —— 不值。
+
+⚠️ **为什么表达式这么长（都是内联展开）**：**输出行之间不能互相引用** ——
+求值器解析变量时只查**输入行**（`HoFaceChain.EvaluateOutputs` → `inputIndex`/原始线名），
+所以"切片权重 = 函数(轴)"只能把轴的公式再抄一遍。要收短就得先改那条链（让输出行能引用输出行），
+那是另一件事。
+
+| 参数 | 表达式（内联） | 值域 | 说明 |
+| --- | --- | --- | --- |
+| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | −1 睁大 … **0 中性** … +1 闭 | 中间层**曾经内置**这几行，现在只是普通行 |
+| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 0 … 1 | |
+| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | −1 … 0 … +1 | |
+| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 0 … 1 | |
+| `Ho/Drive/Mouth/Form` | `((2 - (frownL + frownR + pucker) + (smileR + smileL + ((dimpleL + dimpleR) / 2))) / 2) - 1` | −1 垂嘴角 … 0 … +1 笑 | = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5） |
+| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | |
+| `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
+| `Ho/Drive/Mouth/Press` | `(lipRaise / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
+| `Ho/Drive/Mouth/Jaw` | `jawOpen` | 0 … 1 | 独立自由度 |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1 | `HQJawForward` |
+| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
+| `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
+| `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
+| `Ho/Drive/Gaze/Left\|Right/X` | `EyeLeft_x` / `EyeRight_x` | −1 … +1 | 手机自己就发左右眼标量，不重算 |
+| `Ho/Drive/Gaze/Left\|Right/Y` | `EyeLeft_y` / `EyeRight_y` | −1 … +1 | |
+| `Ho/Drive/Brow/Left\|Right/Y` | `2 * ((browOuterUp - browDown) + ((mouthX方向差) / 8))` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `Brow*Y` − 1（VB 静息 0.5，且掺了偏嘴） |
+| `Ho/Drive/Brow/Left\|Right/InnerUp` | `browInnerUp` | 0 … 1 | |
+| `Ho/Drive/Cheek/Left\|Right/Squint` | `cheekSquintLeft` / `cheekSquintRight` | 0 … 1 | |
+| `Ho/Drive/Cheek/Left\|Right/Puff` | `cheekPuff` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
+| `Ho/Drive/Nose/Left\|Right/Sneer` | `noseSneerLeft` / `noseSneerRight` | 0 … 1 | |
+| `Ho/Drive/Gate/{Mouth,EyeLeft,EyeRight,Brow,Cheek}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门；**常量行不过曲线**（`HoFaceAnimationSession.cs:283`） |
+| `Ho/Drive/Slice/MouthCore/{Funnel0Press0,Funnel1Press0,Funnel0Press1,Funnel1Press1}` | `(1−F)(1−P)` / `F(1−P)` / `(1−F)P` / `FP`，F、P 内联 | 0 … 1，**四条和恒为 1** | `MouthCore` 的条件切片权重（Funnel × Press 双线性） |
+
+`Ho/Drive/Gate/Expr/*`（按键表情门）**故意不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 /
+VTS API 适配器），我们每帧写它就等于把它锁死。控制器里给默认值 `0` 即可。
 
 ---
 

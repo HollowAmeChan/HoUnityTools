@@ -25,7 +25,8 @@
 3. **Unity Animator 参数名完全是我们自己的。** 正因为自由，**建议直接采用第 1、2 条里的名字**
    （追踪参数名或 ARKit 名）当 Animator 参数名 —— 这样 `SetFloat` 的名字与下游一致，省掉一张映射表。
    **我们的现状**：发货那份 `ho-iPhoneVTS.hoface.json` 的具体出口是 [HO 参数规范](PARAMETER_HO.md) 的 **90 行**
-   （G1 **裸规范名** `jawOpen`… + G2 官方 VTS 追踪参数 + VB 自造 + 姿态向量 + `FaceFound`）。
+   （G1 **裸规范名** `jawOpen`… + G2 官方 VTS 追踪参数 + VB 自造 + 姿态向量 + `FaceFound`），
+   **外加 37 行控制器轴 `Ho/Drive/*`**（喂新控制器，不计入 90；见那份 §3.7）。
    ⚠️ **没有任何"内置默认配置"**（2026-09-26 起：那张 52 个 `ARKit/<规范名>` + 4 根眼睑轴的内置默认表已整个删掉，
    见 [中间层 §6.1](FACE_TRACKING_MIDDLE_LAYER.md)）：
    输出行的 `parameter` **只由使用者自己的配置文件定**，控制器里没有那个名字就跳过（不猜也不补）；

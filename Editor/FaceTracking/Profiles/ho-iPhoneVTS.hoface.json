@@ -2677,6 +2677,450 @@
                                                ]
                                   },
                         "notes":  "device (identity)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
+                        "expression":  "eyeBlinkLeft - eyeWideLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Left/Squint",
+                        "expression":  "eyeSquintLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Lid/Left/Squint"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Right/BlinkWide",
+                        "expression":  "eyeBlinkRight - eyeWideRight",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Lid/Right/BlinkWide"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Right/Squint",
+                        "expression":  "eyeSquintRight",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Lid/Right/Squint"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Form",
+                        "expression":  "((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Open",
+                        "expression":  "(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Funnel",
+                        "expression":  "mouthFunnel - (jawOpen * .2)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Press",
+                        "expression":  "((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Jaw",
+                        "expression":  "jawOpen",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Jaw (raw jawOpen; kept as its own degree of freedom)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Forward",
+                        "expression":  "jawForward",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Forward (HQJawForward)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Pucker",
+                        "expression":  "((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/X",
+                        "expression":  "(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/TongueL",
+                        "expression":  "tongueOut",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): follows the single ARKit tongueOut until a sided source exists"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/TongueR",
+                        "expression":  "tongueOut",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Mouth/TongueR (HQTongueRight): same as TongueL for now"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gaze/Left/X",
+                        "expression":  "EyeLeft_x",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Gaze/Left/X: the iPhone sends its own eye scalars, so we do not re-derive them"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gaze/Left/Y",
+                        "expression":  "EyeLeft_y",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Gaze/Left/Y"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gaze/Right/X",
+                        "expression":  "EyeRight_x",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Gaze/Right/X"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gaze/Right/Y",
+                        "expression":  "EyeRight_y",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Gaze/Right/Y"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Brow/Left/Y",
+                        "expression":  "2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Brow/Left/Y = 2*VB BrowLeftY - 1 (0 = rest, +1 raised); VB mixes in the mouth pull"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Brow/Right/Y",
+                        "expression":  "2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Brow/Right/Y = 2*VB BrowRightY - 1"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Brow/Left/InnerUp",
+                        "expression":  "browInnerUp",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Brow/Left/InnerUp"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Brow/Right/InnerUp",
+                        "expression":  "browInnerUp",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Brow/Right/InnerUp"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Cheek/Left/Squint",
+                        "expression":  "cheekSquintLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Cheek/Left/Squint"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Cheek/Right/Squint",
+                        "expression":  "cheekSquintRight",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Cheek/Right/Squint"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Cheek/Left/Puff",
+                        "expression":  "cheekPuff",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Cheek/Left/Puff (HQCheekPuffLeft): follows the single ARKit cheekPuff until a sided source exists"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Cheek/Right/Puff",
+                        "expression":  "cheekPuff",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Cheek/Right/Puff (HQCheekPuffRight): same as Left for now"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Nose/Left/Sneer",
+                        "expression":  "noseSneerLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Nose/Left/Sneer"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Nose/Right/Sneer",
+                        "expression":  "noseSneerRight",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "controller axis Nose/Right/Sneer"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/Mouth",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/EyeLeft",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/EyeRight",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/Brow",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/Cheek",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Slice/MouthCore/Funnel0Press0",
+                        "expression":  "(1 - (clamp(mouthFunnel - (jawOpen * .2), 0, 1))) * (1 - (clamp(((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper), 0, 1)))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Slice/MouthCore/Funnel1Press0",
+                        "expression":  "(clamp(mouthFunnel - (jawOpen * .2), 0, 1)) * (1 - (clamp(((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper), 0, 1)))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Slice/MouthCore/Funnel0Press1",
+                        "expression":  "(1 - (clamp(mouthFunnel - (jawOpen * .2), 0, 1))) * (clamp(((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper), 0, 1))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Slice/MouthCore/Funnel1Press1",
+                        "expression":  "(clamp(mouthFunnel - (jawOpen * .2), 0, 1)) * (clamp(((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper), 0, 1))",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
                     }
                 ]
 }
