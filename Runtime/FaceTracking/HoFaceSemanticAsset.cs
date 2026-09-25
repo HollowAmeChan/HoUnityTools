@@ -27,7 +27,9 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 名字 ↔ 下标 的映射必须放在一个**双方都能引用**的东西上 —— 资产就是那个东西。
     /// 这也是生成器能在生成期就知道"`P/MouthX` 该写第几个槽"的依据。
     /// </summary>
-    [CreateAssetMenu(fileName = "HoFaceSemantics", menuName = "Ho Unity Tools/面捕/动态参数资产", order = 10)]
+    // ⚠️ 与包内其余组件同一个写法：根 `HoUnityTools`（没有空格）、分类与名字用英文。
+    // （原来的 `Ho Unity Tools/面捕/…` 会多出一个顶层分类，而且中文标题在这个菜单里很扎眼。）
+    [CreateAssetMenu(fileName = "HoFaceSemantics", menuName = "HoUnityTools/Face Tracking/Ho Face Semantics", order = 10)]
     public sealed class HoFaceSemanticAsset : ScriptableObject
     {
         /// <summary>一个语义参数的定义。**只有定义，没有值。**</summary>

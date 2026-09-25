@@ -28,7 +28,11 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 本组件也**不会**在退出播放时把值写回资产；值就是运行期状态，进程结束就没了。
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("Ho Unity Tools/面捕/动态参数 Hub")]
+    // ⚠️ AddComponentMenu 的写法与本包其余组件一致：根 `HoUnityTools`（**没有空格**）、
+    // 分类与组件名**都用英文**、组件名带 `Ho ` 前缀。中文标题在这个菜单里很扎眼
+    // （它跟 Animation / Layout / Mesh 那些英文分类并列），而且根名多两个空格会**多出一整个
+    // 顶层分类** `Ho Unity Tools`，与 `HoUnityTools` 并存 —— 真发生过。
+    [AddComponentMenu("HoUnityTools/Face Tracking/Ho Face Semantic Hub")]
     public sealed class HoFaceSemanticHub : MonoBehaviour
     {
         [Tooltip("引用那份「动态参数资产」—— 它定义有哪些语义参数，顺序即下标。")]
