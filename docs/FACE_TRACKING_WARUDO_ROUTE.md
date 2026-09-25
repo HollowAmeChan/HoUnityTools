@@ -99,6 +99,12 @@
 **路径口径与中间层配置同一套**：插件沙箱（`PluginPersistentDataManager`）里的文件名 + `ReadFileBytes`
 + `AssetBundle.LoadFromMemory`（本地 lint 与真机都放行）；列目录只能用 `GetFileEntries`
 （`GetFiles`/`GetDirectories` 的签名带 `System.IO.SearchOption`，一碰就构建失败）。
+节点上是 `[AutoComplete]` 下拉列表（`AutoCompleteList` / `AutoCompleteEntry{label,value}`）。
+🚨 **`AutoComplete*` 方法必须是 `async UniTask<AutoCompleteList>`**：写成同步返回 `AutoCompleteList`
+会让**整个节点注册失败、面板上消失**，而**本地编译全绿**（运行期注册器的检查）。2026-09-25 实测原话：
+`Exception: Method HoFaceParameterNode::AutoCompleteProfile does not return UniTask`1` →
+`Could not register node type …`（另一个节点同一条）。查这类 API 时**别只看返回类型名** ——
+官方那些"返回 `AutoCompleteList`"的样本是**字段**，方法一律是 `UniTask<AutoCompleteList>`。
 代码在 `Core/HoFaceController.cs`；✅ **运行期全部实测**（2026-09-25）：bundle 读得了、隐藏影子上的 `Animator` 照常跑 ——
 参数写进去、混合树解算、`GetBlendShapeWeight` 采回来整条通了
 （实测 `写入 jawOpen 0.186 / mouthSmileLeft 0.096 → 采到 0.2673 / 0.2194`，两个形状都跟着输入动）。

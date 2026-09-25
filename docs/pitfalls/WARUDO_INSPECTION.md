@@ -1,4 +1,4 @@
-﻿# 从蓝图里取证：会看漏的那些事
+# 从蓝图里取证：会看漏的那些事
 
 正本：[面捕在 Warudo 的路线](../FACE_TRACKING_WARUDO_ROUTE.md)（官方那张图的逐节点解码）、
 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md)。
@@ -250,3 +250,25 @@ if (key == null) { invokedFlow.Invoke(node, null); return; }      // 把自己�
 **顺带一个好处**：直读对**孤儿线**照样有效 —— 只要 `OutputNode`/`OutputPort` 还在，
 哪怕线上挂的键已经不是我们的口，值也读得出来。所以"改端口名把老线弄成孤儿"不再致命
 （诊断日志照旧会提示，见 §7）。
+
+## 9. 节点在面板上"整个消失" ⇒ 先去看**注册失败**，别去看界面
+
+症状：热重载后某个节点（或几个）从节点列表里没了，**没有编译错误、`compile-check` 全绿**，
+留下的节点照常工作 —— 看起来像界面/缓存问题。
+
+真因：Warudo 注册节点类型时会**检查 `[AutoComplete]` 指到的那个方法的签名**，不合规就
+**整条 `NodeType` 注册失败**（同一个插件里别的节点不受影响）。`Player.log` 里有两句连着的原话：
+
+```
+Exception: Method HoFaceParameterNode::AutoCompleteProfile does not return UniTask`1
+Rethrow as Exception: Could not register node type HoFaceTracking.Nodes.HoFaceParameterNode
+```
+
+⚠️ **必须是 `async UniTask<AutoCompleteList>`**（`Cysharp.Threading.Tasks`）。写成同步 `AutoCompleteList`
+就会踩这条。2026-09-25 我们两个节点一起消失，就是这么来的。
+
+⚠️ **教训（比这个坑本身更重要）**：我用反射列官方用法时，只看了**返回类型名**，
+看到几个"返回 `AutoCompleteList`"的样本就照抄了 —— 那些其实是**字段**，不是方法；
+方法（`LoadPendulumPhysicsProfileNode.AutoCompleteProfile`）的真实签名是
+`UniTask<AutoCompleteList>`。**列 API 时要把参数/返回的完整类型打出来**，别只看名字。
+
