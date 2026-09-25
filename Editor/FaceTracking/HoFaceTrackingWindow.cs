@@ -106,11 +106,41 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 摊出来 —— 这是"写手到底有没有在工作"最直接的观察面（Hub 是运行期槽，值不在任何资产里）。
             if (connector != null && connector.hub != null && Application.isPlaying)
             {
+                HoConstraintEditorControls.Caption(ChainStatus(connector));
                 HoConstraintEditorControls.Caption(SemanticReadout(connector));
                 var session = HoFaceInputHub.Session(settings);
                 if (session != null && !string.IsNullOrEmpty(session.SemanticStatus))
                     HoConstraintEditorControls.Caption(session.SemanticStatus);
             }
+        }
+
+        /// <summary>
+        /// **这条链现在走到哪一步了** —— 一行，按顺序念就能查出断在哪：
+        /// 会话起没起 → 影子 Hub 有没有槽（= 写手跑没跑）→ 角色 Hub 有没有槽（= 中继写没写）→ 有没有输入。
+        ///
+        /// 为什么要这么一句：这三个失败**在界面上长得一模一样**（都是"Hub 是空的、脸不动"），
+        /// 但一个要按「开始驱动」、一个说明状态机行为没被调用、一个要连手机。分开写清楚，
+        /// 就不用靠猜（2026-09-26 现场：用户报"Hub 空、脸不动"，我隔着屏幕没法区分是哪一种）。
+        /// </summary>
+        private string ChainStatus(HoFaceSemanticConnector connector)
+        {
+            var session = HoFaceInputHub.Session(settings);
+            double age = HoFaceInputHub.LastFrameTime > 0 ? HoFaceClock.Now - HoFaceInputHub.LastFrameTime : double.MaxValue;
+
+            string input = !HoFaceInputHub.Connected ? "手机没连"
+                : HoFaceInputHub.LastFrameTime == 0 ? "手机连上了但一包没来"
+                : age > 1 ? "输入断流 " + age.ToString("F0") + " 秒"
+                : "输入在收（" + HoFaceInputHub.SourceCount + " 条源）";
+
+            string shadow;
+            if (session == null) shadow = "**会话没起**（点「开始驱动」）";
+            else if (session.ShadowHubSlotCount < 0) shadow = "影子 Hub 不存在（会话代码没更新？）";
+            else if (session.ShadowHubSlotCount == 0) shadow = "**影子 Hub 空** ⇒ 写手没被调用";
+            else shadow = "影子 Hub " + session.ShadowHubSlotCount + " 槽";
+
+            string target = connector.hub.SlotCount == 0 ? "角色 Hub 空 ⇒ 中继还没写" : "角色 Hub " + connector.hub.SlotCount + " 槽";
+
+            return "链路：会话" + (session == null ? " ✗" : " ✓") + " · " + shadow + " · " + target + " · " + input;
         }
 
         /// <summary>

@@ -99,6 +99,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         public string SemanticStatus { get; private set; }
 
+        /// <summary>
+        /// 影子 Hub 上有几个槽（给面板的"链路走到哪一步"用）。
+        /// **−1 = 连影子 Hub 都不存在**（会话建影子时没加 Hub ⇒ 多半是包代码没重编译），
+        /// **0 = 影子 Hub 在、但写手一格都没声明过**（= 状态机行为没被调用，或条目是空的）。
+        /// 这两种在界面上本来长得一样，所以这里分开报。
+        /// </summary>
+        public int ShadowHubSlotCount { get { return shadowHub != null ? shadowHub.SlotCount : -1; } }
+
         private RuntimeAnimatorController runningController;
         private string mappingStamp;
         private bool disposed;
