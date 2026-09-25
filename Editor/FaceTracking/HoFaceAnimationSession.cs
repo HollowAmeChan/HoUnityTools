@@ -77,6 +77,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly HashSet<string> parameters = new HashSet<string>(StringComparer.Ordinal);
         private GameObject shadowRoot;
         private Animator shadow;
+
+        /// <summary>
+        /// 影子上的**语义 Hub**：控制器里的「语义写手」（`HoFaceSemanticWriterBehaviour`）写它。
+        /// ⚠️ 写手是**跑在影子 Animator 上**的（那是唯一在跑控制器的地方），而消费方读的是**角色身上**那片
+        /// Hub —— 所以影子根上必须有一片，且每帧由 <see cref="RelaySemantics"/> 搬到角色那边。
+        /// </summary>
+        private HoFaceSemanticHub shadowHub;
+
+        /// <summary>角色身上的 Connector（转发时按它的槽表解释名字）。换角色 / 换表时重新找。</summary>
+        private HoFaceSemanticConnector semanticConnector;
+        private GameObject semanticOwner;
+        /// <summary>转发时被跳过的名字（不在槽表里的），只留前几个用来点名。</summary>
+        private readonly List<string> semanticSkipped = new List<string>();
+        /// <summary>上一次报过的转发状态（结构变了才重算字符串 + 报一次，免得每帧刷屏）。</summary>
+        private string semanticReported;
+
+        /// <summary>
+        /// 语义转发的**结构**摘要（写几个、跳过几个、跳过谁）。面板直接读它 —— 值本身去读 Hub。
+        /// 只在结构变化时更新，所以不用担心每帧分配字符串。
+        /// </summary>
+        public string SemanticStatus { get; private set; }
+
         private RuntimeAnimatorController runningController;
         private string mappingStamp;
         private bool disposed;
@@ -127,6 +149,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             shadowRoot = new GameObject("Ho Face Shadow") { hideFlags = HideFlags.HideAndDontSave };
             shadow = shadowRoot.AddComponent<Animator>();
             shadow.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // 影子根上放一片**语义 Hub**：控制器里的「语义写手」用 `GetComponentInChildren` 找它，
+            // 找不到就什么都写不进去（只报一句）。见 RelaySemantics() —— 它是"影子 → 角色"的中转站。
+            shadowHub = shadowRoot.AddComponent<HoFaceSemanticHub>();
             // 登记给调试器（混合树观察台）：影子台是隐藏对象，调试组件自己找不到它。
             // 这是调试接入的全部代价 —— 一行，且不改任何生产逻辑。
             HoFaceShadowLink.Register(shadow);
@@ -263,6 +288,94 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 自己 Update(0f) 之后，这一步变成同步的：设参数 → 求值 → 读值，一次调用里完成。
             // （影子是 AlwaysAnimate 的活动对象，Unity 之后还会再算一次 —— 参数没变，无害。）
             shadow.Update(0f);
+
+            // 影子算完 → 控制器里的语义写手也写完了 → 把它搬到角色身上那片 Hub（Warudo 侧由节点做同一件事）。
+            RelaySemantics();
+        }
+
+        /// <summary>
+        /// 把影子 Hub 上的语义值**按名字**搬到角色身上那片 Hub（<see cref="HoFaceSemanticConnector.hub"/>）。
+        ///
+        /// 【为什么需要这一步】控制器里的「语义写手」跑在**影子**上（那是唯一在跑控制器的地方），
+        /// 而消费方读的是**角色**上那片 Hub。Warudo 侧这同一件事由「HoFace写动态参数」节点做
+        /// （`HoFaceHubWriteNode`）—— 两边都按**角色 Connector 的槽表**解释名字，所以"面板里看到什么
+        /// = Warudo 里是什么"这条规矩在语义值上也成立。
+        ///
+        /// ⚠️ **名字对不上**（写手填的 `slot` 不在槽表里）是这套设计里最阴的失败：它完全不报错，
+        /// 只表现为"某个语义永远不动"。所以这里会点名，而且只在结构变化时报一次。
+        /// </summary>
+        private void RelaySemantics()
+        {
+            if (shadowHub == null) return;
+
+            GameObject character = Settings.Character();
+            if (semanticConnector == null || semanticOwner != character)
+            {
+                semanticOwner = character;
+                semanticConnector = character != null
+                    ? character.GetComponentInChildren<HoFaceSemanticConnector>(true)
+                    : null;
+                semanticReported = null;
+            }
+
+            if (semanticConnector == null || semanticConnector.hub == null)
+            {
+                if (semanticReported != "no-connector")
+                {
+                    semanticReported = "no-connector";
+                    SemanticStatus = "⚠ 角色上没有 Connector（或它没填 Hub）⇒ 语义值没有地方落";
+                }
+                return;
+            }
+
+            HoFaceSemanticHub target = semanticConnector.hub;
+            target.Reserve(semanticConnector.Count);
+
+            if (shadowHub.SlotCount == 0)
+            {
+                // 写手一格都没声明过。这一条**必须明说**：它和"值恒为 0"在面板上看起来一样，
+                // 但原因完全不同（状态机行为没被调用 / 条目是空的 vs 参数本来就是 0）。
+                if (semanticReported != "empty-shadow")
+                {
+                    semanticReported = "empty-shadow";
+                    SemanticStatus = "⚠ 影子 Hub 还是空的 ⇒ 控制器里的「语义写手」没被调用，或它的条目是空的"
+                        + "（写手挂在状态上、`OnStateUpdate` 每帧跑）";
+                }
+                return;
+            }
+
+            int written = 0;
+            int skipped = 0;
+            semanticSkipped.Clear();
+            for (int i = 0; i < shadowHub.SlotCount; i++)
+            {
+                string name = shadowHub.NameAt(i);
+                if (string.IsNullOrEmpty(name)) continue;      // 空位：写手还没声明过这一格
+                int index = semanticConnector.IndexOf(name);
+                if (index < 0 || index >= target.SlotCount)
+                {
+                    skipped++;
+                    if (semanticSkipped.Count < 4) semanticSkipped.Add(name);
+                    continue;
+                }
+                target.SetFloat(index, shadowHub.GetFloat(i));
+                // 顺手把名字也镜像到角色那片 Hub 上：它在 Inspector 里就会自己说明"第 i 格是什么"，
+                // 而不用去对照 Connector 的槽表。（名字来自槽表，顺序与它一致。）
+                target.names[index] = name;
+                written++;
+            }
+
+            string state = written + "|" + skipped + "|" + string.Join(",", semanticSkipped);
+            if (state == semanticReported) return;
+            semanticReported = state;
+
+            SemanticStatus = "语义转发：写 " + written + " 个"
+                + (skipped > 0
+                    ? " · **跳过 " + skipped + " 个**（不在槽表里：" + string.Join("、", semanticSkipped) + "）"
+                    : " · 全部对上");
+            if (skipped > 0)
+                Debug.LogWarning("[Ho 面捕] 语义转发：有 " + skipped + " 个名字不在角色的 Connector 槽表里（"
+                    + string.Join("、", semanticSkipped) + "）⇒ 那几个语义永远不动。");
         }
 
         /// <summary>

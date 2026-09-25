@@ -59,13 +59,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private void DrawHubRow()
         {
+            GameObject character = settings.Character();
+            HoFaceSemanticConnector connector = FindSemanticConnector(character);
+
             using (HoConstraintEditorControls.Row())
             {
                 HoConstraintEditorControls.Label("动态参数 Connector", HoConstraintEditorTheme.LabelWidth,
                     "控制器把「动态参数」写进它下面的 Hub。约定挂在角色子层级（例如 Character/SemanticHub）。");
-
-                GameObject character = settings.Character();
-                HoFaceSemanticConnector connector = FindSemanticConnector(character);
 
                 if (connector != null)
                 {
@@ -98,6 +98,39 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         : "这个对象上没有 HoFaceSemanticConnector ⇒ 控制器写不进动态参数");
                 }
             }
+
+            // 播放时的**实时读数**：控制器里的语义写手把值写进角色那片 Hub，这里直接把前几个声明过的槽
+            // 摊出来 —— 这是"写手到底有没有在工作"最直接的观察面（Hub 是运行期槽，值不在任何资产里）。
+            if (connector != null && connector.hub != null && Application.isPlaying)
+            {
+                HoConstraintEditorControls.Caption(SemanticReadout(connector));
+                var session = HoFaceInputHub.Session(settings);
+                if (session != null && !string.IsNullOrEmpty(session.SemanticStatus))
+                    HoConstraintEditorControls.Caption(session.SemanticStatus);
+            }
+        }
+
+        /// <summary>
+        /// 前几个**声明过**的槽的当前值（最多 6 个）。名字来自槽表，值来自 Hub —— 全是运行期状态。
+        /// ⚠️ 一个都没声明过时明说"写手还没声明过任何槽"，而不是显示一片 0（那会被误读成"写手坏了"）。
+        /// </summary>
+        private static string SemanticReadout(HoFaceSemanticConnector connector)
+        {
+            var hub = connector.hub;
+            if (hub == null || connector.Count == 0) return "（槽表是空的：没有任何名字，写手写的值不会被认领）";
+
+            var text = new System.Text.StringBuilder();
+            int shown = 0;
+            for (int i = 0; i < connector.Count && shown < 6; i++)
+            {
+                string key = connector.KeyAt(i);
+                if (string.IsNullOrEmpty(key)) continue;
+                if (shown > 0) text.Append("  ·  ");
+                text.Append(key).Append('=').Append(connector.GetFloat(i).ToString("0.###"));
+                shown++;
+            }
+            if (connector.Count > shown) text.Append("  …（共 ").Append(connector.Count).Append(" 项）");
+            return text.ToString();
         }
 
         /// <summary>
