@@ -189,10 +189,14 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             using (HoConstraintEditorControls.Card())
             {
+                // ⚠️ 顶栏**不在任何 ScrollView 里**（见 OnGUI），所以它一旦撑宽就是整个窗口出滚动条。
+                // 原来这一行是 `配置 + 路径框 + 新建配置… + 保存 + 重新载入` 五个东西排一行，
+                // 最小宽度约 420px —— 窗口一窄就爆。现在拆成两行：第一行只放路径，第二行放按钮，
+                // 最小宽度掉到约 200px。
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("配置", HoConstraintEditorTheme.LabelWidthSm, "要被编辑的那份 .hoface.json 文本资产。");
-                    Rect rect = HoConstraintEditorControls.NextFlexible(140.0f);
+                    Rect rect = HoConstraintEditorControls.NextFlexible(80.0f);
                     EditorGUI.BeginChangeCheck();
                     var picked = (TextAsset)EditorGUI.ObjectField(rect, profile, typeof(TextAsset), false);
                     if (EditorGUI.EndChangeCheck())
@@ -200,8 +204,10 @@ namespace Hollow.HoUnityTools.FaceTracking
                         profile = picked;
                         ReloadProfile(false);
                     }
+                }
 
-                    HoConstraintEditorControls.Gap();
+                using (HoConstraintEditorControls.Row())
+                {
                     if (HoConstraintEditorControls.Button("新建配置…", "在工程里新建一份内置默认表。「保存」写文件。「重新载入」从磁盘重读。"))
                         NewProfile();
                     HoConstraintEditorControls.Gap();
@@ -247,18 +253,20 @@ namespace Hollow.HoUnityTools.FaceTracking
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("搜索", HoConstraintEditorTheme.LabelWidthSm, "按参数名过滤（不区分大小写）。");
-                    search = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(60.0f), search, HoConstraintEditorTheme.Field);
+                    // 最小宽度取小：这一行也在左列那个 ScrollView 里，撑宽了就出横向滚动条。
+                    search = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(40.0f), search, HoConstraintEditorTheme.Field);
                 }
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    if (HoConstraintEditorControls.Button("+ 新增输出", "在列表末尾加一行。", false, 90.0f))
+                    if (HoConstraintEditorControls.Button("+ 新增", "在列表末尾加一行。", false, 64.0f))
                     {
                         AddOutput();
                     }
 
                     HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Caption("顺序 = 写参数顺序", "上面的行先写；重复写同一个参数时后面的覆盖前面的。");
+                    HoConstraintEditorControls.CaptionTrim("顺序 = 写参数顺序", 130.0f,
+                        "上面的行先写；重复写同一个参数时后面的覆盖前面的。");
                 }
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
@@ -285,20 +293,23 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// 左列的一行：**整行显式绘制**。
+        /// 左列的一行：**整行显式绘制**，行内带 ↑ ↓ ✕ 三个按钮，**按钮以外整行可点**。
         ///
         /// 为什么不用 `Card()` / `Row()` / `IconButton()` 那套布局组：
         /// 那套要靠 `GUILayoutUtility.GetLastRect()` **反推**矩形，而反推出来的东西是脆的 ——
-        /// 我连踩两次（一次读到最后一行而不是卡片，一次被卡片盖住），表现为"曲线不画了"
-        /// 和"整行点不动"。现在**自己申请整行的 Rect，里面每个位置都算出来**，
+        /// 我连踩三次（读到最后一行而不是卡片、被卡片盖住、按钮与热区不在同一坐标系），
+        /// 表现为"曲线不画了""整行点不动"。现在**自己申请整行的 Rect，里面每个位置都算出来**，
         /// 背景、文字、按钮、热区全都对着同一个已知矩形画，不再依赖任何"最后画的矩形"。
         ///
-        /// 布局（<paramref name="RowHeight"/> 高）：
+        /// 行内保留那三个按钮（右面板**不再**重复一份）：`↑ ↓ ✕` 走显式矩形 + 自判点击，
+        /// 命中就 `Event.Use()` 掉，所以"整行可点"不会跟它们抢。
+        ///
+        /// 布局（{@link RowHeight} 高）：
         ///     ╔══════════════════════════════════════════════╗
         ///     ║ 名字（左对齐）                    ↑   ↓   ✕  ║  ← 第一行
         ///     ║              表达式（居中）                    ║  ← 第二行
         ///     ╚══════════════════════════════════════════════╝
-        ///     曲线画在整块的淡色底上；点整块（按钮以外）选中这一行。
+        ///     曲线画在整块的淡色底上；点按钮以外的任何地方都选中这一行。
         /// </summary>
         private void DrawLeftRow(int index)
         {
@@ -321,8 +332,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (row.width < 24.0f) return;
 
             // ── 三个按钮的位置（右端）────────────────────────────────────────────
-            float button = 18.0f;
-            float gap = 2.0f;
+            const float button = 18.0f;
+            const float gap = 2.0f;
             Rect removeRect = new Rect(row.xMax - button - 1.0f, row.y + 3.0f, button, button);
             Rect downRect = new Rect(removeRect.x - button - gap, removeRect.y, button, button);
             Rect upRect = new Rect(downRect.x - button - gap, downRect.y, button, button);
@@ -339,7 +350,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 DrawRowCurveBackground(content, output, bad, isSelected, accent);
             }
 
-            // ── 第一行：名字**左对齐**，右边接 ⚠ / 延迟 标记 ──────────────────────
+            // ── 第一行：名字**左对齐**，右端接 ⚠ / 延迟 标记 ──────────────────────
             Rect nameRect = new Rect(content.x + 4.0f, content.y, content.width - 8.0f, RowHeaderHeight);
             if (Event.current.type == EventType.Repaint)
             {
@@ -382,29 +393,30 @@ namespace Hollow.HoUnityTools.FaceTracking
                 GUI.Label(expressionRect, new GUIContent(text, tip), style);
             }
 
-            // ── 整行可点（按钮之外）──────────────────────────────────────────────
-            // 先给三个按钮机会：它们命中就 `Use()` 掉，下面这次鼠标事件就轮不到了。
-            bool moved = false;
+            // ── 三个按钮 + 整行可点 ──────────────────────────────────────────────
+            // 顺序很关键：先给按钮机会（命中就 `Event.Use()` 掉），被按钮吃掉的鼠标事件
+            // 就不会走到下面那次"选中整行"。
+            bool handled = false;
             if (DrawRowButton(upRect, "↑", "上移一行（往前生效）。", index > 0))
             {
                 MoveOutput(index, index - 1);
-                moved = true;
+                handled = true;
             }
             if (DrawRowButton(downRect, "↓", "下移一行（往后生效）。", index < middleware.outputs.Count - 1))
             {
                 MoveOutput(index, index + 1);
-                moved = true;
+                handled = true;
             }
-            if (DrawRowButton(removeRect, "✕", "删掉这一行。（右面板也有一个）", true))
+            if (DrawRowButton(removeRect, "✕", "删掉这一行。", true))
             {
                 middleware.outputs.RemoveAt(index);
                 if (selected > index) selected--;
                 else if (selected == index) selected = -1;
                 dirty = true;
-                moved = true;
+                handled = true;
             }
 
-            if (!moved && Event.current.type == EventType.MouseDown && Event.current.button == 0
+            if (!handled && Event.current.type == EventType.MouseDown && Event.current.button == 0
                 && content.Contains(Event.current.mousePosition))
             {
                 selected = index;
@@ -573,29 +585,6 @@ namespace Hollow.HoUnityTools.FaceTracking
                 new (string, bool)[] { ("表达式", !string.IsNullOrEmpty(output.expression)) });
 
             DrawRightScroll(output);
-
-            HoConstraintEditorControls.Separator(3.0f, 4.0f);
-            using (HoConstraintEditorControls.Row())
-            {
-                using (new EditorGUI.DisabledScope(index == 0))
-                {
-                    if (HoConstraintEditorControls.Button("↑ 上移")) MoveOutput(index, index - 1);
-                }
-
-                HoConstraintEditorControls.Gap();
-                using (new EditorGUI.DisabledScope(index == middleware.outputs.Count - 1))
-                {
-                    if (HoConstraintEditorControls.Button("↓ 下移")) MoveOutput(index, index + 1);
-                }
-
-                HoConstraintEditorControls.Flex();
-                if (HoConstraintEditorControls.Button("✕ 删除这一行", null, false))
-                {
-                    middleware.outputs.RemoveAt(index);
-                    selected = -1;
-                    dirty = true;
-                }
-            }
         }
 
         private Vector2 rightScroll;
@@ -609,12 +598,15 @@ namespace Hollow.HoUnityTools.FaceTracking
             using (HoConstraintEditorControls.Row())
             {
                 HoConstraintEditorControls.Label("参数名", HoConstraintEditorTheme.LabelWidth);
+                // ⚠️ 最小宽度取小（60 而不是 120）：这一行是 `标签 + 输入框 + 说明` 三段，
+                // 最小宽度就是三段的**最小和**。以前 120 + 130 让它在窄窗口下要 300px 才装得下，
+                // 右列一到 300px 以下就长出**横向滚动条**。
                 output.parameter = EditorGUI.TextField(
-                    HoConstraintEditorControls.NextFlexible(120.0f),
+                    HoConstraintEditorControls.NextFlexible(60.0f),
                     output.parameter,
                     HoConstraintEditorTheme.Field);
                 HoConstraintEditorControls.Flex();
-                HoConstraintEditorControls.CaptionTrim("控制器里没有就跳过", 130.0f,
+                HoConstraintEditorControls.CaptionTrim("控制器里没有就跳过", 96.0f,
                     "写进控制器的参数；控制器里没有这个名字时这行被跳过（不猜也不补）。");
             }
 
@@ -623,7 +615,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 HoConstraintEditorControls.Label("表达式", HoConstraintEditorTheme.LabelWidth);
                 output.expression = EditorGUI.TextField(
-                    HoConstraintEditorControls.NextFlexible(120.0f),
+                    HoConstraintEditorControls.NextFlexible(60.0f),
                     output.expression,
                     parsedOk ? HoConstraintEditorTheme.Field : HoConstraintEditorTheme.FieldMissing);
             }
@@ -635,7 +627,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
                     GUIStyle errorStyle = new GUIStyle(HoConstraintEditorTheme.Caption);
                     errorStyle.normal.textColor = HoConstraintEditorTheme.ErrorColor;
-                    GUI.Label(HoConstraintEditorControls.NextFlexible(80.0f), new GUIContent(expressionError), errorStyle);
+                    GUI.Label(HoConstraintEditorControls.NextFlexible(40.0f), new GUIContent(expressionError), errorStyle);
                 }
             }
 
