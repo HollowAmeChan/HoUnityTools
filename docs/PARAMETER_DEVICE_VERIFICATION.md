@@ -62,8 +62,6 @@
 ange 是两台的实测范围（**NEVER-MOVES** / **WEAK** 只是"这批采样里没见到它动"，见下）。
 
 <!-- BEGIN GENERATED SEMANTICS -->
-| 规范名（ARKit） | 语义 | 触发情况 | 安卓线名 / range | 苹果线名 / range |
-|---|---|---|---|---|
 | `browDownLeft` | 左眉外端下压 |  | `browDown_L` 0.610 | `BrowDownLeft` 0.657 |
 | `browDownRight` | 右眉外端下压 |  | `browDown_R` 0.610 | `BrowDownRight` 0.657 |
 | `browInnerUp` | 双眉内端上抬 |  | `browInnerUp_L` 0.053 + `browInnerUp_R` 0.053 | `BrowInnerUp` 0.296 |
@@ -91,27 +89,27 @@
 | `eyeWideLeft` | 左眼上下眼睑张开 | 要明显睁大眼（65–75% 帧贴地） | `eyeWide_L` 0.123 | `EyeWideLeft` 0.328 |
 | `eyeWideRight` | 右眼上下眼睑张开 | 要明显睁大眼（65–75% 帧贴地） | `eyeWide_R` 0.117 | `EyeWideRight` 0.279 |
 | `faceFound` | 有脸 1 / 丢脸 0 |  | `FaceFound` 0.000 **CONSTANT-NONZERO** | `FaceFound` 0.000 **CONSTANT-NONZERO** |
-| `headDown` | 头向下（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headDown` 0.081 | — **不发** |
-| `headLeft` | 头向左（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headLeft` 0.319 | — **不发** |
-| `headRight` | 头向右（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRight` 0.707 | — **不发** |
-| `headRollLeft` | 头左倾（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRollLeft` 0.158 | — **不发** |
-| `headRollRight` | 头右倾（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headRollRight` 0.177 | — **不发** |
-| `headUp` | 头向上（**只有安卓发**） | **只有安卓发**；苹果没有这条线 | `headUp` 0.395 | — **不发** |
-| `hotkey` | 最后按下的屏幕热键编号（1–8；−1＝没按过） | 按 VTS app 内的屏幕热键才给 1–8；实测两台都恒 −1 | `Hotkey` 0.000 **CONSTANT-NONZERO** | `Hotkey` 0.000 **CONSTANT-NONZERO** |
+| `headDown` | 头向下（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headDown` 0.081 | — **苹果不发** |
+| `headLeft` | 头向左（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headLeft` 0.319 | — **苹果不发** |
+| `headRight` | 头向右（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headRight` 0.707 | — **苹果不发** |
+| `headRollLeft` | 头左倾（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headRollLeft` 0.158 | — **苹果不发** |
+| `headRollRight` | 头右倾（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headRollRight` 0.177 | — **苹果不发** |
+| `headUp` | 头向上（**只有安卓发**） | **只有安卓多给这一份**（旋转系的 0..1 归一化、左右分边）；**不是**位移，也**不能**从 `Rotation_*` 换算出来 —— 见 §0.3 | `headUp` 0.395 | — **苹果不发** |
+| `hotkey` | 最后按下的屏幕热键编号（1–8；−1 ＝ 没按过） | 按 VTS app 内的屏幕热键才给 1–8；实测两台都恒 −1 | `Hotkey` 0.000 **CONSTANT-NONZERO** | `Hotkey` 0.000 **CONSTANT-NONZERO** |
 | `jawLeft` | 下颌向左 | **要张嘴**（闭嘴时几乎不给值） | `jawLeft` 0.386 | `JawLeft` 0.344 |
 | `jawOpen` | 下颌张开 | **要张嘴**（闭嘴时几乎不给值） | `jawOpen` 0.702 | `JawOpen` 0.803 |
 | `jawRight` | 下颌向右 | **要张嘴**（闭嘴时几乎不给值） | `jawRight` 0.216 | `JawRight` 0.600 |
 | `mouthFrownLeft` | 左嘴角向下 | 要明显撇嘴（70–90% 帧贴地） | `mouthFrown_L` 0.820 | `MouthFrownLeft` 0.230 |
 | `mouthFrownRight` | 右嘴角向下 | 要明显撇嘴（70–90% 帧贴地） | `mouthFrown_R` 0.797 | `MouthFrownRight` 0.224 |
-| `mouthFunnel` | 双唇收成"O 形张开" | 圆唇（"o 嘴"；pucker 峰值最高） | `mouthFunnel` 0.666 | `MouthFunnel` 0.329 |
+| `mouthFunnel` | 双唇收成"O 形张开" | 圆唇（"o 嘴"；`mouthPucker` 峰值最高） | `mouthFunnel` 0.666 | `MouthFunnel` 0.329 |
 | `mouthLeft` | 双唇整体向左 | **要用力拉**（轻拉常年 0） | `mouthLeft` 0.866 | `MouthLeft` 0.965 |
 | `mouthLowerDownLeft` | 左侧下唇向下 |  | `mouthLowerDown_L` 0.211 | `MouthLowerDownLeft` 0.724 |
 | `mouthLowerDownRight` | 右侧下唇向下 |  | `mouthLowerDown_R` 0.211 | `MouthLowerDownRight` 0.704 |
-| `mouthPucker` | 双唇收拢压紧（嘟嘴） | 圆唇（"o 嘴"；pucker 峰值最高） | `mouthPucker` 0.948 | `MouthPucker` 0.885 |
+| `mouthPucker` | 双唇收拢压紧（嘟嘴） | 圆唇（"o 嘴"；`mouthPucker` 峰值最高） | `mouthPucker` 0.948 | `MouthPucker` 0.885 |
 | `mouthRight` | 双唇整体向右 | **要用力拉**（轻拉常年 0） | `mouthRight` 0.197 | `MouthRight` 0.956 |
 | `mouthRollLower` | 下唇向内卷 |  | `mouthRollLower` 0.165 | `MouthRollLower` 0.488 |
 | `mouthRollUpper` | 上唇向内卷 |  | `mouthRollUpper` 0.159 | `MouthRollUpper` 0.243 |
-| `mouthShrugUpper` | 上唇向外（耸） | 安卓：**基本不动**（噪声底）；苹果：正常 | `mouthShrugUpper` 0.039 **WEAK** | `MouthShrugUpper` 0.556 |
+| `mouthShrugUpper` | 上唇向外（耸） | 安卓：**基本不动**（range 0.039，噪声底）；苹果：正常 | `mouthShrugUpper` 0.039 **WEAK** | `MouthShrugUpper` 0.556 |
 | `mouthSmileLeft` | 左嘴角向上 |  | `mouthSmile_L` 0.911 | `MouthSmileLeft` 0.739 |
 | `mouthSmileRight` | 右嘴角向上 |  | `mouthSmile_R` 0.842 | `MouthSmileRight` 0.741 |
 | `mouthUpperUpLeft` | 左侧上唇向上 |  | `mouthUpperUp_L` 0.163 | `MouthUpperUpLeft` 0.384 |
@@ -126,23 +124,62 @@
 | `rotation_z` | 头姿 Z（度） |  | `Rotation_z` 33.430 | `Rotation_z` 26.411 |
 | `timestamp` | UNIX 毫秒时间戳（float 装不下，只够看大概） |  | `Timestamp` 3000000.000 | `Timestamp` 1000000.000 |
 | `tongueOut` | 伸舌 | **要明显伸到位**（95%+ 帧贴地，但能到 1.0） | `tongueOut` 0.330 | `TongueOut` 1.000 |
-| `cheekSquintLeft` | 左眼下方/周围颊部上抬 |  | — **不发** | `CheekSquintLeft` 0.338 |
-| `cheekSquintRight` | 右眼下方/周围颊部上抬 |  | — **不发** | `CheekSquintRight` 0.315 |
-| `jawForward` | 下颌前伸 | **要张嘴**（闭嘴时几乎不给值） | — **不发** | `JawForward` 0.420 |
-| `mouthClose` | **双唇闭合**（与下颌无关，独立于 jawOpen） |  | — **不发** | `MouthClose` 0.130 |
-| `mouthDimpleLeft` | 左嘴角向后拉（酒窝） |  | — **不发** | `MouthDimpleLeft` 0.382 |
-| `mouthDimpleRight` | 右嘴角向后拉 |  | — **不发** | `MouthDimpleRight` 0.367 |
-| `mouthPressLeft` | 左侧下唇向上压 |  | — **不发** | `MouthPressLeft` 0.414 |
-| `mouthPressRight` | 右侧下唇向上压 |  | — **不发** | `MouthPressRight` 0.421 |
-| `mouthShrugLower` | 下唇向外（耸） |  | — **不发** | `MouthShrugLower` 0.638 |
-| `mouthStretchLeft` | 左嘴角向左 |  | — **不发** | `MouthStretchLeft` 0.713 |
-| `mouthStretchRight` | 右嘴角向右（⚠️ Unity 官方英文描述写成 "left corner"，是官方笔误） |  | — **不发** | `MouthStretchRight` 0.815 |
+| `cheekSquintLeft` | 左眼下方/周围颊部上抬 |  | — **安卓不发** | `CheekSquintLeft` 0.338 |
+| `cheekSquintRight` | 右眼下方/周围颊部上抬 |  | — **安卓不发** | `CheekSquintRight` 0.315 |
+| `jawForward` | 下颌前伸 | **要张嘴**（闭嘴时几乎不给值） | — **安卓不发** | `JawForward` 0.420 |
+| `mouthClose` | **双唇闭合**（与下颌无关，独立于 jawOpen） |  | — **安卓不发** | `MouthClose` 0.130 |
+| `mouthDimpleLeft` | 左嘴角向后拉（酒窝） |  | — **安卓不发** | `MouthDimpleLeft` 0.382 |
+| `mouthDimpleRight` | 右嘴角向后拉 |  | — **安卓不发** | `MouthDimpleRight` 0.367 |
+| `mouthPressLeft` | 左侧下唇向上压 |  | — **安卓不发** | `MouthPressLeft` 0.414 |
+| `mouthPressRight` | 右侧下唇向上压 |  | — **安卓不发** | `MouthPressRight` 0.421 |
+| `mouthShrugLower` | 下唇向外（耸） |  | — **安卓不发** | `MouthShrugLower` 0.638 |
+| `mouthStretchLeft` | 左嘴角向左 |  | — **安卓不发** | `MouthStretchLeft` 0.713 |
+| `mouthStretchRight` | 右嘴角向右（⚠️ Unity 官方英文描述写成 "left corner"，是官方笔误） |  | — **安卓不发** | `MouthStretchRight` 0.815 |
 <!-- END GENERATED SEMANTICS -->
 
 ⚠️ **两条判据的坑**（同一个坑踩了三次，别再踩）：
 JawRight 在 114 帧时 range 只有 0.043（判 WEAK），到 120 帧变成 **0.600**；
 MouthRight 同样 0.020 → **0.480**；TongueOut 更早还被判过"不给值"，实际能到 **1.000**。
 ⇒ **看到 WEAK / NEVER-MOVES 要连着"我做了那个动作没有、有没有配对做、采了多少帧"一起看。**
+### 0.3 `head*` 那 6 条到底是什么（安卓独有）
+
+用户的问题：**它是"位移"还是"旋转"？** 用安卓自己的 223 帧数据判：
+
+**① 跟旋转走，不跟位移走** —— 单变量回归的 R²（取值域 0..1 的 `head*` 当因变量）：
+
+| head 线 | 最强旋转项 | R² | 最强位移项 | R² |
+|---|---|---|---|---|
+| `headUp` | `Rotation_y` | **0.601** | `Position_y` | 0.218 |
+| `headLeft` | `Rotation_x` | **0.512** | `Position_x` | **0.003** |
+| `headRight` | `Rotation_x` | **0.645** | `Position_z` | 0.054 |
+| `headRollLeft` | `Rotation_z` | **0.767** | `Position_x` | 0.037 |
+| `headRollRight` | `Rotation_z` | **0.486** | `Position_y` | 0.012 |
+| `headDown` | `Rotation_y` | 0.059 | `Position_z` | 0.001 |
+
+最硬的是 `headLeft` vs `Position_x`：**R² = 0.003**（基本零），而 vs `Rotation_x` 是 0.512。
+六条里五条"旋转"都比"位移"好一个量级。⇒ **是旋转族。**
+
+（`headUp` 控制住旋转后 `Position_y` 还残留 −0.42~−0.51 —— 那不是位移，是**低头/抬头时
+脸相对相机原点会前后移**的几何耦合，加上两个通道各自的延迟/噪声。）
+
+**② 但"是旋转"不等于"能从 `Rotation_*` 换算出来"** —— 拟合不上：
+
+```
+headLeft  ≈ clamp01(a·( Rotation_x - d))  最佳 a=0.08  d=5 → 平均误差 0.119
+headRight ≈ clamp01(a·(-Rotation_x - d))  最佳 a=0.10  d=5 → 平均误差 0.058
+headUp    ≈ clamp01(a·( Rotation_y - d))  最佳 a=0.005 d=5 → 平均误差 0.253
+headDown  ≈ ...                                          → 平均误差 0.866  ← 满量程 1.0
+headRollLeft / headRollRight                             → 0.047 / 0.112
+```
+
+`headDown` 的误差 0.87 等于完全没用。而且**量纲根本不同**：`head*` 是 **0..1**、
+`Rotation_*` 是**度**（±70 这种量级）。
+
+**③ 能力上没有差别**（这一条要说清，我先前表述错过一次）
+`Rotation_x/y/z`（旋转）与 `Position_x/y/z`（位移）**两台都发**，所以**表达头姿/头位两边都够**。
+`head*` 只是**安卓多给的一份**：旋转系的 0..1 归一化、按左右/上下/倾拆成六条单边通道。
+⇒ 苹果要头姿就用 `Rotation_x/y/z` 的**原始度数**；要 `head*` 那种 0..1 形式，就**自己在中间层写表达式**，
+而标定系数**只能拿那台设备自己采的数据定**（跨设备抄会错，理由就是上面那张表）。
 ---
 
 ## 1. 安卓 VTS（`androidVTS`）
@@ -359,73 +396,73 @@ MouthRight 同样 0.020 → **0.480**；TongueOut 更早还被判过"不给值"�
 <!-- BEGIN GENERATED STATS iphoneVTS -->
 | wire | n | mean | std | min | max | range | near-zero % | status |
 |---|---|---|---|---|---|---|---|---|
-| `Hotkey` | 120 | -1.0000 | 0.0000 | -1.0000 | -1.0000 | 0.0000 | 0.0 | CONSTANT-NONZERO |
-| `FaceFound` | 120 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 0.0000 | 0.0 | CONSTANT-NONZERO |
-| `Timestamp` | 120 | 1790353000000.0000 | 69511.4250 | 1790353000000.0000 | 1790353000000.0000 | 0.0000 | 0.0 | CONSTANT-NONZERO |
-| `Rotation_x` | 120 | -2.8858 | 4.7702 | -18.8103 | 20.3082 | 39.1185 | 0.0 | MOVES |
-| `EyeLeft_y` | 120 | 1.2160 | 4.0407 | -8.9685 | 28.8086 | 37.7771 | 0.0 | MOVES |
-| `EyeRight_y` | 120 | 5.8221 | 3.9478 | -4.3411 | 31.9154 | 36.2565 | 0.0 | MOVES |
-| `Rotation_y` | 120 | 22.8676 | 8.4024 | 3.4716 | 35.8134 | 32.3418 | 0.0 | MOVES |
-| `EyeLeft_x` | 120 | 11.7344 | 6.4134 | -5.3275 | 21.7084 | 27.0359 | 0.0 | MOVES |
-| `EyeRight_x` | 120 | 11.6252 | 6.3555 | -5.2637 | 21.4694 | 26.7331 | 0.0 | MOVES |
-| `Rotation_z` | 120 | 1.7642 | 2.5383 | -10.4664 | 12.6969 | 23.1633 | 0.0 | MOVES |
-| `Position_x` | 120 | 2.0334 | 2.1169 | -5.1035 | 8.5080 | 13.6115 | 0.0 | MOVES |
-| `Position_y` | 120 | -3.6830 | 1.4256 | -6.4799 | -0.5312 | 5.9487 | 0.0 | MOVES |
-| `Position_z` | 120 | -3.3284 | 0.6314 | -5.3572 | -0.8569 | 4.5003 | 0.0 | MOVES |
-| `EyeRight_z` | 120 | 1.0636 | 0.7367 | -0.9162 | 2.9883 | 3.9045 | 0.8 | MOVES |
-| `EyeLeft_z` | 120 | 0.2035 | 0.4825 | -1.8706 | 1.7939 | 3.6645 | 0.0 | MOVES |
-| `TongueOut` | 120 | 0.0417 | 0.1998 | 0.0000 | 1.0000 | 1.0000 | 95.0 | MOVES |
-| `MouthLeft` | 120 | 0.0125 | 0.0880 | 0.0000 | 0.9645 | 0.9645 | 56.7 | MOVES |
-| `EyeLookInRight` | 120 | 0.1644 | 0.1089 | 0.0000 | 0.9106 | 0.9106 | 2.5 | MOVES |
-| `MouthPucker` | 120 | 0.1832 | 0.1193 | 0.0429 | 0.9279 | 0.8850 | 0.0 | MOVES |
-| `EyeLookOutLeft` | 120 | 0.0448 | 0.1050 | 0.0000 | 0.8218 | 0.8218 | 31.7 | MOVES |
-| `MouthStretchRight` | 120 | 0.1750 | 0.2144 | 0.0315 | 0.8460 | 0.8145 | 0.0 | MOVES |
-| `JawOpen` | 120 | 0.1200 | 0.2012 | 0.0016 | 0.8046 | 0.8030 | 0.0 | MOVES |
-| `MouthSmileRight` | 120 | 0.1021 | 0.1422 | 0.0000 | 0.7409 | 0.7409 | 12.5 | MOVES |
-| `MouthSmileLeft` | 120 | 0.0893 | 0.1461 | 0.0000 | 0.7387 | 0.7387 | 26.7 | MOVES |
-| `MouthLowerDownLeft` | 120 | 0.1210 | 0.1777 | 0.0087 | 0.7288 | 0.7201 | 0.0 | MOVES |
-| `MouthStretchLeft` | 120 | 0.1712 | 0.1785 | 0.0327 | 0.7460 | 0.7133 | 0.0 | MOVES |
-| `MouthLowerDownRight` | 120 | 0.1300 | 0.1948 | 0.0085 | 0.7059 | 0.6974 | 0.0 | MOVES |
-| `BrowDownRight` | 120 | 0.1865 | 0.1441 | 0.0000 | 0.6567 | 0.6567 | 8.3 | MOVES |
-| `BrowDownLeft` | 120 | 0.1875 | 0.1453 | 0.0000 | 0.6567 | 0.6567 | 8.3 | MOVES |
-| `MouthShrugLower` | 120 | 0.2353 | 0.1272 | 0.0433 | 0.6817 | 0.6384 | 0.0 | MOVES |
-| `JawRight` | 120 | 0.0294 | 0.1257 | 0.0000 | 0.6002 | 0.6002 | 84.2 | MOVES |
-| `EyeLookDownLeft` | 120 | 0.3093 | 0.1493 | 0.0000 | 0.5590 | 0.5590 | 9.2 | MOVES |
-| `EyeLookDownRight` | 120 | 0.3079 | 0.1486 | 0.0000 | 0.5561 | 0.5561 | 9.2 | MOVES |
-| `MouthShrugUpper` | 120 | 0.1790 | 0.1019 | 0.0495 | 0.5988 | 0.5493 | 0.0 | MOVES |
-| `EyeBlinkLeft` | 120 | 0.0941 | 0.0915 | 0.0000 | 0.5133 | 0.5133 | 21.7 | MOVES |
-| `EyeBlinkRight` | 120 | 0.0942 | 0.0910 | 0.0000 | 0.5113 | 0.5113 | 21.7 | MOVES |
-| `MouthRollLower` | 120 | 0.0635 | 0.0579 | 0.0114 | 0.4995 | 0.4881 | 0.0 | MOVES |
-| `MouthRight` | 120 | 0.0219 | 0.0839 | 0.0000 | 0.4799 | 0.4799 | 49.2 | MOVES |
-| `CheekPuff` | 120 | 0.0551 | 0.0797 | 0.0034 | 0.4427 | 0.4393 | 0.0 | MOVES |
-| `MouthPressRight` | 120 | 0.1270 | 0.0820 | 0.0375 | 0.4580 | 0.4205 | 0.0 | MOVES |
-| `JawForward` | 120 | 0.0549 | 0.0814 | 0.0007 | 0.4208 | 0.4201 | 0.0 | MOVES |
-| `MouthPressLeft` | 120 | 0.1207 | 0.0797 | 0.0339 | 0.4475 | 0.4136 | 0.0 | MOVES |
-| `NoseSneerLeft` | 120 | 0.1873 | 0.0766 | 0.0926 | 0.5030 | 0.4104 | 0.0 | MOVES |
-| `MouthUpperUpRight` | 120 | 0.0865 | 0.1031 | 0.0181 | 0.4032 | 0.3851 | 0.0 | MOVES |
-| `MouthUpperUpLeft` | 120 | 0.0806 | 0.0928 | 0.0183 | 0.4023 | 0.3840 | 0.0 | MOVES |
-| `MouthDimpleLeft` | 120 | 0.0690 | 0.0549 | 0.0119 | 0.3915 | 0.3796 | 0.0 | MOVES |
-| `NoseSneerRight` | 120 | 0.1782 | 0.0688 | 0.0845 | 0.4535 | 0.3690 | 0.0 | MOVES |
-| `MouthDimpleRight` | 120 | 0.0699 | 0.0544 | 0.0117 | 0.3764 | 0.3647 | 0.0 | MOVES |
-| `JawLeft` | 120 | 0.0189 | 0.0326 | 0.0000 | 0.3436 | 0.3436 | 17.5 | MOVES |
-| `CheekSquintLeft` | 120 | 0.0885 | 0.0578 | 0.0267 | 0.3643 | 0.3376 | 0.0 | MOVES |
-| `MouthFunnel` | 120 | 0.0443 | 0.0497 | 0.0004 | 0.3298 | 0.3294 | 0.8 | MOVES |
-| `EyeWideLeft` | 120 | 0.0386 | 0.0699 | 0.0000 | 0.3281 | 0.3281 | 62.5 | MOVES |
-| `EyeSquintRight` | 120 | 0.0675 | 0.0508 | 0.0147 | 0.3327 | 0.3180 | 0.0 | MOVES |
-| `EyeSquintLeft` | 120 | 0.0677 | 0.0514 | 0.0147 | 0.3326 | 0.3179 | 0.0 | MOVES |
-| `CheekSquintRight` | 120 | 0.0814 | 0.0457 | 0.0231 | 0.3380 | 0.3149 | 0.0 | MOVES |
-| `EyeWideRight` | 120 | 0.0371 | 0.0675 | 0.0000 | 0.2793 | 0.2793 | 63.3 | MOVES |
-| `EyeLookInLeft` | 120 | 0.0107 | 0.0342 | 0.0000 | 0.2507 | 0.2507 | 70.0 | MOVES |
-| `MouthRollUpper` | 120 | 0.0192 | 0.0227 | 0.0084 | 0.2505 | 0.2421 | 0.0 | MOVES |
-| `BrowInnerUp` | 120 | 0.0754 | 0.0488 | 0.0225 | 0.2502 | 0.2277 | 0.0 | MOVES |
-| `EyeLookUpLeft` | 120 | 0.0096 | 0.0368 | 0.0000 | 0.1922 | 0.1922 | 91.7 | MOVES |
-| `EyeLookUpRight` | 120 | 0.0096 | 0.0367 | 0.0000 | 0.1910 | 0.1910 | 91.7 | MOVES |
-| `MouthFrownRight` | 120 | 0.0052 | 0.0240 | 0.0000 | 0.1896 | 0.1896 | 88.3 | MOVES |
-| `MouthFrownLeft` | 120 | 0.0073 | 0.0211 | 0.0000 | 0.1590 | 0.1590 | 74.2 | MOVES |
-| `MouthClose` | 120 | 0.0347 | 0.0221 | 0.0120 | 0.1357 | 0.1237 | 0.0 | MOVES |
-| `EyeLookOutRight` | 120 | 0.0017 | 0.0121 | 0.0000 | 0.1212 | 0.1212 | 97.5 | MOVES |
-| `BrowOuterUpLeft` | 120 | 0.0064 | 0.0232 | 0.0000 | 0.1098 | 0.1098 | 91.7 | MOVES |
-| `BrowOuterUpRight` | 120 | 0.0050 | 0.0184 | 0.0000 | 0.1036 | 0.1036 | 91.7 | MOVES |
+| `Hotkey` | 203 | -1.0000 | 0.0000 | -1.0000 | -1.0000 | 0.0000 | 0.0 | CONSTANT-NONZERO |
+| `FaceFound` | 203 | 1.0000 | 0.0000 | 1.0000 | 1.0000 | 0.0000 | 0.0 | CONSTANT-NONZERO |
+| `Timestamp` | 203 | 1790353364532.0200 | 482146.3522 | 1790353000000.0000 | 1790354000000.0000 | 1000000.0000 | 0.0 | MOVES |
+| `Rotation_y` | 203 | 19.8148 | 10.8402 | -12.2160 | 35.8134 | 48.0294 | 0.0 | MOVES |
+| `EyeLeft_y` | 203 | 0.7222 | 3.9319 | -18.0250 | 28.8086 | 46.8336 | 0.0 | MOVES |
+| `EyeRight_y` | 203 | 5.3375 | 3.8938 | -13.6361 | 31.9154 | 45.5515 | 0.0 | MOVES |
+| `Rotation_x` | 203 | -2.2798 | 4.2309 | -18.8103 | 20.3082 | 39.1185 | 0.0 | MOVES |
+| `EyeLeft_x` | 203 | 12.5472 | 5.8890 | -9.2143 | 21.7084 | 30.9227 | 0.0 | MOVES |
+| `EyeRight_x` | 203 | 12.4473 | 5.8416 | -9.1777 | 21.4694 | 30.6471 | 0.0 | MOVES |
+| `Rotation_z` | 203 | 1.7782 | 3.4447 | -13.7145 | 12.6969 | 26.4114 | 0.0 | MOVES |
+| `Position_x` | 203 | 2.5690 | 2.6849 | -5.1365 | 10.6234 | 15.7599 | 0.0 | MOVES |
+| `EyeRight_z` | 203 | 1.0344 | 0.7973 | -3.1222 | 2.9883 | 6.1105 | 0.5 | MOVES |
+| `Position_y` | 203 | -3.6394 | 1.2222 | -6.4799 | -0.5312 | 5.9487 | 0.0 | MOVES |
+| `EyeLeft_z` | 203 | 0.1189 | 0.6240 | -4.0640 | 1.8065 | 5.8705 | 0.0 | MOVES |
+| `Position_z` | 203 | -3.1264 | 0.6606 | -5.6101 | -0.8569 | 4.7532 | 0.0 | MOVES |
+| `TongueOut` | 203 | 0.0246 | 0.1550 | 0.0000 | 1.0000 | 1.0000 | 97.0 | MOVES |
+| `MouthLeft` | 203 | 0.0259 | 0.1431 | 0.0000 | 0.9645 | 0.9645 | 58.1 | MOVES |
+| `MouthRight` | 203 | 0.0233 | 0.1117 | 0.0000 | 0.9555 | 0.9555 | 47.8 | MOVES |
+| `EyeLookInRight` | 203 | 0.1545 | 0.0936 | 0.0000 | 0.9106 | 0.9106 | 3.4 | MOVES |
+| `MouthPucker` | 203 | 0.1992 | 0.1208 | 0.0429 | 0.9279 | 0.8850 | 0.0 | MOVES |
+| `EyeLookOutLeft` | 203 | 0.0374 | 0.0860 | 0.0000 | 0.8218 | 0.8218 | 36.0 | MOVES |
+| `MouthStretchRight` | 203 | 0.1292 | 0.1754 | 0.0315 | 0.8460 | 0.8145 | 0.0 | MOVES |
+| `JawOpen` | 203 | 0.0833 | 0.1629 | 0.0016 | 0.8046 | 0.8030 | 0.0 | MOVES |
+| `MouthSmileRight` | 203 | 0.0739 | 0.1162 | 0.0000 | 0.7409 | 0.7409 | 18.7 | MOVES |
+| `MouthSmileLeft` | 203 | 0.0618 | 0.1183 | 0.0000 | 0.7387 | 0.7387 | 30.5 | MOVES |
+| `MouthLowerDownLeft` | 203 | 0.0838 | 0.1447 | 0.0045 | 0.7288 | 0.7243 | 0.0 | MOVES |
+| `MouthStretchLeft` | 203 | 0.1313 | 0.1488 | 0.0327 | 0.7460 | 0.7133 | 0.0 | MOVES |
+| `MouthLowerDownRight` | 203 | 0.0890 | 0.1586 | 0.0018 | 0.7059 | 0.7041 | 0.0 | MOVES |
+| `BrowDownRight` | 203 | 0.1802 | 0.1278 | 0.0000 | 0.6567 | 0.6567 | 6.4 | MOVES |
+| `BrowDownLeft` | 203 | 0.1822 | 0.1287 | 0.0000 | 0.6567 | 0.6567 | 6.4 | MOVES |
+| `MouthShrugLower` | 203 | 0.2427 | 0.1172 | 0.0433 | 0.6817 | 0.6384 | 0.0 | MOVES |
+| `JawRight` | 203 | 0.0189 | 0.0986 | 0.0000 | 0.6002 | 0.6002 | 89.7 | MOVES |
+| `EyeLookDownLeft` | 203 | 0.3297 | 0.1346 | 0.0000 | 0.5590 | 0.5590 | 6.9 | MOVES |
+| `EyeLookDownRight` | 203 | 0.3284 | 0.1341 | 0.0000 | 0.5561 | 0.5561 | 6.9 | MOVES |
+| `MouthShrugUpper` | 203 | 0.1835 | 0.0917 | 0.0431 | 0.5988 | 0.5557 | 0.0 | MOVES |
+| `CheekPuff` | 203 | 0.0572 | 0.0837 | 0.0034 | 0.5172 | 0.5138 | 0.0 | MOVES |
+| `EyeBlinkLeft` | 203 | 0.1068 | 0.0812 | 0.0000 | 0.5133 | 0.5133 | 14.3 | MOVES |
+| `EyeBlinkRight` | 203 | 0.1059 | 0.0799 | 0.0000 | 0.5113 | 0.5113 | 14.3 | MOVES |
+| `EyeLookInLeft` | 203 | 0.0171 | 0.0603 | 0.0000 | 0.5025 | 0.5025 | 65.0 | MOVES |
+| `MouthRollLower` | 203 | 0.0587 | 0.0513 | 0.0114 | 0.4995 | 0.4881 | 0.0 | MOVES |
+| `MouthPressRight` | 203 | 0.1268 | 0.0713 | 0.0375 | 0.4580 | 0.4205 | 0.0 | MOVES |
+| `JawForward` | 203 | 0.0376 | 0.0662 | 0.0007 | 0.4208 | 0.4201 | 0.0 | MOVES |
+| `NoseSneerLeft` | 203 | 0.1694 | 0.0689 | 0.0886 | 0.5030 | 0.4144 | 0.0 | MOVES |
+| `MouthPressLeft` | 203 | 0.1205 | 0.0693 | 0.0339 | 0.4475 | 0.4136 | 0.0 | MOVES |
+| `MouthUpperUpRight` | 203 | 0.0646 | 0.0845 | 0.0173 | 0.4032 | 0.3859 | 0.0 | MOVES |
+| `MouthUpperUpLeft` | 203 | 0.0615 | 0.0760 | 0.0183 | 0.4023 | 0.3840 | 0.0 | MOVES |
+| `MouthDimpleLeft` | 203 | 0.0571 | 0.0487 | 0.0096 | 0.3915 | 0.3819 | 0.0 | MOVES |
+| `EyeLookOutRight` | 203 | 0.0056 | 0.0398 | 0.0000 | 0.3795 | 0.3795 | 96.6 | MOVES |
+| `NoseSneerRight` | 203 | 0.1628 | 0.0628 | 0.0845 | 0.4535 | 0.3690 | 0.0 | MOVES |
+| `MouthDimpleRight` | 203 | 0.0577 | 0.0486 | 0.0096 | 0.3764 | 0.3668 | 0.0 | MOVES |
+| `JawLeft` | 203 | 0.0193 | 0.0266 | 0.0000 | 0.3436 | 0.3436 | 11.3 | MOVES |
+| `CheekSquintLeft` | 203 | 0.0798 | 0.0575 | 0.0267 | 0.3643 | 0.3376 | 0.0 | MOVES |
+| `EyeLookUpLeft` | 203 | 0.0087 | 0.0389 | 0.0000 | 0.3320 | 0.3320 | 93.6 | MOVES |
+| `EyeLookUpRight` | 203 | 0.0086 | 0.0388 | 0.0000 | 0.3314 | 0.3314 | 93.6 | MOVES |
+| `MouthFunnel` | 203 | 0.0379 | 0.0462 | 0.0004 | 0.3298 | 0.3294 | 0.5 | MOVES |
+| `EyeWideLeft` | 203 | 0.0249 | 0.0580 | 0.0000 | 0.3281 | 0.3281 | 74.4 | MOVES |
+| `EyeSquintLeft` | 203 | 0.0604 | 0.0493 | 0.0147 | 0.3366 | 0.3219 | 0.0 | MOVES |
+| `EyeSquintRight` | 203 | 0.0603 | 0.0490 | 0.0147 | 0.3365 | 0.3218 | 0.0 | MOVES |
+| `CheekSquintRight` | 203 | 0.0724 | 0.0406 | 0.0231 | 0.3380 | 0.3149 | 0.0 | MOVES |
+| `BrowInnerUp` | 203 | 0.0672 | 0.0473 | 0.0225 | 0.3188 | 0.2963 | 0.0 | MOVES |
+| `EyeWideRight` | 203 | 0.0241 | 0.0562 | 0.0000 | 0.2793 | 0.2793 | 75.4 | MOVES |
+| `MouthRollUpper` | 203 | 0.0173 | 0.0180 | 0.0079 | 0.2505 | 0.2426 | 0.0 | MOVES |
+| `MouthFrownLeft` | 203 | 0.0126 | 0.0328 | 0.0000 | 0.2300 | 0.2300 | 70.4 | MOVES |
+| `MouthFrownRight` | 203 | 0.0111 | 0.0398 | 0.0000 | 0.2237 | 0.2237 | 81.8 | MOVES |
+| `MouthClose` | 203 | 0.0315 | 0.0225 | 0.0062 | 0.1357 | 0.1295 | 0.0 | MOVES |
+| `BrowOuterUpLeft` | 203 | 0.0049 | 0.0199 | 0.0000 | 0.1098 | 0.1098 | 93.6 | MOVES |
+| `BrowOuterUpRight` | 203 | 0.0040 | 0.0165 | 0.0000 | 0.1036 | 0.1036 | 93.6 | MOVES |
 <!-- END GENERATED STATS iphoneVTS -->
 
 ---
@@ -473,13 +510,20 @@ MouthRight 同样 0.020 → **0.480**；TongueOut 更早还被判过"不给值"�
 
 ⚠️ 所以包里是**两份参考预设**（`ho-debug-androidVTS` / `ho-debug-iphoneVTS`），
 各自**只列自己做实测发过的线**。往中间层加"真实转化"时，**两边各写一套**。
-## 4. 怎么刷新这张表
+## 4. 怎么刷新这些表
 
 ```powershell
-# 从 Player.log 的自动 dump 统计（-Markdown 直接产出可粘贴的表格块）
+# 一条命令刷新**本文件里全部三张生成表**（§0.2 语义表 + §1.3/§2.3 两张统计表）
+& D:\Unity_Fork\HoUnityTools\.warudo-mod-research\.tools\gen-verif-tables.ps1
+
+# 只想看/只要一份设备的统计表时：
 & D:\Unity_Fork\HoUnityTools\.warudo-mod-research\.tools\analyze-dump-stats.ps1 `
     -Device androidVTS -Markdown <输出文件>
 ```
+
+⚠️ 手工改生成表会在下次重跑时被覆盖 —— 要改就改数据源：
+数字来自 `Player.log`、ARKit 语义来自 `PARAMETER_STANDARDS.md` §3.1、
+"触发情况"与标量语义来自 `.warudo-mod-research/.tools/verification-meanings.txt`。
 
 输出里同时会给一行 `identity : ... comparable with the same frame raw | equal N | differs M` ——
 那是"值直通"的核对。它只比**同一次求值里两边都有**的键（出口字典里还可能有设备线名之外的键），
@@ -487,5 +531,5 @@ MouthRight 同样 0.020 → **0.480**；TongueOut 更早还被判过"不给值"�
 `differs` 不为 0 时要分清是**变换**还是**取数时机**——§1 里那 149 条就是
 `Timestamp`（float 精度）与 `EyeBlinkLeft`（上升沿的时间差）两类，都不是变换。
 
-**参考预设怎么生成**：`.warudo-mod-research/.tools/gen-device-profile.ps1`
-（`-Wires` 传线名，就是本表 `wire` 那一列；一份设备一份，别互相套用）。
+**参考预设**（`ho-debug-*.hoface.json`）就是这些表的 `wire` 列 ——
+纯直通、零改名、两层宽曲线，一份设备一份，**别互相套用**。

@@ -620,7 +620,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 * **iPhone VTS 是另一种（干净的）方言**（2026-09-25 实测 67 键）：形状那一半是**纯 VTS PascalCase**
   （`JawOpen` / `MouthSmileLeft`…），**52 个形状全部到位、0 个对不上**；标量那半边两台**同名**。
   对应配置：`ho-debug-iphoneVTS.hoface.json`。两者都在包内 `Editor/FaceTracking/Profiles/`，
-  由 `.warudo-mod-research/.tools/gen-device-profile.ps1` 生成（名字取自源码与 catalog，不手抄）。
+  由 `.warudo-mod-research/.tools/gen-default-profile.ps1` 生成（名字取自源码与 catalog，不手抄）。
 * **出处**：协议来自官方仓库 <https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest>
   （README 原话 "Apps like VSeeFace and VBridger use this."；载荷定义 `VTubeStudioRawTrackingData.cs`）——
   **是官方给的，不是逆向出来的**（原记录见 `Core/HoVtsIphoneReceiver.cs:8-20`）；

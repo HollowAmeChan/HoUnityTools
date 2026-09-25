@@ -1,4 +1,4 @@
-# 配置层（Profiles）
+﻿# 配置层（Profiles）
 
 这里放**发货用的中间层配置**（`*.hoface.json`），当成一个仓库用。
 
@@ -22,8 +22,9 @@
 
 ```powershell
 & .warudo-mod-research\.tools\gen-default-profile.ps1
-$wires = @('BrowDownLeft', 'BrowDownRight', '…')   # 从 PARAMETER_DEVICE_VERIFICATION.md 的 wire 列抄
-& .warudo-mod-research\.tools\gen-device-profile.ps1 -Device androidVTS -Wires $wires -Notes $n
+# 设备那两份（纯直通参考预设）的内容 = PARAMETER_DEVICE_VERIFICATION.md 里对应表的 wire 列。
+# 改线名就改那份文档的实测表，然后：
+& .warudo-mod-research\.tools\gen-verif-tables.ps1     # 刷新文档里的生成表
 ```
 
 ⚠️ **设备那两份的线名是实测抄下来的**（`docs/PARAMETER_DEVICE_VERIFICATION.md` 的 `wire` 列），
