@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using Hollow.HoUnityTools.Editor.Constraints;
@@ -456,7 +456,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     case HoFaceModifierKind.Smooth: parts.Add("平滑 " + modifier.seconds.ToString("0.##") + "s"); break;
                     case HoFaceModifierKind.Delay: parts.Add("延迟 " + modifier.seconds.ToString("0.##") + "s"); break;
-                    case HoFaceModifierKind.Steps: parts.Add("分档 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 档"); break;
+                    case HoFaceModifierKind.Steps: parts.Add("维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"); break;
                 }
             }
             return parts.Count == 0 ? "—" : string.Join(" → ", parts.ToArray());

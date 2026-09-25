@@ -183,7 +183,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         ///
         /// 为什么要它：<see cref="Caption"/> 的宽度是"量出来多宽就多宽"，放在一行里会把整行
         /// 撑到超过视口宽，于是右边的 <c>ScrollView</c> 长出**横向滚动条**。
-        /// 窗口里那些"（这个修饰符现在不起作用）""还没实现，装配时会跳过"正是这种长文案。
+        /// 窗口里那些"（不起作用）""控制器里没有就跳过"正是这种长文案。
         /// 换成本方法之后，窄窗口下它会缩、会截断，而**行本身仍然装得下**。
         /// </summary>
         public static void CaptionTrim(string text, float maxWidth = 160.0f, string tooltip = null)

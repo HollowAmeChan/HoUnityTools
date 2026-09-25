@@ -347,7 +347,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoFaceNaming.cs` | 参数命名规则的**唯一出处**（`Ho/Drive/...`）。只剩"要有哪些参数"；树的形状、每格写什么键不由代码规定 |
 | `HoFaceTrackingChannels.cs` | 52 个 ARKit 规范名、`_L/_R` 别名表、区域与平滑分组、**输入通道**（模式 / 手动 / 中性 / 输入曲线） |
 | `HoFaceExpression.cs` | 表达式求值器（递归下降；语法照 VBridger：函数表 / 惰性 `if` / 非有限折 0） |
-| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 分档；以及 `HoFaceMiddlewareDefaults`（只剩「新建配置的初始内容 / 导出文本 / 验证夹具」三个角色，**运行期不走它**） |
+| `HoFaceMiddleware.cs` | 中间层的**数据模型**：一行 = 参数名 + 表达式 + 曲线 + 有序修饰符；曲线求值（**范围外按端点算，不外推**）；修饰符 / 维持；以及 `HoFaceMiddlewareDefaults`（只剩「新建配置的初始内容 / 导出文本 / 验证夹具」三个角色，**运行期不走它**） |
 | `HoFaceProfile.cs` | 配置文件（`.hoface.json`）的格式名与入口（`format: ho-face-middleware` / `version: 2`） |
 | `HoFaceProfileJson.cs` | 配置文件的**自写 JSON 读写器**（`JsonUtility` 已咬过三次，见 §9.2） |
 | `HoJson.cs` | 极小的 JSON **读取器**：我们所有数据路径共用的那一份；未知字段跳过、报错带字符位置、数字用不变文化、容忍 BOM |

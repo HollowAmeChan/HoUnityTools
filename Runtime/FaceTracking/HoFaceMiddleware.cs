@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -49,7 +49,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         [InspectorName("平滑")] Smooth,
         [InspectorName("延迟（未实现）")] Delay,
-        [InspectorName("分档")] Steps
+        [InspectorName("维持")] Steps
     }
 
     /// <summary>
@@ -63,7 +63,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         public HoFaceModifierKind kind = HoFaceModifierKind.Smooth;
         [Tooltip("平滑 / 延迟的时长（秒）。")]
         public float seconds;
-        [Tooltip("分档：按 trigger 从小到大排列。")]
+        [Tooltip("维持：按 trigger 从小到大排列。")]
         public List<HoFaceStep> steps = new List<HoFaceStep>();
 
         /// <summary>这一步用不用得上（参数填了才算）。</summary>
@@ -99,7 +99,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [Tooltip("响应曲线：横轴是表达式的值，纵轴是写出去的值。范围之外按端点算（不外推）。\n"
             + "死区 = 开头压平；增益 = 斜率；软饱和 = 尾部压平。")]
         public AnimationCurve curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
-        [Tooltip("按列出顺序生效的修饰符（平滑 / 分档 / 延迟）。")]
+        [Tooltip("按列出顺序生效的修饰符（平滑 / 维持 / 延迟）。")]
         public List<HoFaceModifier> modifiers = new List<HoFaceModifier>();
         [Tooltip("备注：面板显示用，不参与求值（比如标注这一行属于哪个协议/哪台设备）。")]
         public string notes;

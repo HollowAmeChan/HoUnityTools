@@ -318,7 +318,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// 有序修饰符。按列出顺序生效（照 VBridger 的输出修饰符）：
-        /// 平滑 / 分档（延迟**还没实现**，面板会标出来）。
+        /// 平滑 / 延迟 / 维持，按修饰符链的顺序依次作用。
         /// 输入行与输出行共用这一套实现，只是状态数组各带一份（<paramref name="smooth"/> 等）。
         /// </summary>
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now,
@@ -394,7 +394,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// 分档：参数过 <c>trigger</c> 就跳到 <c>target</c>，往下掉超过 <c>threshold</c> 才退回去，
+        /// 维持：参数过 <c>trigger</c> 就跳到 <c>target</c>，往下掉超过 <c>threshold</c> 才退回去，
         /// 触发后至少保持 <c>hold</c> 秒。没触发任何档时输出 0（等于隐含的"最小档"）。
         /// </summary>
         private float Step(int row, HoFaceModifier modifier, float value, double now, int[] stepRows, double[] stepUntil)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.Editor.Constraints;
 using Hollow.HoUnityTools.Editor.FaceTracking;
@@ -57,6 +58,139 @@ namespace Hollow.HoUnityTools.FaceTracking
             return editingInputs ? middleware.inputs : middleware.outputs;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // 撤销 / 重做
+        //
+        // 为什么不用 Unity 的 `Undo` 系统：它管的是 `UnityEngine.Object`（场景对象、资产）。
+        // 而这里编辑的是一份**普通 C# 对象**（`HoFaceMiddleware`，里面是 `List<T>`），
+        // `Undo.RecordObject` 对它无从下手。所以自己做**整份快照**。
+        //
+        // 快照直接复用 `HoFaceProfile.Write()` —— 就是我们写盘用的那个序列化器，
+        // 于是"撤销回到的东西"与"存盘写出的东西"永远是同一条路径，不会出现
+        // "撤销回了一个连自己都序列化不出来的状态"这种鬼事。代价是每次改动多一次字符串化，
+        // 对一份几十 KB 的配置可以忽略。
+        // ══════════════════════════════════════════════════════════════
+
+        private const int UndoLimit = 64;
+
+        private struct Snapshot
+        {
+            public string Text;         // 整份配置的序列化
+            public bool EditingInputs;  // 当时在编哪一类行
+            public int Selected;        // 当时选中的行号
+        }
+
+        private readonly List<Snapshot> undoStack = new List<Snapshot>();
+        private readonly List<Snapshot> redoStack = new List<Snapshot>();
+
+        /// <summary>
+        /// 在**改动之前**调用：把当前状态压进撤销栈。
+        ///
+        /// <summary>
+        /// **自动记一笔**（每帧调一次，不需要任何改动点配合）。
+        ///
+        /// 怎么想到这么做的：一开始我把 `Checkpoint()` 撒在每个改动点上，结果那个形状是错的 ——
+        /// 每加一个新按钮就得记得补一次，漏一个就"撤销不干净"，而且这种漏**不会报错**。
+        /// 而这一层**本来就有"整份配置的字符串"**（`HoFaceProfile.Write()`，写盘用的那个）。
+        /// 那就拿它当**指纹**：每帧比一次，变了就把上一份推进栈。
+        ///
+        /// 好处是它与 UI 完全解耦：新加什么控件都不用管撤销，改到哪一层都能退。
+        /// 代价是每帧多一次序列化 —— 一份几十 KB 的配置可以忽略（而且只在 Repaint 趟做）。
+        /// </summary>
+        private void RecordIfChanged()
+        {
+            if (middleware == null)
+            {
+                baseline = null;
+                return;
+            }
+
+            string current = HoFaceProfile.Write(middleware);
+            if (baseline == null)
+            {
+                baseline = current;     // 刚载入：先记下起跑线，不产生撤销步
+                return;
+            }
+            if (string.Equals(current, baseline, StringComparison.Ordinal)) return;
+
+            // 变了：把**上一份**记成一步，然后更新基准。
+            undoStack.Add(new Snapshot { Text = baseline, EditingInputs = editingInputs, Selected = selected });
+            if (undoStack.Count > UndoLimit) undoStack.RemoveAt(0);
+            redoStack.Clear();          // 有新改动 = 原来的"重做"分支作废
+            baseline = current;
+        }
+
+        /// <summary>当前配置的指纹（上次记录时的样子）。</summary>
+        private string baseline;
+
+        private bool TryCapture(out Snapshot snapshot)
+        {
+            snapshot = default;
+            if (middleware == null) return false;
+            snapshot = new Snapshot
+            {
+                Text = HoFaceProfile.Write(middleware),
+                EditingInputs = editingInputs,
+                Selected = selected
+            };
+            return true;
+        }
+
+        private bool CanUndo => undoStack.Count > 0;
+        private bool CanRedo => redoStack.Count > 0;
+
+        private void Undo()
+        {
+            if (!CanUndo) return;
+
+            Snapshot current;
+            if (TryCapture(out current)) redoStack.Add(current);
+
+            Snapshot back = undoStack[undoStack.Count - 1];
+            undoStack.RemoveAt(undoStack.Count - 1);
+            Restore(back);
+            SetMessage("撤销（还能退 " + undoStack.Count + " 步）", false);
+        }
+
+        private void Redo()
+        {
+            if (!CanRedo) return;
+
+            Snapshot current;
+            if (TryCapture(out current)) undoStack.Add(current);
+
+            Snapshot forward = redoStack[redoStack.Count - 1];
+            redoStack.RemoveAt(redoStack.Count - 1);
+            Restore(forward);
+            SetMessage("重做（还能进 " + redoStack.Count + " 步）", false);
+        }
+
+        private void Restore(Snapshot snapshot)
+        {
+            HoFaceMiddleware parsed;
+            string error;
+            if (!HoFaceProfile.TryParse(snapshot.Text, out parsed, out error))
+            {
+                // 快照是我们自己写出来的，解析不了就是 bug；宁可吵也别静默丢状态。
+                SetMessage("撤销失败（快照解析不了）：" + error, true);
+                return;
+            }
+
+            middleware = parsed;
+            editingInputs = snapshot.EditingInputs;
+            selected = snapshot.Selected;
+            dirty = true;       // 撤销回到的状态与磁盘未必一致，仍然要允许保存
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        private void ClearHistory()
+        {
+            undoStack.Clear();
+            redoStack.Clear();
+            baseline = null;    // 换了配置 / 重新载入：下次 RecordIfChanged 重新起跑
+        }
+
         /// <summary>交给「需要的输入值」那个窗口扫的配置（它只读，不写）。</summary>
         public HoFaceMiddleware Middleware => middleware;
 
@@ -92,6 +226,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void OnGUI()
         {
+            HandleUndoShortcuts();
+
             using (new EditorGUILayout.VerticalScope())
             {
                 DrawTopBar();
@@ -101,6 +237,12 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (GUI.changed)
                 {
                     dirty = true;
+                }
+
+                // 撤销是**自动**的：不与任何改动点耦合，每帧（重绘趟）比一次指纹。
+                if (Event.current.type == EventType.Repaint)
+                {
+                    RecordIfChanged();
                 }
             }
         }
@@ -215,6 +357,25 @@ namespace Hollow.HoUnityTools.FaceTracking
         // 顶栏
         // ══════════════════════════════════════════════════════════════
 
+        /// <summary>Ctrl/Cmd+Z 撤销、Ctrl/Cmd+Shift+Z 与 Ctrl/Cmd+Y 重做。</summary>
+        private void HandleUndoShortcuts()
+        {
+            Event evt = Event.current;
+            if (evt.type != EventType.KeyDown) return;
+            if (!evt.control && !evt.command) return;   // Windows/Linux 的 Ctrl，macOS 的 Cmd
+
+            if (evt.keyCode == KeyCode.Z)
+            {
+                if (evt.shift) Redo(); else Undo();
+                evt.Use();
+            }
+            else if (evt.keyCode == KeyCode.Y)
+            {
+                Redo();
+                evt.Use();
+            }
+        }
+
         private void DrawTopBar()
         {
             using (HoConstraintEditorControls.Card())
@@ -267,6 +428,19 @@ namespace Hollow.HoUnityTools.FaceTracking
                             ReloadProfile(false);
                     }
 
+                    HoConstraintEditorControls.Gap();
+                    // 撤销 / 重做 —— 与 Ctrl+Z / Ctrl+Shift+Z 同一套（快捷键在 HandleUndoShortcuts）
+                    using (new EditorGUI.DisabledScope(!CanUndo))
+                    {
+                        if (HoConstraintEditorControls.Button("↶ 撤销", "Ctrl+Z。改配置的任何操作都能退。"))
+                            Undo();
+                    }
+                    HoConstraintEditorControls.Gap();
+                    using (new EditorGUI.DisabledScope(!CanRedo))
+                    {
+                        if (HoConstraintEditorControls.Button("↷ 重做", "Ctrl+Shift+Z 或 Ctrl+Y。"))
+                            Redo();
+                    }
                     HoConstraintEditorControls.Flex();
                     if (dirty)
                     {
@@ -714,7 +888,7 @@ HoFaceOutput output = ActiveRows()[index];
             {
                 HoConstraintEditorControls.Label("修饰符", HoConstraintEditorTheme.LabelWidth);
                 HoConstraintEditorControls.CaptionTrim("按列出顺序串在曲线后面", 200.0f,
-                    "按列出顺序串在曲线后面。平滑 / 分档 / 延迟，从上到下依次作用。");
+                    "按列出顺序串在曲线后面。平滑 / 维持 / 延迟，从上到下依次作用。");
             }
 
             DrawModifiers(output);
@@ -843,13 +1017,13 @@ HoFaceOutput output = ActiveRows()[index];
                             (int)modifier.kind,
                             ModifierKindNames,
                             true,       // ⚠️ 必须 true：false 会走 `Dropdown`，而它是**异步**的（见那里的注释），选了不生效
-                            "平滑 / 延迟 / 分档。按从上到下的顺序生效。");
+                            "平滑 / 延迟 / 维持。按从上到下的顺序生效。");
                         modifier.kind = (HoFaceModifierKind)kind;
 
                         if (!modifier.Active)
                         {
                             HoConstraintEditorControls.CaptionTrim("（不起作用）", 80.0f,
-                                "这个修饰符现在不起作用：平滑/延迟的时长是 0，或分档里一步都没有。");
+                                "这个修饰符现在不起作用：平滑/延迟的时长是 0，或维持里一步都没有。");
                         }
 
                         HoConstraintEditorControls.Flex();
@@ -901,7 +1075,7 @@ HoFaceOutput output = ActiveRows()[index];
         {
             using (HoConstraintEditorControls.Row(true))
             {
-                HoConstraintEditorControls.Label("分档", HoConstraintEditorTheme.LabelWidthSm, "参数过触发值就跳到目标值；掉回阈值以下再退回去。");
+                HoConstraintEditorControls.Label("维持", HoConstraintEditorTheme.LabelWidthSm, "参数过触发值就跳到目标值；掉回阈值以下再退回去。");
                 HoConstraintEditorControls.Caption("按触发值从小到大排列", "顺序乱了也能用，但按顺序读更好核对。");
             }
 
@@ -945,7 +1119,7 @@ HoFaceOutput output = ActiveRows()[index];
             }
         }
 
-        private static readonly string[] ModifierKindNames = { "平滑", "延迟", "分档" };
+        private static readonly string[] ModifierKindNames = { "平滑", "延迟", "维持" };
 
         // ══════════════════════════════════════════════════════════════
         // 数据操作
@@ -966,11 +1140,11 @@ HoFaceOutput output = ActiveRows()[index];
         /// **修饰符角标**：这一行挂了哪些修饰符，就在右上角站几个小字。
         ///
         /// 为什么要它：底色只说了"这是原始量（绿）/ 合成量（蓝）"，**说不出这行被加工过什么**。
-        /// 而"这行带平滑、那行带分档"恰恰是调参时最想一眼扫到的（VBridger 也是用角标标在行角上）。
+        /// 而"这行带平滑、那行带维持"恰恰是调参时最想一眼扫到的（VBridger 也是用角标标在行角上）。
         ///
-        /// `平` = 平滑、`延` = 延迟、`档` = 分档。**修饰符链按顺序列出，所以角标也按顺序排** ——
-        /// 顺序本身是有意义的（先平滑再分档 ≠ 先分档再平滑），角标顺序就是它。
-        /// 不起作用的那些（`seconds = 0` 或分档里一步都没有）画暗一档：在链里但没在干活。
+        /// `平` = 平滑、`延` = 延迟、`档` = 维持。**修饰符链按顺序列出，所以角标也按顺序排** ——
+        /// 顺序本身是有意义的（先平滑再维持 ≠ 先维持再平滑），角标顺序就是它。
+        /// 不起作用的那些（`seconds = 0` 或维持里一步都没有）画暗一档：在链里但没在干活。
         /// </summary>
         private static void DrawModifierBadges(Rect rect, HoFaceOutput output)
         {
@@ -988,9 +1162,9 @@ HoFaceOutput output = ActiveRows()[index];
                 string what;
                 switch (modifier.kind)
                 {
-                    case HoFaceModifierKind.Smooth: glyph = "平"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
+                    case HoFaceModifierKind.Smooth: glyph = "滑"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
                     case HoFaceModifierKind.Delay: glyph = "延"; what = "延迟 " + modifier.seconds.ToString("0.###") + " 秒"; break;
-                    default: glyph = "档"; what = "分档 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 档"; break;
+                    default: glyph = "维"; what = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"; break;
                 }
 
                 Rect cell = new Rect(x, rect.y + 1.0f, badge, Mathf.Max(10.0f, rect.height - 2.0f));
@@ -1143,6 +1317,7 @@ ActiveRows().Insert(to, moved);
                 middleware = parsed;
                 selected = -1;
                 dirty = false;
+                ClearHistory();     // 换了一份配置：撤销栈不能带着上一份的历史
                 if (!silent) SetMessage("已重新载入 " + AssetDatabase.GetAssetPath(profile), false);
             }
             else

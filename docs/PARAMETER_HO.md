@@ -586,7 +586,15 @@ EyeY = eyeLookUpLeft  - eyeLookDownLeft
 需要这种"双眼合并注视"的控制器，用 G1 的 `eyeLook*Left/Right` 自己在树里算；
 需要**设备原始眼球标量**的用 G2 的 `EyeLeftX/Y`、`EyeRightX/Y`。
 
-### 4.5 修饰符：我们与 VB 的差别（**平滑是唯一实质差别**）
+### 4.5 修饰符：我们与 VB 的差别
+
+⚠️ **三个名字都是两边各叫各的，别按字面互译**：
+
+| 我们 | VBridger | 备注 |
+|---|---|---|
+| `Smooth` 平滑 | `Smoothing` | 同名同义（单位不同，见下） |
+| `Delay` 延迟 | `Delay` | 同名同义（它的是帧数） |
+| `Steps` **维持** | `Steps` | **英文同词、中文我们重命名过**。VB 英文面板下四个字段是 `Trigger` / `Target` / `Threshold` / `Hold Time`（本地化表核过）。叫"维持"是因为我们看重它**触发后至少保持 hold** 这一面；VB 的原意是"**跳档**"（离散台阶）。两边都对，只是取的角度不同 |
 
 VB 每行有三个**独立开关**（`smoothOn` / `stepOn` / `delayOn`），我们是每行一个**有序列表**
 （`modifiers`，顺序可控）。逐项实测对照：
@@ -597,8 +605,8 @@ VB 每行有三个**独立开关**（`smoothOn` / `stepOn` / `delayOn`），我�
 | 平滑**时间基准** | **按帧**（无时间单位，帧率变了手感就变） | **按秒**（时间常数） | 我们帧率无关，**更稳** |
 | 平滑**用量** | `V3.0`: 20/26 行；`VisemesARKit`: 20/34；`VMC-Face-Head`: 2 行 | **23 / 90 行**（照 VB 换算） | 已对齐 |
 | **延迟** | 帧 FIFO，`delayCount = round(delay × 0.06)`；10 份预设里 `delayOn` **全 false** | **每行一条 FIFO，单位秒**（不跟帧率绑定） | 我们做了，但 VB 从没启用过 |
-| **分档** | `[trigger, target, threshold, hold_ms]`，hold 走 `round(ms × 0.06)` 帧 | `trigger/target/hold/threshold`，hold 用**秒**；有迟滞与最短保持 | 语义接近，单位不同 |
-| 分档**用量** | `V2.0_Stepped`: 24/26 行；`PNGTuber`: 9/10 | **0 行** | 未采用 |
+| **维持**（VB 叫 `Steps`） | `[trigger, target, threshold, hold_ms]`，hold 走 `round(ms × 0.06)` 帧 | `trigger/target/hold/threshold`，hold 用**秒**；有迟滞与最短保持 | 语义接近，单位不同 |
+| 维持**用量** | `V2.0_Stepped`: 24/26 行；`PNGTuber`: 9/10 | **0 行** | 未采用 |
 | **曲线** | 逐行，通常恒等 | 逐行，90 行**全直线** | 一致 |
 | 非恒等曲线 | 全库**只有 1 条**：`EyeRightY`（五份预设共用，零点附近一个浅 S） | 0 条 | 可忽略 |
 | **两层曲线** | 输入曲线在**机器级文件**里（68 条，当前全恒等） | 输入曲线**在配置行里**（15 条标量给了宽范围） | 我们概念上更好 |
@@ -637,7 +645,7 @@ VB 那 20 行里大部分都在这个量级，真正"黏"的只有 `FaceAngle`�
 
 #### 我们与 VB 的两个语义差异（调参时能感觉到）
 
-**① 分档的 `threshold` 定义不同。** 我们把 `threshold` 当"触发阈值上下的迟滞带"
+**① 维持的 `threshold` 定义不同。** 我们把 `threshold` 当"触发阈值上下的迟滞带"
 （`release = trigger − |threshold|`）；VB 里它是"低于当前档触发点时，要掉多少才退"。
 都能防抖，但同一个数字在两边的手感不一样。
 
