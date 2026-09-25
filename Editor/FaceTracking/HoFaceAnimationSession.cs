@@ -79,10 +79,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private GameObject shadowRoot;
         private Animator shadow;
 
-        /// <summary>角色身上的 Connector（中间层算出来的参数往它指向的 Hub 里写）。换角色 / 换引用时重新找。</summary>
-        private HoFaceSemanticConnector semanticConnector;
+        /// <summary>角色身上的 Hub（中间层算出来的参数往它写）。换角色 / 换引用时重新找。</summary>
+        private HoFaceSemanticHub semanticHub;
         private GameObject semanticOwner;
-        /// <summary>这一轮**新声明**的名字（角色 Hub 上刚开出来的槽），只留前几个用来点名。</summary>
+        /// <summary>这一轮**新声明**的名字（角色 Hub 上刚开出来的格），只留前几个用来点名。</summary>
         private readonly List<string> semanticSkipped = new List<string>();
         /// <summary>上一次报过的发布状态（结构变了才重算字符串 + 报一次，免得每帧刷屏）。</summary>
         private string semanticReported;
@@ -309,7 +309,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// 把**中间层这一帧算出来的输出行**按名字写进**角色身上**那片 Hub
-        /// （<see cref="HoFaceSemanticConnector.hub"/>）。
+        /// （<see cref="HoFaceSemanticHub"/>）。
         ///
         /// ⚠️ **默认不写**：由调试设置的 `writeParameterHub` 开关决定（2026-09-26 用户定）——
         /// 调试台不需要这个出口（面板「参数输出」栏就是同一份值），Warudo 侧由「HoFace写动态参数」节点写。
@@ -319,15 +319,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 这些值本来就是这里算出来的（每一行 = `曲线(表达式(源键…))`，值就在 `outputValues` 里）。
         /// 以前绕一圈：控制器里的状态机行为从 Animator 参数再算一遍、写进**影子** Hub，再由会话中转到角色 ——
         /// 那是**两份真相**，而且那个写者只在 bundle 里跑、编辑器里根本看不见。
-        /// Warudo 侧由「HoFace写动态参数」节点做同一件事（写的是参数处理 / 合并字典那份字典），
-        /// 所以"面板里看到什么 = Warudo 里是什么"这条规矩在动态参数上也成立。
         ///
         /// 【写的是**全部**输出行】不按"控制器里有没有这个参数"过滤：Hub 是"中间层算出来的动态参数"
         /// 本身（跟面板的「参数输出」栏同一份）。控制器里没那些口时它们不驱动动画，但仍然是这份配置的输出。
         /// 调试滑条（<see cref="SetPreview"/>）盖掉同名行时，Hub 里也跟着是那个值 —— 它驱的是影子那棵树。
         ///
         /// ⚠️ **名字对不上**现在只有一个来源：输出行的 `parameter` 写错了（敲成别的名字）。
-        /// 没有表就没有校验点，所以"新声明"（Hub 上刚开出来的槽）会点名报一次。
+        /// 没有表就没有校验点，所以"新声明"（Hub 上刚开出来的格）会点名报一次。
         /// </summary>
         private void PublishSemantics()
         {
@@ -346,27 +344,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             GameObject character = Settings.Character();
-            if (semanticConnector == null || semanticOwner != character)
+            if (semanticHub == null || semanticOwner != character)
             {
                 semanticOwner = character;
-                semanticConnector = character != null
-                    ? character.GetComponentInChildren<HoFaceSemanticConnector>(true)
+                semanticHub = character != null
+                    ? character.GetComponentInChildren<HoFaceSemanticHub>(true)
                     : null;
                 semanticReported = null;
             }
 
-            if (semanticConnector == null || semanticConnector.hub == null)
+            if (semanticHub == null)
             {
                 SemanticPublishedCount = -1;
-                if (semanticReported != "no-connector")
+                if (semanticReported != "no-hub")
                 {
-                    semanticReported = "no-connector";
-                    SemanticStatus = "⚠ 角色上没有 Connector（或它没填 Hub）⇒ 中间层算出来的参数没有地方落";
+                    semanticReported = "no-hub";
+                    SemanticStatus = "⚠ 角色上没有 HoFaceSemanticHub ⇒ 中间层算出来的参数没有地方落";
                 }
                 return;
             }
-
-            HoFaceSemanticHub target = semanticConnector.hub;
 
             int written = 0;
             int claimed = 0;
@@ -379,19 +375,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 float value;
                 if (!previews.TryGetValue(output.parameter, out value)) value = outputValues[row];
 
-                int index = target.IndexOfName(output.parameter);
-                if (index < 0)
+                if (semanticHub.IndexOf(output.parameter) < 0)
                 {
-                    index = target.ClaimSlot(output.parameter);   // 名字由写的人声明（谁写谁开）
-                    if (index >= 0)
-                    {
-                        claimed++;
-                        if (semanticSkipped.Count < 6) semanticSkipped.Add(output.parameter);
-                    }
+                    claimed++;                                      // 谁写谁开：名字由写的人声明
+                    if (semanticSkipped.Count < 6) semanticSkipped.Add(output.parameter);
                 }
-                if (index < 0) continue;
 
-                target.SetFloat(index, value);
+                if (!semanticHub.SetFloat(output.parameter, value)) continue;
                 written++;
             }
 
@@ -401,7 +391,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (state == semanticReported) return;
             semanticReported = state;
 
-            SemanticStatus = "动态参数：写 " + written + " 个槽"
+            SemanticStatus = "动态参数：写 " + written + " 格"
                 + (claimed > 0 ? " · **新声明 " + claimed + " 个**（" + string.Join("、", semanticSkipped) + "）" : " · 名字都在");
             if (claimed > 0)
                 Debug.Log("[Ho 面捕] 动态参数：角色 Hub 上开了 " + claimed + " 个新槽（"

@@ -1046,33 +1046,29 @@ public static class HoFaceTrackingValidation
                 Check(true, "配置那条路端到端通了：VTS UDP 0.6 → 表达式 → 曲线(0..100) → 参数 → 混合树 → 60");
 
                 // ── 动态参数：中间层算完**直接写角色 Hub**（2026-09-26 起是这条链）──────────
-                // 在角色上现挂一片 Hub + Connector（真项目里由作者挂；测试里现挂，才不用改预制件）。
-                // ⚠️ 引用要**显式填**：`AddComponent` 不走 `Reset()`（那是编辑器里加组件时的回调）。
+                // 在角色上现挂一片 Hub（**只有一个组件** —— Connector 2026-09-27 删了）。
                 // ⚠️ 写 Hub 是**可选开关**（默认关，调试台自己不需要它）—— 用例要先把开关打开。
                 rig.writeParameterHub = true;
                 var semanticGo = new GameObject("SemanticHub");
                 semanticGo.transform.SetParent(rig.Character().transform, false);
-                var semanticHub = semanticGo.AddComponent<HoFaceSemanticHub>();
-                var semanticConnector = semanticGo.AddComponent<HoFaceSemanticConnector>();
-                semanticConnector.hub = semanticHub;
+                semanticGo.AddComponent<HoFaceSemanticHub>();
                 stage++; frame = Time.frameCount + 3; return;
             }
             if (stage == 18)
             {
-                var connector = rig.Character().GetComponentInChildren<HoFaceSemanticConnector>(true);
-                var hub = connector != null ? connector.hub : null;
-                int slot = hub != null ? hub.IndexOfName("ARKit/jawOpen") : -1;
-                float published = slot >= 0 ? hub.GetFloat(slot) : float.NaN;
-                Debug.Log("HO_HUB_PUBLISH: 槽数=" + (hub != null ? hub.SlotCount : -1)
-                    + " · 槽0=`" + (hub != null ? hub.NameAt(0) : "") + "`="
-                    + (hub != null ? hub.GetFloat(0).ToString("0.###", CultureInfo.InvariantCulture) : "—")
+                var hub = rig.Character().GetComponentInChildren<HoFaceSemanticHub>(true);
+                int slot = hub != null ? hub.IndexOf("ARKit/jawOpen") : -1;
+                float published = slot >= 0 ? hub.ValueAt(slot) : float.NaN;
+                Debug.Log("HO_HUB_PUBLISH: 格数=" + (hub != null ? hub.Count : -1)
+                    + " · 第0格=`" + (hub != null ? hub.NameAt(0) : "") + "`="
+                    + (hub != null ? hub.ValueAt(0).ToString("0.###", CultureInfo.InvariantCulture) : "—")
                     + " · ARKit/jawOpen=" + published.ToString("0.###", CultureInfo.InvariantCulture)
                     + "（期望 ≈0.6）· 会话报：" + HoFaceInputHub.Session(rig).SemanticStatus);
 
-                Check(hub != null, "角色上能找到 Connector，且它指向 Hub（会话每帧按名字往这里写）");
-                Check(hub != null && hub.SlotCount == 3,
-                    "Hub 的槽数 = 配置里输出行的行数（3）—— 槽是中间层按名字开的，没有预留长度这回事"
-                    + "（实际 " + (hub != null ? hub.SlotCount : -1) + "）");
+                Check(hub != null, "角色上能找到 HoFaceSemanticHub（会话每帧按名字往这里写）");
+                Check(hub != null && hub.Count == 3,
+                    "Hub 的格数 = 配置里输出行的行数（3）—— 格是中间层按名字开的，没有预留长度这回事"
+                    + "（实际 " + (hub != null ? hub.Count : -1) + "）");
                 Check(slot >= 0 && published > 0.5f,
                     "会话把中间层算出来的输出行**按名字**写进了角色 Hub（ARKit/jawOpen=" + published + "）");
 

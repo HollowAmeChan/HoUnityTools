@@ -237,7 +237,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 
 这条边界要**说准**（2026-09-26 用户纠正过一次）：**Hub 本身不限制写者** —— 它是一片
 **"脚本写的工作台"**：我们的中间层、作者自己挂在角色上的组件、别的 mod 的脚本，都能按名字写
-（`HoFaceSemanticConnector.SetFloat` 就在那儿）。真正的限制只有两条：
+（`HoFaceSemanticHub.SetFloat` 就在那儿）。真正的限制只有两条：
 ① **动画 clip 写不了它**（曲线写 `values.<i>` 那条路 2026-09-26 删了，见
 [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md) §5.1）；
 ② **我们不提供"跑在控制器里"的写者**（那个状态机行为同一天也删了）。

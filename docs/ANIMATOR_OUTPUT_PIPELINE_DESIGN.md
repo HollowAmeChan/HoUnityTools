@@ -9,7 +9,7 @@
 > 1. **控制器只写三种东西**：形态键动画、骨骼动画、**动态组件值（走 Hub）**。
 >    材质属性、对象引用**从我们的范围里去掉** —— 所以本文原来那两行"应用材质 / 对象引用"的规划作废。
 > 2. **组件值不直接写其它组件**，而是写进角色上的 **`HoFaceSemanticHub`**（纯存值组件：`float[]` + 运行期声明的名字；
->    写的人是**中间层** —— Unity 侧调试会话 / Warudo 侧「HoFace写动态参数」节点；接口是旁边的 `HoFaceSemanticConnector`）。
+>    写的人是**中间层** —— Unity 侧调试会话 / Warudo 侧「HoFace写动态参数」节点；按名字读/写就长在 Hub 上）。
 >    ⚠️ 这里原来写的是"写的是控制器里的 `HoFaceSemanticWriterBehaviour`，名字表在 Connector 上" ——
 >    那两处 2026-09-26 **都删了**（写手与表），见 [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md) §5。
 >    其它模块**只读 Hub**，不需要认识控制器、也不需要我们的适配器。
@@ -221,7 +221,7 @@ space / absolute-or-offset / default / ownership / releasePolicy
 | --- | --- | --- |
 | 形态键 | `targetPath` + `blendShape.<名>` | 照旧 |
 | 骨骼 / Transform | `targetPath` + `type` + `propertyName` | 照旧 |
-| **Hub 语义槽** | **下标 + 运行期声明的名字**（名字由**中间层**按输出行的 `parameter` 开出来；中性值 = 静态的 0） | 按下标写 `hub.values[i]`，**不反射** |
+| **Hub 动态参数** | **一格一个 `(名字, 值)` 元组**（名字由**中间层**按输出行的 `parameter` 开出来；中性值 = 静态的 0 或那一行声明的 `defaultValue`） | 按名字写 `hub.SetFloat(名字, 值)`，**不反射** |
 
 ⚠️ `componentAdapterId` / `shaderPropertyId` / `materialSlot` / `referenceResourceId` 这几个字段
 **现在用不上了**（那是"写其它组件/材质"的方案），留着的唯一理由是将来放开时不必重新设计格式 ——
@@ -240,7 +240,7 @@ space / absolute-or-offset / default / ownership / releasePolicy
 
 原"为自定义脚本提供两种实现方向"一段：**方向 1（运行时真实类型 + 编译期适配器）现在只对 Hub 用**；
 方向 2（导出时重绑到纯数据代理）**正是 Hub 的形态** —— Hub 上**只有值与写的人当场声明的名字**，
-接口（`HoFaceSemanticConnector`）在角色那边、**不带**任何表，
+接口就在 Hub 自己身上（`GetFloat` / `SetFloat`）、**不带**任何表，
 所以**影子/代理那份上不会跑作者的业务脚本**（没有 Awake/Update/全局注册那些副作用）。
 ⚠️ 2026-09-26 之后，**控制器资产上不再挂我们自己的任何行为**：动态参数由中间层算完直接写角色 Hub
 （那时曾短暂用过"控制器状态上的语义写手"，当天就删了 —— 理由见 [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md) §5.1）。

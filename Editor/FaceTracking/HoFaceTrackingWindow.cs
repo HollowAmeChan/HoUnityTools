@@ -49,11 +49,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private string lastProblem = "";
 
         /// <summary>
-        /// **动态参数 Connector**：在调试对象的子层级里**自动找**一个 <see cref="HoFaceSemanticConnector"/>。
+        /// **动态参数 Hub**：在调试对象的子层级里**自动找**一个 <see cref="HoFaceSemanticHub"/>。
         ///
-        /// 找的是 Connector 而不是 Hub：**Hub 只是一片纯存值的区域**（`float[]`，槽由写的人运行期开），
-        /// 名字 ↔ 下标 的规矩在 Connector 上；而且 Connector 自己指向 Hub，所以找到它就等于两个都找到了。
-        /// 这也与 Warudo 侧一致：那边写动态参数的节点同样是在角色层级里找 Connector。
+        /// ⚠️ 2026-09-27 起 Hub 是**唯一的组件**：以前旁边还挂一个 `HoFaceSemanticConnector`（"把手"），
+        /// 槽表删掉之后它就只剩"再指一次 Hub"，所以整个删了；按名字读/写现在直接长在 Hub 上
+        /// （`GetFloat(名字)` / `SetFloat(名字, 值)`）。这也与 Warudo 侧一致：那边写动态参数的节点
+        /// 同样是在角色层级里找 Hub。
         ///
         /// ⚠️ **两边都不会自动建**：动态参数是**角色资产的一部分**（挂在哪个物体、写哪些名字，
         /// 都是作者的编排），顺手在场景里塞一个新物体，既不进预制体也不落盘，只会让人困惑。
@@ -64,7 +65,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void DrawHubRow()
         {
             GameObject character = settings.Character();
-            HoFaceSemanticConnector connector = FindSemanticConnector(character);
+            HoFaceSemanticHub hub = FindSemanticHub(character);
 
             using (HoConstraintEditorControls.Row())
             {
@@ -83,34 +84,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
 
                 HoConstraintEditorControls.Gap();
-                if (connector != null)
+                if (hub != null)
                 {
                     // **灰的引用行**：找到的东西只读地摆出来，让人核对"认的是不是这一个"。
                     // 用 DisabledScope 而不是 Label：它长得就是那一栏本来的样子（可拖可点选），
-                    // 只是不许改 —— 改它没有意义，Connector 是从角色推出来的。
+                    // 只是不许改 —— 改它没有意义，Hub 是从角色推出来的。
                     using (new EditorGUI.DisabledScope(true))
                     {
-                        EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), connector,
-                            typeof(HoFaceSemanticConnector), true);
+                        EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), hub,
+                            typeof(HoFaceSemanticHub), true);
                     }
 
                     HoConstraintEditorControls.Flex();
 
-                    if (connector.hub == null)
                     {
-                        // 没打开时这不是问题（压根不写），所以只有打开时才亮黄字。
-                        if (settings.writeParameterHub)
-                            Warning("Connector 没填 Hub ⇒ 值没地方存（在 Connector 上把同一个物体上的 Hub 拖进去）");
-                        else
-                            HoConstraintEditorControls.Caption("（开关关着，不用管这一栏）");
-                    }
-                    else
-                    {
-                        // ⚠️ 编辑期 Hub 是**空的**，这是常态（槽是运行期由中间层按名字开的），
+                        // ⚠️ 编辑期 Hub 是**空的**，这是常态（格是运行期由中间层按名字开的），
                         // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
                         HoConstraintEditorControls.Caption(Application.isPlaying
-                            ? connector.hub.SlotCount + " 个槽"
-                            : "槽在运行期由中间层按名字开（编辑期是空的，正常）");
+                            ? hub.Count + " 格"
+                            : "格在运行期由中间层按名字开（编辑期是空的，正常）");
                     }
                 }
                 else
@@ -120,23 +112,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         Warning(character == null
                             ? "先填「调试对象」"
-                            : "开关开着，但这个对象上没有 HoFaceSemanticConnector ⇒ 值没地方落");
+                            : "开关开着，但这个对象上没有 HoFaceSemanticHub ⇒ 值没地方落");
                     }
                     else
                     {
                         HoConstraintEditorControls.Caption(character == null
                             ? "先填「调试对象」"
-                            : "（这个对象上没有 Connector；开关关着，正常）");
+                            : "（这个对象上没有 Hub；开关关着，正常）");
                     }
                 }
             }
 
-            // 播放时的**实时读数**：开关打开后中间层算完就写进角色那片 Hub，这里把前几个声明过的槽
-            // 摊出来 —— 这是"动态参数到底有没有在走"最直接的观察面（Hub 是运行期槽，值不在任何资产里）。
-            if (connector != null && connector.hub != null && Application.isPlaying && settings.writeParameterHub)
+            // 播放时的**实时读数**：开关打开后中间层算完就写进角色那片 Hub，这里把前几个名字
+            // 摊出来 —— 这是"动态参数到底有没有在走"最直接的观察面（Hub 是运行期状态，值不在任何资产里）。
+            if (hub != null && Application.isPlaying && settings.writeParameterHub)
             {
-                HoConstraintEditorControls.Caption(ChainStatus(connector));
-                HoConstraintEditorControls.Caption(SemanticReadout(connector));
+                HoConstraintEditorControls.Caption(ChainStatus(hub));
+                HoConstraintEditorControls.Caption(SemanticReadout(hub));
                 var session = HoFaceInputHub.Session(settings);
                 if (session != null && !string.IsNullOrEmpty(session.SemanticStatus))
                     HoConstraintEditorControls.Caption(session.SemanticStatus);
@@ -145,13 +137,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// **这条链现在走到哪一步了** —— 一行，按顺序念就能查出断在哪：
-        /// 会话起没起 → 这一帧写进角色 Hub 几个槽（= 中间层算完有没有落下去）→ 有没有输入。
+        /// 会话起没起 → 这一帧写进角色 Hub 几格（= 中间层算完有没有落下去）→ 有没有输入。
         ///
         /// 为什么要这么一句：这些失败**在界面上长得一模一样**（都是"Hub 是空的、脸不动"），
-        /// 但一个要按「开始驱动」、一个说明角色上没有 Connector、一个要连手机。分开写清楚，
+        /// 但一个要按「开始驱动」、一个说明角色上没有 Hub、一个要连手机。分开写清楚，
         /// 就不用靠猜（2026-09-26 现场：用户报"Hub 空、脸不动"，我隔着屏幕没法区分是哪一种）。
         /// </summary>
-        private string ChainStatus(HoFaceSemanticConnector connector)
+        private string ChainStatus(HoFaceSemanticHub hub)
         {
             var session = HoFaceInputHub.Session(settings);
             double age = HoFaceInputHub.LastFrameTime > 0 ? HoFaceClock.Now - HoFaceInputHub.LastFrameTime : double.MaxValue;
@@ -164,39 +156,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             string publish;
             if (!settings.writeParameterHub) publish = "没写（「写动态参数 Hub」关着，默认就是关的）";
             else if (session == null) publish = "**会话没起**（点「开始驱动」）";
-            else if (session.SemanticPublishedCount < 0) publish = "**写不进去**（角色上没有 Connector / 它没填 Hub）";
+            else if (session.SemanticPublishedCount < 0) publish = "**写不进去**（角色上没有 HoFaceSemanticHub）";
             else if (session.SemanticPublishedCount == 0) publish = "**一行输出都没有**（配置文件没有输出行？）";
-            else publish = "写入 " + session.SemanticPublishedCount + " 个槽";
+            else publish = "写入 " + session.SemanticPublishedCount + " 格";
 
-            string target = connector.hub.SlotCount == 0 ? "角色 Hub 空 ⇒ 一帧都还没写" : "角色 Hub " + connector.hub.SlotCount + " 槽";
+            string target = hub.Count == 0 ? "角色 Hub 空 ⇒ 一帧都还没写" : "角色 Hub " + hub.Count + " 格";
 
             return "链路：会话" + (session == null ? " ✗" : " ✓") + " · " + publish + " · " + target + " · " + input;
         }
 
         /// <summary>
-        /// 前几个**有名字**的槽的当前值（最多 6 个）。名字与值都来自 Hub（名字 = 中间层输出行的
-        /// `parameter`，Connector 现在只是一根把手、没有表）。
+        /// 前几个**有名字**的格的当前值（最多 6 个）。名字与值都来自 Hub（名字 = 中间层输出行的
+        /// `parameter`；Hub 现在既是存储、也是按名字读写的入口）。
         /// ⚠️ 一个名字都没有时明说"还没写过"，而不是显示一片 0（那会被误读成"算出来就是 0"）。
         /// </summary>
-        private static string SemanticReadout(HoFaceSemanticConnector connector)
+        private static string SemanticReadout(HoFaceSemanticHub hub)
         {
-            var hub = connector.hub;
-            if (hub == null || hub.SlotCount == 0) return "（Hub 里还没有槽：中间层还没写过）";
+            if (hub == null || hub.Count == 0) return "（Hub 里还没有格：中间层还没写过）";
 
             var text = new System.Text.StringBuilder();
             int shown = 0;
             int named = 0;
-            for (int i = 0; i < hub.SlotCount; i++)
+            for (int i = 0; i < hub.Count; i++)
             {
                 string key = hub.NameAt(i);
                 if (string.IsNullOrEmpty(key)) continue;
                 named++;
                 if (shown >= 6) continue;
                 if (shown > 0) text.Append("  ·  ");
-                text.Append(key).Append('=').Append(hub.GetFloat(i).ToString("0.###"));
+                text.Append(key).Append('=').Append(hub.ValueAt(i).ToString("0.###"));
                 shown++;
             }
-            if (named == 0) return "（Hub 里 " + hub.SlotCount + " 个槽都还没有名字：中间层还没写过）";
+            if (named == 0) return "（Hub 里 " + hub.Count + " 格都还没有名字：中间层还没写过）";
             if (named > shown) text.Append("  …（共 ").Append(named).Append(" 个名字）");
             return text.ToString();
         }
@@ -209,21 +200,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var style = new GUIStyle(HoConstraintEditorTheme.Caption);
             style.normal.textColor = HoConstraintEditorTheme.WarningColor;
             GUILayout.Label(new GUIContent(detail,
-                "在角色的子层级里放一个空物体（约定叫 SemanticHub），挂上 **Ho Face Semantic Hub**（存值；"
-                + "槽是运行期由中间层按名字开出来的，不用手填、也没有长度）与 **Ho Face Semantic Connector**"
-                + "（一根把手 + 指向那个 Hub 的引用）。\n"
+                "在角色的子层级里放一个空物体（约定叫 SemanticHub），挂上 **Ho Face Semantic Hub**"
+                + "（一格一个「名字 + 值」，运行期由写的人按名字开出来，不用手填、也没有长度）。\n"
                 + "⚠️ 编辑器**不会**替你建 —— 那是角色资产的一部分，该由作者编排；"
                 + "Warudo 侧的节点同样只找不建。"), style);
         }
 
         /// <summary>
-        /// 在角色子层级里找 Connector。**找不到返回 null，绝不创建**（见 <see cref="DrawHubRow"/> 的说明）。
+        /// 在角色子层级里找 Hub。**找不到返回 null，绝不创建**（见 <see cref="DrawHubRow"/> 的说明）。
         /// `includeInactive: true` —— 它可能挂在一个被禁用的空物体上，那也算找到了。
         /// </summary>
-        private static HoFaceSemanticConnector FindSemanticConnector(GameObject character)
+        private static HoFaceSemanticHub FindSemanticHub(GameObject character)
         {
             if (character == null) return null;
-            return character.GetComponentInChildren<HoFaceSemanticConnector>(true);
+            return character.GetComponentInChildren<HoFaceSemanticHub>(true);
         }
 
         /// <summary>把绝对路径尽量转成工程相对路径（`Assets/...`），这样设置文件里存的是可移植路径。</summary>
