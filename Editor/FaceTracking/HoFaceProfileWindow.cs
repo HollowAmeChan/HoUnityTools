@@ -31,6 +31,52 @@ namespace Hollow.HoUnityTools.FaceTracking
         private const string LeftWidthPref = "HoUnityTools.FaceProfile.LeftWidth";
 
         private TextAsset profile;
+
+        /// <summary>
+        /// 这份配置在磁盘上的路径 —— **权威来源**。`profile`（资产）只是顺带用来显示与拖放。
+        ///
+        /// 为什么以路径为准：工程**之外**的配置文件没有 `TextAsset`（Warudo 只看路径，那种也合法），
+        /// 而 `AssetDatabase.LoadAssetAtPath` 只认 `Assets/` / `Packages/` 开头的工程相对路径 ——
+        /// 绝对路径会给回 null。早先这里一切都绑在资产上，结果"路径填了、按钮却点不动"。
+        /// </summary>
+        private string profilePath;
+
+        /// <summary>现在编辑的那份文件的路径（资产优先，因为资产路径才是 Unity 认的工程相对路径）。</summary>
+        private string CurrentPath
+        {
+            get
+            {
+                if (profile != null)
+                {
+                    string assetPath = AssetDatabase.GetAssetPath(profile);
+                    if (!string.IsNullOrEmpty(assetPath)) return assetPath;
+                }
+                return profilePath;
+            }
+        }
+
+        /// <summary>读这份配置的文本。资产在就用资产的，否则从磁盘读。</summary>
+        private bool TryReadProfile(out string text, out string error)
+        {
+            text = null;
+            error = null;
+
+            if (profile != null) { text = profile.text; return true; }
+
+            string path = CurrentPath;
+            if (string.IsNullOrEmpty(path)) { error = "没有指定配置文件。"; return false; }
+            if (!System.IO.File.Exists(path)) { error = "文件不存在：" + path; return false; }
+            try
+            {
+                text = System.IO.File.ReadAllText(path);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error = exception.Message;
+                return false;
+            }
+        }
         private HoFaceMiddleware middleware;
         private int selected = -1;
         private string search = "";
@@ -208,6 +254,31 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
             window.profile = profile;
+            window.profilePath = profile != null ? AssetDatabase.GetAssetPath(profile) : "";
+            window.selected = -1;
+            window.ReloadProfile(true);
+            window.Repaint();
+        }
+
+        /// <summary>
+        /// 按**路径**打开。工程外的文件、以及存成绝对路径的老设置都走这条路 ——
+        /// 它们没有 `TextAsset`，但磁盘上有文件，而 Warudo 读的本来就是文件。
+        /// 顺手试一下能不能对上工程里的资产（对得上就用资产，存盘时会走 `ImportAsset`）。
+        /// </summary>
+        public static void Open(string path)
+        {
+            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
+            window.profilePath = path;
+            window.profile = string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            if (window.profile == null && !string.IsNullOrEmpty(path))
+            {
+                // 绝对路径 / 工程外路径：转成工程相对再试一次（老设置里存的就是绝对路径）。
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (!string.IsNullOrEmpty(guid))
+                {
+                    window.profile = AssetDatabase.LoadAssetAtPath<TextAsset>(AssetDatabase.GUIDToAssetPath(guid));
+                }
+            }
             window.selected = -1;
             window.ReloadProfile(true);
             window.Repaint();
@@ -217,7 +288,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             minSize = new Vector2(560.0f, 420.0f);
             leftWidth = Mathf.Clamp(EditorPrefs.GetFloat(LeftWidthPref, leftWidth), LeftWidthMin, LeftWidthMax);
-            if (middleware == null && profile != null) ReloadProfile(true);
+            if (middleware == null && !string.IsNullOrEmpty(CurrentPath)) ReloadProfile(true);
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -419,7 +490,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     if (HoConstraintEditorControls.Button("新建配置…", "在工程里新建一份内置默认表。「保存」写文件。「重新载入」从磁盘重读。"))
                         NewProfile();
                     HoConstraintEditorControls.Gap();
-                    using (new EditorGUI.DisabledScope(profile == null))
+                    using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(CurrentPath)))
                     {
                         if (HoConstraintEditorControls.Button("保存", "写回这份文本资产（无 BOM）。同一条参数在场景里会被通知重新解析。", true))
                             SaveProfile();
@@ -452,7 +523,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 {
                     // ⚠️ 面板以前在这里写"用内置默认" —— 那条兜底已经删了（空 = 空表，见 HoFaceDebugSettings.Outputs()），
                     // 对用户说错话比不说更糟：他会以为没选配置也在跑。
-                    string path = profile == null ? "（未选配置 · 这一层不做事）" : AssetDatabase.GetAssetPath(profile);
+                    string path = string.IsNullOrEmpty(CurrentPath) ? "（未选配置 · 这一层不做事）" : CurrentPath;
                     HoConstraintEditorControls.Caption(path, "配置文件在工程里的路径。");
                     if (middleware != null)
                     {
@@ -1295,22 +1366,26 @@ ActiveRows().Insert(to, moved);
 
         private void SaveProfile()
         {
-            if (profile == null)
+            string path = CurrentPath;
+            if (string.IsNullOrEmpty(path))
             {
                 SetMessage("没有选中配置文件。", true);
                 return;
             }
 
             EnsureMiddleware();
-            string path = AssetDatabase.GetAssetPath(profile);
-            if (string.IsNullOrEmpty(path))
+            try
             {
-                SetMessage("这份配置在工程里没有路径（不是磁盘上的资产？）。", true);
+                WriteText(path, HoFaceProfile.Write(middleware));
+            }
+            catch (Exception exception)
+            {
+                SetMessage("写不进去：" + exception.Message, true);
                 return;
             }
 
-            WriteText(path, HoFaceProfile.Write(middleware));
-            AssetDatabase.ImportAsset(path);
+            // 只有工程里的路径才谈得上"导入资产"；工程外的文件写完就是写完了。
+            if (profile != null) AssetDatabase.ImportAsset(path);
             dirty = false;
 
             // 设置对象按"路径 + 文件写盘时间戳"缓存解析结果 —— 存完盘时间戳一定变，
@@ -1326,29 +1401,33 @@ ActiveRows().Insert(to, moved);
 
         private void ReloadProfile(bool silent)
         {
-            if (profile == null)
+            string text;
+            string error;
+            if (!TryReadProfile(out text, out error))
             {
                 middleware = null;
                 selected = -1;
                 dirty = false;
-                if (!silent) SetMessage("没有选中配置文件。", true);
+                ClearHistory();
+                if (!silent) SetMessage(error, true);
                 return;
             }
 
-            if (HoFaceProfile.TryParse(profile.text, out var parsed, out string error))
+            if (HoFaceProfile.TryParse(text, out var parsed, out string parseError))
             {
                 middleware = parsed;
                 selected = -1;
                 dirty = false;
                 ClearHistory();     // 换了一份配置：撤销栈不能带着上一份的历史
-                if (!silent) SetMessage("已重新载入 " + AssetDatabase.GetAssetPath(profile), false);
+                if (!silent) SetMessage("已重新载入 " + CurrentPath, false);
             }
             else
             {
                 middleware = null;
                 selected = -1;
                 dirty = false;
-                SetMessage("读不了这份配置：" + error, true);
+                ClearHistory();
+                SetMessage("读不了这份配置：" + parseError, true);
             }
         }
 

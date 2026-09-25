@@ -238,11 +238,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     // （从零建一份是编辑器的活，这一栏只管"用哪一份"）。
                     // ⚠️ 只有**工程里的资产**能开：那个窗口是围绕 `TextAsset` 转的，
                     // 工程外的文件没有资产可指（它照样能驱动，只是不能在编辑器里改）。
-                    using (new EditorGUI.DisabledScope(currentAsset == null))
+                    // ⚠️ **不要**按"有没有资产"置灰：配置文件可以是绝对路径 / 工程外的文件，
+                    // 那种没有 `TextAsset`（`AssetDatabase.LoadAssetAtPath` 只认 Assets/ 与 Packages/ 开头），
+                    // 但磁盘上有文件、Warudo 也照读 —— 早先这里按资产置灰，结果"填了路径按钮却点不动"。
+                    // 窗口现在以**路径**为准，所以只要有路径就能开。
+                    using (new EditorGUI.DisabledScope(!settings.HasProfile))
                     {
                         if (HoConstraintEditorControls.Button("窗口", "打开配置文件窗口编辑这一份（输入行 / 输出行、曲线、修饰符）。", false, 40.0f))
                         {
-                            HoFaceProfileWindow.Open(currentAsset);
+                            HoFaceProfileWindow.Open(settings.FullProfilePath());
                         }
                     }
 
