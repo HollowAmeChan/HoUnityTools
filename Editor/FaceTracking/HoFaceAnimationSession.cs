@@ -29,9 +29,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public readonly float[] Effective = new float[52];
         /// <summary>通道层整形之后的值（模式 / 输入曲线 / 断流回中性）。**表达式读的就是它。**</summary>
         public readonly float[] Input = new float[52];
-        /// <summary>每一行 `ARKit/&lt;键&gt;` 输出最后写出去的值（调试输出读它）。</summary>
-        public readonly float[] ControllerValues = new float[52];
-        /// <summary>按参数名读某一行最后的输出值（用例与调试输出用；没有这一行时返回 <see cref="float.NaN"/>）。</summary>
+        /// <summary>
+        /// 按参数名读某一行最后的输出值（面板的「参数输出」栏、用例用它；没有这一行时返回 <see cref="float.NaN"/>）。
+        /// ⚠️ 这里**不再有** `ControllerValues`（"名字正好是 `ARKit/&lt;键&gt;` 的那 52 行"的快速索引）：
+        /// 那个约定 2026-09-26 已经废掉（出口用**裸规范名**），而且它早已没有任何读者 —— 面板现在直接
+        /// 按行名读 <see cref="OutputValue"/>，不依赖命名约定。
+        /// </summary>
         public float OutputValue(string parameter) =>
             parameter != null && outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
 
@@ -42,8 +45,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public float MiddlewareInput(string canonical) =>
             canonical != null && inputIndex.TryGetValue(canonical, out int row) ? inputValues[row] : float.NaN;
         private readonly Dictionary<string, int> outputIndex = new Dictionary<string, int>(StringComparer.Ordinal);
-        /// <summary>某一行输出对应哪个通道（参数名正好是 `ARKit/&lt;键&gt;` 时）—— <see cref="ControllerValues"/> 用它。</summary>
-        private readonly int[] arkitRow = new int[52];
         /// <summary>输入行（线名 → 规范名）。它们先把手机原值翻成规范名，通道与输出行都只认规范名。</summary>
         private HoFaceOutput[] inputRows = new HoFaceOutput[0];
         private HoFaceExpression[] inputExpressions = new HoFaceExpression[0];
@@ -280,10 +281,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 outputValues[row] = value;
                 if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
             }
-
-            // 参数名正好是 `ARKit/<键>` 的行，把它的输出值扫到那一格上（调试读数用）。
-            for (int index = 0; index < arkitRow.Length; index++)
-                ControllerValues[index] = arkitRow[index] >= 0 ? outputValues[arkitRow[index]] : 0f;
 
             foreach (var preview in previews)
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
@@ -626,7 +623,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             stepUntil = new double[rows.Count];
             outputDelay = new Queue<(double At, float Value)>[rows.Count];
             outputIndex.Clear();
-            for (int i = 0; i < 52; i++) arkitRow[i] = -1;
             for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档
             for (int i = 0; i < rows.Count; i++)
             {
@@ -638,11 +634,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的表达式用不了（" + rows[i].parameter + "）：" + error);
                 if (!string.IsNullOrEmpty(rows[i].parameter) && !outputIndex.ContainsKey(rows[i].parameter))
                     outputIndex[rows[i].parameter] = i;
-                string shape = rows[i].parameter != null && rows[i].parameter.StartsWith("ARKit/", StringComparison.Ordinal)
-                    ? rows[i].parameter.Substring("ARKit/".Length)
-                    : null;
-                int channel = HoFaceTrackingChannels.IndexOf(shape);
-                if (channel >= 0) arkitRow[channel] = i;
             }
         }
 

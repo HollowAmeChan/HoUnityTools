@@ -39,6 +39,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool configExpanded = true;
         private bool profileExpanded = true;
         private bool parametersExpanded;
+        /// <summary>「参数输出」那一栏：**默认展开** —— 它是"中间层到底算没算出值"的唯一观察面。</summary>
+        private bool outputExpanded = true;
+        private Vector2 outputScroll;
+        private string outputSearch = "";
         private bool diagnoseExpanded;
         private bool logExpanded;
         private bool hintExpanded;
@@ -262,6 +266,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             DrawObjectSection(environment);      // 一、对象：调试对象 / 混合树控制器 / 配置文件对象 / 连接
             DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥
             DrawInputSection();                  // 三、参数输入：VTS 传过来的**全部裸参数**（纯调试）
+            DrawOutputSection();                 // 三·五、参数输出：中间层**求出来的值**（纯调试）
             DrawDiagnoseSection(environment);    // 四、排查：权限、端口、连接、包统计、问题
         }
 
@@ -692,6 +697,138 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.EndScrollView();
             }
         }
+
+        // ══════════════════════════════════════════════════════════════
+        /// <summary>
+        /// **纯调试**：中间层**求出来的值** —— 逐输出行摊开（参数名 / 值 / 表达式）。
+        ///
+        /// 为什么要单独一栏：脸不动的时候，"配置没求好值"和"求好了但写不进去"是两件事，
+        /// 而在界面上**都表现为"什么都没发生"**。这一栏把两者分开：
+        ///   · 值恒 0 ⇒ 输入行没给上（看上一栏的手机线名）或表达式有问题；
+        ///   · 值在动、但标着 **不在控制器里** ⇒ 中间层是对的，**控制器参数名对不上**
+        ///     （`HoFaceAnimationSession` 对不在控制器里的参数是"算得出值、一声不响地不写"）；
+        ///   · 值在动、也没标 ⇒ 中间层与控制器都对，问题在更下游（混合树 / 影子台 / 绑定）。
+        /// </summary>
+        private void DrawOutputSection()
+        {
+            var session = HoFaceInputHub.Session(settings);
+            var rows = settings.Outputs();
+
+            int named = 0, live = 0, missing = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i] == null || string.IsNullOrEmpty(rows[i].parameter)) continue;
+                named++;
+                bool inController = session != null && session.Compiled != null
+                    && session.Compiled.floatParameters.Contains(rows[i].parameter);
+                if (!inController) missing++;
+                float value = session != null ? session.OutputValue(rows[i].parameter) : float.NaN;
+                if (!float.IsNaN(value) && Mathf.Abs(value) > 0.0001f) live++;
+            }
+
+            string summary = named == 0
+                ? "没有输出行"
+                : named + " 行 · 非零 " + live + (missing > 0 ? " · **不在控制器里 " + missing + "**" : "");
+
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
+                ref outputExpanded, "参数输出", summary,
+                missing > 0 ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver))
+            {
+                return;
+            }
+
+            using (HoConstraintEditorControls.Card())
+            {
+                if (named == 0)
+                {
+                    HoConstraintEditorControls.Caption("这份配置一个输出行都没有（或者还没指定配置文件）—— 这一层什么都不写。");
+                    return;
+                }
+
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("筛选", HoConstraintEditorTheme.LabelWidthSm);
+                    outputSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), outputSearch, HoConstraintEditorTheme.Field);
+                    if (missing > 0)
+                    {
+                        HoConstraintEditorControls.Gap();
+                        GUILayout.Label(missing + " 行的参数不在控制器里", InlineWarning());
+                    }
+                }
+
+                if (session == null)
+                    HoConstraintEditorControls.Caption("（进播放模式并点「开始驱动」后这里才有值；现在只能看名字与表达式）");
+
+                outputScroll = EditorGUILayout.BeginScrollView(outputScroll, GUILayout.Height(180.0f));
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    GUI.Label(HoConstraintEditorControls.Next(150.0f), "参数名（写进混合树）", HoConstraintEditorTheme.Caption);
+                    GUI.Label(HoConstraintEditorControls.Next(64.0f), "值", HoConstraintEditorTheme.Caption);
+                    HoConstraintEditorControls.Flex();
+                    GUI.Label(HoConstraintEditorControls.Next(120.0f), "算它的表达式", HoConstraintEditorTheme.Caption);
+                }
+
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var row = rows[i];
+                    if (row == null || string.IsNullOrEmpty(row.parameter)) continue;
+                    if (!string.IsNullOrEmpty(outputSearch)
+                        && row.parameter.IndexOf(outputSearch, StringComparison.OrdinalIgnoreCase) < 0
+                        && (row.expression ?? "").IndexOf(outputSearch, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    float value = session != null ? session.OutputValue(row.parameter) : float.NaN;
+                    bool has = !float.IsNaN(value) && session != null;
+                    bool inController = session == null || session.Compiled == null
+                        || session.Compiled.floatParameters.Contains(row.parameter);
+
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        GUI.Label(HoConstraintEditorControls.Next(150.0f), row.parameter,
+                            has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+
+                        Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
+                        if (has && value >= 0f && value <= 1f)
+                            HoConstraintEditorControls.Meter(bar, value, 0f, 1f, HoConstraintEditorTheme.AccentDriver);
+                        else if (Event.current.type == EventType.Repaint)
+                            EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
+
+                        GUI.Label(HoConstraintEditorControls.Next(64.0f),
+                            has ? value.ToString("F4") : "—",
+                            has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+
+                        GUI.Label(HoConstraintEditorControls.NextFlexible(60.0f), row.expression ?? "",
+                            HoConstraintEditorTheme.Caption);
+
+                        if (!inController)
+                            GUI.Label(HoConstraintEditorControls.Next(110.0f), "不在控制器里 ⇒ 不写",
+                                InlineWarning());
+                    }
+                }
+
+                EditorGUILayout.EndScrollView();
+
+                if (session != null && session.Compiled != null && session.Compiled.warnings.Count > 0)
+                {
+                    HoConstraintEditorControls.Caption("编译期提示 " + session.Compiled.warnings.Count + " 条：");
+                    for (int i = 0; i < session.Compiled.warnings.Count && i < 4; i++)
+                        HoConstraintEditorControls.Caption("  · " + session.Compiled.warnings[i]);
+                }
+            }
+        }
+
+        /// <summary>行内的黄字（那一栏在块里，用不了 <see cref="Warning"/> 的整行布局）。</summary>
+        private static GUIStyle InlineWarning()
+        {
+            if (inlineWarning == null)
+            {
+                inlineWarning = new GUIStyle(HoConstraintEditorTheme.Caption);
+                inlineWarning.normal.textColor = HoConstraintEditorTheme.WarningColor;
+                inlineWarning.wordWrap = false;
+            }
+            return inlineWarning;
+        }
+
+        private static GUIStyle inlineWarning;
 
         // ══════════════════════════════════════════════════════════════
         // 排查（默认收起）
