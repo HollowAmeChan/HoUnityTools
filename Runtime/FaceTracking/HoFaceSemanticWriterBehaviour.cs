@@ -95,7 +95,15 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             if (hub == null)
             {
-                ReportOnce("no-hub", "影子 rig 上没有 HoFaceSemanticHub ⇒ 中间值没有地方写（这份 bundle 的 rig 上要挂一个）。");
+                // ⚠️ **这里故意不报。** 没有 Hub = "这个 Animator 不是语义 rig"，而不是错误：
+                //   · 混合树观察台（`HoFaceBlendTreePeek`）会自己补一个 Animator 去跑同一个 controller
+                //     —— 那是**预览台**，它身上从来没有 Hub（2026-09-26 现场：用户把观察台的
+                //     `controller` 填成了这个 face controller，于是每次进播放都刷一条警告）；
+                //   · 别的地方（例如拿同一份 controller 做别的事）同理。
+                // 真正**挡住事**的两个地方本来就会报，而且是在该报的时候报：
+                //   · Unity 侧：会话的中继会写"影子 Hub 还是空的 ⇒ 写手没被调用，或条目是空的"；
+                //   · Warudo 侧：`HoFaceController` 的状态里会点名"影子 rig 上没有 HoFaceSemanticHub"。
+                // 所以这里只是"没事可做"，静静地走开。
                 return;
             }
 
