@@ -221,7 +221,7 @@ space / absolute-or-offset / default / ownership / releasePolicy
 | --- | --- | --- |
 | 形态键 | `targetPath` + `blendShape.<名>` | 照旧 |
 | 骨骼 / Transform | `targetPath` + `type` + `propertyName` | 照旧 |
-| **Hub 动态参数** | **一格一个 `(名字, 值)` 元组**（名字由**中间层**按输出行的 `parameter` 开出来；中性值 = 静态的 0 或那一行声明的 `defaultValue`） | 按名字写 `hub.SetFloat(名字, 值)`，**不反射** |
+| **Hub 动态参数** | **一格一个 `(名字, 值)` 键值对**（名字由**中间层**按输出行的 `parameter` 开出来；中性值 = 静态的 0 或那一行声明的 `defaultValue`） | 按名字写 `hub.SetFloat(名字, 值)`，**不反射** |
 
 ⚠️ `componentAdapterId` / `shaderPropertyId` / `materialSlot` / `referenceResourceId` 这几个字段
 **现在用不上了**（那是"写其它组件/材质"的方案），留着的唯一理由是将来放开时不必重新设计格式 ——

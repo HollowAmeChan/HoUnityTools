@@ -5,13 +5,13 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
-    /// **动态参数的一格：名字 + 值**（一个二元组）。
+    /// **动态参数的一格：名字 + 值**（一个**键值对** —— `.NET` 里就是 `KeyValuePair<string,float>` 那个形状）。
     ///
-    /// 为什么是"一格一个元组"而不是"两个平行数组"（2026-09-27 用户定）：
+    /// 为什么是"一格一个键值对"而不是"两个平行数组"（2026-09-27 用户定）：
     /// 以前 `float[] values` + `string[] names` 是两个数组**按下标对齐**，那个形状只为两件事服务 ——
     /// ① **动画曲线**能绑到 `values.Array.data[i]`；② 老式"纯按下标写"那条路。
     /// 两条都删了（曲线写不了 Hub、写的人一律按名字），于是"两个数组必须等长、下标必须对齐"
-    /// 就成了纯粹的下标漂移风险，没有任何好处。**一个列表，一格一个元组**，没有平行不变量可破坏。
+    /// 就成了纯粹的下标漂移风险，没有任何好处。**一个列表，一格一个键值对**，没有平行不变量可破坏。
     ///
     /// ⚠️ 字段名别叫 `name`（撞 `UnityEngine.Object.name`）—— 所以这里叫 `key`。
     /// </summary>
@@ -55,7 +55,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     public sealed class HoFaceSemanticHub : MonoBehaviour
     {
         /// <summary>
-        /// 全部格子：**一格一个 `(名字, 值)` 元组**，顺序 = 谁先声明谁在前。
+        /// 全部格子：**一格一个 `(名字, 值)` 键值对**，顺序 = 谁先声明谁在前。
         /// `public` 是有意的：它既是本组件的对外读面，也是**写的人直接写**的那个列表
         /// （Unity 要序列化它，mod 侧同一份代码要能跑）。
         /// </summary>
