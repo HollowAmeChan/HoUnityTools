@@ -92,6 +92,12 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 `browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`）**是两个不同的键、两个不同的参数**，
 程序里区分得开。两套并存是故意的（原始裸名 + VB 的合成名），改名就等于发明 VTS 词表里没有的名字。
 
+**平滑（23 / 90 行）**：时间是**秒**（时间常数），不是 VB 那种"每帧比例"。VB 是每帧
+`Lerp(prev, 输入, 1 − smooth)`、没有时间单位，所以它的值不能直接搬；换算是 `τ = −dt / ln(smooth)`，
+按 60fps 列（最保守的一档），对照表在 [HO 参数规范 §4.5](../../../docs/PARAMETER_HO.md)。
+⚠️ `0.007` **不是笔误**——VB 的 `0.10` 是"每帧 90%"，本身就是个很轻的滤波；真正黏的只有
+`FaceAngle`（0.042s）与眉那一对（0.018s）。**G1（原始 52）刻意不带任何修饰符**：得留一个没滤波的源。
+
 **不出的**：`MousePositionX/Y`（没有鼠标）、`Voice*` / `VoiceA..O`（这条链上没有麦克风）、
 `FaceAngry`（官方标 EXPERIMENTAL、且没有对应的 ARKit 形态量）；
 以及 `Eye_Squint_L/R`、`BrowL/R`、`EyeOpen`、`EyeX/Y` ——

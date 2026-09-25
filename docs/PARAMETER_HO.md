@@ -586,6 +586,65 @@ EyeY = eyeLookUpLeft  - eyeLookDownLeft
 需要这种"双眼合并注视"的控制器，用 G1 的 `eyeLook*Left/Right` 自己在树里算；
 需要**设备原始眼球标量**的用 G2 的 `EyeLeftX/Y`、`EyeRightX/Y`。
 
+### 4.5 修饰符：我们与 VB 的差别（**平滑是唯一实质差别**）
+
+VB 每行有三个**独立开关**（`smoothOn` / `stepOn` / `delayOn`），我们是每行一个**有序列表**
+（`modifiers`，顺序可控）。逐项实测对照：
+
+| 维度 | VBridger | 我们 | 判断 |
+|---|---|---|---|
+| 平滑**语义** | `Lerp(prev, 输入, 1 − smooth)`，**每帧一次** | `1 − exp(−dt / seconds)` | **单位不同**，见下 |
+| 平滑**时间基准** | **按帧**（无时间单位，帧率变了手感就变） | **按秒**（时间常数） | 我们帧率无关，**更稳** |
+| 平滑**用量** | `V3.0`: 20/26 行；`VisemesARKit`: 20/34；`VMC-Face-Head`: 2 行 | **23 / 90 行**（照 VB 换算） | 已对齐 |
+| **延迟** | 帧 FIFO，`delayCount = round(delay × 0.06)`；10 份预设里 `delayOn` **全 false** | 字段留位、**未实现**（面板标注） | 都等于没有 |
+| **分档** | `[trigger, target, threshold, hold_ms]`，hold 走 `round(ms × 0.06)` 帧 | `trigger/target/hold/threshold`，hold 用**秒**；有迟滞与最短保持 | 语义接近，单位不同 |
+| 分档**用量** | `V2.0_Stepped`: 24/26 行；`PNGTuber`: 9/10 | **0 行** | 未采用 |
+| **曲线** | 逐行，通常恒等 | 逐行，90 行**全直线** | 一致 |
+| 非恒等曲线 | 全库**只有 1 条**：`EyeRightY`（五份预设共用，零点附近一个浅 S） | 0 条 | 可忽略 |
+| **两层曲线** | 输入曲线在**机器级文件**里（68 条，当前全恒等） | 输入曲线**在配置行里**（15 条标量给了宽范围） | 我们概念上更好 |
+
+#### 平滑的单位换算（为什么不能直接搬 VB 的值）
+
+VB 的 UI 滑条是 0..100 存成 0..1（源码 `smoothField.value = smoothVal * 100`、
+`smoothVal = value / 100`），然后每帧 `lerp(num, 1 − smoothVal)`。**所以 `smooth` 是个
+"每帧比例"，没有时间单位** —— 同一个预设，60fps 和 144fps 手感不同。
+
+我们的 `Smooth` 是时间常数（秒），帧率无关。令两者在**一帧**上等效：
+
+```
+1 − exp(−dt/τ) = 1 − smooth        ⇒        τ = −dt / ln(smooth)
+```
+
+按 **60fps** 列表（VB 是桌面应用；这也是**最保守**的一档：VB 在高帧率下滤波更弱，
+所以取 60fps 的值搬到按秒的实现上，永远不会比它原本更"糊"）：
+
+| VB `smooth` | τ（秒） | 我们用在哪 |
+|---|---|---|
+| 0.10 | 0.007 | `EyeLeftX/Y`、`EyeRightX/Y`、`EyeOpenLeft/Right`、`MouthSmile`、`MouthX`、`MouthFunnel`、`MouthPucker`、`MouthShrug`、`MouthPressLipOpen` |
+| 0.15 | 0.009 | `MouthOpen`、`Brows` |
+| 0.19 | 0.010 | `FacePositionX/Y` |
+| 0.22 | 0.011 | `FacePositionZ` |
+| 0.32 | 0.015 | `BrowInnerUp` |
+| 0.40 | 0.018 | `BrowLeftY`、`BrowRightY` |
+| 0.67 | 0.042 | `FaceAngleX/Y/Z` |
+
+⚠️ **这些值都不大**：`0.10` **不是"关掉"**，它是"每帧 90%"≈ 7ms —— 一个很轻的滤波。
+VB 那 20 行里大部分都在这个量级，真正"黏"的只有 `FaceAngle`（42ms）与眉那一对（18ms）。
+**别把 0.007 当成笔误。**
+
+⚠️ **G1（原始 52）不给任何修饰符**：它的全部价值就是"没被动过的值"。
+给它加平滑之后就没有任何未滤波的源可以对照了。
+
+#### 我们与 VB 的两个语义差异（调参时能感觉到）
+
+**① 分档的 `threshold` 定义不同。** 我们把 `threshold` 当"触发阈值上下的迟滞带"
+（`release = trigger − |threshold|`）；VB 里它是"低于当前档触发点时，要掉多少才退"。
+都能防抖，但同一个数字在两边的手感不一样。
+
+**② VB 是按部位给黏度的。** 它的 `BodyAngle` 平滑远小于脸的（0.14 / 0.22 vs
+`FaceAngle` 0.67）—— 身体慢、脸快。这正是"每行自己的手感"的原始出处，
+也是我们把它做成**每行一个 `modifiers` 列表**（而不是全局一个时间常数）的原因。
+
 ---
 
 ## 5. 明确**算不出来**的（9 行 / 11 个参数）
