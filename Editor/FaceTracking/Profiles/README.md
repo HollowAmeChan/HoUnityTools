@@ -14,8 +14,7 @@
 
 | 文件 | 是什么 |
 |---|---|
-| `ho-iPhoneVTS.hoface.json` | **正式中间层的第一份**：67 条 iPhone 线名 + 21 条出口。出口**不是直通**，是**从 ARKit 形态量合成 VTS 官方追踪参数**（`FaceAngleX` / `MouthOpen` / `Brows`…）。公式机械取自本机 VBridger，见下 |
-| `ho-vts-default.hoface.json` | **旧骨架**：三种方言的线名 → 规范名 + 58 条 `ARKit/*` 直通出口，给人复制当起点用。⚠️ 它的出口写 `ARKit/*`——**等于假设控制器做 ARKit 语义**，而这并不保证 |
+| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：67 条 iPhone 线名 + 21 条出口。出口**不是直通**，是**从 ARKit 形态量合成 VTS 官方追踪参数**（`FaceAngleX` / `MouthOpen` / `Brows`…）。公式机械取自本机 VBridger，见下 |
 | `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的**纯直通参考**：67 输入 / 67 输出，零改名、零曲线 |
 | `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的**纯直通参考**：65 输入 / 65 输出，同上 |
 
@@ -23,10 +22,13 @@
 （`parameter = expression = 线名`，两层曲线恒等），它是**实测表**的落盘形式，职责只有记录；
 `ho-iPhoneVTS` 才是**真在加工**的那一层（改名 / 表达式 / 曲线）。
 
-旧三份由 `gen-default-profile.ps1` 生成，名字全部取自源码与**实测真值**（**不手抄、不按命名规则推断**）：
+它同时是 **Unity 那套验证用例的夹具**（`Tests~/FaceTrackingValidation.cs` 的 `PrepareValidationProfile`）：
+读它、原样写成验证工程里的 `Assets/ValidationProfile.hoface.json`。所以**改它的输入行会连带影响那套用例**——
+夹具会当场查 `jawOpen` 那一路在不在（行为用例靠它串"包 → 参数"整条链），缺了就直接抛。
+
+设备那两份由 `gen-default-profile.ps1` 生成，名字全部取自实测**真值**（**不手抄、不按命名规则推断**）：
 
 ```powershell
-& .warudo-mod-research\.tools\gen-default-profile.ps1    # ho-vts-default
 # 设备那两份（纯直通参考预设）的内容 = PARAMETER_DEVICE_VERIFICATION.md 里对应表的 wire 列。
 # 改线名就改那份文档的实测表，然后：
 & .warudo-mod-research\.tools\gen-verif-tables.ps1       # 刷新文档里的生成表

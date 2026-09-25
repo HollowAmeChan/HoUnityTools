@@ -2,271 +2,272 @@
     "format":  "ho-face-middleware",
     "version":  2,
     "displayName":  "ho-iPhoneVTS",
-    "notes":  "Formal middleware profile -- APPLE / iPhone VTS input.\n\nUnlike the two ho-debug-* profiles (which are pure pass-through references: zero renaming, no\ncurves, parameter = expression = the raw wire name), THIS file is a real middle layer: it takes\nthe device\u0027s ARKit shape values and SYNTHESISES the official VTubeStudio tracking parameters\nfrom them, the way VBridger does for its VTS relay.\n\nINPUT SIDE -- long-lived, per-device\n  One row per iPhone VTS wire, parameter = expression = the wire name. There is no renaming in\n  this profile on purpose: the canonical vocabulary here IS the device\u0027s wire vocabulary, so\n  inventing a second set of names would add a layer with nothing in it.\n  67 wires, measured (docs/PARAMETER_DEVICE_VERIFICATION.md, section 2). Do not derive wire\n  names from a spelling rule -- doing that once produced 12 rows pointing at keys the phone\n  never sends, and that failure mode is silent.\n\nOUTPUT SIDE -- the controller contract\n  Writes the 22 official VTS tracking parameters we can derive, plus FaceFound.\n  VTS\u0027s tracking list is a fixed built-in set of 98 names (33 face/mouse/audio, 26 hand,\n  39 controller); the 22 here are the face ones our input can actually feed.\n  Explicitly NOT written: MousePositionX/Y (no mouse), Voice* and VoiceA..O (no microphone on\n  this link), FaceAngry (experimental, iOS only, and no ARKit shape maps onto it).\n  Also NOT written: VBridger\u0027s own custom outputs (MouthFunnel, MouthPucker, MouthShrug,\n  Eye_Squint_L/R, MouthPressLipOpen, BrowInnerUp). Those are VB-private names that need a\n  ParameterCreationRequest on the receiving end -- they are not VTS standard.\n\nWHERE THE FORMULAS CAME FROM\n  Extracted mechanically from the local VBridger install, never hand-transcribed -- see\n  .research/vbridger/extract_vts_formulas.ps1. Each row\u0027s notes name the preset it came from.\n  Formulas are picked by PRESET, not by output name: VB\u0027s V3.0 EyeRightX is built from\n  eyeLookIn_L / eyeLookOut_L and its EyeRightY adds browOuterUp_L, so the name does not\n  describe the source.\n  Exception: EyeLeftX/Y and EyeRightX/Y come straight from the device\u0027s own raw eye scalars,\n  because the iPhone sends them and VB\u0027s synthesis reads a different axis than its name claims.\n\nWHAT IS NOT CALIBRATED\n  Shaping, not calibration. VBridger\u0027s own input-curve store is 68 rows of identity\n  (0-\u003e0 / 1-\u003e1), so there is no calibration to copy from it, and its preset numbers describe\n  its own channel set, not this one.\n  The FaceAngle* / FacePosition* sign flips are VBridger\u0027s, transcribed structurally: the\n  device axes they consume (Rotation_*, Position_*) have NOT been verified against them on\n  hardware. Head position units are also uncalibrated (raw phone values pass through).\n  Fix both on YOUR copy -- this file is the starting point, not the answer.\n\nCURVES\n  Every row carries an explicit curve. The vertical axis is the PARAMETER VALUE, not a\n  percentage: writing 0..100 on an output row multiplies the blend-tree weight by 100.\n  A row whose expression is a synthesis formula (Brows, MouthOpen, MouthSmile) has a 0.5-ish\n  neutral and can leave 0..1, so its curve is deliberately wider than the nominal range.\n  The device scalars are given +/-180 on BOTH layers -- a 0..1 default curve would silently\n  clamp head rotation to 0/1 and look like \"head pose was never wired up\".",
+    "notes":  "Formal middleware profile -- APPLE / iPhone VTS input.\n\nUnlike the two ho-debug-* profiles (which are pure pass-through references: zero renaming, no\ncurves, parameter = expression = the raw wire name), THIS file is a real middle layer: it takes\nthe device\u0027s ARKit shape values and SYNTHESISES the official VTubeStudio tracking parameters\nfrom them, the way VBridger does for its VTS relay.\n\nINPUT SIDE -- long-lived, per-device\n  One row per iPhone VTS wire. The 52 shape rows RENAME the device\u0027s PascalCase wire\n  (`JawOpen`) to the canonical camelCase name (`jawOpen`); the other 15 rows (head/eye pose,\n  FaceFound, Hotkey, Timestamp) are not channel names, so there `parameter == expression`.\n  THIS RENAME IS NOT OPTIONAL and is not a naming preference: the canonical vocabulary belongs to\n  the upstream channel table (`HoFaceTrackingChannels.Names`), and the session resolves channels\n  by walking the INPUT rows\u0027 `parameter`. A profile whose input parameter is `JawOpen` matches no\n  channel at all, so the middle layer silently emits nothing.\n  67 wires, measured (docs/PARAMETER_DEVICE_VERIFICATION.md, section 2). Do not derive wire\n  names from a spelling rule -- doing that once produced 12 rows pointing at keys the phone\n  never sends, and that failure mode is silent.\n\nOUTPUT SIDE -- the controller contract\n  Writes the official VTS tracking parameters we can derive (20 art axes), plus FaceFound.\n  VTS\u0027s tracking list is a fixed built-in set of 98 names (33 face/mouse/audio, 26 hand,\n  39 controller); the ones here are the face ones our input can actually feed.\n  Explicitly NOT written: MousePositionX/Y (no mouse), Voice* and VoiceA..O (no microphone on\n  this link), FaceAngry (experimental, iOS only, and no ARKit shape maps onto it).\n  Also NOT written: VBridger\u0027s own custom outputs (MouthFunnel, MouthPucker, MouthShrug,\n  Eye_Squint_L/R, MouthPressLipOpen, BrowInnerUp). Those are VB-private names that need a\n  ParameterCreationRequest on the receiving end -- they are not VTS standard.\n  Full per-parameter definitions, ranges and formula sources: docs/PARAMETER_HO.md.\n\nWHERE THE FORMULAS CAME FROM\n  Extracted mechanically from the local VBridger install, never hand-transcribed -- see\n  .research/vbridger/extract_vts_formulas.ps1. Each row\u0027s notes name the preset it came from.\n  Formulas are picked by PRESET, not by output name: VB\u0027s V3.0 EyeRightX is built from\n  eyeLookIn_L / eyeLookOut_L and its EyeRightY adds browOuterUp_L, so the name does not\n  describe the source.\n  Exception: EyeLeftX/Y and EyeRightX/Y come straight from the device\u0027s own raw eye scalars,\n  because the iPhone sends them and VB\u0027s synthesis reads a different axis than its name claims.\n\nWHAT IS NOT CALIBRATED\n  Shaping, not calibration. VBridger\u0027s own input-curve store is 68 rows of identity\n  (0-\u003e0 / 1-\u003e1), so there is no calibration to copy from it, and its preset numbers describe\n  its own channel set, not this one.\n  The FaceAngle* / FacePosition* sign flips are VBridger\u0027s, transcribed structurally: the\n  device axes they consume (Rotation_*, Position_*) have NOT been verified against them on\n  hardware. Head position units are also uncalibrated (raw phone values pass through).\n  Fix both on YOUR copy -- this file is the starting point, not the answer.\n\nCURVES\n  Every row carries an explicit curve. The vertical axis is the PARAMETER VALUE, not a\n  percentage: writing 0..100 on an output row multiplies the blend-tree weight by 100.\n  A row whose expression is a synthesis formula (Brows, MouthOpen, MouthSmile) has a 0.5-ish\n  neutral and can leave 0..1, so its curve is deliberately wider than the nominal range.\n  The device scalars are given +/-180 on BOTH layers -- a 0..1 default curve would silently\n  clamp head rotation to 0/1 and look like \"head pose was never wired up\".",
     "inputs":  [
                    {
-                       "parameter":  "BrowDownLeft",
+                       "parameter":  "browDownLeft",
                        "expression":  "BrowDownLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "BrowDownRight",
+                       "parameter":  "browDownRight",
                        "expression":  "BrowDownRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "BrowInnerUp",
+                       "parameter":  "browInnerUp",
                        "expression":  "BrowInnerUp",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "BrowOuterUpLeft",
+                       "parameter":  "browOuterUpLeft",
                        "expression":  "BrowOuterUpLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "BrowOuterUpRight",
+                       "parameter":  "browOuterUpRight",
                        "expression":  "BrowOuterUpRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "CheekPuff",
+                       "parameter":  "cheekPuff",
                        "expression":  "CheekPuff",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "CheekSquintLeft",
+                       "parameter":  "cheekSquintLeft",
                        "expression":  "CheekSquintLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "CheekSquintRight",
+                       "parameter":  "cheekSquintRight",
                        "expression":  "CheekSquintRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeBlinkLeft",
+                       "parameter":  "eyeBlinkLeft",
                        "expression":  "EyeBlinkLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeBlinkRight",
+                       "parameter":  "eyeBlinkRight",
                        "expression":  "EyeBlinkRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookDownLeft",
+                       "parameter":  "eyeLookDownLeft",
                        "expression":  "EyeLookDownLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookDownRight",
+                       "parameter":  "eyeLookDownRight",
                        "expression":  "EyeLookDownRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookInLeft",
+                       "parameter":  "eyeLookInLeft",
                        "expression":  "EyeLookInLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookInRight",
+                       "parameter":  "eyeLookInRight",
                        "expression":  "EyeLookInRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookOutLeft",
+                       "parameter":  "eyeLookOutLeft",
                        "expression":  "EyeLookOutLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookOutRight",
+                       "parameter":  "eyeLookOutRight",
                        "expression":  "EyeLookOutRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookUpLeft",
+                       "parameter":  "eyeLookUpLeft",
                        "expression":  "EyeLookUpLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeLookUpRight",
+                       "parameter":  "eyeLookUpRight",
                        "expression":  "EyeLookUpRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeSquintLeft",
+                       "parameter":  "eyeSquintLeft",
                        "expression":  "EyeSquintLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeSquintRight",
+                       "parameter":  "eyeSquintRight",
                        "expression":  "EyeSquintRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeWideLeft",
+                       "parameter":  "eyeWideLeft",
                        "expression":  "EyeWideLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "EyeWideRight",
+                       "parameter":  "eyeWideRight",
                        "expression":  "EyeWideRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "JawForward",
+                       "parameter":  "jawForward",
                        "expression":  "JawForward",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "JawLeft",
+                       "parameter":  "jawLeft",
                        "expression":  "JawLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "JawOpen",
+                       "parameter":  "jawOpen",
                        "expression":  "JawOpen",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "JawRight",
+                       "parameter":  "jawRight",
                        "expression":  "JawRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthClose",
+                       "parameter":  "mouthClose",
                        "expression":  "MouthClose",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthDimpleLeft",
+                       "parameter":  "mouthDimpleLeft",
                        "expression":  "MouthDimpleLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthDimpleRight",
+                       "parameter":  "mouthDimpleRight",
                        "expression":  "MouthDimpleRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthFrownLeft",
+                       "parameter":  "mouthFrownLeft",
                        "expression":  "MouthFrownLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthFrownRight",
+                       "parameter":  "mouthFrownRight",
                        "expression":  "MouthFrownRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthFunnel",
+                       "parameter":  "mouthFunnel",
                        "expression":  "MouthFunnel",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthLeft",
+                       "parameter":  "mouthLeft",
                        "expression":  "MouthLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthLowerDownLeft",
+                       "parameter":  "mouthLowerDownLeft",
                        "expression":  "MouthLowerDownLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthLowerDownRight",
+                       "parameter":  "mouthLowerDownRight",
                        "expression":  "MouthLowerDownRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthPressLeft",
+                       "parameter":  "mouthPressLeft",
                        "expression":  "MouthPressLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthPressRight",
+                       "parameter":  "mouthPressRight",
                        "expression":  "MouthPressRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthPucker",
+                       "parameter":  "mouthPucker",
                        "expression":  "MouthPucker",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthRight",
+                       "parameter":  "mouthRight",
                        "expression":  "MouthRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthRollLower",
+                       "parameter":  "mouthRollLower",
                        "expression":  "MouthRollLower",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthRollUpper",
+                       "parameter":  "mouthRollUpper",
                        "expression":  "MouthRollUpper",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthShrugLower",
+                       "parameter":  "mouthShrugLower",
                        "expression":  "MouthShrugLower",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthShrugUpper",
+                       "parameter":  "mouthShrugUpper",
                        "expression":  "MouthShrugUpper",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthSmileLeft",
+                       "parameter":  "mouthSmileLeft",
                        "expression":  "MouthSmileLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthSmileRight",
+                       "parameter":  "mouthSmileRight",
                        "expression":  "MouthSmileRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthStretchLeft",
+                       "parameter":  "mouthStretchLeft",
                        "expression":  "MouthStretchLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthStretchRight",
+                       "parameter":  "mouthStretchRight",
                        "expression":  "MouthStretchRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthUpperUpLeft",
+                       "parameter":  "mouthUpperUpLeft",
                        "expression":  "MouthUpperUpLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "MouthUpperUpRight",
+                       "parameter":  "mouthUpperUpRight",
                        "expression":  "MouthUpperUpRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "NoseSneerLeft",
+                       "parameter":  "noseSneerLeft",
                        "expression":  "NoseSneerLeft",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "NoseSneerRight",
+                       "parameter":  "noseSneerRight",
                        "expression":  "NoseSneerRight",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
-                       "parameter":  "TongueOut",
+                       "parameter":  "tongueOut",
                        "expression":  "TongueOut",
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                       "notes":  "device wire -\u003e canonical name (camelCase)"
                    },
                    {
                        "parameter":  "Rotation_x",
                        "expression":  "Rotation_x",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -282,12 +283,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Rotation_y",
                        "expression":  "Rotation_y",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -303,12 +304,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Rotation_z",
                        "expression":  "Rotation_z",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -324,12 +325,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Position_x",
                        "expression":  "Position_x",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -345,12 +346,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Position_y",
                        "expression":  "Position_y",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -366,12 +367,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Position_z",
                        "expression":  "Position_z",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -387,12 +388,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeLeft_x",
                        "expression":  "EyeLeft_x",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -408,12 +409,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeLeft_y",
                        "expression":  "EyeLeft_y",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -429,12 +430,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeLeft_z",
                        "expression":  "EyeLeft_z",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -450,12 +451,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeRight_x",
                        "expression":  "EyeRight_x",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -471,12 +472,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeRight_y",
                        "expression":  "EyeRight_y",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -492,12 +493,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "EyeRight_z",
                        "expression":  "EyeRight_z",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -513,12 +514,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "FaceFound",
                        "expression":  "FaceFound",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -534,12 +535,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Hotkey",
                        "expression":  "Hotkey",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -555,12 +556,12 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    },
                    {
                        "parameter":  "Timestamp",
                        "expression":  "Timestamp",
+                       "notes":  "device wire; not a channel name, so no rename",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -576,8 +577,7 @@
                                                       "outT":  1
                                                   }
                                               ]
-                                 },
-                       "notes":  "iPhone VTS device wire (measured); no rename in this profile"
+                                 }
                    }
                ],
     "outputs":  [
@@ -793,7 +793,7 @@
                     },
                     {
                         "parameter":  "EyeOpenLeft",
-                        "expression":  ".5 + (EyeBlinkLeft * -.8) + (EyeWideLeft * .8)",
+                        "expression":  ".5 + (eyeBlinkLeft * -.8) + (eyeWideLeft * .8)",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -814,7 +814,7 @@
                     },
                     {
                         "parameter":  "EyeOpenRight",
-                        "expression":  ".5 + (EyeBlinkRight * -.8) + (EyeWideRight * .8)",
+                        "expression":  ".5 + (eyeBlinkRight * -.8) + (eyeWideRight * .8)",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -835,7 +835,7 @@
                     },
                     {
                         "parameter":  "Brows",
-                        "expression":  ".5 + (BrowOuterUpLeft + BrowOuterUpRight - BrowDownLeft - BrowDownRight) / 4",
+                        "expression":  ".5 + (browOuterUpLeft + browOuterUpRight - browDownLeft - browDownRight) / 4",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -856,7 +856,7 @@
                     },
                     {
                         "parameter":  "BrowLeftY",
-                        "expression":  ".5 + (BrowOuterUpLeft - BrowDownLeft) + ((MouthRight - MouthLeft) / 8)",
+                        "expression":  ".5 + (browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8)",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -877,7 +877,7 @@
                     },
                     {
                         "parameter":  "BrowRightY",
-                        "expression":  ".5 + (BrowOuterUpRight - BrowDownRight) + ((MouthLeft - MouthRight) / 8)",
+                        "expression":  ".5 + (browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8)",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -898,7 +898,7 @@
                     },
                     {
                         "parameter":  "MouthOpen",
-                        "expression":  "(JawOpen - MouthClose) - ((MouthRollUpper + MouthRollLower) * .2) + (MouthFunnel * .2)",
+                        "expression":  "(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -919,7 +919,7 @@
                     },
                     {
                         "parameter":  "MouthSmile",
-                        "expression":  "(2 - (MouthFrownLeft + MouthFrownRight + MouthPucker) + (MouthSmileRight + MouthSmileLeft + ((MouthDimpleLeft + MouthDimpleRight) / 2))) / 4",
+                        "expression":  "(2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 4",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -940,7 +940,7 @@
                     },
                     {
                         "parameter":  "MouthX",
-                        "expression":  "((MouthLeft - MouthRight) + (MouthSmileLeft - MouthSmileRight))",
+                        "expression":  "((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight))",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -961,7 +961,7 @@
                     },
                     {
                         "parameter":  "CheekPuff",
-                        "expression":  "CheekPuff",
+                        "expression":  "cheekPuff",
                         "curve":  {
                                       "keys":  [
                                                    {
@@ -982,7 +982,7 @@
                     },
                     {
                         "parameter":  "TongueOut",
-                        "expression":  "TongueOut",
+                        "expression":  "tongueOut",
                         "curve":  {
                                       "keys":  [
                                                    {

@@ -1199,45 +1199,39 @@ public static class HoFaceTrackingValidation
     }
 
     /// <summary>
-    /// 把**包内那份发货的默认配置**复制成这个验证工程里的一份，并补上用例断言要的 `notes` 口径
-    /// （`iFacialMocap` / `VTS 手机`），然后把 `rig.profilePath` 指过去。
+    /// 把**包内那份 iPhone VTS 的正式中间层配置**读进来、写成这个验证工程里的一份，再把
+    /// `rig.profilePath` 指过去。
     ///
     /// 【为什么不再用内置默认表】
     /// 2026-09-25 起 Unity 侧也取消了"没指定配置文件就用内置默认表"的兜底（与 Warudo 侧统一：
     /// **空 = 空表**）。所以这个夹具必须有一份真配置，否则 `rig.Inputs()` 是空表，整套用例全塌。
     ///
-    /// 【为什么要补 notes】
-    /// `HoFaceMiddlewareDefaults.Inputs()` 用 `notes = "iFacialMocap"` / `"VTS 手机"` 当钥匙，
-    /// 而发货配置里那些行的 `notes` 是说明性文字。用例按 `notes` 找行，所以这里就地改写，
-    /// 而不是去改发货文件（那份文件的 notes 是给用户看的）。
+    /// 【为什么是 VTS 那一份】
+    /// 这一层**只剩 VTS 一条协议**：iFacialMocap 的接收端连着那个类一起删了，所以夹具不再需要
+    /// `_L/_R` 那一族线名。`ho-iPhoneVTS.hoface.json` 的输入行是 `parameter == expression == 设备线名`
+    /// （零改名），所以它同时就是"这台设备实际会发的 67 个键"的清单 —— 用它当夹具，覆盖的就是真东西。
     ///
-    /// 找不到发货配置时**抛异常**：验证工程的价值就在"覆盖真实文件"，静默退回内置默认会让这条用例失去意义
-    /// （而且那条路已经没了）。
+    /// 【还断言 `jawOpen`】
+    /// 下面那些行为用例（`SendPacket(Shape("JawOpen", …))` → `Weight("jawOpen")`）靠
+    /// `jawOpen` 这一路串起"包 → 输入行 → 通道 → 输出行 → 影子参数"。换了夹具却丢了这一路，
+    /// 失败会表现为一堆莫名其妙的中性值，所以这里**当场查一次**并抛清楚的原因。
     /// </summary>
     private static void PrepareValidationProfile(HoFaceDebugSettings settings)
     {
-        string shipped = ShippedDefaultProfileFullPath();
+        string shipped = ShippedIphoneVtsProfileFullPath();
         if (string.IsNullOrEmpty(shipped) || !File.Exists(shipped))
-            throw new Exception("找不到包内发货的默认配置（Editor/FaceTracking/Profiles/ho-vts-default.hoface.json）。");
+            throw new Exception("找不到包内发货的 iPhone VTS 配置（Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json）。");
 
         HoFaceMiddleware middleware;
         string error;
         if (!HoFaceProfile.TryParse(File.ReadAllText(shipped), out middleware, out error))
-            throw new Exception("读不了发货的默认配置：" + error);
+            throw new Exception("读不了发货的 iPhone VTS 配置：" + error);
 
-        // 用例要的两把 notes 钥匙。
-        for (int i = 0; i < middleware.inputs.Count; i++)
-        {
-            var row = middleware.inputs[i];
-            if (row == null) continue;
-            if (row.expression == "jawOpen" || row.expression.EndsWith("_L", StringComparison.Ordinal)
-                || row.expression.EndsWith("_R", StringComparison.Ordinal))
-                row.notes = "iFacialMocap";
-            else if (row.expression == "JawOpen" || row.expression.EndsWith("Left", StringComparison.Ordinal)
-                || row.expression.EndsWith("Right", StringComparison.Ordinal))
-                row.notes = "VTS 手机";
-            // 头/眼/faceFound 那几行保持原 notes（用例不按它们找行）
-        }
+        bool hasJaw = false;
+        foreach (var row in middleware.inputs)
+            if (row != null && row.parameter == "jawOpen") { hasJaw = true; break; }
+        if (!hasJaw)
+            throw new Exception("夹具配置里没有 `jawOpen` 这一路 —— 行为用例靠它串"包 → 参数"整条链，缺了会以一堆中性值的形式失败。");
 
         string assetPath = "Assets/ValidationProfile" + HoFaceProfile.Extension;
         string fullPath = System.IO.Path.Combine(Application.dataPath, "ValidationProfile" + HoFaceProfile.Extension);
@@ -1246,9 +1240,11 @@ public static class HoFaceTrackingValidation
         settings.profilePath = assetPath;
     }
 
-    /// <summary>包内发货配置的绝对路径（允许用 `HOUNITYTOOLS_ROOT` 环境变量覆盖包位置）。</summary>
-    private static string ShippedDefaultProfileFullPath()
+    /// <summary>包内那份 iPhone VTS 中间层配置的绝对路径（允许用 `HOUNITYTOOLS_ROOT` 环境变量覆盖包位置）。</summary>
+    private static string ShippedIphoneVtsProfileFullPath()
     {
+        const string relative = "Editor/FaceTracking/Profiles/ho-iPhoneVTS";
+
         var roots = new System.Collections.Generic.List<string>();
         string fromEnv = Environment.GetEnvironmentVariable("HOUNITYTOOLS_ROOT");
         if (!string.IsNullOrEmpty(fromEnv)) roots.Add(fromEnv);
@@ -1256,7 +1252,7 @@ public static class HoFaceTrackingValidation
 
         foreach (string root in roots)
         {
-            string candidate = Path.Combine(root, "Editor/FaceTracking/Profiles/ho-vts-default" + HoFaceProfile.Extension);
+            string candidate = Path.Combine(root, relative + HoFaceProfile.Extension);
             if (File.Exists(candidate)) return candidate;
         }
 
@@ -1269,7 +1265,7 @@ public static class HoFaceTrackingValidation
                 int at = line.IndexOf("file:", StringComparison.OrdinalIgnoreCase);
                 if (at < 0) continue;
                 string value = line.Substring(at + 5).Trim().TrimEnd(',', '"').Replace('\\', '/');
-                string candidate = Path.Combine(value, "Editor/FaceTracking/Profiles/ho-vts-default" + HoFaceProfile.Extension);
+                string candidate = Path.Combine(value, relative + HoFaceProfile.Extension);
                 if (File.Exists(candidate)) return candidate;
             }
         }
@@ -1281,9 +1277,13 @@ public static class HoFaceTrackingValidation
     {
         Check(HoFaceTrackingChannels.Names.Length == 52, "ARKit channel count");
 
-        // 中间层默认输入行：线名 → 规范名 + 量纲。这两条是"不再有隐式处理"的核心证据。
+        // 中间层内置输入行：线名 → 规范名 + 量纲。这两条断言读的是 **C# 内置的 `Inputs()`**
+        //（「新建配置」写出来的初始内容），**不是**发货配置 —— 所以它们跟夹具换成哪一份无关。
+        // ⚠️ 这一层实际只剩 VTS 一条路（iFacialMocap 接收端连着那个类一起删了），
+        //    内置 `Inputs()` 里那族 `_L/_R` 行现在没有活的生产者。留着不影响运行（缺线的那行会冻结），
+        //    但"新建配置"会照样把它们写进用户的初始表里。
         var defaults = HoFaceMiddlewareDefaults.Inputs();
-        Check(defaults.Count > 52, "内置输入行覆盖两种协议");
+        Check(defaults.Count > 52, "内置输入行覆盖两种拼写（VTS 是活的，_L/_R 那族已无生产者）");
         float converted = float.NaN;
         float vtsConverted = float.NaN;
         foreach (var row in defaults)

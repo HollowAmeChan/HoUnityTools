@@ -71,6 +71,56 @@ iPhone 那 203 帧里 52 个形态量**全部 MOVES**，逐个对应 ARKit 52 �
 | 鼠标 / 触摸 | `MousePositionX`、`MousePositionY` |
 | 生气脸的专用分类器 | `FaceAngry` |
 
+### 1.3 三个词汇表，一条转换规则
+
+这是整份规范**最容易搞错**的地方：同一个形态量有三套名字在流动，而"哪一层用哪一套"是**固定的**，不是口味问题。
+
+| 层 | 长什么样 | 例子 | 谁定义 |
+|---|---|---|---|
+| **设备线名** | PascalCase | `JawOpen`、`EyeBlinkLeft`、`MouthSmileLeft` | **VTS 手机协议**（= iOS ARKit 名，官方固定） |
+| **规范名**（我们中间层内部） | camelCase | `jawOpen`、`eyeBlinkLeft`、`mouthSmileLeft` | `HoFaceTrackingChannels.Names`（52 条，`Runtime/FaceTracking/`） |
+| **出口名**（喂控制器） | 我们选的那套 | `MouthOpen`、`FaceAngleX` | 本规范 §3 |
+| *（参考）VB 的内部名* | camelCase + `_L/_R` | `jawOpen`、`eyeBlink_L` | VBridger 的 `SceneData.shapekeys` |
+
+**线名 → 规范名的规则只有一条：首字母小写。** 52 个形状全部适用（这正是 VBridger `vtsKeys`
+表与它的内部 `shapekeys` 表之间的关系——两表只差大小写，其余 12 个头/眼项拼写相同）。
+
+在本机 VBridger 源码里，这三套拼写各有一张**按下标对齐**的表，用哪张取决于当前追踪源：
+
+| VB 的表 | 行 | 拼写 | 对应我们这边 |
+|---|---|---|---|
+| `faceMotionKeys` | L8052 | `BrowDownLeft`（iFacialMocap/MediaPipe 的 `Left/Right` 系） | 我们不接 |
+| `vtsKeys` | L8063 | **`BrowDownLeft` / `EyeBlinkLeft` / `JawOpen`** | **= 我们设备发的线名，逐字相同** |
+| （无表） | — | `browDown_L` / `eyeBlink_L` / `jawOpen` | = VB 内部名；也是我们的规范名 |
+
+⚠️ **VB 并不"拥有一切方言"**：它拥有的是**三套各自的精确表**，`IndexOf` **逐字命中**，
+**没有归一化、没有别名表**。所以"多写几条不同拼写的输入行"不是可选的兼容策略，而是必需——
+每多接一种拼写就多一族行。
+
+⚠️ **输入行的左值必须是规范名，右值才是线名**：
+
+    输入行：parameter = 规范名（jawOpen，camelCase）    ← 通道靠这个认
+            expression = 设备线名（JawOpen，PascalCase） ← 包里真收到的那个键
+
+因为 `HoFaceAnimationSession` 是拿**输入行的 `parameter`** 去
+`HoFaceTrackingChannels.IndexOf(...)` 解析通道的。**写反的后果是静默且全面的**：
+一份 `parameter = expression = JawOpen` 的配置**一个通道都解析不到**，中间层什么形状参数都不产出——
+不报错、不警告，只是全都不动。
+
+> 这不是假想：`ho-iPhoneVTS.hoface.json` 的第一版就是这么写的，理由听起来还挺有道理——
+> "这一份的规范名词表就是设备线名词表"。**错。** 规范名是上游通道表的属性，配置只能去符合它。
+
+⚠️ 只有**非通道**的 15 条（`Rotation_*` / `Position_*` / `EyeLeft_*` / `EyeRight_*` /
+`FaceFound` / `Hotkey` / `Timestamp`）可以 `parameter == expression`——它们不是通道，
+没有任何东西拿它们去 `IndexOf`，所以没有改名可做也没有改名必要。
+
+> 由此推出一条判据：**一份"纯直通"（`parameter == expression`）的配置能不能真跑起来，
+> 完全取决于那台设备的线名是否恰好等于规范名**（忽略大小写）。
+> 实测：`ho-debug-iphoneVTS` 覆盖 52/52（PascalCase 恰好只差首字母，能跑）；
+> `ho-debug-androidVTS` 只覆盖 14/52（`browDown_L` 那种与 `browDownLeft` 差得远）。
+> 所以那两份的定位是**实测记录**，不是"能跑的配置"——见
+> [Profiles/README.md](../Editor/FaceTracking/Profiles/README.md)。
+
 ---
 
 ## 2. 值域约定（写公式前必须知道的四件事）
