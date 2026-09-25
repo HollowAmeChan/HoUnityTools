@@ -88,20 +88,31 @@
 |---|---|---|
 | `HoFaceVTS接收器`（旧标题 `Ho Face 接收器（VTS 手机）`，2026-09-25 改名） | **正式** | **3 个**（**数据口在前、`状态` 在最下**）：`原始值`(10)（字典，列表语义，喂参数处理）、`新鲜`(20)（布尔，喂参数处理「输入新鲜」——这是信号不是给人看的）、`状态`(30)（一行文本：来源 / 状态说明 / 本帧键 / 帧·坏帧 / 距上帧；手机模式外加**只在真丢包时**出现的来源提示，本机模式改报客户端数与注入次数）。<br>砍掉的六个：`运行中` `本帧键数` `距上帧秒` `累计帧/坏帧` `外来来源` `本帧原始值` —— 都只是"给人看一眼"，不驱动任何节点，`本帧原始值` 还是 `原始值` 的文本版（想看就把 `原始值` 接「Ho调试日志」，那边摊成 `线名 = 值`）。<br>输入侧另有 **VTS 服务端模式**（勾选框 + `API 端口`），见 §2.0.1 第三条来源。 |
 | `HoFace参数处理` | **正式** | **3 个**：`参数`（字典，列表语义 —— 输出行的结果，**键已去掉 `ARKit/` 前缀**）+ `有脸`（布尔）+ `状态`（四行：配置行 · 问题 · 沙箱路径 · 沙箱里现成的配置）。<br>这就是两层之间**唯一的接口**；`数值预览` 那份长文本按「重读配置」按钮写进 `Player.log`（摊开的就是出口那份参数）。 |
-| `HoFace控制求解` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个 `状态`（一行：参数几个键 · 形状几个 · 有脸 · 头姿）。**默认零配置**；输入 = `参数`（字典）+ `有脸`（布尔，**默认 true**）+ `控制器（可选，AssetBundle 路径）`（见下面的 §2.0.2）。<br>⚠️ 它的 `NodeType.Id` **沿用旧「Ho Face 处理链」那个** `7c3a91d6-…`，所以升级时指官方三个节点的 5 根线不会断。 |
+| `HoFace控制求解` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个 `状态`（多行：参数几个键 · 形状几个 · 有脸 · 头姿；+ `控制器：…`）。**零配置**（唯一那个"配置"是必填的 `控制器` bundle 选择 —— 它是求值场所，不是映射）；输入 = `参数`（字典）+ `有脸`（布尔，**默认 true**）+ `控制器`（**必填**，沙箱 `*.bundle` 下拉，见下面的 §2.0.2）。<br>⚠️ **没有可用的控制器就不吐任何输出**（5 个口全中性，`状态` 里点名原因）—— 见 §2.0.3。<br>⚠️ 它的 `NodeType.Id` **沿用旧「Ho Face 处理链」那个** `7c3a91d6-…`，所以升级时指官方三个节点的 5 根线不会断。 |
 | `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制；⑥ **显示认几类值**（`Describe`）：字符串原样、名→值的表（排序摊平）、**数组/列表逐项**（`[i] = (x, y, z, w)`）、`Vector3`/`Quaternion` 用 F3 —— ⚠️ 数组这条修过：`object` 口拿到 `Bone Rotations`（`Quaternion[]`）时只靠 `ToString()` 屏上只有 `UnityEngine.Quaternion[]` 一行，而官方「检查值」把数组序列化成 JSON，所以"官方的能出值"，差的不是口、是显示。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
 
-**📖 §2.0.2 控制器模式（可选，2026-09-25 加）**：`HoFace控制求解` 多了一个**可选**输入 —— 一个 **AssetBundle 路径**，
-里面装着「控制器 + 它绑定的 rig 预制体」；填了就在隐藏影子上跑真控制器、把结果采出来（形状 + 骨骼偏移），
-留空就是原来的纯装配（VB 那条路照旧）。两条 Unity 硬约束：**`.controller` 文件运行时读不了**（编辑器格式，
-`UnityEditor.Animations` 不在播放器里），**代理造不出来**（运行时无法枚举 `AnimationClip` 的绑定 ——
+**📖 §2.0.2 控制器模式（**必填**，2026-09-25 加 / 当天改成必填）**：`HoFace控制求解` 有一个**必填**输入 —— 一个
+**AssetBundle**（沙箱里的文件，节点上是下拉列表），里面装着「控制器 + 它绑定的 rig 预制体」；
+在隐藏影子上跑真控制器、把结果采出来（形状 + 骨骼偏移）。两条 Unity 硬约束：**`.controller` 文件运行时读不了**
+（编辑器格式，`UnityEditor.Animations` 不在播放器里），**代理造不出来**（运行时无法枚举 `AnimationClip` 的绑定 ——
 `AnimationUtility` 是编辑器专属 —— 所以 bundle 必须带控制器原配的那套层级）。
-代码在 `Core/HoFaceController.cs`；✅ **运行期两条都已实测**（2026-09-25）：bundle `LoadFromFile` 读得了、
-隐藏影子上的 `Animator` 照常跑 —— 参数写进去、混合树解算、`GetBlendShapeWeight` 采回来整条通了
+**路径口径与中间层配置同一套**：插件沙箱（`PluginPersistentDataManager`）里的文件名 + `ReadFileBytes`
++ `AssetBundle.LoadFromMemory`（本地 lint 与真机都放行）；列目录只能用 `GetFileEntries`
+（`GetFiles`/`GetDirectories` 的签名带 `System.IO.SearchOption`，一碰就构建失败）。
+代码在 `Core/HoFaceController.cs`；✅ **运行期全部实测**（2026-09-25）：bundle 读得了、隐藏影子上的 `Animator` 照常跑 ——
+参数写进去、混合树解算、`GetBlendShapeWeight` 采回来整条通了
 （实测 `写入 jawOpen 0.186 / mouthSmileLeft 0.096 → 采到 0.2673 / 0.2194`，两个形状都跟着输入动）。
 **审查那条**：那次构建 `Illegal Assembly Reference = '0'`，唯一被点名的是 `System.IO`（`Path.GetFileName`，已改掉），
 也就是说 `UnityEngine.AssetBundle` **没被安全校验拦**。❓ 仍未验：真控制器（别人的 VRM 控制器）、骨骼那条（要 Humanoid Avatar）。
 细节见 mod `README.md` §1.1.2 / §1.6 / §1.7 与 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.2 / §4.3。
+
+**📖 §2.0.3 控制器是唯一的求值路径（2026-09-25 定，当天落地）**：原来"没控制器就直接把参数装配成输出"
+那条退路**砍了** —— 它等于把量纲/曲线/名字的锅甩给下游，而且**不报错**（画面看着像在工作，实际全错）。
+现在 `控制器` 留空或载入失败 ⇒ 5 个输出口**全中性**（`BlendShapes` 空字典 / 位置零 / 骨骼 identity /
+`Is Tracked` 假），`状态` 里那句 `⚠ 没有可用的控制器…` 就是"为什么不吐"的说明书。
+`Is Tracked` 必须跟着假：否则官方那条链会拿"全中性"当"追到了"去应用，头/根回零 = 角色突然弹回原姿势。
+⚠️ 结果：**`Core/HoFaceSolver.cs` 现在只管头/根位置**（参数里的保留名），它的形状/骨骼那两份输出没有消费者。
+（"VB 自己算好直接喂"不构成保留退路的理由：那只是跳过中间层，依旧要喂给本节点，所以依旧要控制器。）
 
 ⚠️ **`状态` 在控制器模式下会多报一行 `写入 <参数名> <值>`**（2026-09-25 补，最多 6 个），
 载入时还会各写一行自检/采样日志到 `Player.log`：控制器模式的 `BlendShapes` **只来自代理网格**，
@@ -114,9 +125,11 @@
 要判断的是它**跟着输入动没动**。
 
 ⚠️ **换 bundle / 换代码之后必须重新部署**（这次卡最久的不是代码，是部署，见 mod `README.md` §1.7）：
-菜单打的 bundle 落在`<工程根>\_hodebug\`，**不是** Warudo 读的沙箱目录；`.warudo` 是打包产物，
-改了 `.cs` 不重打包就还是旧 DLL；而且 `Prepare` 对同一路径直接返回 ⇒ **换了文件也必须按 `重读控制器`**。
-一眼判据：自检行里的 `state=<哈希>` 与 `clip` 名字变没变。
+菜单打的 bundle **现在直接落在 Warudo 的插件沙箱**（跟中间层配置同一个目录，脚本里那个 `SandboxFolder`
+常量），节点上是**沙箱 `*.bundle` 的下拉列表**（`[AutoComplete]`），选中的是**文件名**
+（`ReadFileBytes` + `AssetBundle.LoadFromMemory`）—— 不再手填绝对路径、也不会放错目录。
+`.warudo` 仍是打包产物：改了 `.cs` 不重打包就是旧 DLL；而且 `Prepare` 对**同名**文件直接返回
+⇒ **换了文件也必须按 `重读控制器`**。一眼判据：自检行里的 `state=<哈希>` 与 `clip` 名字变没变。
 
 **2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「Ho调试日志」接替）：
 `Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
