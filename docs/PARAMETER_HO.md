@@ -172,7 +172,7 @@ VB 有一整族参数用 **0.5 = 中立**：`Brows`、`BrowLeftY`、`BrowRightY`
 
 | 组 | 行数 | 长什么样 | 干什么 |
 |---|---|---|---|
-| **G1 原始 ARKit 52** | 52 | `ARKit/eyeBlinkLeft`、`ARKit/jawOpen`… | **无损直通**。控制器要细节（某个具体形变、自己画轴）就读这一组 |
+| **G1 原始 ARKit 52** | 52 | **裸规范名**：`eyeBlinkLeft`、`jawOpen`、`mouthSmileLeft`… | **无损直通**。控制器要细节（某个具体形变、自己画轴）就读这一组 |
 | **G2 官方 VTS 追踪参数** | 20 | `MouthOpen`、`Brows`、`FaceAngleX`… | **合成**出来的语义轴。喂 VTS 就发这组 |
 | **G3 VB 自造 + 姿态向量 + 信号** | 18 | `MouthFunnel`、`Face/Angle/X`、`FaceFound`… | VB 私有的一族（VTS 词表没有那些概念）+ 4 组 XYZ 向量 + 1 个协议信号 |
 | | **90** | | **出口行的总数** |
@@ -182,25 +182,40 @@ VB 有一整族参数用 **0.5 = 中立**：`Brows`、`BrowLeftY`、`BrowRightY`
 `MouthSmile` 把 `mouthFrown*`/`mouthPucker`/`mouthDimple*` 折成一个数，因为 VTS 没有对应参数。
 **要那份细节就只能读 G1。** 只出 G2 等于在中间层就把信息扔了。
 
-**命名空间（斜杠）是分组的唯一手段**：
+⚠️ **G1 用裸名，没有前缀。** 这一点犯过错：曾经写成 `ARKit/<规范名>`，理由是"要个命名空间
+跟合成组分开"。**错两层**：① VBridger 不这么干——它的 VMC 发送循环遍历整个
+`SceneData.outputValues`（里面躺着全部原始形态键名），所以原始量就是**裸名**发出去的，
+合成行只是再往里加键（`Assembly-CSharp.decompiled.cs` L13322-13329）；
+② 加了前缀就**谁都读不到**——控制器只写自己参数表里声明过的名字，`ARKit/eyeBlinkLeft`
+与任何声明都对不上，于是 52 行白算。
 
-| 前缀 | 含义 |
+**只有姿态向量带命名空间**（`Face/`·`Body/`），因为那两个**真的会撞**：
+
+| 名字 | 含义 |
 |---|---|
-| `ARKit/<规范名>` | 原始通道值，恒等直通（52 条） |
-| `Head/*` | **已废弃**，别再用（那是已删的 `ho-vts-default` 的保留名） |
-| `Face/Angle/*`、`Face/Pos/*`、`Body/Angle/*`、`Body/Pos/*` | VB 的姿态向量（12 条） |
-| 其余无前缀 | 语义参数（G2 的官方名 + G3 的 VB 自造名） |
+| `FaceAngleX` | 官方 VTS 标量：`±90`，不缩放 |
+| `Face/Angle/X` | VB 向量分量：`±30`，带 `0.66` 阻尼 |
+
+这是**两个不同的量**，同名会打架。`Head/*` 是**已删的 `ho-vts-default`** 的保留名，别再用。
+
+**大小写不影响区分**：整条链每个字典都是 `StringComparer.Ordinal`（大小写敏感），控制器匹配
+也走 `parameters.TryGetValue(参数名)` + Animator 参数名，所以 `tongueOut` 与 `TongueOut`
+是两个不同的键、两个不同的参数。这 5 对（`cheekPuff`/`CheekPuff`、`mouthFunnel`/`MouthFunnel`、
+`mouthPucker`/`MouthPucker`、`browInnerUp`/`BrowInnerUp`、`tongueOut`/`TongueOut`）**留着是有意的**——
+改名就等于发明 VTS 词表里没有的名字。唯一要留意的是控制器作者**别故意同时声明两个**，
+那会让它们写同一个形态键槽（后写的赢），但那是作者的选择，不是这一层的缺陷。
 
 ### 3.1 G1 原始 ARKit 52（无损直通）
 
-**就是 §1 那 52 条规范名，一个不多一个不少**，`parameter = ARKit/<规范名>`、
-`expression = <规范名>`，曲线恒等 `0..1 → 0..1`。
+**就是 §1 那 52 条规范名，一个不多一个不少**，`parameter = expression = <规范名>`，
+曲线恒等 `0..1 → 0..1`。**出口名就是裸规范名**（`eyeBlinkLeft`、`jawOpen`…），没有前缀——
+理由见 §3 开头那段。
 
 这一组的意义是"**你永远拿得到原始值**"：G2/G3 任何一个合成量的口径你不认同时，
 可以直接拿这 52 条自己算，不必改中间层。**它是这一层的信息上界。**
 
 完整名单（= `HoFaceTrackingChannels.Names`，逐字等于 `catalog.raw_arkit[].name`）。
-出口参数名就是 `ARKit/` + 规范名，所以这里只列规范名：
+**`parameter` 与 `expression` 都是这个裸名**，所以下面这份名单同时就是出口名：
 
 | # | 规范名 | 组 | # | 规范名 | 组 |
 |---|---|---|---|---|---|
@@ -489,7 +504,7 @@ EyeY = eyeLookUpLeft  - eyeLookDownLeft
 ② 它有损——把四对 `eyeLook*Left/Right` 压成两根轴，而**控制器完全可以自己压**
 （那是表达式一行的事），中间层没必要替它决定。
 
-需要这种"双眼合并注视"的控制器，用 G1 的 `ARKit/eyeLook*` 自己在树里算；
+需要这种"双眼合并注视"的控制器，用 G1 的 `eyeLook*Left/Right` 自己在树里算；
 需要**设备原始眼球标量**的用 G2 的 `EyeLeftX/Y`、`EyeRightX/Y`。
 
 ---

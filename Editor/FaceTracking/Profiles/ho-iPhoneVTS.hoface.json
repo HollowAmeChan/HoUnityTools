@@ -582,7 +582,7 @@
                ],
     "outputs":  [
                     {
-                        "parameter":  "ARKit/browDownLeft",
+                        "parameter":  "browDownLeft",
                         "expression":  "browDownLeft",
                         "curve":  {
                                       "keys":  [
@@ -603,7 +603,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/browDownRight",
+                        "parameter":  "browDownRight",
                         "expression":  "browDownRight",
                         "curve":  {
                                       "keys":  [
@@ -624,7 +624,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/browInnerUp",
+                        "parameter":  "browInnerUp",
                         "expression":  "browInnerUp",
                         "curve":  {
                                       "keys":  [
@@ -645,7 +645,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/browOuterUpLeft",
+                        "parameter":  "browOuterUpLeft",
                         "expression":  "browOuterUpLeft",
                         "curve":  {
                                       "keys":  [
@@ -666,7 +666,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/browOuterUpRight",
+                        "parameter":  "browOuterUpRight",
                         "expression":  "browOuterUpRight",
                         "curve":  {
                                       "keys":  [
@@ -687,7 +687,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/cheekPuff",
+                        "parameter":  "cheekPuff",
                         "expression":  "cheekPuff",
                         "curve":  {
                                       "keys":  [
@@ -708,7 +708,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/cheekSquintLeft",
+                        "parameter":  "cheekSquintLeft",
                         "expression":  "cheekSquintLeft",
                         "curve":  {
                                       "keys":  [
@@ -729,7 +729,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/cheekSquintRight",
+                        "parameter":  "cheekSquintRight",
                         "expression":  "cheekSquintRight",
                         "curve":  {
                                       "keys":  [
@@ -750,7 +750,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeBlinkLeft",
+                        "parameter":  "eyeBlinkLeft",
                         "expression":  "eyeBlinkLeft",
                         "curve":  {
                                       "keys":  [
@@ -771,7 +771,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeBlinkRight",
+                        "parameter":  "eyeBlinkRight",
                         "expression":  "eyeBlinkRight",
                         "curve":  {
                                       "keys":  [
@@ -792,7 +792,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookDownLeft",
+                        "parameter":  "eyeLookDownLeft",
                         "expression":  "eyeLookDownLeft",
                         "curve":  {
                                       "keys":  [
@@ -813,7 +813,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookDownRight",
+                        "parameter":  "eyeLookDownRight",
                         "expression":  "eyeLookDownRight",
                         "curve":  {
                                       "keys":  [
@@ -834,7 +834,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookInLeft",
+                        "parameter":  "eyeLookInLeft",
                         "expression":  "eyeLookInLeft",
                         "curve":  {
                                       "keys":  [
@@ -855,7 +855,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookInRight",
+                        "parameter":  "eyeLookInRight",
                         "expression":  "eyeLookInRight",
                         "curve":  {
                                       "keys":  [
@@ -876,7 +876,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookOutLeft",
+                        "parameter":  "eyeLookOutLeft",
                         "expression":  "eyeLookOutLeft",
                         "curve":  {
                                       "keys":  [
@@ -897,7 +897,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookOutRight",
+                        "parameter":  "eyeLookOutRight",
                         "expression":  "eyeLookOutRight",
                         "curve":  {
                                       "keys":  [
@@ -918,7 +918,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookUpLeft",
+                        "parameter":  "eyeLookUpLeft",
                         "expression":  "eyeLookUpLeft",
                         "curve":  {
                                       "keys":  [
@@ -939,7 +939,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeLookUpRight",
+                        "parameter":  "eyeLookUpRight",
                         "expression":  "eyeLookUpRight",
                         "curve":  {
                                       "keys":  [
@@ -960,7 +960,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeSquintLeft",
+                        "parameter":  "eyeSquintLeft",
                         "expression":  "eyeSquintLeft",
                         "curve":  {
                                       "keys":  [
@@ -981,7 +981,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeSquintRight",
+                        "parameter":  "eyeSquintRight",
                         "expression":  "eyeSquintRight",
                         "curve":  {
                                       "keys":  [
@@ -1002,7 +1002,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeWideLeft",
+                        "parameter":  "eyeWideLeft",
                         "expression":  "eyeWideLeft",
                         "curve":  {
                                       "keys":  [
@@ -1023,7 +1023,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/eyeWideRight",
+                        "parameter":  "eyeWideRight",
                         "expression":  "eyeWideRight",
                         "curve":  {
                                       "keys":  [
@@ -1044,7 +1044,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/jawForward",
+                        "parameter":  "jawForward",
                         "expression":  "jawForward",
                         "curve":  {
                                       "keys":  [
@@ -1065,7 +1065,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/jawLeft",
+                        "parameter":  "jawLeft",
                         "expression":  "jawLeft",
                         "curve":  {
                                       "keys":  [
@@ -1086,7 +1086,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/jawOpen",
+                        "parameter":  "jawOpen",
                         "expression":  "jawOpen",
                         "curve":  {
                                       "keys":  [
@@ -1107,7 +1107,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/jawRight",
+                        "parameter":  "jawRight",
                         "expression":  "jawRight",
                         "curve":  {
                                       "keys":  [
@@ -1128,7 +1128,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthClose",
+                        "parameter":  "mouthClose",
                         "expression":  "mouthClose",
                         "curve":  {
                                       "keys":  [
@@ -1149,7 +1149,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthDimpleLeft",
+                        "parameter":  "mouthDimpleLeft",
                         "expression":  "mouthDimpleLeft",
                         "curve":  {
                                       "keys":  [
@@ -1170,7 +1170,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthDimpleRight",
+                        "parameter":  "mouthDimpleRight",
                         "expression":  "mouthDimpleRight",
                         "curve":  {
                                       "keys":  [
@@ -1191,7 +1191,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthFrownLeft",
+                        "parameter":  "mouthFrownLeft",
                         "expression":  "mouthFrownLeft",
                         "curve":  {
                                       "keys":  [
@@ -1212,7 +1212,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthFrownRight",
+                        "parameter":  "mouthFrownRight",
                         "expression":  "mouthFrownRight",
                         "curve":  {
                                       "keys":  [
@@ -1233,7 +1233,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthFunnel",
+                        "parameter":  "mouthFunnel",
                         "expression":  "mouthFunnel",
                         "curve":  {
                                       "keys":  [
@@ -1254,7 +1254,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthLeft",
+                        "parameter":  "mouthLeft",
                         "expression":  "mouthLeft",
                         "curve":  {
                                       "keys":  [
@@ -1275,7 +1275,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthLowerDownLeft",
+                        "parameter":  "mouthLowerDownLeft",
                         "expression":  "mouthLowerDownLeft",
                         "curve":  {
                                       "keys":  [
@@ -1296,7 +1296,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthLowerDownRight",
+                        "parameter":  "mouthLowerDownRight",
                         "expression":  "mouthLowerDownRight",
                         "curve":  {
                                       "keys":  [
@@ -1317,7 +1317,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthPressLeft",
+                        "parameter":  "mouthPressLeft",
                         "expression":  "mouthPressLeft",
                         "curve":  {
                                       "keys":  [
@@ -1338,7 +1338,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthPressRight",
+                        "parameter":  "mouthPressRight",
                         "expression":  "mouthPressRight",
                         "curve":  {
                                       "keys":  [
@@ -1359,7 +1359,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthPucker",
+                        "parameter":  "mouthPucker",
                         "expression":  "mouthPucker",
                         "curve":  {
                                       "keys":  [
@@ -1380,7 +1380,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthRight",
+                        "parameter":  "mouthRight",
                         "expression":  "mouthRight",
                         "curve":  {
                                       "keys":  [
@@ -1401,7 +1401,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthRollLower",
+                        "parameter":  "mouthRollLower",
                         "expression":  "mouthRollLower",
                         "curve":  {
                                       "keys":  [
@@ -1422,7 +1422,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthRollUpper",
+                        "parameter":  "mouthRollUpper",
                         "expression":  "mouthRollUpper",
                         "curve":  {
                                       "keys":  [
@@ -1443,7 +1443,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthShrugLower",
+                        "parameter":  "mouthShrugLower",
                         "expression":  "mouthShrugLower",
                         "curve":  {
                                       "keys":  [
@@ -1464,7 +1464,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthShrugUpper",
+                        "parameter":  "mouthShrugUpper",
                         "expression":  "mouthShrugUpper",
                         "curve":  {
                                       "keys":  [
@@ -1485,7 +1485,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthSmileLeft",
+                        "parameter":  "mouthSmileLeft",
                         "expression":  "mouthSmileLeft",
                         "curve":  {
                                       "keys":  [
@@ -1506,7 +1506,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthSmileRight",
+                        "parameter":  "mouthSmileRight",
                         "expression":  "mouthSmileRight",
                         "curve":  {
                                       "keys":  [
@@ -1527,7 +1527,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthStretchLeft",
+                        "parameter":  "mouthStretchLeft",
                         "expression":  "mouthStretchLeft",
                         "curve":  {
                                       "keys":  [
@@ -1548,7 +1548,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthStretchRight",
+                        "parameter":  "mouthStretchRight",
                         "expression":  "mouthStretchRight",
                         "curve":  {
                                       "keys":  [
@@ -1569,7 +1569,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthUpperUpLeft",
+                        "parameter":  "mouthUpperUpLeft",
                         "expression":  "mouthUpperUpLeft",
                         "curve":  {
                                       "keys":  [
@@ -1590,7 +1590,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/mouthUpperUpRight",
+                        "parameter":  "mouthUpperUpRight",
                         "expression":  "mouthUpperUpRight",
                         "curve":  {
                                       "keys":  [
@@ -1611,7 +1611,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/noseSneerLeft",
+                        "parameter":  "noseSneerLeft",
                         "expression":  "noseSneerLeft",
                         "curve":  {
                                       "keys":  [
@@ -1632,7 +1632,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/noseSneerRight",
+                        "parameter":  "noseSneerRight",
                         "expression":  "noseSneerRight",
                         "curve":  {
                                       "keys":  [
@@ -1653,7 +1653,7 @@
                         "notes":  "raw ARKit 52 pass-through"
                     },
                     {
-                        "parameter":  "ARKit/tongueOut",
+                        "parameter":  "tongueOut",
                         "expression":  "tongueOut",
                         "curve":  {
                                       "keys":  [
