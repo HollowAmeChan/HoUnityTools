@@ -96,17 +96,27 @@
 留空就是原来的纯装配（VB 那条路照旧）。两条 Unity 硬约束：**`.controller` 文件运行时读不了**（编辑器格式，
 `UnityEditor.Animations` 不在播放器里），**代理造不出来**（运行时无法枚举 `AnimationClip` 的绑定 ——
 `AnimationUtility` 是编辑器专属 —— 所以 bundle 必须带控制器原配的那套层级）。
-代码在 `Core/HoFaceController.cs`；❓ 只剩**运行期**两条（bundle 能不能 `LoadFromFile`、隐藏影子上的 `Animator` 能不能跑）——
-**审查那条已经有答案**：2026-09-25 那次构建 `Illegal Assembly Reference = '0'`，唯一被点名的是 `System.IO`
-（`Path.GetFileName`，已改掉），也就是说 `UnityEngine.AssetBundle` **没被安全校验拦**。
-细节见 mod `README.md` §1.1.2 与 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.2 / §4.3。
+代码在 `Core/HoFaceController.cs`；✅ **运行期两条都已实测**（2026-09-25）：bundle `LoadFromFile` 读得了、
+隐藏影子上的 `Animator` 照常跑 —— 参数写进去、混合树解算、`GetBlendShapeWeight` 采回来整条通了
+（实测 `写入 jawOpen 0.186 / mouthSmileLeft 0.096 → 采到 0.2673 / 0.2194`，两个形状都跟着输入动）。
+**审查那条**：那次构建 `Illegal Assembly Reference = '0'`，唯一被点名的是 `System.IO`（`Path.GetFileName`，已改掉），
+也就是说 `UnityEngine.AssetBundle` **没被安全校验拦**。❓ 仍未验：真控制器（别人的 VRM 控制器）、骨骼那条（要 Humanoid Avatar）。
+细节见 mod `README.md` §1.1.2 / §1.6 / §1.7 与 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.2 / §4.3。
 
-⚠️ **`状态` 在控制器模式下会多报一行 `写入 <参数名> <值>`**（2026-09-25 补，最多 6 个）：
-控制器模式的 `BlendShapes` **只来自代理网格**，所以"某个形状恒 0"有两个独立原因 ——
-**参数没写进 Animator**（控制器里没这个名字）或**控制器没把那格推到网格上**；
-只报"对上参数 N 个"（个数）时分不清是哪个（现场就是这么卡的：`mouthSmileLeft` 参数层 0.946、
-控制器里恒 0）。这一行报的是**我们写给 Animator 的那个数**：它非 0 ⇒ 输入到位、问题在控制器那一侧。
-⚠️ 换 bundle 后必须按节点上的 `重读控制器`（`Prepare` 对同一路径直接返回，认不出文件被替换过）。
+⚠️ **`状态` 在控制器模式下会多报一行 `写入 <参数名> <值>`**（2026-09-25 补，最多 6 个），
+载入时还会各写一行自检/采样日志到 `Player.log`：控制器模式的 `BlendShapes` **只来自代理网格**，
+所以"某个形状恒 0"有三个独立原因 —— ①参数没写进 Animator ②控制器没把那格推到网格上
+③网格上根本没有那个形状名（`GetBlendShapeWeight` 按名字取，Unity 不报错、那格永远 0）。
+只报"对上参数 N 个"（个数）时分不清（现场就是这么卡的：`mouthSmileLeft` 参数层 0.946、控制器里恒 0）。
+细节与判据见 mod `README.md` §1.1.2。
+
+⚠️ **`写入` ≠ `采到` 不是错**：采到的是"控制器那条树这一帧的输出"，真实控制器有自己的混合/曲线；
+要判断的是它**跟着输入动没动**。
+
+⚠️ **换 bundle / 换代码之后必须重新部署**（这次卡最久的不是代码，是部署，见 mod `README.md` §1.7）：
+菜单打的 bundle 落在`<工程根>\_hodebug\`，**不是** Warudo 读的沙箱目录；`.warudo` 是打包产物，
+改了 `.cs` 不重打包就还是旧 DLL；而且 `Prepare` 对同一路径直接返回 ⇒ **换了文件也必须按 `重读控制器`**。
+一眼判据：自检行里的 `state=<哈希>` 与 `clip` 名字变没变。
 
 **2026-09-25 清掉的三个临时节点**（摸底用完就删；旧蓝图里那个「调试台」会被同 Id 的「Ho调试日志」接替）：
 `Ho Face 原始值（按线名）`（接收器的「原始值」口就够了）、
