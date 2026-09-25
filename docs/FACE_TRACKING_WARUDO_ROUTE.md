@@ -132,9 +132,10 @@
 要判断的是它**跟着输入动没动**。
 
 ⚠️ **换 bundle / 换代码之后必须重新部署**（这次卡最久的不是代码，是部署，见 mod `README.md` §1.7）：
-菜单打的 bundle **现在直接落在 Warudo 的插件沙箱**（跟中间层配置同一个目录，脚本里那个 `SandboxFolder`
-常量），节点上是**沙箱 `*.bundle` 的下拉列表**（`[AutoComplete]`），选中的是**文件名**
-（`ReadFileBytes` + `AssetBundle.LoadFromMemory`）—— 不再手填绝对路径、也不会放错目录。
+节点上是**沙箱 `*.bundle` 的下拉列表**（`[AutoComplete]`），选中的是**文件名**
+（`ReadFileBytes` + `AssetBundle.LoadFromMemory`）—— 不再手填绝对路径。
+⚠️ **落点由你负责**：打包在包内 FastBuild 的 **HoFT 页**，那一页**输出目录由你选**（通常选 Warudo 的插件沙箱），
+所以"打进沙箱"不是自动的 —— **打完自己确认它落在沙箱里**（这一条正是 §1.7 那次放错落点的教训）。
 `.warudo` 仍是打包产物：改了 `.cs` 不重打包就是旧 DLL；而且 `Prepare` 对**同名**文件直接返回
 ⇒ **换了文件也必须按 `重读控制器`**。一眼判据：自检行里的 `state=<哈希>` 与 `clip` 名字变没变。
 
@@ -145,8 +146,11 @@
 
 ⚠️ **轮询由接收器节点驱动**：`OnUpdate` 里调 `HoFaceInputState.Poll()`（`HoFaceReceiverStatusNode.cs:42-46`）——
 它不在图里，就**没有人收包**。
-⚠️ 处理链节点**没有 flow 触发**：5 个输出口惰性求值、一帧只算一次（`HoFaceMiddlewareNode.cs:70-84`），
-因为 Warudo 没承诺节点之间的执行顺序 —— 不赌顺序。想手动催就用节点上的「重读配置」按钮。
+⚠️ **两个节点都没有 flow 触发**：输出口惰性求值、一帧只算一次
+（`HoFaceParameterNode.cs` 与 `HoFaceSolverNode.cs` 的 `Ensure()` 都用 `Time.frameCount` 兜），
+因为 Warudo 没承诺节点之间的执行顺序 —— 不赌顺序。想手动催就用节点上的「重读配置」/「重读控制器」按钮。
+⚠️ 口径按拆分后的两个节点算：参数处理 **3 个**输出口（`参数`/`有脸`/`状态`）、
+控制求解 **6 个**（官方同形的 5 个 + `状态`）。
 
 ### 2.0.1 ✅ 已完成：「Ho Face 处理链」拆成两个节点（2026-09-25 定 → 当天落地）
 
@@ -190,7 +194,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 **四条先定死的**（都是这次讨论定下来的）：
 
 1. **`有脸` / `IsTracked` 由上游算，求解不算。** 今天的判据是"新鲜 **且** `FaceFound ≠ 0`，
-   而 `FaceFound` 是**裸线名**（`Nodes/HoFaceMiddlewareNode.cs:195-208`）—— 那是**协议知识**，
+   而 `FaceFound` 是**裸线名**（判据在 `Nodes/HoFaceParameterNode.cs` 的 `HasFace()`）—— 那是**协议知识**，
    求解只拿到规范名、根本看不到。所以 `有脸` 是**输入口**：参数处理按 VTS / iFacialMocap 的规矩算它，
    接收器的 VTS 服务端模式则直接拿 VTS 注入请求里的 `faceFound`（见下）。顺带省一根线
    （今天的「新鲜」只喂 `IsTracked`，折进这一个 bool 就够）。
@@ -278,8 +282,8 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
   内部在影子上跑控制器、把结果反算出来，直接产出 BS 列表 / 骨骼旋转偏移 / 根位置。
 * **应用端不碰 Warudo 的通用机械**（`SWITCH_*` / `SMOOTH_*` / `MERGE_*` / `EMPTY_*` / `DEFAULT_*` / `LOOK_AT`），
   只留那三个官方应用节点。
-* **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② "控制器"还是**数据树**（`Core/HoFaceSolver.cs`）而不是
-  `.controller`；③ 求解端的**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
+* **现状离目标差在哪**：① 还是 1 个 mod（拆不拆见下）；② ~~"控制器"还是**数据树**~~ →
+  **已改成真控制器**（沙箱 bundle + 影子 Animator，见 §2.0.2；数据树只剩参数层与头/根位置装配）；③ 求解端的**口径**是"与官方接收器同形"（输出口叫 `Bone Rotations`），
   目标形态那边直接叫"骨骼旋转偏移" —— 端口名与类型的最终口径**还没定**（下游那个 apply 节点吃的确实是
   offset，所以**语义**上今天已经是偏移了：单位四元数 = 不改那根骨头，见 §3.3 与 §3.4 第 3 条）。
 * **为什么现在没拆成两个 mod**：Warudo **每个 mod 各自编译成一个程序集**，同名类型跨 mod 是**不同的 `Type`**，
@@ -352,7 +356,7 @@ GET_IFACIALMOCAP_RECEIVER_DATA
 （`api-scan` 转储，早前取过）。
 
 → **五个端口，不多不少。对上它就能直接塞进官方那张图，不需要自己造图。**
-（我们的处理链节点正是照这五个做的：`HoFaceMiddlewareNode.cs:195-257`。）
+（我们的「HoFace控制求解」正是照这五个做的：`Nodes/HoFaceSolverNode.cs`。）
 
 ### 3.2 接线（✅ 逐条读自 `dataConnections` / `flowConnections`）
 
@@ -519,7 +523,8 @@ CloneAnimator：在（Character Avatar Clone）
 ```
 
 Warudo 的角色动画走 Animancer 直接播 clip。→ **在角色本体上跑混合树这条路不存在**，
-混合树只能在我们的影子 Animator 上跑（控制器从 4.1 那条路来），或者干脆做成**数据树**（Warudo 侧今天的选择）。
+混合树只能在我们的**影子 Animator** 上跑（控制器从 AssetBundle 来，见 §2.0.2 —— 这就是 Warudo 侧现在的做法），
+或者做成**数据树**（那是早期在"跑不了控制器"前提下的打算，已被 §2.0.2 取代）。
 
 ### 4.3 `CharacterAsset` 不交出"裸预制件"，但活实例够用 ✅
 
@@ -647,10 +652,13 @@ AvatarCloneParent：Character Avatar Clone Parent
 * **不做** tracker asset（`GenericTrackerAsset` 子类）：那条路会在角色上建一份追踪器资源，
   等于把中间层配置变**每角色一份**，与"中间层是设备 / 控制器级"冲突。
 * **不做**接收器里的改名 / 量纲 / 断流回中性：前两样在中间层配置里，最后一样在图上（§3.2）。
-* **今天不做**（但仍挂在待办 #2 上）：Warudo 侧的"影子 Animator 加载 `.controller`"。插件 mod 不能读盘
-  （无 `System.IO`），而 Unity 播放器**无法从文件加载 `AnimatorController`**（只有 AssetBundle 能）——
-  唯一可能的路就是 §4.1 那条 `SharedAssets`。**在它被验证之前**，Warudo 侧的混合树是**数据树**，
-  由 `Core/HoFaceChain.cs` 求值。（Unity 侧不受这条影响：那里本来就有真正的 `.controller` 和影子 Animator。）
+* ✅ **曾经"今天不做"、现在已经做完**：Warudo 侧的"影子 Animator 加载控制器"。
+  当时的判断是"插件 mod 不能读盘（无 `System.IO`），而播放器无法从文件加载 `AnimatorController`（只有 AssetBundle 能）"，
+  所以打算一直用**数据树**。**结论已经反转**：读写走**插件沙箱 API**（不是 `System.IO`），
+  沙箱里放一个 AssetBundle，运行时 `ReadFileBytes` + `LoadFromMemory` 就能拿到 `RuntimeAnimatorController`，
+  在隐藏影子上跑真控制器并采形状/骨骼 —— 见 §2.0.2（✅ 实测）与 `Core/HoFaceController.cs`。
+  于是 **Warudo 侧的"混合树"不再是数据树**：控制器那条路是**唯一**求值路径（§2.0.3）。
+  数据树（`Core/HoFaceChain.cs`）现在只负责**参数层**求值，`Core/HoFaceSolver.cs` 只剩头/根位置装配。
 * **不依赖**官方那套"一个 mod 带一堆资源"的打包方式；我们只带**自己的控制器**。
 * 已经删掉的东西见 §1.1，别再把它们写回来。
 
@@ -664,9 +672,9 @@ AvatarCloneParent：Character Avatar Clone Parent
 | 2 | mod 里放一个 `.controller`，验证 `SharedAssets.AssetCount` 变正、`Load` 取得回 | 当年那台探针的「Mod 资产」一节给过 `AssetCount=2` ✅，但 `Load("HoFaceTree")` **取不到** —— 先按 **assetID 0..AssetCount-1** 逐个试（§4.1 那条新发现），再回过头定名字约定。⚠️ **探针已删，观察窗要临时加** | ❓ **未实测** |
 | 3 | 骨骼数组的空间与偏移基准 | 一半已量出：**局部/世界**与**按 `HumanBodyBones` 索引** ✅（§5）。**基准那一半仍未测** —— 要带非 identity 旋转的角色再量一次（观察窗同上） | 🔶 **半条** |
 | 4 | 处理链节点替换掉官方接收器节点后行为不变 | 图上换掉接收器，面部照常动。**一次都没在 Warudo 里跑过** | ❓ **未实测** |
-| 5 | 影子 Animator：`AddComponent<Animator>()` + 控制器 + 反算 | Unity 侧 ✅ 已落地（`HoFaceAnimationSession.cs:119-127`，影子台 + 只写拥有的键）。**Warudo 侧不打算走这条路**（§6），改数据树 | ✅ Unity 侧完成 |
+| 5 | 影子 Animator：`AddComponent<Animator>()` + 控制器 + 反算 | Unity 侧 ✅ 已落地（`HoFaceAnimationSession.cs:119-127`，影子台 + 只写拥有的键）。**Warudo 侧也已落地**（§2.0.2 / `Core/HoFaceController.cs`：沙箱读 bundle + 影子 Animator + 采形状与骨骼）—— 早期"不打算走这条路、改数据树"的判断已作废 | ✅ 两侧都完成 |
 | 6 | Unity 侧调试面板：影子算 + 纯写入角色预制件，角色不挂任何组件 | ✅ 已落地（全局面板 + `HoFaceDebugHost` 宿主；角色上零组件） | ✅ **已完成** |
-| 7 | 清掉 3 个临时节点 + 收缩 `NodeTypes` | 面板上只剩接收器 + 处理链 + 调试日志 | ✅ **2026-09-25 完成**（§2.0） |
+| 7 | 清掉 3 个临时节点 + 收缩 `NodeTypes` | 面板上只剩接收器 + `HoFace参数处理` + `HoFace控制求解` + 调试日志 | ✅ **2026-09-25 完成**（§2.0） |
 | 8 | 按目标形态拆成 `HoVtsTrack` / `HoVtsTrackController` 两个 mod | 两个 `.warudo` 各自能加载、端口连起来能跑 | ❓ 待做 |
 
 ---

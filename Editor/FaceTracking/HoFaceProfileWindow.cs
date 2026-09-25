@@ -142,7 +142,9 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 using (HoConstraintEditorControls.Row(true))
                 {
-                    string path = profile == null ? "（未选配置 · 用内置默认）" : AssetDatabase.GetAssetPath(profile);
+                    // ⚠️ 面板以前在这里写"用内置默认" —— 那条兜底已经删了（空 = 空表，见 HoFaceDebugSettings.Outputs()），
+                    // 对用户说错话比不说更糟：他会以为没选配置也在跑。
+                    string path = profile == null ? "（未选配置 · 这一层不做事）" : AssetDatabase.GetAssetPath(profile);
                     HoConstraintEditorControls.Caption(path, "配置文件在工程里的路径。");
                     if (middleware != null && middleware.outputs != null)
                     {

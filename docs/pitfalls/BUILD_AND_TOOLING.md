@@ -76,7 +76,9 @@ Illegal Namespace References = '1', Illegal Type References = '1', Illegal Membe
 
 > 附一条从这次报告里顺出来的结论：报告里 `Illegal Assembly Reference = '0'`，被点名的只有 `System.IO`，
 > 也就是说 **`UnityEngine.AssetBundle`（控制器模式要用）没有被安全校验拦** —— 这条 ❓ 有答案了；
-> 但它的**运行期**行为（能不能 `LoadFromFile`、影子 Animator 能不能跑）仍未验。
+> ✅ **运行期行为后来也全验过了**：走插件沙箱 `ReadFileBytes` + `AssetBundle.LoadFromMemory`、
+> 在隐藏影子上跑真 `AnimatorController`、`GetBlendShapeWeight` 采回来 —— 整条通（见 `FACE_TRACKING_WARUDO_ROUTE.md` §2.0.2）。
+> ⚠️ 口径已变：**不再是 `LoadFromFile` + 绝对路径**，改成沙箱文件名（原因见 mod `README.md` §1.1.2 的路径口径）。
 
 ### 4.1 现场什么样（2026-09-25 实测，一次就够记住）
 
