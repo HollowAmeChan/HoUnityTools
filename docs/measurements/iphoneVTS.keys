@@ -12,7 +12,9 @@
 #     实测 52 个规范名**全部到位、0 个对不上、一个不缺**（与 check-device-keys.ps1 的结果一致）。
 #   * 内眉只有一条线（`BrowInnerUp`），不像安卓那样左右分两条。
 #   * 16 个标量与安卓**同名同量纲**（`EyeLeft_x` 也是度数）。
-#   * **没有** `headUp/headDown/...` 那 6 个。
+#   * **也发** `headUp/headDown/headLeft/headRight/headRollLeft/headRollRight` 那 6 个
+#     （2026-09-25 用户在接收器 `原始值` 上亲眼看到：`headLeft=0.025`、`headUp=0.019` 等）。
+#     ⇒ 我先前"iPhone 没有这 6 个"的判断**是错的**，以实测为准。本次仍**不映射**（与安卓一致，等确认语义）。
 #
 # --- 形状（52 条线） ---
 BrowDownLeft = browDownLeft
@@ -84,3 +86,11 @@ EyeRight_z = eyeRightZ
 FaceFound = faceFound
 Hotkey = -
 Timestamp = -
+#
+# --- 另一条通道，本次不映射（保留记录，等确认语义） ---
+headUp = -
+headDown = -
+headLeft = -
+headRight = -
+headRollLeft = -
+headRollRight = -
