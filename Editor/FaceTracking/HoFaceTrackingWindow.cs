@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using Hollow.HoUnityTools.Editor.Constraints;
@@ -217,17 +217,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Label("配置文件对象", HoConstraintEditorTheme.LabelWidth,
                         "**必须**。中间层配置（*.hoface.json）—— Unity 侧与 Warudo 侧读的是同一个文件。");
-                    string editedPath = EditorGUI.TextField(
-                        HoConstraintEditorControls.NextFlexible(70.0f), settings.profilePath, HoConstraintEditorTheme.Field);
-                    if (editedPath != settings.profilePath)
+                    // 用**资产选择器**而不是让人手打路径：手打路径是这栏最容易出错的地方
+                    // （相对路径的基准、扩展名、拼错一个字母都只是"读不出来"，看不出错在哪）。
+                    // 存进 `settings` 的仍然是**路径**（Warudo 那边读的就是文件路径）。
+                    TextAsset currentAsset = string.IsNullOrEmpty(settings.profilePath)
+                        ? null
+                        : AssetDatabase.LoadAssetAtPath<TextAsset>(settings.profilePath);
+                    EditorGUI.BeginChangeCheck();
+                    var pickedAsset = (TextAsset)EditorGUI.ObjectField(
+                        HoConstraintEditorControls.NextFlexible(70.0f), currentAsset, typeof(TextAsset), false);
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        settings.profilePath = editedPath;
+                        settings.profilePath = pickedAsset != null ? AssetDatabase.GetAssetPath(pickedAsset) : "";
                         settings.ReloadProfile();
                         HoFaceDebugHost.Save();
                     }
 
                     HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("选…", "选一个现有的 .hoface.json。", false, 34.0f))
+                    // 「选…」留着：工程**之外**的文件没有资产可拖（Warudo 只看路径，那种也合法）。
+                    if (HoConstraintEditorControls.Button("选…", "选一个 .hoface.json。工程里的直接拖上面那个框就行；这个按钮留给工程外的文件。", false, 34.0f))
                     {
                         string path = EditorUtility.OpenFilePanel("选中间层配置", Application.dataPath, "json");
                         if (!string.IsNullOrEmpty(path))
@@ -254,6 +262,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     if (!settings.HasProfile) HoConstraintEditorControls.Caption("必填；空着下面三栏都锁住");
                     else if (settings.Middleware == null) HoConstraintEditorControls.Caption("读不出来：" + settings.ProfileError);
+                    // 路径填了、但不在工程里 ⇒ 资产框会显示 None。说清那是正常的，别让人以为丢了。
+                    else if (currentAsset == null) HoConstraintEditorControls.CaptionTrim("工程外文件：" + settings.profilePath, 240.0f,
+                        "这份配置在工程之外，所以资产框是空的；路径本身有效，Unity 与 Warudo 都按它读。");
                 }
 
                 using (HoConstraintEditorControls.Row(true))
