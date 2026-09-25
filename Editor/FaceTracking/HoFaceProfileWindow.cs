@@ -12,14 +12,22 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 它编辑的数据 = 运行时那份 <see cref="HoFaceMiddleware"/>（磁盘上的 `.hoface.json`）。
     /// 面板上的顺序就是生效顺序 —— 左边列表的顺序 = 写参数的顺序，修饰符列表的顺序 = 串起来的顺序。
     ///
-    /// 三处刻意做成"一眼能看出坏在哪"：表达式解析不过 / 变量不是 ARKit 键 / 用了还没实现的延迟。
+    /// **中线可以左右拖**（双击复位）：右边那一列在窄窗口下装不下时，把左边收窄比左右滚要顺手。
+    ///
+    /// 只有一处"一眼看出坏在哪"：**表达式解析不过**。这里**不检查变量是不是 ARKit 键** ——
+    /// 映射是自由的，输入行的左值是规范名、输出行的变量可以是线名或上一行的结果，
+    /// 而且"某个名字这一帧有没有来源"只有跑起来才知道（缺键的行冻结，不是报错）。见 <see cref="DrawVariableList"/>。
+    ///
     /// 保存后会让宿主重新读一遍这份配置（见 <see cref="SaveProfile"/>）。
     /// </summary>
     public sealed class HoFaceProfileWindow : EditorWindow
     {
-        private const float LeftWidth = 300.0f;
+        private const float LeftWidthMin = 180.0f;
+        private const float LeftWidthMax = 560.0f;
+        private const float SplitterWidth = 6.0f;
         private const float CurveHeight = 90.0f;
         private const string NewProfileName = "ho-2d-test1.hoface.json";
+        private const string LeftWidthPref = "HoUnityTools.FaceProfile.LeftWidth";
 
         private TextAsset profile;
         private HoFaceMiddleware middleware;
@@ -29,6 +37,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         private bool messageIsError;
         private Vector2 listScroll;
         private bool dirty;
+
+        /// <summary>左边目录的宽度；**可以拖中线改**，存在 EditorPrefs 里跨窗口记住。</summary>
+        private float leftWidth = 300.0f;
+        private bool draggingSplitter;
 
         [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
         private static void Open()
@@ -48,7 +60,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void OnEnable()
         {
-            minSize = new Vector2(720.0f, 420.0f);
+            minSize = new Vector2(560.0f, 420.0f);
+            leftWidth = Mathf.Clamp(EditorPrefs.GetFloat(LeftWidthPref, leftWidth), LeftWidthMin, LeftWidthMax);
             if (middleware == null && profile != null) ReloadProfile(true);
         }
 
@@ -75,28 +88,92 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(LeftWidth), GUILayout.ExpandHeight(true)))
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(leftWidth), GUILayout.ExpandHeight(true)))
                 {
                     DrawLeftColumn();
                 }
 
-                HoConstraintEditorControls.Separator(0.0f, 0.0f);
+                DrawSplitter(ref leftWidth, LeftWidthMin, LeftWidthMax);
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
                 {
                     if (middleware == null)
                     {
-                        HoConstraintEditorControls.Caption("（还没载入配置）", "上面选一份 .hoface.json 文本资产，或点「新建配置…」。");
+                        HoConstraintEditorControls.CaptionTrim("（还没载入配置）", 190.0f,
+                            "上面选一份 .hoface.json 文本资产，或点「新建配置…」。");
                     }
                     else if (selected < 0 || selected >= middleware.outputs.Count)
                     {
-                        HoConstraintEditorControls.Caption("（左边选一行）", "点左边的参数名看它的表达式、曲线与修饰符。");
+                        HoConstraintEditorControls.CaptionTrim("（左边选一行）", 190.0f,
+                            "点左边的参数名看它的表达式、曲线与修饰符。");
                     }
                     else
                     {
                         DrawRightColumn(selected);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// **可拖的中线**：左键按住左右拖，改 <paramref name="width"/>。
+        /// 双击回到默认宽度。松手时记住（<see cref="EditorPrefs"/>）。
+        ///
+        /// 为什么要有它：右边那一列在窄窗口下会装不下，原来只能靠**横向滚动条**看全；
+        /// 让用户自己把左边收窄，比让他左右滚要顺手得多。
+        /// </summary>
+        private void DrawSplitter(ref float width, float min, float max)
+        {
+            Rect rect = GUILayoutUtility.GetRect(SplitterWidth, SplitterWidth, 0.0f, 4000.0f, GUILayout.ExpandHeight(true));
+            int control = GUIUtility.GetControlID(FocusType.Passive);
+
+            switch (Event.current.type)
+            {
+                case EventType.Repaint:
+                    EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
+                    Color line = HoConstraintEditorTheme.SeparatorColor;
+                    if (draggingSplitter) line = new Color(line.r, line.g, line.b, 1.0f);
+                    EditorGUI.DrawRect(new Rect(rect.x + (rect.width - 1.0f) * 0.5f, rect.y, 1.0f, rect.height), line);
+                    break;
+
+                case EventType.MouseDown:
+                    if (rect.Contains(Event.current.mousePosition))
+                    {
+                        if (Event.current.clickCount == 2)
+                        {
+                            // 双击复位
+                            width = 300.0f;
+                            EditorPrefs.SetFloat(LeftWidthPref, width);
+                            Event.current.Use();
+                            Repaint();
+                        }
+                        else
+                        {
+                            draggingSplitter = true;
+                            GUIUtility.hotControl = control;
+                            Event.current.Use();
+                        }
+                    }
+                    break;
+
+                case EventType.MouseDrag:
+                    if (draggingSplitter)
+                    {
+                        width = Mathf.Clamp(width + Event.current.delta.x, min, max);
+                        Event.current.Use();
+                        Repaint();
+                    }
+                    break;
+
+                case EventType.MouseUp:
+                    if (draggingSplitter)
+                    {
+                        draggingSplitter = false;
+                        GUIUtility.hotControl = 0;
+                        EditorPrefs.SetFloat(LeftWidthPref, width);
+                        Event.current.Use();
+                    }
+                    break;
             }
         }
 
@@ -271,7 +348,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                     parsed.CollectVariables(variables);
                     using (HoConstraintEditorControls.Row(true))
                     {
-                        HoConstraintEditorControls.Caption("曲线(" + variables.Count + " 个变量)", "变量来自表达式；右边会逐个列出并标出不是 ARKit 键的。");
+                        HoConstraintEditorControls.CaptionTrim("曲线(" + variables.Count + " 个变量)", 140.0f,
+                            "曲线有 " + variables.Count + " 个变量的定义域要照顾；右边会把它们逐个列出。");
                     }
                 }
             }
@@ -368,7 +446,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                     output.parameter,
                     HoConstraintEditorTheme.Field);
                 HoConstraintEditorControls.Flex();
-                HoConstraintEditorControls.Caption("写进控制器的参数；控制器里没有这个名字时这行被跳过。");
+                HoConstraintEditorControls.CaptionTrim("控制器里没有就跳过", 130.0f,
+                    "写进控制器的参数；控制器里没有这个名字时这行被跳过（不猜也不补）。");
             }
 
             bool parsedOk = HoFaceExpression.TryParse(output.expression, out var parsed, out string expressionError);
@@ -400,7 +479,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             using (HoConstraintEditorControls.Row(true))
             {
                 HoConstraintEditorControls.Label("修饰符", HoConstraintEditorTheme.LabelWidth);
-                HoConstraintEditorControls.Caption("按列出顺序串在曲线后面。", "平滑 / 分档 / 延迟，从上到下依次作用。");
+                HoConstraintEditorControls.CaptionTrim("按列出顺序串在曲线后面", 200.0f,
+                    "按列出顺序串在曲线后面。平滑 / 分档 / 延迟，从上到下依次作用。");
             }
 
             DrawModifiers(output);
@@ -413,7 +493,17 @@ namespace Hollow.HoUnityTools.FaceTracking
             EditorGUILayout.EndScrollView();
         }
 
-        /// <summary>表达式用到的变量逐个列出；不是 ARKit 键的点名（只是提醒，不拦保存）。</summary>
+        /// <summary>
+        /// 把表达式里用到的变量逐个列出来 —— **只列，不判定**。
+        ///
+        /// 【为什么不检查 ARKit】这一层的映射是**自由**的：表达式读的是"上一层给的名字"，
+        /// 它可以是规范名（`jawOpen`）、可以是线名（`Rotation_x`）、也可以是一个**上一行算出来的**名字。
+        /// 判定"它是不是标准 ARKit 键"在**任何一行上都是错的**：
+        ///   · 输入行上，规范名本来就不等于设备线名（`browDown_L` 那种 `_L/_R` 别名根本不在 ARKit 52 里）；
+        ///   · 输出行上，变量允许是原始线名（头/眼那 15 个就都不是通道名）。
+        /// 而且"这个变量到底有没有来源"这件事**只有跑起来才知道**（缺键的行会冻结，不是报错）。
+        /// 所以这里只做**枚举**：作者用眼睛核，机器不猜。
+        /// </summary>
         private void DrawVariableList(HoFaceExpression parsed)
         {
             if (parsed == null)
@@ -426,20 +516,18 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             using (HoConstraintEditorControls.Row(true))
             {
-                HoConstraintEditorControls.Label("变量", HoConstraintEditorTheme.LabelWidth, "表达式里的变量 = 源形态键名。");
+                HoConstraintEditorControls.Label("变量", HoConstraintEditorTheme.LabelWidth, "表达式里的变量 = 上一层给的名字（规范名 / 线名 / 上一行的结果）。");
                 HoConstraintEditorControls.Caption(variables.Count == 0 ? "（表达式里没有变量）" : variables.Count + " 个");
             }
 
             for (int i = 0; i < variables.Count; i++)
             {
                 string name = variables[i];
-                bool known = HoFaceTrackingChannels.IndexOf(name) >= 0;
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
-                    GUIStyle style = new GUIStyle(known ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.Caption);
-                    if (!known) style.normal.textColor = HoConstraintEditorTheme.WarningColor;
-                    GUI.Label(HoConstraintEditorControls.NextAuto(name + (known ? "" : "  · 不是标准 ARKit 键"), style), new GUIContent(name + (known ? "" : "  · 不是标准 ARKit 键")), style);
+                    GUI.Label(HoConstraintEditorControls.NextAuto(name, HoConstraintEditorTheme.Value),
+                        new GUIContent(name), HoConstraintEditorTheme.Value);
                 }
             }
         }
@@ -457,7 +545,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             using (HoConstraintEditorControls.Row(true))
             {
                 HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
-                HoConstraintEditorControls.Caption("横轴 = 表达式的值，纵轴 = 写出去的值；关键点范围之外按端点算（不外推）。");
+                HoConstraintEditorControls.CaptionTrim("横轴 = 表达式值，纵轴 = 写出的值；范围外按端点算", 320.0f,
+                    "横轴 = 表达式的值，纵轴 = 写出去的值；关键点范围之外按端点算（不外推）。");
             }
 
             using (HoConstraintEditorControls.Row(true))
@@ -525,7 +614,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                         if (!modifier.Active)
                         {
-                            HoConstraintEditorControls.Caption("（这个修饰符现在不起作用）", "平滑/延迟的时长是 0，或分档里一步都没有。");
+                            HoConstraintEditorControls.CaptionTrim("（不起作用）", 80.0f,
+                                "这个修饰符现在不起作用：平滑/延迟的时长是 0，或分档里一步都没有。");
                         }
 
                         HoConstraintEditorControls.Flex();
