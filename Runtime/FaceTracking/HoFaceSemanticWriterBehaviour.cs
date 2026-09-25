@@ -57,7 +57,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         // ── 缓存（每帧不重新解析、不重新查表）────────────────────────────────────
         private Animator current;                       // 本次 Write 的 animator（给 Lookup 用）
-        private HoFaceSemanticHub hub;                  // 找到的影子 Hub（找一次）
+        private Animator hubAnimator;                   // 缓存下面那个 hub 是"哪个 animator 的"
+        private HoFaceSemanticHub hub;                  // 找到的影子 Hub（每个 animator 各自找一次）
         private Func<string, float> lookup;             // Lookup 的方法组，避免每帧分配委托
         private HoFaceExpression[] parsed;              // 解析好的表达式（按条目下标）
         private string[] parsedText;                    // 上面那份对应的原文（改了才重解析）
@@ -82,7 +83,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (animator == null || entries == null || entries.Count == 0) return;
 
-            if (hub == null) hub = animator.GetComponentInChildren<HoFaceSemanticHub>(true);
+            // ⚠️ **状态机行为的实例是"每个控制器资产一份"、不是每个 Animator 一份**（Unity 的行为）：
+            // 同一个控制器被两个 Animator 同时跑时，这个对象是共享的。所以缓存必须**跟着 animator 走**，
+            // 否则第二个 Animator 会拿到第一个的 Hub / 参数表 —— 表现是"另一台角色的值写到这台身上"。
+            if (hubAnimator != animator)
+            {
+                hubAnimator = animator;
+                hub = animator.GetComponentInChildren<HoFaceSemanticHub>(true);
+                parametersCached = false;
+            }
+
             if (hub == null)
             {
                 ReportOnce("no-hub", "影子 rig 上没有 HoFaceSemanticHub ⇒ 中间值没有地方写（这份 bundle 的 rig 上要挂一个）。");
