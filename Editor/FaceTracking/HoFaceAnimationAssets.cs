@@ -519,7 +519,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 于是这条校验又回到"一律拒绝"，也不再需要"只放过某一个"这种例外。
             if (machine.behaviours.Length != 0)
                 throw new InvalidOperationException("不支持 StateMachineBehaviour（状态机上）：" + machine.name
-                    + " —— 面捕的树只有「参数 + 树」，不要挂行为（见 docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md §5）");
+                    + " —— 面捕的树只有「参数 + 树」，不要挂行为（见 docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md §6、"
+                    + "以及 docs/pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md §2 里那条被删掉的写手）");
             foreach (var child in machine.states)
             {
                 foreach (var behaviour in child.state.behaviours)
