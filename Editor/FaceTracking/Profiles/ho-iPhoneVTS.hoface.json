@@ -582,6 +582,1098 @@
                ],
     "outputs":  [
                     {
+                        "parameter":  "ARKit/browDownLeft",
+                        "expression":  "browDownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/browDownRight",
+                        "expression":  "browDownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/browInnerUp",
+                        "expression":  "browInnerUp",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpLeft",
+                        "expression":  "browOuterUpLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/browOuterUpRight",
+                        "expression":  "browOuterUpRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekPuff",
+                        "expression":  "cheekPuff",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintLeft",
+                        "expression":  "cheekSquintLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/cheekSquintRight",
+                        "expression":  "cheekSquintRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeBlinkLeft",
+                        "expression":  "eyeBlinkLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeBlinkRight",
+                        "expression":  "eyeBlinkRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownLeft",
+                        "expression":  "eyeLookDownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookDownRight",
+                        "expression":  "eyeLookDownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInLeft",
+                        "expression":  "eyeLookInLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookInRight",
+                        "expression":  "eyeLookInRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutLeft",
+                        "expression":  "eyeLookOutLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookOutRight",
+                        "expression":  "eyeLookOutRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpLeft",
+                        "expression":  "eyeLookUpLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeLookUpRight",
+                        "expression":  "eyeLookUpRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintLeft",
+                        "expression":  "eyeSquintLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeSquintRight",
+                        "expression":  "eyeSquintRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideLeft",
+                        "expression":  "eyeWideLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/eyeWideRight",
+                        "expression":  "eyeWideRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/jawForward",
+                        "expression":  "jawForward",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/jawLeft",
+                        "expression":  "jawLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/jawOpen",
+                        "expression":  "jawOpen",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/jawRight",
+                        "expression":  "jawRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthClose",
+                        "expression":  "mouthClose",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleLeft",
+                        "expression":  "mouthDimpleLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthDimpleRight",
+                        "expression":  "mouthDimpleRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownLeft",
+                        "expression":  "mouthFrownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFrownRight",
+                        "expression":  "mouthFrownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthFunnel",
+                        "expression":  "mouthFunnel",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLeft",
+                        "expression":  "mouthLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownLeft",
+                        "expression":  "mouthLowerDownLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthLowerDownRight",
+                        "expression":  "mouthLowerDownRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressLeft",
+                        "expression":  "mouthPressLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPressRight",
+                        "expression":  "mouthPressRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthPucker",
+                        "expression":  "mouthPucker",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRight",
+                        "expression":  "mouthRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollLower",
+                        "expression":  "mouthRollLower",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthRollUpper",
+                        "expression":  "mouthRollUpper",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugLower",
+                        "expression":  "mouthShrugLower",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthShrugUpper",
+                        "expression":  "mouthShrugUpper",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileLeft",
+                        "expression":  "mouthSmileLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthSmileRight",
+                        "expression":  "mouthSmileRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchLeft",
+                        "expression":  "mouthStretchLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthStretchRight",
+                        "expression":  "mouthStretchRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpLeft",
+                        "expression":  "mouthUpperUpLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/mouthUpperUpRight",
+                        "expression":  "mouthUpperUpRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerLeft",
+                        "expression":  "noseSneerLeft",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/noseSneerRight",
+                        "expression":  "noseSneerRight",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
+                        "parameter":  "ARKit/tongueOut",
+                        "expression":  "tongueOut",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "raw ARKit 52 pass-through"
+                    },
+                    {
                         "parameter":  "FaceAngleX",
                         "expression":  "-Rotation_y",
                         "curve":  {
@@ -600,7 +1692,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (-headRotY*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (-headRotY*1); sign/axis NOT verified on device"
                     },
                     {
                         "parameter":  "FaceAngleY",
@@ -621,7 +1713,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (-headRotX*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (-headRotX*1); sign/axis NOT verified on device"
                     },
                     {
                         "parameter":  "FaceAngleZ",
@@ -642,7 +1734,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (headRotZ*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (headRotZ*1); sign/axis NOT verified on device"
                     },
                     {
                         "parameter":  "FacePositionX",
@@ -663,7 +1755,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (headPosX*-1); sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosX*-1); sign NOT verified; units uncalibrated"
                     },
                     {
                         "parameter":  "FacePositionY",
@@ -684,7 +1776,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (headPosY*1); sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosY*1); sign NOT verified; units uncalibrated"
                     },
                     {
                         "parameter":  "FacePositionZ",
@@ -705,7 +1797,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger VTS_Compatible (headPosZ*-.5); VB halves Z; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosZ*-.5); VB halves Z; units uncalibrated"
                     },
                     {
                         "parameter":  "EyeLeftX",
@@ -726,7 +1818,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger device EyeLeft_x (VB synthesises instead)"
+                        "notes":  "device EyeLeft_x (VB synthesises instead)"
                     },
                     {
                         "parameter":  "EyeLeftY",
@@ -747,7 +1839,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger device EyeLeft_y (VB synthesises instead)"
+                        "notes":  "device EyeLeft_y (VB synthesises instead)"
                     },
                     {
                         "parameter":  "EyeRightX",
@@ -768,7 +1860,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger device EyeRight_x (VB synthesises instead)"
+                        "notes":  "device EyeRight_x (VB synthesises instead)"
                     },
                     {
                         "parameter":  "EyeRightY",
@@ -789,7 +1881,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger device EyeRight_y (VB synthesises instead)"
+                        "notes":  "device EyeRight_y (VB synthesises instead)"
                     },
                     {
                         "parameter":  "EyeOpenLeft",
@@ -810,7 +1902,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "EyeOpenRight",
@@ -831,7 +1923,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "Brows",
@@ -852,7 +1944,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "BrowLeftY",
@@ -873,7 +1965,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "BrowRightY",
@@ -894,7 +1986,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "MouthOpen",
@@ -915,7 +2007,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "MouthSmile",
@@ -936,7 +2028,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "MouthX",
@@ -957,7 +2049,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0"
                     },
                     {
                         "parameter":  "CheekPuff",
@@ -978,7 +2070,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger all presets (identity)"
+                        "notes":  "all presets (identity)"
                     },
                     {
                         "parameter":  "TongueOut",
@@ -999,7 +2091,364 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger all presets (identity)"
+                        "notes":  "all presets (identity)"
+                    },
+                    {
+                        "parameter":  "MouthFunnel",
+                        "expression":  "mouthFunnel - (jawOpen * .2)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1.5,
+                                                       "v":  1.5,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthPucker",
+                        "expression":  "((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1,
+                                                       "v":  -1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthShrug",
+                        "expression":  "(mouthShrugUpper + mouthShrugLower + mouthPressRight + mouthPressLeft) / 4",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "MouthPressLipOpen",
+                        "expression":  "((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -1.5,
+                                                       "v":  -1.5,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1.5,
+                                                       "v":  1.5,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0; VB uses four different divisors; we take the majority /1.8"
+                    },
+                    {
+                        "parameter":  "BrowInnerUp",
+                        "expression":  "browInnerUp",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  0,
+                                                       "v":  0,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  1,
+                                                       "v":  1,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0"
+                    },
+                    {
+                        "parameter":  "Face/Angle/X",
+                        "expression":  "-Rotation_y * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Face/Angle/Y",
+                        "expression":  "-Rotation_x * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Face/Angle/Z",
+                        "expression":  "Rotation_z * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Body/Angle/X",
+                        "expression":  "-Rotation_y * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Body/Angle/Y",
+                        "expression":  "-Rotation_x * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Body/Angle/Z",
+                        "expression":  "Rotation_z * .66",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -30,
+                                                       "v":  -30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  30,
+                                                       "v":  30,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified"
+                    },
+                    {
+                        "parameter":  "Face/Pos/X",
+                        "expression":  "-Position_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "Face/Pos/Y",
+                        "expression":  "Position_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "Face/Pos/Z",
+                        "expression":  "-Position_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "Body/Pos/X",
+                        "expression":  "-Position_x",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "Body/Pos/Y",
+                        "expression":  "Position_y",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated"
+                    },
+                    {
+                        "parameter":  "Body/Pos/Z",
+                        "expression":  "-Position_z",
+                        "curve":  {
+                                      "keys":  [
+                                                   {
+                                                       "t":  -50,
+                                                       "v":  -50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   },
+                                                   {
+                                                       "t":  50,
+                                                       "v":  50,
+                                                       "inT":  1,
+                                                       "outT":  1
+                                                   }
+                                               ]
+                                  },
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated"
                     },
                     {
                         "parameter":  "FaceFound",
@@ -1020,7 +2469,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "from VBridger device (identity)"
+                        "notes":  "device (identity)"
                     }
                 ]
 }

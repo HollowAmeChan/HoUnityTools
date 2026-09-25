@@ -14,7 +14,7 @@
 
 | 文件 | 是什么 |
 |---|---|
-| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：67 条 iPhone 线名 + 21 条出口。出口**不是直通**，是**从 ARKit 形态量合成 VTS 官方追踪参数**（`FaceAngleX` / `MouthOpen` / `Brows`…）。公式机械取自本机 VBridger，见下 |
+| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：67 条输入行 + **90 条出口**（原始 ARKit 52 + 官方 VTS 20 + VB 自造 5 + 姿态向量 12 + `FaceFound`）。公式机械取自本机 VBridger，见下 |
 | `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的**纯直通参考**：67 输入 / 67 输出，零改名、零曲线 |
 | `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的**纯直通参考**：65 输入 / 65 输出，同上 |
 
@@ -48,20 +48,30 @@
 
 ## `ho-iPhoneVTS` 的口径（正式中间层）
 
-| 层 | 做什么 | 为什么 |
-|---|---|---|
-| **输入行**（67） | `parameter = expression = 设备线名`，**零改名** | 这一份的**规范名词表就是设备线名词表**。再发明一套名字＝加一层里面什么都没有的映射 |
-| **出口**（21） | **ARKit 形态量 → VTS 官方追踪参数** | 出口左值是**控制器参数名**。控制器不保证做 ARKit 语义，所以不写 `ARKit/*`；VTS 追踪参数是**外部有文档的标准**（[参数标准表 §1.1](../../../docs/PARAMETER_STANDARDS.md)），跨模型稳定 |
+出口是**两份并行 + 一套额外**，共 **90 行**：
 
-出口那 21 条 = 官方追踪参数里**我们喂得动**的那 22 个面/鼠标/音频参数去掉鼠标的：
+| 组 | 行数 | 出口名 | 是什么 |
+|---|---|---|---|
+| **G1 原始 ARKit 52** | 52 | `ARKit/<规范名>` | **无损直通**。控制器要细节（某个具体形变、自己画轴）就读这组 |
+| **G2 官方 VTS 追踪参数** | 20 | `MouthOpen`、`FaceAngleX`、`Brows`… | **合成**出来的语义轴（**有损**，见下） |
+| **G3a VB 自造参数** | 5 | `MouthFunnel`、`MouthPucker`、`MouthShrug`、`MouthPressLipOpen`、`BrowInnerUp` | VTS 词表没有的概念，喂 VTS 要注册 |
+| **G3b 姿态向量** | 12 | `Face/Angle/*`、`Face/Pos/*`、`Body/Angle/*`、`Body/Pos/*` | 4 组 × XYZ |
+| **G3c 协议层信号** | 1 | `FaceFound` | 丢追动画用 |
 
-* 头姿 6：`FaceAngleX/Y/Z`、`FacePositionX/Y/Z`
-* 眼睑 2：`EyeOpenLeft/Right` ｜ 注视 4：`EyeLeftX/Y`、`EyeRightX/Y`
-* 眉 3：`Brows`、`BrowLeftY`、`BrowRightY`
-* 嘴 4 + 其它 2：`MouthOpen`、`MouthSmile`、`MouthX`、`TongueOut`、`CheekPuff`、`FaceFound`
+**为什么 G1 和 G2 要同时出**：G2 是**故意有损**的——`MouthOpen` 把
+`mouthClose`/`mouthRoll*`/`mouthFunnel` 折成一个数、`MouthSmile` 把
+`mouthFrown*`/`mouthPucker`/`mouthDimple*` 折成一个数，因为 VTS 没有那些参数。
+**要那份细节就只能读 G1。** 这也是 VBridger 自己的做法（它同时发原始与合成两份）。
 
-**不写的**：`MousePositionX/Y`（没有鼠标）、`Voice*` / `VoiceA..O`（这条链上没有麦克风）、
-`FaceAngry`（官方标 EXPERIMENTAL、且没有对应的 ARKit 形态量）。
+**命名空间**：`ARKit/` = 原始通道值；`Face/*`·`Body/*` = 姿态向量；
+其余无前缀 = 语义参数。⚠️ `Head/*` 是**已删的 `ho-vts-default`** 的保留名，别再用。
+
+**不出的**：`MousePositionX/Y`（没有鼠标）、`Voice*` / `VoiceA..O`（这条链上没有麦克风）、
+`FaceAngry`（官方标 EXPERIMENTAL、且没有对应的 ARKit 形态量）；
+以及 `Eye_Squint_L/R`、`BrowL/R`、`EyeOpen`、`EyeX/Y` ——
+它们是**已有参数换拼写或换聚合**（同一个值写两个名字），信息在 G1/G2 里都有。
+
+逐参数的公式、值域、来源见 [HO 参数规范](../../../docs/PARAMETER_HO.md)。
 
 ⚠️ **VBridger 自己的那批自定义出口一个都不抄**：`MouthFunnel`、`MouthPucker`、`MouthShrug`、
 `Eye_Squint_L/R`、`MouthPressLipOpen`、`BrowInnerUp` 都是 VB 私有名（要靠
