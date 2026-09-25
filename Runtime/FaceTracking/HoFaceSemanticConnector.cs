@@ -25,6 +25,9 @@ namespace Hollow.HoUnityTools.FaceTracking
     ///   · 消费方：填本组件，`GetFloat("名字")`；每帧都要读的话在 `Start` 里解析一次更省（但要先跑起来
     ///     让名字被声明出来）。
     ///   · 要写（比如材质控制器自己生产一个参数）：`SetFloat("名字", v)` —— 名字没声明过时会**当场开一格**。
+    ///     ⚠️ **Hub 是一片"脚本写的工作台"**：我们的中间层、你的组件、别的 mod 的脚本都能按名字写进来；
+    ///     **唯一写不进去的是动画 clip**（曲线写 `values.<i>` 那条路 2026-09-26 删了，
+    ///     见 `docs/FACE_TRACKING_DYNAMIC_PARAMETERS.md` §5.1）。
     ///
     /// ⚠️ **类型要逐字节同步进 mod 程序集**（`.research/sync-modcore.ps1`，只有命名空间不同），
     /// 所以里面**不要写 `#if UNITY_EDITOR`**，字段一律 public（要序列化进预制件）。
