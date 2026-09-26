@@ -2853,7 +2853,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Form",
-                        "expression":  "((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1",
+                        "expression":  "((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2864,7 +2864,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）"
+                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归 `MouthWidth` / 倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",

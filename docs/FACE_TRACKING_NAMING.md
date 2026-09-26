@@ -145,7 +145,8 @@
 
 | 轴段词 | 轴参数 | 正端 / 负端 | 说明 |
 | --- | --- | --- | --- |
-| `Form` | `Mouth/Form` | +1 笑 / −1 垂嘴角 | **读作"净笑量"**（= `2×VB MouthSmile − 1`）：`[(smileL+smileR) + dimple/2 − (frownL+frownR) − pucker] / 2`。VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下面那条"名字为什么还叫 `Form`" |
+| `Form` | `Mouth/Form` | +1 笑 / −1 sad | **读作"净笑量"**（2026-09-28 起负半轴 = **sad**）：`[(smileL+smileR) + dimple/2 − 2·sad] / 2`，其中 `sad = max(frown均值, 1.5×(stretch均值 − (0.42·jawOpen + 0.05)))`（闭嘴走 `frown`、张嘴走 `stretch` 残差；"噘"不再在这根轴里）。
+VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下面那条"名字为什么还叫 `Form`" |
 | `Open` | `Mouth/Open` | +1 开 / 0 闭 | VB `MouthOpen` |
 | `Funnel` | `Mouth/Funnel` | +1 漏斗 | VB `MouthFunnel` |
 | `Press` | `Mouth/Press` | +1 展/露齿 / −1 压/卷 | VB `MouthPressLipOpen`（双向） |

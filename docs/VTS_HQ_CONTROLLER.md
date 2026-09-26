@@ -317,7 +317,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2（**负半边留着**，负值钳到 `MouthCore` 的 X0 = 静息） | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**。**0 = 静息、+1 = 笑满；负侧由"嘴角下弯 + 噘嘴"驱动（没有眉/眼）** ⇒ 它是"嘴部情绪轴"，**不是纯 sad**（见 §3.4）。⚠️ 那两个负项是**正值的抑制量**，不能删（见下面那条警告） | **+0.75 常态笑、+1 大笑**（两个都要格）、0 静息；负侧 −0.4（卷唇/咬唇）、−0.5…−0.7（噘嘴 / 噘嘴+苦脸）——**负侧全部交给别的表** |
+| `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（**2026-09-28 负半轴改成 sad**：闭嘴走 `frown`、张嘴走 `stretch` 残差；"噘"不再在这根轴里） | 恒等 −1…2（**负半边留着**，负值钳到 `MouthCore` 的 X0 = 静息） | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**。**0 = 静息、+1 = 笑满；负侧由"嘴角下弯 + 噘嘴"驱动（没有眉/眼）** ⇒ 它是"嘴部情绪轴"，**不是纯 sad**（见 §3.4）。⚠️ 那两个负项是**正值的抑制量**，不能删（见下面那条警告） | **+0.75 常态笑、+1 大笑**（两个都要格）、0 静息；负侧 −0.4（卷唇/咬唇）、−0.5…−0.7（噘嘴 / 噘嘴+苦脸）——**负侧全部交给别的表** |
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.02 死区 + 0.02..0.05 斜坡，之外恒等**（`MouthCore` 的 Y 只留 `0 / 0.4 / 0.75`，**右上角单独摆 0.6**；负值钳到 Y0 = 闭） | smooth 0.009 s | **它不是"下颌开度"而是"嘴唇张开量"**：闭紧（`−mouthClose`，系数 1）与**卷唇**（`−0.2×(rollU+rollL)`）都算"比中性更闭合"——这两个负项**必须留着**（见下面那条警告） 。**实测：张满 0.75、半张 0.4、大笑张嘴 0.6；负侧只由卷唇驱动 —— 不咬唇内卷 −0.07、咬紧内卷 −0.14；撇嘴 ±0.01 是设备耦合（`mouthLeft/Right` 根本不在公式里）、已被死区抹平** | 0 … **0.75**（大笑张嘴 ≈0.6）；负侧 **−0.07 / −0.14**（树里钳到闭，卷唇姿势在 `MouthCoreRoll` 变体） |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | smooth 0.007 s | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
@@ -1856,7 +1856,42 @@ profile 那两行与 `docs/PARAMETER_HO.md` / `docs/FACE_TRACKING_NAMING.md` / �
   `Ho/Drive/Style/CatMouth`（改名时把全文一起改了）；`.research/` 里那些 `commit-msg-*` 与备份
   是**当时**的记录，不改。
 
+#### 5.7.21 sad 折进 smile 的负半轴 ＋ "左右平移独立成表"（2026-09-28，用户定）
+
+用户的两句：
+
+> 「一旦把 **苦（sad）与嘴左右两块半平移拆开成两半** 就一切都清晰了，**sad 加入进 smile 的另一半轴**。
+> 左右两块的平移直接是一个 2d3 动画轴就 over 了。最关键的是 **sad 怎么出**」
+
+**① 为什么这个拆法对**：`MouthCorner` 之所以一直别扭，是因为它把 **上下（苦）** 与 **左右（平移）**
+揉进了同一个 2D 表 —— 它的对角格本来就没有语义。拆开之后：sad 归 `Mouth/Form` 的**负半轴**（= Live2D 的
+`ParamMouthForm`、VB 的 `MouthSmile` 那个双向轴），左右平移单独成表。⇒ **`MouthCorner` 可以删**
+（等作者画好新的那几格之后一起做，见 §5.7.21 清单）。
+
+**② "sad 怎么出" —— 两段式判据**（13 个候选在 126 段上扫过，`.research/结论-2026-09-28-sad怎么出.md`）：
+
+```text
+sad = max( (mouthFrownLeft + mouthFrownRight) / 2 ,
+           clamp( ((mouthStretchLeft + mouthStretchRight) / 2 − (0.42 · jawOpen + 0.05)) × 1.5 , 0, 1 ) )
+```
+
+* **闭嘴苦走 `frown`**（0.48~0.57）、**张嘴苦走 `stretch` 残差** —— 因为实测**一张嘴 `frown` 整行归零**
+  （苦半张/苦大张 `frown` ≈0，苦转到 `mouthStretch`：同开度基线上 +0.25~+0.4）；
+* 代进实测：苦闭嘴 **−0.51** · 苦半张 **−0.30**（旧口径是 **0** ✗）· 苦大张 **−0.66**；
+  干扰项：静息 −0.01 · 用力说话 +0.04 · 笑不变 ✓；
+* ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（−0.63 / −0.75 与苦同档）。理由：设备上"嘴角向下压"与
+  "压紧嘴唇"**本来就是同一个姿势**（抿嘴下 `frown` 0.69~0.75 vs 真苦嘴 0.48~0.69）——
+  13 个含/不含 `frown` 的候选全扫完，**分开是不可能的**；接受之后 sad 的缝 ≈ **+0.28**
+  （目标下界 0.42 / 非目标上界 0.14）。
+* 正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的"张嘴 × 笑"不受影响（台架：两嘴角 0.8 ⇒ Form 0.8000 不变）。
+* **"噘"从此不在这根轴里**（归 `MouthWidth` / 倒V 形态）—— 这也是这次改动的另一半含义。
+
+**③ 还没做的（等作者画格子）**：`MouthCore` 的 X 现在是 `0 / 0.75 / 1` 三档（负侧钳到 0）⇒ 要真正
+用上 sad，得**加一列 −1（苦）**，也就是多画"苦 × 闭 / 半张 / 张满"那几格；同一轮再做
+**左右平移独立成表**（3 档；顺便给 `Mouth/X` 补上实测最强的 `dimple` 不对称通道）并**删 `MouthCorner`**。
+
 #### 5.7.20 下颌 `Mouth/Jaw` 修正：正侧改用 `jawOpen`（闭嘴下颌下拉本来一直触发不了）＋"张嘴时的苦"走 `stretch`
+
 
 用户报：「`mouthJaw` 的闭嘴时下颌下拉、**只表现下巴下移的动画完全无法触发**」。同一批还答了上一轮的
 "苦 + 张嘴"（18 段，`.research/takes-kubite.txt`，同一场校准 6 组 × 3；结论
