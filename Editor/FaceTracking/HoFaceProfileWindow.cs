@@ -561,7 +561,8 @@ HoFaceOutput output = ActiveRows()[index];
                 return;
             }
 
-            bool bad = !HoFaceExpression.TryParse(output.expression, out _, out _);
+            bool bad = IsBrokenRow(output);
+            bool constant = IsConstantRow(output);
             string name = string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter;
 
             // ⚠️ 横向滚动条的**真正来源**就在这一行。
@@ -584,11 +585,13 @@ HoFaceOutput output = ActiveRows()[index];
             // ── 背景 + 曲线 ──────────────────────────────────────────────────────
             if (Event.current.type == EventType.Repaint)
             {
-                Color accent = bad ? HoConstraintEditorTheme.ErrorColor : AccentForRow(output);
+                Color accent = bad
+                    ? HoConstraintEditorTheme.ErrorColor
+                    : (constant ? HoConstraintEditorTheme.TextFaintColor : AccentForRow(output));
                 bool isSelected = index == selected;
 
                 EditorGUI.DrawRect(row, isSelected ? SelectedRowTint : RowTint);
-                DrawRowCurveBackground(content, output, bad, isSelected, accent);
+                DrawRowCurveBackground(content, output, bad, constant, isSelected, accent);
             }
 
             // 角标占掉右上角（名字与表达式都让开它，免得压字）。
@@ -630,7 +633,17 @@ HoFaceOutput output = ActiveRows()[index];
                 };
                 string text = output.expression;
                 string tip = output.expression;
-                if (bad)
+                if (constant)
+                {
+                    // 常量行：表达式栏**写默认值**（人来读的就是"这一行是多少"），灰字，不是错。
+                    style.normal.textColor = HoConstraintEditorTheme.TextFaintColor;
+                    text = ConstantRowText(output) + (editingInputs ? "（没有源）" : "（常量行）");
+                    tip = editingInputs
+                        ? "常量行：表达式留空 ⇒ 这一行的值恒为 " + output.defaultValue.ToString("0.###") + "（没有线名驱动它）。"
+                        : "常量行：表达式留空 ⇒ 中间层每帧直接写 " + output.defaultValue.ToString("0.###")
+                          + "（不过曲线）。门控那种「不需要输入、总有一个默认值」的东西就靠它。";
+                }
+                else if (bad)
                 {
                     style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                     text = "⚠ " + output.expression;
@@ -724,15 +737,19 @@ ActiveRows().RemoveAt(index);
         ///  平白多了一整套缓存、销毁、泄漏要考虑，见 git 历史。）
         /// </summary>
         /// <param name="area">已经让开右侧按钮区的可用矩形（调用方算好）。</param>
-        private void DrawRowCurveBackground(Rect area, HoFaceOutput output, bool bad, bool selected, Color accent)
+        private void DrawRowCurveBackground(Rect area, HoFaceOutput output, bool bad, bool constant, bool selected, Color accent)
         {
             if (area.width < 16.0f || area.height < 8.0f) return;
 
             // 极淡的底色：给"这一行属于哪一堆"一个氛围，不影响读字。
             // 选中的那行多压一点，让"整行可点"在视觉上说得通。
             Color tint = accent;
-            tint.a = bad ? 0.18f : (selected ? 0.14f : 0.08f);
+            tint.a = bad ? 0.18f : (constant ? 0.12f : (selected ? 0.14f : 0.08f));
             EditorGUI.DrawRect(area, tint);
+
+            // **常量行不画曲线**：它的值不走曲线（空表达式 ⇒ 取 defaultValue），画出来只会误导。
+            // 灰底已经说明"这是一行常量"。
+            if (constant) return;
 
             AnimationCurve curve = output.curve;
             if (curve == null || curve.length == 0) return;
@@ -783,11 +800,31 @@ ActiveRows().RemoveAt(index);
             return raw ? HoConstraintEditorTheme.AccentOutput : HoConstraintEditorTheme.AccentDriver;
         }
 
+        /// <summary>
+        /// **常量行**：`expression` 留空（或只有空白）+ `defaultValue` —— 中间层每帧直接写那个默认值，
+        /// 而且**不过曲线**（`HoFaceAnimationSession`：空表达式 ⇒ 取 `defaultValue`）。
+        /// 门控那种"不需要输入、总有一个默认值"的东西就是它（[中间层](FACE_TRACKING_MIDDLE_LAYER.md) §5.3）。
+        ///
+        /// ⚠️ **它不是错**：之前这里把空表达式直接丢进 `HoFaceExpression.TryParse` ⇒ 判定"解析不过"⇒ 整行爆红。
+        /// 2026-09-27 修：常量行按"灰底 + 表达式栏写默认值"画。
+        /// </summary>
+        private static bool IsConstantRow(HoFaceOutput output) =>
+            output != null && string.IsNullOrWhiteSpace(output.expression);
+
+        /// <summary>**真的坏了**：有表达式但解析不过（常量行不算）。</summary>
+        private static bool IsBrokenRow(HoFaceOutput output) =>
+            output != null && !IsConstantRow(output) && !HoFaceExpression.TryParse(output.expression, out _, out _);
+
+        /// <summary>常量行在表达式那一栏显示的东西：`= 默认值`（人来读的就是"写多少"）。</summary>
+        private static string ConstantRowText(HoFaceOutput output) =>
+            "= " + output.defaultValue.ToString("0.###");
+
         private void DrawStatusLine()
         {
             List<HoFaceOutput> rows = ActiveRows();
             int count = rows != null ? rows.Count : 0;
             int bad = 0;
+            int constants = 0;
             var duplicates = new HashSet<string>();
             if (rows != null)
             {
@@ -796,7 +833,9 @@ ActiveRows().RemoveAt(index);
                 {
                     HoFaceOutput output = rows[i];
                     if (output == null) continue;
-                    if (!HoFaceExpression.TryParse(output.expression, out _, out _)) bad++;
+                    // 常量行（空表达式 + 默认值）**不是错**：门控就靠它。只有"有表达式但解析不过"才报错。
+                    if (IsConstantRow(output)) constants++;
+                    else if (IsBrokenRow(output)) bad++;
                     if (!string.IsNullOrEmpty(output.parameter) && !seen.Add(output.parameter)) duplicates.Add(output.parameter);
                 }
             }
@@ -804,7 +843,8 @@ ActiveRows().RemoveAt(index);
             using (HoConstraintEditorControls.Row(true))
             {
                 string text = (editingInputs ? "输入行 " : "输出行 ") + count + " 行 · " + bad
-                    + " 行表达式有错 · " + duplicates.Count + " 个重复参数名";
+                    + " 行表达式有错 · " + duplicates.Count + " 个重复参数名"
+                    + (constants > 0 ? " · 常量行 " + constants : "");
                 GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
                 if (bad > 0 || duplicates.Count > 0) style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                 GUI.Label(HoConstraintEditorControls.NextAuto(text, style), text, style);
@@ -834,7 +874,10 @@ HoFaceOutput output = ActiveRows()[index];
             HoConstraintEditorControls.Title(
                 string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter,
 "第 " + (index + 1) + " / " + ActiveRows().Count + " 行",
-                new (string, bool)[] { ("表达式", !string.IsNullOrEmpty(output.expression)) });
+                new (string, bool)[]
+                {
+                    IsConstantRow(output) ? ("常量行", true) : ("表达式", !string.IsNullOrEmpty(output.expression))
+                });
 
             DrawRightScroll(output);
         }
@@ -862,7 +905,10 @@ HoFaceOutput output = ActiveRows()[index];
                     "写进控制器的参数；控制器里没有这个名字时这行被跳过（不猜也不补）。");
             }
 
-            bool parsedOk = HoFaceExpression.TryParse(output.expression, out var parsed, out string expressionError);
+            bool constant = IsConstantRow(output);
+            HoFaceExpression parsed = null;          // 常量行不进解析器，这两个要先有值
+            string expressionError = null;
+            bool parsedOk = constant || HoFaceExpression.TryParse(output.expression, out parsed, out expressionError);
             using (HoConstraintEditorControls.Row())
             {
                 HoConstraintEditorControls.Label("表达式", HoConstraintEditorTheme.LabelWidth);
@@ -870,6 +916,15 @@ HoFaceOutput output = ActiveRows()[index];
                     HoConstraintEditorControls.NextFlexible(60.0f),
                     output.expression,
                     parsedOk ? HoConstraintEditorTheme.Field : HoConstraintEditorTheme.FieldMissing);
+                if (constant)
+                {
+                    HoConstraintEditorControls.Flex();
+                    HoConstraintEditorControls.CaptionTrim(editingInputs ? "常量行：没有源" : "常量行：留空就是它", 130.0f,
+                        editingInputs
+                            ? "表达式留空 = **常量行**：这一行的值恒为下面的「默认值」（没有线名驱动它）。"
+                            : "表达式留空 = **常量行**：中间层每帧直接把下面的「默认值」写出去（不过曲线）。"
+                              + "门控那种「不需要输入、总有一个默认值」的东西就靠它 —— 不是错。");
+                }
             }
 
             if (!parsedOk)

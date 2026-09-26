@@ -646,7 +646,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // **这一行的默认值**（照 VBridger 的 `defaultValue`）：那条线名一帧都没来过时，
                 // 这个规范名就是它 —— 摆成初值，于是"没数据"不再等于隐式 0。
                 inputValues[i] = inputList[i].defaultValue;
-                if (HoFaceExpression.TryParse(inputList[i].expression, out var parsed, out string inputError))
+                if (string.IsNullOrWhiteSpace(inputList[i].expression))
+                {
+                    // **常量行**（表达式留空）：这一行没有源，值恒为 defaultValue。不是错，别报警。
+                    inputExpressions[i] = null;
+                }
+                else if (HoFaceExpression.TryParse(inputList[i].expression, out var parsed, out string inputError))
                     inputExpressions[i] = parsed;
                 else
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 条输入行的表达式用不了（" + inputList[i].parameter + "）：" + inputError);
@@ -667,7 +672,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 outputs[i] = rows[i];
                 if (rows[i] == null) continue;
-                if (HoFaceExpression.TryParse(rows[i].expression, out var parsed, out string error))
+                if (string.IsNullOrWhiteSpace(rows[i].expression))
+                {
+                    // **常量行**（表达式留空 + `defaultValue`）：门控那种"不需要输入、总有一个默认值"的东西。
+                    // 求值时走 `defaultValue`（`expressions[i] == null` 那条分支），而且**不过曲线**。
+                    expressions[i] = null;
+                }
+                else if (HoFaceExpression.TryParse(rows[i].expression, out var parsed, out string error))
                     expressions[i] = parsed;
                 else
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的表达式用不了（" + rows[i].parameter + "）：" + error);
