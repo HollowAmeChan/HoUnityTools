@@ -194,11 +194,17 @@ namespace Hollow.HoUnityTools.FaceTracking
     ///
     /// 【规则】刻意做得简单（用户定的形状）：
     /// <list type="number">
-    /// <item>**按行序求值** —— 就是 profile 里 <c>outputs</c> 的顺序，不排序、不递归；</item>
-    /// <item>用 <c>out("参数名")</c> 读**上面某一行已经算完的输出值**：过完曲线与修饰符的那一份，
-    ///   也就是"发布出去的值"。用**函数**而不是裸名字有两个理由：参数名里带 `/`（裸标识符写不出来），
+    /// <item>**按行序求值** —— 就是 profile 里 <c>outputs</c> 的顺序，不排序、不递归；
+    ///   所有行读写的都是同一张**输出表缓存**（<see cref="HoFaceOutputTable"/>）；</item>
+    /// <item>用 <c>out("参数名")</c> 读**上面最近写过这个名字的那一行**的值（过完曲线与修饰符的那一份）。
+    ///   用**函数**而不是裸名字有两个理由：参数名里带 `/`（裸标识符写不出来），
     ///   以及**防止与输入通道重名**（输出行叫 `Brows` 时能明确说"我要输出那一份"）；</item>
-    /// <item>**引用下面的行 ⇒ 这一行无效**：面板上爆红，且**始终输出 `defaultValue`**（不参与求值）。</item>
+    /// <item>**同名多行是合法且有意的**（2026-09-27 用户定）：行按顺序**覆盖**表里的那一格，
+    ///   发布出去的是**最后写的那一行** ⇒ 于是"每条形态再压一条同名行、读自己、写自己"就能
+    ///   **无限拓展**（加形态不用动任何已有行）。⚠️ 所以这里判的是"**上面有没有**这个名字"，
+    ///   不是"这个名字唯一不唯一"；</item>
+    /// <item>**上面没有这个名字（或引用了下面才出现的行）⇒ 这一行无效**：面板上爆红，
+    ///   且**始终输出 `defaultValue`**（不参与求值）。</item>
     /// </list>
     ///
     /// 【为什么不用拓扑排序】只在"上面"找 ⇒ 依赖图**按构造就是 DAG**：不可能有环，
@@ -218,42 +224,52 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (rows == null) return new string[0];
             var errors = new string[rows.Count];
 
-            // 参数名 → 行号：**同名多行时第一行生效**（与 HoFaceAnimationSession 的 outputIndex 一致）
-            var index = new Dictionary<string, int>(StringComparer.Ordinal);
+            // 参数名 → 行号。⚠️ 同名多行是**合法且有意的**（输出表缓存：后写覆盖先写），
+            // 所以这里必须**按行序边走边覆盖**：本行查到的永远是「上面最近写过这个名字的那一行」，
+            // 与 HoFaceOutputTable 的语义**逐字一致**（那边是"这个名字现在有没有值"）。
+            var above = new Dictionary<string, int>(StringComparer.Ordinal);
+            // 只为报错措辞：这个名字在**整份**表里出现过吗（出现过却不在上面 ⇒ 它只出现在下面）。
+            var anywhere = new Dictionary<string, int>(StringComparer.Ordinal);
             for (int i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
                 if (row == null || string.IsNullOrEmpty(row.parameter)) continue;
-                if (!index.ContainsKey(row.parameter)) index[row.parameter] = i;
+                anywhere[row.parameter] = i;
             }
 
             var refs = new List<string>();
             for (int i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
-                if (row == null || string.IsNullOrWhiteSpace(row.expression)) continue;   // 常量行不引用任何人
+                if (row == null) continue;
 
-                HoFaceExpression parsed;
-                string why;
-                if (!HoFaceExpression.TryParse(row.expression, out parsed, out why)) continue;
-
-                refs.Clear();
-                parsed.CollectOutputRefs(refs);
-                for (int k = 0; k < refs.Count; k++)
+                if (!string.IsNullOrWhiteSpace(row.expression))
                 {
-                    int target;
-                    if (!index.TryGetValue(refs[k], out target))
+                    HoFaceExpression parsed;
+                    string why;
+                    if (HoFaceExpression.TryParse(row.expression, out parsed, out why))
                     {
-                        errors[i] = "out(\"" + refs[k] + "\") 引用了不存在的输出行";
-                        break;
-                    }
-                    if (target >= i)
-                    {
-                        errors[i] = "out(\"" + refs[k] + "\") 引用了第 " + (target + 1) + " 行（在本行下面）"
-                            + " —— 只能引用上面已经算完的行；本行始终输出默认值";
-                        break;
+                        refs.Clear();
+                        parsed.CollectOutputRefs(refs);
+                        for (int k = 0; k < refs.Count; k++)
+                        {
+                            // `above` 里只有**已经走过的行** ⇒ 命中就一定在本行上面（不需要再比行号）
+                            if (!above.ContainsKey(refs[k]))
+                            {
+                                errors[i] = anywhere.ContainsKey(refs[k])
+                                    ? "out(\"" + refs[k] + "\") 上面还没有写过这个名字（只有下面的第 "
+                                        + (anywhere[refs[k]] + 1) + " 行写）"
+                                        + " —— 只能引用上面已经算完的行；本行始终输出默认值"
+                                    : "out(\"" + refs[k] + "\") 引用了不存在的输出行";
+                                break;
+                            }
+                        }
                     }
                 }
+
+                // 走完这一行才把它写进"上面"：于是 `out("自己的名字")` 读到的是**上一条同名行**
+                // （双重形态的链就是这么长出来的），而**第一条**同名行读自己是"上面还没有" ⇒ 爆红。
+                if (!string.IsNullOrEmpty(row.parameter)) above[row.parameter] = i;
             }
             return errors;
         }

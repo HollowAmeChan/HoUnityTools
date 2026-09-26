@@ -35,11 +35,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 那个约定 2026-09-26 已经废掉（出口用**裸规范名**），而且它早已没有任何读者 —— 面板现在直接
         /// 按行名读 <see cref="OutputValue"/>，不依赖命名约定。
         /// **调试覆盖优先**：被 <see cref="SetPreview"/> 盖住的行读到的就是覆盖值（与真正写进影子 / Hub 的那份一致）。
+        /// ⚠️ **同名多行读的是最后写的那一份**（输出表缓存，2026-09-27）：链上每一行都有自己的值，
+        /// 但"这个名字发布出去的值"只有一个 —— 就是表里那一格。
         /// </summary>
         public float OutputValue(string parameter)
         {
             if (string.IsNullOrEmpty(parameter)) return float.NaN;
             if (previews.TryGetValue(parameter, out float overridden)) return overridden;
+            if (outputTable.TryRead(parameter, out float published)) return published;
+            // 一帧都还没算过时表是空的：退回"按行读"，免得面板在起始那一瞬间全变 NaN。
             return outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
         }
 
@@ -67,8 +71,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private HoFaceOutput[] outputs = new HoFaceOutput[0];
         private HoFaceExpression[] expressions = new HoFaceExpression[0];
         private float[] outputValues = new float[0];
-        /// <summary>输出行求值游标：<c>out("…")</c> 只认严格在它之前的行（见 <see cref="LookupOutput"/>）。</summary>
-        private int outputCursor;
+        /// <summary>
+        /// **输出表缓存**（2026-09-27 用户定）：`参数名 → 这一帧已经写进去的值`。
+        /// 输出行**都读它、写它**，整趟走完才发布 —— 见 <see cref="HoFaceOutputTable"/>。
+        /// 同名多行"读自己、写自己"的链就是靠它成立的（后写覆盖先写）。
+        /// </summary>
+        private readonly HoFaceOutputTable outputTable = new HoFaceOutputTable();
         private float[] outputSmooth = new float[0];
         private int[] stepIndex = new int[0];
         private double[] stepUntil = new double[0];
@@ -314,9 +322,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 求值**严格按 outputs 的行序**（2026-09-27）：`out("参数名")` 读的就是"上面已经算完的那一行"，
             // 所以顺序既是求值顺序、也是依赖顺序（见 HoFaceOutputOrder）。
             double frameNow = HoFaceClock.Now;
+            // **输出表缓存**：每帧清一次，行走完再统一发布（用户定 2026-09-27）。
+            // 行与行之间只通过这张表看见彼此 —— 后写覆盖先写，所以"读自己、写自己"的同名链天然成立。
+            outputTable.Clear();
             for (int row = 0; row < outputs.Length; row++)
             {
-                outputCursor = row;   // LookupOutput 只认严格在本行之前的行
                 var output = outputs[row];
                 if (output == null) continue;
                 // 表达式留空 = **常量行**（门控那种"不需要输入、总有默认值"的东西就靠它）；
@@ -339,8 +349,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (value != 0f && Mathf.Abs(value) < 1e-6f) value = 0f;
 
                 outputValues[row] = value;
-                if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
+                outputTable.Write(output.parameter, value);   // 同名多行：表里永远是"最后写的那一份"
             }
+
+            // ── 发布（**全都走完了才输出**）──────────────────────────────────────────────
+            // 按**表**发布而不是按行：同名多行只写一次（最后写的那一份），于是
+            // "别的行读到的值 / 面板读到的值 / 影子与 Hub 里那一格"永远是同一个数，不会有半成品。
+            foreach (var pair in outputTable.Entries)
+                if (parameters.Contains(pair.Key)) shadow.SetFloat(pair.Key, pair.Value);
 
             foreach (var preview in previews)
                 if (parameters.Contains(preview.Key)) shadow.SetFloat(preview.Key, preview.Value);
@@ -425,7 +441,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (output == null || string.IsNullOrEmpty(output.parameter)) continue;
 
                 float value;
-                if (!previews.TryGetValue(output.parameter, out value)) value = outputValues[row];
+                if (!previews.TryGetValue(output.parameter, out value))
+                    value = outputTable.TryRead(output.parameter, out float published) ? published : outputValues[row];
 
                 if (semanticHub.IndexOf(output.parameter) < 0)
                 {
@@ -502,22 +519,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         /// <summary>
-        /// `out("参数名")` 的取值：**上面某一行这一帧算完的值**（过完曲线与修饰符的那一份，
-        /// 也就是"发布出去的那份值"）—— 不是原始表达式值。
+        /// `out("参数名")` 的取值：**输出表缓存里这个名字现在的值** —— 也就是**上面最近写过它**的那一行
+        /// 这一帧算完的值（过完曲线与修饰符的那一份，也就是"要发布出去的那份值"），不是原始表达式值。
         ///
-        /// 两道保险：
-        /// ① 编译期已经判过"只能引用上面的行"（引用了下面的行的行会被置成常量行，根本走不到这里）；
-        /// ② 这里再用 <see cref="outputCursor"/> 挡一次 —— 只认**严格在本行之前**的行，
-        ///    于是"万一将来有人绕过编译期检查"也不会读到本帧的半成品。
-        /// 名字找不到 / 是常量行之外的情况一律 0（表达式求值器不抛异常）。
+        /// ⚠️ 表里只有**已经走过的行**写过的东西 ⇒ "只能引用上面的行"这条规则在运行期**由构造保证**
+        /// （编译期那一道在 <see cref="HoFaceOutputOrder.Validate"/>，两边是同一个语义）。
+        /// ⚠️ **同名多行读的就是上一条同名行**：`out("自己这个名字")` 不会读到本行 —— 本行还没写进表。
+        /// 名字还没人写过 / 是空名字一律 0（表达式求值器不抛异常）。
         /// </summary>
-        private float LookupOutput(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return 0f;
-            int row;
-            if (outputIndex.TryGetValue(name, out row) && row < outputCursor) return outputValues[row];
-            return 0f;
-        }
+        private float LookupOutput(string name) => outputTable.Read(name);
 
         /// <summary>
         /// 有序修饰符。按列出顺序生效（照 VBridger 的输出修饰符）：
@@ -739,8 +749,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     expressions[i] = parsed;
                 else
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的表达式用不了（" + rows[i].parameter + "）：" + error);
-                if (!string.IsNullOrEmpty(rows[i].parameter) && !outputIndex.ContainsKey(rows[i].parameter))
-                    outputIndex[rows[i].parameter] = i;
+                // 同名多行：**最后一行**才是"这个名字发布出去的那一份"（与输出表缓存一致）。
+                // 这个索引只给"一帧都还没算过"时的读数兜底 —— 真正的读数是 HoFaceOutputTable。
+                if (!string.IsNullOrEmpty(rows[i].parameter)) outputIndex[rows[i].parameter] = i;
             }
 
             // ── 输出行之间的**引用顺序**（2026-09-27）：`out("参数名")` 只能引用**上面**的行 ──────

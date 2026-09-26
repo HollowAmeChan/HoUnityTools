@@ -1123,13 +1123,19 @@ HoFaceOutput output = ActiveRows()[index];
             for (int i = 0; i < references.Count; i++)
             {
                 string name = references[i];
-                int target = -1;
+                int self = rows != null ? rows.IndexOf(output) : -1;
+                int target = -1;   // **上面最近的一条同名行**（同名多行时读的是它，不是第一条）
+                int below = -1;    // 只有下面有同名行 ⇒ 本行无效
+                int sameCount = 0;
                 if (rows != null)
                 {
-                    for (int r = 0; r < rows.Count; r++)
-                    {
+                    for (int r = rows.Count - 1; r >= 0; r--)
+                        if (rows[r] != null && rows[r].parameter == name) sameCount++;
+                    for (int r = (self >= 0 ? self : rows.Count) - 1; r >= 0; r--)
                         if (rows[r] != null && rows[r].parameter == name) { target = r; break; }
-                    }
+                    if (target < 0)
+                        for (int r = (self >= 0 ? self : -1) + 1; r < rows.Count; r++)
+                            if (rows[r] != null && rows[r].parameter == name) { below = r; break; }
                 }
 
                 using (HoConstraintEditorControls.Row(true))
@@ -1137,24 +1143,21 @@ HoFaceOutput output = ActiveRows()[index];
                     HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
                     var style = new GUIStyle(HoConstraintEditorTheme.Value);
                     string suffix;
-                    if (target < 0)
+                    if (target < 0 && below < 0)
                     {
                         suffix = "   ← 没有这一行";
+                        style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                    }
+                    else if (target < 0)
+                    {
+                        suffix = "   ← 只有第 " + (below + 1) + " 行（在本行下面 ⇒ 本行无效）";
                         style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                     }
                     else
                     {
                         suffix = "   ← 第 " + (target + 1) + " 行";
-                        int self = rows != null ? rows.IndexOf(output) : -1;
-                        if (self >= 0 && target >= self)
-                        {
-                            suffix += "（在本行下面 ⇒ 本行无效）";
-                            style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
-                        }
-                        else
-                        {
-                            style.normal.textColor = HoConstraintEditorTheme.WarningColor;
-                        }
+                        if (sameCount > 1) suffix += "（同名 " + sameCount + " 条：读上面最近的那一条）";
+                        style.normal.textColor = HoConstraintEditorTheme.WarningColor;
                     }
 
                     GUI.Label(HoConstraintEditorControls.NextAuto(name + suffix, style),

@@ -1,4 +1,4 @@
-﻿# 配置层（Profiles）
+# 配置层（Profiles）
 
 这里放**发货用的中间层配置**（`*.hoface.json`），当成一个仓库用。
 
@@ -15,7 +15,7 @@
 
 | 文件 | 是什么 |
 |---|---|
-| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：67 条输入行 + **129 行输出** = **90 条出口**（原始 ARKit 52 + 官方 VTS 20 + VB 自造 5 + 姿态向量 12 + `FaceFound`，2026-09-27 之前只有这 90 行）+ **39 行控制器轴 `Ho/Drive/*`**（轴 / 区域门 / `MouthCore` 切片权重，喂新控制器；逐行见 `docs/PARAMETER_HO.md` §3.7）。公式机械取自本机 VBridger，见下 |
+| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：**69 条输入行**（67 条设备线 + 2 条**外部开关** `HoAutoInvertedV` / `HoExternalInvertedV`，Warudo 在 VTS 接收器之后 append）+ **132 行输出** = **90 条出口**（原始 ARKit 52 + 官方 VTS 20 + VB 自造 5 + 姿态向量 12 + `FaceFound`，2026-09-27 之前只有这 90 行）+ **39 行控制器轴 `Ho/Drive/*`**（轴 / 区域门 / `MouthCore` 切片权重，喂新控制器；逐行见 `docs/PARAMETER_HO.md` §3.7）+ **3 行风格化内部行 `Ho/Style/*`**（规则二的基准行 + 倒V 的「写自己」+ 它那条「关其他」**同名**行 —— 走输出表缓存，**不写控制器**，见 `docs/VTS_HQ_CONTROLLER.md` §5.6）。公式机械取自本机 VBridger，见下 |
 | `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的**纯直通参考**：67 输入 / 67 输出，零改名、零曲线 |
 | `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的**纯直通参考**：65 输入 / 65 输出，同上 |
 
