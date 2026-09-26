@@ -102,6 +102,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         public bool writeParameterHub;
 
+        /// <summary>
+        /// **把影子台显示在 Hierarchy 里**（2026-09-27 用户定：观察台不该是一个组件）。
+        ///
+        /// 打开后会话建的 `Ho Face Shadow` 用 `HideFlags.DontSave`（出现在 Hierarchy、可选中），
+        /// 于是选中它、打开 Animator 窗口，就能看见**运行中的那棵树**与实时参数 ——
+        /// 比"再摆一个抄参数的组件"直接：不抄、不镜像，也不再需要 `HoFaceShadowLink` 那条静态耦合。
+        /// 它**不落盘**（`DontSave`），停止驱动就没了；关掉开关会把它重新藏回去（下一帧生效）。
+        /// </summary>
+        public bool showShadowInHierarchy;
+
         /// <summary>配置文件填了没有 —— 这是"下面能不能改"的总闸。</summary>
         public bool HasProfile { get { return !string.IsNullOrEmpty(profilePath); } }
 
@@ -385,7 +395,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             text.Append("  \"staleSeconds\": ").Append(HoFaceProfileJson.Num(staleSeconds)).Append(",\n");
             text.Append("  \"neutralFadeSeconds\": ").Append(HoFaceProfileJson.Num(neutralFadeSeconds)).Append(",\n");
             text.Append("  \"startOnPlay\": ").Append(startOnPlay ? "true" : "false").Append(",\n");
-            text.Append("  \"writeParameterHub\": ").Append(writeParameterHub ? "true" : "false").Append('\n');
+            text.Append("  \"writeParameterHub\": ").Append(writeParameterHub ? "true" : "false").Append(",\n");
+            text.Append("  \"showShadowInHierarchy\": ").Append(showShadowInHierarchy ? "true" : "false").Append('\n');
             text.Append("}\n");
             return text.ToString();
         }
@@ -421,6 +432,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         case "neutralFadeSeconds": result.neutralFadeSeconds = r.ReadFloat(); break;
                         case "startOnPlay": result.startOnPlay = r.ReadBool(); break;
                         case "writeParameterHub": result.writeParameterHub = r.ReadBool(); break;
+                        case "showShadowInHierarchy": result.showShadowInHierarchy = r.ReadBool(); break;
                         default: r.SkipValue(); break;
                     }
                 });

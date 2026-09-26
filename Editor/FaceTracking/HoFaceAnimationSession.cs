@@ -167,15 +167,29 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private void BuildShadow()
         {
-            shadowRoot = new GameObject("Ho Face Shadow") { hideFlags = HideFlags.HideAndDontSave };
+            // **影子台默认是隐藏对象**（`HideAndDontSave`：Hierarchy 里点不到、不落盘）。
+            // 想看运行中的那棵树时，在「面捕 · 调试面板」的「对象」段把「混合树观察台」打开 ——
+            // 那时它用 `DontSave`（出现在 Hierarchy、可选中），选中它 + Animator 窗口看到的就是**真身**，
+            // 不需要任何"抄参数"的镜像组件（2026-09-27 用户定：观察台不该是一个组件）。
+            shadowRoot = new GameObject("Ho Face Shadow")
+            {
+                hideFlags = Settings.showShadowInHierarchy ? HideFlags.DontSave : HideFlags.HideAndDontSave
+            };
             shadow = shadowRoot.AddComponent<Animator>();
             shadow.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             // ⚠️ 影子根上**没有** Hub —— 中间层算出来的参数直接写**角色身上**那片 Hub
             // （见 PublishSemantics）。曾经这里放过一片"影子 Hub"，那是给控制器里的状态机行为写的，
             // 那条路 2026-09-26 整个删掉了。
-            // 登记给调试器（混合树观察台）：影子台是隐藏对象，调试组件自己找不到它。
-            // 这是调试接入的全部代价 —— 一行，且不改任何生产逻辑。
-            HoFaceShadowLink.Register(shadow);
+        }
+
+        /// <summary>
+        /// 面板那个「混合树观察台」开关改了之后调它：把已经在跑的影子台**立刻**显示 / 藏回去
+        /// （不用重启驱动）。影子台还没建时什么都不做 —— 下一次 <see cref="BuildShadow"/> 照开关来。
+        /// </summary>
+        public void ApplyShadowVisibility()
+        {
+            if (shadowRoot == null) return;
+            shadowRoot.hideFlags = Settings.showShadowInHierarchy ? HideFlags.DontSave : HideFlags.HideAndDontSave;
         }
 
         /// <summary>按编译结果的绑定路径搭出镜像层级，每格挂一个只被驱动、不上屏的 SkinnedMeshRenderer。</summary>
@@ -753,7 +767,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             owned.Clear();
             meshRefs.Clear();
             DestroyProxies();
-            HoFaceShadowLink.Unregister(shadow);
             if (shadowRoot != null) UnityEngine.Object.DestroyImmediate(shadowRoot);
             shadowRoot = null;
             shadow = null;

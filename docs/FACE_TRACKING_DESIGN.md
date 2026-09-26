@@ -224,7 +224,7 @@ flowchart TD
 | 设参数 | 只对**控制器里真有的** Float 参数 `SetFloat`；没有那个名字就跳过（不猜、不补）（`:242`） |
 | **求值** | 设完参数后**自己 `shadow.Update(0f)` 强制求值一次**（`:252-259`） |
 | 抄回 | `WriteOutputs` 从影子代理读 `GetBlendShapeWeight` 写到真 Renderer，只遍历 `owned`（`:386-396`） |
-| 调试接入 | 影子向 `HoFaceShadowLink` 登记自己，混合树观察台（`HoFaceBlendTreePeek`）从那里取（`HoFaceShadowLink.cs:20`、`HoFaceBlendTreePeek.cs:48`） |
+| 调试接入 | **把影子台显示出来就看真身**：面板「对象」段的「混合树观察台」开关打开后，影子根用 `DontSave`（出现在 Hierarchy、可选中）⇒ 选中它 + Animator 窗口 = 运行中的那棵树与实时参数（`HoFaceAnimationSession.cs` 的 `BuildShadow` / `ApplyShadowVisibility`）。2026-09-27 之前是一个独立组件（`HoFaceBlendTreePeek`）靠 `HoFaceShadowLink` 静态登记"抄参数"来镜像 —— 那种设计跟面捕面板耦合、还只认最后登记的那个会话，已删 |
 
 **为什么必须 `Update(0f)` 一次同步调用：** 以前是组件的 `Update`/`LateUpdate` 一对（设参数在 `Update`、抄回在 `LateUpdate`，中间让 Unity 自己算完）。组件删掉之后，如果"设参数"和"读结果"还分在两个编辑器回调里，就是在**赌回调顺序**。自己 `Update(0f)` 之后，这一步变成"设参数 → 求值 → 读值"一次调用里完成；影子是活动对象，Unity 之后还会再算一次，参数没变所以无害。
 
@@ -352,8 +352,6 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoJson.cs` | 极小的 JSON **读取器**：我们所有数据路径共用的那一份；未知字段跳过、报错带字符位置、数字用不变文化、容忍 BOM |
 | `HoVtsPacket.cs` | VTS 手机包的解析（纯静态、不碰 socket）：请求包原文 + `线名 → 原值` 摊平 |
 | `HoFaceOutputOwnership.cs` | **键级占用表**（§5.1） |
-| `HoFaceShadowLink.cs` | 会话 → 调试观察台的唯一联系点：登记"正在生效的影子 Animator" |
-| `HoFaceBlendTreePeek.cs` | 混合树观察台（`MonoBehaviour`）：把影子的参数与层权重抄到一个可见 Animator 上，好在 Animator 窗口里看红点。无渲染器、不读输出，**无损**。Inspector 上**只有 `controller` 一个字段**（2026-09-27 简化：参数值的来源固定是"正在生效的会话"，不再有"跟随别的 Animator"那条路）；运行时自己补的 Animator 带 `HideInInspector`，不在 Inspector 上占一行 |
 | `HoFaceJelly.cs` | 一维阻尼谐振子（纯函数）。现在由独立的 `HoSpringConstraint` 使用（`Runtime/Constraints/HoSpringConstraint.cs:83`）——果冻**不在**面捕这条链里 |
 
 ### 8.2 Editor（`Editor/FaceTracking/`）
@@ -374,7 +372,6 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoFaceControllerToolWindow.cs` | 「控制器编辑」页（`HoUnityTools/面捕/控制器编辑`）：把**已经在工程里**的那份控制器**就地**装配 —— 只做两件事：填片段、重写曲线路径。不新建资产、不改名、不动 GUID |
 | `HoFaceProfileWindow.cs` | 「配置文件」页（`HoUnityTools/面捕/配置文件`）：编辑输入行与输出行 |
 | `HoFaceFirewall.cs` | Windows 防火墙放行（入站 UDP）。提权走 `powershell -EncodedCommand`（base64），不拼命令行字符串 |
-| `HoFaceBlendTreePeekEditor.cs` | 观察台的 Inspector |
 
 **面捕这套的入口就三个菜单**：`HoUnityTools/面捕/调试面板`、`HoUnityTools/面捕/控制器编辑`、`HoUnityTools/面捕/配置文件`
 （`[MenuItem]` 分别在 `HoFaceTrackingWindow.cs:56`、`HoFaceControllerToolWindow.cs:41`、`HoFaceProfileWindow.cs:33`）。

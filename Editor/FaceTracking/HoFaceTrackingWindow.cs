@@ -83,6 +83,36 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     HoFaceDebugHost.Save();
                 }
 
+                // ── 混合树观察台（2026-09-27：从"一个组件"改成这里的开关）────────────────────
+                // 运行中的树跑在**影子台**上（隐藏对象，Hierarchy 里点不到）。这个开关就是把那台影子台
+                // 显示出来：选中它 + Animator 窗口 = 看**真身**（实时参数、红点都在那儿）。
+                // 以前那是一个要自己摆、自己填 controller 的组件，而且它只能"抄参数"去镜像 ——
+                // 抄的是我们自己的东西、又只认最后登记的那个会话，本质是跟面捕面板耦合的假通用件，删了。
+                EditorGUI.BeginChangeCheck();
+                bool peek = HoConstraintEditorControls.Toggle("混合树观察台（把影子台显示在 Hierarchy）",
+                    settings.showShadowInHierarchy,
+                    "默认关。打开后影子台 `Ho Face Shadow` 会出现在 Hierarchy 里（不落盘）：\n"
+                    + "选中它、打开 Animator 窗口，看到的就是**正在跑的那棵树**与实时参数（不是资产预览）。\n"
+                    + "停止驱动它就消失；关掉开关立刻重新藏起来。");
+                if (EditorGUI.EndChangeCheck())
+                {
+                    settings.showShadowInHierarchy = peek;
+                    HoFaceDebugHost.Save();
+                    HoFaceInputHub.Session(settings)?.ApplyShadowVisibility();   // 已经在跑的话立刻生效
+                }
+                if (settings.showShadowInHierarchy)
+                {
+                    HoConstraintEditorControls.Gap();
+                    HoConstraintEditorControls.CaptionTrim(
+                        Application.isPlaying
+                            ? "Hierarchy 里找 `Ho Face Shadow` → 选中 → Animator 窗口"
+                            : "进 Play 并开始驱动后，Hierarchy 里会出现 `Ho Face Shadow`",
+                        260.0f,
+                        "影子台是运行期建的，编辑模式下不存在。\n"
+                        + "⚠️ Project 里点 controller 资产看到的是**资产本身**（结构 + 参数默认值）；"
+                        + "要看运行中的值，只能选中跑着它的实例 —— 也就是这台影子台。");
+                }
+
                 HoConstraintEditorControls.Gap();
                 if (hub != null)
                 {
