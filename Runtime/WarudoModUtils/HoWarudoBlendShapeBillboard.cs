@@ -35,6 +35,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                  "本组件历史默认值是勾上的，结果面板长到角色左边、且背面朝人。现已默认关闭。")]
         public bool flipFacing;
 
+        [InspectorName("打印摆放诊断")]
+        [Tooltip("每 5 秒把锚点与面板的世界位置/旋转/缩放打进日志。\n" +
+                 "用来确认宿主侧有没有偷偷改缩放或镜像（负缩放会让文字变镜像）。")]
+        public bool logPlacementDiagnostics;
+
+        private float m_NextPlacementDiagnosticsTime;
+
         [InspectorName("观察相机")]
         [Tooltip("仅在启用面向相机时使用。留空则使用 Camera.main。")]
         public Camera viewCamera;
@@ -203,7 +210,12 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             displayObject.hideFlags = HideFlags.DontSave;
             displayObject.layer = gameObject.layer;
             m_DisplayRoot = displayObject.transform;
-            m_DisplayRoot.SetParent(transform, false);
+
+            // ⚠️ 刻意**不** SetParent(transform)。原先挂上去会继承锚点的旋转和缩放：
+            //    · 锚点（或 Warudo 侧任意祖先）带负缩放 -> 文字直接变镜像，怎么调朝向都没用
+            //    · 锚点带很小的缩放（Warudo 角色常见 0.01 级别）-> 面板尺寸失控
+            //    现在位置由「锚点位置 + 只用旋转换算的偏移」得到，尺寸和朝向完全由本组件说了算。
+            //    销毁/隐藏仍然由 m_DisplayRoot 引用管理（见 OnDisable / OnDestroy）。
 
             m_TitleText = CreateTextMesh("Title", m_DisplayRoot);
             SynchronizeDisplayLayer();
@@ -594,8 +606,27 @@ namespace Hollow.HoUnityTools.WarudoModUtils
 
             // 列从原点沿局部 +X 展开（见 LayoutColumnGroups）。所以这里**不能**默认再转 180°，
             // 否则整个面板会被翻到父物体的 -X 侧（角色左边），并且正反面反了。
-            m_DisplayRoot.localPosition = localOffset;
+            //
+            // 偏移只用锚点的**旋转**换算，不带它的缩放 —— worldScale 是显式世界尺寸控制，
+            // 再乘一遍锚点缩放会让面板在缩放过的角色上小到看不见。
+            m_DisplayRoot.position = transform.position + transform.rotation * localOffset;
             m_DisplayRoot.localScale = Vector3.one * Mathf.Max(0.001f, worldScale);
+
+            if (logPlacementDiagnostics && Time.unscaledTime >= m_NextPlacementDiagnosticsTime)
+            {
+                m_NextPlacementDiagnosticsTime = Time.unscaledTime + 5f;
+                Vector3 anchorScale = transform.lossyScale;
+                bool anchorMirrored = anchorScale.x < 0f || anchorScale.y < 0f || anchorScale.z < 0f;
+                Debug.Log("[HoBlendShapeBillboard] anchor='" + transform.name +
+                          "' pos=" + transform.position.ToString("F3") +
+                          " euler=" + transform.eulerAngles.ToString("F1") +
+                          " lossyScale=" + anchorScale.ToString("F3") +
+                          (anchorMirrored ? "  <<< 锚点带负缩放，这就是文字镜像的根源" : string.Empty) +
+                          " | panel pos=" + m_DisplayRoot.position.ToString("F3") +
+                          " euler=" + m_DisplayRoot.eulerAngles.ToString("F1") +
+                          " scale=" + m_DisplayRoot.lossyScale.ToString("F3") +
+                          " faceCamera=" + faceCamera + " flipFacing=" + flipFacing);
+            }
 
             Quaternion correction = flipFacing ? TextFacingCorrection : Quaternion.identity;
             if (!faceCamera)
