@@ -7,267 +7,267 @@
                    {
                        "parameter":  "browDownLeft",
                        "expression":  "BrowDownLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "browDownRight",
                        "expression":  "BrowDownRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "browInnerUp",
                        "expression":  "BrowInnerUp",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "browOuterUpLeft",
                        "expression":  "BrowOuterUpLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "browOuterUpRight",
                        "expression":  "BrowOuterUpRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "cheekPuff",
                        "expression":  "CheekPuff",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "cheekSquintLeft",
                        "expression":  "CheekSquintLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "cheekSquintRight",
                        "expression":  "CheekSquintRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeBlinkLeft",
                        "expression":  "EyeBlinkLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeBlinkRight",
                        "expression":  "EyeBlinkRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookDownLeft",
                        "expression":  "EyeLookDownLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookDownRight",
                        "expression":  "EyeLookDownRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookInLeft",
                        "expression":  "EyeLookInLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookInRight",
                        "expression":  "EyeLookInRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookOutLeft",
                        "expression":  "EyeLookOutLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookOutRight",
                        "expression":  "EyeLookOutRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookUpLeft",
                        "expression":  "EyeLookUpLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeLookUpRight",
                        "expression":  "EyeLookUpRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeSquintLeft",
                        "expression":  "EyeSquintLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeSquintRight",
                        "expression":  "EyeSquintRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeWideLeft",
                        "expression":  "EyeWideLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "eyeWideRight",
                        "expression":  "EyeWideRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "jawForward",
                        "expression":  "JawForward",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "jawLeft",
                        "expression":  "JawLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "jawOpen",
                        "expression":  "JawOpen",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "jawRight",
                        "expression":  "JawRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthClose",
                        "expression":  "MouthClose",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthDimpleLeft",
                        "expression":  "MouthDimpleLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthDimpleRight",
                        "expression":  "MouthDimpleRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthFrownLeft",
                        "expression":  "MouthFrownLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthFrownRight",
                        "expression":  "MouthFrownRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthFunnel",
                        "expression":  "MouthFunnel",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthLeft",
                        "expression":  "MouthLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthLowerDownLeft",
                        "expression":  "MouthLowerDownLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthLowerDownRight",
                        "expression":  "MouthLowerDownRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthPressLeft",
                        "expression":  "MouthPressLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthPressRight",
                        "expression":  "MouthPressRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthPucker",
                        "expression":  "MouthPucker",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthRight",
                        "expression":  "MouthRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthRollLower",
                        "expression":  "MouthRollLower",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthRollUpper",
                        "expression":  "MouthRollUpper",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthShrugLower",
                        "expression":  "MouthShrugLower",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthShrugUpper",
                        "expression":  "MouthShrugUpper",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthSmileLeft",
                        "expression":  "MouthSmileLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthSmileRight",
                        "expression":  "MouthSmileRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthStretchLeft",
                        "expression":  "MouthStretchLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthStretchRight",
                        "expression":  "MouthStretchRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthUpperUpLeft",
                        "expression":  "MouthUpperUpLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "mouthUpperUpRight",
                        "expression":  "MouthUpperUpRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "noseSneerLeft",
                        "expression":  "NoseSneerLeft",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "noseSneerRight",
                        "expression":  "NoseSneerRight",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "tongueOut",
                        "expression":  "TongueOut",
-                       "notes":  "device wire -\u003e canonical name (camelCase)"
+                       "notes":  "device wire -\u003e canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
                    },
                    {
                        "parameter":  "Rotation_x",
                        "expression":  "Rotation_x",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -288,7 +288,7 @@
                    {
                        "parameter":  "Rotation_y",
                        "expression":  "Rotation_y",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -309,7 +309,7 @@
                    {
                        "parameter":  "Rotation_z",
                        "expression":  "Rotation_z",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -330,7 +330,7 @@
                    {
                        "parameter":  "Position_x",
                        "expression":  "Position_x",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -351,7 +351,7 @@
                    {
                        "parameter":  "Position_y",
                        "expression":  "Position_y",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -372,7 +372,7 @@
                    {
                        "parameter":  "Position_z",
                        "expression":  "Position_z",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -393,7 +393,7 @@
                    {
                        "parameter":  "EyeLeft_x",
                        "expression":  "EyeLeft_x",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -414,7 +414,7 @@
                    {
                        "parameter":  "EyeLeft_y",
                        "expression":  "EyeLeft_y",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -435,7 +435,7 @@
                    {
                        "parameter":  "EyeLeft_z",
                        "expression":  "EyeLeft_z",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -456,7 +456,7 @@
                    {
                        "parameter":  "EyeRight_x",
                        "expression":  "EyeRight_x",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -477,7 +477,7 @@
                    {
                        "parameter":  "EyeRight_y",
                        "expression":  "EyeRight_y",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -498,7 +498,7 @@
                    {
                        "parameter":  "EyeRight_z",
                        "expression":  "EyeRight_z",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -519,7 +519,7 @@
                    {
                        "parameter":  "FaceFound",
                        "expression":  "FaceFound",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -540,7 +540,7 @@
                    {
                        "parameter":  "Hotkey",
                        "expression":  "Hotkey",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -561,7 +561,7 @@
                    {
                        "parameter":  "Timestamp",
                        "expression":  "Timestamp",
-                       "notes":  "device wire; not a channel name, so no rename",
+                       "notes":  "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
                        "curve":  {
                                      "keys":  [
                                                   {
@@ -585,7 +585,7 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**外部开关①：是否允许自动触发**（2026-09-27 用户定）。它是我们自己的一根线：Warudo 在 VTS 接收器之后 append 这个名字就能关掉倒V 的自动触发。⚠️ 没人 append 时取 defaultValue = **1**（默认允许自动触发）。⚠️ 名字必须是**标识符形状**（不能带 `/`，表达式里的变量名写不出来）；每个风格化形态各一根，别用一根全局的（那会让倒V 的开关顺带把鼓嘴也管了）。"
+                        "notes":  "**外部开关①：是否允许自动触发**（2026-09-27 用户定）。它是我们自己的一根线：Warudo 在 VTS 接收器之后 append 这个名字就能关掉倒V 的自动触发。⚠️ 没人 append 时取 defaultValue = **1**（默认允许自动触发）。⚠️ 名字必须是**标识符形状**（不能带 `/`，表达式里的变量名写不出来）；每个风格化形态各一根，别用一根全局的（那会让倒V 的开关顺带把鼓嘴也管了）。\n【经验参】无（外部开关①；唯一的可调项是 defaultValue = 1 —— 没人 append 这条线时**允许自动触发**，写 0 它就永远不亮）"
                     },
                     {
                         "parameter":  "HoExternalInvertedV",
@@ -593,7 +593,7 @@
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**外部开关②：常开**（2026-09-27 用户定；原稿写成「手动」，用户更正为「外部」）。Warudo 在 VTS 接收器之后 append 这个名字 —— 它就是那个**增量的入口**；中间层按名字读它、加在判定**之前**（写 1 就必亮，与自动同时开也不会翻倍）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。每个风格化形态各一根。"
+                        "notes":  "**外部开关②：常开**（2026-09-27 用户定；原稿写成「手动」，用户更正为「外部」）。Warudo 在 VTS 接收器之后 append 这个名字 —— 它就是那个**增量的入口**；中间层按名字读它、加在判定**之前**（写 1 就必亮，与自动同时开也不会翻倍）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。每个风格化形态各一根。\n【经验参】无（外部开关②；defaultValue = 0 —— 没人 append 时**不常开**；Warudo 写 1 就常开）"
                     }
                ],
     "outputs":  [
@@ -616,7 +616,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "browDownRight",
@@ -637,7 +637,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "browInnerUp",
@@ -658,7 +658,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "browOuterUpLeft",
@@ -679,7 +679,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "browOuterUpRight",
@@ -700,7 +700,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "cheekPuff",
@@ -721,7 +721,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "cheekSquintLeft",
@@ -742,7 +742,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "cheekSquintRight",
@@ -763,7 +763,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeBlinkLeft",
@@ -784,7 +784,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeBlinkRight",
@@ -805,7 +805,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookDownLeft",
@@ -826,7 +826,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookDownRight",
@@ -847,7 +847,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookInLeft",
@@ -868,7 +868,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookInRight",
@@ -889,7 +889,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookOutLeft",
@@ -910,7 +910,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookOutRight",
@@ -931,7 +931,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookUpLeft",
@@ -952,7 +952,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeLookUpRight",
@@ -973,7 +973,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeSquintLeft",
@@ -994,7 +994,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeSquintRight",
@@ -1015,7 +1015,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeWideLeft",
@@ -1036,7 +1036,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "eyeWideRight",
@@ -1057,7 +1057,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "jawForward",
@@ -1078,7 +1078,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "jawLeft",
@@ -1099,7 +1099,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "jawOpen",
@@ -1120,7 +1120,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "jawRight",
@@ -1141,7 +1141,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthClose",
@@ -1162,7 +1162,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthDimpleLeft",
@@ -1183,7 +1183,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthDimpleRight",
@@ -1204,7 +1204,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthFrownLeft",
@@ -1225,7 +1225,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthFrownRight",
@@ -1246,7 +1246,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthFunnel",
@@ -1267,7 +1267,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthLeft",
@@ -1288,7 +1288,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthLowerDownLeft",
@@ -1309,7 +1309,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthLowerDownRight",
@@ -1330,7 +1330,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthPressLeft",
@@ -1351,7 +1351,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthPressRight",
@@ -1372,7 +1372,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthPucker",
@@ -1393,7 +1393,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthRight",
@@ -1414,7 +1414,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthRollLower",
@@ -1435,7 +1435,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthRollUpper",
@@ -1456,7 +1456,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthShrugLower",
@@ -1477,7 +1477,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthShrugUpper",
@@ -1498,7 +1498,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthSmileLeft",
@@ -1519,7 +1519,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthSmileRight",
@@ -1540,7 +1540,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthStretchLeft",
@@ -1561,7 +1561,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthStretchRight",
@@ -1582,7 +1582,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthUpperUpLeft",
@@ -1603,7 +1603,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "mouthUpperUpRight",
@@ -1624,7 +1624,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "noseSneerLeft",
@@ -1645,7 +1645,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "noseSneerRight",
@@ -1666,7 +1666,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "tongueOut",
@@ -1687,7 +1687,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "raw ARKit 52 pass-through"
+                        "notes":  "raw ARKit 52 pass-through\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "FaceAngleX",
@@ -1717,7 +1717,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (-headRotY*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (-headRotY*1); sign/axis NOT verified on device\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.042）"
                     },
                     {
                         "parameter":  "FaceAngleY",
@@ -1747,7 +1747,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (-headRotX*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (-headRotX*1); sign/axis NOT verified on device\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.042）"
                     },
                     {
                         "parameter":  "FaceAngleZ",
@@ -1777,7 +1777,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (headRotZ*1); sign/axis NOT verified on device"
+                        "notes":  "VBridger VTS_Compatible (headRotZ*1); sign/axis NOT verified on device\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.042）"
                     },
                     {
                         "parameter":  "FacePositionX",
@@ -1807,7 +1807,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (headPosX*-1); sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosX*-1); sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.01）"
                     },
                     {
                         "parameter":  "FacePositionY",
@@ -1837,7 +1837,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (headPosY*1); sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosY*1); sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.01）"
                     },
                     {
                         "parameter":  "FacePositionZ",
@@ -1867,7 +1867,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger VTS_Compatible (headPosZ*-.5); VB halves Z; units uncalibrated"
+                        "notes":  "VBridger VTS_Compatible (headPosZ*-.5); VB halves Z; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.011）"
                     },
                     {
                         "parameter":  "EyeLeftX",
@@ -1897,7 +1897,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "device EyeLeft_x (VB synthesises instead)"
+                        "notes":  "device EyeLeft_x (VB synthesises instead)\n【经验参】无（机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "EyeLeftY",
@@ -1927,7 +1927,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "device EyeLeft_y (VB synthesises instead)"
+                        "notes":  "device EyeLeft_y (VB synthesises instead)\n【经验参】无（机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "EyeRightX",
@@ -1957,7 +1957,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "device EyeRight_x (VB synthesises instead)"
+                        "notes":  "device EyeRight_x (VB synthesises instead)\n【经验参】无（机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "EyeRightY",
@@ -1987,7 +1987,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "device EyeRight_y (VB synthesises instead)"
+                        "notes":  "device EyeRight_y (VB synthesises instead)\n【经验参】无（机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "EyeOpenLeft",
@@ -2017,7 +2017,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "EyeOpenRight",
@@ -2047,7 +2047,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "Brows",
@@ -2077,7 +2077,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.009）"
                     },
                     {
                         "parameter":  "BrowLeftY",
@@ -2107,7 +2107,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.018）"
                     },
                     {
                         "parameter":  "BrowRightY",
@@ -2137,7 +2137,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.018）"
                     },
                     {
                         "parameter":  "MouthOpen",
@@ -2167,7 +2167,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.009）"
                     },
                     {
                         "parameter":  "MouthSmile",
@@ -2197,7 +2197,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "MouthX",
@@ -2227,7 +2227,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "CheekPuff",
@@ -2248,7 +2248,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "all presets (identity)"
+                        "notes":  "all presets (identity)\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "TongueOut",
@@ -2269,7 +2269,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "all presets (identity)"
+                        "notes":  "all presets (identity)\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "MouthFunnel",
@@ -2299,7 +2299,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "MouthPucker",
@@ -2329,7 +2329,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "MouthShrug",
@@ -2359,7 +2359,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "MouthPressLipOpen",
@@ -2389,7 +2389,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0; VB uses four different divisors; we take the majority /1.8"
+                        "notes":  "VBridger AdvancedARKit_V3.0; VB uses four different divisors; we take the majority /1.8\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.007）"
                     },
                     {
                         "parameter":  "BrowInnerUp",
@@ -2419,7 +2419,7 @@
                                                         ]
                                           }
                                       ],
-                        "notes":  "VBridger AdvancedARKit_V3.0"
+                        "notes":  "VBridger AdvancedARKit_V3.0\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "Face/Angle/X",
@@ -2440,7 +2440,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Face/Angle/Y",
@@ -2461,7 +2461,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Face/Angle/Z",
@@ -2482,7 +2482,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Angle/X",
@@ -2503,7 +2503,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotY*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Angle/Y",
@@ -2524,7 +2524,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotX*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Angle/Z",
@@ -2545,7 +2545,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headRotZ*.66); vector row; sign/axis NOT verified\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Face/Pos/X",
@@ -2566,7 +2566,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Face/Pos/Y",
@@ -2587,7 +2587,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Face/Pos/Z",
@@ -2608,7 +2608,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Pos/X",
@@ -2629,7 +2629,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosX*-1); vector row; sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Pos/Y",
@@ -2650,7 +2650,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosY); vector row; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "Body/Pos/Z",
@@ -2671,7 +2671,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated"
+                        "notes":  "VBridger AdvancedARKit_V3.0 (headPosZ*-1); vector row; sign NOT verified; units uncalibrated\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：无）"
                     },
                     {
                         "parameter":  "FaceFound",
@@ -2692,7 +2692,7 @@
                                                    }
                                                ]
                                   },
-                        "notes":  "device (identity)"
+                        "notes":  "device (identity)\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
                         "parameter":  "Ho/Style/MouthGate",
@@ -2700,7 +2700,7 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**关其他的基准行**（规则二的第一条，2026-09-27 用户定）：常量 1 = 门开着。\n⭐ 为什么要有它：每条形态会再压**一条同名行**，读 `out(\"Ho/Style/MouthGate\")`（= 上一条同名行）再乘 `1 - 自己的形态` —— 于是**加形态不用动任何已有行**，这就是「无限拓展」。\n⚠️ 它是常量行（表达式留空 ⇒ 输出 defaultValue），所以**不过曲线**；想让门开场时爬上去就给它加「平滑」，现在不需要。\n⚠️ 两条同名行都在**驱动器块最上面**（引用只能朝上）：控制器那侧的契约行 `Ho/Drive/Gate/MouthStyle = out(\"Ho/Style/MouthGate\")` 排在下面任何位置都能读到**最后写的那一份**。"
+                        "notes":  "**关其他的基准行**（规则二的第一条，2026-09-27 用户定）：常量 1 = 门开着。\n⭐ 为什么要有它：每条形态会再压**一条同名行**，读 `out(\"Ho/Style/MouthGate\")`（= 上一条同名行）再乘 `1 - 自己的形态` —— 于是**加形态不用动任何已有行**，这就是「无限拓展」。\n⚠️ 它是常量行（表达式留空 ⇒ 输出 defaultValue），所以**不过曲线**；想让门开场时爬上去就给它加「平滑」，现在不需要。\n⚠️ 两条同名行都在**驱动器块最上面**（引用只能朝上）：控制器那侧的契约行 `Ho/Drive/Gate/MouthStyle = out(\"Ho/Style/MouthGate\")` 排在下面任何位置都能读到**最后写的那一份**。\n【经验参】无（关其他的基准行：常量 1 = 门开着；1/0 是约定值，链上第二条同名行会覆盖它）"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
@@ -2708,7 +2708,7 @@
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05 } ] }, { "kind": "smooth", "seconds": 0.2, "steps": [] } ],
-                        "notes":  "**写自己**（规则一，2026-09-27 用户定）：倒V 一条行管完 —— 读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」（形态切换的过渡）。\n⭐ **读数不是裸 mouthPucker**（2026-09-27 十五段 5 秒实测定）：`mouthPucker × 死区 × 鼻门` ——\n  ① **死区** `clamp((mouthPucker − 0.41) / 0.02, 0, 1)`：静息三次的 max 是 **0.3797**（0.3458 / 0.3403 / 0.3797），膝盖压在天花板 +0.03（与 browDown 0.24 vs 0.2083、noseSneer 0.18 vs 0.1514 同一个做法）；\n  ② **鼻门** `1 − clamp((max(noseSneerLeft, noseSneerRight) − 0.54) / 0.05, 0, 1)`：真噘嘴那侧 noseSneer ≤**0.2942**，而这台设备的**挤眼**（用力型）≥**0.7821** ⇒ 中间 0.49 宽的空带，膝盖取中点 0.54。\n⚠️ 为什么非要鼻门：**裸 mouthPucker 在挤眼里实测能到 0.7769**（0.6389 / 0.7769 / 0.7222），旧的 0.8 触发线离误触发只剩 0.023 —— 单线缝只有 +0.1865，加上这两项之后缝 **+0.9634**（目标最弱 0.9634、非目标全 0）。\n⚠️ **压唇（mouthPress）不能拿来当门**：用户「噘嘴拉满」那一组自己就压到 0.32~0.49，与挤眼的重叠（那样会把真噘嘴判掉）。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**，不需要 clamp。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `mouthPucker > 0.8`（0/1 进去迟滞会退化成跟随）。\n⚠️ 代价（用户已认）：开关关着的时候这一行**照样吃时域修饰**（维持/平滑的状态一直在跑），无害。\n⚠️ `trigger 0.80` 现在是**实测**的：它落在空带 [0, 0.9634] 里偏上 —— 既兜住「没量到的、不皱鼻的挤眼」（pucker 0.78 也不亮），又比最弱那次真噘嘴低 0.16。"
+                        "notes":  "**写自己**（规则一，2026-09-27 用户定）：倒V 一条行管完 —— 读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」（形态切换的过渡）。\n⭐ **读数不是裸 mouthPucker**（2026-09-27 十五段 5 秒实测定）：`mouthPucker × 死区 × 鼻门` ——\n  ① **死区** `clamp((mouthPucker − 0.41) / 0.02, 0, 1)`：静息三次的 max 是 **0.3797**（0.3458 / 0.3403 / 0.3797），膝盖压在天花板 +0.03（与 browDown 0.24 vs 0.2083、noseSneer 0.18 vs 0.1514 同一个做法）；\n  ② **鼻门** `1 − clamp((max(noseSneerLeft, noseSneerRight) − 0.54) / 0.05, 0, 1)`：真噘嘴那侧 noseSneer ≤**0.2942**，而这台设备的**挤眼**（用力型）≥**0.7821** ⇒ 中间 0.49 宽的空带，膝盖取中点 0.54。\n⚠️ 为什么非要鼻门：**裸 mouthPucker 在挤眼里实测能到 0.7769**（0.6389 / 0.7769 / 0.7222），旧的 0.8 触发线离误触发只剩 0.023 —— 单线缝只有 +0.1865，加上这两项之后缝 **+0.9634**（目标最弱 0.9634、非目标全 0）。\n⚠️ **压唇（mouthPress）不能拿来当门**：用户「噘嘴拉满」那一组自己就压到 0.32~0.49，与挤眼的重叠（那样会把真噘嘴判掉）。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**，不需要 clamp。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `mouthPucker > 0.8`（0/1 进去迟滞会退化成跟随）。\n⚠️ 代价（用户已认）：开关关着的时候这一行**照样吃时域修饰**（维持/平滑的状态一直在跑），无害。\n⚠️ `trigger 0.80` 现在是**实测**的：它落在空带 [0, 0.9634] 里偏上 —— 既兜住「没量到的、不皱鼻的挤眼」（pucker 0.78 也不亮），又比最弱那次真噘嘴低 0.16。\n【经验参】死区膝 0.41（三次静置 mouthPucker max 0.3797 + 0.03）、过渡宽 0.02；鼻门膝 0.54（真噘嘴 noseSneer ≤0.2942 与挤眼 ≥0.7821 的中点）、过渡宽 0.05；维持 trigger 0.80 / threshold 0.05 / hold 0.1；平滑 0.2s —— 全部来自 2026-09-27 十五段 5 秒实测，**换人 / 换设备要重标**"
                     },
                     {
                         "parameter":  "Ho/Style/MouthGate",
@@ -2716,7 +2716,7 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**关其他**（规则二，本形态那一条）：读**上一条同名行**、乘 `1 - 本形态`、再写回同一个名字 —— 输出表缓存按行序**后写覆盖先写**，所以最后一条同名行就是发布出去的门（0 = 关掉整块「张嘴 × 笑」）。\n⭐ **加鼓嘴/苦嘴时照抄这一条**（把形态名换掉），**不用改上面任何一行** —— 这就是「双重形态」：每个形态 = 一条「写自己」+ 一条「关其他」。\n⚠️ 平滑挂在形态自己那一行上（规则一），这里不挂（两处各平滑一次会把过渡拉长）。\n⚠️ `defaultValue` 也是 1：这一行万一无效（比如上面没有同名行）时门是**开着**的 —— 宁可什么都不关，也不要把整块张嘴笑误关掉。"
+                        "notes":  "**关其他**（规则二，本形态那一条）：读**上一条同名行**、乘 `1 - 本形态`、再写回同一个名字 —— 输出表缓存按行序**后写覆盖先写**，所以最后一条同名行就是发布出去的门（0 = 关掉整块「张嘴 × 笑」）。\n⭐ **加鼓嘴/苦嘴时照抄这一条**（把形态名换掉），**不用改上面任何一行** —— 这就是「双重形态」：每个形态 = 一条「写自己」+ 一条「关其他」。\n⚠️ 平滑挂在形态自己那一行上（规则一），这里不挂（两处各平滑一次会把过渡拉长）。\n⚠️ `defaultValue` 也是 1：这一行万一无效（比如上面没有同名行）时门是**开着**的 —— 宁可什么都不关，也不要把整块张嘴笑误关掉。\n【经验参】无（关其他的链行：只用 out(同名) 与 clamp 的 0/1；defaultValue 1 = 万一无效时门开着，同样是约定值）"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
@@ -2731,7 +2731,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here"
+                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/Squint",
@@ -2746,7 +2746,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/Squint"
+                        "notes":  "controller axis Lid/Left/Squint\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/BlinkWide",
@@ -2761,7 +2761,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/BlinkWide"
+                        "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/Squint",
@@ -2776,7 +2776,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/Squint"
+                        "notes":  "controller axis Lid/Right/Squint\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Form",
@@ -2791,7 +2791,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row"
+                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",
@@ -2812,7 +2812,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.02..0.05 是斜坡（斜率 1.667）；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
+                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.02..0.05 是斜坡（斜率 1.667）；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。\n【经验参】曲线死区：−0.02..0.02 → 0、±0.05 归恒等（实测下颌抖动的口径）；曲线上的 0.4 / 0.75 / 2 是量程刻度；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Funnel",
@@ -2827,7 +2827,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)"
+                        "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Press",
@@ -2842,7 +2842,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)"
+                        "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Jaw",
@@ -2861,7 +2861,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells. 2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667). The +/-1 end keys change nothing (the expression already clamps to +/-1). ⚠️ WARNING: chewing is a MOTION on this very axis -- if the jawOpen/mouthClose oscillation amplitude is <= 0.05 this dead zone erases it (that amplitude is still unmeasured, see docs/VTS_HQ_CONTROLLER.md 5.4.2 item 3)."
+                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells. 2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667). The +/-1 end keys change nothing (the expression already clamps to +/-1). ⚠️ WARNING: chewing is a MOTION on this very axis -- if the jawOpen/mouthClose oscillation amplitude is <= 0.05 this dead zone erases it (that amplitude is still unmeasured, see docs/VTS_HQ_CONTROLLER.md 5.4.2 item 3).\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/JawSide",
@@ -2880,7 +2880,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667); the axis is within +/-1 by construction (difference of two 0..1 wires) so the end keys change nothing. 实测（同一批，见 docs/VTS_HQ_CONTROLLER.md 5.4.2）：静息 -0.013（进死区 -> 0）、咬紧时真动下颌只有 0.02..0.04（也在死区里 -> 0）、挤嘴角的伪影 0.05..0.2（**只被掐掉最低那一小段，0.08 以上原样通过**）、微张真动 0.52（原样通过）。"
+                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667); the axis is within +/-1 by construction (difference of two 0..1 wires) so the end keys change nothing. 实测（同一批，见 docs/VTS_HQ_CONTROLLER.md 5.4.2）：静息 -0.013（进死区 -> 0）、咬紧时真动下颌只有 0.02..0.04（也在死区里 -> 0）、挤嘴角的伪影 0.05..0.2（**只被掐掉最低那一小段，0.08 以上原样通过**）、微张真动 0.52（原样通过）。\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Forward",
@@ -2895,7 +2895,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.01, "steps": [] }
                                       ],
-                        "notes":  "⚠️ 2026-09-27 起这根轴**不做树**了（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）—— 它从此只是**辅助变量 / 出口**：表达式就是裸线 jawForward，照旧每帧发布（面板 / Warudo / 将来的公式都能取），但没有树消费它（跟 Cheek/*、Gaze/* 一个待遇）。那棵 2 格的 MouthForward 1D 表连同两个片段已删（控制器 26 => 25 棵树、88 => 86 槽位）。为什么不做，见 docs/VTS_HQ_CONTROLLER.md 5.4.1：这条线要张嘴才有值、张嘴本身又给值、噘嘴单独给 0.05、满档要噘嘴+前顶一起（0.14，裸线满量程只有 0.13）、安卓不发 —— VBridger 七份预设里 jawForward 出现 0 次（连直通都不给）。留存的实测记录：裸线静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14"
+                        "notes":  "⚠️ 2026-09-27 起这根轴**不做树**了（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）—— 它从此只是**辅助变量 / 出口**：表达式就是裸线 jawForward，照旧每帧发布（面板 / Warudo / 将来的公式都能取），但没有树消费它（跟 Cheek/*、Gaze/* 一个待遇）。那棵 2 格的 MouthForward 1D 表连同两个片段已删（控制器 26 => 25 棵树、88 => 86 槽位）。为什么不做，见 docs/VTS_HQ_CONTROLLER.md 5.4.1：这条线要张嘴才有值、张嘴本身又给值、噘嘴单独给 0.05、满档要噘嘴+前顶一起（0.14，裸线满量程只有 0.13）、安卓不发 —— VBridger 七份预设里 jawForward 出现 0 次（连直通都不给）。留存的实测记录：裸线静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.01）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Pucker",
@@ -2910,7 +2910,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)"
+                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/X",
@@ -2925,7 +2925,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left"
+                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/TongueL",
@@ -2940,7 +2940,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): follows the single ARKit tongueOut until a sided source exists"
+                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): follows the single ARKit tongueOut until a sided source exists\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/TongueR",
@@ -2955,7 +2955,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/TongueR (HQTongueRight): same as TongueL for now"
+                        "notes":  "controller axis Mouth/TongueR (HQTongueRight): same as TongueL for now\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                         {
                             "parameter":  "Ho/Drive/Mouth/CornerL",
@@ -2970,7 +2970,7 @@
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/CornerL = clamp(mouthSmileLeft - mouthFrownLeft) (contract HQSmileFrownLeft, -1 sad .. +1 smile); the MouthCorner table holds the left-corner residual, MouthCore keeps the lip contour"
+                            "notes":  "controller axis Mouth/CornerL = clamp(mouthSmileLeft - mouthFrownLeft) (contract HQSmileFrownLeft, -1 sad .. +1 smile); the MouthCorner table holds the left-corner residual, MouthCore keeps the lip contour\n【经验参】无（表达式是机械换算；平滑：0.009）"
                         },
                         {
                             "parameter":  "Ho/Drive/Mouth/CornerR",
@@ -2985,7 +2985,7 @@
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/CornerR = clamp(mouthSmileRight - mouthFrownRight) (contract HQSmileFrownRight, -1 sad .. +1 smile); the MouthCorner table holds the right-corner residual"
+                            "notes":  "controller axis Mouth/CornerR = clamp(mouthSmileRight - mouthFrownRight) (contract HQSmileFrownRight, -1 sad .. +1 smile); the MouthCorner table holds the right-corner residual\n【经验参】无（表达式是机械换算；平滑：0.009）"
                         },
                         {
                             "parameter":  "Ho/Drive/Mouth/Roll",
@@ -3000,7 +3000,7 @@
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/Roll -- drives MouthCoreRollSwitch (1D, thresholds 0.02 / 0.12) which cross-fades TWO WHOLE MOUTH TABLES (MouthCore = resting / MouthCoreRoll = cat-mouth variant). 这一行 = **上下同卷判据 × 死区 × 下颌增益 × 噘嘴门**（都写在表达式里，曲线恒等）：\n  ① **几何平均 `sqrt(rollUpper * rollLower)`**（2026-09-27 用户四条 5 秒实测）：**上下两根线必须一起动**才算卷唇 —— 两根一起动时 √积 ≈ 平均（所以旧的 0.18 / 0.45 口径不变），**只动一根时（噘嘴/噪声）直接归 0**。实测：真猫嘴 (0.355, 0.576) ⇒ 0.452；噘嘴 (≈0, 0.124) ⇒ **0**；静息 (≈0, 0.016) ⇒ **0**；M 收音 (0.021, 0.039) ⇒ 0.008。\n  ② 死区：结果 <= 0.02 归 0，0.02..0.05 乘数形式斜坡，之上恒等。\n  ③ 下颌增益 `1 + 4*jawOpen²`：张嘴时设备会把读数压低（用户报压到跟噪声分不清）⇒ 乘回来；增益必须在死区**之后**（否则噪声一起放大），且只看 jawOpen（看 Open 会形成正反馈回路）。\n  ④ 噘嘴门 `1 - clamp((mouthPucker - 0.5)/0.3, 0, 1)`：第二道独立保险 —— **门开在 0.5** 是因为这台设备的 `mouthPucker` 静息偏置本来就有 ≈0.2（iPhone 203 帧实测 mean 0.1992 / 现场静息 0.17..0.35，见 docs/PARAMETER_DEVICE_VERIFICATION.md），开低了会误掐；噘嘴 0.975 照样掐死、真猫嘴 0.03 不碰。\n  ⚠️ 常数（4 / 0.4 / 0.3 / 死区 0.02）都是待标定占位；标定见 docs/VTS_HQ_CONTROLLER.md §2.4。\n  ⚠️ 读数不再是两根线的原始平均；原始值仍由 G1 的 mouthRollUpper/mouthRollLower 出口行无损直通。\n  要**按键强制猫嘴**：直接写这个参数 >= 0.12。"
+                            "notes":  "controller axis Mouth/Roll -- drives MouthCoreRollSwitch (1D, thresholds 0.02 / 0.12) which cross-fades TWO WHOLE MOUTH TABLES (MouthCore = resting / MouthCoreRoll = cat-mouth variant). 这一行 = **上下同卷判据 × 死区 × 下颌增益 × 噘嘴门**（都写在表达式里，曲线恒等）：\n  ① **几何平均 `sqrt(rollUpper * rollLower)`**（2026-09-27 用户四条 5 秒实测）：**上下两根线必须一起动**才算卷唇 —— 两根一起动时 √积 ≈ 平均（所以旧的 0.18 / 0.45 口径不变），**只动一根时（噘嘴/噪声）直接归 0**。实测：真猫嘴 (0.355, 0.576) ⇒ 0.452；噘嘴 (≈0, 0.124) ⇒ **0**；静息 (≈0, 0.016) ⇒ **0**；M 收音 (0.021, 0.039) ⇒ 0.008。\n  ② 死区：结果 <= 0.02 归 0，0.02..0.05 乘数形式斜坡，之上恒等。\n  ③ 下颌增益 `1 + 4*jawOpen²`：张嘴时设备会把读数压低（用户报压到跟噪声分不清）⇒ 乘回来；增益必须在死区**之后**（否则噪声一起放大），且只看 jawOpen（看 Open 会形成正反馈回路）。\n  ④ 噘嘴门 `1 - clamp((mouthPucker - 0.5)/0.3, 0, 1)`：第二道独立保险 —— **门开在 0.5** 是因为这台设备的 `mouthPucker` 静息偏置本来就有 ≈0.2（iPhone 203 帧实测 mean 0.1992 / 现场静息 0.17..0.35，见 docs/PARAMETER_DEVICE_VERIFICATION.md），开低了会误掐；噘嘴 0.975 照样掐死、真猫嘴 0.03 不碰。\n  ⚠️ 常数（4 / 0.4 / 0.3 / 死区 0.02）都是待标定占位；标定见 docs/VTS_HQ_CONTROLLER.md §2.4。\n  ⚠️ 读数不再是两根线的原始平均；原始值仍由 G1 的 mouthRollUpper/mouthRollLower 出口行无损直通。\n  要**按键强制猫嘴**：直接写这个参数 >= 0.12。\n【经验参】死区 0.02（≤ 归 0）、0.02..0.05 斜坡；下颌增益 4（×(1 + 4·jawOpen²)）；噘嘴门 0.5 / 0.3（按静息偏置 ≈0.2 实测定的）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标前三个"
                         },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
@@ -3015,7 +3015,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Gaze/Left/X: the iPhone sends its own eye scalars, so we do not re-derive them"
+                        "notes":  "controller axis Gaze/Left/X: the iPhone sends its own eye scalars, so we do not re-derive them\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/Y",
@@ -3030,7 +3030,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Gaze/Left/Y"
+                        "notes":  "controller axis Gaze/Left/Y\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gaze/Right/X",
@@ -3045,7 +3045,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Gaze/Right/X"
+                        "notes":  "controller axis Gaze/Right/X\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gaze/Right/Y",
@@ -3060,7 +3060,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Gaze/Right/Y"
+                        "notes":  "controller axis Gaze/Right/Y\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Brow/Left/Y",
@@ -3075,7 +3075,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.018, "steps": [] }
                                       ],
-                        "notes":  "controller axis Brow/Left/Y = 2*VB BrowLeftY - 1 (0 = rest, +1 raised); VB mixes in the mouth pull. 2026-09-27 DEAD ZONE on the browDown term only: three calibrated 5 s rest takes (after device calibration) gave browDownLeft 0.108..0.2083 with the mouth term at ~0, so the plain row parked the neutral face 62..69 percent inside the frown column of BrowCoreL (a two-tick X axis is the worst case for a static bias). Dead zone = x * clamp((x - 0.24) / 0.02, 0, 1) => 0 up to 0.24, identity from 0.26. The mouth-pull term is deliberately NOT dead-zoned (it stays live); the real frown / nose-scrunch reading is 0.83 => -1.66, far above the knee, so saturation is unchanged. VB-parity export rows (BrowLeftY / BrowRightY / Brows) keep VB's own rest bias on purpose."
+                        "notes":  "controller axis Brow/Left/Y = 2*VB BrowLeftY - 1 (0 = rest, +1 raised); VB mixes in the mouth pull. 2026-09-27 DEAD ZONE on the browDown term only: three calibrated 5 s rest takes (after device calibration) gave browDownLeft 0.108..0.2083 with the mouth term at ~0, so the plain row parked the neutral face 62..69 percent inside the frown column of BrowCoreL (a two-tick X axis is the worst case for a static bias). Dead zone = x * clamp((x - 0.24) / 0.02, 0, 1) => 0 up to 0.24, identity from 0.26. The mouth-pull term is deliberately NOT dead-zoned (it stays live); the real frown / nose-scrunch reading is 0.83 => -1.66, far above the knee, so saturation is unchanged. VB-parity export rows (BrowLeftY / BrowRightY / Brows) keep VB's own rest bias on purpose.\n【经验参】browDown 死区膝 0.24、过渡 0.02（三次静置 browDownLeft 0.108..0.2083 实测）；平滑 0.018s（VB 同族）；表达式里其余的数（2×、/8）是 VBridger 的"
                     },
                     {
                         "parameter":  "Ho/Drive/Brow/Right/Y",
@@ -3090,7 +3090,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.018, "steps": [] }
                                       ],
-                        "notes":  "controller axis Brow/Right/Y = 2*VB BrowRightY - 1. Same browDown dead zone as the left row (x * clamp((x - 0.24) / 0.02, 0, 1)); the mouth term flips sign and stays live. Measured browDownRight at rest: 0.108..0.2083 (three calibrated 5 s takes)."
+                        "notes":  "controller axis Brow/Right/Y = 2*VB BrowRightY - 1. Same browDown dead zone as the left row (x * clamp((x - 0.24) / 0.02, 0, 1)); the mouth term flips sign and stays live. Measured browDownRight at rest: 0.108..0.2083 (three calibrated 5 s takes).\n【经验参】browDown 死区膝 0.24、过渡 0.02（三次静置 browDownRight 0.108..0.2083 实测）；平滑 0.018s（VB 同族）；表达式里其余的数（2×、/8）是 VBridger 的"
                     },
                     {
                         "parameter":  "Ho/Drive/Brow/Left/InnerUp",
@@ -3105,7 +3105,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.015, "steps": [] }
                                       ],
-                        "notes":  "controller axis Brow/Left/InnerUp"
+                        "notes":  "controller axis Brow/Left/InnerUp\n【经验参】无（表达式是机械换算；平滑：0.015）"
                     },
                     {
                         "parameter":  "Ho/Drive/Brow/Right/InnerUp",
@@ -3120,7 +3120,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.015, "steps": [] }
                                       ],
-                        "notes":  "controller axis Brow/Right/InnerUp"
+                        "notes":  "controller axis Brow/Right/InnerUp\n【经验参】无（表达式是机械换算；平滑：0.015）"
                     },
                     {
                         "parameter":  "Ho/Drive/Cheek/Left/Squint",
@@ -3135,7 +3135,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Cheek/Left/Squint"
+                        "notes":  "controller axis Cheek/Left/Squint\n【经验参】无（表达式是机械换算；平滑：0.009）"
                     },
                     {
                         "parameter":  "Ho/Drive/Cheek/Right/Squint",
@@ -3150,7 +3150,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Cheek/Right/Squint"
+                        "notes":  "controller axis Cheek/Right/Squint\n【经验参】无（表达式是机械换算；平滑：0.009）"
                     },
                     {
                         "parameter":  "Ho/Drive/Cheek/Left/Puff",
@@ -3165,7 +3165,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.01, "steps": [] }
                                       ],
-                        "notes":  "controller axis Cheek/Left/Puff (HQCheekPuffLeft): follows the single ARKit cheekPuff until a sided source exists"
+                        "notes":  "controller axis Cheek/Left/Puff (HQCheekPuffLeft): follows the single ARKit cheekPuff until a sided source exists\n【经验参】无（表达式是机械换算；平滑：0.01）"
                     },
                     {
                         "parameter":  "Ho/Drive/Cheek/Right/Puff",
@@ -3180,7 +3180,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.01, "steps": [] }
                                       ],
-                        "notes":  "controller axis Cheek/Right/Puff (HQCheekPuffRight): same as Left for now"
+                        "notes":  "controller axis Cheek/Right/Puff (HQCheekPuffRight): same as Left for now\n【经验参】无（表达式是机械换算；平滑：0.01）"
                     },
                     {
                         "parameter":  "Ho/Drive/Nose/Up",
@@ -3195,7 +3195,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Nose/Up -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 DEAD ZONE (x * clamp((x - 0.18) / 0.02, 0, 1)): the same three calibrated 5 s rest takes gave noseSneer 0.089..0.1514, which put the neutral face 13..21 percent into the nose-up cell of the NoseUp 1D table; the real action (squint + nose push) measured 0.70 avg / 0.75 max, far above the knee, so the 0.7 tick stays valid. 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。"
+                        "notes":  "controller axis Nose/Up -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 DEAD ZONE (x * clamp((x - 0.18) / 0.02, 0, 1)): the same three calibrated 5 s rest takes gave noseSneer 0.089..0.1514, which put the neutral face 13..21 percent into the nose-up cell of the NoseUp 1D table; the real action (squint + nose push) measured 0.70 avg / 0.75 max, far above the knee, so the 0.7 tick stays valid. 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。\n【经验参】死区膝 0.18、过渡 0.02（三次静置 noseSneer 0.089..0.1514 实测）；平滑 0.009s（VB 同族）；/2 那个平均是机械的"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Mouth",
@@ -3207,7 +3207,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)\n【经验参】无（常量行；defaultValue 1 是约定值）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Eye",
@@ -3219,7 +3219,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well). 2026-09-27: EyeLeft/EyeRight merged into one Eye gate -- the gaze trees are gone (注视交给 Warudo 的 LookAt + IK), so each eye region held only its lid switch."
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well). 2026-09-27: EyeLeft/EyeRight merged into one Eye gate -- the gaze trees are gone (注视交给 Warudo 的 LookAt + IK), so each eye region held only its lid switch.\n【经验参】无（常量行；defaultValue 1 是约定值）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Brow",
@@ -3231,7 +3231,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)\n【经验参】无（常量行；defaultValue 1 是约定值）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Nose",
@@ -3243,7 +3243,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)\n【经验参】无（常量行；defaultValue 1 是约定值）"
                     },
                     {
                         "parameter":  "Ho/Drive/Slice/MouthCore/Funnel0Press0",
@@ -3255,7 +3255,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
                     },
                     {
                         "parameter":  "Ho/Drive/Slice/MouthCore/Funnel1Press0",
@@ -3267,7 +3267,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
                     },
                     {
                         "parameter":  "Ho/Drive/Slice/MouthCore/Funnel0Press1",
@@ -3279,7 +3279,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
                     },
                     {
                         "parameter":  "Ho/Drive/Slice/MouthCore/Funnel1Press1",
@@ -3291,7 +3291,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)"
+                        "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
                     }
                 ]
 }
