@@ -321,6 +321,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     ? output.Transform(expressions[row].Evaluate(Lookup))
                     : output.defaultValue;
                 value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
+
+                // ⑤ **极小值归零**（2026-09-27 用户实测）：面板用 F4 显示，于是"影子台里是
+                //    −4.949414e-40（非规格化数）而面板显示 0.0000"这种不一致会让人怀疑管线。
+                //    轴与门的有效分辨率远大于 1e-6（面板四位小数都印不出来），所以低于它的值一律
+                //    当成 0：面板 / 影子台 / 角色 Hub 三处从此一致，顺带免掉非规格化数在部分 CPU 上的
+                //    慢路径。（来源不在我们这几行里：in-engine 实测**静息时 30 根轴全是精确 0**，
+                //    门是精确 1；能造出非规格化数的只有 `Mathf.Exp` 那一处，它被 `1 - exp` 吃掉了。）
+                if (value != 0f && Mathf.Abs(value) < 1e-6f) value = 0f;
+
                 outputValues[row] = value;
                 if (parameters.Contains(output.parameter)) shadow.SetFloat(output.parameter, value);
             }
