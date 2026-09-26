@@ -11,8 +11,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：40 个参数 + 29 棵树 + 104 个**空槽位**，
     /// 一层 `Ho/00 Drive`、一个状态 `Drive`（Write Defaults 开）、无 Behaviour、无 clip —— 动画由作者后面填。
     ///
-    /// 形状是设计产物（`docs/VTS_HQ_CONTROLLER.md` §3 / §10）：根 Direct → 5 个区域 Direct →（2D 表 / 1D 副本树），
-    /// 槽位名按 `docs/FACE_TRACKING_NAMING.md` §5（也就是 §10.1 那份清单）。
+    /// 形状与"现在落到哪"记在 `docs/VTS_HQ_CONTROLLER.md`：**§2.1 结构、§2.2 每格叶子的语义**
+    /// （根 Direct → 5 个区域 Direct → 2D 表 / 1D 副本树），槽位名按 `docs/FACE_TRACKING_NAMING.md` §5。
     ///
     /// **为什么有这个菜单项**：
     /// ① 手搭 29 棵树不现实、也不可复现；

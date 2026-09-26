@@ -1,4 +1,4 @@
-﻿# HO 参数规范（我们的中间层选什么）
+# HO 参数规范（我们的中间层选什么）
 
 > 这份是**我们自己的**目标词表的唯一权威表。跟 [参数标准表](PARAMETER_STANDARDS.md) 的分工：
 > 那份记**外部标准怎么定**（VTS / ARKit / VMC / VRM / VRCFT 各自的规定，逐条带官方 URL），
@@ -485,7 +485,7 @@ V3.0 版没有。我们用 V3.0。
 ### 3.7 控制器轴：`Ho/Drive/*`（**37 行，不计入上面的 90**）
 
 **这一组不是"给下游的出口"，是"喂控制器的口径"**（2026-09-27 加，见
-[控制器 2D 规划](VTS_HQ_CONTROLLER.md) 与[命名权威](FACE_TRACKING_NAMING.md)）：
+[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3 与[命名权威](FACE_TRACKING_NAMING.md)）：
 发货那份 profile 现在**同时**写两份东西 —— 上面 G1–G3 那些**出口名**（VTS 生态照旧按那些名字读），
 外加这一组 `Ho/Drive/<部位>/<轴>`，让新控制器直接按名取轴。
 
@@ -504,27 +504,32 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 0 … 1 | |
 | `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | −1 … 0 … +1 | |
 | `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 0 … 1 | |
-| `Ho/Drive/Mouth/Form` | `((2 - (frownL + frownR + pucker) + (smileR + smileL + ((dimpleL + dimpleR) / 2))) / 2) - 1` | −1 垂嘴角 … 0 … +1 笑 | = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5） |
+| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | −1 垂嘴角 … 0 … +1 笑 | = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5） |
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
-| `Ho/Drive/Mouth/Press` | `(lipRaise / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
+| `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
 | `Ho/Drive/Mouth/Jaw` | `jawOpen` | 0 … 1 | 独立自由度 |
 | `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1 | `HQJawForward` |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
 | `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
-| `Ho/Drive/Gaze/Left\|Right/X` | `EyeLeft_x` / `EyeRight_x` | −1 … +1 | 手机自己就发左右眼标量，不重算 |
+| `Ho/Drive/Gaze/Left\|Right/X` | `EyeLeft_x` / `EyeRight_x` | −1 … +1 | 手机自己就发左右眼标量，不重算；**哪边是内要实测定** |
 | `Ho/Drive/Gaze/Left\|Right/Y` | `EyeLeft_y` / `EyeRight_y` | −1 … +1 | |
-| `Ho/Drive/Brow/Left\|Right/Y` | `2 * ((browOuterUp - browDown) + ((mouthX方向差) / 8))` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `Brow*Y` − 1（VB 静息 0.5，且掺了偏嘴） |
+| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `BrowLeftY` − 1（VB 静息 0.5，且掺了偏嘴） |
+| `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 同上（右） | 同上；偏嘴那一项左右反号 |
 | `Ho/Drive/Brow/Left\|Right/InnerUp` | `browInnerUp` | 0 … 1 | |
 | `Ho/Drive/Cheek/Left\|Right/Squint` | `cheekSquintLeft` / `cheekSquintRight` | 0 … 1 | |
 | `Ho/Drive/Cheek/Left\|Right/Puff` | `cheekPuff` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
 | `Ho/Drive/Nose/Left\|Right/Sneer` | `noseSneerLeft` / `noseSneerRight` | 0 … 1 | |
-| `Ho/Drive/Gate/{Mouth,EyeLeft,EyeRight,Brow,Cheek}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门；**常量行不过曲线**（`HoFaceAnimationSession.cs:283`） |
+| `Ho/Drive/Gate/{Mouth,EyeLeft,EyeRight,Brow,Cheek}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门；**常量行不过曲线**（`HoFaceAnimationSession.cs:316`），但修饰符照走 |
 | `Ho/Drive/Slice/MouthCore/{Funnel0Press0,Funnel1Press0,Funnel0Press1,Funnel1Press1}` | `(1−F)(1−P)` / `F(1−P)` / `(1−F)P` / `FP`，F、P 内联 | 0 … 1，**四条和恒为 1** | `MouthCore` 的条件切片权重（Funnel × Press 双线性） |
 
 `Ho/Drive/Gate/Expr/*`（按键表情门）**故意不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 /
 VTS API 适配器），我们每帧写它就等于把它锁死。控制器里给默认值 `0` 即可。
+
+⚠️ **上面这张表是"我们选了什么口径"**；发货 profile 里**逐行的表达式原文、曲线范围、修饰符现状**（37 行**一条修饰符都没有**）
+与"哪根轴要调稳"的操作口径在[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 / §3.2 —— 两边同名同义，
+改公式时**两处一起改**（还有 4 条切片行内联了 `Funnel` / `Press` 的副本，见那节第 3 条陷阱）。
 
 ---
 

@@ -1,400 +1,238 @@
-﻿# 带一层门控的 VTS 原生语义控制器：2D 混合树规划与装配草案
+# VTS 原生语义控制器：现在落到哪 · 每格叶子的语义 · 每根轴的口
 
-**状态：草案 v3**（v2 起按你的意见改：**按键表情的平行副本会让门控嵌套，这一层嵌套是接受的**；
-副本改用 **1D 交叉淡入树**，于是中间层不用写互补权重、复制门也不由我们写。已定/待定见 §11）。
-分工：**能表达什么**（42 树族 × 轴 × 条件）见 [VTS 全量契约表](VTS_HIGH_QUALITY_FACE_CONTRACT.md)；
-**轴的公式从哪来**见 [参数空间](VTS_FACE_PARAMETER_SPACES.md)；**当前装配机制**（控制器是搬来的作品、装配只填片段）见
-[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §3；**引擎能/不能算什么**见 [混合树能力边界](BLEND_TREE_LIMITS.md) §2 与 [踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md)。
+**这份文档只记三件事**，不再当计划书：
 
-**这一版要回答的只有一件事：哪些语义进哪张 2D 表、门控摆在哪、权重谁算。** 动画内容后做。
-
-## 1. 起点：土豆那份配置已经把 VB 语义算出来了，只是没地方去
-
-`D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\ho-iPhoneVTS.hoface.json`（67 输入行 / 94 输出行）
-里**不是直通的那 42 行**正好就是 VB `AdvancedARKit_V3.0` 那套语义 —— 也就是说**VB 已有的轴，我们不用重新造，直接合进来**：
-
-```text
-MouthOpen  = (jawOpen − mouthClose) − .2×(mouthRollUpper+mouthRollLower) + .2×mouthFunnel
-MouthSmile = (2 − (frownL+frownR+pucker) + (smileL+smileR+(dimpleL+dimpleR)/2)) / 4
-MouthFunnel = mouthFunnel − .2×jawOpen            MouthPressLipOpen = lipRaise/1.8 − roll
-MouthPucker = 2×(dimpleL+dimpleR) − mouthPucker   MouthX = (mouthLeft−mouthRight) + (smileL−smileR)
-MouthShrug = (shrugUpper+shrugLower+pressR+pressL)/4
-EyeOpenL/R = .5 − .8×eyeBlink + .8×eyeWide        Brows / BrowLeftY / BrowRightY / BrowInnerUp
-JawOpen / CheekPuff / TongueOut / FaceAngleXYZ / FacePositionXYZ / EyeLeftXY / EyeRightXY
-Ho/Drive/Lid/{Left,Right}/{BlinkWide,Squint} = eyeBlink − eyeWide / eyeSquint
-```
-
-⚠️ **但控制器只认 57 个名字**（`Gate/Eye`、`Gate/Lip`、4 根 `Ho/Drive/Lid/*` + 51 个**裸 ARKit 名**）。
-那 20+ 行 VB 语义**名字不在控制器参数表里** ⇒ 写入那一步按控制器的口逐个查字典，查不到就**静默忽略**
-（面板「参数输出」栏把它们标成"不在控制器里"）。**这一版的活就是把这条链接上。**
-
-> 📌 现状要核对的：现控制器 `Ho/Drive/Lid/Left/BlinkWide` 的 `m_DefaultFloat = 1` 而 Right 是 `0`
-> （左右不一致；WD 开时权重不足 1 的部分混的是**启动值**，启动值不同 ⇒ 同一份动画左右结果不同）。
-> 新控制器把默认值统一写清。
-
-## 2. 哪些语义可以构成 2D 混合树（本稿的核心）
-
-三档：**① 数据已经就绪**（VB 行已经在跑，直接合）/ **② 需要一根 HQ 新轴**（公式在契约表 D，中间层加一行）/
-**③ 先做一维**（契约 §4 明确"先保留独立轴"的那些）。**④ 不做 2D** 的另列。
-
-### ① 立刻能做（轴已经在配置里了）
-
-| 树名 | X 轴 | Y 轴 | 条件轴 | 备注 |
-| --- | --- | --- | --- | --- |
-| **`MouthCore`** | `Form` = 2×`MouthSmile` − 1 | `Open` = `MouthOpen` | `Funnel`, `Press` | 最重要的那张表；`MouthSmile` 静息 0.5 ⇒ 必须映射成 −1…1 的中性 0 |
-| **`LidL` / `LidR`** | `BlinkWide` = `eyeBlink − eyeWide`（±1，0 中性） | `Squint` | `EyeSmile`（②） | 现控制器已经在跑（6 个采样点）；坐标别和 VRCFT 的 0…1/0.75 混用 |
-| **`GazeL` / `GazeR`** | `GazeX` = `EyeLeft_x`/`EyeRight_x` | `GazeY` | — | **每侧独立**，不从合并量还原；独立左右眼是另一种契约 |
-| **`BrowCoreL` / `BrowCoreR`** | `BrowY` = `BrowLeftY`/`BrowRightY` | `BrowInnerUp` | — | VB 的 BrowY 里已经掺了 `(mouthRight−mouthLeft)/8`（说话时眉会动一点，是 VB 的联动） |
-| **`CheekSquint`** | `CheekSquintL` | `CheekSquintR` | `Form`, `Lid` | 直通即可 |
-| **`NoseSneer`** | `NoseSneerL` | `NoseSneerR` | 上唇抬起 | 直通即可 |
-| **`MouthWidth`** | `MouthPucker`（−1…1 双向） | `MouthX` | `Open`, `Form` | 对 `MouthCore` 的嘴宽/偏嘴修正 |
-| **`MouthTongue`** | `HQTongueLeft`（新，先同跟 `tongueOut`） | `HQTongueRight`（新） | `Jaw`, `Open`, `Pucker`, `Funnel`, `Press` | **分左右**：模型上舌头本来就是左右两组键；V3 去掉了 `1−tongueOut` 抑制 ⇒ 更容易同时有值 |
-| **`CheekPuff`** | `HQCheekPuffLeft`（新，先同跟 `cheekPuff`） | `HQCheekPuffRight`（新） | `Open`, `Seal`, `Form`, `Pucker` | **分左右**鼓腮；嘴型从"轴"降成**条件** |
-
-### ② 加一根 HQ 行就能做（公式都在契约表 D，机械可抄）
-
-| 树名 | X 轴 | Y 轴 | 新行 |
-| --- | --- | --- | --- |
-| `MouthJaw` | `JawOpen` | `HQJawForward` = `jawForward` | 条件 `HQJawX` = `jawRight − jawLeft` |
-| `MouthShrugSplit` | `HQUpperLipShrug` = `mouthShrugUpper` | `HQLowerLipShrug` = `mouthShrugLower` | — |
-| `MouthCorner` | `HQSmileFrownL` = clamp(`smileL−frownL`) | `HQSmileFrownR` | — |
-| `MouthUpperRaise` | `HQUpperLipRaiseL` = `mouthUpperUp_L` | `…Right` | 条件 `Open`/`Press` |
-| `MouthLowerDrop` | `HQLowerLipDropL` = `mouthLowerDown_L` | `…Right` | 同上 |
-| `LidL`/`LidR` 的笑眼条件 | — | — | `HQEyeSmileL/R` = `mouthSmile_L/R`（**现在缺这两行**，见 §9；本版笑眼改走副本，见 §4） |
-| `CheekPuffTongue`（极端组合残差） | `HQTongueLeft` | `HQTongueRight` | 条件 `HQCheekPuffLeft/Right`、`Jaw` |
-
-### ③ 先一维（**别急着配 2D**）：`MouthX`、`MouthShrug`、`MouthPucker`、`HQJawX`、`HQJawForward`、`CheekPuff`（单侧那根）、`TongueOut`
-契约 §4 的理由：这些是**双向轴或独立自由度**，先独立；只有"组合后的造型明显不成立"时才升级成条件修正。
-（分侧那两根 `HQCheekPuffL/R`、`HQTongueL/R` 例外 —— 它们在 `CheekPuff`/`MouthTongue` 里就是主轴，见 §2①。）
-
-### ④ 不做 2D：`FaceAngle*` / `BodyAngle*` / `FacePosition*` / `BodyPosition*`（3D 宿主走**姿态链**，不画面部矩阵）、
-`FaceFound` / `Hotkey` / `Timestamp`（控制数据，不是美术维度）、音素（**类别权重**，没有自然距离，不是连续轴）、
-`HandPos` / `HandFinger` / `CtrlStick`（演出通道）。
-
-## 3. 门控：区域门 × 表情副本门（**嵌套，已确认可接受**）
-
-### 3.1 两层是什么
-
-| 层 | 参数 | 是什么 | 谁写 |
-| --- | --- | --- | --- |
-| **第 1 层：区域门** | `Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}` | 整块算不算数（默认 1） | 中间层**常量行**（`expression` 留空 + `defaultValue = 1`） |
-| **第 2 层：表情副本** | `Ho/Drive/Gate/Expr/<表情名>`（`Smile`、`Angry`、`Wink`…） | 这张表走"普通版"还是"按键表情版" | **本版不接**（§3.3）：默认 `0`，**中间层不写它** |
-
-```
-Ho/00 Drive Tree (Direct)                      ← 根：每个区域一个子节点
-└─ MouthRegion (Direct)   ← 权重 = Ho/Drive/Gate/Mouth      （第 1 层，唯一那层门）
-     ├─ MouthCoreSwitch（Simple1D，blendParameter = Ho/Drive/Gate/Expr/Smile）  ← 权重 = Ho/Drive/W/One
-     │    ├─ 阈值 0 → MouthCore（FreeformCartesian2D：Form × Open，9 个槽位）
-     │    └─ 阈值 1 → MouthCoreExpr（同轴、不同姿势）
-     ├─ MouthJaw      ← 权重 = Ho/Drive/W/One（不参与表情副本：按键表情不该改下颌）
-     └─ MouthWidth    ← 权重 = Ho/Drive/W/One
-```
-
-⚠️ **Direct 的每个子节点都必须挂一个参数** —— 所以"这一格永远全量生效"也要一个参数：
-**`Ho/Drive/W/One`（默认 1，中间层不写它）**。区域子树里那些表 / 1D 开关容器都挂它。
-（这正是我第一版清单漏掉的一格：只写了门的权重，没写"表本身的权重"——引擎不给默认值，必须显式挂。）
-
-⚠️ **条件切片（Funnel × Press）不进这张表，而是"以后再加的同级表"**：`MouthRegion` 下再加
-`MouthCoreFunnel` / `MouthCorePress` / `MouthCoreFunnelPress` 三张同轴表，权重分别挂**对应的 `Slice/MouthCore/*` 参数**，
-`MouthCore` 自己挂 `Slice/MouthCore/Funnel0Press0`（`(1−f)(1−p)`）—— 四条和恒为 1。
-**没做的切片必须复用基础片段**（契约 §F），留空 Motion 会让权重和不足 1 ⇒ 掺进 WD 的启动值。
-**骨架（2026-09-27 生成的那份）只有基础表**，切片等有了条件姿势再加。
-
-**副本用「1D 交叉淡入树」实现，不用"两个互补权重的兄弟节点"** —— 这是本节最要紧的一条：
-
-* 1D 树（`Simple1D`，两个子节点分别钉在阈值 `0` / `1`）**由引擎自己补齐权重**（段内线性插值），
-  不需要谁去写 `1 − g` ⇒ 中间层不用参与，区域内的权重和天然恒为 1。
-* 门参数**默认 `0` = 普通版**；而**我们不写这个参数** ⇒ 任何外部来源（VTS API、键盘、别的脚本）
-  都能自己驱动它，**不会被我们每帧覆盖**。这就是"门只是一行参数、谁写都行"的落地方式。
-* 参考实现里那个 `EyeSyncMix` 就是同一个形状（1D 树 + OFF/ON 两版子树），见
-  [控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §1.4 与 [混合树能力边界](BLEND_TREE_LIMITS.md) §2。
-
-⚠️ **这一条我们还没实测**（2026-09-27 记）：我们量过的 Direct 家族是"加法 / 嵌套相乘 / WD 混合启动值"，
-而"**1D 树的子节点是子树而不是 clip**"只在参考实现里见过（那张能力表给它标的就是"只作参考"）。
-两件事要等第一次真搭出来才知道：① 1D 树两个孩子都是子树时，段内插值是否照旧按权重混两棵子树；
-② 4 层嵌套（根 Direct → 区域 Direct → 1D → 2D）在引擎里有没有别的代价/限制。
-**兜底形状**（万一 1D 那条不通）：把主版与副本做成**同一 Direct 下的两个兄弟**，权重分别用
-`Gate/Expr/<名>` 与它的补 `1 − g` —— 补值由中间层算一行（多一行输出），其余不变。
-搭副本那次一起验，验完把结论回填到本节与[能力边界](BLEND_TREE_LIMITS.md)。
-
-⚠️ **为什么平行副本只能做成"树内权重交叉淡入"，不能做成 Animator 状态切换**：
-影子台是 **`Update(0)` 静态采样**（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §3、[设计](FACE_TRACKING_DESIGN.md) §4），
-而状态过渡是**按时间推进**的 —— `dt = 0` 时过渡永远走不完。按键表情只有"参数驱动的权重"这一条路。
-
-### 3.2 嵌套的后果（认下来，但要知道代价在哪）
-
-* 有效门控 = `Gate/Mouth × (1D 树在 g 处算出的权重) × Slice/…`，**乘积只活在树里**：
-  Hub 里读到的是**各个因子**，不是乘积。下游要"这块实际贡献多少"就自己乘 ——
-  **真要让乘积本身也可见**，就在中间层多写一行 `Ho/Drive/Eff/<族>/<切片>`（乘法由中间层做，不是从树里读回来）。
-* 让**每个区域内部的总权重恒为 1**（切片权重和 = 1，副本与主版由 1D 树互补）：
-  这样就不会有"权重和不足 1 ⇒ 混进启动值"那份意外（[踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §4）。
-  区域门调到 1 时这块完全由树决定；把区域门调小 = **让这块回到启动姿势**，这是区域门唯一的语义。
-* **一张表一个副本、一个门**（第一版）：门名就是表情名（`Gate/Expr/Smile`），**同一个门可以同时驱动好几张表的副本**
-  （`Smile` 同时改嘴、眼睑、眉）。同一张表要**两个**表情版本时，再把这棵 1D 树升级成多阈值。
-
-### 3.3 表情开关的来源：**本版不接、也不测**（你定）
-
-✅ **但调试不用等来源**：面板「参数输出」栏每行右边有四个**覆盖按钮**（不覆盖 / -1 / 0 / 1），
-点一下就把那一行**这一帧写出去的值**钉住（走会话 `SetPreview`，所有生产逻辑之后生效 ⇒ 影子树与角色 Hub 同时看到）。
-所以把 `Ho/Drive/Gate/Expr/Smile` 覆盖成 `1` 就能当场看按键表情那一版，覆盖成 `0` 就回来；
-整栏右上角那个「清空覆盖（N）」一次清掉全部。**门控调试的观察面就是这一栏。**
-
-结构与命名先定死，来源后接 —— 树只认 `Ho/Drive/Gate/Expr/<名>`，参数默认 `0` 且**不由中间层写**。
-真要接的时候，候选与一条实测事实在这里备查：
-
-⚠️ 协议里的 `Hotkey` **实测恒为 −1**：安卓与 iPhone 两台都是（"按 VTS app 内的屏幕热键才给 1–8"，
-而那三个快捷键不输出）—— 见 [参数实机验证表](PARAMETER_DEVICE_VERIFICATION.md) §0.2 与 [HO 参数规范](PARAMETER_HO.md) §1。
-所以"按键"要另选来源：① VTS 公开 API（`ExpressionActivation` / `HotkeyTrigger`）适配器；
-② 本地按键（Unity 调试面板开关 / Warudo 官方键盘节点写同一个参数）；③ VB 若把表情输出成线。
-
-## 4. 平行副本给谁做（**已定**）
-
-| 做副本 | 表情门（建议名） | 为什么 | 不做副本 |
-| --- | --- | --- | --- |
-| **`MouthCore` 外嘴** | `Gate/Expr/Smile` | 按键表情最常改的就是嘴（笑/怒/吐舌的整套嘴形） | `MouthJaw` 下颌、`MouthWidth` 嘴宽：表情不改下颌与嘴宽，保持原样 |
-| **`LidL` / `LidR` 眼睑** | `Gate/Expr/Smile`（可与嘴共用） | 笑眼/眯眼/闭眼的表情（`Wink` 再单独加一个门） | `GazeL`/`GazeR` 注视：按键表情一般不动眼球（要动就再开一张） |
-| **`BrowCoreL` / `BrowCoreR` 眉** | `Gate/Expr/Angry` | 怒/悲/惊讶全靠眉 | `CheekSquint` 颊、`NoseSneer` 鼻：先不做 |
-| ~~M14 舌~~ | — | 第一版不做（要吐舌表情时再加） | — |
-
-**一个门可以驱动多张表的副本**（`Smile` 同时改嘴、眼睑、眉 ⇒ 三棵 1D 树共用同一个 blendParameter）。
-第一版就一个表情门先跑通；**门名与表情的对应关系是作者约定**，代码不参与（`HoFaceNaming` 不认识它）。
-
-副本的**键集合与轴与原表完全一致**（这是"平行副本"的定义：同轴不同姿势）。装配器只按**槽位名**填片段 ⇒
-副本的槽位用**同族带后缀**的命名：`M01E__Form__Open__A3X{i}Y{j}`（`E` = expression 副本）。
-
-⚠️ **笑眼这一条因此换了个做法**：契约里 `LidL`/`LidR` 的第三维是 `HQEyeSmile`（条件切片）；本版把它改成**平行副本**
-（`Smile` 门一开，眼睑整套换成笑眼版姿势）。理由：按键表情本来就是"整套换一套姿势"，
-而条件切片要求作者为每个条件单独摆一遍采样点 —— 两者做的事一样，副本更好维护。`HQEyeSmile` 仍然留在契约里，
-将来要做"不按键、由 `mouthSmile` 自动联动的笑眼"时再加。
-
-## 5. 键集合的分工规则（比树形更重要）
-
-1. **每棵树拥有互不重叠的键集合**（写进契约表：族 → 键列表）。Direct 是**加法**、不归一化（`0.6+0.8 → 140`）：
-   键不重叠时"基础 + 修正"才是叠加；重叠时值会相加。
-2. **语义会重叠的必须并进同一张 2D 表**，靠摆采样点表达（例：眼睑"闭眼 × 眯眼"的多个组合姿势）。
-   判据一句话：**两棵树如果会写同一个键，就得合并，或者在中间层先选一格。**
-3. **基础 / 条件覆盖 / 修正**三类槽按 [契约表 §F](VTS_HIGH_QUALITY_FACE_CONTRACT.md) 的 fallback：
-   修正槽没填 = **零残差**（不影响基础）；条件覆盖槽没填 = **复用同一份基础片段**（不是留空 Motion）。
-   装配器只做"同名片段替换 + 报缺项"，**不会替你补洞**。
-4. 修正树写的是**残差**：做完单侧上唇姿势要减掉 `MouthCore` 已经表达的部分再放进 `MouthUpperRaise`，不能全量再加一遍。
-
-## 6. 第一版落地清单（tranche 1）
-
-| 树名 | 2D 轴 | 条件 | 槽位前缀 | 建议采样 | 副本 |
-| --- | --- | --- | --- | --- | --- |
-| `MouthCore` 外嘴核心 | Form × Open | Funnel × Press（先只做 1 张，其余复用基础片段） | `MouthCore__Form__Open__A3X{i}Y{j}` | 3×3 | ✅ 副本 `MouthCoreExpr`（门 `Smile`） |
-| `LidL` / `LidR` 眼睑 | BlinkWide × Squint | ~~EyeSmile~~（改走副本，见 §4） | `LidL__BlinkWide__Squint__A3X{i}Y{j}`（沿用现名） | 3×2（现有 6 点） | ✅ 副本 `LidLExpr`/`LidRExpr`（门 `Smile`） |
-| `GazeL` / `GazeR` 注视 | InOut × UpDown | — | `GazeL__InOut__UpDown__A3X{i}Y{j}` | 3×3（或十字 5 点） | — |
-| `BrowCoreL` / `BrowCoreR` 眉 | Height × InnerUp（**按 VB 的 BrowLeftY/BrowRightY**） | — | `BrowCoreL__Height__InnerUp__A2X{i}Y{j}` | 2×2 | ✅ 副本 `BrowCoreLExpr`/`BrowCoreRExpr`（门 `Angry`） |
-| `MouthJaw` 下颌 | Jaw × Forward | JawSide | `MouthJaw__Jaw__Forward__A3X{i}Y0` | 3×1 | — |
-| `MouthWidth` 嘴宽/偏嘴 | Pucker × LeftRight | — | `MouthWidth__Pucker__LeftRight__A3X{i}Y{j}` | 3×3 | — |
-| `CheekSquint` 双颊 | CheekL × CheekR | — | `CheekSquint__CheekL__CheekR__A2X{i}Y{j}` | 2×2 | — |
-| `CheekPuff` 鼓腮（**分左右**） | PuffL × PuffR | Open, Seal, Form, Pucker | `CheekPuff__PuffL__PuffR__A2X{i}Y{j}` | 2×2 | — |
-| `MouthTongue` 舌（**分左右**） | TongueL × TongueR | Jaw, Open, Pucker, Funnel, Press | `MouthTongue__TongueL__TongueR__A2X{i}Y{j}` | 2×2 | — |
-| `NoseSneer` 鼻翼 | SneerL × SneerR | — | `NoseSneer__SneerL__SneerR__A2X{i}Y{j}` | 2×2 | — |
-
-**先不做**（契约里都留着，加的时候不动已经做好的树）：`MouthSeal`、`MouthShrugSplit`、`MouthCorner`、
-`MouthUpperRaise`、`MouthLowerDrop`、`MouthLipRoll`、`MouthLipPress`、`MouthStretch`、`MouthDimple`、
-`MouthRawRound`、`MouthJawSide`、`MouthShrugBase`、`CheekPuffTongue`、`LidGazeL/R`、`LidMouthL/R`、`LidBoth`、
-`BrowEyeL/R`、`BrowCenter`、`HeadAim`/`HeadPos`/`BodyAim`/`BodyPos`、`AudioPhoneme`、`HandPos`/`HandFinger`/`CtrlStick`。
-
-## 7. 参数契约（控制器认这些名字）
-
-三段式 `Ho/Drive/<部位>/<轴>`（ASCII、`HoFaceNaming` 的根不变）：
-
-```text
-Mouth:  Form(-1..1, 0中性) Open(0..1) Funnel(0..1) Press(-1..1) Jaw(0..1) Pucker(-1..1) X(-1..1) Shrug(0..1)
-        TongueL(0..1) TongueR(0..1)
-Lid:    Left|Right / BlinkWide(-1..1, 0中性) Squint(0..1) EyeSmile(0..1)
-Gaze:   Left|Right / X(-1..1) Y(-1..1)
-Brow:   Left|Right / Y(0..1) InnerUp(0..1)
-Cheek:  Left|Right / Squint(0..1) Puff(0..1)      Nose: Left|Right / Sneer(0..1)
-Gate:   Mouth EyeLeft EyeRight Brow Cheek（区域门，默认 1）  Gate/Expr/<表情名>（副本门，默认 0、我们不写）
-Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本那条 1D 轴不需要权重行）
-```
-
-名字的完整规则（树名怎么拼、轴段词用哪些、副本/区域/槽位怎么命名）见 **[面捕命名权威](FACE_TRACKING_NAMING.md)** ——
-本文只用名字，不再自己发明。
-
-⚠️ **不借 VB/VTS 的原名当参数名**：配置里那个 `MouthSmile` 是**VB 公式的输出**，不是 VTS 自己那个 `MouthSmile`；
-同名同义的误会会长期留在表里（[参数标准表](PARAMETER_STANDARDS.md) 的分工正是"外部怎么定 vs 我们选什么"）。
-
-## 8. 采样点与槽位（动画后做，但命名现在定死）
-
-* 槽位 = **一个多键姿势片段**，命名 `<树名>__<X段词>__<Y段词>__A<n>X<i>Y<j>`（现场例子：`LidL__BlinkWide__Squint__A3X0Y2`）；
-  段词与 1D/副本的写法见[命名权威](FACE_TRACKING_NAMING.md) §5。
-* ⚠️ **工具缺口**：现有「形态键动画」工具（`Editor/AnimationTools/HoBlendShapeClipBuilder.cs`）出的是
-  "**一键一片段**、值恒 100" —— 那是给 Direct 每键叶子用的，**不是 2D 采样点的姿势**。
-  填 2D 表需要"**姿势烘焙**"：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）存成一个以槽位命名的多键片段。
-  **动画你后做，但这条工具得排在它前面。**
-* 采样允许**稀疏、非方阵**，多个采样点可以共用同一份片段（闭眼时不同 Squint 可以是同一个闭眼姿势）。
-* 非方阵的插值语义由 2D Freeform Cartesian 定，**先摆点看结果**，不要假设。
-
-## 9. 配置改造：**发货那份 profile 已经改好了**（2026-09-27）
-
-包里的 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 从 67 输入 / 90 输出变成 **67 / 127**：
-**90 行出口原样保留**，**另加 37 行控制器轴**（逐行清单见 [HO 参数规范](PARAMETER_HO.md) §3.7）。
-**改造 = 追加，不是重命名** —— 三条查出来的硬约束决定了这个形状：
-
-| # | 约束（都有代码/文档判据） | 后果 |
+| 节 | 回答什么 | 什么时候看 |
 | --- | --- | --- |
-| 1 | **输出行之间不能互相引用**：求值器只查输入行（`HoFaceChain.EvaluateOutputs` → `inputIndex` / 原始线名） | 切片权重行**把轴公式内联展开**；要收短得先改那条链 |
-| 2 | **G1–G3 那 90 行是下游契约**：VTS 生态、Hub 消费者、离线台架（`.research/profile-json-test` 的 §3 表格核对）都按名字守它们 | 轴行**新增**而不是把出口名改掉；`§0` 的"出口行总数 90"也保持不变 |
-| 3 | **4 根 `Ho/Drive/Lid/*` 早就不是代码内置的了**（`HoFaceMiddleware` 里那段注入已删） | 它们**必须写在 profile 里** —— 发货那份以前**缺这 4 行**（只有土豆那份 rig 副本有），现在补齐 |
+| [§1 当前进度](#1-当前进度) | 什么已经落地、什么还是空的 | 想知道"能不能开跑" |
+| [§2 树与叶子](#2-现在的树每格叶子是什么语义) | 29 棵树长什么样、**每一格代表什么姿势** | **实机测灵敏度** |
+| [§3 轴的口](#3-每根轴中间层输出行公式修饰符) | 每根轴由哪条中间层输出行喂、公式与曲线是什么、修饰符现状 | **调稳定性 / 调手感**、调中间层 |
+| [§4 下一步](#4-下一步) | 按依赖顺序还剩什么 | 接着干 |
 
-细节与坑（都写进了 §3.7 的备注）：
+设计**怎么推出来**的（为什么分这些表、门为什么嵌套两层、副本为什么用 1D 树）不再写在这里：结论已经落在控制器资产
+与 §2/§3 的表里，推导过程看 git 历史。能表达什么看[契约表](VTS_HIGH_QUALITY_FACE_CONTRACT.md) §E，
+名字怎么拼看[命名权威](FACE_TRACKING_NAMING.md)，引擎能/不能算什么看[混合树踩坑](pitfalls/BLEND_TREE_TRAPS.md)。
+**最后更新：2026-09-27。**
 
-* `Form` = **2×`MouthSmile` − 1**、`Brow/*/Y` = **2×VB `Brow*Y` − 1**：VB 那两条的静息是 0.5，
-  轴要"0 = 中性"就得重映射（两条都用宽曲线，别用 0..1 的默认曲线，否则静息负半边被夹掉）。
-* **区域门是常量行**（`expression` 留空 + `defaultValue = 1`）：**常量行不过曲线**（`HoFaceAnimationSession.cs:283`），
-  所以写 1 就是 1。
-* **`Gate/Expr/*` 一行都不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 / VTS API 适配器）；
-  控制器里默认 `0`。我们每帧写它 = 把它锁死。
-* **分侧轴先两侧同跟单侧原值**（`TongueL`/`TongueR` ← `tongueOut`；`Cheek/*/Puff` ← `cheekPuff`），
-  有分侧来源时直接驱动、树不动。
-* **文件头 `notes` 那段"没写 VB 自造输出"是过期的**（那些行后来加了）—— 顺手在 §3.7 里说清，改 profile 时一并改写。
-* 土豆那份 **rig 副本**（`BREAK_URP/.../ho-iPhoneVTS.hoface.json`，94 行）与发货那份**已经漂了**：
-  它多 4 行显式眼睑轴（现在发货那份也有了），没有 33 行新轴 —— **把它换成发货那份**即可对齐（沙箱里那份同理）。
+---
 
-判据（面板「参数输出」栏）：**要进树的轴一个都不许落在"不在控制器里"** —— 骨架没搭好之前，这 37 行会全部
-显示"不在控制器里"，那正是"还没接上"的可视化。其余出口行保持 output-only。
+## 1. 当前进度
 
-## 10. 手搭清单（在混合树编辑器里照这个建；动画留空）
-
-> ✅ **骨架已经生成好了**（2026-09-27）：`D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\PTP_CTR_Face_VTS.controller`
-> —— 40 个参数、29 棵树、75 + 29 个**空 Motion 槽位**，一层一个状态 WD 开、无 Behaviour。
-> 生成脚本 `.research/make-vts-controller.ps1`（从老控制器的字段集取模板），核对脚本
-> `.research/check-controller.ps1` 对它报 **0 问题**。
->
-> ✅ **Unity 已经导入过它**（不是"应该能加载"）：BREAK_URP 那个编辑器一直在跑，导入日志里
-> `Start importing … PTP_CTR_Face_VTS.controller … Importer(815301076,…)` 之后跟着
-> **`asset objects unloaded after import = 32`** —— 我们那 32 个对象（1 控制器 + 1 状态机 + 1 状态 + 29 棵树）
-> **全被解析出来了**、日志无报错，项目里也生成了 `.meta`（GUID `7b3231c5…`）。
-> 按类比过字段集：`91 / 206 / 1102 / 1107` 四类的字段**与 Unity 自己写的老控制器逐字段相同**（新增 0 条）。
->
-> Unity 侧的重建入口是菜单 **`HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`**
-> （`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`，用 Unity 自己的 API 建同一份形状；
-> API 用法照抄我们跑通的 `Tests~/FaceTrackingValidation.cs`）。**设计一改就从这里重新生成，别手改资产。**
-
-> 搭完先跑一次 `.research/check-controller.ps1 -Path <那份>.controller`：参数名/默认值/树形/门控接线一次核完
-> （验收清单见 §11 第 3 条）。**参数名敲错一个字符是静默失败**，这一步别省。
-
-**第 0 步 · 参数（全部 Float）**：**一共 40 个** = 下面这 **37 个由发货 profile 每帧写**
-（逐行的表达式与曲线见 [HO 参数规范](PARAMETER_HO.md) §3.7）+ **1 个恒 1 权重** + **2 个表情门**
-（后三个 profile **都不写**）。不写全的名字以后查[命名权威](FACE_TRACKING_NAMING.md) §6。
-
-| 组 | 参数 | 默认值 | 谁写 |
+| # | 东西 | 状态 | 落在哪 / 判据 |
 | --- | --- | --- | --- |
-| 区域门（5） | `Ho/Drive/Gate/Mouth` · `EyeLeft` · `EyeRight` · `Brow` · `Cheek` | **1** | 中间层常量行 |
-| **恒 1 权重（1）** | **`Ho/Drive/W/One`** —— Direct 的每个子节点都要挂参数，"这一格永远全量生效"也需要一个参数 | **1** | **没人写**（默认值就是 1） |
-| 表情门（2） | `Ho/Drive/Gate/Expr/Smile` · `Ho/Drive/Gate/Expr/Angry` | **0** | **没人写**（留给按键来源，§3.3） |
-| 轴（28） | `Mouth/Form` `Open` `Funnel` `Press` `Jaw` `Forward` `Pucker` `X` `TongueL` `TongueR`；`Lid/Left\|Right/BlinkWide` `Squint`；`Gaze/Left\|Right/X` `Y`；`Brow/Left\|Right/Y` `InnerUp`；`Cheek/Left\|Right/Squint` `Puff`；`Nose/Left\|Right/Sneer`（前缀都是 `Ho/Drive/`） | 0（`BlinkWide` 也是 0） | profile 各行 |
-| 切片权重（4） | `Ho/Drive/Slice/MouthCore/{Funnel0Press0, Funnel1Press0, Funnel0Press1, Funnel1Press1}` | 0 | profile 各行 |
+| 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（40 参数 / 29 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
+| 2 | **参数表 40 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、28 根轴 = `0`、4 条切片权重 = `0` |
+| 3 | **树形 29 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 18 张表（13 主版 + 5 副本）+ 5 棵 1D 副本树 |
+| 4 | **槽位 104 个** | ⬜ **全是空 Motion** | 100% 未摆姿势 ⇒ **造型一条都还看不到**；但**轴值现在就能测**（§2.4） |
+| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 127 输出**（90 出口 + 37 轴行） |
+| 6 | **轴的修饰符** | ⬜ **37 行一条都没有**（连 `modifiers` 字段都没有） | 曲线也基本是恒等（只是放宽范围防夹断）—— 这是"不稳"的第一嫌疑，见 §3.2 |
+| 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
+| 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
+| 9 | **1D 树的孩子是子树** | ⬜ **没实测** | 只在参考实现里见过。搭副本/第一次真跑起来时验；不通就换兜底形状（§4） |
+| 10 | **姿势烘焙工具** | ⬜ 没有 | 现有「形态键动画」工具（`HoBlendShapeClipBuilder.cs`）出的是"一键一片段、值恒 100"，**填不了 2D 采样点** |
+| 11 | **表情门来源** | ⬜ 未定 | 手机协议 `Hotkey` 实测恒 −1（两台设备）；候选 = VTS API 适配器 / 本地按键（面板覆盖或 Warudo 键盘节点）/ VB 输出成线 |
+| 12 | **Warudo 侧** | ⬜ bundle 还是 09-25 那份 | `hoface-controller-test.bundle` 里**不含**这 40 个口 ⇒ Warudo 侧现在拿不到轴；profile 沙箱那份已经是最新 |
+| 13 | **调试观察面** | ✅ | 面板「参数输出」每行四个覆盖按钮（不覆盖 / −1 / 0 / 1）+ 「清空覆盖（N）」；「预览混合树」把影子台显示到 Hierarchy |
 
-**第 1 步 · 层与状态**：一层（现控制器是 `Ho/00 Drive`）+ 一个状态；**Write Defaults 开**。
+**改形状 / 核对的入口**（改设计时走这里，**别手改资产**）：
 
-**第 2 步 · 根 Direct** `Ho/00 Drive Tree`：5 个子节点 = 5 个区域子树，`directBlendParameter` = 对应区域门。
+* 生成：菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`（`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`）
+  或文本生成器 `.research/make-vts-controller.ps1`。
+* 核对：`.research/check-controller.ps1 -Path <那份>.controller` —— 参数名 / 类型 / 默认值 / 层状态与 WD /
+  树形与轴 / Direct 子节点有没有挂参数，一次核完。**名字敲错一个字符 = 那条值被静默丢掉**（面板只会说"不在控制器里"），
+  这一步别省。它靠文本解析，替代不了 Unity 自己报的错，也不检查槽位内容。
+* 包侧门：`.research/compile-check-pkg.ps1`（+ 改到 `.ps1` 时 `ensure-bom.ps1 -Fix`）。
 
-**第 3 步 · 区域子树**（Direct，子节点见下）：`MouthRegion`（门 `Mouth`）、`EyeLeftRegion`（`EyeLeft`）、
-`EyeRightRegion`（`EyeRight`）、`BrowRegion`（`Brow`）、`CheekRegion`（`Cheek`）。
-**子树里的每个子节点都挂 `Ho/Drive/W/One`**（表整体按 1 加进去；分配发生在表内部）。
+---
 
-**第 4 步 · 表（tranche 1）**：区域子树里的每个子节点要么是一张 2D 表、要么是一棵 1D 副本树。
-（1D 副本树的两个子节点是**子树**：阈值 `0` → 主版表、阈值 `1` → `…Expr` 副本 —— 这条形状还没实测，见 §3.1 末。）
+## 2. 现在的树：每格叶子是什么语义
 
-| 表 | 类型 | blendParameter X / Y | 子节点 | 槽位名 |
-| --- | --- | --- | --- | --- |
-| `MouthCore` | FreeformCartesian2D | `Ho/Drive/Mouth/Form` / `…/Open` | 9（3×3，先摆 1 行也行） | `MouthCore__Form__Open__A3X{i}Y{j}` |
-| `MouthJaw` | FreeformCartesian2D | `…/Mouth/Jaw` / `…/Mouth/Forward` | 3 | `MouthJaw__Jaw__Forward__A3X{i}Y0` |
-| `MouthWidth` | FreeformCartesian2D | `…/Mouth/Pucker` / `…/Mouth/X` | 9 | `MouthWidth__Pucker__LeftRight__A3X{i}Y{j}` |
-| `MouthTongue` | FreeformCartesian2D | `…/Mouth/TongueL` / `…/Mouth/TongueR` | 4 | `MouthTongue__TongueL__TongueR__A2X{i}Y{j}` |
-| `LidL` / `LidR` | FreeformCartesian2D | `…/Lid/<Left\|Right>/BlinkWide` / `…/Squint` | 6 | `LidL__BlinkWide__Squint__A3X{i}Y{j}`（现成） |
-| `GazeL` / `GazeR` | FreeformCartesian2D | `…/Gaze/<Left\|Right>/X` / `…/Y` | 9 | `GazeL__InOut__UpDown__A3X{i}Y{j}` |
-| `BrowCoreL` / `BrowCoreR` | FreeformCartesian2D | `…/Brow/<Left\|Right>/Y` / `…/InnerUp` | 4 | `BrowCoreL__Height__InnerUp__A2X{i}Y{j}` |
-| `CheekSquint` | FreeformCartesian2D | `…/Cheek/Left/Squint` / `…/Right/Squint` | 4 | `CheekSquint__CheekL__CheekR__A2X{i}Y{j}` |
-| `CheekPuff` | FreeformCartesian2D | `…/Cheek/Left/Puff` / `…/Right/Puff` | 4 | `CheekPuff__PuffL__PuffR__A2X{i}Y{j}` |
-| `NoseSneer` | FreeformCartesian2D | `…/Nose/Left/Sneer` / `…/Right/Sneer` | 4 | `NoseSneer__SneerL__SneerR__A2X{i}Y{j}` |
-| `MouthCoreSwitch` | **Simple1D**（`blendParameter` = `Gate/Expr/Smile`，阈值 0 / 1） | — | 2（0→`MouthCore`、1→`MouthCoreExpr`） | — |
-| `LidLSwitch` / `LidRSwitch` | Simple1D（`Gate/Expr/Smile`） | — | 2（`LidL`/`LidLExpr`、`LidR`/`LidRExpr`） | — |
-| `BrowCoreLSwitch` / `BrowCoreRSwitch` | Simple1D（`Gate/Expr/Angry`） | — | 2（`BrowCoreL`/`BrowCoreLExpr`…） | — |
+### 2.1 结构（29 棵 = 1 根 + 5 区域 + 18 表 + 5 个 1D 开关）
 
-**第 5 步 · 占位**：每张表的子节点**先可以是空 Motion**（槽位"缺"能在「详情」栏逐条列出来）；
-填的时候按 §8 的"姿势烘焙"出片段，文件名 = 槽位名。
+```text
+Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}
+├─ MouthRegion                  Direct   子节点权重 = Ho/Drive/W/One
+│   ├─ MouthCoreSwitch          Simple1D  blendParameter = Ho/Drive/Gate/Expr/Smile   （0 → 主版，1 → 副本）
+│   │   ├─ MouthCore            FreeformCartesian2D  9 格
+│   │   └─ MouthCoreExpr        FreeformCartesian2D  9 格
+│   ├─ MouthJaw                 FreeformCartesian2D  3 格
+│   ├─ MouthWidth               FreeformCartesian2D  9 格
+│   └─ MouthTongue              FreeformCartesian2D  4 格
+├─ EyeLeftRegion                Direct   → LidLSwitch（LidL / LidLExpr 6+6）+ GazeL（9）
+├─ EyeRightRegion               Direct   → LidRSwitch（LidR / LidRExpr 6+6）+ GazeR（9）
+├─ BrowRegion                   Direct   → BrowCoreLSwitch（BrowCoreL / Expr 4+4）+ BrowCoreRSwitch（BrowCoreR / Expr 4+4）
+└─ CheekRegion                  Direct   → CheekSquint（4）+ CheekPuff（4）+ NoseSneer（4）
+```
 
-⚠️ 手搭时最容易忘的三条：**Direct 的每个子节点都要挂一个参数**（不挂就不参与混合）；
-**同一个键不要被两张表写**（Direct 是加法，会相加）；**区域门保持 `1`**（调小 = 让这块回到启动姿势）。
+⚠️ **Direct 的每个子节点都必须挂一个参数**（不挂就不参与混合）—— 所以"这一格永远全量生效"也要一个参数：
+**`Ho/Drive/W/One`（默认 1，没人写它）**。区域子树里的表与 1D 开关全部挂它；只有 5 个区域子树挂区域门。
 
-### 10.1 槽位清单（机械展开，共 104 个）
+⚠️ **Direct 是加法、不归一化**：兄弟表**写同一个键就会相加**。所以叶子姿势的键分工必须守住 §2.2 的
+「分工」列 —— 最容易撞的是 `MouthCore`（唇）与 `MouthJaw`（下颌/下巴）。
 
-这份表由 `.research/gen-slot-manifest.ps1` 从 §10 的树清单**展开**出来（不是手抄），它同时自检命名规则
-（四段、段内无下划线、坐标不越界、无重复）：**104 个槽位全部合规**。它也是将来"姿势烘焙"工具要产出的**文件名集合**。
+### 2.2 表与叶子（一格 = 那个坐标下的一整套姿势）
 
-| 树 | 槽位数 | 坐标索引 | 命名模板 | X 各刻度的轴值 | Y 各刻度的轴值 | 最少起步（建议） |
-| --- | --- | --- | --- | --- | --- | --- |
-| `MouthCore` | 9 | X{0..2} × Y{0..2} | `MouthCore__Form__Open__A3X<i>Y<j>` | -1 / 0 / +1（垂嘴角 / 中性 / 笑） | 0 / .5 / 1（闭 / 半开 / 开） | X1Y0 中性 + X0Y0 + X2Y0 |
-| `MouthJaw` | 3 | X{0..2} × Y{0} | `MouthJaw__Jaw__Forward__A3X<i>Y<j>` | 0 / .5 / 1（闭 / 半开 / 张满） | 0（不前伸；这一维先只用 Y0） | X0Y0 + X2Y0 |
-| `MouthWidth` | 9 | X{0..2} × Y{0..2} | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` | -1 / 0 / +1（收 / 中性 / 展） | -1 / 0 / +1（偏右 / 中 / 偏左） | X1Y1 中性 + 四角 |
-| `MouthTongue` | 4 | X{0..1} × Y{0..1} | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
-| `LidL` | 6 | X{0..2} × Y{0,2} | `LidL__BlinkWide__Squint__A3X<i>Y<j>` | -1 / 0 / +1（睁大 / 中性 / 闭） | 0 / 1（不眯 / 眯满；Y1 半眯先空着） | 现有 6 格已经是这套坐标 |
-| `LidR` | 6 | X{0..2} × Y{0,2} | `LidR__BlinkWide__Squint__A3X<i>Y<j>` | 同上（右） | 同上（右） | 现有 6 格已经是这套坐标 |
-| `GazeL` | 9 | X{0..2} × Y{0..2} | `GazeL__InOut__UpDown__A3X<i>Y<j>` | -1 / 0 / +1（外 / 中 / 内） | -1 / 0 / +1（下 / 中 / 上） | X1Y1 中性 + 十字四端（也可只摆 5 格） |
-| `GazeR` | 9 | X{0..2} × Y{0..2} | `GazeR__InOut__UpDown__A3X<i>Y<j>` | 同上（右） | 同上（右） | X1Y1 中性 + 十字四端 |
-| `BrowCoreL` | 4 | X{0..1} × Y{0..1} | `BrowCoreL__Height__InnerUp__A2X<i>Y<j>` | -1 / +1（压眉 / 抬眉） | 0 / 1（不抬内眉 / 抬满） | X0Y0 + X1Y0 + X1Y1 |
-| `BrowCoreR` | 4 | X{0..1} × Y{0..1} | `BrowCoreR__Height__InnerUp__A2X<i>Y<j>` | 同上（右） | 同上（右） | X0Y0 + X1Y0 + X1Y1 |
-| `CheekSquint` | 4 | X{0..1} × Y{0..1} | `CheekSquint__CheekL__CheekR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
-| `CheekPuff` | 4 | X{0..1} × Y{0..1} | `CheekPuff__PuffL__PuffR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
-| `NoseSneer` | 4 | X{0..1} × Y{0..1} | `NoseSneer__SneerL__SneerR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
-| `MouthCoreExpr`（副本） | 9 | X{0..2} × Y{0..2} | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` | 同 `MouthCore` | 同 `MouthCore` | 按键表情那一版；主版做完再摆 |
-| `LidLExpr`（副本） | 6 | X{0..2} × Y{0,2} | `LidLExpr__BlinkWide__Squint__A3X<i>Y<j>` | 同 `LidL` | 同 `LidL` | 按键表情那一版；主版做完再摆 |
-| `LidRExpr`（副本） | 6 | X{0..2} × Y{0,2} | `LidRExpr__BlinkWide__Squint__A3X<i>Y<j>` | 同 `LidR` | 同 `LidR` | 按键表情那一版；主版做完再摆 |
-| `BrowCoreLExpr`（副本） | 4 | X{0..1} × Y{0..1} | `BrowCoreLExpr__Height__InnerUp__A2X<i>Y<j>` | 同 `BrowCoreL` | 同 `BrowCoreL` | 按键表情那一版；主版做完再摆 |
-| `BrowCoreRExpr`（副本） | 4 | X{0..1} × Y{0..1} | `BrowCoreRExpr__Height__InnerUp__A2X<i>Y<j>` | 同 `BrowCoreR` | 同 `BrowCoreR` | 按键表情那一版；主版做完再摆 |
+| 树 | X 轴（刻度） | Y 轴（刻度） | 格 | 一格代表什么 | 分工（该写哪些键） | 槽位名模板 |
+| --- | --- | --- | ---: | --- | --- | --- |
+| `MouthCore` | `Mouth/Form` −1 撇/垂嘴角 · 0 中性 · +1 笑 | `Mouth/Open` 0 闭 · 0.5 半开 · 1 张满 | 9 | 外嘴基础：**唇的轮廓与口孔** | 只写唇/口孔，**不写下颌与下巴** | `MouthCore__Form__Open__A3X<i>Y<j>` |
+| `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 9 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` |
+| `MouthJaw` | `Mouth/Jaw` 0 · 0.5 · 1 | `Mouth/Forward` 只有 0（Y 只用 `Y0`） | 3 | 下颌/口内：**下颌骨与下巴**随开度 | 只写颌/下巴；不前伸 | `MouthJaw__Jaw__Forward__A3X<i>Y0` |
+| `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差） | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
+| `MouthTongue` | `Mouth/TongueL` 0 / 1 | `Mouth/TongueR` 0 / 1 | 4 | 舌（分左右）：舌头两组键 | 舌相关键 | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` |
+| `LidL` | `Lid/Left/BlinkWide` −1 睁大 · 0 中性 · +1 闭 | `Lid/Left/Squint` 0 不眯 · 1 眯满 | 6 | 左眼睑完整姿势（闭/睁大 × 眯） | 左眼睑相关键 | `LidL__BlinkWide__Squint__A3X<i>Y<j>` |
+| `LidLExpr` | 同 `LidL` | 同 `LidL` | 6 | 笑眼版（`Gate/Expr/Smile`） | 同上 | `LidLExpr__BlinkWide__Squint__A3X<i>Y<j>` |
+| `GazeL` | `Gaze/Left/X` −1 · 0 · +1 | `Gaze/Left/Y` −1 · 0 · +1 | 9 | 左眼球注视：每格 = 眼球朝那个方向 | 只写眼球骨骼，**不写眼睑** | `GazeL__InOut__UpDown__A3X<i>Y<j>` |
+| `LidR` / `LidRExpr` | 同 `LidL`（右） | 同 `LidL`（右） | 6 / 6 | 右眼睑（主版 / 笑眼版） | 右眼睑相关键 | `LidR__BlinkWide__Squint__A3X<i>Y<j>` |
+| `GazeR` | `Gaze/Right/X` −1 · 0 · +1 | `Gaze/Right/Y` −1 · 0 · +1 | 9 | 右眼球注视 | 同上（右） | `GazeR__InOut__UpDown__A3X<i>Y<j>` |
+| `BrowCoreL` | `Brow/Left/Y` −1 压眉 · +1 抬眉 | `Brow/Left/InnerUp` 0 / 1 | 4 | 左眉姿势：压/抬 × 内眉抬起 | 左眉相关键 | `BrowCoreL__Height__InnerUp__A2X<i>Y<j>` |
+| `BrowCoreLExpr` | 同 `BrowCoreL` | 同 `BrowCoreL` | 4 | 怒/悲那一版（`Gate/Expr/Angry`） | 同上 | `BrowCoreLExpr__Height__InnerUp__A2X<i>Y<j>` |
+| `BrowCoreR` / `BrowCoreRExpr` | 同（右） | 同（右） | 4 / 4 | 右眉（主版 / 表情版） | 右眉相关键 | `BrowCoreR__Height__InnerUp__A2X<i>Y<j>` |
+| `CheekSquint` | `Cheek/Left/Squint` 0 / 1 | `Cheek/Right/Squint` 0 / 1 | 4 | 双颊上提（眯眼笑时的颊），分侧 | 颊相关键（**与眼睑表分工**） | `CheekSquint__CheekL__CheekR__A2X<i>Y<j>` |
+| `CheekPuff` | `Cheek/Left/Puff` 0 / 1 | `Cheek/Right/Puff` 0 / 1 | 4 | 鼓腮（分左右） | 颊/口腔相关键 | `CheekPuff__PuffL__PuffR__A2X<i>Y<j>` |
+| `NoseSneer` | `Nose/Left/Sneer` 0 / 1 | `Nose/Right/Sneer` 0 / 1 | 4 | 鼻翼上提 / 皱鼻，分侧 | 鼻/鼻唇相关键 | `NoseSneer__SneerL__SneerR__A2X<i>Y<j>` |
 
-**一共 104 个槽位**（含 5 棵副本树 29 个）。槽位是**多键姿势片段**：一个槽 = 那一格的整套姿势，
-不是「一键一片段」。按 [契约表 §F](VTS_HIGH_QUALITY_FACE_CONTRACT.md) 的 fallback，
-**没摆的格复用同一份基础片段**即可开跑，所以「最少起步」那一列就是先做几张。
+* 槽位名 = `<树名>__<X段词>__<Y段词>__A<n>X<i>Y<j>`（`n` = X 轴刻度数，`i`/`j` 从 **0** 起）。段词与副本后缀的规则见[命名权威](FACE_TRACKING_NAMING.md) §5。
+* **没摆的格不用补洞**：基础表没摆 = 复用同一份低维基础姿势；修正表没摆 = **零残差**。所以"最少起步"先摆中性格加两端就能开跑（契约 §F）。
+* ⚠️ **`LidL`/`LidR` 的 Y 只有 0 / 1 两档**（半眯 `Squint=0.5` 没有格，由插值给出）；`MouthJaw` 的 Y 只有 `Y0`（不前伸）。这是"稀疏、非方阵"允许的用法，不是漏了。
+* ⚠️ **`GazeL/GazeR` 的 X 方向**：我们原样直通 `EyeLeft_x`/`EyeRight_x`，没有翻符号，所以 **`X0`(−1) 到底是"内"还是"外"要靠实测定**（§2.4 第一项就是它）。
 
-## 11. 装配与验收
+### 2.3 灵敏度现在能测到什么程度
 
-1. 控制器编辑页**就地装配**（`HoUnityTools/面捕/控制器编辑`）：控制器是你那份、动画文件夹是槽位数据、调试对象是场景角色；
-   装配只填片段 + 重绑形态键曲线，**不碰层与参数**。
-2. **硬约束**（装配不拦，开始驱动才拒）：只允许形态键曲线、无 `StateMachineBehaviour`、
-   **Direct 树所在状态必须 WD 开**（关掉会逐帧发散：`98.98 → 246.28 → 1059.33`）。
-3. **手搭完先机器核一遍**：`.research/check-controller.ps1 -Path <那份>.controller`
-   —— 一次核完**参数名 / 类型 / 默认值（区域门 1、其余 0）/ 层状态与 WD / 5 个区域 + 23 棵树的类型与轴 /
-   Direct 子节点有没有挂参数**。为什么值得跑：中间层写参数是"按控制器声明的口逐个查字典"，
-   **名字敲错一个字符 = 那条值被静默丢掉**（面板只会说"不在控制器里"）；这个脚本把这件事变成一行输出。
-   （它靠文本解析 `.controller`，替代不了 Unity 自己报的编译错；也不检查槽位内容 —— 那是「详情」栏的事。）
-4. **这一版"做完"的判据**：① §7 的参数名在控制器参数表里齐全、区域门默认值统一为 `1`、
-   表情门默认 `0` 且**配置里没有写它的行**；② 门只有 §3 那两层（区域 + 表情副本的 1D 树）；
-   ③ 配置里要进树的行**全部命中**控制器参数（面板「参数输出」栏："不在控制器里" = 0）；
-   ④ 「详情」栏能列出槽位清单（"缺哪些动画"是可见的清单）；⑤ `check-controller.ps1` 退出码 0。
-5. **看不到的部分**：没有动画时树里全是空 Motion / 复用片段，**插值行为要等第一张表填上才看得到** ——
-   这一版不谎称验收过"动起来对不对"。1D 副本树可以在**参数层**先验（手动把门推 0→1，看权重交叉淡入）。
-6. 门：包侧 `compile-check-pkg.ps1` + `ensure-bom.ps1 -Fix`；涉及 mod 的过 mod `compile-check`；两边分别提交。
+* **能测**：每根轴**实际会走到多少**（手机做动作 / 说话 → 看轴值）。这是"曲线与修饰符该怎么调"的唯一依据。
+* **不能测**：造型好不好看 —— 104 格全是空 Motion，插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
 
-## 12. 已定 / 待定
+### 2.4 怎么测（一次把 28 根轴测完）
 
-**已定（2026-09-27）**：
+1. 面板「对象」段：控制器 = `PTP_CTR_Face_VTS`、配置文件 = `ho-iPhoneVTS.hoface.json`、调试对象 = 角色 → 连接 → 开始驱动（或「自动驱动」默认开，按 Play 即跑）。
+2. 打开「预览混合树」（默认开）→ Hierarchy 里选中 `Ho Face Shadow` → **Animator 窗口的 Parameters**：这 40 个口就是控制器真实看到的值，逐根看范围最直接。
+   （另一条路：面板「参数输出」栏 —— 那里是中间层写出去的值，同一份；每行右边的覆盖按钮可以**把某根轴钉成 −1 / 0 / 1** 手动试。）
+3. 做动作并记**实际到达的极值**：例如"说一句话，`Mouth/Open` 只到 0.35"、"闭嘴时 `Lid/Left/BlinkWide` 到 0.8 不到 1"、"`Cheek/Left/Squint` 几乎不动"。
+4. 把结果填回 **§3 每张表的「实测范围」列**（现在都是"待测"）—— 那一列 + §3.2 的修饰符说明就是"怎么把它调稳"的输入。
+5. 顺手验两条方向性：`GazeL/R` 的 ±1 哪边是内（§2.2 末），`Mouth/X` 的 +1 是不是"偏左"（表达式是 `mouthLeft − mouthRight` + 笑差）。
 
-1. **平行副本**给 **`MouthCore` 外嘴 + `LidL`/`LidR` 眼睑 + `BrowCoreL`/`BrowCoreR` 眉**（`MouthTongue` 以后再说）；副本用 **1D 交叉淡入树**（§3.1）。
-2. **参数名**用 `Ho/Drive/<部位>/<轴>`（不借 VB/VTS 原名）。
-3. **眉毛**做，按 VB 现成的 `BrowLeftY/BrowRightY` × `BrowInnerUp`。
-4. **表情来源本版不接、也不测**：门参数建好、默认 `0`、中间层不写它（§3.3）。
-5. **骨架由我生成**（改成生成器，不再手搭）：`PTP_CTR_Face_VTS.controller` 已落在土豆的 FT 目录下，
-   形状即 §10，槽位全空 —— 文本生成脚本 `.research/make-vts-controller.ps1`（核对脚本报 0 问题）
-   + Unity 侧菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`（设计改动后重新生成用）。
-   ✅ **Unity 已经导入过它**（32 个对象全解析、无报错，见 §10 顶上的记录）。
-7. **按键 / 门控调试用面板的「覆盖」按钮**（2026-09-27 加）：`参数输出` 栏每行四个按钮（不覆盖 / -1 / 0 / 1）
-   + 整栏一个「清空覆盖（N）」。走会话 `SetPreview`，在生产逻辑之后生效 ⇒ 面板 / 影子树 / 角色 Hub 一致。
-6. **鼓腮与吐舌分左右**，各出一对 HQ 轴（`HQCheekPuffLeft/Right`、`HQTongueLeft/Right`，契约 HQ 39 → 43），
-   树名/轴段词按 [命名权威](FACE_TRACKING_NAMING.md)（树族不再用 `M01` 那套编号）。
+---
 
-**待定**：
+## 3. 每根轴：中间层输出行、公式、修饰符
 
-1. **表情门的名字**（已用 `Smile` / `Angry` 两个）与第一批到底要几个表情 —— 只影响命名，不影响结构。
-2. **采样点密度**（§6/§10 的建议值 3×3 / 3×2 / 2×2）—— 你填动画时定，本文只是起点建议。
-3. **表情开关来源**先接哪个（VTS API 适配器 / 本地按键 / 等 VB 输出）？**手机 `Hotkey` 那条已经废了**（实测恒 −1）。
-4. **1D 树的孩子是"子树"这件事没实测**（§3.1 末）—— 搭副本那次一起验：不通就换 §3.1 的兜底形状（Direct 兄弟 + 中间层补权重）。
+**轴参数名 = profile 输出行的 `parameter` 名**（同名，都在 `Ho/Drive/…` 下）。中间层每帧按名字写进控制器；
+控制器里没有的名字会被静默跳过，所以**面板「参数输出」栏里这 37 行一个都不该显示"不在控制器里"** —— 那是最快的接线自检。
 
-下一步：照 §10 手搭骨架（空 Motion + 槽位占位）→ 按 §9 改土豆那份配置 → 跑"名字全命中"的验收（§11）。
+### 3.1 逐根轴的口（37 行里的 28 根轴 + 5 个区域门 + 4 条切片）
+
+> 「实测范围」留空 = 等 §2.4 的实机结果回填；调曲线/修饰符前先有这一列。
+
+**嘴（10）**
+
+| 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
+| --- | --- | --- | --- | --- | --- |
+| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | — | = 2×`MouthSmile` − 1；**静息 0 = 中性**，−1 撇 · +1 笑 | 待测 |
+| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 恒等 −1…2 | — | 0 闭 … 1 张满；**负侧也有值**（抿嘴比闭还"负"） | 待测 |
+| `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | — | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
+| `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | — | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
+| `Ho/Drive/Mouth/Jaw` | `jawOpen` | 恒等 0…1 | — | 0 闭 … 1 张满；`MouthJaw` 表的主轴 | 待测 |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 恒等 0…1 | — | 下颌前伸；**现在树里只用了 0** | 待测 |
+| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | 恒等 −2…2 | — | **双向**：−1 噘嘴 … +1 展宽 | 待测 |
+| `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | 恒等 −2…2 | — | **双向**：+1 偏左（按表达式）… −1 偏右 | 待测 |
+| `Ho/Drive/Mouth/TongueL` | `tongueOut` | 恒等 0…1 | — | 舌左；**现在两侧同跟单侧原值** | 待测 |
+| `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | — | 舌右；同上 | 待测 |
+
+**眼睑 / 注视（8）**
+
+| 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
+| --- | --- | --- | --- | --- | --- |
+| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | 恒等 −1…1 | — | −1 睁大 · **0 中性** · +1 闭 | 待测 |
+| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 恒等 0…1 | — | 0 不眯 … 1 眯满 | 待测 |
+| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | 恒等 −1…1 | — | 同上（右） | 待测 |
+| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 恒等 0…1 | — | 同上（右） | 待测 |
+| `Ho/Drive/Gaze/Left/X` | `EyeLeft_x` | 恒等 −1…1 | — | 左眼水平；手机自己发的标量，**不重算** | 待测 |
+| `Ho/Drive/Gaze/Left/Y` | `EyeLeft_y` | 恒等 −1…1 | — | 左眼垂直 | 待测 |
+| `Ho/Drive/Gaze/Right/X` | `EyeRight_x` | 恒等 −1…1 | — | 右眼水平 | 待测 |
+| `Ho/Drive/Gaze/Right/Y` | `EyeRight_y` | 恒等 −1…1 | — | 右眼垂直 | 待测 |
+
+**眉（4）**
+
+| 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
+| --- | --- | --- | --- | --- | --- |
+| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | 恒等 −2…2 | — | **0 = 静息**，−1 压眉 · +1 抬眉；VB 那条掺了偏嘴联动（说话时眉会动一点） | 待测 |
+| `Ho/Drive/Brow/Left/InnerUp` | `browInnerUp` | 恒等 0…1 | — | 内眉抬起 | 待测 |
+| `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 恒等 −2…2 | — | 同上（右） | 待测 |
+| `Ho/Drive/Brow/Right/InnerUp` | `browInnerUp` | 恒等 0…1 | — | 同上（两侧同跟一根） | 待测 |
+
+**颊 / 鼻（6）**
+
+| 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
+| --- | --- | --- | --- | --- | --- |
+| `Ho/Drive/Cheek/Left/Squint` | `cheekSquintLeft` | 恒等 0…1 | — | 左颊上提 | 待测 |
+| `Ho/Drive/Cheek/Right/Squint` | `cheekSquintRight` | 恒等 0…1 | — | 右颊上提 | 待测 |
+| `Ho/Drive/Cheek/Left/Puff` | `cheekPuff` | 恒等 0…1 | — | 左鼓腮；**分侧是预留的**，现在两侧同跟 | 待测 |
+| `Ho/Drive/Cheek/Right/Puff` | `cheekPuff` | 恒等 0…1 | — | 右鼓腮；同上 | 待测 |
+| `Ho/Drive/Nose/Left/Sneer` | `noseSneerLeft` | 恒等 0…1 | — | 左鼻翼上提 | 待测 |
+| `Ho/Drive/Nose/Right/Sneer` | `noseSneerRight` | 恒等 0…1 | — | 右鼻翼上提 | 待测 |
+
+**区域门（5）与切片权重（4）** —— 这两组不是"手感轴"，调它们是改结构：
+
+| 参数 | 表达式 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}` | **空**（常量行） | `1` | 区域门：调小 = 让这块回到启动姿势。**常量行不过曲线**（`HoFaceAnimationSession.cs:316`：走 `defaultValue`，不调 `Transform`），写 1 就是 1；但**修饰符照走**（想让门慢慢推上去可以给它加 Smooth） |
+| `Ho/Drive/Slice/MouthCore/{Funnel0Press0, Funnel1Press0, Funnel0Press1, Funnel1Press1}` | `(1−f)(1−p)` / `f(1−p)` / `(1−f)p` / `fp`（f、p 都是**内联**的 `Funnel` / `Press` 公式） | `0` | Funnel × Press 双线性切片，**四条和恒为 1**。树里**还没接**（§4） |
+
+`Ho/Drive/Gate/Expr/*`（`Smile` / `Angry`）**故意一行都不写**：它属于驱动"按键"的那一方。
+
+### 3.2 稳定化：修饰符（现在一条都没有）
+
+**事实**：这 37 行**连 `modifiers` 字段都没有**（= 一条修饰符都没挂）。而同一份 profile 的 90 行出口里有 **23 行带 `smooth`**，
+时间常数是**逐行自己定的**（VB 的形状：每路一个手感）：
+
+| 量级 | 谁在用 |
+| --- | --- |
+| 0.007 s | 眼（`EyeLeftX/Y`、`EyeRightX/Y`、`EyeOpenLeft/Right`）、`MouthSmile`、`MouthX`、`MouthOpen`、`MouthFunnel`、`MouthPucker`、`MouthShrug`、`MouthPressLipOpen` |
+| 0.009 – 0.011 s | `Brows` 0.009、`FacePositionZ` 0.011 |
+| 0.010 / 0.015 / 0.018 s | `FacePositionX/Y` 0.010、`BrowInnerUp` 0.015、`BrowLeftY`/`BrowRightY` 0.018 |
+| 0.042 s | `FaceAngleX/Y/Z`（头姿最重，抖动最明显） |
+
+**候选做法**（按"轴也走同一套逐行手感"）：给每根轴加 `smooth`，量级照上表同部位的取值起步；抖得厉害的轴
+（`Gaze/*`、`Lid/*/BlinkWide`、`Cheek/*`）先用 0.007–0.012，观察"跟手 vs 抖"的取舍。写法：
+
+```json
+"modifiers": [ { "kind": "smooth", "seconds": 0.012, "steps": [] } ]
+```
+
+* `kind`：`smooth`（时间常数，`seconds`）/ `steps`（维持：`steps[]` = `{trigger, target, hold, threshold}`，按 trigger 升序）/ `delay`（枚举上写着"未实现"，但**两侧不一致**：Unity 侧真的按每行 FIFO 延迟了、mod 侧会跳过它 —— 见[分工现状核对](FACE_PIPELINE_STATUS_2026_09_26.md) §3.2。要两端一致就先别用 `delay`）。
+* 多个修饰符**按列表顺序叠加**。
+* 编辑入口：「配置文件」窗口（`HoUnityTools/面捕/配置文件`）选中那一行，右边就是表达式 / 曲线 / 修饰符。
+  调试面板的「参数输出」栏是**只读**的观察面。
+* ⚠️ **出口行带平滑 ≠ 轴被平滑**：两批行各自独立求值（轴行不引用出口行），现在那 23 条 `smooth` 只作用在出口上。
+  要轴稳，就得**在轴上再挂一遍**（数值可以照同部位抄）。
+
+**调的时候必须知道的四条**：
+
+1. **曲线是夹的、不外推**（`HoFaceCurve.Transfer`，`HoFaceMiddleware.cs:15`：范围之外按端点算）：想留住负半边或超过 1 的轴，必须用宽曲线 ——
+   现在 `Form`/`Open`/`Funnel`/`Pucker`/`X`/`Press`/`Brow*Y` 都是 `±2` 就是为了这个；改成默认 `0…1` 会把负半边**压平**，
+   表情会突然变钝。`Lid/*/BlinkWide` 是 `−1…1`（天然含负侧）。
+2. **区域门是常量行，不过曲线**：调它的曲线没有效果，要改就改 `defaultValue`（修饰符仍然生效）。
+3. ⚠️ **改 `Funnel` / `Press` 的公式或修饰符时，4 条切片行的内联副本要跟着改**：输出行之间**不能互相引用**
+   （求值器只查输入行），所以切片行是把两条公式**抄了一遍**内联算的。只改轴不改切片 = 切片权重与轴不同步 ——
+   这类漂移在动画里表现为"条件姿势的权重和轴对不上"，很难查。**要么两处一起改，要么先让切片行引用轴（需要改求值链）**。
+4. `Gate/Expr/*` 中间层不写 = 谁都能写它（VTS API / 键盘 / 别的脚本），我们不锁死它。
+
+---
+
+## 4. 下一步
+
+按依赖顺序（✅ = 已完成；后面标了谁做）：
+
+1. **实机测 28 根轴的灵敏度**（§2.4），把结果回填 §3 的「实测范围」列 —— *你做，需要手机 + 进 Play*。
+2. **按实测结果给 37 行加修饰符 / 修曲线**（§3.2）—— 目标：跟手但不抖，且负半边/越界值没被压平。*你定数值，我可以先按同部位量级铺一版草稿。*
+3. **姿势烘焙工具**（*我做*）：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）存成**以槽位命名的多键片段**，
+   文件名 = §2.2 的槽位名。现有 `HoBlendShapeClipBuilder` 只能一键一片段，填不了采样点。**排在动画前面。**
+4. **1D 树 + 子树嵌套实测**（*你跑、我看日志*）：第一次真跑起来时确认 ① 1D 树两个孩子都是子树时段内插值是否照旧，
+   ② 4 层嵌套（根 Direct → 区域 Direct → 1D → 2D）有没有额外代价。不通就换兜底形状：主版与副本做成同一 Direct 下的
+   两个兄弟，权重用 `Gate/Expr/<名>` 与它的补（补值由中间层多写一行）。
+5. **切片接线**（*等条件姿势*）：`MouthCoreFunnel` / `MouthCorePress` / `FunnelPress` 三张同级表 + `MouthCore` 自己挂
+   `Slice/MouthCore/Funnel0Press0`。**没做的切片必须复用基础片段**，否则权重和不足 1 会掺进启动姿势。
+6. **表情门来源选一个**（§1 第 11 项）：① VTS 公开 API（`ExpressionActivation` / `HotkeyTrigger`）适配器；
+   ② 本地按键（面板覆盖 / Warudo 官方键盘节点写同一个参数）；③ VB 若把表情输出成线。
+7. **Warudo 侧补上**（*我*）：按新控制器重建 `hoface-controller-test.bundle`（现在那份 09-25 的不含这 40 个口），
+   profile 沙箱副本已经是最新，不用再拷。
+8. **接线自检**（随时可跑）：面板「参数输出」栏里这 37 行**一个都不该显示"不在控制器里"**；槽位"缺哪些动画"能在
+   「详情」栏列出来；`.research/check-controller.ps1` 退出码 0。

@@ -1,4 +1,4 @@
-﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
+# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
@@ -7,7 +7,7 @@
 分工：**42 个树名的清单**由本文 §2 与 [契约表 E2](VTS_HIGH_QUALITY_FACE_CONTRACT.md)（机器可读版在
 [配套目录](VTS_HIGH_QUALITY_FACE_CATALOG.json) 的 `tree_families`）共同表达；
 **轴的公式与来源**在 [契约表 C/D](VTS_HIGH_QUALITY_FACE_CONTRACT.md) 与 [参数空间](VTS_FACE_PARAMETER_SPACES.md)；
-**这一版控制器要做哪些树**在 [控制器 2D 规划](VTS_HQ_CONTROLLER.md)。
+**这一版控制器要做哪些树**在 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md)（§2 是已落地的树与叶子语义）。
 
 ## 1. 规则
 
@@ -88,7 +88,7 @@
 | 表情门 | `Ho/Drive/Gate/Expr/<表情名>`（`Smile` / `Angry` / `Wink`…）；**默认 0，中间层不写它** |
 
 一个门可以同时驱动多张表的副本（`Smile` 同时改嘴、眼睑、眉 ⇒ 三棵 1D 树共用一个参数）。
-第一版给 `MouthCore`、`LidL`/`LidR`、`BrowCoreL`/`BrowCoreR` 做副本，见 [控制器 2D 规划](VTS_HQ_CONTROLLER.md) §4。
+第一版给 `MouthCore`、`LidL`/`LidR`、`BrowCoreL`/`BrowCoreR` 做副本（已在骨架里），见 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §2.1。
 
 ## 4. 参数、门、切片
 
@@ -160,5 +160,6 @@
 * **土豆那份控制器**（`PTP_CTR_Face_ARKit.controller`）里的树还是老形状：根 Direct `Ho/00 Drive Tree`
   + `LidL`/`LidR`（**名字恰好合规**）+ `EyeRegion`/`LipRegion`（区域名待换成 `EyeLeftRegion`/`MouthRegion`），
   叶子参数是**裸 ARKit 名**（`jawOpen`、`eyeBlinkLeft`…）。新控制器按本文重建，老的那份不动。
-* **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）——
-  改造清单见 [控制器 2D 规划](VTS_HQ_CONTROLLER.md) §9。
+* **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）
+  —— **37 行 `Ho/Drive/*` 轴已经加进 profile 了**（逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+  [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3），出口那 90 行按原样保留。
