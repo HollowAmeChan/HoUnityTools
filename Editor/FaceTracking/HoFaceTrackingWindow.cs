@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -700,6 +701,115 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         // ══════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════
+        /// <summary>
+        /// **「记 5 秒」**：把一段时间内每行的 min / avg / max / 波动 记下来，到点统一打一条 Console。
+        ///
+        /// 为什么不是单帧快照：实测同一个动作**逐帧差很多**（用户原话"其实不是很稳定"），
+        /// 单帧既定不了阈值、也判断不了"两个动作分不分得开" —— 要比的是**区间**。
+        ///
+        /// 采样挂在 `EditorApplication.update` 上（不依赖窗口重绘）；窗口关掉 / 域重载会丢订阅，
+        /// 所以 `StopRecording` 里先退订，另外有 `RecordSeconds + 1` 的硬超时兜底。
+        /// </summary>
+        private const double RecordSeconds = 5.0;
+        private bool recording;
+        private double recordStartedAt;
+        private double recordElapsed;
+        private readonly List<string> recordNames = new List<string>();
+        private readonly List<float> recordMin = new List<float>();
+        private readonly List<float> recordMax = new List<float>();
+        private readonly List<double> recordSum = new List<double>();
+        private readonly List<int> recordCount = new List<int>();
+        private int recordSamples;
+
+        private void StartRecording(List<HoFaceOutput> rows)
+        {
+            recordNames.Clear();
+            for (int i = 0; i < rows.Count; i++)
+                if (rows[i] != null && !string.IsNullOrEmpty(rows[i].parameter)) recordNames.Add(rows[i].parameter);
+
+            recordMin.Clear(); recordMax.Clear(); recordSum.Clear(); recordCount.Clear();
+            for (int i = 0; i < recordNames.Count; i++)
+            {
+                recordMin.Add(float.PositiveInfinity);
+                recordMax.Add(float.NegativeInfinity);
+                recordSum.Add(0.0);
+                recordCount.Add(0);
+            }
+            recordSamples = 0;
+            recordElapsed = 0.0;
+            recordStartedAt = EditorApplication.timeSinceStartup;
+            recording = true;
+            EditorApplication.update -= RecordTick;
+            EditorApplication.update += RecordTick;
+            Repaint();
+        }
+
+        private void StopRecording(bool print)
+        {
+            if (!recording) return;
+            recording = false;
+            EditorApplication.update -= RecordTick;
+            if (print) PrintRecord();
+            Repaint();
+        }
+
+        private void RecordTick()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            recordElapsed = now - recordStartedAt;
+
+            var session = HoFaceInputHub.Session(settings);
+            if (session == null || session.Compiled == null) { StopRecording(false); return; }
+
+            for (int i = 0; i < recordNames.Count; i++)
+            {
+                float v = session.OutputValue(recordNames[i]);
+                if (float.IsNaN(v)) continue;
+                if (v < recordMin[i]) recordMin[i] = v;
+                if (v > recordMax[i]) recordMax[i] = v;
+                recordSum[i] += v;
+                recordCount[i]++;
+            }
+            recordSamples++;
+
+            if (recordElapsed >= RecordSeconds) StopRecording(true);
+            else Repaint();   // 让按钮上的倒计时动起来
+        }
+
+        private void PrintRecord()
+        {
+            // 只列"动过"的行（波动 > 0.01 或 均值偏离 0 超过 0.01），按**波动从大到小**排 ——
+            // 这样最能区分动作的线自然排在最上面。
+            var moving = new List<int>();
+            for (int i = 0; i < recordNames.Count; i++)
+            {
+                if (recordCount[i] == 0) continue;
+                double avg = recordSum[i] / recordCount[i];
+                float span = recordMax[i] - recordMin[i];
+                if (span > 0.01f || Mathf.Abs((float)avg) > 0.01f) moving.Add(i);
+            }
+            moving.Sort((a, b) => (recordMax[b] - recordMin[b]).CompareTo(recordMax[a] - recordMin[a]));
+
+            var text = new StringBuilder();
+            text.Append("[Ho 面捕统计] ").Append(DateTime.Now.ToString("HH:mm:ss"))
+                .Append("  窗口 ").Append(RecordSeconds.ToString("F1")).Append("s · 采样 ").Append(recordSamples)
+                .Append(" 帧 · 动过 ").Append(moving.Count).Append(" / ").Append(recordNames.Count).Append(" 行");
+            text.Append("\n参数名  min  avg  max  波动");
+            for (int k = 0; k < moving.Count; k++)
+            {
+                int i = moving[k];
+                double avg = recordSum[i] / recordCount[i];
+                text.Append('\n').Append(recordNames[i])
+                    .Append("  ").Append(recordMin[i].ToString("F4"))
+                    .Append("  ").Append(((float)avg).ToString("F4"))
+                    .Append("  ").Append(recordMax[i].ToString("F4"))
+                    .Append("  ").Append((recordMax[i] - recordMin[i]).ToString("F4"));
+            }
+            text.Append("\n[Ho 面捕统计] 完（没动的行已省略；整段复制即可）");
+            Debug.Log(text.ToString());
+        }
+
         /// <summary>
         /// **纯调试**：中间层**求出来的值** —— 逐输出行摊开（参数名 / 值 / 表达式）。
         ///
@@ -718,7 +828,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             var session = HoFaceInputHub.Session(settings);
             var rows = settings.Outputs();
-
             // ⚠️ **没有会话 ≠ 参数不在控制器里**（2026-09-26 修）：会话没起时 `Compiled` 是 null，
             // 那时"查不到这个参数"只说明没人问过控制器，不是"名字对不上"。以前这两件事混在一起，
             // 表现是"没点开始驱动"时那一栏直接报 `不在控制器里 94`（红黄一片），把人往错的方向带。
@@ -774,30 +883,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     // 按键 / 门控调试（`Ho/Drive/Gate/Expr/*`）就是靠它。
                     int overrides = session != null ? session.PreviewCount : 0;
                     HoConstraintEditorControls.Flex();
-                    // ── 拍快照（2026-09-27 加）───────────────────────────────────
-                    // 标定用：**做个动作 → 点一下 → Console 里就是那一帧所有"在动的行"**，
-                    // 一行一条 `参数名 = 值`，直接整段复制发给对方即可。
-                    // 为什么不做成"看几行"：判据常常在我们没盯着的那根线上（卷唇串扰就是例子）。
+                    // ── 记 5 秒（2026-09-27 加，替代早先的"拍快照"）────────────────
+                    // 标定用：**做住一个动作 5 秒 → 到点自动出统计**（每行 min / avg / max / 波动）。
+                    // 为什么不是单帧快照：实测发现读数**不稳**（同一动作逐帧差很多），
+                    // 单帧既不能定阈值、也判断不了"两个动作分不分得开" —— 要比的是**区间**。
+                    // 采样挂在 `EditorApplication.update` 上（不靠窗口重绘），记录期间按钮显示进度、可取消。
+                    bool canRecord = hasSession && session != null && named > 0;
                     if (HoConstraintEditorControls.Button(
-                            "拍快照",
-                            "把这一栏现在**所有非零行**打到 Console（一行一条，复制整段即可）—— 标定/取证用：做个动作、点一下",
-                            hasSession && named > 0, 76.0f)
-                        && session != null)
+                            recording ? "记录中 " + (RecordSeconds - recordElapsed).ToString("F1") + "s（点此取消）" : "记 5 秒",
+                            "做住一个动作，点这个 —— 记 5 秒后把**每行的 min / avg / max / 波动**打到 Console"
+                            + "（按波动排序，一行一条，整段复制即可）。\n为什么记 5 秒：单帧读数不稳，要比的是区间。",
+                            canRecord, 140.0f))
                     {
-                        var snap = new StringBuilder();
-                        snap.Append("[Ho 面捕快照] ").Append(DateTime.Now.ToString("HH:mm:ss"))
-                            .Append("  （只列 |值| > 0.005 的行）");
-                        int shown = 0;
-                        for (int i = 0; i < rows.Count; i++)
-                        {
-                            if (rows[i] == null || string.IsNullOrEmpty(rows[i].parameter)) continue;
-                            float v = session.OutputValue(rows[i].parameter);
-                            if (float.IsNaN(v) || Mathf.Abs(v) <= 0.005f) continue;
-                            snap.Append('\n').Append(rows[i].parameter).Append(" = ").Append(v.ToString("F4"));
-                            shown++;
-                        }
-                        snap.Append("\n[Ho 面捕快照] 完（").Append(shown).Append(" 行非零 / 共 ").Append(named).Append(" 行）");
-                        Debug.Log(snap.ToString());
+                        if (recording) StopRecording(false);
+                        else StartRecording(rows);
                     }
                     if (HoConstraintEditorControls.Button(
                             overrides > 0 ? "清空覆盖（" + overrides + "）" : "清空覆盖",
