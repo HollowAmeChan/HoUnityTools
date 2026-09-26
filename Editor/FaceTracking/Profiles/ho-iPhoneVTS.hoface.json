@@ -2772,7 +2772,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.03..0.06 是斜坡；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
+                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.02..0.05 是斜坡（斜率 1.667）；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Funnel",
@@ -2929,15 +2929,21 @@
                             "expression":  "(mouthRollUpper + mouthRollLower) / 2",
                             "defaultValue":  0,
                             "curve":  {
-                                    "keys":  [
-                                                { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                    ]
-                            },
+                                          "keys":  [
+                                                       { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                       { "t": -0.05, "v": -0.05, "inT": 1, "outT": 1.667 },
+                                                       { "t": -0.02, "v": 0, "inT": 1.667, "outT": 0 },
+                                                       { "t": 0.02, "v": 0, "inT": 0, "outT": 1.667 },
+                                                       { "t": 0.05, "v": 0.05, "inT": 1.667, "outT": 1 },
+                                                       { "t": 0.18, "v": 0.18, "inT": 1, "outT": 1 },
+                                                       { "t": 0.45, "v": 0.45, "inT": 1, "outT": 1 },
+                                                       { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                                   ]
+                                      },
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- contract HQ*LipRoll collapsed to ONE axis (upper and lower lines move together on this device, so a 2D table wastes a dimension); it means ONE thing: how hard the teeth bite down while the lips tuck in (upper/lower split is not needed). MEASURED 2026-09-27: lips tucked without teeth ~= 0.18 (this is the anime cat-mouth pose), strongest teeth-bite = 0.45 -- the axis never reaches 1, so the 1D table ticks are re-scaled to 0 / 0.18 / 0.45, and anything above 0.45 saturates on the bite pose"
+                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- contract HQ*LipRoll collapsed to ONE axis (upper and lower lines move together on this device, so a 2D table wastes a dimension); it means ONE thing: how hard the teeth bite down while the lips tuck in (upper/lower split is not needed). 死区（2026-09-27 用户实测）：|值| <= 0.02 归 0（手机静息时就在这个区间抖），0.02..0.05 斜坡、再外面恒等 —— 和 Mouth/Open 同一条形状。MEASURED: lips tucked without teeth ~= 0.18, strongest teeth-bite = 0.45 (the axis never reaches 1) => 1D ticks 0 / 0.18 / 0.45, anything above 0.45 saturates on the bite pose. WHY IT IS ITS OWN TABLE (user, 2026-09-27): the roll is still detected while the mouth is OPEN -- the reading drops as the mouth opens but the 0.18 tick stays reachable, so this axis must be live in both mouth states; closed-mouth roll is the cleanest cat mouth (0.18)."
                         },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
