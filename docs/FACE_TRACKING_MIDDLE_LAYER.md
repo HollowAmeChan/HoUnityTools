@@ -123,16 +123,18 @@
 **为什么不需要环检测 / 拓扑排序**：只在"上面"找 ⇒ 依赖图**按构造就是 DAG**，
 行序本身就是拓扑序 —— 环在语法上不可能出现。
 
-**例子**（风格化门）：
+**例子**（风格化门，**已落地**：`Ho/Style/*` —— 见[控制器 §5.6](VTS_HQ_CONTROLLER.md)）：
 
 ```text
-第 1 行  Ho/Drive/Mouth/Stylized      = max(鼓嘴判据, 倒V判据, 苦嘴判据)     ← 都是普通表达式
-第 2 行  Ho/Drive/Gate/MouthStyle     = 1 - clamp(out("Ho/Drive/Mouth/Stylized"), 0, 1)
-第 3 行  Ho/Drive/Gate/Mouth          = 常量 1    ← 原来那个区域门不动
+第 1 行  Ho/Style/InvertedV/Detect = mouthPucker + 维持(...)              ← 连续读数 + 迟滞
+第 2 行  Ho/Style/InvertedV/Drive  = clamp(out("…/Detect") * out("…/Auto") + HoManualInvertedV, 0, 1)
+第 3 行  Ho/Style/Any              = clamp(out(三个槽相加), 0, 1) + 平滑   ← 写一次、冻结
+（控制器那侧迟早加 `Ho/Drive/Gate/MouthStyle = 1 - out("Ho/Style/Any")`）
 ```
 
-⇒"关掉张嘴笑那几棵树"就是把它们挂的权重参数从 `Ho/Drive/W/One` 换成
-`Ho/Drive/Gate/MouthStyle`（**控制器结构那一侧的事**，见[控制器 §5.6](VTS_HQ_CONTROLLER.md)）。
+⚠️ **`Ho/Style/*` 是"中间层内部行"**：只被别的输出行读，**不写控制器参数**（所以这批没动控制器资产）。
+`Ho/Drive/*` 才是**契约**（写进 Animator 参数的那一批）。面板「参数输出」栏给内部行标一句
+灰字「内部行 ⇒ 不写控制器」，且**不算进**"不在控制器里"那个警报 —— 那是留给名字写错的行。
 
 ⚠️ **顺序即语义**：把这个门放在被它引用的行**上面**，它就会（正确地）被判无效、恒输出默认值 ——
 面板会红给你看，而不是悄悄算成 0。

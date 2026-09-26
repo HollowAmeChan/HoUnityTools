@@ -25,7 +25,7 @@
 | 2 | **参数表 42 个** | ✅ | **4 区域门** = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、31 根轴 = `0`、4 条切片权重 = `0` |
 | 3 | **树形 25 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ **4 个区域 Direct**（嘴 / 眼 / 眉 / 鼻）→ **9 张 2D 表 + 1 张 1D 表** + 1 张变体表（`MouthCoreRoll`）+ 4 张副本 + 5 棵 1D 开关树。⚠️ 嘴的开关是**轴驱动的变体开关**（在静息嘴 / 猫嘴版之间分叉）；注视与颊的树已删（朝向交给 Warudo 的 LookAt + IK、颊二次元表现不了）、**前伸的树已删**（线降级成辅助变量，§5.4.1） |
 | 4 | **槽位 86 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。⚠️ **`MouthCore` / `MouthJaw` 两张表的坐标是用户在 Animator 窗口里手工拉的**（各 8 / 6 个点，见 §5.4.3）；`Roll` 是开关阈值 `0.02 / 0.12`（√(上×下) 判据 + 死区 + 下颌增益 + 噘嘴门） |
-| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = 打包暂存副本（`.research/pkgcopy`）；**67 输入 / 129 输出**（90 出口 + 39 轴行）；**3 根轴带死区曲线**（`Mouth/Open` ±0.03、`Mouth/Jaw` ±0.05、`Mouth/JawSide` ±0.05，§3.1） |
+| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = 打包暂存副本（`.research/pkgcopy`）；**68 输入 / 135 输出**（90 出口 + 39 轴行 + 6 条 `Ho/Style/*` 内部行；输入里多一条 `HoManualInvertedV` 是 Warudo append 的手动增量入口 —— 设备线仍是 67）；**3 根轴带死区曲线**（`Mouth/Open` ±0.03、`Mouth/Jaw` ±0.05、`Mouth/JawSide` ±0.05，§3.1） |
 | 6 | **轴的修饰符** | 🟡 **31 根轴已挂 `smooth`**（含没有树的注视/颊那几根）（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` / `Mouth/Jaw` / `Mouth/JawSide` 带死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
 | 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
@@ -1039,18 +1039,37 @@ coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为�
 **不许再侵入别的 gate 的表达式**。
 
 ⭐ **"不再侵入"的具体做法 = 固定槽**：共享的那两行**只写一次**，把三个形态的槽**从第一天就都写进去**
-（还没做的先当**常量 0 行**）：
+（还没做的先当**常量 0 行**）——**2026-09-27 已落地**（名字见下：内部行走 `Ho/Style/*`，
+**不写控制器**，所以这一批没有动控制器资产）：
 
 ```text
-Mouth/Style/Cheek/Drive      （常量 0，等鼓嘴那棵树做出来再换成真式子）
-Mouth/Style/InvertedV/Drive  = clamp(out("…/InvertedV/Detect") * out("…/InvertedV/Auto") + 增量线, 0, 1) + 平滑
-Mouth/Style/Bitter/Drive     （常量 0，等苦嘴）
-Mouth/Style/Any              = clamp(out("…/Cheek/Drive") + out("…/InvertedV/Drive") + out("…/Bitter/Drive"), 0, 1)
-Gate/MouthStyle              = 1 − out("Mouth/Style/Any")
+Ho/Style/InvertedV/Auto     常量行，默认 1（是否自动触发 —— 作者开关，面板覆盖按钮随时能翻）
+Ho/Style/InvertedV/Detect   = mouthPucker + 维持(trigger 0.8 / target 1 / threshold 0.05 / hold 0.1)
+Ho/Style/InvertedV/Drive    = clamp(out("…/Detect") * out("…/Auto") + HoManualInvertedV, 0, 1)
+Ho/Style/Cheek/Drive        常量 0（鼓嘴那棵树还没做 —— 槽先留着）
+Ho/Style/Bitter/Drive       常量 0（苦嘴同上）
+Ho/Style/Any                = clamp(三条 Drive 相加, 0, 1) + 平滑 0.2s        ← 写一次、冻结
 ```
 
+⚠️ **命名分了两层**（这一条是"不许侵入控制器"的直接后果）：
+* **`Ho/Drive/*`** = **契约**（写进控制器的 Animator 参数，混合树消费的就是这些）；
+* **`Ho/Style/*`** = **中间层内部行**：只被别的输出行用 `out("…")` 读，**不写控制器**。
+  面板「参数输出」栏对它们只标一句灰字「内部行 ⇒ 不写控制器」，**不计入** `不在控制器里 N`
+  —— 那个警报是留给"名字真的写错了"的（`HoFaceTrackingWindow.IsInternalRow`）。
+⇒ 于是**控制器那一步可以等**：等倒V 的树做出来，再加一行
+`Ho/Drive/Gate/MouthStyle = 1 − out("Ho/Style/Any")` 并接线重新生成。**在那之前一行控制器参数都不用改。**
+
+⚠️ **`Detect` 的 0.8 是算出来的占位值**（实测锚点：静息 ≤0.43 / 挤眼 ≤0.62 / 真噘嘴 0.975）
+—— 等「静置 + 噘嘴拉满」两次 5 秒到手就把它收掉（改一个数，外加台架里那一条）。
+
+⭐ **手动增量每形态一根**（别用一根全局的）：`Ho/Manual/InvertedV` 的**线名**就是
+Warudo 在 VTS 接收器之后 append 的那个输入；profile 里它是一行**输入行**
+（`parameter = expression = HoManualInvertedV`，`defaultValue = 0`）⇒ 没人 append 时取 0
+（"没按就不常开"）。⚠️ 名字要写成**标识符形状**（`HoManualInvertedV`）—— 表达式里的变量名
+不能带 `/`，所以 hub 键与规范名取同一个拼写。
+
 代价说清楚：**2 条恒 0 的常量行**（在"不许发明死行"的规矩下这是**故意的例外**，
-买的是"以后加形态一个字都不用改共享表达式"）。`Gate/MouthStyle` 与 `Style/Any` 从此**冻结**。
+买的是"以后加形态一个字都不用改共享表达式"）。`Style/Any` 从此**冻结**。
 **行块布局（"靠上"这件事现在是硬约束）**
 
 `out("…")` 只能引用**上面**的行 ⇒ **判据必须在门之上**。而**行序现在就是语义**，

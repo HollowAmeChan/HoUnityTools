@@ -603,6 +603,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
         }
 
+        /// <summary>
+        /// **中间层内部行**（`Ho/Style/*`）：这些行只被**别的输出行**用 `out("…")` 读，**不写控制器**
+        /// （控制器里没有、也不需要对应的 Animator 参数 —— 它们不进混合树）。
+        ///
+        /// 为什么值得单独分一类：`参数输出` 那栏原来把「不在控制器里」一律画成警告 ——
+        /// 而那是**给"名字对不上"用的警报**。内部行天生不在控制器里，全画成警告等于让那个警报贬值
+        /// （真正拼错名字的行会淹在里面）。所以内部行只标一句灰字「内部行 ⇒ 不写控制器」，
+        /// 也不算进那个 `不在控制器里 N` 的计数。
+        /// ⚠️ 判据是**命名**（`Ho/Style/` 前缀），不是"查不到" —— 拼错名字的行照旧要报警告。
+        /// </summary>
+        private static bool IsInternalRow(string parameter) =>
+            !string.IsNullOrEmpty(parameter) && parameter.StartsWith("Ho/Style/", StringComparison.Ordinal);
+
         private static string ModifierText(HoFaceOutput row)
         {
             if (row.modifiers == null || row.modifiers.Count == 0) return "—";
@@ -833,11 +846,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 表现是"没点开始驱动"时那一栏直接报 `不在控制器里 94`（红黄一片），把人往错的方向带。
             bool hasSession = session != null && session.Compiled != null;
 
-            int named = 0, live = 0, missing = 0;
+            int named = 0, live = 0, missing = 0, internalRows = 0;
             for (int i = 0; i < rows.Count; i++)
             {
                 if (rows[i] == null || string.IsNullOrEmpty(rows[i].parameter)) continue;
                 named++;
+                if (IsInternalRow(rows[i].parameter)) { internalRows++; continue; }
                 bool inController = !hasSession
                     || session.Compiled.floatParameters.Contains(rows[i].parameter);
                 if (!inController) missing++;
@@ -848,6 +862,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             string summary = named == 0
                 ? "没有输出行"
                 : named + " 行 · 非零 " + live
+                  + (internalRows > 0 ? " · 内部 " + internalRows : "")
                   + (hasSession
                       ? (missing > 0 ? " · **不在控制器里 " + missing + "**" : "")
                       : " · **会话没起**");
@@ -943,7 +958,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     bool overridden = session != null && session.TryGetPreview(row.parameter, out overrideValue);
                     float value = session != null ? session.OutputValue(row.parameter) : float.NaN;
                     bool has = !float.IsNaN(value) && session != null;
-                    bool inController = !hasSession
+                    bool inController = IsInternalRow(row.parameter)
+                        || !hasSession
                         || session.Compiled.floatParameters.Contains(row.parameter);
 
                     using (HoConstraintEditorControls.Row(true))
@@ -998,7 +1014,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         GUI.Label(HoConstraintEditorControls.NextFlexible(60.0f), row.expression ?? "",
                             HoConstraintEditorTheme.Caption);
 
-                        if (!inController)
+                        if (IsInternalRow(row.parameter))
+                            GUI.Label(HoConstraintEditorControls.Next(110.0f), "内部行 ⇒ 不写控制器",
+                                HoConstraintEditorTheme.Caption);
+                        else if (!inController)
                             GUI.Label(HoConstraintEditorControls.Next(110.0f), "不在控制器里 ⇒ 不写",
                                 InlineWarning());
                     }

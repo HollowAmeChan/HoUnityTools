@@ -578,7 +578,15 @@
                                                   }
                                               ]
                                  }
-                   }
+                   },
+                    {
+                        "parameter":  "HoManualInvertedV",
+                        "expression":  "HoManualInvertedV",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "**手动增量的入口**（2026-09-27 用户定）：这一行的线名就是 Warudo 在 VTS 接收器之后 **append 的那个输入** —— 中间层按名字读它，读到就加到倒V 的 Drive 上（「常开」）。⚠️ 没人 append 时它一帧都不来 => 取 defaultValue = 0（正是「没按就不常开」）。每个风格化形态各一根，别用一根全局的（那会让倒V常开顺带把鼓嘴也点着）。"
+                    }
                ],
     "outputs":  [
                     {
@@ -2677,6 +2685,54 @@
                                                ]
                                   },
                         "notes":  "device (identity)"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/Auto",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "风格化槽：倒V 的**自动触发开关**（常量行，1 = 允许自动触发）。⚠️ 作者开关，不期望运行时有人写它；想临时关掉就用「参数输出」的覆盖按钮。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/Detect",
+                        "expression":  "mouthPucker",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05 } ] } ],
+                        "notes":  "倒V 的**判定**：喂进去的必须是**连续读数**（mouthPucker），迟滞交给「维持」（trigger 0.8 / target 1 / threshold 0.05 => 释放 0.75 / hold 0.1s）。⚠️ 0.8 是**算出来的占位值**：实测锚点 静息 <=0.43 / 挤眼 <=0.62 / 真噘嘴 0.975 —— 等「静置 + 噘嘴拉满」两次 5 秒到手再收。⚠️ 0/1 进去迟滞会退化成跟随，所以不能写成 mouthPucker > 0.8。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/Drive",
+                        "expression":  "clamp(out(\"Ho/Style/InvertedV/Detect\") * out(\"Ho/Style/InvertedV/Auto\") + HoManualInvertedV, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "倒V 的驱动 = 自动（判定 × 开关）+ **手动增量**（Warudo 在 VTS 接收器之后 append 的 HoManualInvertedV）。手动那半是纯加法 => 两个都开也不会 2 倍（clamp 到 1）。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/Cheek/Drive",
+                        "expression":  "",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "风格化槽（**固定槽**）：鼓嘴还没做树，先当常量 0 —— 有它是为了让 Style/Any 那条求和式**写一次就冻结**，以后加形态不用改共享表达式。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/Bitter/Drive",
+                        "expression":  "",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "风格化槽（**固定槽**）：苦嘴还没做，先当常量 0。同上。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/Any",
+                        "expression":  "clamp(out(\"Ho/Style/Cheek/Drive\") + out(\"Ho/Style/InvertedV/Drive\") + out(\"Ho/Style/Bitter/Drive\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [ { "kind": "smooth", "seconds": 0.2, "steps": [] } ],
+                        "notes":  "**风格化总门**（内部行）：0 = 没有风格化形态，1 = 有。**平滑只在这一处**（整块「张嘴笑」作为一个单位淡出，判据那边保持脆）。控制器那侧迟早加一行 Ho/Drive/Gate/MouthStyle = 1 - out(\"Ho/Style/Any\")，把 MouthCoreRollSwitch / MouthWidth / MouthCorner 的权重从 W/One 换成它。"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
