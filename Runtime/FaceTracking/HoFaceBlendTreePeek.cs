@@ -25,6 +25,20 @@ namespace Hollow.HoUnityTools.FaceTracking
             + "留空时退一步用**来源正在跑的那个** —— 想对比「资产里的树」与「运行中的树」时，填上资产里的那份。")]
         public RuntimeAnimatorController controller;
 
+        // ── 面板用的只读读数：把"它到底在跟谁、跑的是哪一份"摆到 Inspector 上，而不是只写进日志 ──
+        /// <summary>现在跟随的影子 Animator（没有会话时为 null）。</summary>
+        public Animator BoundSource => boundSource;
+
+        /// <summary>实际跑在这台 Animator 上的 controller（你填的那份，或退一步用来源那份）。</summary>
+        public RuntimeAnimatorController BoundController =>
+            animator != null ? animator.runtimeAnimatorController : null;
+
+        /// <summary>正在抄的 float 参数个数（= 来源与这份 controller 的**参数交集**）。</summary>
+        public int CopiedParameterCount => wanted.Count;
+
+        /// <summary>这一刻有没有正在生效的面捕会话（`HoFaceShadowLink.Active`）。</summary>
+        public static bool HasLiveSession => HoFaceShadowLink.Active != null;
+
         private readonly HashSet<string> wanted = new HashSet<string>(System.StringComparer.Ordinal);
         private readonly Dictionary<string, float> lastWritten = new Dictionary<string, float>(System.StringComparer.Ordinal);
         private Animator animator;
