@@ -1,4 +1,4 @@
-﻿# 面捕设计：已验证的机制层
+# 面捕设计：已验证的机制层
 
 日期：2026-09-25。这份只讲**今天仍然成立**的东西：输入路线、中间层配置的语义、影子台、键的占用表、时钟与线程、验收。
 
@@ -328,7 +328,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `ExitingPlayMode` / `ExitingEditMode` | `Shutdown`：停所有会话、释放 socket（不收的话端口占着，新域绑不上端口）。**如果这一刻还连着，先把 `wantConnected = true` 记下来** | `HoFaceInputHub.cs:291-321` |
 | `EnteredPlayMode` | 清掉"用户停过 / 报错 / 重试"这些状态，立刻 `TryReconnect()`，别让用户看到"未连接" | `:294-301` |
 | `ExitingPlayMode`（宿主） | 再收一次会话：影子对象是 `HideAndDontSave`，不收会留在场景里 | `HoFaceDebugHost.cs:96-103` |
-| `EnteredPlayMode` + `startOnPlay` | 自动开会话（**不会**自动连手机） | `HoFaceDebugHost.cs:105-109` |
+| `EnteredPlayMode` + `startOnPlay` | 自动开会话（**不会**自动连手机）。面板上的入口 = 「对象」段最底下那行布尔开关里的「**自动驱动**」（默认关，`HoFaceDebugSettings.startOnPlay`）；它只等于替你按一下「开始驱动」，连接始终是显式动作 | `HoFaceDebugHost.cs:105-109` |
 | 每帧 | `TryReconnect`：只有在**用户想连着**时才接回来；刚连上给 3 秒宽限（`Thread.IsAlive` 在 `Start()` 之后有一瞬间还是 `false`，免得把刚建好的接收线程掐掉重来）；重试用 2 秒网隔 | `HoFaceInputHub.cs:246-257` |
 | `beforeAssemblyReload` / `quitting` | `Shutdown` | `HoFaceInputHub.cs:74-75` |
 | 接收端 `Dispose` | 停线程（`Join(1000)`）、关 socket、清 `pending` | `HoFaceReceiverBase.cs:252-260` |

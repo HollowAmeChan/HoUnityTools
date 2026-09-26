@@ -62,30 +62,45 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// **拖动调试对象就够，这一栏不用手填** —— 每帧从那个对象推出来，所以它是"自动寻找"，
         /// 不是一个要维护的第二个引用。
         /// </summary>
-        private void DrawHubRow()
+        private void DrawSwitchesRow()
         {
             GameObject character = settings.Character();
             HoFaceSemanticHub hub = FindSemanticHub(character);
 
-            // 两个可选开关 + 灰的只读预览**同一行**：**布尔最左、灰色预览靠右**，文字只留最短的
-            // （说明全进 tooltip）—— 2026-09-27 用户定，这一栏之前太挤。
-            // 「预览混合树」= 把运行中的影子台显示到 Hierarchy：选中它 + Animator 窗口 = 看真身。
+            // 倒数第二行 = **只有布尔开关 + 一个灰的只读预览**：布尔最左、灰色预览靠右，
+            // 文字只留最短的（说明全进 tooltip）—— 2026-09-27 用户定，这一栏之前太挤。
+            // 顺序也是用户定的：预览混合树 / 自动驱动 / 写动态参数。
             using (HoConstraintEditorControls.Row(true))
             {
                 EditorGUI.BeginChangeCheck();
-                bool write = HoConstraintEditorControls.Toggle("写 Hub", settings.writeParameterHub,
-                    "**写动态参数 Hub**（默认关）：打开后把**全部输出行**（含「控制器里没有那些参数」的行）"
-                    + "按名字写进角色 Hub，下一帧生效。\n"
-                    + "调试台自己不需要它（「参数输出」栏看的是同一份值）；Warudo 侧由「HoFace写动态参数」节点写。");
                 bool preview = HoConstraintEditorControls.Toggle("预览混合树", settings.showShadowInHierarchy,
                     "**默认开**：把运行中的影子台 `Ho Face Shadow` 显示到 Hierarchy（不落盘、停止驱动就消失）。\n"
                     + "选中它 → 打开 Animator 窗口 = **正在跑的那棵树**与实时参数（不抄、不镜像）。\n"
                     + "⚠️ Project 里点 controller 资产看到的是**资产本身**（结构 + 参数默认值），不是任何角色的运行状态。\n"
                     + "关掉立刻重新藏回去（正在跑也不用重启驱动）。");
+
+                HoConstraintEditorControls.Gap(8.0f);
+
+                // 这一行就是 `startOnPlay` 的开关。它只做"**开始驱动**"这一件事，
+                // **不会**顺手连手机 —— 连接是显式动作（右下那个按钮），自动连会在你还没看
+                // IP 是否对的时候就先把端口占了。
+                bool autoStart = HoConstraintEditorControls.Toggle("自动驱动", settings.startOnPlay,
+                    "**进播放模式后自动开始驱动**（默认关）。\n"
+                    + "只等于替你按一下「开始驱动」；**不会**自动连接手机 —— 连接始终是显式动作。\n"
+                    + "停止播放 / 退出播放模式时照常交还形态键。");
+
+                HoConstraintEditorControls.Gap(8.0f);
+
+                bool write = HoConstraintEditorControls.Toggle("写动态参数", settings.writeParameterHub,
+                    "**写动态参数 Hub**（默认关）：打开后把**全部输出行**（含「控制器里没有那些参数」的行）"
+                    + "按名字写进角色 Hub，下一帧生效。\n"
+                    + "调试台自己不需要它（「参数输出」栏看的是同一份值）；Warudo 侧由「HoFace写动态参数」节点写。");
+
                 if (EditorGUI.EndChangeCheck())
                 {
-                    settings.writeParameterHub = write;
                     settings.showShadowInHierarchy = preview;
+                    settings.startOnPlay = autoStart;
+                    settings.writeParameterHub = write;
                     HoFaceDebugHost.Save();
                     HoFaceInputHub.Session(settings)?.ApplyShadowVisibility();   // 已经在跑的话立刻生效
                 }
@@ -102,23 +117,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), hub,
                             typeof(HoFaceSemanticHub), true);
                     }
-
-                    // ⚠️ 编辑期 Hub 是**空的**，这是常态（格是运行期由中间层按名字开的），
-                    // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
-                    HoConstraintEditorControls.Caption(Application.isPlaying
-                        ? hub.Count + " 格"
-                        : "格运行期开（编辑期空，正常）");
                 }
-                // **黄字**：只有"打开写 Hub 却没有落点"才是问题；关着时它只是可选件没挂。
+                // **黄字**：只有"打开写 Hub 却没有落点"才是问题；关着时它只是可选件没挂，
+                // 那就什么都不说 —— 这一栏不留"用户提示小字"（2026-09-27 用户定）。
                 else if (settings.writeParameterHub)
                 {
                     Warning(character == null
                         ? "先填「调试对象」"
                         : "写 Hub 开着，但这个对象上没有 HoFaceSemanticHub ⇒ 值没地方落");
-                }
-                else
-                {
-                    HoConstraintEditorControls.Caption(character == null ? "先填「调试对象」" : "（没有 Hub）");
                 }
             }
 
@@ -366,8 +372,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         }
 
                         HoConstraintEditorControls.Flex();
-                        HoConstraintEditorControls.Caption(live == null ? "未启动"
-                            : live.Running ? (live.LastFrameTime > 0 ? live.Packets + " 包" : "等响应") : "已停");
+                        // ⚠️ 右边**不再**写"未启动 / 等响应 / N 包"小字（2026-09-27 用户定）：
+                        // 一行里既有输入框又有状态字，看着挤，而且那个状态在下面「连接」按钮上
+                        // 已经有反馈（连上/断开本身就是结果）。只在**真出错**时才留字。
+                        if (live != null && !live.Running && !string.IsNullOrEmpty(live.Error))
+                            HoConstraintEditorControls.Caption(live.Error);
                     }
                 }
 
@@ -440,29 +449,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
-                // ── 连接：**归第一栏**（"连哪台手机"是对象的事；参数栏纯粹用来看值）──────
-                using (HoConstraintEditorControls.Row())
-                {
-                    HoConstraintEditorControls.Label("连接", HoConstraintEditorTheme.LabelWidth, "按上面那份源列表把接收端拉起来。");
-                    if (HoConstraintEditorControls.Button(connected ? "断开" : "连接", null, !connected, 60.0f))
-                    {
-                        if (connected) HoFaceInputHub.Disconnect();
-                        else HoFaceInputHub.Connect();
-                    }
-
-                    HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("恢复默认源", "回到默认的 VTS 手机一条。", !connected, 84.0f))
-                    {
-                        environment.sources = HoFaceInputEnvironment.Default();
-                        environment.Persist();
-                    }
-
-                    HoConstraintEditorControls.Flex();
-                    HoConstraintEditorControls.Caption(connected
-                        ? HoFaceInputHub.SourceCount + " 条源 · " + packetRate.ToString("F0") + " 包/秒"
-                        : "未连接");
-                }
-
                 using (HoConstraintEditorControls.Row())
                 {
                     HoConstraintEditorControls.Label("调试对象", HoConstraintEditorTheme.LabelWidth,
@@ -472,43 +458,43 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         HoConstraintEditorControls.NextFlexible(90.0f), character, typeof(GameObject), true);
                     if (picked != character) { settings.SetCharacter(picked); HoFaceDebugHost.Save(); }
 
-                    HoConstraintEditorControls.Gap();
-                    if (HoConstraintEditorControls.Button("当前选择", "用当前选中的物体当调试对象。"))
-                    {
-                        if (Selection.activeGameObject != null) { settings.SetCharacter(Selection.activeGameObject); HoFaceDebugHost.Save(); }
-                    }
-
                     if (character == null && !string.IsNullOrEmpty(settings.characterPath))
                         HoConstraintEditorControls.Caption("按路径找不到：" + settings.characterPath);
                 }
 
-                DrawHubRow();
+                HoConstraintEditorControls.Separator(3.0f, 3.0f);
+
+                // ── 最后两行（2026-09-27 用户定）─────────────────────────────────────
+                // 倒数第二行 = 布尔开关（预览混合树 / 自动驱动 / 写动态参数 + 灰色的 Hub 目标），
+                // 最后一行 = 功能按钮（连接 / 开始驱动），**放大 + 居中**，在这一栏最底下。
+                DrawSwitchesRow();
 
                 using (HoConstraintEditorControls.Row())
                 {
+                    HoConstraintEditorControls.Flex();
+                    if (HoConstraintEditorControls.Button(connected ? "断开" : "连接",
+                        "按上面那份源列表把接收端拉起来（手机那条需要先填 IP 与端口）。", !connected, 96.0f))
+                    {
+                        if (connected) HoFaceInputHub.Disconnect();
+                        else HoFaceInputHub.Connect();
+                    }
+
+                    HoConstraintEditorControls.Gap(8.0f);
+
                     // ⚠️ 必须 gate `HasProfile`：没有配置文件 ⇒ 输入/输出行都是**空表**，
                     // 会话能起来但什么都不做（还会占用形态键）。这正是"空 = 空表"那条口径要拦住的东西。
                     bool canDrive = Application.isPlaying && settings != null && settings.HasProfile;
                     using (new EditorGUI.DisabledScope(!canDrive))
                     {
-                        if (HoConstraintEditorControls.Button(session == null ? "开始驱动" : "停止并交还", "播放模式下面捕才真正驱动混合树。停止会把占用的形态键还回去。", session == null, 84.0f))
+                        if (HoConstraintEditorControls.Button(session == null ? "开始驱动" : "停止并交还",
+                            "播放模式下面捕才真正驱动混合树。停止会把占用的形态键还回去。", session == null, 112.0f))
                         {
                             if (session == null) HoFaceInputHub.Start(settings);
                             else HoFaceInputHub.Stop(settings);
                         }
                     }
 
-                    HoConstraintEditorControls.Gap();
-                    var character = settings.Character();
-                    if (character != null && HoConstraintEditorControls.Button("选中", "在层级里选中这个角色。", false, 44.0f))
-                    {
-                        Selection.activeGameObject = character;
-                    }
-
                     HoConstraintEditorControls.Flex();
-                    if (session != null) HoConstraintEditorControls.Caption(session.StateSummary);
-                    else if (!Application.isPlaying) HoConstraintEditorControls.Caption("进播放模式后可驱动");
-                    else if (settings == null) HoConstraintEditorControls.Caption("先指定组件");
                 }
             }
 

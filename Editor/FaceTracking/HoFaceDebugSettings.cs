@@ -86,7 +86,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>断流后回中性的淡出时长（秒）。</summary>
         public float neutralFadeSeconds = 0.2f;
 
-        /// <summary>进入播放后自动开会话（**不会**自动连手机）。</summary>
+        /// <summary>
+        /// 进入播放后自动开会话（**不会**自动连手机）。
+        /// 面板入口 = 「对象」段最底下那行布尔开关里的「**自动驱动**」（2026-09-27 用户定）：
+        /// 它只等于替你按一下「开始驱动」；连接是**显式动作**（同一行右边的按钮），
+        /// 自动连会在你还没核对 IP / 端口的时候就把端口占了。
+        /// </summary>
         public bool startOnPlay;
 
         /// <summary>
