@@ -61,12 +61,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>表情门（默认 0，**中间层不写**：留给驱动"按键"的那一方）。</summary>
         private static readonly string[] ExpressionGates = { "Smile", "Angry" };
 
-        /// <summary>一张 2D 表的定义：X/Y 参数 + 每个刻度的轴值 + 槽位名里那两段词。</summary>
+        /// <summary>一张 2D 表的定义：X/Y 参数 + 每个刻度的轴值 + 槽位名里那两段词 + 挖掉的格子。</summary>
         private sealed class TableSpec
         {
             public string Name;
             public string X, Y, XToken, YToken;
             public float[] XValues, YValues;
+            /// <summary>稀疏表：这些 (i,j) 格子**物理上到不了**，不建（圈跟着斜切）。null = 摆满。</summary>
+            public Vector2Int[] Skip;
         }
 
         private static readonly float[] Two = { -1f, 0f, 1f };     // 双向轴：负端 / 中性 / 正端
@@ -96,9 +98,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly float[] FormSmile = { -1f, 0f, 0.75f, 1f };
 
+        /// <summary>
+        /// `MouthCore` 的可达区是一条**斜带**（实测：咬唇 −0.4/−0.14、噘嘴 −0.5~−0.7/≈0、静息 0/0、
+        /// 常态笑 +0.75/~0、大笑 +1/0.4+）⇒ 两个对角死角物理上做不到，留着只降低可读性，**挖掉**：
+        /// 左上（苦着脸张大嘴：`−pucker` 与 `jawOpen` 打架）、右下（笑着咬唇：咬唇必带 pucker）。
+        /// </summary>
+        private static readonly Vector2Int[] MouthCoreSkip =
+        {
+            new Vector2Int(0, 2), new Vector2Int(0, 3),   // 左上：Form −1 × Open 0.4 / 0.75
+            new Vector2Int(2, 0), new Vector2Int(3, 0)    // 右下：Form 0.75 / 1 × Open −0.14
+        };
+
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
@@ -212,6 +225,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
+                        if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(spec.Name, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
                         tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
                             new Vector2(spec.XValues[i], spec.YValues[j]));
@@ -232,11 +246,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int j = 0; j < spec.YValues.Length; j++)
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
+                        if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(copy.Value, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
                         tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
                             new Vector2(spec.XValues[i], spec.YValues[j]));
                     }
-                slotCounts[copy.Value] = spec.XValues.Length * spec.YValues.Length;
+                slotCounts[copy.Value] = CountCells(spec);
                 trees[copy.Value] = tree;
             }
 
@@ -296,6 +311,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static string ClipFolderFor(string controllerPath)
         {
             return Path.GetDirectoryName(controllerPath).Replace('\\', '/') + "/Animations";
+        }
+
+        /// <summary>这张表挖掉这个格子吗（稀疏表）。</summary>
+        private static bool Skipped(TableSpec spec, int i, int j)
+        {
+            if (spec.Skip == null) return false;
+            foreach (var cell in spec.Skip) if (cell.x == i && cell.y == j) return true;
+            return false;
+        }
+
+        /// <summary>这张表实际有多少格。</summary>
+        private static int CountCells(TableSpec spec)
+        {
+            int count = 0;
+            for (int j = 0; j < spec.YValues.Length; j++)
+                for (int i = 0; i < spec.XValues.Length; i++)
+                    if (!Skipped(spec, i, j)) count++;
+            return count;
         }
 
         /// <summary>槽位名 = `<树名>__<X段词>__<Y段词>__A<X刻度数>X<i>Y<j>`（见命名权威 §5）。</summary>
