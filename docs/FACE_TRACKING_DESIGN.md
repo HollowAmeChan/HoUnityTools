@@ -368,7 +368,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoFaceInputPacket.cs` | 一帧原始输入：只有"线名 → 原值" |
 | `HoFaceAnimationAssets.cs` | 控制器**装配**（复制模板 / 按槽位名填动画 / 重绑驱动对象 / 保留 GUID）与**预览编译**（过滤后的内存副本 + 接受范围检查）；`Inspect` 读控制器实况、`Slots` 读槽位清单 |
 | `HoFaceAnimationSession.cs` | **影子台 + 输入行 / 通道 / 输出行 + 键的拥有权 + 写回与停止恢复** |
-| `HoFaceTrackingWindow.cs` | 调试面板（菜单 `HoUnityTools/面捕/调试面板`）：对象 / 配置详情 / 参数输入 / 排查。**面板怎么用见 [面捕工作流](FACE_TRACKING_WORKFLOW.md)** |
+| `HoFaceTrackingWindow.cs` | 调试面板（菜单 `HoUnityTools/面捕/调试面板`）：对象 / 配置详情 / 接收器输入行 / 配置输入行 / 配置输出行 / 排查（整页滚轮滚动）。**面板怎么用见 [面捕工作流](FACE_TRACKING_WORKFLOW.md)** |
 | `HoFaceControllerToolWindow.cs` | 「控制器编辑」页（`HoUnityTools/面捕/控制器编辑`）：把**已经在工程里**的那份控制器**就地**装配 —— 只做两件事：填片段、重写曲线路径。不新建资产、不改名、不动 GUID |
 | `HoFaceProfileWindow.cs` | 「配置文件」页（`HoUnityTools/面捕/配置文件`）：编辑输入行与输出行 |
 | `HoFaceFirewall.cs` | Windows 防火墙放行（入站 UDP）。提权走 `powershell -EncodedCommand`（base64），不拼命令行字符串 |

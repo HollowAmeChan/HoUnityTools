@@ -20,11 +20,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// </summary>
     public sealed class HoFaceTrackingWindow : EditorWindow
     {
-        /// <summary>「配置详情」与「参数输入」各自一份筛选/滚动位置 —— 共用一个的话，一个栏里的筛选会顺手把另一栏也滤掉。</summary>
-        private Vector2 profileScroll;
+        /// <summary>「配置详情」与「接收器输入行」各自一份筛选 —— 共用一个的话，一个栏里的筛选会顺手把另一栏也滤掉。</summary>
         private string profileSearch = "";
-        private Vector2 inputScroll;
         private string inputSearch = "";
+        /// <summary>
+        /// **整页一个滚动视图**（2026-09-27 用户：内容太长看不了）—— 鼠标滚轮滚它。
+        /// 各栏内部**不再各自开滚动**：嵌套滚动会把滚轮抢走，而且每一栏的高度都得跟窗口高度算来算去。
+        /// </summary>
+        private Vector2 pageScroll;
         private readonly System.Collections.Generic.List<string> localAddresses = new System.Collections.Generic.List<string>();
         private string localIps = "";
         /// <summary>
@@ -41,10 +44,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool configExpanded = true;
         private bool profileExpanded = true;
         private bool parametersExpanded;
-        /// <summary>「参数输出」那一栏：**默认展开** —— 它是"中间层到底算没算出值"的唯一观察面。</summary>
+        /// <summary>「配置输入行」那一栏：与「配置输出行」对称，默认展开（它回答"规范名到底有没有值"）。</summary>
+        private bool configInputExpanded = true;
+        /// <summary>「配置输出行」那一栏：**默认展开** —— 它是"中间层到底算没算出值"的唯一观察面。</summary>
         private bool outputExpanded = true;
-        private Vector2 outputScroll;
         private string outputSearch = "";
+        private string configInputSearch = "";
         private bool diagnoseExpanded;
         private bool logExpanded;
         private bool hintExpanded;
@@ -283,13 +288,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             var environment = HoFaceInputEnvironment.instance;
+            // **整页滚轮滚动**（2026-09-27 用户：「给这个完整的界面加上滚轮能上下滚动，现在太长的就看不了了」）：
+            // 一整个滚动视图套住下面所有栏 —— 滚轮到哪儿都滚页面，内部各栏**不再各自开滚动**。
+            pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
             DrawTitle();
-            // 四栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
+            // 五栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
             DrawObjectSection(environment);      // 一、对象：调试对象 / 控制器 / 配置文件 / 连接
-            DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥
-            DrawInputSection();                  // 三、参数输入：VTS 传过来的**全部裸参数**（纯调试）
-            DrawOutputSection();                 // 三·五、参数输出：中间层**求出来的值**（纯调试）
+            DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥（只读）
+            DrawReceiverInputSection();          // 三、接收器输入行：手机发来的**裸线名**（纯调试）
+            DrawConfigInputSection();            // 三·五、配置输入行：线名 → 规范名**活在什么值上**（可覆盖）
+            DrawOutputSection();                 // 三·六、配置输出行：中间层**求出来的值**（可覆盖）
             DrawDiagnoseSection(environment);    // 四、排查：权限、端口、连接、包统计、问题
+            EditorGUILayout.EndScrollView();
         }
 
         private void DrawTitle()
@@ -556,8 +566,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     profileSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), profileSearch, HoConstraintEditorTheme.Field);
                 }
 
-                profileScroll = EditorGUILayout.BeginScrollView(profileScroll, GUILayout.Height(Mathf.Max(160.0f, position.height - 420.0f)));
-
                 HoConstraintEditorControls.Caption("输入行 —— 手机线名 → 规范名（改名与量纲在这一层）");
                 DrawProfileHeader("规范名", "曲线", "修饰符");
                 foreach (var row in middleware.inputs) DrawProfileRow(row);
@@ -567,8 +575,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 HoConstraintEditorControls.Caption("输出行 —— 规范名 → 输出（控制器参数名 / 保留名）");
                 DrawProfileHeader("输出", "曲线", "修饰符");
                 foreach (var row in middleware.outputs) DrawProfileRow(row);
-
-                EditorGUILayout.EndScrollView();
             }
         }
 
@@ -633,13 +639,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         // ══════════════════════════════════════════════════════════════
-        // 三、参数输入栏：VTS 传过来的**全部裸参数**
+        // 三、接收器输入行：手机发来的**全部裸线名**
         // ══════════════════════════════════════════════════════════════
         /// <summary>
-        /// **纯调试**：只看 VTS 传过来的裸值。名字就是手机发来的样子，不做规范名、不做量纲、
-        /// 不画曲线、没有模式与覆盖。连接那些操作在**对象栏**（那是"连哪台手机"的事）。
+        /// **纯调试**：只看手机**原样发来**的裸值（协议事实：有哪些线名、值是多少、多久没动）。
+        /// 名字就是设备发来的样子，不做规范名、不做量纲、不画曲线、没有模式与覆盖 ——
+        /// "这份配置怎么读它们"在下一栏「配置输入行」。连接那些操作在**对象栏**（那是"连哪台手机"的事）。
         /// </summary>
-        private void DrawInputSection()
+        private void DrawReceiverInputSection()
         {
             int count = HoFaceInputHub.MergedValues.Count;
             string summary = HoFaceInputHub.Connected
@@ -647,7 +654,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 : "未连接";
 
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
-                ref parametersExpanded, "参数输入", summary, HoConstraintEditorTheme.AccentDriver))
+                ref parametersExpanded, "接收器输入行", summary, HoConstraintEditorTheme.AccentDriver))
             {
                 return;
             }
@@ -663,12 +670,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (count == 0)
                 {
                     HoConstraintEditorControls.Caption(HoFaceInputHub.Connected
-                        ? "还没收到包 —— 看第四栏「排查」。"
-                        : "没连上。手机那边打开「3rd Party PC Clients」，在第一栏填手机 IP 再点连接。");
+                        ? "还没收到包 —— 看「排查」那一栏。"
+                        : "没连上。手机那边打开「3rd Party PC Clients」，在「对象」栏填手机 IP 再点连接。");
                     return;
                 }
 
-                inputScroll = EditorGUILayout.BeginScrollView(inputScroll, GUILayout.Height(Mathf.Max(140.0f, position.height - 420.0f)));
                 using (HoConstraintEditorControls.Row(true))
                 {
                     GUI.Label(HoConstraintEditorControls.Next(140.0f), "线名（手机原样）", HoConstraintEditorTheme.Caption);
@@ -707,8 +713,136 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                             at <= 0 ? "—" : age.ToString("F1") + "s", HoConstraintEditorTheme.LabelDim);
                     }
                 }
+            }
+        }
 
-                EditorGUILayout.EndScrollView();
+        // ══════════════════════════════════════════════════════════════
+        // 三·五、配置输入行：这份 profile 的**输入行**（线名 → 规范名）活在什么值上
+        // ══════════════════════════════════════════════════════════════
+        /// <summary>
+        /// **配置输入行 = 这份配置的输入侧活在什么值上**（线名 → 规范名的**结果**）。
+        ///
+        /// 与上一栏的分工：上一栏是**手机原样发来的线名**（协议事实：有哪几根、值多少、多久没动），
+        /// 这一栏是**配置怎么读它们**（改名 / 量纲 / 曲线 / 修饰符都在这一层），也是
+        /// "某个规范名到底有没有值"的唯一观察面 —— 输出行这边恒 0 时，来这里看是**输入**没给上。
+        ///
+        /// 覆盖按钮与「配置输出行」那一栏**完全一样**（同一份 <see cref="DrawOverrideButtons"/>）：
+        /// 钉住的是**这一行产出的读数**，位置在输入行求值的最前面 ⇒ 线名这一帧没来也钉得住，
+        /// 通道（输入曲线 / 断流回中性）与所有读这个规范名的输出行都会吃到它。
+        /// ⚠️ 唯一不看它的是通道自己的模式：`Manual` / `Hold` / `Neutral` 的通道按模式给值，
+        /// 覆盖对它们无效（默认是 `Live`，所以正常情况覆盖都管用）。
+        /// </summary>
+        private void DrawConfigInputSection()
+        {
+            var session = HoFaceInputHub.Session(settings);
+            var rows = settings.Inputs();
+            int named = 0, live = 0, overriddenRows = 0, offController = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var row = rows[i];
+                if (row == null || string.IsNullOrEmpty(row.parameter)) continue;
+                named++;
+                if (session != null && session.TryGetPreview(row.parameter, out _)) overriddenRows++;
+                float value = session != null ? session.MiddlewareInput(row.parameter) : float.NaN;
+                if (!float.IsNaN(value) && Mathf.Abs(value) > 0.0001f) live++;
+                // 规范名不是 52 个形态键的行（头姿 / 包字段 / 我们自己的外部开关）**不是错**：
+                // 它们本来就不进通道，只被表达式直接引用。这里只是把数量说清楚。
+                if (HoFaceTrackingChannels.IndexOf(row.parameter) < 0) offController++;
+            }
+
+            string summary = named == 0
+                ? "没有输入行"
+                : named + " 行 · 非零 " + live
+                  + (overriddenRows > 0 ? " · 覆盖 " + overriddenRows : "")
+                  + (offController > 0 ? " · 非通道 " + offController : "")
+                  + (session == null ? " · **会话没起**" : "");
+
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(
+                ref configInputExpanded, "配置输入行", summary, HoConstraintEditorTheme.AccentDriver))
+            {
+                return;
+            }
+
+            using (HoConstraintEditorControls.Card())
+            {
+                if (named == 0)
+                {
+                    HoConstraintEditorControls.Caption("这份配置一个输入行都没有（或者还没指定配置文件）—— 规范名全按默认值/中性走。");
+                    return;
+                }
+
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("筛选", HoConstraintEditorTheme.LabelWidthSm);
+                    configInputSearch = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(80.0f), configInputSearch, HoConstraintEditorTheme.Field);
+
+                    int overrides = session != null ? session.PreviewCount : 0;
+                    HoConstraintEditorControls.Flex();
+                    if (HoConstraintEditorControls.Button(
+                            recording && recordInputs ? "记录中 " + (RecordSeconds - recordElapsed).ToString("F1") + "s（点此取消）" : "记 5 秒",
+                            "做住一个动作，点这个 —— 记 5 秒后把**每行的 min / avg / max / 波动**打到 Console"
+                            + "（按波动排序，一行一条，整段复制即可）。\n记的是**配置输入行**（线名 → 规范名的结果）。",
+                            session != null && named > 0, 140.0f))
+                    {
+                        if (recording && recordInputs) StopRecording(false);
+                        else StartRecording(rows, true);
+                    }
+                    if (HoConstraintEditorControls.Button(
+                            overrides > 0 ? "清空覆盖（" + overrides + "）" : "清空覆盖",
+                            "把**所有**手动覆盖一次清掉（两栏共用一份：每行右边那四个按钮：不覆盖 / -1 / 0 / 1）",
+                            overrides > 0, 120.0f)
+                        && session != null)
+                    {
+                        session.ClearPreviews();
+                    }
+                }
+
+                if (session == null)
+                {
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        HoConstraintEditorControls.Caption("（进播放模式、并在「对象」段点「开始驱动」后这里才有值；现在只能看名字与线名）");
+                    }
+                }
+
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    GUI.Label(HoConstraintEditorControls.Next(150.0f), "规范名（表达式读它）", HoConstraintEditorTheme.Caption);
+                    HoConstraintEditorControls.Flex();
+                    GUI.Label(HoConstraintEditorControls.Next(96.0f), "覆盖", HoConstraintEditorTheme.Caption);
+                    GUI.Label(HoConstraintEditorControls.Next(64.0f), "值", HoConstraintEditorTheme.Caption);
+                    HoConstraintEditorControls.Flex();
+                    GUI.Label(HoConstraintEditorControls.Next(120.0f), "读哪根线（表达式）", HoConstraintEditorTheme.Caption);
+                }
+
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var row = rows[i];
+                    if (row == null || string.IsNullOrEmpty(row.parameter)) continue;
+                    string expression = row.expression ?? "";
+                    if (!string.IsNullOrEmpty(configInputSearch)
+                        && row.parameter.IndexOf(configInputSearch, StringComparison.OrdinalIgnoreCase) < 0
+                        && expression.IndexOf(configInputSearch, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    float overrideValue = 0f;
+                    bool overridden = session != null && session.TryGetPreview(row.parameter, out overrideValue);
+                    float value = session != null ? session.MiddlewareInput(row.parameter) : float.NaN;
+                    bool has = !float.IsNaN(value);
+
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        GUI.Label(HoConstraintEditorControls.Next(150.0f), row.parameter,
+                            has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+
+                        DrawValueMeter(has, value, overridden);
+                        DrawOverrideButtons(session, row.parameter, overridden, overrideValue);
+                        DrawValueLabel(has, value, overridden);
+
+                        GUI.Label(HoConstraintEditorControls.NextFlexible(60.0f),
+                            string.IsNullOrEmpty(expression) ? "= " + row.defaultValue.ToString("0.###") : expression,
+                            HoConstraintEditorTheme.Caption);
+                    }
+                }
             }
         }
 
@@ -725,6 +859,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private const double RecordSeconds = 5.0;
         private bool recording;
+        /// <summary>这一轮记的是**配置输入行**（`MiddlewareInput`）还是**配置输出行**（`OutputValue`）。</summary>
+        private bool recordInputs;
         private double recordStartedAt;
         private double recordElapsed;
         private readonly List<string> recordNames = new List<string>();
@@ -734,8 +870,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly List<int> recordCount = new List<int>();
         private int recordSamples;
 
-        private void StartRecording(List<HoFaceOutput> rows)
+        private void StartRecording(List<HoFaceOutput> rows, bool inputs)
         {
+            recordInputs = inputs;
             recordNames.Clear();
             for (int i = 0; i < rows.Count; i++)
                 if (rows[i] != null && !string.IsNullOrEmpty(rows[i].parameter)) recordNames.Add(rows[i].parameter);
@@ -772,11 +909,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             recordElapsed = now - recordStartedAt;
 
             var session = HoFaceInputHub.Session(settings);
-            if (session == null || session.Compiled == null) { StopRecording(false); return; }
+            if (session == null) { StopRecording(false); return; }
 
             for (int i = 0; i < recordNames.Count; i++)
             {
-                float v = session.OutputValue(recordNames[i]);
+                // 两栏各记各的：配置输入行读"线名 → 规范名的结果"，配置输出行读"写出去的值"。
+                float v = recordInputs ? session.MiddlewareInput(recordNames[i]) : session.OutputValue(recordNames[i]);
                 if (float.IsNaN(v)) continue;
                 if (v < recordMin[i]) recordMin[i] = v;
                 if (v > recordMax[i]) recordMax[i] = v;
@@ -805,6 +943,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             var text = new StringBuilder();
             text.Append("[Ho 面捕统计] ").Append(DateTime.Now.ToString("HH:mm:ss"))
+                .Append(recordInputs ? "  · 配置输入行" : "  · 配置输出行")
                 .Append("  窗口 ").Append(RecordSeconds.ToString("F1")).Append("s · 采样 ").Append(recordSamples)
                 .Append(" 帧 · 动过 ").Append(moving.Count).Append(" / ").Append(recordNames.Count).Append(" 行");
             text.Append("\n参数名  min  avg  max  波动");
@@ -867,7 +1006,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                       : " · **会话没起**");
 
             if (!HoConstraintEditorSectionGui.DrawSectionHeader(
-                ref outputExpanded, "参数输出", summary,
+                ref outputExpanded, "配置输出行", summary,
                 hasSession && missing > 0 ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver))
             {
                 return;
@@ -904,17 +1043,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     // 采样挂在 `EditorApplication.update` 上（不靠窗口重绘），记录期间按钮显示进度、可取消。
                     bool canRecord = hasSession && session != null && named > 0;
                     if (HoConstraintEditorControls.Button(
-                            recording ? "记录中 " + (RecordSeconds - recordElapsed).ToString("F1") + "s（点此取消）" : "记 5 秒",
+                            recording && !recordInputs ? "记录中 " + (RecordSeconds - recordElapsed).ToString("F1") + "s（点此取消）" : "记 5 秒",
                             "做住一个动作，点这个 —— 记 5 秒后把**每行的 min / avg / max / 波动**打到 Console"
                             + "（按波动排序，一行一条，整段复制即可）。\n为什么记 5 秒：单帧读数不稳，要比的是区间。",
                             canRecord, 140.0f))
                     {
-                        if (recording) StopRecording(false);
-                        else StartRecording(rows);
+                        if (recording && !recordInputs) StopRecording(false);
+                        else StartRecording(rows, false);
                     }
                     if (HoConstraintEditorControls.Button(
                             overrides > 0 ? "清空覆盖（" + overrides + "）" : "清空覆盖",
-                            "把这一栏里所有手动覆盖一次清掉（每行右边那四个按钮：不覆盖 / -1 / 0 / 1）",
+                            "把**所有**手动覆盖一次清掉（两栏共用一份：每行右边那四个按钮：不覆盖 / -1 / 0 / 1）",
                             overrides > 0, 120.0f)
                         && session != null)
                     {
@@ -932,7 +1071,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
                 }
 
-                outputScroll = EditorGUILayout.BeginScrollView(outputScroll, GUILayout.Height(180.0f));
                 using (HoConstraintEditorControls.Row(true))
                 {
                     GUI.Label(HoConstraintEditorControls.Next(150.0f), "参数名（写进混合树）", HoConstraintEditorTheme.Caption);
@@ -966,49 +1104,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         GUI.Label(HoConstraintEditorControls.Next(150.0f), row.parameter,
                             has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
 
-                        Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
-                        if (has && value >= 0f && value <= 1f)
-                            HoConstraintEditorControls.Meter(bar, value, 0f, 1f,
-                                overridden ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver);
-                        else if (Event.current.type == EventType.Repaint)
-                            EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
+                        DrawValueMeter(has, value, overridden);
 
                         // ── 覆盖：不覆盖 / -1 / 0 / 1 ──────────────────────────────────
                         // 按键与门控调试就靠这四个：`-1 / 0 / 1` 直接把这一行**写出去的值**钉住
                         // （走 SetPreview：所有生产逻辑之后生效），「不」把这一行交还给中间层。
-                        Rect overrideBlock = HoConstraintEditorControls.Next(96.0f);
-                        const float cell = 22.0f;
-                        if (HoConstraintEditorControls.SegmentButton(
-                            new Rect(overrideBlock.x, overrideBlock.y, cell, overrideBlock.height),
-                            "不", !overridden, "不覆盖：这一行按中间层算出来的值走"))
-                        {
-                            session?.ClearPreview(row.parameter);
-                        }
-                        if (HoConstraintEditorControls.SegmentButton(
-                            new Rect(overrideBlock.x + (cell + 1.0f), overrideBlock.y, cell, overrideBlock.height),
-                            "-1", overridden && Mathf.Abs(overrideValue + 1f) < 0.0001f, "把这一行覆盖成 -1"))
-                        {
-                            session?.SetPreview(row.parameter, -1f);
-                        }
-                        if (HoConstraintEditorControls.SegmentButton(
-                            new Rect(overrideBlock.x + (cell + 1.0f) * 2.0f, overrideBlock.y, cell, overrideBlock.height),
-                            "0", overridden && Mathf.Abs(overrideValue) < 0.0001f, "把这一行覆盖成 0"))
-                        {
-                            session?.SetPreview(row.parameter, 0f);
-                        }
-                        if (HoConstraintEditorControls.SegmentButton(
-                            new Rect(overrideBlock.x + (cell + 1.0f) * 3.0f, overrideBlock.y, cell, overrideBlock.height),
-                            "1", overridden && Mathf.Abs(overrideValue - 1f) < 0.0001f, "把这一行覆盖成 1"))
-                        {
-                            session?.SetPreview(row.parameter, 1f);
-                        }
+                        // 与「配置输入行」共用同一份实现 —— 两栏的能力必须一模一样。
+                        DrawOverrideButtons(session, row.parameter, overridden, overrideValue);
 
-                        GUI.Label(HoConstraintEditorControls.Next(64.0f),
-                            new GUIContent(
-                                has ? value.ToString("F4") : "—",
-                                overridden ? "这一行被调试覆盖盖住了（不是中间层算出来的值）" : null),
-                            overridden ? OverrideValue()
-                                : (has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim));
+                        DrawValueLabel(has, value, overridden);
 
                         GUI.Label(HoConstraintEditorControls.NextFlexible(60.0f), row.expression ?? "",
                             HoConstraintEditorTheme.Caption);
@@ -1022,8 +1126,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     }
                 }
 
-                EditorGUILayout.EndScrollView();
-
                 if (session != null && session.Compiled != null && session.Compiled.warnings.Count > 0)
                 {
                     HoConstraintEditorControls.Caption("编译期提示 " + session.Compiled.warnings.Count + " 条：");
@@ -1031,6 +1133,64 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         HoConstraintEditorControls.Caption("  · " + session.Compiled.warnings[i]);
                 }
             }
+        }
+
+        /// <summary>
+        /// **覆盖按钮组**（不覆盖 / -1 / 0 / 1）——「配置输入行」与「配置输出行」**共用这一份**：
+        /// 用户定「后两行都得有一样的覆盖按钮与能力」，所以这里只能有一份实现（两栏各写一遍迟早会漂）。
+        /// 走 <see cref="HoFaceAnimationSession.SetPreview"/>，`-1 / 0 / 1` 钉住这一行，「不」交还给中间层。
+        /// </summary>
+        private static void DrawOverrideButtons(HoFaceAnimationSession session, string parameter,
+            bool overridden, float overrideValue)
+        {
+            Rect block = HoConstraintEditorControls.Next(96.0f);
+            const float cell = 22.0f;
+            if (HoConstraintEditorControls.SegmentButton(
+                new Rect(block.x, block.y, cell, block.height),
+                "不", !overridden, "不覆盖：这一行按中间层算出来的值走"))
+            {
+                session?.ClearPreview(parameter);
+            }
+            if (HoConstraintEditorControls.SegmentButton(
+                new Rect(block.x + (cell + 1.0f), block.y, cell, block.height),
+                "-1", overridden && Mathf.Abs(overrideValue + 1f) < 0.0001f, "把这一行覆盖成 -1"))
+            {
+                session?.SetPreview(parameter, -1f);
+            }
+            if (HoConstraintEditorControls.SegmentButton(
+                new Rect(block.x + (cell + 1.0f) * 2.0f, block.y, cell, block.height),
+                "0", overridden && Mathf.Abs(overrideValue) < 0.0001f, "把这一行覆盖成 0"))
+            {
+                session?.SetPreview(parameter, 0f);
+            }
+            if (HoConstraintEditorControls.SegmentButton(
+                new Rect(block.x + (cell + 1.0f) * 3.0f, block.y, cell, block.height),
+                "1", overridden && Mathf.Abs(overrideValue - 1f) < 0.0001f, "把这一行覆盖成 1"))
+            {
+                session?.SetPreview(parameter, 1f);
+            }
+        }
+
+        /// <summary>值那一格左边的画条（0..1 才画；被覆盖时是黄条）—— 两栏共用。</summary>
+        private static void DrawValueMeter(bool has, float value, bool overridden)
+        {
+            Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
+            if (has && value >= 0f && value <= 1f)
+                HoConstraintEditorControls.Meter(bar, value, 0f, 1f,
+                    overridden ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver);
+            else if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
+        }
+
+        /// <summary>值那一格（四位小数；被覆盖就是黄字 + 说明）—— 两栏共用。</summary>
+        private static void DrawValueLabel(bool has, float value, bool overridden)
+        {
+            GUI.Label(HoConstraintEditorControls.Next(64.0f),
+                new GUIContent(
+                    has ? value.ToString("F4") : "—",
+                    overridden ? "这一行被调试覆盖盖住了（不是中间层算出来的值）" : null),
+                overridden ? OverrideValue()
+                    : (has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim));
         }
 
         /// <summary>行内的黄字（那一栏在块里，用不了 <see cref="Warning"/> 的整行布局）。</summary>

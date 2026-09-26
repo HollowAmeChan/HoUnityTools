@@ -124,7 +124,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly Dictionary<string, float> previews = new Dictionary<string, float>(StringComparer.Ordinal);
 
         /// <summary>
-        /// 调试预览：外部（面板「参数输出」栏那四个按钮）直接指定某个参数，在所有生产逻辑之后覆盖。
+        /// 调试预览：外部（面板「配置输入行」/「配置输出行」两栏的那四个按钮）直接指定某一行的值。
+        ///
+        /// **两个作用点**（2026-09-27，用户要"两栏一样的覆盖能力"）：
+        /// · **输出行**的名字 ⇒ 在**所有生产逻辑之后**覆盖（写影子 / 写 Hub / 面板读数都用它）；
+        /// · **输入行**的名字 ⇒ 在输入行求值的最前面覆盖（<see cref="EvaluateInputs"/>）：
+        ///   钉住的是"线名 → 规范名的结果"，于是通道与所有读这个规范名的输出行都会吃到它，
+        ///   而且**线名这一帧没来也钉得住**（通道那边的"新鲜"也一起放行）。
         ///
         /// 走这条路而不是直接 `animator.SetFloat`，是因为**预览必须走完整条管线** ——
         /// 参数 → 影子上的混合树 → 被占用的键 → 真模型。否则预览看到的和实际跑起来看到的不是一回事。
@@ -256,11 +262,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (index < 0) continue;
                 float fade = Mathf.Max(0.01f, Settings.neutralFadeSeconds);
                 bool hasValue = inputIndex.TryGetValue(channel.shape, out int inputRow);
+                // ⚠️ **被调试覆盖的通道**（「配置输入行」钉住了喂它的那一行）：连没连、新不新鲜都不看 ——
+                //    覆盖是"我说了算"的调试手段，没连手机也得管用（否则按键/门控那一套没法调）。
+                bool pinned = hasValue && previews.ContainsKey(channel.shape);
                 double age = hasValue ? HoFaceInputHub.LastFrameTime : 0;
                 age = age > 0 ? now - age : double.MaxValue;
-                bool fresh = hasValue && inputFresh[inputRow] && HoFaceInputHub.Connected && age <= Mathf.Max(0.1f, Settings.staleSeconds);
+                bool fresh = pinned || (hasValue && inputFresh[inputRow] && HoFaceInputHub.Connected && age <= Mathf.Max(0.1f, Settings.staleSeconds));
                 // Never received live channels do not reserve model properties.
-                bool mayWrite = channel.mode != HoFaceInputMode.Live || (hasValue && inputFresh[inputRow] && age <= Mathf.Max(0.1f, Settings.staleSeconds) + fade);
+                bool mayWrite = pinned || channel.mode != HoFaceInputMode.Live || (hasValue && inputFresh[inputRow] && age <= Mathf.Max(0.1f, Settings.staleSeconds) + fade);
                 if (channel.mode != lastModes[index] && channel.mode == HoFaceInputMode.Hold) held[index] = Effective[index];
                 lastModes[index] = channel.mode;
                 float neutral = Finite01(channel.neutral);
@@ -478,6 +487,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             for (int row = 0; row < inputRows.Length; row++)
             {
+                var input = inputRows[row];
+                string canonical = input != null ? input.parameter : null;
+
+                // ⚠️ **调试覆盖**（中控台「配置输入行」那四个按钮，2026-09-27）：钉住的是**这一行产出的读数**
+                //    （线名 → 规范名的结果）。刻意放在最前面：
+                //    · 线名这一帧没来（下面那条 `!present`）也照样钉得住；
+                //    · 曲线与修饰符不参与（覆盖的是"这一行是多少" —— 与输出行那边钉"写出去的值"同一条规矩）；
+                //    · 下游（通道的输入曲线/断流回中性、所有读这个规范名的输出行）都会吃到它。
+                //    ⇒ 只有通道自己的模式（`Manual` / `Hold` / `Neutral`）不看读数，覆盖对它们无效。
+                if (!string.IsNullOrEmpty(canonical) && previews.TryGetValue(canonical, out float pinned))
+                {
+                    inputValues[row] = pinned;
+                    inputFresh[row] = true;
+                    continue;
+                }
+
                 var expression = inputExpressions[row];
                 if (expression == null) { inputFresh[row] = false; continue; }
 
