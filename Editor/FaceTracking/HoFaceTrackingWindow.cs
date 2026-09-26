@@ -613,8 +613,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 也不算进那个 `不在控制器里 N` 的计数。
         /// ⚠️ 判据是**命名**（`Ho/Style/` 前缀），不是"查不到" —— 拼错名字的行照旧要报警告。
         /// </summary>
-        private static bool IsInternalRow(string parameter) =>
-            !string.IsNullOrEmpty(parameter) && parameter.StartsWith("Ho/Style/", StringComparison.Ordinal);
+        private static bool IsInternalRow(string parameter) => HoFaceNaming.IsStyleRow(parameter);
 
         private static string ModifierText(HoFaceOutput row)
         {

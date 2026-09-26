@@ -889,6 +889,7 @@ ActiveRows().RemoveAt(index);
             int bad = 0;
             int constants = 0;
             var duplicates = new HashSet<string>();
+            var chains = new HashSet<string>();       // 有意的同名链（风格化门的「双重形态」）
             if (rows != null)
             {
                 var seen = new HashSet<string>();
@@ -899,7 +900,13 @@ ActiveRows().RemoveAt(index);
                     // 常量行（空表达式 + 默认值）**不是错**：门控就靠它。只有"有表达式但解析不过"才报错。
                     if (IsConstantRow(output)) constants++;
                     else if (IsBrokenRow(output)) bad++;
-                    if (!string.IsNullOrEmpty(output.parameter) && !seen.Add(output.parameter)) duplicates.Add(output.parameter);
+                    if (string.IsNullOrEmpty(output.parameter)) continue;
+                    if (seen.Add(output.parameter)) continue;
+                    // ⚠️ **同名多行在风格化内部行里是有意的**：规则二的「双重形态」链就是
+                    //    "读自己、写自己"（输出表缓存：后写覆盖先写，见 VTS_HQ_CONTROLLER §5.6）
+                    //    ⇒ 那是**链**，不是重名错误。别处重名照旧报红。
+                    if (HoFaceNaming.IsStyleRow(output.parameter)) chains.Add(output.parameter);
+                    else duplicates.Add(output.parameter);
                 }
             }
 
@@ -907,7 +914,8 @@ ActiveRows().RemoveAt(index);
             {
                 string text = (editingInputs ? "输入行 " : "输出行 ") + count + " 行 · " + bad
                     + " 行表达式有错 · " + duplicates.Count + " 个重复参数名"
-                    + (constants > 0 ? " · 常量行 " + constants : "");
+                    + (constants > 0 ? " · 常量行 " + constants : "")
+                    + (chains.Count > 0 ? " · 风格化同名链 " + chains.Count + " 条（有意）" : "");
                 GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
                 if (bad > 0 || duplicates.Count > 0) style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                 GUI.Label(HoConstraintEditorControls.NextAuto(text, style), text, style);
