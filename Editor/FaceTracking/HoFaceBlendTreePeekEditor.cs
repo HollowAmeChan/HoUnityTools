@@ -26,7 +26,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 + "于是能在 Animator 窗口里看见正在跑的混合树 —— 编辑器自带的混合树视图看不到这些，"
                 + "因为真正的影子台是隐藏对象。\n\n"
                 + "玩法：Play 并把面捕驱动起来 → 在 Hierarchy 里选中本物体 → 打开 Animator 窗口。\n"
-                + "本物体不需要挂 Animator，运行时自己补一个。\n"
+                + "本物体不需要挂 Animator，运行时自己补一个（**补的那个不在 Inspector 上占一行**）。\n"
                 + "它是无损的：这个 Animator 不驱动任何渲染器、也不读输出，姿势求值出来没有去处。",
                 MessageType.None);
         }

@@ -36,7 +36,14 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             // Animator 不要求用户挂：这个空物体只是个挂载点，缺了就自己补。
             animator = GetComponent<Animator>();
-            if (animator == null) animator = gameObject.AddComponent<Animator>();
+            if (animator == null)
+            {
+                animator = gameObject.AddComponent<Animator>();
+                // **自己补的那一个不在 Inspector 上占一行**（2026-09-27 用户要求）：
+                // 这个物体只是个挂载点，要看的是 Animator 窗口里那棵树；面板上多出一行 Animator
+                // 只会让人以为"还得配一个"。用户自己挂的 Animator 保持原样（不是我们加的，不动它）。
+                animator.hideFlags = HideFlags.HideInInspector;
+            }
             // 没有渲染器，不设 AlwaysAnimate 可能被剔除掉 —— 那窗口里就什么都不会动。
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             animator.applyRootMotion = false;
