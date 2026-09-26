@@ -81,9 +81,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly float[] OpenMeasured = { 0f, 0.4f, 0.75f };
 
+        /// <summary>
+        /// **`Mouth/Form` 专用刻度：−1 / 0 / 0.75 / 1**（2026-09-27 用户实测定）。
+        /// 正侧不是"0 → 1"两档：「**常态笑**」在 0.75 左右、「**大笑**」才到 1 —— 两个都是真实状态，
+        /// 各要一个采样点，所以 X 是四档（12 格）。负侧仍停在 −1：那里是曲线的钳制端，
+        /// 而噘嘴实测只到 −0.5（按选项 C 只该把唇形往苦的方向带一点，不该到极端苦相）。
+        /// ⚠️ 只给 `MouthCore` / `MouthCoreExpr` 的 X 用；`MouthWidth` 的 X/Y 仍是 `Two`（没有实测数据）。
+        /// </summary>
+        private static readonly float[] FormSmile = { -1f, 0f, 0.75f, 1f };
+
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = Two, YValues = OpenMeasured },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
