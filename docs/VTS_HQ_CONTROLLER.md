@@ -283,6 +283,36 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 ⚠️ 手搭时最容易忘的三条：**Direct 的每个子节点都要挂一个参数**（不挂就不参与混合）；
 **同一个键不要被两张表写**（Direct 是加法，会相加）；**区域门保持 `1`**（调小 = 让这块回到启动姿势）。
 
+### 10.1 槽位清单（机械展开，共 104 个）
+
+这份表由 `.research/gen-slot-manifest.ps1` 从 §10 的树清单**展开**出来（不是手抄），它同时自检命名规则
+（四段、段内无下划线、坐标不越界、无重复）：**104 个槽位全部合规**。它也是将来"姿势烘焙"工具要产出的**文件名集合**。
+
+| 树 | 槽位数 | 坐标索引 | 命名模板 | X 各刻度的轴值 | Y 各刻度的轴值 | 最少起步（建议） |
+| --- | --- | --- | --- | --- | --- | --- |
+| `MouthCore` | 9 | X{0..2} × Y{0..2} | `MouthCore__Form__Open__A3X<i>Y<j>` | -1 / 0 / +1（垂嘴角 / 中性 / 笑） | 0 / .5 / 1（闭 / 半开 / 开） | X1Y0 中性 + X0Y0 + X2Y0 |
+| `MouthJaw` | 3 | X{0..2} × Y{0} | `MouthJaw__Jaw__Forward__A3X<i>Y<j>` | 0 / .5 / 1（闭 / 半开 / 张满） | 0（不前伸；这一维先只用 Y0） | X0Y0 + X2Y0 |
+| `MouthWidth` | 9 | X{0..2} × Y{0..2} | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` | -1 / 0 / +1（收 / 中性 / 展） | -1 / 0 / +1（偏右 / 中 / 偏左） | X1Y1 中性 + 四角 |
+| `MouthTongue` | 4 | X{0..1} × Y{0..1} | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
+| `LidL` | 6 | X{0..2} × Y{0,2} | `LidL__BlinkWide__Squint__A3X<i>Y<j>` | -1 / 0 / +1（睁大 / 中性 / 闭） | 0 / 1（不眯 / 眯满；Y1 半眯先空着） | 现有 6 格已经是这套坐标 |
+| `LidR` | 6 | X{0..2} × Y{0,2} | `LidR__BlinkWide__Squint__A3X<i>Y<j>` | 同上（右） | 同上（右） | 现有 6 格已经是这套坐标 |
+| `GazeL` | 9 | X{0..2} × Y{0..2} | `GazeL__InOut__UpDown__A3X<i>Y<j>` | -1 / 0 / +1（外 / 中 / 内） | -1 / 0 / +1（下 / 中 / 上） | X1Y1 中性 + 十字四端（也可只摆 5 格） |
+| `GazeR` | 9 | X{0..2} × Y{0..2} | `GazeR__InOut__UpDown__A3X<i>Y<j>` | 同上（右） | 同上（右） | X1Y1 中性 + 十字四端 |
+| `BrowCoreL` | 4 | X{0..1} × Y{0..1} | `BrowCoreL__Height__InnerUp__A2X<i>Y<j>` | -1 / +1（压眉 / 抬眉） | 0 / 1（不抬内眉 / 抬满） | X0Y0 + X1Y0 + X1Y1 |
+| `BrowCoreR` | 4 | X{0..1} × Y{0..1} | `BrowCoreR__Height__InnerUp__A2X<i>Y<j>` | 同上（右） | 同上（右） | X0Y0 + X1Y0 + X1Y1 |
+| `CheekSquint` | 4 | X{0..1} × Y{0..1} | `CheekSquint__CheekL__CheekR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
+| `CheekPuff` | 4 | X{0..1} × Y{0..1} | `CheekPuff__PuffL__PuffR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
+| `NoseSneer` | 4 | X{0..1} × Y{0..1} | `NoseSneer__SneerL__SneerR__A2X<i>Y<j>` | 0 / 1 | 0 / 1 | X0Y0 + X1Y1 |
+| `MouthCoreExpr`（副本） | 9 | X{0..2} × Y{0..2} | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` | 同 `MouthCore` | 同 `MouthCore` | 按键表情那一版；主版做完再摆 |
+| `LidLExpr`（副本） | 6 | X{0..2} × Y{0,2} | `LidLExpr__BlinkWide__Squint__A3X<i>Y<j>` | 同 `LidL` | 同 `LidL` | 按键表情那一版；主版做完再摆 |
+| `LidRExpr`（副本） | 6 | X{0..2} × Y{0,2} | `LidRExpr__BlinkWide__Squint__A3X<i>Y<j>` | 同 `LidR` | 同 `LidR` | 按键表情那一版；主版做完再摆 |
+| `BrowCoreLExpr`（副本） | 4 | X{0..1} × Y{0..1} | `BrowCoreLExpr__Height__InnerUp__A2X<i>Y<j>` | 同 `BrowCoreL` | 同 `BrowCoreL` | 按键表情那一版；主版做完再摆 |
+| `BrowCoreRExpr`（副本） | 4 | X{0..1} × Y{0..1} | `BrowCoreRExpr__Height__InnerUp__A2X<i>Y<j>` | 同 `BrowCoreR` | 同 `BrowCoreR` | 按键表情那一版；主版做完再摆 |
+
+**一共 104 个槽位**（含 5 棵副本树 29 个）。槽位是**多键姿势片段**：一个槽 = 那一格的整套姿势，
+不是「一键一片段」。按 [契约表 §F](VTS_HIGH_QUALITY_FACE_CONTRACT.md) 的 fallback，
+**没摆的格复用同一份基础片段**即可开跑，所以「最少起步」那一列就是先做几张。
+
 ## 11. 装配与验收
 
 1. 控制器编辑页**就地装配**（`HoUnityTools/面捕/控制器编辑`）：控制器是你那份、动画文件夹是槽位数据、调试对象是场景角色；
