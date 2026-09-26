@@ -2704,11 +2704,11 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
-                        "expression":  "(mouthPucker * HoAutoInvertedV) + HoExternalInvertedV",
+                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * HoAutoInvertedV) + HoExternalInvertedV",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05 } ] }, { "kind": "smooth", "seconds": 0.2, "steps": [] } ],
-                        "notes":  "**写自己**（规则一，2026-09-27 用户定）：倒V 一条行管完 —— 连续读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」（形态切换的过渡）。\n⚠️ **两个开关都是外部开关**：`HoAutoInvertedV`（是否允许自动触发，没人 append ⇒ 1）与 `HoExternalInvertedV`（常开，没人 append ⇒ 0），两条都在输入区里声明过 —— Warudo 在 VTS 接收器之后 append 同名线就能控制。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**，不需要 clamp。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `mouthPucker > 0.8`（0/1 进去迟滞会退化成跟随）。\n⚠️ 代价（用户已认）：开关关着的时候这一行**照样吃时域修饰**（维持/平滑的状态一直在跑），无害。\n⚠️ trigger 0.8 是**算出来的占位值**（实测锚点：静息 ≤0.43 / 挤眼 ≤0.62 / 真噘嘴 0.975）—— 等「静置 + 噘嘴拉满」两次 5 秒到手再收。"
+                        "notes":  "**写自己**（规则一，2026-09-27 用户定）：倒V 一条行管完 —— 读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」（形态切换的过渡）。\n⭐ **读数不是裸 mouthPucker**（2026-09-27 十五段 5 秒实测定）：`mouthPucker × 死区 × 鼻门` ——\n  ① **死区** `clamp((mouthPucker − 0.41) / 0.02, 0, 1)`：静息三次的 max 是 **0.3797**（0.3458 / 0.3403 / 0.3797），膝盖压在天花板 +0.03（与 browDown 0.24 vs 0.2083、noseSneer 0.18 vs 0.1514 同一个做法）；\n  ② **鼻门** `1 − clamp((max(noseSneerLeft, noseSneerRight) − 0.54) / 0.05, 0, 1)`：真噘嘴那侧 noseSneer ≤**0.2942**，而这台设备的**挤眼**（用力型）≥**0.7821** ⇒ 中间 0.49 宽的空带，膝盖取中点 0.54。\n⚠️ 为什么非要鼻门：**裸 mouthPucker 在挤眼里实测能到 0.7769**（0.6389 / 0.7769 / 0.7222），旧的 0.8 触发线离误触发只剩 0.023 —— 单线缝只有 +0.1865，加上这两项之后缝 **+0.9634**（目标最弱 0.9634、非目标全 0）。\n⚠️ **压唇（mouthPress）不能拿来当门**：用户「噘嘴拉满」那一组自己就压到 0.32~0.49，与挤眼的重叠（那样会把真噘嘴判掉）。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**，不需要 clamp。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `mouthPucker > 0.8`（0/1 进去迟滞会退化成跟随）。\n⚠️ 代价（用户已认）：开关关着的时候这一行**照样吃时域修饰**（维持/平滑的状态一直在跑），无害。\n⚠️ `trigger 0.80` 现在是**实测**的：它落在空带 [0, 0.9634] 里偏上 —— 既兜住「没量到的、不皱鼻的挤眼」（pucker 0.78 也不亮），又比最弱那次真噘嘴低 0.16。"
                     },
                     {
                         "parameter":  "Ho/Style/MouthGate",
