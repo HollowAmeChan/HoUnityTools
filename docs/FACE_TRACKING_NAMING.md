@@ -36,7 +36,7 @@
 | 树名 | 部位 | X | Y | 条件轴 | 是什么 |
 | --- | --- | --- | --- | --- | --- |
 | `MouthCore` | Mouth | Form | Open | Funnel, Press | 外嘴核心：嘴唇轮廓/口孔 |
-| `MouthJaw` | Mouth | Jaw | Forward | JawSide | 下颌/口内（与 `MouthCore` 划清键） |
+| `MouthJaw` | Mouth | JawSide | Jaw | JawSide | 下颌/口内（与 `MouthCore` 划清键）。⚠️ 我们实现成 **左右 3 档 × 上下 2 档 = 6 格**（上下含 `mouthClose` 的咬合/咀嚼侧） |
 | `MouthSeal` | Mouth | Seal | Jaw | Open, Form, Funnel | 闭唇时保留下颌运动 |
 | `MouthWidth` | Mouth | Pucker | LeftRight | Open, Form | 嘴宽/偏嘴修正 |
 | `MouthShrugSplit` | Mouth | ShrugUp | ShrugDown | Open, Pucker | 上下耸唇细分 |
@@ -55,11 +55,11 @@
 | `LidGazeL` / `LidGazeR` | Lid | BlinkWide | UpDown | GazeX, Squint, EyeSmile | 眼睑随视线/极端视线残差 |
 | `LidMouthL` / `LidMouthR` | Lid | LeftRight | BlinkWide | EyeSmile | 偏嘴带动眼周 |
 | `LidBoth` | Lid | LidL | LidR | SquintL, SquintR | 双眼非对称残差（同步算法在中间层） |
-| `GazeL` / `GazeR` | Gaze | InOut | UpDown | 无 | 眼球注视（**每侧独立**） |
+| `GazeL` / `GazeR` | Gaze | InOut | UpDown | 无 | 眼球注视（**每侧独立**）。⚠️ **我们没建树**（2026-09-27）：朝向交给 Warudo 的 LookAt + IK，4 根轴只作为出口发布 |
 | `BrowCoreL` / `BrowCoreR` | Brow | Down | OuterUp | InnerUp | 该侧眉核心（压眉/外眉抬起/内眉抬起） |
 | `BrowEyeL` / `BrowEyeR` | Brow | Height | BlinkWide | InnerUp, Squint | 眉眼接触（眉压＋睁大） |
 | `BrowCenter` | Brow | ExpressionL | ExpressionR | 无 | 中央眉/额头协同 |
-| `CheekSquint` | Cheek | CheekL | CheekR | Form, LidL, LidR | 双颊收紧 |
+| `CheekSquint` | Cheek | CheekL | CheekR | Form, LidL, LidR | 双颊收紧。⚠️ **我们没建树**（二次元角色表现不了颊） |
 | `CheekPuff` | Cheek | PuffL | PuffR | Open, Seal, Form, Pucker | 鼓腮（**分左右**）＋闭口/嘴型接触 |
 | `CheekPuffTongue` | Cheek | TongueL | TongueR | PuffL, PuffR, Jaw | 鼓腮×伸舌的极端组合残差 |
 | `NoseSneer` | Nose | SneerL | SneerR | UpperL, UpperR, Form | 鼻翼/鼻唇 |
@@ -123,7 +123,7 @@
 
 代码只认其中 4 个名字（`HoFaceNaming.cs`：`Ho/Drive` 根、`BlinkWide`、`Squint`、`LidAxis()`），
 其余全是**作者约定** + 中间层配置文件里的行名。**这些行现在真的写出来了**：发货那份
-`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 40 行 `Ho/Drive/*`（逐行清单见
+`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 39 行 `Ho/Drive/*`（逐行清单见
 [HO 参数规范](PARAMETER_HO.md) §3.7）。
 
 ## 5. 槽位名（= 片段名）
@@ -207,14 +207,14 @@
   + `LidL`/`LidR`（**名字恰好合规**）+ `EyeRegion`/`LipRegion`（区域名待换成 `EyeLeftRegion`/`MouthRegion`），
   叶子参数是**裸 ARKit 名**（`jawOpen`、`eyeBlinkLeft`…）。新控制器按本文重建，老的那份不动。
 * **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）
-  —— **40 行 `Ho/Drive/*` 轴已经加进 profile 了**（逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+  —— **39 行 `Ho/Drive/*` 轴已经加进 profile 了**（逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
   [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3），出口那 90 行按原样保留。
 
 ## 9. 已经用这套名字落地的树（对照 §2 的 42 家族）
 
 | 已落地 | 说明 |
 | --- | --- |
-| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**15 张 2D 表 + 1 张变体表 + 4 张副本 + 5 个 1D 开关 = 控制器共 30 棵树 / 111 个槽位**（2026-09-27：删 `MouthCoreExpr`/`MouthCoreSwitch`，加 `MouthCoreRoll` + `MouthCoreRollSwitch`；卷唇不再是独立表） |
+| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**9 张 2D 表 + 2 张 1D 表 + 1 张变体表 + 4 张副本 + 5 个 1D 开关 + 4 个区域 + 根 = 控制器共 26 棵树 / 89 个槽位**（2026-09-27 那一轮：删 `MouthCoreExpr`/`MouthCoreSwitch`（嘴没有按键表情版）、删 `GazeL`/`GazeR`（朝向交给 Warudo 的 LookAt + IK）、删 `CheekSquint`/`CheekPuff`（二次元表现不了）、`NoseSneer` 收成 `NoseUp` 1D；加 `MouthCoreRoll`+开关、`MouthForward` 1D、`MouthJaw` 换轴） |
 | **`MouthCorner`**（2026-09-27 加） | 轴 = 本文 §2 那一行的 `CornerL` × `CornerR`（= 合同表 D 的 `HQSmileFrownLeft/Right`）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在 `MouthWidth`，`Form` 的表达式与出口行都不动。见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.4 |
 
 其余家族（`MouthSeal`、`MouthShrugSplit`、`MouthUpperRaise`、`MouthLowerDrop`、`LidGaze*`、`BrowCenter`、

@@ -45,7 +45,7 @@
 **别把脚本当成唯一出处** —— 清单以 mod 侧 `Core/PORTED.md` §1 那张表为准。
 
 **这份规范覆盖"我们这条链上出去什么"**：出口是**两份并行 + 一套额外**，共 **90 行**；
-**外加**喂新控制器的**控制器轴** `Ho/Drive/*` **40 行**（§3.7，那是"口径"不是"出口组"，不计入 90）。
+**外加**喂新控制器的**控制器轴** `Ho/Drive/*` **39 行**（§3.7，那是"口径"不是"出口组"，不计入 90）。
 
 | 组 | 行数 | 在哪 | 是什么 |
 |---|---|---|---|
@@ -482,7 +482,7 @@ V3.0 版没有。我们用 V3.0。
 都写在对应行的 `notes` 里：`FaceAngle*`/`FacePosition*` 取 `VTS_Compatible` 的官方标量拼法、
 向量组取 V3.0 的简洁公式。
 
-### 3.7 控制器轴：`Ho/Drive/*`（**40 行，不计入上面的 90**）
+### 3.7 控制器轴：`Ho/Drive/*`（**39 行，不计入上面的 90**）
 
 **这一组不是"给下游的出口"，是"喂控制器的口径"**（2026-09-27 加，见
 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3 与[命名权威](FACE_TRACKING_NAMING.md)）：
@@ -508,7 +508,7 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.03 死区**（手机"不张也不抿"时就在这个区间抖），0.03…0.06 是斜坡，之外恒等 —— 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
-| `Ho/Drive/Mouth/Jaw` | `jawOpen` | 0 … 1 | 独立自由度 |
+| `Ho/Drive/Mouth/Jaw` | `clamp(jawOpen - mouthClose, -1, 1)` | **−1 咬合/压 · 0 静息 · +1 张开** | 下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧 |
 | `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1 | `HQJawForward` |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
@@ -521,10 +521,10 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `BrowLeftY` − 1（VB 静息 0.5，且掺了偏嘴） |
 | `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 同上（右） | 同上；偏嘴那一项左右反号 |
 | `Ho/Drive/Brow/Left\|Right/InnerUp` | `browInnerUp` | 0 … 1 | |
-| `Ho/Drive/Cheek/Left\|Right/Squint` | `cheekSquintLeft` / `cheekSquintRight` | 0 … 1 | |
+| `Ho/Drive/Cheek/Left\|Right/Squint` | `cheekSquintLeft` / `cheekSquintRight` | 0 … 1 | ⚠️ **没有树消费**（二次元角色表现不了颊）—— 照旧发布当出口 |
 | `Ho/Drive/Cheek/Left\|Right/Puff` | `cheekPuff` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
-| `Ho/Drive/Nose/Left\|Right/Sneer` | `noseSneerLeft` / `noseSneerRight` | 0 … 1 | |
-| `Ho/Drive/Gate/{Mouth,EyeLeft,EyeRight,Brow,Cheek}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门；**常量行不过曲线**（`HoFaceAnimationSession.cs:316`），但修饰符照走 |
+| `Ho/Drive/Nose/Up` | `(noseSneerLeft + noseSneerRight) / 2` | 0 … 1 | **鼻子上顶**（唯一留下的鼻状态；连带的内眼睑/眯眼/眉内下由物理共动带出） |
+| `Ho/Drive/Gate/{Mouth,Eye,Brow,Nose}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门（**4 个**：左右眼并成一个、颊 → 鼻）；**常量行不过曲线**（`HoFaceAnimationSession.cs:316`），但修饰符照走 |
 | `Ho/Drive/Slice/MouthCore/{Funnel0Press0,Funnel1Press0,Funnel0Press1,Funnel1Press1}` | `(1−F)(1−P)` / `F(1−P)` / `(1−F)P` / `FP`，F、P 内联 | 0 … 1，**四条和恒为 1** | `MouthCore` 的条件切片权重（Funnel × Press 双线性） |
 
 `Ho/Drive/Gate/Expr/*`（按键表情门）**故意不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 /

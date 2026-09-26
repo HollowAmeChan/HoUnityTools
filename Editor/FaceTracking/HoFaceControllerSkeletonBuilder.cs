@@ -32,13 +32,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private const string StateName = "Drive";
         private const string OneWeight = "Ho/Drive/W/One";
 
-        private static readonly string[] RegionGates = { "Mouth", "EyeLeft", "EyeRight", "Brow", "Cheek" };
+        private static readonly string[] RegionGates = { "Mouth", "Eye", "Brow", "Nose" };
 
-        /// <summary>轴参数（部位/轴 → 名字）：31 根，见设计稿 §3.1。</summary>
+        /// <summary>
+        /// 轴参数（部位/轴 → 名字）：31 根，见设计稿 §3.1。
+        /// ⚠️ 有些轴**没有树消费**（注视 4 根、`Cheek/*` 4 根、`Funnel` / `Press`）—— 它们照旧发布当出口，
+        /// 谁要用谁取（注视那 4 根就是给 Warudo 的 LookAt / 别的消费者留的）。
+        /// </summary>
         private static readonly string[] Axes =
         {
             "Ho/Drive/Mouth/Form", "Ho/Drive/Mouth/Open", "Ho/Drive/Mouth/Funnel", "Ho/Drive/Mouth/Press",
-            "Ho/Drive/Mouth/Jaw", "Ho/Drive/Mouth/Forward", "Ho/Drive/Mouth/Pucker", "Ho/Drive/Mouth/X",
+            "Ho/Drive/Mouth/Jaw", "Ho/Drive/Mouth/JawSide", "Ho/Drive/Mouth/Forward", "Ho/Drive/Mouth/Pucker", "Ho/Drive/Mouth/X",
             "Ho/Drive/Mouth/TongueL", "Ho/Drive/Mouth/TongueR",
             // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
@@ -46,11 +50,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             "Ho/Drive/Mouth/Roll",
             "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
             "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
+            // 注视（2026-09-27）：**两棵树删了**（朝向交给 Warudo 的 LookAt + IK），这 4 根轴照旧发布当出口
             "Ho/Drive/Gaze/Left/X", "Ho/Drive/Gaze/Left/Y", "Ho/Drive/Gaze/Right/X", "Ho/Drive/Gaze/Right/Y",
             "Ho/Drive/Brow/Left/Y", "Ho/Drive/Brow/Left/InnerUp", "Ho/Drive/Brow/Right/Y", "Ho/Drive/Brow/Right/InnerUp",
+            // 颊（2026-09-27 删树）：二次元角色表现不了这两个形变；轴照旧发布当出口
             "Ho/Drive/Cheek/Left/Squint", "Ho/Drive/Cheek/Right/Squint",
             "Ho/Drive/Cheek/Left/Puff", "Ho/Drive/Cheek/Right/Puff",
-            "Ho/Drive/Nose/Left/Sneer", "Ho/Drive/Nose/Right/Sneer"
+            // 鼻（2026-09-27 收成**一个状态**：鼻子上顶）
+            "Ho/Drive/Nose/Up"
         };
 
         /// <summary>MouthCore 的条件切片权重（Funnel × Press 双线性；骨架里还没有切片表，参数先建好）。</summary>
@@ -124,6 +131,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
 
         /// <summary>
+        /// 下巴竖直轴（`Mouth/Jaw`）的两档：**0 = 闭 / 咬合**、**+0.75 = 张满**（待标定）。
+        /// ⚠️ 这两个数组必须声明在 `Tables` **之前** —— C# 静态字段按声明顺序初始化，
+        /// 放在后面的话 `Tables` 构造时读到的还是 `null`（真栽过一次：探针报 NullReference）。
+        /// </summary>
+        private static readonly float[] JawOpen = { 0f, 0.75f };
+
+        /// <summary>下巴前伸的三档（`jawForward` 0..1；待标定）。</summary>
+        private static readonly float[] ForwardTicks = { 0f, 0.5f, 1f };
+
+        /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
+        private static readonly float[] NoseUpTicks = { 0f, 1f };
+
+        /// <summary>
         /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)`。
         /// 嘴张到最大时**半笑与全笑分辨不出来** ⇒ 这一格没有独立语义。
         /// 顶行左右两个角**留着**（"张嘴不笑" 与 "大笑张嘴" 都是真实状态），
@@ -147,20 +167,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly TableSpec[] Tables =
         {
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
-            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
+            // 下巴（2026-09-27 用户定「就是下巴上下左右这棵树」）：**X = 左右（3 档）× Y = 上下（2 档）= 6 格**。
+            // ⚠️ 上下只有两档：咬合 / 咀嚼 = **0 那一档**（轴本身是双极的，负侧钳到 Y0）。
+            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = Two, YValues = JawOpen },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
             new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/CornerL", Y = "Ho/Drive/Mouth/CornerR", XToken = "CornerL", YToken = "CornerR", XValues = Two, YValues = Two },
             new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
-            new TableSpec { Name = "GazeL", X = "Ho/Drive/Gaze/Left/X", Y = "Ho/Drive/Gaze/Left/Y", XToken = "InOut", YToken = "UpDown", XValues = Two, YValues = Two },
-            new TableSpec { Name = "GazeR", X = "Ho/Drive/Gaze/Right/X", Y = "Ho/Drive/Gaze/Right/Y", XToken = "InOut", YToken = "UpDown", XValues = Two, YValues = Two },
+            // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
             new TableSpec { Name = "BrowCoreL", X = "Ho/Drive/Brow/Left/Y", Y = "Ho/Drive/Brow/Left/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
-            new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
-            new TableSpec { Name = "CheekSquint", X = "Ho/Drive/Cheek/Left/Squint", Y = "Ho/Drive/Cheek/Right/Squint", XToken = "CheekL", YToken = "CheekR", XValues = ZeroOne, YValues = ZeroOne },
-            new TableSpec { Name = "CheekPuff", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = ZeroOne, YValues = ZeroOne },
-            new TableSpec { Name = "NoseSneer", X = "Ho/Drive/Nose/Left/Sneer", Y = "Ho/Drive/Nose/Right/Sneer", XToken = "SneerL", YToken = "SneerR", XValues = ZeroOne, YValues = ZeroOne }
+            new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne }
+            // ⚠️ 颊两棵树 + 鼻那棵 2D 表都删了（2026-09-27）：颊在二次元角色上表现不了；
+            //    鼻收成**一个状态**（鼻子上顶）⇒ 挪到下面的 1D 片段表（`NoseUp`）。
         };
 
         /// <summary>
@@ -177,10 +197,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] RollTicks = { 0.02f, 0.12f };
 
         /// <summary>
-        /// 1D 片段表（一根轴、孩子是动画片段）：**现在没有表用它**（卷唇改成"变体开关"之后空着）。
-        /// 留着是因为一维形状还多（命名权威里的例子 `MouthShrugBase__Shrug__A3X1`），回来时不用重写。
+        /// 1D 片段表（一根轴、孩子是动画片段）。**这是那套机制的第一个正式用户**（2026-09-27）：
+        /// 卷唇改成"变体开关"之后空了一阵，现在下巴前伸与鼻子上顶用上了。
         /// </summary>
-        private static readonly Simple1DSpec[] Simple1DTables = { };
+        private static readonly Simple1DSpec[] Simple1DTables =
+        {
+            // 下巴前伸（用户定：「下巴前伸就是一个单独的轴，他不用跟别人组合」）——
+            // 自己一棵、和 `MouthJaw` 靠加法叠加（分工：只写**下颌平移**那几根键，chin/下唇归 `MouthJaw`）。
+            new Simple1DSpec { Name = "MouthForward", Parameter = "Ho/Drive/Mouth/Forward", Token = "Forward", Values = ForwardTicks },
+            // 鼻子上顶（用户定：颊不要、鼻只留这一个状态）—— 只要"不顶 / 顶"两格。
+            new Simple1DSpec { Name = "NoseUp", Parameter = "Ho/Drive/Nose/Up", Token = "Up", Values = NoseUpTicks }
+        };
 
         /// <summary>
         /// **轴驱动的变体表**（不是按键表情副本）：与主版**同轴、同刻度、同稀疏格**，整套姿势换成变体版。
@@ -236,11 +263,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
-            { "EyeLeftRegion", "EyeLeft", "LidLSwitch,GazeL" },
-            { "EyeRightRegion", "EyeRight", "LidRSwitch,GazeR" },
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthForward,MouthWidth,MouthCorner,MouthTongue" },
+            // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
+            { "EyeRegion", "Eye", "LidLSwitch,LidRSwitch" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
-            { "CheekRegion", "Cheek", "CheekSquint,CheekPuff,NoseSneer" }
+            { "NoseRegion", "Nose", "NoseUp" }
         };
 
         [MenuItem("HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）")]
@@ -279,7 +306,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
 
-            // ── 参数（43 个）───────────────────────────────────────────────────
+            // ── 参数（42 个）───────────────────────────────────────────────────
             var parameters = new List<AnimatorControllerParameter>();
             foreach (string gate in RegionGates) parameters.Add(Float("Ho/Drive/Gate/" + gate, 1f));
             parameters.Add(Float(OneWeight, 1f));                                  // Direct 子节点都要挂权重
@@ -432,7 +459,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             return "路径：" + path + "\n"
                 + "参数 " + parameters.Count + " 个（区域门 5 + W/One 1 + 表情门 2 + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + "）\n"
-                + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 变体 " + Variants.GetLength(0)
+                + "树 " + trees.Count + " 棵（根 1 + 区域 " + Regions.GetLength(0) + " + 表 " + Tables.Length + " + 1D 表 " + Simple1DTables.Length + " + 变体 " + Variants.GetLength(0)
                 + " + 副本 " + Copies.GetLength(0) + " + 开关 " + (Switches.GetLength(0) + VariantSwitches.Length) + "）\n"
                 + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree
                 + "核对：`.research/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";

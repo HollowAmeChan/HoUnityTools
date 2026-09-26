@@ -2806,18 +2806,33 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Jaw",
-                        "expression":  "jawOpen",
+                        "expression":  "clamp(jawOpen - mouthClose, -1, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Jaw (raw jawOpen; kept as its own degree of freedom)"
+                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells."
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/JawSide",
+                        "expression":  "jawRight - jawLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Forward",
@@ -3120,8 +3135,8 @@
                         "notes":  "controller axis Cheek/Right/Puff (HQCheekPuffRight): same as Left for now"
                     },
                     {
-                        "parameter":  "Ho/Drive/Nose/Left/Sneer",
-                        "expression":  "noseSneerLeft",
+                        "parameter":  "Ho/Drive/Nose/Up",
+                        "expression":  "(noseSneerLeft + noseSneerRight) / 2",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -3132,22 +3147,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Nose/Left/Sneer"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Nose/Right/Sneer",
-                        "expression":  "noseSneerRight",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Nose/Right/Sneer"
+                        "notes":  "controller axis Nose/Up -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Mouth",
@@ -3162,7 +3162,7 @@
                         "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
                     },
                     {
-                        "parameter":  "Ho/Drive/Gate/EyeLeft",
+                        "parameter":  "Ho/Drive/Gate/Eye",
                         "expression":  "",
                         "defaultValue":  1,
                         "curve":  {
@@ -3171,19 +3171,7 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Gate/EyeRight",
-                        "expression":  "",
-                        "defaultValue":  1,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
+                        "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well). 2026-09-27: EyeLeft/EyeRight merged into one Eye gate -- the gaze trees are gone (注视交给 Warudo 的 LookAt + IK), so each eye region held only its lid switch."
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Brow",
@@ -3198,7 +3186,7 @@
                         "notes":  "row-side region gate: constant 1 written every frame (the tree side keeps m_DefaultFloat 1 as well)"
                     },
                     {
-                        "parameter":  "Ho/Drive/Gate/Cheek",
+                        "parameter":  "Ho/Drive/Gate/Nose",
                         "expression":  "",
                         "defaultValue":  1,
                         "curve":  {
