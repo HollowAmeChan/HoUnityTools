@@ -1353,6 +1353,13 @@ public static class HoFaceTrackingValidation
         if (!hasJaw)
             throw new Exception("夹具配置里没有 `jawOpen` 这一路 —— 行为用例靠它串「包 → 参数」整条链，缺了会以一堆中性值的形式失败。");
 
+        // 这些播放测试的控制器消费 ARKit/<canonical>，正式配置现在消费的是 Ho/Drive/*。
+        // 保留真实设备输入表，输出用测试控制器自己的直通契约，避免生产配置改轴后整套测试失效。
+        // 正式 JSON 的逐行跨端一致性由 Tests~/FaceRuleParity 单独验证。
+        middleware.outputs.Clear();
+        foreach (string shape in HoFaceTrackingChannels.Names)
+            middleware.outputs.Add(new HoFaceOutput { parameter = "ARKit/" + shape, expression = shape });
+
         string assetPath = "Assets/ValidationProfile" + HoFaceProfile.Extension;
         string fullPath = System.IO.Path.Combine(Application.dataPath, "ValidationProfile" + HoFaceProfile.Extension);
         System.IO.File.WriteAllText(fullPath, HoFaceProfile.Write(middleware));

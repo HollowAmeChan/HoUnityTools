@@ -48,7 +48,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     public enum HoFaceModifierKind
     {
         [InspectorName("平滑")] Smooth,
-        [InspectorName("延迟（未实现）")] Delay,
+        [InspectorName("延迟")] Delay,
         [InspectorName("维持")] Steps
     }
 

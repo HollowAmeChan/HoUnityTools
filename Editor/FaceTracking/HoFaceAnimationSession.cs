@@ -246,6 +246,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 throw new InvalidOperationException("目标 Animator 已变更或禁用，会话已停止。");
             foreach (var entry in meshRefs)
                 if (entry.Key == null || entry.Key.sharedMesh != entry.Value) throw new InvalidOperationException("模型 Mesh 已变更，请重新检查绑定后启动。");
+            string stamp = MappingStamp();
+            if (!configured || stamp != mappingStamp)
+            {
+                // 配置变更才重置规则状态；通道接管/交还引起的影子重建不能清空平滑和延迟。
+                BuildOutputs();
+                primed = false;
+            }
             bool changed = !configured;
             var nextSelected = new bool[52];
             double now = HoFaceClock.Now;
@@ -299,13 +306,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 它现在是每一行输出自己的修饰符（照 VBridger 的粒度）：要平滑哪一路就在那一行加。
                 Input[index] = Effective[index];
             }
-            primed = true;
             for (int i = 0; i < selected.Length; i++)
             {
                 if (selected[i] != nextSelected[i]) changed = true;
                 selected[i] = nextSelected[i];
             }
-            string stamp = MappingStamp();
             if (changed || runningController != Settings.FaceController() || stamp != mappingStamp)
             {
                 Rebuild();
@@ -333,33 +338,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             double frameNow = HoFaceClock.Now;
             // **输出表缓存**：每帧清一次，行走完再统一发布（用户定 2026-09-27）。
             // 行与行之间只通过这张表看见彼此 —— 后写覆盖先写，所以"读自己、写自己"的同名链天然成立。
-            outputTable.Clear();
-            for (int row = 0; row < outputs.Length; row++)
-            {
-                var output = outputs[row];
-                if (output == null) continue;
-                // 表达式留空 = **常量行**（门控那种"不需要输入、总有默认值"的东西就靠它）；
-                // 表达式写了但解析不了时也退回这个作者声明过的默认值（比魔法 0 诚实）。
-                // ⚠️ 常量行**不过曲线**：作者填 1 就该得 1（曲线是给"算出来的值"整形用的）。
-                // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
-                // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
-                //    ⇒ 走同一条路：**始终输出 defaultValue**。
-                float value = expressions[row] != null
-                    ? output.Transform(expressions[row].Evaluate(Lookup, LookupOutput))
-                    : output.defaultValue;
-                value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
-
-                // ⑤ **极小值归零**（2026-09-27 用户实测）：面板用 F4 显示，于是"影子台里是
-                //    −4.949414e-40（非规格化数）而面板显示 0.0000"这种不一致会让人怀疑管线。
-                //    轴与门的有效分辨率远大于 1e-6（面板四位小数都印不出来），所以低于它的值一律
-                //    当成 0：面板 / 影子台 / 角色 Hub 三处从此一致，顺带免掉非规格化数在部分 CPU 上的
-                //    慢路径。（来源不在我们这几行里：in-engine 实测**静息时 30 根轴全是精确 0**，
-                //    门是精确 1；能造出非规格化数的只有 `Mathf.Exp` 那一处，它被 `1 - exp` 吃掉了。）
-                if (value != 0f && Mathf.Abs(value) < 1e-6f) value = 0f;
-
-                outputValues[row] = value;
-                outputTable.Write(output.parameter, value);   // 同名多行：表里永远是"最后写的那一份"
-            }
+            EvaluateOutputs(deltaTime, frameNow);
+            primed = true;
 
             // ── 发布（**全都走完了才输出**）──────────────────────────────────────────────
             // 按**表**发布而不是按行：同名多行只写一次（最后写的那一份），于是
@@ -474,6 +454,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (claimed > 0)
                 Debug.Log("[Ho 面捕] 动态参数：角色 Hub 上开了 " + claimed + " 个新槽（"
                     + string.Join("、", semanticSkipped) + "）—— 名字就是中间层输出行的 `parameter`。");
+        }
+
+        /// <summary>按配置行序求值；全部完成后调用方再发布参数。</summary>
+        private void EvaluateOutputs(float deltaTime, double frameNow)
+        {
+            outputTable.Clear();
+            for (int row = 0; row < outputs.Length; row++)
+            {
+                var output = outputs[row];
+                if (output == null) continue;
+                // 表达式留空 = **常量行**（门控那种"不需要输入、总有默认值"的东西就靠它）；
+                // 表达式写了但解析不了时也退回这个作者声明过的默认值（比魔法 0 诚实）。
+                // ⚠️ 常量行**不过曲线**：作者填 1 就该得 1（曲线是给"算出来的值"整形用的）。
+                // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
+                // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
+                //    ⇒ 走同一条路：**始终输出 defaultValue**。
+                float value = expressions[row] != null
+                    ? output.Transform(expressions[row].Evaluate(Lookup, LookupOutput))
+                    : output.defaultValue;
+                value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
+
+                // ⑤ **极小值归零**（2026-09-27 用户实测）：面板用 F4 显示，于是"影子台里是
+                //    −4.949414e-40（非规格化数）而面板显示 0.0000"这种不一致会让人怀疑管线。
+                //    轴与门的有效分辨率远大于 1e-6（面板四位小数都印不出来），所以低于它的值一律
+                //    当成 0：面板 / 影子台 / 角色 Hub 三处从此一致，顺带免掉非规格化数在部分 CPU 上的
+                //    慢路径。（来源不在我们这几行里：in-engine 实测**静息时 30 根轴全是精确 0**，
+                //    门是精确 1；能造出非规格化数的只有 `Mathf.Exp` 那一处，它被 `1 - exp` 吃掉了。）
+                if (value != 0f && Mathf.Abs(value) < 1e-6f) value = 0f;
+
+                outputValues[row] = value;
+                outputTable.Write(output.parameter, value);   // 同名多行：表里永远是"最后写的那一份"
+            }
         }
 
         /// <summary>
@@ -794,7 +806,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private void Rebuild()
         {
-            BuildOutputs();
             var next = HoFaceAnimationAssets.Compile(Settings, shape => { int i = HoFaceTrackingChannels.IndexOf(shape); return i >= 0 && selected[i]; });
             try
             {
