@@ -807,18 +807,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 if (!hasSession)
                 {
-                    // 会话没起时这一栏**永远是空的** —— 而「开始驱动」那个按钮在折叠的「对象」段里，
-                    // 所以这里放一个等价入口（2026-09-26：用户就是在这儿找"为什么没输出"）。
+                    // 会话没起时这一栏**永远是空的**。这里**只留一句提示、不放按钮** ——
+                    // 「开始驱动」的入口在「对象」段（2026-09-27 用户：入口重复了，删掉这行那个按钮）。
                     using (HoConstraintEditorControls.Row(true))
                     {
-                        HoConstraintEditorControls.Caption("（进播放模式并点「开始驱动」后这里才有值；现在只能看名字与表达式）");
-                        bool canDrive = Application.isPlaying && settings != null && settings.HasProfile;
-                        if (HoConstraintEditorControls.Button("开始驱动",
-                            "等同「对象」段里那个按钮：一次只算一次（谁先读谁触发），所以点一下就开始算参数与驱动。",
-                            !canDrive, 84.0f))
-                        {
-                            HoFaceInputHub.Start(settings);
-                        }
+                        HoConstraintEditorControls.Caption("（进播放模式、并在「对象」段点「开始驱动」后这里才有值；现在只能看名字与表达式）");
                     }
                 }
 
