@@ -9,8 +9,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：44 个参数 + 27 棵树 + 89 个**空槽位**
-    /// （2026-09-28 之前是 92 —— 猫嘴版变体表按实机砍掉 3 格，见 `VariantSkip`），
+    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：44 个参数 + 27 棵树 + 92 个**空槽位**，
     /// 一层 `Ho/00 Drive`、一个状态 `Drive`（Write Defaults 开）、无 Behaviour、无 clip —— 动画由作者后面填。
     ///
     /// 形状与"现在落到哪"记在 `docs/VTS_HQ_CONTROLLER.md`：**§2.1 结构、§2.2 每格叶子的语义**
@@ -287,20 +286,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             { "MouthCoreRoll", "MouthCore" }
         };
 
-        /// <summary>
-        /// ⭐ **变体表自己再挖掉的格**（2026-09-28 用户定，实机抄数之后）：猫嘴开着时**可达的面积更小** ——
-        /// ① `Open` 顶行（0.6 ~ 0.75）猫嘴够不到：做住 `Open ≈ 0`、张嘴/大张最多到 ~0.4
-        ///    （`X1Y2` 早就挖了，剩 `X0Y2` / `X2Y2` 这两格）；
-        /// ② "中性形 + 张嘴"（`X0Y1`）也不会出现 —— 猫嘴必然把嘴角往后拉 ⇒ `Form > 0`。
-        /// ⇒ 猫嘴版 8 格 → **5 格**（`X0Y0` **留着**：它是 `Roll` 刚过 0.15、两张表交叉淡入时的中性锚点）。
-        /// ⚠️ 主版 `MouthCore` **一格不动**（"张嘴不笑" / "大笑张嘴" 在非猫嘴时都是真实状态）；
-        /// ⚠️ 键是**变体树名**，值是额外挖掉的 `(i, j)`（主版 spec 的 `Skip` 仍然生效）。
-        /// </summary>
-        private static readonly Dictionary<string, Vector2Int[]> VariantSkip =
-            new Dictionary<string, Vector2Int[]>(StringComparer.Ordinal)
-            {
-                { "MouthCoreRoll", new[] { new Vector2Int(0, 1), new Vector2Int(0, 2), new Vector2Int(2, 2) } }
-            };
+        // ⚠️ **2026-09-28 砍过 3 格又撤回了 —— 变体表与主版一样保持 8 格**（用户定）。
+        //    当时看图觉得"猫嘴开着时 `Open` 顶行（0.6 / 0.75）与『中性形 + 张嘴』到不了"
+        //    （`X0Y1` / `X0Y2` / `X2Y2`），但**常开**（直接写 `Ho/Drive/Mouth/Roll` ≥ 0.30，见
+        //    `docs/VTS_HQ_CONTROLLER.md` §2.2）会把嘴钉在猫嘴版上 —— 那时任意 Form × Open 都会被采到，
+        //    少一格就是"没烘的那几根键回默认、嘴塌"（WD 开）。用户原话：
+        //    「还是要留着，因为如果用户加了常开，那些范围还是会采到的」。
+        //    ⚠️ 教训：**"轴上到不了" ≠ "不会被采到"** —— 变体表的钥匙是那根轴，而常开能绕过轴直接把钥匙转到底。
 
         /// <summary>
         /// 轴驱动的变体开关（1D 树，两个孩子都是整表，阈值显式写死）：
@@ -453,8 +445,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 trees[copy.Value] = tree;
             }
 
-            // 变体表：与主版**同轴同刻度**（整套姿势换成变体版），所以直接复用主版的 spec ——
-            // 但**稀疏格可以更多**（`VariantSkip`：猫嘴版再挖掉 3 格）。
+            // 变体表：与主版**同轴、同刻度、同稀疏格**（整套姿势换成变体版），所以直接复用主版的 spec
             for (int v = 0; v < Variants.GetLength(0); v++)
             {
                 TableSpec spec = FindTable(Variants[v, 1]);
@@ -462,16 +453,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 tree.blendParameter = spec.X;
                 tree.blendParameterY = spec.Y;
                 tree.useAutomaticThresholds = false;
-                int filled = 0;
                 for (int j = 0; j < spec.YValues.Length; j++)
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
-                        if (Skipped(spec, i, j) || VariantSkipped(Variants[v, 0], i, j)) continue;
+                        if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(Variants[v, 0], spec.XToken, spec.YToken, spec.XValues.Length, i, j);
                         tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
-                        filled++;
                     }
-                slotCounts[Variants[v, 0]] = filled;
+                slotCounts[Variants[v, 0]] = CountCells(spec);
                 trees[Variants[v, 0]] = tree;
             }
 
@@ -586,15 +575,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int i = 0; i < spec.XValues.Length; i++)
                     if (!Skipped(spec, i, j)) count++;
             return count;
-        }
-
-        /// <summary>**变体表**额外挖掉的格吗（`VariantSkip`；主版不受影响）。</summary>
-        private static bool VariantSkipped(string treeName, int i, int j)
-        {
-            Vector2Int[] cells;
-            if (VariantSkip == null || !VariantSkip.TryGetValue(treeName, out cells)) return false;
-            foreach (var cell in cells) if (cell.x == i && cell.y == j) return true;
-            return false;
         }
 
         /// <summary>槽位名 = `<树名>__<X段词>__<Y段词>__A<X刻度数>X<i>Y<j>`（见命名权威 §5）。</summary>
