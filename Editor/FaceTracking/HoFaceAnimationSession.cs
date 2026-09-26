@@ -30,13 +30,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>通道层整形之后的值（模式 / 输入曲线 / 断流回中性）。**表达式读的就是它。**</summary>
         public readonly float[] Input = new float[52];
         /// <summary>
-        /// 按参数名读某一行最后的输出值（面板的「参数输出」栏、用例用它；没有这一行时返回 <see cref="float.NaN"/>）。
+        /// 按参数名读某一行**这一帧写出去**的值（面板的「参数输出」栏、用例用它；没有这一行时返回 <see cref="float.NaN"/>）。
         /// ⚠️ 这里**不再有** `ControllerValues`（"名字正好是 `ARKit/&lt;键&gt;` 的那 52 行"的快速索引）：
         /// 那个约定 2026-09-26 已经废掉（出口用**裸规范名**），而且它早已没有任何读者 —— 面板现在直接
         /// 按行名读 <see cref="OutputValue"/>，不依赖命名约定。
+        /// **调试覆盖优先**：被 <see cref="SetPreview"/> 盖住的行读到的就是覆盖值（与真正写进影子 / Hub 的那份一致）。
         /// </summary>
-        public float OutputValue(string parameter) =>
-            parameter != null && outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
+        public float OutputValue(string parameter)
+        {
+            if (string.IsNullOrEmpty(parameter)) return float.NaN;
+            if (previews.TryGetValue(parameter, out float overridden)) return overridden;
+            return outputIndex.TryGetValue(parameter, out int row) ? outputValues[row] : float.NaN;
+        }
 
         /// <summary>
         /// 按**规范名**读输入行算出来的值（「排查」栏的姿态监视用）。没有对应输入行时返回 <see cref="float.NaN"/> ——
@@ -109,7 +114,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly Dictionary<string, float> previews = new Dictionary<string, float>(StringComparer.Ordinal);
 
         /// <summary>
-        /// 调试预览：外部（混合树小工具的滑条）直接指定某个参数，在所有生产逻辑之后覆盖。
+        /// 调试预览：外部（面板「参数输出」栏那四个按钮）直接指定某个参数，在所有生产逻辑之后覆盖。
         ///
         /// 走这条路而不是直接 `animator.SetFloat`，是因为**预览必须走完整条管线** ——
         /// 参数 → 影子上的混合树 → 被占用的键 → 真模型。否则预览看到的和实际跑起来看到的不是一回事。
@@ -120,7 +125,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             previews[parameter] = float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
         }
 
+        /// <summary>把某一个参数的覆盖去掉（面板上那个「不覆盖」按钮）。</summary>
+        public void ClearPreview(string parameter)
+        {
+            if (!string.IsNullOrEmpty(parameter)) previews.Remove(parameter);
+        }
+
         public void ClearPreviews() => previews.Clear();
+
+        /// <summary>这个参数现在有没有被覆盖（面板画那个「盖住了」的高亮用它）。</summary>
+        public bool TryGetPreview(string parameter, out float value)
+        {
+            if (string.IsNullOrEmpty(parameter)) { value = 0f; return false; }
+            return previews.TryGetValue(parameter, out value);
+        }
+
+        /// <summary>当前被覆盖的参数个数（「清空覆盖（N）」用它）。</summary>
+        public int PreviewCount => previews.Count;
 
         public HoFaceAnimationSession(HoFaceDebugSettings settings)
         {

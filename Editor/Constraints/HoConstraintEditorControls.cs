@@ -411,6 +411,23 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             return ButtonInternal(Next(width), glyph, HoConstraintEditorTheme.IconButton, tooltip);
         }
 
+        /// <summary>
+        /// **分段按钮**（一排里选一个）：`on` 时用 <see cref="HoConstraintEditorTheme.SegmentOn"/>，否则 SegmentOff。
+        /// 面捕面板「参数输出」那四个覆盖按钮（不覆盖 / -1 / 0 / 1）就是它 —— 画在给定矩形里，方便和表头对齐。
+        /// </summary>
+        public static bool SegmentButton(Rect rect, string text, bool on, string tooltip = null)
+        {
+            return ButtonInternal(rect, text, on ? HoConstraintEditorTheme.SegmentOn : HoConstraintEditorTheme.SegmentOff, tooltip);
+        }
+
+        /// <summary>分段按钮（自己占宽度）。</summary>
+        public static bool SegmentButton(string text, bool on, string tooltip = null, float width = 0.0f)
+        {
+            GUIStyle style = on ? HoConstraintEditorTheme.SegmentOn : HoConstraintEditorTheme.SegmentOff;
+            Rect rect = Next(width > 0.0f ? width : HoConstraintEditorTheme.Measure(style, text) + 4.0f);
+            return ButtonInternal(rect, text, style, tooltip);
+        }
+
         /// <summary>行内的「▸ 细节」折叠头（自带宽度，返回新状态）。</summary>
         public static bool InlineFoldout(bool expanded, string text, string tooltip = null)
         {

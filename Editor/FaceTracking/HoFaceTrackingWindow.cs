@@ -788,6 +788,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         HoConstraintEditorControls.Gap();
                         GUILayout.Label(missing + " 行的参数不在控制器里", InlineWarning());
                     }
+
+                    // ── 覆盖的总开关 ──────────────────────────────────────────────
+                    // 覆盖 = 直接钉住这一行**写出去的值**（-1 / 0 / 1），走 SetPreview：
+                    // 它在所有生产逻辑之后生效，所以影子树与角色 Hub 看到的都是覆盖值。
+                    // 按键 / 门控调试（`Ho/Drive/Gate/Expr/*`）就是靠它。
+                    int overrides = session != null ? session.PreviewCount : 0;
+                    HoConstraintEditorControls.Flex();
+                    if (HoConstraintEditorControls.Button(
+                            overrides > 0 ? "清空覆盖（" + overrides + "）" : "清空覆盖",
+                            "把这一栏里所有手动覆盖一次清掉（每行右边那四个按钮：不覆盖 / -1 / 0 / 1）",
+                            overrides > 0, 120.0f)
+                        && session != null)
+                    {
+                        session.ClearPreviews();
+                    }
                 }
 
                 if (!hasSession)
@@ -811,6 +826,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (HoConstraintEditorControls.Row(true))
                 {
                     GUI.Label(HoConstraintEditorControls.Next(150.0f), "参数名（写进混合树）", HoConstraintEditorTheme.Caption);
+                    HoConstraintEditorControls.Flex();
+                    GUI.Label(HoConstraintEditorControls.Next(96.0f), "覆盖", HoConstraintEditorTheme.Caption);
                     GUI.Label(HoConstraintEditorControls.Next(64.0f), "值", HoConstraintEditorTheme.Caption);
                     HoConstraintEditorControls.Flex();
                     GUI.Label(HoConstraintEditorControls.Next(120.0f), "算它的表达式", HoConstraintEditorTheme.Caption);
@@ -824,6 +841,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         && row.parameter.IndexOf(outputSearch, StringComparison.OrdinalIgnoreCase) < 0
                         && (row.expression ?? "").IndexOf(outputSearch, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
+                    // 调试覆盖（面板上那四个按钮）：**这一帧写出去的值**（OutputValue 已经把覆盖算进去），
+                    // 所以进度条、值、影子树、角色 Hub 看的是同一份。
+                    float overrideValue = 0f;
+                    bool overridden = session != null && session.TryGetPreview(row.parameter, out overrideValue);
                     float value = session != null ? session.OutputValue(row.parameter) : float.NaN;
                     bool has = !float.IsNaN(value) && session != null;
                     bool inController = !hasSession
@@ -836,13 +857,47 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                         Rect bar = HoConstraintEditorControls.NextFlexible(40.0f);
                         if (has && value >= 0f && value <= 1f)
-                            HoConstraintEditorControls.Meter(bar, value, 0f, 1f, HoConstraintEditorTheme.AccentDriver);
+                            HoConstraintEditorControls.Meter(bar, value, 0f, 1f,
+                                overridden ? HoConstraintEditorTheme.WarningColor : HoConstraintEditorTheme.AccentDriver);
                         else if (Event.current.type == EventType.Repaint)
                             EditorGUI.DrawRect(bar, HoConstraintEditorTheme.WellColor);
 
+                        // ── 覆盖：不覆盖 / -1 / 0 / 1 ──────────────────────────────────
+                        // 按键与门控调试就靠这四个：`-1 / 0 / 1` 直接把这一行**写出去的值**钉住
+                        // （走 SetPreview：所有生产逻辑之后生效），「不」把这一行交还给中间层。
+                        Rect overrideBlock = HoConstraintEditorControls.Next(96.0f);
+                        const float cell = 22.0f;
+                        if (HoConstraintEditorControls.SegmentButton(
+                            new Rect(overrideBlock.x, overrideBlock.y, cell, overrideBlock.height),
+                            "不", !overridden, "不覆盖：这一行按中间层算出来的值走"))
+                        {
+                            session?.ClearPreview(row.parameter);
+                        }
+                        if (HoConstraintEditorControls.SegmentButton(
+                            new Rect(overrideBlock.x + (cell + 1.0f), overrideBlock.y, cell, overrideBlock.height),
+                            "-1", overridden && Mathf.Abs(overrideValue + 1f) < 0.0001f, "把这一行覆盖成 -1"))
+                        {
+                            session?.SetPreview(row.parameter, -1f);
+                        }
+                        if (HoConstraintEditorControls.SegmentButton(
+                            new Rect(overrideBlock.x + (cell + 1.0f) * 2.0f, overrideBlock.y, cell, overrideBlock.height),
+                            "0", overridden && Mathf.Abs(overrideValue) < 0.0001f, "把这一行覆盖成 0"))
+                        {
+                            session?.SetPreview(row.parameter, 0f);
+                        }
+                        if (HoConstraintEditorControls.SegmentButton(
+                            new Rect(overrideBlock.x + (cell + 1.0f) * 3.0f, overrideBlock.y, cell, overrideBlock.height),
+                            "1", overridden && Mathf.Abs(overrideValue - 1f) < 0.0001f, "把这一行覆盖成 1"))
+                        {
+                            session?.SetPreview(row.parameter, 1f);
+                        }
+
                         GUI.Label(HoConstraintEditorControls.Next(64.0f),
-                            has ? value.ToString("F4") : "—",
-                            has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim);
+                            new GUIContent(
+                                has ? value.ToString("F4") : "—",
+                                overridden ? "这一行被调试覆盖盖住了（不是中间层算出来的值）" : null),
+                            overridden ? OverrideValue()
+                                : (has ? HoConstraintEditorTheme.Value : HoConstraintEditorTheme.LabelDim));
 
                         GUI.Label(HoConstraintEditorControls.NextFlexible(60.0f), row.expression ?? "",
                             HoConstraintEditorTheme.Caption);
@@ -877,6 +932,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static GUIStyle inlineWarning;
+
+        /// <summary>被调试覆盖盖住的那个读数（黄字，和普通读数区分开）。</summary>
+        private static GUIStyle OverrideValue()
+        {
+            if (overrideValueStyle == null)
+            {
+                overrideValueStyle = new GUIStyle(HoConstraintEditorTheme.Value);
+                overrideValueStyle.normal.textColor = HoConstraintEditorTheme.WarningColor;
+            }
+            return overrideValueStyle;
+        }
+
+        private static GUIStyle overrideValueStyle;
 
         // ══════════════════════════════════════════════════════════════
         // 排查（默认收起）
