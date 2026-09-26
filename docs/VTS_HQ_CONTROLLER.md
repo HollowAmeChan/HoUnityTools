@@ -261,10 +261,15 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 > 生成脚本 `.research/make-vts-controller.ps1`（从老控制器的字段集取模板），核对脚本
 > `.research/check-controller.ps1` 对它报 **0 问题**。
 >
-> ⚠️ 那份是**文本生成**的，还没在 Unity 里打开过（本机四个编辑器占着授权互斥量，`-batchmode` 起不来）。
-> **Unity 侧的兜底/重建入口是菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`**
+> ✅ **Unity 已经导入过它**（不是"应该能加载"）：BREAK_URP 那个编辑器一直在跑，导入日志里
+> `Start importing … PTP_CTR_Face_VTS.controller … Importer(815301076,…)` 之后跟着
+> **`asset objects unloaded after import = 32`** —— 我们那 32 个对象（1 控制器 + 1 状态机 + 1 状态 + 29 棵树）
+> **全被解析出来了**、日志无报错，项目里也生成了 `.meta`（GUID `7b3231c5…`）。
+> 按类比过字段集：`91 / 206 / 1102 / 1107` 四类的字段**与 Unity 自己写的老控制器逐字段相同**（新增 0 条）。
+>
+> Unity 侧的重建入口是菜单 **`HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`**
 > （`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`，用 Unity 自己的 API 建同一份形状；
-> API 用法照抄我们跑通的 `Tests~/FaceTrackingValidation.cs`）。**面板读不出来就用它重建一份。**
+> API 用法照抄我们跑通的 `Tests~/FaceTrackingValidation.cs`）。**设计一改就从这里重新生成，别手改资产。**
 
 > 搭完先跑一次 `.research/check-controller.ps1 -Path <那份>.controller`：参数名/默认值/树形/门控接线一次核完
 > （验收清单见 §11 第 3 条）。**参数名敲错一个字符是静默失败**，这一步别省。
@@ -372,8 +377,9 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 3. **眉毛**做，按 VB 现成的 `BrowLeftY/BrowRightY` × `BrowInnerUp`。
 4. **表情来源本版不接、也不测**：门参数建好、默认 `0`、中间层不写它（§3.3）。
 5. **骨架由我生成**（改成生成器，不再手搭）：`PTP_CTR_Face_VTS.controller` 已落在土豆的 FT 目录下，
-   形状即 §10，槽位全空 —— 生成脚本 `.research/make-vts-controller.ps1`，核对脚本报 0 问题。
-   ⚠️ 还没在 Unity 里打开过（授权互斥量），第一次打开要目视确认。
+   形状即 §10，槽位全空 —— 文本生成脚本 `.research/make-vts-controller.ps1`（核对脚本报 0 问题）
+   + Unity 侧菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`（设计改动后重新生成用）。
+   ✅ **Unity 已经导入过它**（32 个对象全解析、无报错，见 §10 顶上的记录）。
 6. **鼓腮与吐舌分左右**，各出一对 HQ 轴（`HQCheekPuffLeft/Right`、`HQTongueLeft/Right`，契约 HQ 39 → 43），
    树名/轴段词按 [命名权威](FACE_TRACKING_NAMING.md)（树族不再用 `M01` 那套编号）。
 
