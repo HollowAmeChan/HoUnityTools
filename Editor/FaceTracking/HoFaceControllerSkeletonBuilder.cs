@@ -71,9 +71,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] Ends = { -1f, 1f };        // 两档
         private static readonly float[] ZeroOne = { 0f, 1f };
 
+        /// <summary>
+        /// **`Mouth/Open` 专用刻度：0 / 0.4 / 0.75**（2026-09-27 用户实测定）。
+        /// 手机实测"张满"只到 0.75、"半张"在 0.4 附近 ⇒ 把这根轴的圈收进实测范围：
+        /// 0.75 就是张满（顶行），0.9 / 1.0 也会被投影到这一行（实测逐位相同）。
+        /// ⚠️ 只给 `MouthCore` 的 Y 用；`Mouth/Jaw`（= 裸 `jawOpen`）**没有实测数据**，仍用 `Unit`。
+        /// </summary>
+        private static readonly float[] OpenMeasured = { 0f, 0.4f, 0.75f };
+
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = Two, YValues = Unit },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = Two, YValues = OpenMeasured },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },
