@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -184,6 +185,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ── 树 ────────────────────────────────────────────────────────────
             var trees = new Dictionary<string, BlendTree>(StringComparer.Ordinal);
             var slotCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            int clipsCreated = 0, clipsKept = 0;
+            // 槽位片段：每个格子一份**以槽位名命名的空 `.anim`**，放在控制器旁边的 `Animations/`。
+            // 于是混合树里每格都显示语义名字（不再是 None），"槽位名 = 片段名"从第一天就成立。
+            // ⚠️ **已存在的片段绝不覆盖**：作者可能已经把姿势烘进去了；要重铺得手动删文件。
+            string clipFolder = ClipFolderFor(path);
+            if (!AssetDatabase.IsValidFolder(clipFolder))
+            {
+                string parent = Path.GetDirectoryName(clipFolder).Replace('\\', '/');
+                AssetDatabase.CreateFolder(parent, Path.GetFileName(clipFolder));
+            }
 
             foreach (var spec in Tables)
             {
@@ -196,8 +207,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
-                        // 空槽位：motion = null（面板上就是一个待填的格子），位置 = 该格的轴值
-                        tree.AddChild(null, new Vector2(spec.XValues[i], spec.YValues[j]));
+                        string slot = SlotName(spec.Name, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
+                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
+                            new Vector2(spec.XValues[i], spec.YValues[j]));
                         filled++;
                     }
                 }
@@ -214,7 +226,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 tree.useAutomaticThresholds = false;
                 for (int j = 0; j < spec.YValues.Length; j++)
                     for (int i = 0; i < spec.XValues.Length; i++)
-                        tree.AddChild(null, new Vector2(spec.XValues[i], spec.YValues[j]));
+                    {
+                        string slot = SlotName(copy.Value, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
+                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
+                            new Vector2(spec.XValues[i], spec.YValues[j]));
+                    }
                 slotCounts[copy.Value] = spec.XValues.Length * spec.YValues.Length;
                 trees[copy.Value] = tree;
             }
@@ -267,8 +283,35 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return "路径：" + path + "\n"
                 + "参数 " + parameters.Count + " 个（区域门 5 + W/One 1 + 表情门 2 + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + "）\n"
                 + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 副本 " + Copies.GetLength(0) + " + 开关 " + Switches.GetLength(0) + "）\n"
-                + "空槽位 " + slots + " 个：\n" + perTree
-                + "核对：`.research/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位/门控接线一次核完）";
+                + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree
+                + "核对：`.research/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";
+        }
+
+        /// <summary>槽位片段放哪：控制器同级的 `Animations/`。</summary>
+        private static string ClipFolderFor(string controllerPath)
+        {
+            return Path.GetDirectoryName(controllerPath).Replace('\\', '/') + "/Animations";
+        }
+
+        /// <summary>槽位名 = `<树名>__<X段词>__<Y段词>__A<X刻度数>X<i>Y<j>`（见命名权威 §5）。</summary>
+        private static string SlotName(string tree, string xToken, string yToken, int xCount, int i, int j)
+        {
+            return tree + "__" + xToken + "__" + yToken + "__A" + xCount + "X" + i + "Y" + j;
+        }
+
+        /// <summary>
+        /// 取槽位片段：没有就建一份**空**的（名字即语义），已有就原样用 —— **绝不覆盖**已烘好的姿势。
+        /// </summary>
+        private static AnimationClip SlotClip(string folder, string slot, ref int created, ref int kept)
+        {
+            string clipPath = folder + "/" + slot + ".anim";
+            var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+            if (existing != null) { kept++; return existing; }
+
+            var clip = new AnimationClip { name = slot };
+            AssetDatabase.CreateAsset(clip, clipPath);
+            created++;
+            return clip;
         }
 
         private static AnimatorControllerParameter Float(string name, float value)
