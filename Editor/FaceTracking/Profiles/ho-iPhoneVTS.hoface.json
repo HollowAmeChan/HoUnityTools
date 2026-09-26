@@ -1,4 +1,4 @@
-{
+﻿{
     "format":  "ho-face-middleware",
     "version":  2,
     "displayName":  "ho-iPhoneVTS",
@@ -2926,24 +2926,18 @@
                         },
                         {
                             "parameter":  "Ho/Drive/Mouth/Roll",
-                            "expression":  "(mouthRollUpper + mouthRollLower) / 2",
+                            "expression":  "clamp(((mouthRollUpper + mouthRollLower) / 2) * clamp((abs((mouthRollUpper + mouthRollLower) / 2) - 0.02) / 0.03, 0, 1) * (1 + 4 * jawOpen * jawOpen), 0, 1)",
                             "defaultValue":  0,
                             "curve":  {
                                           "keys":  [
-                                                       { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                       { "t": -0.05, "v": -0.05, "inT": 1, "outT": 1.667 },
-                                                       { "t": -0.02, "v": 0, "inT": 1.667, "outT": 0 },
-                                                       { "t": 0.02, "v": 0, "inT": 0, "outT": 1.667 },
-                                                       { "t": 0.05, "v": 0.05, "inT": 1.667, "outT": 1 },
-                                                       { "t": 0.18, "v": 0.18, "inT": 1, "outT": 1 },
-                                                       { "t": 0.45, "v": 0.45, "inT": 1, "outT": 1 },
-                                                       { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                                       { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                       { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                    ]
                                       },
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- how hard the teeth bite down while the lips tuck in (upper/lower split not needed on this device, so the two lines are averaged). 死区（2026-09-27 用户实测）：|值| <= 0.02 归 0（手机静息时就在这个区间抖），0.02..0.05 斜坡、再外面恒等 —— 和 Mouth/Open 同一条形状。MEASURED: lips tucked without teeth ~= 0.18, strongest teeth-bite = 0.45 (never reaches 1). 2026-09-27 RESTRUCTURE: this axis is now the blend parameter of MouthCoreRollSwitch, a 1D switch between TWO whole mouth tables (MouthCore = resting mouth / MouthCoreRoll = cat-mouth variant), thresholds 0.02 and 0.18 -- no residual roll table any more, so the mouth at any instant is a cross-fade of two AUTHORED tables (the mixed states are someone's responsibility, not an addition of residuals). 0.18 and above saturate on the cat-mouth variant (user: 不需要区分两段卷嘴). To FORCE a cat mouth (button/keyboard), just write this parameter >= 0.18 -- no second table, no expression gate."
+                            "notes":  "controller axis Mouth/Roll -- drives MouthCoreRollSwitch (1D, thresholds 0.02 / 0.12) which cross-fades TWO WHOLE MOUTH TABLES (MouthCore = resting / MouthCoreRoll = cat-mouth variant), so the mouth at any instant is a cross-fade of AUTHORED tables instead of a sum of residual lanes. 这一行 = **死区 × 下颌增益**（乘数写在这里，曲线是恒等）：\n  ① 死区：|平均| <= 0.02 归 0，0.02..0.05 线性斜坡（乘数形式，0.05 以上**恒等** ⇒ 实测刻度 0.18 / 0.45 原样不变）；\n  ② 下颌增益 `1 + 4*jawOpen^2`：**张大嘴时把卷唇读数乘回来**（用户报\"张嘴会抑制卷唇，压到跟噪声分不清\"）。\n     为什么用 jawOpen 而不是 Open：Open 里减了 roll（−0.2×roll）⇒ 用它会形成正反馈回路。\n     为什么增益要放在死区**之后**：反过来会把噪声一起放大（死区就白设了），说话时张大嘴会乱闪猫嘴。\n  MEASURED: 闭嘴只卷嘴 ~= 0.18、咬唇最强 0.45（到不了 1；0.18 及以上都算猫嘴满档）。\n  ⚠️ 常数 `4` 是**待标定**的占位：标定办法 = 看本行读数 —— 闭嘴卷唇应 ≈0.18；**张大嘴卷唇应 >= 0.12**（不够就加大这个数）。\n  ⚠️ 读数不再是\"两根线的原始平均\"（带死区与增益）；原始值仍由 G1 的 mouthRollUpper/mouthRollLower 出口行无损直通。\n  要**按键强制猫嘴**：直接写这个参数 >= 0.12 即可（不需要第二张表、也不需要表情门）。"
                         },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
