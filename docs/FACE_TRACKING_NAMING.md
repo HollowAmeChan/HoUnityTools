@@ -124,7 +124,7 @@
 
 | 轴段词 | 轴参数 | 正端 / 负端 | 说明 |
 | --- | --- | --- | --- |
-| `Form` | `Mouth/Form` | +1 笑 / −1 垂嘴角 | VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性** |
+| `Form` | `Mouth/Form` | +1 笑 / −1 垂嘴角 | **读作"净笑量"**（= `2×VB MouthSmile − 1`）：`[(smileL+smileR) + dimple/2 − (frownL+frownR) − pucker] / 2`。VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下面那条"名字为什么还叫 `Form`" |
 | `Open` | `Mouth/Open` | +1 开 / 0 闭 | VB `MouthOpen` |
 | `Funnel` | `Mouth/Funnel` | +1 漏斗 | VB `MouthFunnel` |
 | `Press` | `Mouth/Press` | +1 展/露齿 / −1 压/卷 | VB `MouthPressLipOpen`（双向） |
@@ -142,6 +142,32 @@
 | `CheekL` / `CheekR`、`SneerL` / `SneerR` | `Cheek/*`、`Nose/*` | 0…1 | 直通（分侧本来就是两个键） |
 | `AngleX/Y/Z`、`PosX/Y/Z` | `Head/*`、`Body/*` | — | 姿态链的轴，**不进面部矩阵** |
 | `Strength` / `Emotion` | `Audio/*` | — | 音素库的幅度/表情条件 |
+
+### 6.1 名字为什么还叫 `Form`（2026-09-27 用户定：**不改**）
+
+有人（包括用户）提过把它改叫 `Smile` —— 因为**选项 C 之后它确实只剩"笑量"这一件事**
+（负侧三族各回各家：苦 → `MouthCorner`、噘 → `MouthWidth`、卷唇 → `MouthLipRoll`，
+树的 X 只留 `0 静息 / +0.75 常态笑 / +1 大笑`），"多重形态"那层含义已经没了。三家对照如下：
+
+| 血统 | 这根轴叫什么 | 中性 / 量纲 |
+| --- | --- | --- |
+| **VBridger / VTS 追踪参数** | **`MouthSmile`**（profile 里就是这条公式，0..1） | 静息 **0.5** |
+| **Live2D Cubism** | **`ParamMouthForm`**（VTS 官方**推荐接法**就是 `MouthSmile → ParamMouthForm`） | **0**，−1 怒 ↔ +1 笑 |
+| **VRCFT Unified** | 全局合并轴 `SmileSad` / `SmileFrown`（单侧 `SmileSadLeft/Right`） | **0** 双向；成熟资产用 **4 姿势 1D**（阈值 −0.8/−0.1/+0.1/+0.8） |
+
+**决定保留 `Form`**，理由三条：
+
+1. **它不是自造词**：Cubism 标准参数就叫 `ParamMouthForm`，而且 VTS 官方把 `MouthSmile` 推荐接进它；
+   我们自己的合同（[高质量契约](VTS_HIGH_QUALITY_FACE_CONTRACT.md) E1）也早就把它定义成
+   "`MouthSmile` 经模型校准映射，建议 −1…1、中性 0" —— 换名等于把一个有出处的术语换成半个新词。
+2. **改叫 `Smile` 会撞字面**：控制器里已有 `Ho/Drive/Gate/Expr/Smile`（**0/1 表情门**，切夸张版姿势）。
+   两者路径不同、不会撞参数，但读者会在同一份面板里看到两个 "Smile"（一个连续量、一个开关）。
+3. **改叫 `SmileSad`/`SmileFrown` 会过度承诺**：那是 VRCFT 给**双向**轴的名字，
+   而我们的树**没有负列**（选项 C 把苦拆给了 `MouthCorner`）⇒ 名字会指向一处树里到不了的区域。
+
+⚠️ 唯一要记住的是**读法**：在这套东西里 **`Form` = 净笑量**
+（`[(smileL+smileR) + dimple/2 − (frownL+frownR) − pucker] / 2`），**仍会出负值**（苦/噘压过笑时），
+负值照旧是"正值的抑制量"、照旧发布到 Hub，只是树把它钳到 X0 = 静息。要细节去 G1 拿 `mouthSmile*`/`mouthFrown*`。
 
 ## 7. 改名流程（让"权威"真的生效）
 
