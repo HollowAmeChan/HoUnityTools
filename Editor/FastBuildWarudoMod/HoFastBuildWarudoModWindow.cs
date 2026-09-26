@@ -21,9 +21,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private const string TemporaryAssetRoot = "Assets/HoFastBuildWarudoModTemp";
         private const string StagedScriptsDirectoryName = "Scripts";
         private const string StagedResourcesDirectoryName = "Resources";
-        private const string RuntimeBoneDebugResourceKey = "HoRuntimeDebugLine";
-        private const string RuntimeBoneDebugTypeName =
-            "Hollow.HoUnityTools.WarudoModUtils.HoRuntimeBoneDebugRenderer";
         private const string FbxSdkRuntimeDefine = "FBXSDK_RUNTIME";
         private const string PendingPhase = "AwaitingCompile";
         private const string BuildingPhase = "Building";
@@ -2624,7 +2621,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         private void StageReferencedRuntimeAssets(string temporaryRoot)
         {
             var stagedAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string stagedDebugShaderPath = string.Empty;
             List<string> sourcePaths = CollectRuntimeSourceClosure();
             foreach (string sourcePath in sourcePaths)
             {
@@ -2650,40 +2646,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     }
 
                     StageResourceAssetRecursive(resourcePath, temporaryRoot, stagedAssets);
-                    if (string.Equals(resourceKey, RuntimeBoneDebugResourceKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        stagedDebugShaderPath = NormalizeAssetPath(temporaryRoot).TrimEnd('/') + "/" +
-                                                StagedResourcesDirectoryName + "/" +
-                                                GetResourcesRelativePath(resourcePath);
-                    }
                 }
             }
-
-            if (!string.IsNullOrEmpty(stagedDebugShaderPath))
-                StageRuntimeDebugMaterial(temporaryRoot, stagedDebugShaderPath);
-        }
-
-        private static void StageRuntimeDebugMaterial(string temporaryRoot, string stagedShaderPath)
-        {
-            Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(stagedShaderPath);
-            if (shader == null)
-            {
-                Debug.LogWarning("[HoUnityTools] FastBuild 无法为 HoRuntimeDebugLine 创建材质：" + stagedShaderPath);
-                return;
-            }
-
-            string materialPath = NormalizeAssetPath(temporaryRoot).TrimEnd('/') + "/" +
-                                  StagedResourcesDirectoryName + "/HoRuntimeDebugLine.mat";
-            if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null)
-                return;
-
-            EnsureAssetFolder(NormalizeAssetPath(Path.GetDirectoryName(materialPath)));
-            var material = new Material(shader)
-            {
-                name = "Ho Runtime Debug Line Material"
-            };
-            AssetDatabase.CreateAsset(material, materialPath);
-            AssetDatabase.ImportAsset(materialPath, ImportAssetOptions.ForceSynchronousImport);
         }
 
         private static void StageResourceAssetRecursive(
@@ -3171,26 +3135,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             try
             {
                 root.name = "Character";
-                Material runtimeDebugMaterial = AssetDatabase.LoadAssetAtPath<Material>(
-                    NormalizeAssetPath(state.temporaryAssetRoot).TrimEnd('/') +
-                    "/" + StagedResourcesDirectoryName + "/HoRuntimeDebugLine.mat");
                 MonoBehaviour[] behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);
                 foreach (MonoBehaviour behaviour in behaviours)
                 {
                     if (behaviour == null)
                         continue;
-
-                    if (runtimeDebugMaterial != null &&
-                        string.Equals(behaviour.GetType().FullName, RuntimeBoneDebugTypeName, StringComparison.Ordinal))
-                    {
-                        var materialSerializedObject = new SerializedObject(behaviour);
-                        SerializedProperty materialProperty = materialSerializedObject.FindProperty("debugMaterial");
-                        if (materialProperty != null && materialProperty.objectReferenceValue == null)
-                        {
-                            materialProperty.objectReferenceValue = runtimeDebugMaterial;
-                            materialSerializedObject.ApplyModifiedPropertiesWithoutUndo();
-                        }
-                    }
 
                     MonoScript currentScript = MonoScript.FromMonoBehaviour(behaviour);
                     string currentPath = currentScript == null
