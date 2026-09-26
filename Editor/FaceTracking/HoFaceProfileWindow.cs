@@ -1021,6 +1021,9 @@ HoFaceOutput output = ActiveRows()[index];
 
             DrawVariableList(parsed);
 
+            // `out("…")` 引用（只有用到的行才多一块）—— 可读性就是这个机制唯一的代价，这里补回来
+            DrawOutputReferenceList(output);
+
             CurveField(output);
 
             HoConstraintEditorControls.Separator(4.0f, 2.0f);
@@ -1076,6 +1079,97 @@ HoFaceOutput output = ActiveRows()[index];
                     HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
                     GUI.Label(HoConstraintEditorControls.NextAuto(name, HoConstraintEditorTheme.Value),
                         new GUIContent(name), HoConstraintEditorTheme.Value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// **这一行引用了哪些输出行**（`out("…")`），逐条列出**它现在是第几行** —— 只列，不判定。
+        ///
+        /// 【为什么值得单列一块】`out("…")` 是这一层唯一"跨行"的东西，而**行序就是语义**：
+        /// 只看表达式，读者根本不知道那个名字在文档的哪一头（更不知道它在不在本行上面）。
+        /// 所以把"它引用了谁 + 目标是第几行 + 在不在上面"直接摊在眼前 ——
+        /// **可读性就是这个机制唯一牺牲掉的东西**，这一块就是把它补回来的地方。
+        /// ⚠️ 顺序错了（目标在本行下面 / 名字不存在）时这里用提醒色标出来，跟列表里那个红字同一个来源。
+        /// </summary>
+        private void DrawOutputReferenceList(HoFaceOutput output)
+        {
+            if (output == null || IsConstantRow(output)) return;
+            HoFaceExpression parsed;
+            string why;
+            if (!HoFaceExpression.TryParse(output.expression, out parsed, out why)) return;
+
+            var references = new List<string>();
+            parsed.CollectOutputRefs(references);
+            if (references.Count == 0) return;   // 不用 out(...) 的行（绝大多数）不多占一行
+
+            List<HoFaceOutput> rows = ActiveRows();
+            string orderError = editingInputs ? HoFaceOutputOrder.InputRowError(output) : null;
+            if (!editingInputs)
+            {
+                // 本行在列表里的位置：引用顺序的判定与 HoFaceOutputOrder 完全一致
+                int self = rows != null ? rows.IndexOf(output) : -1;
+                string[] errors = rows != null ? HoFaceOutputOrder.Validate(rows) : null;
+                if (self >= 0 && errors != null && self < errors.Length) orderError = errors[self];
+            }
+
+            using (HoConstraintEditorControls.Row(true))
+            {
+                HoConstraintEditorControls.Label("引用", HoConstraintEditorTheme.LabelWidth,
+                    "out(\"…\") 读的是**上面**已经算完的输出行（过完曲线与修饰符的那一份）。顺序即语义。");
+                HoConstraintEditorControls.Caption(references.Count + " 个输出行");
+            }
+
+            for (int i = 0; i < references.Count; i++)
+            {
+                string name = references[i];
+                int target = -1;
+                if (rows != null)
+                {
+                    for (int r = 0; r < rows.Count; r++)
+                    {
+                        if (rows[r] != null && rows[r].parameter == name) { target = r; break; }
+                    }
+                }
+
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
+                    var style = new GUIStyle(HoConstraintEditorTheme.Value);
+                    string suffix;
+                    if (target < 0)
+                    {
+                        suffix = "   ← 没有这一行";
+                        style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                    }
+                    else
+                    {
+                        suffix = "   ← 第 " + (target + 1) + " 行";
+                        int self = rows != null ? rows.IndexOf(output) : -1;
+                        if (self >= 0 && target >= self)
+                        {
+                            suffix += "（在本行下面 ⇒ 本行无效）";
+                            style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                        }
+                        else
+                        {
+                            style.normal.textColor = HoConstraintEditorTheme.WarningColor;
+                        }
+                    }
+
+                    GUI.Label(HoConstraintEditorControls.NextAuto(name + suffix, style),
+                        new GUIContent(name + suffix), style);
+                }
+            }
+
+            if (orderError != null)
+            {
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
+                    var style = new GUIStyle(HoConstraintEditorTheme.Caption);
+                    style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
+                    GUI.Label(HoConstraintEditorControls.NextFlexible(120.0f), new GUIContent(orderError), style);
                 }
             }
         }
@@ -1295,48 +1389,80 @@ HoFaceOutput output = ActiveRows()[index];
         /// </summary>
         private static void DrawModifierBadges(Rect rect, HoFaceOutput output)
         {
-            if (output.modifiers == null || output.modifiers.Count == 0) return;
+            int references = OutputReferenceCount(output);
+            bool anyModifier = output.modifiers != null && output.modifiers.Count > 0;
+            if (!anyModifier && references == 0) return;
 
             const float badge = 13.0f;
             float x = rect.xMax - badge;
-            for (int i = output.modifiers.Count - 1; i >= 0; i--)
+            if (anyModifier)
             {
-                HoFaceModifier modifier = output.modifiers[i];
-                if (modifier == null) continue;
-                if (x < rect.x) break;      // 位置不够就不画了（不叠字）
-
-                string glyph;
-                string what;
-                switch (modifier.kind)
+                for (int i = output.modifiers.Count - 1; i >= 0; i--)
                 {
-                    case HoFaceModifierKind.Smooth: glyph = "滑"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
-                    case HoFaceModifierKind.Delay: glyph = "延"; what = "延迟 " + modifier.seconds.ToString("0.###") + " 秒"; break;
-                    default: glyph = "维"; what = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"; break;
-                }
+                    HoFaceModifier modifier = output.modifiers[i];
+                    if (modifier == null) continue;
+                    if (x < rect.x) break;      // 位置不够就不画了（不叠字）
 
+                    string glyph;
+                    string what;
+                    switch (modifier.kind)
+                    {
+                        case HoFaceModifierKind.Smooth: glyph = "滑"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
+                        case HoFaceModifierKind.Delay: glyph = "延"; what = "延迟 " + modifier.seconds.ToString("0.###") + " 秒"; break;
+                        default: glyph = "维"; what = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"; break;
+                    }
+
+                    Rect cell = new Rect(x, rect.y + 1.0f, badge, Mathf.Max(10.0f, rect.height - 2.0f));
+                    var style = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleCenter };
+                    style.normal.textColor = modifier.Active
+                        ? HoConstraintEditorTheme.TextBrightColor
+                        : HoConstraintEditorTheme.TextFaintColor;
+
+                    // 深色小底：角标要压在曲线背景上，没底会跟线糊在一起。
+                    EditorGUI.DrawRect(cell, new Color(0.0f, 0.0f, 0.0f, modifier.Active ? 0.34f : 0.18f));
+                    GUI.Label(cell, new GUIContent(glyph, what + (modifier.Active ? "" : "（现在不起作用）")), style);
+                    x -= badge + 1.0f;
+                }
+            }
+
+            // `引` = 这一行用 `out("…")` 读了**上面的**输出行（2026-09-27）。排在修饰符角标的左边：
+            // 修饰符是按顺序生效的，而"引用"不是链上的一环、是这一行的**输入**。
+            if (references > 0 && x >= rect.x)
+            {
                 Rect cell = new Rect(x, rect.y + 1.0f, badge, Mathf.Max(10.0f, rect.height - 2.0f));
                 var style = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleCenter };
-                style.normal.textColor = modifier.Active
-                    ? HoConstraintEditorTheme.TextBrightColor
-                    : HoConstraintEditorTheme.TextFaintColor;
-
-                // 深色小底：角标要压在曲线背景上，没底会跟线糊在一起。
-                EditorGUI.DrawRect(cell, new Color(0.0f, 0.0f, 0.0f, modifier.Active ? 0.34f : 0.18f));
-                GUI.Label(cell, new GUIContent(glyph, what + (modifier.Active ? "" : "（现在不起作用）")), style);
-                x -= badge + 1.0f;
+                style.normal.textColor = HoConstraintEditorTheme.WarningColor;
+                EditorGUI.DrawRect(cell, new Color(0.0f, 0.0f, 0.0f, 0.34f));
+                GUI.Label(cell, new GUIContent("引", "引用了 " + references + " 个**上面**的输出行（out(\"…\")）"
+                    + " —— 顺序即语义；详情栏里有逐条清单。"), style);
             }
+        }
+
+        /// <summary>这一行用 `out("…")` 引了几个输出行（0 = 没用）。解析不过 / 常量行都算 0（坏行在别处报）。</summary>
+        private static int OutputReferenceCount(HoFaceOutput output)
+        {
+            if (output == null || IsConstantRow(output)) return 0;
+            HoFaceExpression parsed;
+            string why;
+            if (!HoFaceExpression.TryParse(output.expression, out parsed, out why)) return 0;
+            var references = new List<string>();
+            parsed.CollectOutputRefs(references);
+            return references.Count;
         }
 
         /// <summary>角标要占多宽（名字与表达式据此让位）。</summary>
         private static float ModifierBadgeWidth(HoFaceOutput output)
         {
-            if (output.modifiers == null || output.modifiers.Count == 0) return 0.0f;
             int count = 0;
-            for (int i = 0; i < output.modifiers.Count; i++)
+            if (output.modifiers != null)
             {
-                if (output.modifiers[i] != null) count++;
+                for (int i = 0; i < output.modifiers.Count; i++)
+                {
+                    if (output.modifiers[i] != null) count++;
+                }
             }
 
+            if (OutputReferenceCount(output) > 0) count++;   // 多一个 `引` 角标
             return count == 0 ? 0.0f : count * 14.0f + 2.0f;
         }
 
