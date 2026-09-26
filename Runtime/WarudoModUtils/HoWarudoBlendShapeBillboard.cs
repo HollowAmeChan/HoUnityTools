@@ -35,6 +35,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                  "本组件历史默认值是勾上的，结果面板长到角色左边、且背面朝人。现已默认关闭。")]
         public bool flipFacing;
 
+        [InspectorName("列反向展开")]
+        [Tooltip("让列朝本物体的 **-X** 方向展开，且**不动朝向**。\n" +
+                 "为什么需要这个：负责文字正反面的那个 180° 旋转会**同时**把列的展开方向翻过来，\n" +
+                 "「文字要正着读」和「面板要长在某一侧」这两个需求会打架。\n" +
+                 "所以拆成两个独立开关：flipFacing 管朝向，本项管展开方向。四种组合里必然有一个是对的。")]
+        public bool reverseColumnOrder;
+
         [InspectorName("打印摆放诊断")]
         [Tooltip("每 5 秒把锚点与面板的世界位置/旋转/缩放打进日志。\n" +
                  "用来确认宿主侧有没有偷偷改缩放或镜像（负缩放会让文字变镜像）。")]
@@ -481,7 +488,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             for (int i = 0; i < groupCount; i++)
             {
                 ColumnGroup group = m_ColumnGroups[i];
-                group.root.transform.localPosition = new Vector3(x, y, 0f);
+                group.root.transform.localPosition = new Vector3(reverseColumnOrder ? -x : x, y, 0f);
 
                 float nameWidth = MeasureTextWidth(group.names, group.names.text);
                 float valueWidth = MeasureTextWidth(group.values, group.values.text);

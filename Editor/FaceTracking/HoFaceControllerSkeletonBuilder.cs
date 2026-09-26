@@ -284,6 +284,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         };
 
         /// <summary>
+        /// ⭐ **变体表自己再挖掉的格**（2026-09-28 用户定，实机抄数之后）：猫嘴开着时**可达的面积更小** ——
+        /// ① `Open` 顶行（0.6 ~ 0.75）猫嘴够不到：做住 `Open ≈ 0`、张嘴/大张最多到 ~0.4
+        ///    （`X1Y2` 早就挖了，剩 `X0Y2` / `X2Y2` 这两格）；
+        /// ② "中性形 + 张嘴"（`X0Y1`）也不会出现 —— 猫嘴必然把嘴角往后拉 ⇒ `Form > 0`。
+        /// ⇒ 猫嘴版 8 格 → **5 格**（`X0Y0` **留着**：它是 `Roll` 刚过 0.15、两张表交叉淡入时的中性锚点）。
+        /// ⚠️ 主版 `MouthCore` **一格不动**（"张嘴不笑" / "大笑张嘴" 在非猫嘴时都是真实状态）；
+        /// ⚠️ 键是**变体树名**，值是额外挖掉的 `(i, j)`（主版 spec 的 `Skip` 仍然生效）。
+        /// </summary>
+        private static readonly Dictionary<string, Vector2Int[]> VariantSkip =
+            new Dictionary<string, Vector2Int[]>(StringComparer.Ordinal)
+            {
+                { "MouthCoreRoll", new[] { new Vector2Int(0, 1), new Vector2Int(0, 2), new Vector2Int(2, 2) } }
+            };
+
+        /// <summary>
         /// 轴驱动的变体开关（1D 树，两个孩子都是整表，阈值显式写死）：
         /// 名字 / 主版 / 变体 / 驱动它的轴 / 两个阈值。
         /// </summary>
@@ -434,7 +449,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 trees[copy.Value] = tree;
             }
 
-            // 变体表：与主版**同轴、同刻度、同稀疏格**（整套姿势换成变体版），所以直接复用主版的 spec
+            // 变体表：与主版**同轴同刻度**（整套姿势换成变体版），所以直接复用主版的 spec ——
+            // 但**稀疏格可以更多**（`VariantSkip`：猫嘴版再挖掉 3 格）。
             for (int v = 0; v < Variants.GetLength(0); v++)
             {
                 TableSpec spec = FindTable(Variants[v, 1]);
@@ -442,14 +458,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 tree.blendParameter = spec.X;
                 tree.blendParameterY = spec.Y;
                 tree.useAutomaticThresholds = false;
+                int filled = 0;
                 for (int j = 0; j < spec.YValues.Length; j++)
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
-                        if (Skipped(spec, i, j)) continue;
+                        if (Skipped(spec, i, j) || VariantSkipped(Variants[v, 0], i, j)) continue;
                         string slot = SlotName(Variants[v, 0], spec.XToken, spec.YToken, spec.XValues.Length, i, j);
                         tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
+                        filled++;
                     }
-                slotCounts[Variants[v, 0]] = CountCells(spec);
+                slotCounts[Variants[v, 0]] = filled;
                 trees[Variants[v, 0]] = tree;
             }
 
