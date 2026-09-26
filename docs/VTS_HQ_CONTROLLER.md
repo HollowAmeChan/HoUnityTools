@@ -23,7 +23,7 @@
 | 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（44 参数 / 31 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
 | 2 | **参数表 44 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、32 根轴 = `0`、4 条切片权重 = `0` |
 | 3 | **树形 31 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 20 张表（15 主版 + 5 副本）+ 5 棵 1D 副本树 |
-| 4 | **槽位 117 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过两次圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `−1/0/+0.75/+1`） |
+| 4 | **槽位 115 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过两次圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `−1/0/+0.75/+1`） |
 | 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 131 输出**（90 出口 + 41 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
 | 6 | **轴的修饰符** | 🟡 **32 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
@@ -53,9 +53,9 @@
 Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}
 ├─ MouthRegion                  Direct   子节点权重 = Ho/Drive/W/One
 │   ├─ MouthCoreSwitch          Simple1D  blendParameter = Ho/Drive/Gate/Expr/Smile   （0 → 主版，1 → 副本）
-│   │   ├─ MouthCore            FreeformCartesian2D  9 格（静息/常态笑/大笑 × 闭/半开/张满 —— **只管正值**）
+│   │   ├─ MouthCore            FreeformCartesian2D  **8 格**（静息/常态笑/大笑 × 闭/半开/张满，顶行中间挖掉 —— **只管正值**）
 │   ├─ MouthLipRoll             FreeformCartesian2D  4 格（上下唇内卷：不卷/上卷/下卷/咬唇）
-│   │   └─ MouthCoreExpr        FreeformCartesian2D  9 格（同主版）
+│   │   └─ MouthCoreExpr        FreeformCartesian2D  8 格（同主版）
 │   ├─ MouthJaw                 FreeformCartesian2D  3 格
 │   ├─ MouthWidth               FreeformCartesian2D  9 格
 │   ├─ MouthCorner              FreeformCartesian2D  9 格   （嘴角残差表：中间那格 = 零修正）
@@ -76,8 +76,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 树 | X 轴（刻度） | Y 轴（刻度） | 格 | 一格代表什么 | 分工（该写哪些键） | 槽位名模板 |
 | --- | --- | --- | ---: | --- | --- | --- |
-| `MouthCore` | `Mouth/Form` 0 静息 · **+0.75 常态笑** · **+1 大笑**（**只管正值**） | `Mouth/Open` 0 闭 · 0.4 半开 · 0.75 张满（**只管正值**） | 9 | 外嘴基础：**唇的轮廓与口孔**，只回答「**笑到什么程度 × 张多大**」 | 只写唇/口孔，**不写下颌与下巴**；负侧三族全在别的表 | `MouthCore__Form__Open__A3X<i>Y<j>` |
-| `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 9 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` |
+| `MouthCore` | `Mouth/Form` 0 静息 · **+0.75 常态笑** · **+1 大笑**（**只管正值**） | `Mouth/Open` 0 闭 · 0.4 半开 · 0.75 张满（**只管正值**） | **8** | 外嘴基础：**唇的轮廓与口孔**，只回答「**笑到什么程度 × 张多大**」；⚠️ 顶行中间那格不要（嘴张到最大时半笑/全笑分辨不出来） | 只写唇/口孔，**不写下颌与下巴**；负侧三族全在别的表 | `MouthCore__Form__Open__A3X<i>Y<j>` |
+| `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 8 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` |
 | `MouthJaw` | `Mouth/Jaw` 0 · 0.5 · 1 | `Mouth/Forward` 只有 0（Y 只用 `Y0`） | 3 | 下颌/口内：**下颌骨与下巴**随开度 | 只写颌/下巴；不前伸 | `MouthJaw__Jaw__Forward__A3X<i>Y0` |
 | **`MouthLipRoll`** | `Mouth/RollUp` 0 不卷 · 1 上唇卷满 | `Mouth/RollDown` 0 / 1（下唇） | 4 | **上下唇内卷/咬唇**（原始两根线直接当轴，不经 `Form`/`Open`） | 只写**卷唇那几根键** | `MouthLipRoll__RollUp__RollDown__A2X<i>Y<j>` |
 | `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差） | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
@@ -102,6 +102,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 * ⚠️ **`MouthCore` 只管"笑 × 张嘴"两块正值**（2026-09-27 用户定）：X = `0 静息 / +0.75 常态笑 / +1 大笑`、
   Y = `0 闭 / 0.4 半开 / 0.75 张满` ⇒ 干净的 3×3 = 9 格（`A3X<i>Y<j>`），**没有负行/负列，也没有死角**。
   负侧三族**各回各家**：苦（嘴角）→ `MouthCorner`、噘 → `MouthWidth`、卷唇/咬唇 → `MouthLipRoll`。
+  只有 **8 格**：顶行中间 `(Form 0.75 × Open 0.75)` 挖掉（2026-09-27 用户定 —— 嘴张到最大时**半笑与全笑分辨不出来**）；
+  顶行左右两个角留着（"张嘴不笑" 与 "大笑张嘴" 都是真实状态），而且挖的是**矩形内部**一点、不是圈上的角 ⇒ 圈仍是矩形，出界照旧是干净的钳制。
   这条是用户从 2D 图上连续指出"左上角几乎不可达""左下角四个点有两个没用"之后定下来的 ——
   **根因是两个轴的负侧都在表达同一件事**（卷唇同时把 `Form` 拉到 −0.4、把 `Open` 拉到 −0.14），
   二维格子在那块是退化的。
@@ -118,11 +120,11 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ### 2.3 灵敏度现在能测到什么程度
 
 * **能测**：每根轴**实际会走到多少**（手机做动作 / 说话 → 看轴值）。这是"曲线与修饰符该怎么调"的唯一依据。
-* **不能测**：造型好不好看 —— 117 格现在都是**空片段**（没有曲线的命名 clip），插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
+* **不能测**：造型好不好看 —— 115 格现在都是**空片段**（没有曲线的命名 clip），插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
 
 #### 2.3.1 轴超出槽位范围会怎样（**2026-09-27 实测**）
 
-现在我们 15 张表**全都是摆满的矩形网格**（3×3 / 3×1 / 2×2 / 3×2 / 2×2）—— 负侧搬走之后就没死角了。这套结论说的就是"矩形"这种摆法：
+现在我们 15 张表的**圈都是完整矩形**（3×3 去掉一个内部点 / 3×1 / 2×2 / 3×2 / 2×2）—— 负侧搬走之后就没死角了。这套结论说的就是"矩形"这种摆法：
 
 | 轴的位置 | Unity 的行为 |
 | --- | --- |
@@ -416,7 +418,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
    1D 的两个孩子是子树时**线性交叉淡入**（g=0/.25/.5/.75/1 → 0/25/50/75/100），
    **四层嵌套（Direct → Direct → 1D → 2D）照旧求值**。兜底形状（Direct 兄弟 + 中间层补权重）**不需要**了。
    （同一轮还跑通了 **Unity 侧生成器**：`HoFaceControllerSkeletonBuilder.Build()` 在 batchmode 里建出来的是
-   44 参数 / 31 树，`MouthCore` 的 9 格坐标与 `MouthLipRoll` 的 4 格，与文本生成器**逐位一致**。）
+   44 参数 / 31 树，`MouthCore` 的 8 格坐标与 `MouthLipRoll` 的 4 格，与文本生成器**逐位一致**。）
 5. **切片接线**（*等条件姿势*）：`MouthCoreFunnel` / `MouthCorePress` / `FunnelPress` 三张同级表 + `MouthCore` 自己挂
    `Slice/MouthCore/Funnel0Press0`。**没做的切片必须复用基础片段**，否则权重和不足 1 会掺进启动姿势。
    摆切片时**别让点落在别的点构成的边/线上**（那会圈内外跳变，见 §2.3.1）。

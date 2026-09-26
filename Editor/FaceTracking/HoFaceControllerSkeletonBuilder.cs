@@ -99,14 +99,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
 
         /// <summary>
-        /// **保留**的稀疏机制：某张表的某个 (i,j) 格子物理上到不了时，可以登记在这里不建。
-        /// 现在**一张表都没用**（`MouthCore` 的负侧整块搬去了 `MouthLipRoll`，回到干净的 3×3）。
+        /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)`。
+        /// 嘴张到最大时**半笑与全笑分辨不出来** ⇒ 这一格没有独立语义。
+        /// 顶行左右两个角**留着**（"张嘴不笑" 与 "大笑张嘴" 都是真实状态），
+        /// 而且挖掉的是**矩形内部**的一点、不是圈上的角 ⇒ 表仍是完整矩形，出界照旧是干净的钳制。
         /// </summary>
-        private static readonly Vector2Int[] NoSkips = null;
+        private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(1, 2) };
 
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip },
             // 卷唇/咬唇**自己的表**（契约里预留的 `MouthLipRoll`）：轴就是原始两根线，不经过 Form/Open。
             // 2×2 正好是四个真实状态：不卷 / 上卷 / 下卷 / 上下都卷（= 咬唇）。
             new TableSpec { Name = "MouthLipRoll", X = "Ho/Drive/Mouth/RollUp", Y = "Ho/Drive/Mouth/RollDown", XToken = "RollUp", YToken = "RollDown", XValues = ZeroOne, YValues = ZeroOne },
