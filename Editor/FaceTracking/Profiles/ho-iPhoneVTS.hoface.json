@@ -2811,13 +2811,17 @@
                         "curve":  {
                                       "keys":  [
                                                    { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
+                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
+                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
+                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells."
+                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells. 2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667). The +/-1 end keys change nothing (the expression already clamps to +/-1). ⚠️ WARNING: chewing is a MOTION on this very axis -- if the jawOpen/mouthClose oscillation amplitude is <= 0.05 this dead zone erases it (that amplitude is still unmeasured, see docs/VTS_HQ_CONTROLLER.md 5.4.2 item 3)."
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/JawSide",
@@ -2826,13 +2830,17 @@
                         "curve":  {
                                       "keys":  [
                                                    { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
+                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
+                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
+                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。"
+                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667); the axis is within +/-1 by construction (difference of two 0..1 wires) so the end keys change nothing. 实测（同一批，见 docs/VTS_HQ_CONTROLLER.md 5.4.2）：静息 -0.013（进死区 -> 0）、咬紧时真动下颌只有 0.02..0.04（也在死区里 -> 0）、挤嘴角的伪影 0.05..0.2（**只被掐掉最低那一小段，0.08 以上原样通过**）、微张真动 0.52（原样通过）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Forward",

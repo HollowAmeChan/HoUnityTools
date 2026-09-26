@@ -131,6 +131,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
 
         /// <summary>
+        /// 下巴**左右**轴（`JawSide`）自己的三档（2026-09-27 用户定「还是六个动画，只不过把最大值弄到
+        /// 0.65 左右」）。⚠️ 原来的 `Two`（±1）是**没实测就占位**的：实测「微张、解放咬颌」那个状态下
+        /// 单侧只到 **0.52**（咬紧时只有 0.02–0.04，而"只挤嘴角"的伪影反而有 0.05–0.2）⇒ 用 ±1 的话
+        /// 真动作只把 X 推到 52%，作者画的左右那两格永远吃不饱。改成 ±0.65：0.52 ⇒ 80%。
+        /// </summary>
+        private static readonly float[] JawSide = { -0.65f, 0f, 0.65f };
+
+        /// <summary>
         /// 下巴竖直轴（`Mouth/Jaw`）的两档：**0 = 闭 / 咬合**、**+0.75 = 张满**（待标定）。
         /// ⚠️ 这两个数组必须声明在 `Tables` **之前** —— C# 静态字段按声明顺序初始化，
         /// 放在后面的话 `Tables` 构造时读到的还是 `null`（真栽过一次：探针报 NullReference）。
@@ -166,7 +174,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
             // 下巴（2026-09-27 用户定「就是下巴上下左右这棵树」）：**X = 左右（3 档）× Y = 上下（2 档）= 6 格**。
             // ⚠️ 上下只有两档：咬合 / 咀嚼 = **0 那一档**（轴本身是双极的，负侧钳到 Y0）。
-            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = Two, YValues = JawOpen },
+            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
             new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/CornerL", Y = "Ho/Drive/Mouth/CornerR", XToken = "CornerL", YToken = "CornerR", XValues = Two, YValues = Two },

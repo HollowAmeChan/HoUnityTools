@@ -508,7 +508,8 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.03 死区**（手机"不张也不抿"时就在这个区间抖），0.03…0.06 是斜坡，之外恒等 —— 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
-| `Ho/Drive/Mouth/Jaw` | `clamp(jawOpen - mouthClose, -1, 1)` | **−1 咬合/压 · 0 静息 · +1 张开** | 下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧 |
+| `Ho/Drive/Mouth/Jaw` | `clamp(jawOpen - mouthClose, -1, 1)` | **−1 咬合/压 · 0 静息 · +1 张开** | 下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧。**2026-09-27 加 ±0.05 死区曲线**（`|v| ≤ 0.05 → 0`、`0.05…0.08` 斜坡、之外恒等；用户「两个轴的曲线都加一点去噪」）。⚠️⚠️ **咀嚼就长在这根轴上 —— 振幅 ≤0.05 会被死区整个抹掉**，振幅待测 |
+| `Ho/Drive/Mouth/JawSide` | `jawRight - jawLeft` | −1 偏左 · 0 居中 · +1 偏右（⚠️ **实测单侧只到 0.52**） | 下巴的**左右**轴（双极，合同表 `HQJawX`）。**2026-09-27 加同形 ±0.05 死区曲线**；树里 X 刻度按实测收到 `−0.65 / 0 / +0.65`。⚠️ 这根线**咬颌态相关**（咬紧时真动只有 0.02–0.04，而"只挤嘴角"的伪影有 0.05–0.2；**微张解放咬颌才到 0.52**）⇒ 见[控制器 §5.4.2](VTS_HQ_CONTROLLER.md) |
 | `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）。实测记录（只留档，不驱动任何东西）：静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14。为什么不做见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)（VB 七份预设里这根线出现 **0 次**） |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
