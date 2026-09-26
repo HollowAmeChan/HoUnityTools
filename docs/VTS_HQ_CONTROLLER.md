@@ -104,7 +104,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `MouthCore` | `Mouth/Form`（读作**净笑量**）与 `Mouth/Open` **都是手工拉的自由点集**（2026-09-27 用户第二次改，见 §5.4.3） | 同左 | **8** | 外嘴基础：**唇的轮廓与口孔**，只回答「**笑到什么程度 × 张多大**」；⚠️ **顶行中间那一格不要**（嘴张到最大时半笑与全笑分辨不出来）⇒ 挖掉 `(1,2)`。⚠️ **8 个点各自摆位**（不再有"刻度"）：`(0,0) (0.482,-0.017) (0.907,-0.024) (0,0.4) (0.47,0.336) (0.968,0.267) (0,0.75) (0.926,0.596)` —— X0 那列（静息）仍正好在旧刻度上，X1/X2（笑那侧）全被拉过 | 只写唇/口孔，**不写下颌与下巴**；负侧三族全在别的表 | `MouthCore__Form__Open__A3X<i>Y<j>` |
 | **`MouthJaw`** | `Mouth/JawSide` **手工拉的自由点集**（6 个点的 X 见右栏；2026-09-27 用户在 Animator 窗口里拖过） | `Mouth/Jaw` 同上（6 个点的 Y 见右栏） | **6** | **下巴一张树管完上下左右**；**咬合 / 咀嚼 = 最下面那排**（闭着嘴唇时下颌上下动，`mouthClose` 检出）。⚠️ **这棵树没有"刻度"了 —— 6 个点各自摆位**：`(-0.342,-0.015) (0,0) (0.34,-0.01) (-0.541,0.374) (0.006,0.902) (0.534,0.354)` | 下颌 / 下巴 / 口内 | `MouthJaw__JawSide__Jaw__A3X<i>Y<j>` |
 | **`MouthCoreRoll`** | 同 `MouthCore`（同一个 `Mouth/Roll` 开关选它） | 同 `MouthCore` | **8** | **猫嘴版整嘴表**：把"静息嘴"整套换成嘴唇内翻压在牙上的那一版；由 `MouthCoreRollSwitch` 按 `Mouth/Roll` 淡入（0.15→0.30 之间是两张作者画的表交叉淡入）。⚠️ **逐点坐标必须与主版一致**（用户是在 Animator 里手拉主版的，变体那份不会跟着动）⇒ 检查器有一条硬检查。⚠️ **2026-09-28 试砍过 3 格、当场撤回**（§5.7.18）：那三格（`X0Y1`/`X0Y2`/`X2Y2`）看着"轴上到不了"，但**常开**（直接写 `Mouth/Roll ≥ 0.30`）会把它们采到 ⇒ **8 格一格不少** | 与 `MouthCore` 同分工（唇/口孔）—— 因为它是**替换**不是叠加 | `MouthCoreRoll__Form__Open__A3X<i>Y<j>` |
-| `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 ⚠️ **刻度需要按实测重排**：静息落在 **−0.18**、噘嘴 **−0.47**（见 §3.1 那行的实测）⇒ 想要"噘嘴 → 倒V"，X 刻度该摆在实测值上（否则静息就已经偏向下弯那一格） | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差）。**噘嘴的"倒V嘴"就画在这里的 X 负端** | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
+| `MouthWidth` | `Mouth/Pucker`（= `2×酒窝 − 噘`）**收 · 中 · 展**：✅ **2026-09-28 已按实测重排** ⇒ X 刻度 **−0.85 / −0.30 / +0.60**（噘嘴 −0.84 · 静息 −0.30 · 笑 +0.64）—— 旧刻度是 ±1，静息就已经偏向下弯那一格
+ | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差）。**噘嘴的"倒V嘴"就画在这里的 X 负端** | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
 | `MouthCorner` | `Mouth/CornerL` −1 左嘴角苦 · 0 · +1 左嘴角笑 | `Mouth/CornerR` 同上（右） | 9 | **左右嘴角残差**（不对称：左笑右苦也能表达）；中间那格 = **零修正** | 只写**嘴角**那几根键；唇的轮廓归 `MouthCore` | `MouthCorner__CornerL__CornerR__A3X<i>Y<j>` |
 | `MouthTongue` | `Mouth/TongueL` 0 / 1 | `Mouth/TongueR` 0 / 1 | 4 | 舌（分左右）：舌头两组键 | 舌相关键 | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` |
 | `LidL` | `Lid/Left/BlinkWide` −1 睁大 · 0 中性 · +1 闭 | `Lid/Left/Squint` 0 不眯 · 1 眯满 | 6 | 左眼睑完整姿势（闭/睁大 × 眯） | 左眼睑相关键 | `LidL__BlinkWide__Squint__A3X<i>Y<j>` |
@@ -325,7 +326,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `Ho/Drive/Mouth/JawSide` | `jawRight - jawLeft` | **±0.05 死区 + 0.05…0.08 斜坡（斜率 2.667），之外恒等 −1…1** | smooth 0.009 s | **下巴的左右轴（双极）**：0 居中 · − 偏左 · + 偏右。⚠️ **实测是"咬颌态相关"的**（§5.4.2）：静息 −0.013、**咬紧时真动下颌只有 0.02–0.04**、**只挤嘴角的伪影反而有 0.05–0.2**、**微张（解放咬颌）才到 0.52，而张嘴再大反而变小** ⇒ 树的 X 刻度按 0.52 收到 `−0.65 / 0 / +0.65`，且**左右两格摆在 `(±0.4, 0.45)`**（不是张满那一行）。死区掐掉 ≤0.05（静息 + 咬紧真动 + 伪影最低那一小截），**0.08 以上原样通过** | 静息 **−0.013**（进死区 ⇒ 0）· 咬紧真动 0.02–0.04（⇒ 0）· 挤嘴角 0.05–0.2 · **微张真动 0.52（峰）** · 张满反而更小 |
 | `Ho/Drive/Mouth/Forward` | `jawForward` | 恒等 0…1 | smooth 0.01 s | ⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定）。照旧每帧发布（面板 / Warudo / 将来的公式都能取），但**没有树消费它**；跟 `Cheek/*`、`Gaze/*` 一个待遇 | 静息 **≈0** · 噘嘴单独 **0.05** · **噘嘴+前顶 = 0.14**（裸线满量程只有 0.13）——**只记录，不驱动任何东西** |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 噘嘴 … +1 展宽。⚠️ **实测（2026-09-27 五秒统计）：静息 ≈ −0.18、噘嘴 ≈ −0.47、真猫嘴会冲到 +2 并**饱和**（卷唇时 dimple 也在 0.5 上下）。静息不为 0 的原因不是我们：这台设备 `mouthPucker` 静息偏置 ≈0.2（iPhone 203 帧实测 mean 0.1992）、`mouthDimple*` 也有 ≈0.06 偏置**| 静息 **−0.18** · 噘嘴 **−0.47** · 猫嘴 **+2（饱和）** |
-| `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | 恒等 −2…2 | smooth 0.007 s | **双向**：+1 偏左（按表达式）… −1 偏右 | 待测 |
+| `Ho/Drive/Mouth/X` | `((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight) + 3 * (mouthDimpleLeft - mouthDimpleRight)) * clamp((0.20 - jawOpen) / 0.10, 0, 1)`（**2026-09-28 重做**：加了实测最强的 `dimple` 不对称 + 一道下颌门） | 恒等（门开着时）−2…2 | smooth 0.007 s | **双向**：+ 偏左 … − 偏右（符号按表达式）。⭐ 系数与门都是扫出来的（105 段、剔掉被形态门关着的鼓嘴那 9 段）：k0 缝 **+0.033** → k1 +0.056 → k2 +0.079 → **k3 +0.092**；加门后**全局最坏 +0.046**（无门时 −0.001）。⚠️ 残余假阳性是**笑**（笑常态 shift ≈0.099 vs 撇嘴 0.134~0.191） | 静息 **0** · 撇嘴 **0.13~0.19（测前）/ 0.29（台架用例）** · 用力说话 **0**（门下） |
 | `Ho/Drive/Mouth/TongueL` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌左；**现在两侧同跟单侧原值** | 待测 |
 | `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌右；同上 | 待测 |
 | `Ho/Drive/Mouth/CornerL` | `clamp(mouthSmileLeft - mouthFrownLeft, -1, 1)` | 恒等 −1…1 | smooth 0.009 s | **左嘴角**：−1 苦（下弯）· 0 静息 · +1 笑（上翘）= 合同表 D 的 `HQSmileFrownLeft`；**与右侧完全独立** | 待测 |
@@ -500,7 +501,8 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 | --- | --- | --- |
 | `MouthCore` | **唇的轮廓与口孔**（基础） | `Form` × `Open` |
 | **`MouthCorner`**（新） | **左右嘴角的笑/苦**（残差表，中间格 = 零修正，可表达"左笑右苦"） | `Mouth/CornerL` × `Mouth/CornerR` |
-| `MouthWidth` | 嘴宽 / 偏嘴残差（**噘嘴在这里**） | `Mouth/Pucker` × `Mouth/X` |
+| `MouthWidth` | 嘴宽 / 偏嘴残差（**噘嘴在这里**） | `Mouth/Pucker` × `Mouth/X`（**2026-09-28 两轴刻度按实测重排**：X −0.85/−0.30/+0.60、Y ±0.18） |
+
 | **`MouthCoreRoll`**（新，2026-09-27） | **猫嘴**：整套嘴的变体版（嘴唇内翻压在牙上） | `Mouth/Form` × `Mouth/Open`（同一张 2D 表），由 `Mouth/Roll` 在开关里选中 |
 
 * 新轴（`CornerL/R`、`Roll`）= 合同表 D 里早就写好的 `HQSmileFrownLeft/Right` 与
@@ -1889,6 +1891,16 @@ sad = max( (mouthFrownLeft + mouthFrownRight) / 2 ,
 **③ 还没做的（等作者画格子）**：`MouthCore` 的 X 现在是 `0 / 0.75 / 1` 三档（负侧钳到 0）⇒ 要真正
 用上 sad，得**加一列 −1（苦）**，也就是多画"苦 × 闭 / 半张 / 张满"那几格；同一轮再做
 **左右平移独立成表**（3 档；顺便给 `Mouth/X` 补上实测最强的 `dimple` 不对称通道）并**删 `MouthCorner`**。
+
+✅ **2026-09-28 已完成其中「平移轴 + 刻度」这一半**（不动树、不用画格子那部分）：
+* `Ho/Drive/Mouth/X` 重做成 `((mouthLeft − mouthRight) + (smileL − smileR) + 3×(dimpleL − dimpleR)) × clamp((0.20 − jawOpen)/0.10, 0, 1)`
+  —— 系数与门是扫出来的（105 段、剔掉被形态门关着的鼓嘴 9 段）：k0 缝 +0.033 → k3 **+0.092**，加门后**全局最坏 +0.046**（无门 −0.001）；
+* `MouthWidth` 的两轴**刻度按实测重排**：X **−0.85 / −0.30 / +0.60**（噘嘴 −0.84 · 静息 −0.30 · 笑 +0.64）、
+  Y **±0.18**（撇嘴 0.134~0.191）—— 旧刻度 ±1 时静息就偏格、撇嘴只走 15% ⇒ 表根本动不了。
+  ⚠️ 槽位名按索引编 ⇒ 挪刻度**不改名、不新增片段**（`.research/patch-mouthwidth-ticks.ps1`，资产已改、检查器 0 问题）。
+* ⚠️ 残余假阳性仍是**笑**（笑常态 shift ≈0.099 vs 撇嘴 0.134~0.191，比值 0.5~0.7）⇒ 真机试过再决定要不要再加门。
+* ⏳ 剩下的是**要画格子的那半**：`MouthCore` 的 X 加 −1（苦）那一列、以及删 `MouthCorner`（等"苦 × 闭/半张/张满"的整嘴姿势）。
+
 
 #### 5.7.20 下颌 `Mouth/Jaw` 修正：正侧改用 `jawOpen`（闭嘴下颌下拉本来一直触发不了）＋"张嘴时的苦"走 `stretch`
 

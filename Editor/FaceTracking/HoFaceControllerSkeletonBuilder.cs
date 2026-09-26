@@ -155,6 +155,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly float[] JawOpen = { 0f, 0.75f };
 
+        /// <summary>
+        /// **`MouthWidth` 的刻度（2026-09-28 按实测重排）** —— 以前两轴都用 `Two`（−1 / 0 / +1）：
+        /// · X（`Mouth/Pucker` = `2×酒窝 − 噘`）：实测 噘嘴 **−0.84** · 静息 **−0.30** · 笑 **+0.64** ·
+        ///   抿嘴 +1.23 · 猫嘴 +1.5 ⇒ 旧刻度把**静息**放在 −0.30 却当中格 ⇒「静息就已经偏向下弯那一格」；
+        /// · Y（`Mouth/X` = 左右平移）：2026-09-28 重做后实测 撇嘴 **0.134~0.191**、
+        ///   笑（残余假阳性）0.099 ⇒ 旧刻度 ±1 让撇嘴只走到 15% ⇒ **表根本动不了**。
+        /// ⚠️ 槽位名按**索引**编（`A3X&lt;i&gt;Y&lt;j&gt;`）⇒ 挪刻度**不改名、不新增片段**（命名权威 §5）。
+        /// </summary>
+        private static readonly float[] PuckerMeasured = { -0.85f, -0.30f, 0.60f };
+        private static readonly float[] ShiftMeasured = { -0.18f, 0f, 0.18f };
+
         /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
         private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
 
@@ -223,7 +234,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ⚠️ 上下只有两档：咬合 / 咀嚼 = **0 那一档**（轴本身是双极的，负侧钳到 Y0）。
             // ⚠️ 左右两格**不摆在张满那一行**：搬到 (X, 0.45) —— 见 `MouthJawOverride`。
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen, Override = MouthJawOverride },
-            new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
+            new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = PuckerMeasured, YValues = ShiftMeasured },
+
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
             new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/CornerL", Y = "Ho/Drive/Mouth/CornerR", XToken = "CornerL", YToken = "CornerR", XValues = Two, YValues = Two },
             new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },

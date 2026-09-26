@@ -2987,7 +2987,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/X",
-                        "expression":  "(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)",
+                        "expression":  "((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight) + 3 * (mouthDimpleLeft - mouthDimpleRight)) * clamp((0.20 - jawOpen) / 0.10, 0, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2998,7 +2998,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **2026-09-28 平移轴重做（用户定：「左右两块的平移直接是一个 2d3 动画轴」）**：原来的 `(mouthLeft − mouthRight) + (mouthSmileLeft − mouthSmileRight)` **没吃 `mouthDimple` 的左右不对称**，而 dimple（嘴角往后/外拉）才是撇嘴实测最强的那一路（撇嘴左 dimpleLeft 0.243~0.286 / dimpleRight 0.303~0.319，静置两侧只有 0.014~0.031）。\n⭐ **系数与门都是扫出来的**（105 段、剔掉鼓嘴那 9 段 —— 单边鼓嘴会把 `mouthLeft/Right` 顶到 0.87，但它被形态门关着，不该混进统计）：\n  `k0`（现状）缝 **+0.033** · `k1` +0.056 · `k2` +0.079 · `k3` +0.092（`.research/take-features-shift*.txt`）；\n  **加一道下颌门**（撇嘴 `jawOpen ≈0.02`，而挡路的「用力说话」0.28）⇒ `k3` 缝 **+0.0923**、全局最坏 **+0.0462**（无门时全局最坏 −0.0009）⇒ 取 **k=3 + `clamp((0.20 − jawOpen)/0.10, 0, 1)`**。\n⚠️ 残余的假阳性是**笑**（dimpl/smile 左右差的基线：笑常态 shift ≈0.099 vs 撇嘴 0.134~0.191，比值 0.5~0.7）⇒ 阈值/刻度要按这个余量摆（见 `MouthWidth` 的重排）。\n⚠️ **轴的量纲变了**（撇嘴现在 0.134~0.191，不是原来的 0.09），所以控制器的 `MouthWidth` **刻度一并按实测重排**（静息落中格）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/TongueL",
