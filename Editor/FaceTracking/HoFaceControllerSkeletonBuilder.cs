@@ -90,13 +90,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] OpenMeasured = { -0.14f, 0f, 0.4f, 0.75f };
 
         /// <summary>
-        /// **`Mouth/Form` 专用刻度：−1 / 0 / 0.75 / 1**（2026-09-27 用户实测定）。
+        /// **`Mouth/Form` 专用刻度：−0.4 / 0 / 0.75 / 1**（2026-09-27 用户实测定）。
         /// 正侧不是"0 → 1"两档：「**常态笑**」在 0.75 左右、「**大笑**」才到 1 —— 两个都是真实状态，
-        /// 各要一个采样点，所以 X 是四档（12 格）。负侧仍停在 −1：那里是曲线的钳制端，
-        /// 而噘嘴实测只到 −0.5（按选项 C 只该把唇形往苦的方向带一点，不该到极端苦相）。
+        /// 各要一个采样点，所以 X 是四档。
+        /// 负端是 **−0.4**：实测最左下的"咬唇/卷唇"状态 Form 只到 −0.4（苦脸/噘嘴能到 −0.5…−0.7，
+        /// 会被钳到这一列）。原来放 −1（曲线钳制端）会让整列永远只走到 40~70%，图上看着像"到不了的点"。
         /// ⚠️ 只给 `MouthCore` / `MouthCoreExpr` 的 X 用；`MouthWidth` 的 X/Y 仍是 `Two`（没有实测数据）。
         /// </summary>
-        private static readonly float[] FormSmile = { -1f, 0f, 0.75f, 1f };
+        private static readonly float[] FormSmile = { -0.4f, 0f, 0.75f, 1f };
 
         /// <summary>
         /// `MouthCore` 的可达区是一条**斜带**（实测：咬唇 −0.4/−0.14、噘嘴 −0.5~−0.7/≈0、静息 0/0、
