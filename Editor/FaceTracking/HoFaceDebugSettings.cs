@@ -109,8 +109,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 于是选中它、打开 Animator 窗口，就能看见**运行中的那棵树**与实时参数 ——
         /// 比"再摆一个抄参数的组件"直接：不抄、不镜像，也不再需要 `HoFaceShadowLink` 那条静态耦合。
         /// 它**不落盘**（`DontSave`），停止驱动就没了；关掉开关会把它重新藏回去（下一帧生效）。
+        /// **默认开**（2026-09-27 用户定）：调试时"看得见运行中的树"是常态需求，藏起来才是特例。
         /// </summary>
-        public bool showShadowInHierarchy;
+        public bool showShadowInHierarchy = true;
 
         /// <summary>配置文件填了没有 —— 这是"下面能不能改"的总闸。</summary>
         public bool HasProfile { get { return !string.IsNullOrEmpty(profilePath); } }
