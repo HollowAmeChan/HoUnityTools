@@ -107,6 +107,9 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         private bool m_OwnsMaterial;
         private bool m_IsReady;
         private bool m_UsesShaderBillboard;
+        private bool m_WarnedInvalidBuffers;
+        private int m_SkippedNonFiniteSegments;
+        private float m_NextMeshDiagnosticsTime;
         private int m_VisibleNodeCount;
         private int m_LastDrawFrame = -1;
         private Camera m_LastDrawCamera;
@@ -424,6 +427,13 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 m_Material.SetInt("_ZWrite", 0);
         }
 
+        [Header("诊断")]
+        [InspectorName("打印网格诊断")]
+        [Tooltip("每 5 秒把网格包围盒与顶点/索引数打进日志。排查「凭空多出一个大三角形」时用：\n" +
+                 "· 包围盒尺寸离谱 -> 顶点数据里有坏值（NaN / 无穷 / 索引越界）\n" +
+                 "· 包围盒正常     -> 问题在着色器或材质，不在网格数据")]
+        public bool logMeshDiagnostics;
+
         private void RebuildMesh()
         {
             if (!m_IsReady || skeletonRoot == null || m_Nodes.Count == 0)
@@ -493,6 +503,15 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                 return;
             }
 
+            // 自检：顶点/索引缓冲必须自洽。不自洽时宁可不画，也不要画出「一个巨大的三角形」
+            // ——索引指到别的线段上时，顶点色会在红蓝之间插值，看起来正好是紫色。
+            if (!ValidateMeshBuffers())
+            {
+                m_Mesh.Clear(false);
+                m_MeshRenderer.enabled = false;
+                return;
+            }
+
             m_Mesh.Clear(false);
             m_Mesh.SetVertices(m_Vertices);
             m_Mesh.SetUVs(0, m_Uvs);
@@ -501,6 +520,18 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             m_Mesh.SetIndices(m_Indices, MeshTopology.Triangles, 0, false);
             m_Mesh.RecalculateBounds();
             m_MeshRenderer.enabled = !drawAfterCamera;
+
+            if (logMeshDiagnostics && Time.unscaledTime >= m_NextMeshDiagnosticsTime)
+            {
+                m_NextMeshDiagnosticsTime = Time.unscaledTime + 5f;
+                Bounds bounds = m_Mesh.bounds;
+                Debug.Log("[HoRuntimeBoneDebug] verts=" + m_Vertices.Count +
+                          " idx=" + m_Indices.Count +
+                          " boundsSize=" + bounds.size.ToString("F3") +
+                          " boundsCenter=" + bounds.center.ToString("F3") +
+                          " skippedNonFiniteSegments=" + m_SkippedNonFiniteSegments +
+                          " shaderBillboard=" + m_UsesShaderBillboard);
+            }
 
             if (m_UsesShaderBillboard && m_Material.HasProperty("_LineWidth"))
                 m_Material.SetFloat("_LineWidth", Mathf.Max(0.5f, lineWidthPixels));
@@ -536,8 +567,65 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             return m_CachedCamera;
         }
 
+        /// <summary>
+        /// 顶点/索引缓冲自检。不自洽就当帧不画 —— 画出来比不画危害大得多：
+        /// 索引指到别的线段上时，顶点色会在红蓝之间插值，看起来正好是一个紫色大三角形。
+        /// </summary>
+        private bool ValidateMeshBuffers()
+        {
+            int vertexCount = m_Vertices.Count;
+            bool ok = vertexCount > 0 &&
+                      vertexCount == m_Colors.Count &&
+                      vertexCount == m_Uvs.Count &&
+                      vertexCount == m_OtherVertices.Count &&
+                      m_Indices.Count % 3 == 0;
+
+            if (ok)
+            {
+                for (int i = 0; i < m_Indices.Count; i++)
+                {
+                    if (m_Indices[i] >= 0 && m_Indices[i] < vertexCount)
+                        continue;
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (ok)
+                return true;
+
+            if (!m_WarnedInvalidBuffers)
+            {
+                m_WarnedInvalidBuffers = true;
+                Debug.LogError(
+                    "[HoRuntimeBoneDebug] 网格缓冲自检失败，已停止绘制。verts=" + vertexCount +
+                    " colors=" + m_Colors.Count + " uvs=" + m_Uvs.Count +
+                    " others=" + m_OtherVertices.Count + " indices=" + m_Indices.Count);
+            }
+
+            return false;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+        }
+
         private void AddSegment(Vector3 start, Vector3 end, Color color, float width, Vector3 cameraPosition)
         {
+            // 坏值防护：骨骼 Transform 一旦出现 NaN / 无穷（缩放为 0 的父级、坏动画曲线等），
+            // 画出来的就是一个横跨半个屏幕的巨大三角形。直接跳过这一段。
+            if (!IsFinite(start) || !IsFinite(end))
+            {
+                m_SkippedNonFiniteSegments++;
+                return;
+            }
+
             Vector3 direction = end - start;
             float length = direction.magnitude;
             if (length < 0.00001f)

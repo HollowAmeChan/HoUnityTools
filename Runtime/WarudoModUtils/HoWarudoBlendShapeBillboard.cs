@@ -24,6 +24,17 @@ namespace Hollow.HoUnityTools.WarudoModUtils
         [Tooltip("关闭时直接使用本组件 Transform 的位置和朝向。")]
         public bool faceCamera;
 
+        [Header("摆放")]
+        [InspectorName("局部偏移")]
+        [Tooltip("相对本组件 Transform 的偏移。列始终从本物体的 +X 方向展开（也就是角色右手边）。")]
+        public Vector3 localOffset = Vector3.zero;
+
+        [InspectorName("正背面翻转 180°")]
+        [Tooltip("勾上 = 面板整体绕 Y 再转 180°。\n" +
+                 "⚠️ 它会把「列往外长的方向」和「正反面」一起翻过来 —— 这两个现象本来就是同一个旋转造成的。\n" +
+                 "本组件历史默认值是勾上的，结果面板长到角色左边、且背面朝人。现已默认关闭。")]
+        public bool flipFacing;
+
         [InspectorName("观察相机")]
         [Tooltip("仅在启用面向相机时使用。留空则使用 Camera.main。")]
         public Camera viewCamera;
@@ -581,18 +592,22 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (m_DisplayRoot == null)
                 return;
 
-            m_DisplayRoot.localPosition = Vector3.zero;
+            // 列从原点沿局部 +X 展开（见 LayoutColumnGroups）。所以这里**不能**默认再转 180°，
+            // 否则整个面板会被翻到父物体的 -X 侧（角色左边），并且正反面反了。
+            m_DisplayRoot.localPosition = localOffset;
             m_DisplayRoot.localScale = Vector3.one * Mathf.Max(0.001f, worldScale);
+
+            Quaternion correction = flipFacing ? TextFacingCorrection : Quaternion.identity;
             if (!faceCamera)
             {
-                m_DisplayRoot.localRotation = TextFacingCorrection;
+                m_DisplayRoot.localRotation = correction;
                 return;
             }
 
             Camera camera = ResolveCamera();
             if (camera == null)
             {
-                m_DisplayRoot.localRotation = TextFacingCorrection;
+                m_DisplayRoot.localRotation = correction;
                 return;
             }
 
@@ -600,7 +615,7 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             if (direction.sqrMagnitude > 0.000001f)
             {
                 m_DisplayRoot.rotation = Quaternion.LookRotation(direction, camera.transform.up)
-                    * TextFacingCorrection;
+                    * correction;
             }
         }
 
