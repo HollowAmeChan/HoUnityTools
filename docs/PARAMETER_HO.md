@@ -482,7 +482,7 @@ V3.0 版没有。我们用 V3.0。
 都写在对应行的 `notes` 里：`FaceAngle*`/`FacePosition*` 取 `VTS_Compatible` 的官方标量拼法、
 向量组取 V3.0 的简洁公式。
 
-### 3.7 控制器轴：`Ho/Drive/*`（**41 行 = 30 轴 + 4 区域门 + 4 切片权重 + 3 契约行，不计入上面的 90**）
+### 3.7 控制器轴：`Ho/Drive/*`（**40 行 = 29 轴 + 4 区域门 + 4 切片权重 + 3 契约行，不计入上面的 90**）
 
 **这一组不是"给下游的出口"，是"喂控制器的口径"**（2026-09-27 加，见
 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3 与[命名权威](FACE_TRACKING_NAMING.md)）：
@@ -504,7 +504,7 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 0 … 1 | |
 | `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | −1 … 0 … +1 | |
 | `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 0 … 1 | |
-| `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（2026-09-28：**负半轴 = sad**，两段式判据；"噘"已从这根轴移出，归 `MouthWidth` / 倒V 形态） | −1 sad … 0 … +1 笑 |
+| `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（2026-09-28：**负半轴 = sad**，两段式判据；"噘"已从这根轴移出，归倒V 形态 —— 原 `MouthWidth` 表 2026-09-28 已删，见[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)） | −1 sad … 0 … +1 笑 |
  = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5）。⚠️ 名字**读作"净笑量"**，`Form` 是保留的（Cubism `ParamMouthForm` / VTS 推荐接法；不改名的理由见[命名权威](FACE_TRACKING_NAMING.md) §6.1） |
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.03 死区**（手机"不张也不抿"时就在这个区间抖），0.03…0.06 是斜坡，之外恒等 —— 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
@@ -513,8 +513,7 @@ V3.0 版没有。我们用 V3.0。
  下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧。**2026-09-27 加 ±0.05 死区曲线**（`|v| ≤ 0.05 → 0`、`0.05…0.08` 斜坡、之外恒等；用户「两个轴的曲线都加一点去噪」）。⚠️⚠️ **咀嚼就长在这根轴上 —— 振幅 ≤0.05 会被死区整个抹掉**，振幅待测 |
 | `Ho/Drive/Mouth/JawSide` | `jawRight - jawLeft` | −1 偏左 · 0 居中 · +1 偏右（⚠️ **实测单侧只到 0.52**） | 下巴的**左右**轴（双极，合同表 `HQJawX`）。**2026-09-27 加同形 ±0.05 死区曲线**；树里 X 刻度按实测收到 `−0.65 / 0 / +0.65`。⚠️ 这根线**咬颌态相关**（咬紧时真动只有 0.02–0.04，而"只挤嘴角"的伪影有 0.05–0.2；**微张解放咬颌才到 0.52**）⇒ 见[控制器 §5.4.2](VTS_HQ_CONTROLLER.md) |
 | `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）。实测记录（只留档，不驱动任何东西）：静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14。为什么不做见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)（VB 七份预设里这根线出现 **0 次**） |
-| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
-| `Ho/Drive/Mouth/X` | `((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight) + 3 * (mouthDimpleLeft - mouthDimpleRight)) * clamp((0.20 - jawOpen) / 0.10, 0, 1)`（2026-09-28 重做：吃上实测最强的 `dimple` 不对称，并乘一道下颌门） | **+ 偏左** … − 偏右 | 双向。实测：静息 0 · 撇嘴 0.13~0.19 · 用力说话 0（门下） |
+| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向。⚠️ **2026-09-28 起没有树消费它**（`MouthWidth` 已删，见[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)）—— 照旧发布当出口，跟 `Mouth/Funnel` / `Mouth/Press` / `Mouth/Forward` 同一种待遇 |
 
 | `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
 | `Ho/Drive/Mouth/CornerL` | `clamp(mouthSmileLeft - mouthFrownLeft, -1, 1)` | −1 苦 · 0 静息 · +1 笑 | **左嘴角**（合同表 D 的 `HQSmileFrownLeft`）；2026-09-27 加，喂 `MouthCorner` 残差表 |
@@ -535,7 +534,8 @@ V3.0 版没有。我们用 V3.0。
 `Ho/Drive/Gate/Expr/*`（按键表情门）**故意不写**：它属于驱动"按键"的那一方（Unity 面板 / Warudo 键盘节点 /
 VTS API 适配器），我们每帧写它就等于把它锁死。控制器里给默认值 `0` 即可。
 
-⚠️ **上面这张表是"我们选了什么口径"**；发货 profile 里**逐行的表达式原文、曲线范围、修饰符现状**（31 根轴已挂 `smooth`，
+⚠️ **上面这张表是"我们选了什么口径"**；发货 profile 里**逐行的表达式原文、曲线范围、修饰符现状**（30 根轴已挂 `smooth`，
+
 取值照 VB 同族平移；区域门与切片行不挂）与"哪根轴要调稳"的操作口径在[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 / §3.2 —— 两边同名同义，
 改公式时**两处一起改**（还有 4 条切片行内联了 `Funnel` / `Press` 的副本，见那节第 3 条陷阱）。
 

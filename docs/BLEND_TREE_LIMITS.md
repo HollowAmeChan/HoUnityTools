@@ -259,16 +259,19 @@ ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是同一块，裸输入�
 
 ### 10.2 Normalize Blend Values（那个复选框）
 
-| 混合类型 | 复选框**关**（我们生成的 25 棵树都是这个） | 复选框**开** |
+| 混合类型 | 复选框**关**（我们生成的 26 棵树都是这个） | 复选框**开** |
 | --- | --- | --- |
 | 1D / 2D | —— | **空操作**：同一棵树开/关，内部点、非对称点、超范围点读数**逐位相同** |
 | **Direct**（两个孩子写同一个属性，权重 0.6 / 0.8） | **加法**：`100×0.6 + 200×0.8 = 220`；两个都写 100 时 `= 140` | **归一化**：权重被除以它们的和 ⇒ `0.4286×100 + 0.5714×200 = **157.14**` |
 
-⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 4 个孩子，每人权重 = `Ho/Drive/W/One` = 1）。
-**2026-09-28 起 `.research/check-controller.ps1` 加了一条断言：27 棵树的 `m_NormalizedBlendValues` 必须全是 0**
+⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 6 个孩子，2026-09-28 删 `MouthWidth` 后 = `MouthCoreRollSwitch` / `MouthJaw` / `MouthCorner` / `MouthTongue` / `InvertedV` / `Cheek`；其中两个"张嘴 × 笑"的孩子挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 2×门）。
+**2026-09-28 起 `.research/check-controller.ps1` 加了一条断言：26 棵树的 `m_NormalizedBlendValues` 必须全是 0**
+（⚠️ 加这条断言时是 **27** 棵；2026-09-28 删掉 `MouthWidth` 之后 = **26**，见[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)）
+
 （对 1D/2D 是空操作，对 Direct 是**载荷**；有人手滑勾上一次，整个区域就会被摊薄 —— 负例验过会报错）。
 
-一旦有人在 Inspector 里把这个复选框勾上，4 个孩子会被除成 `0.25` ⇒ **整个区域变淡/姿势被摊薄**。
+一旦有人在 Inspector 里把这个复选框勾上，孩子们会被按权重和除小 ⇒ **整个区域变淡/姿势被摊薄**（4 个恒 1 的孩子时就是各 `0.25`）。
+
 所以：**别勾它**（生成器写 `m_NormalizedBlendValues: 0`，那就是我们要的）。
 
 （Unity 的 IssueTracker 有一条标题是「Direct blend tree "Normalize Blend Values" does not normalize」，

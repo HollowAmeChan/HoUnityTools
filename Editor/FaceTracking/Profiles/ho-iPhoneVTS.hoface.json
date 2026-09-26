@@ -2781,7 +2781,7 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**三个孩子**：`MouthCoreRollSwitch` / `MouthWidth` / `MouthCorner`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突）。\n⭐ `out(\"…\")` 读的是**上面最近写过这个名字**的那一行 ⇒ 这里读到的是**最后一条**同名行（= 全部形态合起来的门）✓，以后再加形态也不用改这一行。\n【经验参】无（只是转发 out(同名)；门的值由形态行决定）"
+                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**两个孩子**：`MouthCoreRollSwitch` / `MouthCorner`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突；`MouthWidth` 2026-09-28 已整棵删掉）。\n⭐ `out(\"…\")` 读的是**上面最近写过这个名字**的那一行 ⇒ 这里读到的是**最后一条**同名行（= 全部形态合起来的门）✓，以后再加形态也不用改这一行。\n【经验参】无（只是转发 out(同名)；门的值由形态行决定）"
                     },
                     {
                         "parameter":  "Ho/Drive/Style/InvertedV",
@@ -2864,7 +2864,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归 `MouthWidth` / 倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。"
+                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归倒V 形态 —— ⚠️ `MouthWidth` 2026-09-28 已整棵删掉，噘现在只走倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",
@@ -2983,22 +2983,9 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/X",
-                        "expression":  "((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight) + 3 * (mouthDimpleLeft - mouthDimpleRight)) * clamp((0.20 - jawOpen) / 0.10, 0, 1)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
-                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **2026-09-28 平移轴重做（用户定：「左右两块的平移直接是一个 2d3 动画轴」）**：原来的 `(mouthLeft − mouthRight) + (mouthSmileLeft − mouthSmileRight)` **没吃 `mouthDimple` 的左右不对称**，而 dimple（嘴角往后/外拉）才是撇嘴实测最强的那一路（撇嘴左 dimpleLeft 0.243~0.286 / dimpleRight 0.303~0.319，静置两侧只有 0.014~0.031）。\n⭐ **系数与门都是扫出来的**（105 段、剔掉鼓嘴那 9 段 —— 单边鼓嘴会把 `mouthLeft/Right` 顶到 0.87，但它被形态门关着，不该混进统计）：\n  `k0`（现状）缝 **+0.033** · `k1` +0.056 · `k2` +0.079 · `k3` +0.092（`.research/take-features-shift*.txt`）；\n  **加一道下颌门**（撇嘴 `jawOpen ≈0.02`，而挡路的「用力说话」0.28）⇒ `k3` 缝 **+0.0923**、全局最坏 **+0.0462**（无门时全局最坏 −0.0009）⇒ 取 **k=3 + `clamp((0.20 − jawOpen)/0.10, 0, 1)`**。\n⚠️ 残余的假阳性是**笑**（dimpl/smile 左右差的基线：笑常态 shift ≈0.099 vs 撇嘴 0.134~0.191，比值 0.5~0.7）⇒ 阈值/刻度要按这个余量摆（见 `MouthWidth` 的重排）。\n⚠️ **轴的量纲变了**（撇嘴现在 0.134~0.191，不是原来的 0.09），所以控制器的 `MouthWidth` **刻度一并按实测重排**（静息落中格）。"
+                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **2026-09-28：`MouthWidth` 整棵删掉 ⇒ 这根轴从此没有树消费它** —— 照旧每帧发布当出口/辅助变量（与 `Mouth/Funnel` / `Mouth/Press` / `Mouth/Forward`、`Cheek/*`、`Gaze/*` 同一待遇）。新的「整嘴平移 3×3 + 嘴角 2×2」等实测回来再建
+（§5.7.22）。"
+
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/TongueL",
