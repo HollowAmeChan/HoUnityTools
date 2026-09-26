@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -141,7 +141,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ForwardTicks = { 0f, 0.5f, 1f };
 
         /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
-        private static readonly float[] NoseUpTicks = { 0f, 1f };
+        private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
 
         /// <summary>
         /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)`。
