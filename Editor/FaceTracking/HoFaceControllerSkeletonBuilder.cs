@@ -9,7 +9,8 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：44 个参数 + 27 棵树 + 92 个**空槽位**，
+    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：44 个参数 + 27 棵树 + 89 个**空槽位**
+    /// （2026-09-28 之前是 92 —— 猫嘴版变体表按实机砍掉 3 格，见 `VariantSkip`），
     /// 一层 `Ho/00 Drive`、一个状态 `Drive`（Write Defaults 开）、无 Behaviour、无 clip —— 动画由作者后面填。
     ///
     /// 形状与"现在落到哪"记在 `docs/VTS_HQ_CONTROLLER.md`：**§2.1 结构、§2.2 每格叶子的语义**
@@ -244,9 +245,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>
         /// **`Mouth/Roll` 的两个阈值：0.15 / 0.30**（2026-09-28 实测重定，A 批 24 段 + B 批 12 段）。
         /// 这根轴的判据那一次也一起换了（见 profile 里 `Ho/Drive/Mouth/Roll` 那一行）：
-        /// `下唇卷 × clamp((嘴角方向 − 0.20)/0.10, 0, 1)`，所以**读数的量纲也变了** ——
+        /// `下唇卷 × clamp((嘴角方向 − 0.12)/0.10, 0, 1)`，所以**读数的量纲也变了** ——
         /// 猫嘴三段实测 **0.434~0.460**（全过满档），最坏的非目标（常态笑：嘴角门开着但下唇几乎不卷）
         /// **0.075**（离起点还有 2 倍）⇒ `0.15` 是起点、`0.30` 是满档。
+        /// ⚠️ **膝 0.20 → 0.12**（2026-09-28）：用户实机报数 —— 做住 / 张嘴 / 大张 的嘴角方向
+        /// 0.50 / 0.25 / 0.17，膝 0.20 时后两档只拿到门 0.5 / 0 ⇒ 读数 0.05 / 0，擦着释放线 0.02
+        /// ⇒「张嘴立刻就掉回去」；膝 0.12 后三档是 0.40 / 0.10 / 0.044，而最坏非目标（用力说话 0.096）仍在膝下。
         /// ⚠️ 旧的 `0.02 / 0.12` 是给"√(上×下) × 死区 × 下颌增益"那套旧读数配的，**不能再用**。
         /// ⚠️ 1D 的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：自动模式会忽略存下来的值、
         /// 在 `[m_MinThreshold, m_MaxThreshold] = [0,1]` 上把两档平摊成 0 与 1 ⇒ 静默错位。
@@ -582,6 +586,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int i = 0; i < spec.XValues.Length; i++)
                     if (!Skipped(spec, i, j)) count++;
             return count;
+        }
+
+        /// <summary>**变体表**额外挖掉的格吗（`VariantSkip`；主版不受影响）。</summary>
+        private static bool VariantSkipped(string treeName, int i, int j)
+        {
+            Vector2Int[] cells;
+            if (VariantSkip == null || !VariantSkip.TryGetValue(treeName, out cells)) return false;
+            foreach (var cell in cells) if (cell.x == i && cell.y == j) return true;
+            return false;
         }
 
         /// <summary>槽位名 = `<树名>__<X段词>__<Y段词>__A<X刻度数>X<i>Y<j>`（见命名权威 §5）。</summary>

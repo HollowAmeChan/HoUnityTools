@@ -42,6 +42,20 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                  "所以拆成两个独立开关：flipFacing 管朝向，本项管展开方向。四种组合里必然有一个是对的。")]
         public bool reverseColumnOrder;
 
+        [InspectorName("附加旋转 (欧拉角，度)")]
+        [Tooltip("在朝向算完之后**最后**叠上去的旋转（作用在面板自己的局部坐标轴上）。\n" +
+                 "· Z 填 180 = 面板绕自己的正前方向自转半圈（文字会上下颠倒，但不会变镜像）\n" +
+                 "· Y 填 180 = 正反面翻过来（和 flipFacing 等效，两者会叠加）\n" +
+                 "· X 填 180 = 上下翻\n" +
+                 "⚠️ 旋转**修不了镜像**。若文字是左右镜像的，用下面的 mirrorX。")]
+        public Vector3 extraEuler;
+
+        [InspectorName("水平镜像 (X 负缩放)")]
+        [Tooltip("把面板在 X 上翻一个负缩放。\n" +
+                 "**只有这个能修真正的左右镜像** —— 镜像不是一个旋转，任何旋转都补不回来。\n" +
+                 "（TextMesh 用的内置字体材质是 Cull Off，所以负缩放能正常显示、不会消失。）")]
+        public bool mirrorX;
+
         [InspectorName("打印摆放诊断")]
         [Tooltip("每 5 秒把锚点与面板的世界位置/旋转/缩放打进日志。\n" +
                  "用来确认宿主侧有没有偷偷改缩放或镜像（负缩放会让文字变镜像）。")]
@@ -617,7 +631,11 @@ namespace Hollow.HoUnityTools.WarudoModUtils
             // 偏移只用锚点的**旋转**换算，不带它的缩放 —— worldScale 是显式世界尺寸控制，
             // 再乘一遍锚点缩放会让面板在缩放过的角色上小到看不见。
             m_DisplayRoot.position = transform.position + transform.rotation * localOffset;
-            m_DisplayRoot.localScale = Vector3.one * Mathf.Max(0.001f, worldScale);
+
+            Vector3 scale = Vector3.one * Mathf.Max(0.001f, worldScale);
+            if (mirrorX)
+                scale.x = -scale.x;
+            m_DisplayRoot.localScale = scale;
 
             if (logPlacementDiagnostics && Time.unscaledTime >= m_NextPlacementDiagnosticsTime)
             {
@@ -635,7 +653,8 @@ namespace Hollow.HoUnityTools.WarudoModUtils
                           " faceCamera=" + faceCamera + " flipFacing=" + flipFacing);
             }
 
-            Quaternion correction = flipFacing ? TextFacingCorrection : Quaternion.identity;
+            Quaternion correction = (flipFacing ? TextFacingCorrection : Quaternion.identity)
+                                    * Quaternion.Euler(extraEuler);
             if (!faceCamera)
             {
                 m_DisplayRoot.localRotation = correction;
