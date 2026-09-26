@@ -74,27 +74,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 EditorGUI.BeginChangeCheck();
                 bool preview = HoConstraintEditorControls.Toggle("预览混合树", settings.showShadowInHierarchy,
-                    "**默认开**：把运行中的影子台 `Ho Face Shadow` 显示到 Hierarchy（不落盘、停止驱动就消失）。\n"
-                    + "选中它 → 打开 Animator 窗口 = **正在跑的那棵树**与实时参数（不抄、不镜像）。\n"
-                    + "⚠️ Project 里点 controller 资产看到的是**资产本身**（结构 + 参数默认值），不是任何角色的运行状态。\n"
-                    + "关掉立刻重新藏回去（正在跑也不用重启驱动）。");
+                    "把运行中的影子台 `Ho Face Shadow` 显示到 Hierarchy：选中它 + Animator 窗口 = 看**正在跑的那棵树**"
+                    + "（不落盘，停止驱动就没了）。");
 
                 HoConstraintEditorControls.Gap(8.0f);
 
-                // 这一行就是 `startOnPlay` 的开关。它只做"**开始驱动**"这一件事，
-                // **不会**顺手连手机 —— 连接是显式动作（右下那个按钮），自动连会在你还没看
-                // IP 是否对的时候就先把端口占了。
+                // 这一行就是 `startOnPlay` 的开关（**默认开**）。它只做"开始驱动"这一件事，
+                // **不会**顺手连手机 —— 连接是显式动作，自动连会在你还没看 IP 是否对的时候先把端口占了。
                 bool autoStart = HoConstraintEditorControls.Toggle("自动驱动", settings.startOnPlay,
-                    "**进播放模式后自动开始驱动**（默认关）。\n"
-                    + "只等于替你按一下「开始驱动」；**不会**自动连接手机 —— 连接始终是显式动作。\n"
-                    + "停止播放 / 退出播放模式时照常交还形态键。");
+                    "进播放模式后自动按下「开始驱动」（**不会**自动连手机）。");
 
                 HoConstraintEditorControls.Gap(8.0f);
 
                 bool write = HoConstraintEditorControls.Toggle("写动态参数", settings.writeParameterHub,
-                    "**写动态参数 Hub**（默认关）：打开后把**全部输出行**（含「控制器里没有那些参数」的行）"
-                    + "按名字写进角色 Hub，下一帧生效。\n"
-                    + "调试台自己不需要它（「参数输出」栏看的是同一份值）；Warudo 侧由「HoFace写动态参数」节点写。");
+                    "把**全部输出行**按名字写进角色 `HoFaceSemanticHub`（Warudo 侧由「HoFace写动态参数」节点写）。");
 
                 if (EditorGUI.EndChangeCheck())
                 {
@@ -417,7 +410,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                     HoConstraintEditorControls.Gap();
                     // 「选…」留着：工程**之外**的文件没有资产可拖（Warudo 只看路径，那种也合法）。
-                    if (HoConstraintEditorControls.Button("选…", "选一个 .hoface.json。工程里的直接拖上面那个框就行；这个按钮留给工程外的文件。", false, 34.0f))
+                    if (HoConstraintEditorControls.Button("选…", "选一个工程外的 .hoface.json（工程里的直接拖左边那个框）。", false, 34.0f))
                     {
                         string path = EditorUtility.OpenFilePanel("选中间层配置", Application.dataPath, "json");
                         if (!string.IsNullOrEmpty(path))
@@ -473,7 +466,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Flex();
                     if (HoConstraintEditorControls.Button(connected ? "断开" : "连接",
-                        "按上面那份源列表把接收端拉起来（手机那条需要先填 IP 与端口）。", !connected, 96.0f))
+                        connected ? "停掉接收端。" : "按上面填的 IP 把接收端拉起来。", !connected, 96.0f))
                     {
                         if (connected) HoFaceInputHub.Disconnect();
                         else HoFaceInputHub.Connect();
@@ -487,7 +480,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     using (new EditorGUI.DisabledScope(!canDrive))
                     {
                         if (HoConstraintEditorControls.Button(session == null ? "开始驱动" : "停止并交还",
-                            "播放模式下面捕才真正驱动混合树。停止会把占用的形态键还回去。", session == null, 112.0f))
+                            "只在播放模式下有效；停止会把占用的形态键还回去。", session == null, 112.0f))
                         {
                             if (session == null) HoFaceInputHub.Start(settings);
                             else HoFaceInputHub.Stop(settings);

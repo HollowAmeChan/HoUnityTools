@@ -102,7 +102,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 return;
             }
 
-            if (change == PlayModeStateChange.EnteredPlayMode && Settings != null && Settings.startOnPlay)
+            // ⚠️ 还要 gate `HasProfile`：开关**默认开**（2026-09-27 用户定），而没配面捕的工程
+            // 每次按 Play 都会走到这里 —— 不拦的话 `Start` 会记一条「没指定中间层配置」的红字，
+            // 等于给"根本没在用面捕"的人每次开播都报一次错。
+            if (change == PlayModeStateChange.EnteredPlayMode && Settings != null && Settings.startOnPlay && Settings.HasProfile)
             {
                 try { Start(); }
                 catch (Exception e) { Debug.LogWarning("[Ho 面捕] 自动开始失败：" + e.Message); }
