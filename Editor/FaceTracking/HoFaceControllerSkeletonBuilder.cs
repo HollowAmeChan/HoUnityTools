@@ -34,7 +34,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static readonly string[] RegionGates = { "Mouth", "EyeLeft", "EyeRight", "Brow", "Cheek" };
 
-        /// <summary>轴参数（部位/轴 → 名字）：30 根，见设计稿 §3.1。</summary>
+        /// <summary>轴参数（部位/轴 → 名字）：32 根，见设计稿 §3.1。</summary>
         private static readonly string[] Axes =
         {
             "Ho/Drive/Mouth/Form", "Ho/Drive/Mouth/Open", "Ho/Drive/Mouth/Funnel", "Ho/Drive/Mouth/Press",
@@ -42,6 +42,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             "Ho/Drive/Mouth/TongueL", "Ho/Drive/Mouth/TongueR",
             // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
+            // 卷唇（2026-09-27）：`Form`/`Open` 的负侧只由"卷唇"驱动 ⇒ 整族搬来 MouthLipRoll（HQ*LipRoll）
+            "Ho/Drive/Mouth/RollUp", "Ho/Drive/Mouth/RollDown",
             "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
             "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
             "Ho/Drive/Gaze/Left/X", "Ho/Drive/Gaze/Left/Y", "Ho/Drive/Gaze/Right/X", "Ho/Drive/Gaze/Right/Y",
@@ -77,42 +79,37 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ZeroOne = { 0f, 1f };
 
         /// <summary>
-        /// **`Mouth/Open` 专用刻度：−0.14 / 0 / 0.4 / 0.75**（2026-09-27 用户实测定）。
-        ///
-        /// 正侧：手机实测"张满"只到 0.75、"半张"在 0.4 附近 ⇒ 把这根轴的圈收进实测范围
+        /// **`Mouth/Open` 专用刻度：0 / 0.4 / 0.75**（2026-09-27 用户实测定）。
+        /// 手机实测"张满"只到 0.75、"半张"在 0.4 附近 ⇒ 把这根轴的圈收进实测范围
         /// （0.75 就是张满，0.9 / 1.0 会被投影到这一行，实测逐位相同）。
-        /// 负侧：这根轴**不是"下颌开度"而是"嘴唇张开量"** —— 闭紧与卷唇都算"比中性更闭合"。
-        /// 实测：不咬唇上下内卷 = **−0.07**、咬紧内卷 = **−0.14** ⇒ 负侧给 **−0.14** 一格；
-        /// −0.07 落在它一半处即可（用户定"可以不加太多动画"）。
-        /// 曲线把 ±0.02 的死区抹平（撇嘴只到 −0.01/0）。
+        /// ⚠️ **负侧不要**（用户定）：`Open` 的负值（咬唇 −0.14 / 内卷 −0.07）只由"卷唇"驱动，
+        /// 而那整族已经搬去 `MouthLipRoll` ⇒ 这里只留正值，负值一律钳到 Y0（= 闭）。
         /// ⚠️ 只给 `MouthCore` 的 Y 用；`Mouth/Jaw`（= 裸 `jawOpen`）**没有实测数据**，仍用 `Unit`。
         /// </summary>
-        private static readonly float[] OpenMeasured = { -0.14f, 0f, 0.4f, 0.75f };
+        private static readonly float[] OpenMeasured = { 0f, 0.4f, 0.75f };
 
         /// <summary>
-        /// **`Mouth/Form` 专用刻度：−0.4 / 0 / 0.75 / 1**（2026-09-27 用户实测定）。
-        /// 正侧不是"0 → 1"两档：「**常态笑**」在 0.75 左右、「**大笑**」才到 1 —— 两个都是真实状态，
-        /// 各要一个采样点，所以 X 是四档。
-        /// 负端是 **−0.4**：实测最左下的"咬唇/卷唇"状态 Form 只到 −0.4（苦脸/噘嘴能到 −0.5…−0.7，
-        /// 会被钳到这一列）。原来放 −1（曲线钳制端）会让整列永远只走到 40~70%，图上看着像"到不了的点"。
+        /// **`Mouth/Form` 专用刻度：0 / 0.75 / 1**（2026-09-27 用户实测定）。
+        /// 「**常态笑**」在 0.75 左右、「**大笑**」才到 1 —— 两个都是真实状态，各要一个采样点。
+        /// ⚠️ **负侧不要**（用户定）：`Form` 的负侧混了三件事，全部搬走 —— 苦 → `MouthCorner`（嘴角）、
+        /// 噘 → `MouthWidth`、卷唇/咬唇 → `MouthLipRoll`。于是这张表**只管"笑 × 张嘴"两块正值**，
+        /// 回到干净的 3×3（没有负行/负列，也就没有要挖的死角）。
         /// ⚠️ 只给 `MouthCore` / `MouthCoreExpr` 的 X 用；`MouthWidth` 的 X/Y 仍是 `Two`（没有实测数据）。
         /// </summary>
-        private static readonly float[] FormSmile = { -0.4f, 0f, 0.75f, 1f };
+        private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
 
         /// <summary>
-        /// `MouthCore` 的可达区是一条**斜带**（实测：咬唇 −0.4/−0.14、噘嘴 −0.5~−0.7/≈0、静息 0/0、
-        /// 常态笑 +0.75/~0、大笑 +1/0.4+）⇒ 两个对角死角物理上做不到，留着只降低可读性，**挖掉**：
-        /// 左上（苦着脸张大嘴：`−pucker` 与 `jawOpen` 打架）、右下（笑着咬唇：咬唇必带 pucker）。
+        /// **保留**的稀疏机制：某张表的某个 (i,j) 格子物理上到不了时，可以登记在这里不建。
+        /// 现在**一张表都没用**（`MouthCore` 的负侧整块搬去了 `MouthLipRoll`，回到干净的 3×3）。
         /// </summary>
-        private static readonly Vector2Int[] MouthCoreSkip =
-        {
-            new Vector2Int(0, 2), new Vector2Int(0, 3),   // 左上：Form −1 × Open 0.4 / 0.75
-            new Vector2Int(2, 0), new Vector2Int(3, 0)    // 右下：Form 0.75 / 1 × Open −0.14
-        };
+        private static readonly Vector2Int[] NoSkips = null;
 
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured },
+            // 卷唇/咬唇**自己的表**（契约里预留的 `MouthLipRoll`）：轴就是原始两根线，不经过 Form/Open。
+            // 2×2 正好是四个真实状态：不卷 / 上卷 / 下卷 / 上下都卷（= 咬唇）。
+            new TableSpec { Name = "MouthLipRoll", X = "Ho/Drive/Mouth/RollUp", Y = "Ho/Drive/Mouth/RollDown", XToken = "RollUp", YToken = "RollDown", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
@@ -149,7 +146,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>区域 → 直接挂在它下面的子节点（表名或开关名）。</summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
+            { "MouthRegion", "Mouth", "MouthCoreSwitch,MouthLipRoll,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
             { "EyeLeftRegion", "EyeLeft", "LidLSwitch,GazeL" },
             { "EyeRightRegion", "EyeRight", "LidRSwitch,GazeR" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },

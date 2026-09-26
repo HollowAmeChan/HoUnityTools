@@ -103,7 +103,7 @@
 
 代码只认其中 4 个名字（`HoFaceNaming.cs`：`Ho/Drive` 根、`BlinkWide`、`Squint`、`LidAxis()`），
 其余全是**作者约定** + 中间层配置文件里的行名。**这些行现在真的写出来了**：发货那份
-`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 39 行 `Ho/Drive/*`（逐行清单见
+`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 41 行 `Ho/Drive/*`（逐行清单见
 [HO 参数规范](PARAMETER_HO.md) §3.7）。
 
 ## 5. 槽位名（= 片段名）
@@ -161,7 +161,7 @@
   + `LidL`/`LidR`（**名字恰好合规**）+ `EyeRegion`/`LipRegion`（区域名待换成 `EyeLeftRegion`/`MouthRegion`），
   叶子参数是**裸 ARKit 名**（`jawOpen`、`eyeBlinkLeft`…）。新控制器按本文重建，老的那份不动。
 * **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）
-  —— **39 行 `Ho/Drive/*` 轴已经加进 profile 了**（逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+  —— **41 行 `Ho/Drive/*` 轴已经加进 profile 了**（逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
   [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3），出口那 90 行按原样保留。
 
 ## 9. 已经用这套名字落地的树（对照 §2 的 42 家族）
