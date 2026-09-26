@@ -699,7 +699,62 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 **刻度状态**（2026-09-27 用户："张嘴满值就是我们现在调的，半张跟张满我就已经手调好了"）：
 ① 上下轴 `0 / 0.75` ✅ **已定**（作者手调）；② 左右轴 `−1 / 0 / +1` 待实测（下巴左右移到底的读数）；
 ③ 咀嚼时 `jawOpen` / `mouthClose` 的**振幅与频率**仍待实测（决定这棵树跟不跟得上动作）。
+### 5.4.1 下颌系到底能不能用（2026-09-27：Apple 原文 + VBridger 实做对照）
+
+用户问「张嘴会把这个值顶上去 —— 这是 ARKit 故意的设计吗，二次元角色合适吗」。三份证据：
+
+**① Apple 只定义语义，从没承诺过不联动。**（原文取自 `ARFaceAnchor.BlendShapeLocation` 的 docs JSON）
+
+| 系数 | Apple 原文 |
+| --- | --- |
+| `jawForward` | "The coefficient describing **forward movement** of the lower jaw." |
+| `jawOpen` | "The coefficient describing an **opening** of the lower jaw." |
+| `jawLeft` / `jawRight` | "leftward / rightward movement of the lower jaw." |
+| `mouthClose` | "closure of the lips ***independent of jaw position***." ← ⭐ **全家桶里唯一显式说"独立"的一条** |
+
+每个系数的 Discussion 只有一张示意图，而图的说明偏偏是"**In both states, the values for all other
+coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为。
+⇒ **不是"故意设计成联动"，是"从没承诺过不联动"**：它把一张脸拟合成一组基，基之间近似正交但不可能真正交；
+再加上生理上下颌本来就是"转动 + 平移"一起动。
+⚠️ [参数标准表](PARAMETER_STANDARDS.md) §5 里那句"与 `jawOpen` 正交"是**我们从定义推的**，不是 Apple 的承诺。
+
+**② 设备实测**（我们自己的两份记录）：`jawForward` **要张嘴**（闭嘴时几乎不给值）、**安卓根本不发**；
+`JawRight` 是**跳变**的（114 帧 range 0.043 → 120 帧 0.600）；`JawLeft` 静息 0.019。
+见[设备实测](PARAMETER_DEVICE_VERIFICATION.md)。
+
+**③ VBridger 的做法：整个下颌系只用 `jawOpen` 一根。** 把 7 份预设（含我们那份母本
+`AdvancedARKit_V3.0`）的 `store` 全解析了一遍：
+
+| 预设（行数） | `jawOpen` | `jawLeft` / `jawRight` | `jawForward` |
+| --- | --- | --- | --- |
+| AdvancedARKit **V2.0 / V2.0_PlusVolume / V2.0_Stepped / V3.0**（各 26） | ✅ 4 处用途 | ❌ | ❌ |
+| PNGTuber（10） | ✅（只在 `MouthOpen`） | ❌ | ❌ |
+| VisemesARKit（34） | ✅（viseme 加权混合） | ❌ | ❌ |
+| VMC-Face-Head（54）/ VMC_FaceOnly（50） | ✅ | ⚠️ **只做直通改名**（`jawLeft = jawLeft`），不参与任何计算 | ❌ |
+| VTS_Compatible（28） | ✅（只在 `MouthOpen`） | ❌ | ❌ |
+
+`jawForward` 在**七份里出现 0 次**（**连直通都没有**）。V3.0 里 `jawOpen` 的全部四处用途
+（`JawOpen` 出口、`MouthOpen`、`VoiceVolumePlusMouthOpen`、`MouthFunnel = mouthFunnel − jawOpen*.2`）
+**正好就是我们抄来的那四条公式** ⇒ **我们其他公式的母本，在下颌这件事上只信 `jawOpen` 一根。**
+
+**结论（我的判断，等你定）**：下巴前顶这个**姿势**没问题（二次元喜剧姿势就该有），但这根**通道**
+是 ARKit 全家桶里条件最差的一根：**要张嘴才有值 → 张嘴本身又给值 → 噘嘴也给值（0.05）→
+满档还要"噘嘴 + 前顶"一起 → 安卓不发 → VB 干脆整根丢掉**。
+⇒ **它当不了"下巴前顶"的检测器**，只能当"下颌在动"的模糊指示。四条路：
+
+1. **保持现状**（线性 + 认串扰）—— 代价：张嘴 / 说话 / 噘嘴都会带着下巴动一点；
+2. **减污染** `clamp(jawForward − k · jawOpen, 0, 1)`（k 用"张嘴单独"那段实测标定）——
+   扣掉张嘴那一项，留下噘嘴那一项（用户已认）；
+3. **学 VB：不做**（`MouthForward` 树留着空转等按键表情门，或者直接删掉）；
+4. **改按键**（前顶本来就是喜剧姿势，按键比检测靠谱）。
+
+⚠️ 选 ① 还是 ② 取决于**一个数**：**"张嘴单独"时 `jawForward` 到底多少**。
+用户看到的是"**0.008 以上**"—— 若真是 ~0.01（= 满档 0.12 的 8%），可以不管；
+若它随张嘴爬到 0.04+（补间是渐进的），就**必须减**。
+
 ### 5.5 脸的其他部分：现在到什么程度（**2026-09-27 用户定：眼/眉暂缓，树里先 ARKit 直通**）
+
+
 
 嘴之外，用户问"还有哪些我忘记表达的状态"。全脸对一遍：
 

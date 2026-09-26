@@ -1,4 +1,4 @@
-﻿# VBridger 的输入 / 输出参数格式（一手抽样）
+# VBridger 的输入 / 输出参数格式（一手抽样）
 
 > **已归档（2026-09-23）。** 这是从 `Saves\*.vbridger` 十份自带预设（已解密成 JSON）里**逐行统计**
 > 出来的词汇表与规则，用来回答两个问题：**它的输入是什么**、**它发出去的参数是什么格式**。
@@ -64,6 +64,13 @@
 > 反过来，这张表里有 **11 个从来没有被任何预设引用**：`BlendShapes`、`jawForward`、
 > `noseSneer_L/R`、`Joints`、`eyeLeftX`、`eyeRightX`、`Sound Input`、`viseme_SIL`、`Other`、`faceFound`
 > ——（`viseme_SIL` 只以 `_abs` 形式被用）。**声明与实际使用是两回事**，看这张表时要小心。
+>
+> ✅ **2026-09-27 用解密出来的原件复核过**（`.research/vbridger/decrypted/` 里 7 份预设的 `store`
+> 全解析）：`jawForward` **0 次** —— 连"直通改名"都没有。整个**下颌系** VB 只用 `jawOpen`
+> （V3.0 里四处用途：`JawOpen` 出口、`MouthOpen`、`VoiceVolumePlusMouthOpen`、`MouthFunnel`），
+> `jawLeft`/`jawRight` **只在两份 VMC 预设里当出口名直通**（不参与任何计算）。
+> 对照表见[控制器 §5.4.1](../VTS_HQ_CONTROLLER.md) —— 我们的 `MouthForward` / `MouthJaw` 两棵树
+> 建在 VB 一根都不用的线上。
 
 其它追踪源**不新增变量，而是改名进这套规范名**（同文件里的三张表）：
 

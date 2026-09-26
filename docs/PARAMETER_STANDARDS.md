@@ -1,4 +1,4 @@
-﻿# 参数标准表（面捕与形态键的权威依据）
+# 参数标准表（面捕与形态键的权威依据）
 
 这份文档**只做一件事**：把"下游到底认哪些名字、什么值域、谁定的、跨模型稳不稳"逐行列清楚，
 让本仓库所有涉及"写参数 / 写形态键 / 生成动画 / 做映射"的设计都能引到这里，而不是各自凭记忆。
@@ -536,7 +536,7 @@ Eyebrows/Cheeks/Nose 10 = 眉 5 + 颊 3 + 鼻 2。**两组口径合计都是 52*
 | `mouthRollLower/Upper` | 官方语义是"**向口腔内侧**卷"（往牙齿方向），不是向外翻 |
 | `mouthShrugLower/Upper` | 官方是 "**outward** movement"（向外），不是"向上耸" |
 | `browDown*` / `noseSneer*` | `browDown*` 只指**眉外侧**（"outer portion"）；`noseSneer*` 是"鼻翼**周围**上提" |
-| `jawForward` | 是下颌**向前平移**，与 `jawOpen`（张开角度）正交；**具体是哪根轴官方没给**。很多追踪源对它恒发 0，不要拿它当"张嘴" |
+| `jawForward` | 官方原文 = "The coefficient describing **forward movement** of the lower jaw."（`jawOpen` = "an **opening**"、`jawLeft/Right` = "leftward / rightward movement"）。⚠️ **"与 `jawOpen` 正交"那是我们从定义推的，Apple 没承诺** —— 它全家桶里**唯一**显式写"独立"的是 `mouthClose`（"closure of the lips *independent of jaw position*"）；每个系数的 Discussion 那张示意图还特意注明"其他系数全置 0.0"（**理想值**，不是设备行为）。实测这台 iPhone：**要张嘴才给值**、安卓不发 ⇒ 不要拿它当"张嘴"，也不要指望它只反映前伸（见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)） |
 | `tongueOut` / `cheekPuff` 的平台支持 | 见 §1.1：只有手机端有（`cheekPuff` 只 iOS），webcam 永远没有数据；`tongueOut` 的 1.0 是"ARKit 能追踪到的最大程度"而非物理极限 |
 | **逐键机型门槛表不存在** | Apple 只给了整体要求（iOS 14 / 带 Neural Engine，或 iOS 13 及以下必须 TrueDepth）与 `tongueOut` 的 iOS 12.0；**没有"哪个键需要哪颗芯片"的官方矩阵** → 这类说法一律不要引用 |
 | 左右对称性 | 52 个里并非全部左右成对：做"单根轴"时要显式决定用左、右还是平均 |
