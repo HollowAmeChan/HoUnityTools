@@ -157,16 +157,29 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(1, 2) };
 
         /// <summary>
-        /// **`MouthCore` 挪过位的那一格**（2026-09-27 用户实测定）：右上角 `(大笑 × 张满)`。
-        /// 实测"**大笑张嘴时嘴会收缩**"⇒ `Open` 到不了 0.75，摆 **0.6** 才是那个状态的真实位置。
-        /// ⚠️ 只挪**这一个点**（不是整行）：静息张嘴仍是 0.75、常态笑张嘴那格已挖掉。
-        /// 于是顶边从平线变成 **0.6 ↔ 0.75 的斜线** —— 圈仍是凸的，出界照旧投影到圈边（不外推），
-        /// 代价是 `(Form 0.75…1, Open > 0.6)` 那块会落到这条斜边上（越靠右越接近"大笑张嘴"）。
-        /// ⚠️ 槽位名按索引编（`A3X<i>Y<j>`），所以挪坐标**不改名、不用重烘**。
+        /// **`MouthCore` 的 8 个点：手工拉的自由点集**（2026-09-27 用户第二次改，从资产读回来的真值）。
+        /// 他改的是 X1 / X2 那两列（笑那侧），X0 那列没动：
+        /// <code>
+        ///   A3X0Y0 (0,0)          A3X1Y0 (0.482,-0.017)   A3X2Y0 (0.907,-0.024)
+        ///   A3X0Y1 (0,0.4)        A3X1Y1 (0.47,0.336)     A3X2Y1 (0.968,0.267)
+        ///   A3X0Y2 (0,0.75)       （A3X1Y2 挖掉）          A3X2Y2 (0.926,0.596)
+        /// </code>
+        /// ⇒ `FormSmile` / `OpenMeasured` 降级成**索引骨架**（槽位名里只带 X 的档数）。
+        /// ⚠️ **变体表 `MouthCoreRoll` 用的是同一份 Override** ⇒ 两个生成器天然同步；
+        ///    但**资产是用户手动改的**，所以每次同步完都要把主版那 8 个坐标**镜像到猫嘴版**
+        ///    （检查器有一条"变体 / 副本必须与主版逐点一致"的硬检查）。
+        /// ⚠️ 他以后再拉点：**先读资产、再改这里**，不要反过来。
         /// </summary>
         private static readonly CellPos[] MouthCoreOverride =
         {
-            new CellPos { I = 2, J = 2, X = 1f, Y = 0.6f }
+            new CellPos { I = 0, J = 0, X = 0f, Y = 0f },
+            new CellPos { I = 1, J = 0, X = 0.482f, Y = -0.017f },
+            new CellPos { I = 2, J = 0, X = 0.907f, Y = -0.024f },
+            new CellPos { I = 0, J = 1, X = 0f, Y = 0.4f },
+            new CellPos { I = 1, J = 1, X = 0.47f, Y = 0.336f },
+            new CellPos { I = 2, J = 1, X = 0.968f, Y = 0.267f },
+            new CellPos { I = 0, J = 2, X = 0f, Y = 0.75f },
+            new CellPos { I = 2, J = 2, X = 0.926f, Y = 0.596f }
         };
 
         /// <summary>
