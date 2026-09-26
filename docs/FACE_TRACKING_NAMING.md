@@ -1,4 +1,4 @@
-# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
+﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 **0.15 / 0.30**）。轴 = **下唇卷 × 嘴角门**（2026-09-28 换：`clamp(mouthRollLower × clamp((嘴角方向 − 0.20)/0.10, 0, 1), 0, 1)`，`嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2`）—— 旧口径 `√(上×下) × 死区 × 下颌增益 × 噘嘴门` 已被 36 段实测推翻（缝 −0.24）；**按键要强制猫嘴就直接写这个参数**（≥0.30） |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 **0.15 / 0.30**）。轴 = **下唇卷 × 嘴角门**（2026-09-28 换：`clamp(mouthRollLower × clamp((嘴角方向 − 0.12)/0.10, 0, 1), 0, 1)`，`嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2`）—— 旧口径 `√(上×下) × 死区 × 下颌增益 × 噘嘴门` 已被 36 段实测推翻（缝 −0.24）；**按键要强制猫嘴就直接写这个参数**（≥0.30） |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |
