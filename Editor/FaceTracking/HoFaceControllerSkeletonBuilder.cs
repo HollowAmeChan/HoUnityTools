@@ -137,16 +137,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly float[] JawOpen = { 0f, 0.75f };
 
-        /// <summary>
-        /// 下巴前伸的**两档：静置 / 满**（2026-09-27 用户定「前顶完全不需要三挡，一档就行」）。
-        /// 原来的 `0 / 0.5 / 1` 是没实测的占位，实测把量程打穿了：裸 `jawForward` 满量程只有 **0.13**
-        /// （两次读数 0.13 / 0.14）—— 静息 ≈0、**噘嘴单独 ≈0.05**（串扰）、**噘嘴+前顶 = 满**
-        /// （用户：「噘嘴的同时下巴前顶才是最大」）。满档摆 `0.12` 而不是踩在峰值上：照 `Roll` 的先例
-        /// 留余量，弱一天也能真的到 100%。⚠️ 噘嘴单独那 0.05 会顶出 ~42% 的前顶姿势，**用户已认**
-        /// （口径 = 原样线性）；要改就是中间层再减掉那 0.05。
-        /// </summary>
-        private static readonly float[] ForwardTicks = { 0f, 0.12f };
-
         /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
         private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
 
@@ -204,14 +194,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] RollTicks = { 0.02f, 0.12f };
 
         /// <summary>
-        /// 1D 片段表（一根轴、孩子是动画片段）。**这是那套机制的第一个正式用户**（2026-09-27）：
-        /// 卷唇改成"变体开关"之后空了一阵，现在下巴前伸与鼻子上顶用上了。
+        /// 1D 片段表（一根轴、孩子是动画片段）。**这是那套机制的第一个正式用户**（2026-09-27）。
+        /// ⚠️ 2026-09-27 起**只乘 `NoseUp` 一张**：下巴前伸那棵按用户决定删掉了
+        /// （「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了」）
+        /// —— `Ho/Drive/Mouth/Forward` 那一行照样发布（辅助变量/出口），只是没有树消费它。
         /// </summary>
         private static readonly Simple1DSpec[] Simple1DTables =
         {
-            // 下巴前伸（用户定：「下巴前伸就是一个单独的轴，他不用跟别人组合」）——
-            // 自己一棵、和 `MouthJaw` 靠加法叠加（分工：只写**下颌平移**那几根键，chin/下唇归 `MouthJaw`）。
-            new Simple1DSpec { Name = "MouthForward", Parameter = "Ho/Drive/Mouth/Forward", Token = "Forward", Values = ForwardTicks },
             // 鼻子上顶（用户定：颊不要、鼻只留这一个状态）—— 只要"不顶 / 顶"两格。
             new Simple1DSpec { Name = "NoseUp", Parameter = "Ho/Drive/Nose/Up", Token = "Up", Values = NoseUpTicks }
         };
@@ -270,7 +259,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthForward,MouthWidth,MouthCorner,MouthTongue" },
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
             // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
             { "EyeRegion", "Eye", "LidLSwitch,LidRSwitch" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },

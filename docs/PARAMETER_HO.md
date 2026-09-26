@@ -509,7 +509,7 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
 | `Ho/Drive/Mouth/Jaw` | `clamp(jawOpen - mouthClose, -1, 1)` | **−1 咬合/压 · 0 静息 · +1 张开** | 下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧 |
-| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。**2026-09-27 实测**：静息 ≈0 / **噘嘴单独 ≈0.05**（串扰，用户已认）/ **噘嘴+前顶 = 0.14 = 满**（用户：「噘嘴的同时下巴前顶才是最大」）⇒ 喂 `MouthForward` 1D 表时刻度从 `0/0.5/1` **砍成 `0/0.12` 两档**。⚠️ 因为满档**需要噘嘴参与**，Roll 那种噘嘴门在这根轴上不能用 |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）。实测记录（只留档，不驱动任何东西）：静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14。为什么不做见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)（VB 七份预设里这根线出现 **0 次**） |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
 | `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |

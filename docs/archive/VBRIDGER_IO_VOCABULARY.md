@@ -69,8 +69,9 @@
 > 全解析）：`jawForward` **0 次** —— 连"直通改名"都没有。整个**下颌系** VB 只用 `jawOpen`
 > （V3.0 里四处用途：`JawOpen` 出口、`MouthOpen`、`VoiceVolumePlusMouthOpen`、`MouthFunnel`），
 > `jawLeft`/`jawRight` **只在两份 VMC 预设里当出口名直通**（不参与任何计算）。
-> 对照表见[控制器 §5.4.1](../VTS_HQ_CONTROLLER.md) —— 我们的 `MouthForward` / `MouthJaw` 两棵树
-> 建在 VB 一根都不用的线上。
+> 对照表见[控制器 §5.4.1](../VTS_HQ_CONTROLLER.md) —— 我们的 `MouthJaw` 建在 `jawLeft/Right` 上
+> （VB 只当出口名直通用的那两根）；`MouthForward`（建在 `jawForward` 上）**2026-09-27 已按同一份对照删掉**，
+> 那根线降级成辅助变量。
 
 其它追踪源**不新增变量，而是改名进这套规范名**（同文件里的三张表）：
 
