@@ -1,4 +1,4 @@
-﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
+# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 0.02 / 0.12）。轴 = **`√(上×下)` 上下同卷判据**（只动一根 ⇒ 0，这就是"区分噘嘴"）× **±0.02 死区** × **`1 + 4·jawOpen²` 下颌增益** × **噘嘴门 `1 − clamp((mouthPucker − 0.5)/0.3, 0, 1)`**；**按键要强制猫嘴就直接写这个参数**（≥0.12） |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 **0.15 / 0.30**）。轴 = **下唇卷 × 嘴角门**（2026-09-28 换：`clamp(mouthRollLower × clamp((嘴角方向 − 0.20)/0.10, 0, 1), 0, 1)`，`嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2`）—— 旧口径 `√(上×下) × 死区 × 下颌增益 × 噘嘴门` 已被 36 段实测推翻（缝 −0.24）；**按键要强制猫嘴就直接写这个参数**（≥0.30） |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |
@@ -93,7 +93,7 @@
 ⚠️ **嘴没有副本**（2026-09-27 用户定，已删 `MouthCoreExpr` + `MouthCoreSwitch`）：
 「按键表情版本身对于嘴张嘴笑没有意义」—— 夸张的笑嘴 = `Form` 更大，轴上本来就够得到；
 **只有轴上到不了的"性质"才值得开副本**（笑眼、怒眉）。要"按键强制某个嘴型"，就直接写对应的轴值
-（例：猫嘴 = 写 `Ho/Drive/Mouth/Roll` ≥ 0.12），不需要第二张表。
+（例：猫嘴 = 写 `Ho/Drive/Mouth/Roll` ≥ 0.30），不需要第二张表。
 
 ### 3.1 轴驱动的变体（**另一类**：不是按键表情）
 
@@ -103,7 +103,7 @@
 | 东西 | 名字 | 例 |
 | --- | --- | --- |
 | 变体树 | `<树名><驱动它的轴段词>` | `MouthCoreRoll`（由 `Roll` 轴选中的 `MouthCore` 变体 = 猫嘴版整嘴） |
-| 1D 开关容器 | `<变体树名>Switch`，`blendParameter` = 那根轴 | `MouthCoreRollSwitch`（blend = `Ho/Drive/Mouth/Roll`，阈值 0.02 / 0.12） |
+| 1D 开关容器 | `<变体树名>Switch`，`blendParameter` = 那根轴 | `MouthCoreRollSwitch`（blend = `Ho/Drive/Mouth/Roll`，阈值 0.15 / 0.30） |
 
 ⚠️ **变体 vs 副本**：机制一样（1D + 两张整表），区别在**谁选**——副本由**按键表情门**选（0/1），
 变体由**某根轴**选（实测档位）。名字上用 `Expr` / `<轴段词>` 区分，一眼能看出是哪一类。
