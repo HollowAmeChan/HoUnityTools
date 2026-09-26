@@ -9,18 +9,24 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：40 个参数 + 29 棵树 + 104 个**空槽位**，
+    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：44 个参数 + 27 棵树 + 92 个**空槽位**，
     /// 一层 `Ho/00 Drive`、一个状态 `Drive`（Write Defaults 开）、无 Behaviour、无 clip —— 动画由作者后面填。
     ///
     /// 形状与"现在落到哪"记在 `docs/VTS_HQ_CONTROLLER.md`：**§2.1 结构、§2.2 每格叶子的语义**
-    /// （根 Direct → 5 个区域 Direct → 2D 表 / 1D 副本树），槽位名按 `docs/FACE_TRACKING_NAMING.md` §5。
+    /// （根 Direct → 4 个区域 Direct → 2D 表 / 1D 副本树 / 变体 / 形态子树），槽位名按 `docs/FACE_TRACKING_NAMING.md` §5。
+    ///
+    /// ⚠️ **中间层的两条「形态契约行」**（`Ho/Drive/Gate/MouthStyle` = 形态门、`Ho/Drive/Style/InvertedV`
+    /// = 倒V 权重）也在这里建：控制器看不见中间层的内部行 `Ho/Style/*`，中间层只能把值转发成控制器参数。
+    /// 形态门压在 `MouthRegion` 的三个"张嘴 × 笑"孩子上（`@Style` 后缀），倒V 权重喂 `InvertedV` 那棵 1D 表。
     ///
     /// **为什么有这个菜单项**：
-    /// ① 手搭 29 棵树不现实、也不可复现；
+    /// ① 手搭 27 棵树不现实、也不可复现；
     /// ② 2026-09-27 那份 `PTP_CTR_Face_VTS.controller` 是用文本生成器写出来的（抄老控制器的字段集），
     ///    当时**没能在 Unity 里打开验证**（本机编辑器占着授权互斥量、跑不了 batchmode）——
     ///    这个菜单项就是"用 Unity 自己的 API 重新建一份"的兜底；
     /// ③ 设计改动（加树、改轴、加槽位）之后从这里重新生成，而不是去手改资产。
+    ///    ⚠️ 但**用户是直接在 Animator 窗口里拉点的**（`MouthCore` 8 点 / `MouthJaw` 6 点）——
+    ///    那些坐标在下面那些 `Override` 表里；**先读资产、再改这里**，顺序反了就把他的手改冲掉。
     ///
     /// ⚠️ 形状表（哪棵树混哪两根轴、哪些槽位、谁挂哪个门）在这里是**硬编码**的，跟着设计稿走；
     /// 生成出来的资产用 `.research/check-controller.ps1` 对着**发货 profile** 反推的期望集核一遍。
@@ -31,6 +37,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private const string LayerName = "Ho/00 Drive";
         private const string StateName = "Drive";
         private const string OneWeight = "Ho/Drive/W/One";
+        /// <summary>形态门（中间层的契约行 `Ho/Drive/Gate/MouthStyle`，默认 1 = 门开着）。</summary>
+        private const string StyleGate = "Ho/Drive/Gate/MouthStyle";
+        /// <summary>倒V 的形态权重（中间层的契约行 `Ho/Drive/Style/InvertedV`，默认 0 = 不是倒V）。</summary>
+        private const string InvertedVWeight = "Ho/Drive/Style/InvertedV";
 
         private static readonly string[] RegionGates = { "Mouth", "Eye", "Brow", "Nose" };
 
@@ -221,9 +231,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
             new TableSpec { Name = "BrowCoreL", X = "Ho/Drive/Brow/Left/Y", Y = "Ho/Drive/Brow/Left/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
-            new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne }
-            // ⚠️ 颊两棵树 + 鼻那棵 2D 表都删了（2026-09-27）：颊在二次元角色上表现不了；
+            new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
+            // ⚠️ 颊那两棵 **ARKit** 树 + 鼻那棵 2D 表都删了（2026-09-27）：颊（`cheekSquint`）在二次元角色上表现不了；
             //    鼻收成**一个状态**（鼻子上顶）⇒ 挪到下面的 1D 片段表（`NoseUp`）。
+            // 颊轴（2026-09-27 加）：**鼓嘴**形态用的 2D 表 —— X = 左颊 / Y = 右颊，各两档 = 4 格。
+            // ⚠️ 与上面删掉的那两棵**不是一回事**：它们吃 ARKit 的 `cheekSquint`，这张吃
+            //    `Ho/Drive/Cheek/Left|Right/Puff`（两条**鼓嘴颊轴**）—— 单边鼓时嘴唇被推过去（`mouthLeft/Right`
+            //    0.67~0.87）把左右分开，双鼓时它们 ≈0.03、靠 `cheekPuff` 同时点亮两侧。姿势还没画（空片段）。
+            new TableSpec { Name = "Cheek", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = ZeroOne, YValues = ZeroOne }
         };
 
         /// <summary>
@@ -248,7 +263,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly Simple1DSpec[] Simple1DTables =
         {
             // 鼻子上顶（用户定：颊不要、鼻只留这一个状态）—— 只要"不顶 / 顶"两格。
-            new Simple1DSpec { Name = "NoseUp", Parameter = "Ho/Drive/Nose/Up", Token = "Up", Values = NoseUpTicks }
+            new Simple1DSpec { Name = "NoseUp", Parameter = "Ho/Drive/Nose/Up", Token = "Up", Values = NoseUpTicks },
+            // 倒V（2026-09-27 加）：**一个固定姿势** —— 形态门在中间层是"维持"（迟滞）出来的 0/1
+            // ⇒ 两档阈值就是 0 / 1。⚠️ 它吃的是**契约行** `Ho/Drive/Style/InvertedV`：
+            // 控制器看不见中间层的内部行 `Ho/Style/InvertedV`，中间层把它的值转发成这个控制器参数。
+            new Simple1DSpec { Name = "InvertedV", Parameter = InvertedVWeight, Token = "InvertedV", Values = ZeroOne }
         };
 
         /// <summary>
@@ -305,7 +324,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
+            // ⚠️ `@Style` 后缀 = 这个孩子挂**形态门** `Ho/Drive/Gate/MouthStyle`（默认恒 1 = `Ho/Drive/W/One`）：
+            //    倒V / 鼓嘴亮起来时，中间层把门压到 0，于是**整块"张嘴 × 笑"**让位给形态。
+            //    `MouthJaw` / `MouthTongue` 与两条形态子树保持恒 1（下巴/舌头跟风格化不冲突；
+            //    形态子树本身就是"被门放行的东西"，再挂门就套娃了）。
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Style,MouthJaw,MouthWidth@Style,MouthCorner@Style,MouthTongue,InvertedV,Cheek" },
             // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
             { "EyeRegion", "Eye", "LidLSwitch,LidRSwitch" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
@@ -348,11 +371,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
 
-            // ── 参数（42 个）───────────────────────────────────────────────────
+            // ── 参数（44 个 = 4 区域门 + 1 形态门 + W/One + 2 表情门 + 31 轴 + 4 切片 + 1 形态权重）──
             var parameters = new List<AnimatorControllerParameter>();
             foreach (string gate in RegionGates) parameters.Add(Float("Ho/Drive/Gate/" + gate, 1f));
+            parameters.Add(Float(StyleGate, 1f));                                  // 形态门（默认 1 = 门开着）
             parameters.Add(Float(OneWeight, 1f));                                  // Direct 子节点都要挂权重
             foreach (string gate in ExpressionGates) parameters.Add(Float("Ho/Drive/Gate/Expr/" + gate, 0f));
+            parameters.Add(Float(InvertedVWeight, 0f));                            // 倒V 权重（默认 0 = 不是倒V）
             foreach (string axis in Axes) parameters.Add(Float(axis, 0f));
             foreach (string slice in MouthCoreSlices) parameters.Add(Float(slice, 0f));
             foreach (var parameter in parameters) controller.AddParameter(parameter);
@@ -467,9 +492,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             for (int r = 0; r < Regions.GetLength(0); r++)
             {
                 var tree = NewTree(controller, Regions[r, 0], BlendTreeType.Direct);
-                foreach (string child in Regions[r, 2].Split(','))
+                foreach (string entry in Regions[r, 2].Split(','))
                 {
-                    AttachDirect(tree, trees[child], OneWeight);
+                    // `名字` = 恒 1；`名字@Style` = 挂形态门（见 Regions 那段注释）
+                    string child = entry, weight = OneWeight;
+                    int at = entry.IndexOf('@');
+                    if (at >= 0)
+                    {
+                        child = entry.Substring(0, at);
+                        string tag = entry.Substring(at + 1);
+                        if (tag != "Style") throw new InvalidOperationException("不认识的区域权重标记：" + tag);
+                        weight = StyleGate;
+                    }
+                    AttachDirect(tree, trees[child], weight);
                 }
                 trees[Regions[r, 0]] = tree;
             }
@@ -500,7 +535,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
             return "路径：" + path + "\n"
-                + "参数 " + parameters.Count + " 个（区域门 5 + W/One 1 + 表情门 2 + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + "）\n"
+                + "参数 " + parameters.Count + " 个（区域门 " + RegionGates.Length + " + 形态门 1 + W/One 1 + 表情门 "
+                + ExpressionGates.Length + " + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + " + 形态权重 1）\n"
                 + "树 " + trees.Count + " 棵（根 1 + 区域 " + Regions.GetLength(0) + " + 表 " + Tables.Length + " + 1D 表 " + Simple1DTables.Length + " + 变体 " + Variants.GetLength(0)
                 + " + 副本 " + Copies.GetLength(0) + " + 开关 " + (Switches.GetLength(0) + VariantSwitches.Length) + "）\n"
                 + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree

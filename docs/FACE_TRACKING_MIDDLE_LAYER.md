@@ -147,7 +147,9 @@
   Ho/Style/MouthGate = out("Ho/Style/MouthGate") * (1 - clamp(out("Ho/Style/InvertedV"), 0, 1))
                         ↑ 读的是**上一条同名行**（基准）                    ↑ 本形态
 （加鼓嘴：照抄最后那一行、把形态名换成 Ho/Style/Cheek —— **已有的行一个字都不用改**）
-（控制器那侧迟早加**契约行** `Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`）
+（✅ **2026-09-27 已加**：控制器那侧的**契约行** `Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`
+与 `Ho/Drive/Style/InvertedV = out("Ho/Style/InvertedV")` 都已落地 —— 前者压在 `MouthRegion` 的三个
+"张嘴 × 笑"孩子上当权重，后者喂倒V 那棵 1D 子树。见[控制器 §5.6](VTS_HQ_CONTROLLER.md)）
 ```
 
 ⚠️ **`Ho/Style/*` 是"中间层内部行"**：只被别的输出行读，**不写控制器参数**（所以这批没动控制器资产）。
