@@ -169,12 +169,32 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new CellPos { I = 2, J = 2, X = 1f, Y = 0.6f }
         };
 
+        /// <summary>
+        /// **`MouthJaw` 挪过位的两格**（2026-09-27 用户定）：两个横向角点从 `(±0.65, 0.75)`
+        /// 搬到 **`(±0.4, 0.45)`**（用户先说「张嘴以后左右移的幅度会变小，两个角点可以挪到连线的
+        /// 往外凸一点点的位置」，随后给了准值「从 -0.65,0.75 改到 -0.4,0.45 这样」）。
+        /// 理由链：实测咬紧 0.02–0.04 → **微张 0.52** → **再张更大反而变小** ⇒ 把左右两格钉在
+        /// 0.75（张满）那一行的话，"歪得动"的那个开度上读数到不了 ±0.65，那两格**永远吃不饱**；
+        /// 钉到 0.45 那个开度、并把 |X| 收到 0.4（实测 0.52 之内 ⇒ 到得了满档）。
+        /// ⇒ 这棵树**不再是网格**（这正是 `FreeformCartesian2D` 的意义）：中间那格仍留在张满
+        /// `(0, 0.75)`，只有左右两列各有一个点落在 0.45 这个开度上。凸包从矩形变成六边形
+        /// `(−0.65,0) (0,0) (0.65,0) (0.4,0.45) (0,0.75) (−0.4,0.45)`；出界照旧投影到圈边（不外推）。
+        /// ⚠️ 槽位名按**索引**编（`A3X&lt;i&gt;Y&lt;j&gt;`）⇒ 挪坐标**不改名、不新增片段**。
+        /// ⚠️ 0.45 是**用户给的摆位**，不是实测开度。
+        /// </summary>
+        private static readonly CellPos[] MouthJawOverride =
+        {
+            new CellPos { I = 0, J = 1, X = -0.4f, Y = 0.45f },
+            new CellPos { I = 2, J = 1, X = 0.4f, Y = 0.45f }
+        };
+
         private static readonly TableSpec[] Tables =
         {
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
             // 下巴（2026-09-27 用户定「就是下巴上下左右这棵树」）：**X = 左右（3 档）× Y = 上下（2 档）= 6 格**。
             // ⚠️ 上下只有两档：咬合 / 咀嚼 = **0 那一档**（轴本身是双极的，负侧钳到 Y0）。
-            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen },
+            // ⚠️ 左右两格**不摆在张满那一行**：搬到 (X, 0.45) —— 见 `MouthJawOverride`。
+            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen, Override = MouthJawOverride },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
             new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/CornerL", Y = "Ho/Drive/Mouth/CornerR", XToken = "CornerL", YToken = "CornerR", XValues = Two, YValues = Two },
