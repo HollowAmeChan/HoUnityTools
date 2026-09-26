@@ -408,6 +408,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return info;
         }
 
+        /// <summary>
+        /// 这一行有没有读**自己那个参数名**（`out("同名")`）—— 「双重形态」链的判据：
+        /// 链上的行读的是**上一条同名行**（输出表缓存：后写覆盖先写），所以"同名"才是对的；
+        /// 同名却**没**读自己 ⇒ 那不是链，只是覆盖（见 docs/VTS_HQ_CONTROLLER.md §5.6）。
+        /// </summary>
+        private static bool ReadsOwnName(HoFaceOutput output)
+        {
+            if (output == null || string.IsNullOrWhiteSpace(output.parameter)) return false;
+            if (string.IsNullOrWhiteSpace(output.expression)) return false;
+            HoFaceExpression parsed;
+            if (!HoFaceExpression.TryParse(output.expression, out parsed, out _)) return false;
+            var references = new List<string>();
+            parsed.CollectOutputRefs(references);
+            for (int i = 0; i < references.Count; i++)
+                if (references[i] == output.parameter) return true;
+            return false;
+        }
+
         private static void CountStates(AnimatorStateMachine machine, ref int count)
         {
             if (machine == null) return;
@@ -437,12 +455,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 参数名现在由**中间层配置**声明（控制器只是等着被喂）。这里只做实事的检查：
             // 同名参数被两行写 = 后写者覆盖前者（说出来，不拦）；类型不是 Float 时 SetFloat 会失败。
+            //
+            // ⚠️ **唯一的例外是风格化门的「双重形态」链**（2026-09-27 用户）：`Ho/Style/*` 里
+            // **同名行读自己写自己**是**故意**的（输出表缓存：后写覆盖先写 ⇒ 加形态不用动已有行）——
+            // 见 docs/VTS_HQ_CONTROLLER.md §5.6。所以那里不报；
+            // 但"同名却**没有**读自己"的仍要报：那不是链、只是覆盖（前一行白算，而且那个形态关不掉嘴）。
             var written = new HashSet<string>(StringComparer.Ordinal);
             foreach (var output in settings.Outputs())
             {
                 if (output == null || string.IsNullOrWhiteSpace(output.parameter)) continue;
                 if (!written.Add(output.parameter))
-                    Debug.LogWarning("[Ho 面捕] 中间层里有两行写同一个参数：" + output.parameter + "（后一行会覆盖前一行）");
+                {
+                    if (!HoFaceNaming.IsStyleRow(output.parameter))
+                        Debug.LogWarning("[Ho 面捕] 中间层里有两行写同一个参数：" + output.parameter + "（后一行会覆盖前一行）");
+                    else if (!ReadsOwnName(output))
+                        Debug.LogWarning("[Ho 面捕] `Ho/Style/*` 里两行同名，但后一行没有读 out(\""
+                            + output.parameter + "\") —— 这不是「双重形态」的链，而是覆盖："
+                            + "前一行等于白算（那个形态关不掉嘴）");
+                }
                 if (parameters.TryGetValue(output.parameter, out var type) && type != AnimatorControllerParameterType.Float)
                     Debug.LogWarning("[Ho 面捕] 参数不是 Float，写不进去：" + output.parameter);
             }
