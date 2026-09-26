@@ -224,7 +224,7 @@ flowchart TD
 | 设参数 | 只对**控制器里真有的** Float 参数 `SetFloat`；没有那个名字就跳过（不猜、不补）（`:242`） |
 | **求值** | 设完参数后**自己 `shadow.Update(0f)` 强制求值一次**（`:252-259`） |
 | 抄回 | `WriteOutputs` 从影子代理读 `GetBlendShapeWeight` 写到真 Renderer，只遍历 `owned`（`:386-396`） |
-| 调试接入 | **把影子台显示出来就看真身**：面板「对象」段的「混合树观察台」开关打开后，影子根用 `DontSave`（出现在 Hierarchy、可选中）⇒ 选中它 + Animator 窗口 = 运行中的那棵树与实时参数（`HoFaceAnimationSession.cs` 的 `BuildShadow` / `ApplyShadowVisibility`）。2026-09-27 之前是一个独立组件（`HoFaceBlendTreePeek`）靠 `HoFaceShadowLink` 静态登记"抄参数"来镜像 —— 那种设计跟面捕面板耦合、还只认最后登记的那个会话，已删 |
+| 调试接入 | **把影子台显示出来就看真身**：面板「对象」段的「预览混合树」开关（默认开）打开后，影子根用 `DontSave`（出现在 Hierarchy、可选中）⇒ 选中它 + Animator 窗口 = 运行中的那棵树与实时参数（`HoFaceAnimationSession.cs` 的 `BuildShadow` / `ApplyShadowVisibility`）。2026-09-27 之前是一个独立组件（`HoFaceBlendTreePeek`）靠 `HoFaceShadowLink` 静态登记"抄参数"来镜像 —— 那种设计跟面捕面板耦合、还只认最后登记的那个会话，已删 |
 
 **为什么必须 `Update(0f)` 一次同步调用：** 以前是组件的 `Update`/`LateUpdate` 一对（设参数在 `Update`、抄回在 `LateUpdate`，中间让 Unity 自己算完）。组件删掉之后，如果"设参数"和"读结果"还分在两个编辑器回调里，就是在**赌回调顺序**。自己 `Update(0f)` 之后，这一步变成"设参数 → 求值 → 读值"一次调用里完成；影子是活动对象，Unity 之后还会再算一次，参数没变所以无害。
 

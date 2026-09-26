@@ -67,80 +67,58 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             GameObject character = settings.Character();
             HoFaceSemanticHub hub = FindSemanticHub(character);
 
-            using (HoConstraintEditorControls.Row())
+            // 两个可选开关 + 灰的只读预览**同一行**：**布尔最左、灰色预览靠右**，文字只留最短的
+            // （说明全进 tooltip）—— 2026-09-27 用户定，这一栏之前太挤。
+            // 「预览混合树」= 把运行中的影子台显示到 Hierarchy：选中它 + Animator 窗口 = 看真身。
+            using (HoConstraintEditorControls.Row(true))
             {
-                HoConstraintEditorControls.Label("动态参数 Hub", HoConstraintEditorTheme.LabelWidth,
-                    "**可选**：打开才会把中间层算出来的值写进角色身上那片 Hub（给别的脚本 / 材质 / 蓝图读）。"
-                    + "调试台自己不需要它 —— 上面「参数输出」栏看的就是同一份值；"
-                    + "Warudo 侧也不靠它（那边由「HoFace写动态参数」节点写）。");
-
                 EditorGUI.BeginChangeCheck();
-                bool write = HoConstraintEditorControls.Toggle("写动态参数 Hub", settings.writeParameterHub,
-                    "默认关。打开后：**全部输出行**（含「控制器里没有那些参数」的行）按名字写进角色 Hub，下一帧生效。");
+                bool write = HoConstraintEditorControls.Toggle("写 Hub", settings.writeParameterHub,
+                    "**写动态参数 Hub**（默认关）：打开后把**全部输出行**（含「控制器里没有那些参数」的行）"
+                    + "按名字写进角色 Hub，下一帧生效。\n"
+                    + "调试台自己不需要它（「参数输出」栏看的是同一份值）；Warudo 侧由「HoFace写动态参数」节点写。");
+                bool preview = HoConstraintEditorControls.Toggle("预览混合树", settings.showShadowInHierarchy,
+                    "**默认开**：把运行中的影子台 `Ho Face Shadow` 显示到 Hierarchy（不落盘、停止驱动就消失）。\n"
+                    + "选中它 → 打开 Animator 窗口 = **正在跑的那棵树**与实时参数（不抄、不镜像）。\n"
+                    + "⚠️ Project 里点 controller 资产看到的是**资产本身**（结构 + 参数默认值），不是任何角色的运行状态。\n"
+                    + "关掉立刻重新藏回去（正在跑也不用重启驱动）。");
                 if (EditorGUI.EndChangeCheck())
                 {
                     settings.writeParameterHub = write;
+                    settings.showShadowInHierarchy = preview;
                     HoFaceDebugHost.Save();
+                    HoFaceInputHub.Session(settings)?.ApplyShadowVisibility();   // 已经在跑的话立刻生效
                 }
 
-                HoConstraintEditorControls.Gap();
+                HoConstraintEditorControls.Flex();
+
+                // **灰的引用行**：找到的东西只读地摆出来，让人核对"认的是不是这一个"。
+                // 用 DisabledScope 而不是 Label：它长得就是那一栏本来的样子（可拖可点选），
+                // 只是不许改 —— 改它没有意义，Hub 是从角色推出来的。
                 if (hub != null)
                 {
-                    // **灰的引用行**：找到的东西只读地摆出来，让人核对"认的是不是这一个"。
-                    // 用 DisabledScope 而不是 Label：它长得就是那一栏本来的样子（可拖可点选），
-                    // 只是不许改 —— 改它没有意义，Hub 是从角色推出来的。
                     using (new EditorGUI.DisabledScope(true))
                     {
                         EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90.0f), hub,
                             typeof(HoFaceSemanticHub), true);
                     }
 
-                    HoConstraintEditorControls.Flex();
-
-                    {
-                        // ⚠️ 编辑期 Hub 是**空的**，这是常态（格是运行期由中间层按名字开的），
-                        // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
-                        HoConstraintEditorControls.Caption(Application.isPlaying
-                            ? hub.Count + " 格"
-                            : "格在运行期由中间层按名字开（编辑期是空的，正常）");
-                    }
+                    // ⚠️ 编辑期 Hub 是**空的**，这是常态（格是运行期由中间层按名字开的），
+                    // 不是"没配好" —— 所以这里把它说出来，别让人以为自己漏了一步。
+                    HoConstraintEditorControls.Caption(Application.isPlaying
+                        ? hub.Count + " 格"
+                        : "格运行期开（编辑期空，正常）");
+                }
+                // **黄字**：只有"打开写 Hub 却没有落点"才是问题；关着时它只是可选件没挂。
+                else if (settings.writeParameterHub)
+                {
+                    Warning(character == null
+                        ? "先填「调试对象」"
+                        : "写 Hub 开着，但这个对象上没有 HoFaceSemanticHub ⇒ 值没地方落");
                 }
                 else
                 {
-                    // **黄字**：只有"打开开关却没有落点"才是问题；关着时它只是可选件没挂。
-                    if (settings.writeParameterHub)
-                    {
-                        Warning(character == null
-                            ? "先填「调试对象」"
-                            : "开关开着，但这个对象上没有 HoFaceSemanticHub ⇒ 值没地方落");
-                    }
-                    else
-                    {
-                        HoConstraintEditorControls.Caption(character == null
-                            ? "先填「调试对象」"
-                            : "（这个对象上没有 Hub；开关关着，正常）");
-                    }
-                }
-            }
-
-            // ── 混合树观察台（2026-09-27：从"一个组件"改成这里的一个开关）──────────────────
-            // 运行中的树跑在**影子台**上。这个开关就是把那台影子台显示出来：选中它 + Animator 窗口
-            // 看到的就是**真身**（实时参数、红点都在那儿）—— 不抄、不镜像。
-            // 说明全在 tooltip 里，行上只留一个开关（这一栏本来就挤）。
-            using (HoConstraintEditorControls.Row(true))
-            {
-                EditorGUI.BeginChangeCheck();
-                bool peek = HoConstraintEditorControls.Toggle("混合树观察台（影子台显示在 Hierarchy）",
-                    settings.showShadowInHierarchy,
-                    "**默认开**。影子台 `Ho Face Shadow` 会出现在 Hierarchy 里（不落盘、停止驱动就消失）：\n"
-                    + "选中它 → 打开 Animator 窗口 = **正在跑的那棵树**与实时参数。\n"
-                    + "⚠️ 在 Project 里点 controller 资产看到的是**资产本身**（结构 + 参数默认值），不是任何角色的运行状态。\n"
-                    + "关掉这个开关会把它立刻藏回去（正在跑也不用重启驱动）。");
-                if (EditorGUI.EndChangeCheck())
-                {
-                    settings.showShadowInHierarchy = peek;
-                    HoFaceDebugHost.Save();
-                    HoFaceInputHub.Session(settings)?.ApplyShadowVisibility();   // 已经在跑的话立刻生效
+                    HoConstraintEditorControls.Caption(character == null ? "先填「调试对象」" : "（没有 Hub）");
                 }
             }
 
@@ -306,7 +284,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var environment = HoFaceInputEnvironment.instance;
             DrawTitle();
             // 四栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
-            DrawObjectSection(environment);      // 一、对象：调试对象 / 混合树控制器 / 配置文件对象 / 连接
+            DrawObjectSection(environment);      // 一、对象：调试对象 / 控制器 / 配置文件 / 连接
             DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥
             DrawInputSection();                  // 三、参数输入：VTS 传过来的**全部裸参数**（纯调试）
             DrawOutputSection();                 // 三·五、参数输出：中间层**求出来的值**（纯调试）
@@ -334,7 +312,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         // 一、对象栏：三样东西，全部由面板持有（角色上不挂任何组件）
         // ══════════════════════════════════════════════════════════════
         /// <summary>
-        /// 四样：**调试对象**（场景里的角色实例）、**面捕混合树控制器**、**配置文件对象**、
+        /// 四样：**调试对象**（场景里的角色实例）、**面捕控制器**、**配置文件**、
         /// 以及从调试对象推出来的**动态参数 Hub**（只读展示）。
         /// 配置文件是**必须的** —— 没填它，下面三栏全部锁住不让改（配置是这套东西的心脏，
         /// 空着往下调只会得到一堆看不懂的数字）。
@@ -343,7 +321,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             bool connected = HoFaceInputHub.Connected;
             var session = HoFaceInputHub.Session(settings);
-            string summary = !settings.HasProfile ? "缺配置文件对象"
+            string summary = !settings.HasProfile ? "缺配置文件"
                 : settings.FaceController() == null ? "缺控制器"
                 : settings.Character() == null ? "缺调试对象"
                 : session != null ? "驱动中" : "就绪";
@@ -395,7 +373,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("混合树控制器", HoConstraintEditorTheme.LabelWidth,
+                    HoConstraintEditorControls.Label("控制器", HoConstraintEditorTheme.LabelWidth,
                         "会话真正跑的那份控制器。在「控制器编辑」页里原地装配；你也可以自己改完指到这里。");
                     var current = settings.FaceController();
                     var picked = (RuntimeAnimatorController)EditorGUI.ObjectField(
@@ -410,7 +388,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    HoConstraintEditorControls.Label("配置文件对象", HoConstraintEditorTheme.LabelWidth,
+                    HoConstraintEditorControls.Label("配置文件", HoConstraintEditorTheme.LabelWidth,
                         "**必须**。中间层配置（*.hoface.json）—— Unity 侧与 Warudo 侧读的是同一个文件。");
                     // 用**资产选择器**而不是让人手打路径：手打路径是这栏最容易出错的地方
                     // （相对路径的基准、扩展名、拼错一个字母都只是"读不出来"，看不出错在哪）。
@@ -564,7 +542,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void DrawProfileSection()
         {
             var middleware = settings.Middleware;
-            string summary = !settings.HasProfile ? "先把配置文件对象填上"
+            string summary = !settings.HasProfile ? "先把配置文件填上"
                 : middleware == null ? "读不出来"
                 : "输入行 " + middleware.inputs.Count + " · 输出行 " + middleware.outputs.Count;
 
@@ -578,7 +556,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 if (!settings.HasProfile)
                 {
-                    HoConstraintEditorControls.Caption("对象栏里的「配置文件对象」是必填的；填好之后这里会列出它的全部行。");
+                    HoConstraintEditorControls.Caption("对象栏里的「配置文件」是必填的；填好之后这里会列出它的全部行。");
                     return;
                 }
 
