@@ -67,6 +67,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private HoFaceOutput[] outputs = new HoFaceOutput[0];
         private HoFaceExpression[] expressions = new HoFaceExpression[0];
         private float[] outputValues = new float[0];
+        /// <summary>输出行求值游标：<c>out("…")</c> 只认严格在它之前的行（见 <see cref="LookupOutput"/>）。</summary>
+        private int outputCursor;
         private float[] outputSmooth = new float[0];
         private int[] stepIndex = new int[0];
         private double[] stepUntil = new double[0];
@@ -308,17 +310,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 这里**不再有**"某个键写某个参数"的硬编码：参数名与算法都在中间层资产里，
             // 控制器里没有那个参数名就跳过（不猜也不补）。轴也是普通一行：
             // `Ho/Drive/Lid/Left/BlinkWide = eyeBlinkLeft - eyeWideLeft`。
+            //
+            // 求值**严格按 outputs 的行序**（2026-09-27）：`out("参数名")` 读的就是"上面已经算完的那一行"，
+            // 所以顺序既是求值顺序、也是依赖顺序（见 HoFaceOutputOrder）。
             double frameNow = HoFaceClock.Now;
             for (int row = 0; row < outputs.Length; row++)
             {
+                outputCursor = row;   // LookupOutput 只认严格在本行之前的行
                 var output = outputs[row];
                 if (output == null) continue;
                 // 表达式留空 = **常量行**（门控那种"不需要输入、总有默认值"的东西就靠它）；
                 // 表达式写了但解析不了时也退回这个作者声明过的默认值（比魔法 0 诚实）。
                 // ⚠️ 常量行**不过曲线**：作者填 1 就该得 1（曲线是给"算出来的值"整形用的）。
                 // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
+                // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
+                //    ⇒ 走同一条路：**始终输出 defaultValue**。
                 float value = expressions[row] != null
-                    ? output.Transform(expressions[row].Evaluate(Lookup))
+                    ? output.Transform(expressions[row].Evaluate(Lookup, LookupOutput))
                     : output.defaultValue;
                 value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
 
@@ -491,6 +499,24 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (index >= 0) return Input[index];
             if (inputIndex.TryGetValue(name, out int row)) return inputValues[row];
             return HoFaceInputHub.Input(name);
+        }
+
+        /// <summary>
+        /// `out("参数名")` 的取值：**上面某一行这一帧算完的值**（过完曲线与修饰符的那一份，
+        /// 也就是"发布出去的那份值"）—— 不是原始表达式值。
+        ///
+        /// 两道保险：
+        /// ① 编译期已经判过"只能引用上面的行"（引用了下面的行的行会被置成常量行，根本走不到这里）；
+        /// ② 这里再用 <see cref="outputCursor"/> 挡一次 —— 只认**严格在本行之前**的行，
+        ///    于是"万一将来有人绕过编译期检查"也不会读到本帧的半成品。
+        /// 名字找不到 / 是常量行之外的情况一律 0（表达式求值器不抛异常）。
+        /// </summary>
+        private float LookupOutput(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return 0f;
+            int row;
+            if (outputIndex.TryGetValue(name, out row) && row < outputCursor) return outputValues[row];
+            return 0f;
         }
 
         /// <summary>
@@ -675,7 +701,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     inputExpressions[i] = null;
                 }
                 else if (HoFaceExpression.TryParse(inputList[i].expression, out var parsed, out string inputError))
-                    inputExpressions[i] = parsed;
+                {
+                    // ⚠️ **输入行不许用 `out(...)`**（2026-09-27）：输入行在输出行**之前**求值，
+                    //    那边没有"上面"可引用。这种行按无效处理（表达式丢掉 ⇒ 不新鲜 ⇒ 通道回中性）。
+                    string misuse = HoFaceOutputOrder.InputRowError(inputList[i]);
+                    if (misuse != null)
+                        Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 条输入行（" + inputList[i].parameter + "）：" + misuse);
+                    else
+                        inputExpressions[i] = parsed;
+                }
                 else
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 条输入行的表达式用不了（" + inputList[i].parameter + "）：" + inputError);
                 inputIndex[inputList[i].parameter] = i;   // 同名多行：最后一行生效（用户覆盖用）
@@ -707,6 +741,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的表达式用不了（" + rows[i].parameter + "）：" + error);
                 if (!string.IsNullOrEmpty(rows[i].parameter) && !outputIndex.ContainsKey(rows[i].parameter))
                     outputIndex[rows[i].parameter] = i;
+            }
+
+            // ── 输出行之间的**引用顺序**（2026-09-27）：`out("参数名")` 只能引用**上面**的行 ──────
+            // 引用了下面的行 / 引用不存在的行 ⇒ 这一行**无效**：表达式作废（= 常量行），
+            // 于是它**始终输出 defaultValue**，面板上也会爆红（两边用同一个 HoFaceOutputOrder）。
+            var orderErrors = HoFaceOutputOrder.Validate(rows);
+            for (int i = 0; i < orderErrors.Length; i++)
+            {
+                if (orderErrors[i] == null) continue;
+                expressions[i] = null;
+                Debug.LogWarning("[Ho 面捕] 第 " + (i + 1) + " 行的引用顺序不对（" + rows[i].parameter + "）："
+                    + orderErrors[i] + "。这一行按常量行走：每帧输出 " + rows[i].defaultValue.ToString("0.###") + "。");
             }
         }
 

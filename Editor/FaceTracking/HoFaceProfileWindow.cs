@@ -518,6 +518,20 @@ namespace Hollow.HoUnityTools.FaceTracking
                 List<HoFaceOutput> rows = ActiveRows();
                 if (rows != null)
                 {
+                    // ⚠️ **引用顺序**（2026-09-27）：`out("…")` 只能引用**上面**的行。每次画列表算一遍
+                    //    （跟 `IsBrokenRow` 每行每帧试解析同一个量级，本来就在做），存下来给每一行用。
+                    //    输出行：整体校验（引用了下面/不存在的行 → 那一行爆红、且会话让它恒输出默认值）。
+                    //    输入行：不许用 out(...) —— 逐行标出来（不然"算了但一直是 0"没人看得出来）。
+                    if (editingInputs)
+                    {
+                        orderErrors = new string[rows.Count];
+                        for (int i = 0; i < rows.Count; i++) orderErrors[i] = HoFaceOutputOrder.InputRowError(rows[i]);
+                    }
+                    else
+                    {
+                        orderErrors = HoFaceOutputOrder.Validate(rows);
+                    }
+
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
                     {
                         listScroll = EditorGUILayout.BeginScrollView(listScroll, false, true);
@@ -561,7 +575,10 @@ HoFaceOutput output = ActiveRows()[index];
                 return;
             }
 
-            bool bad = IsBrokenRow(output);
+            // ⚠️ **引用顺序不对**（引用了下面的行 / 引用了不存在的行）也算"这一行坏了"：
+            //    会话会把它的表达式作废、每帧输出默认值 —— 面板上必须一样红，否则没人知道它在空转。
+            string orderError = DependencyError(index);
+            bool bad = IsBrokenRow(output) || orderError != null;
             bool constant = IsConstantRow(output);
             // 曲线被人动过（死区 / 增益 / 分段）⇒ 整行点亮，扫描 129 行时一眼找得出来。
             bool shaped = !bad && !constant && IsCurveShaped(output.curve);
@@ -618,7 +635,9 @@ HoFaceOutput output = ActiveRows()[index];
                 {
                     var noteStyle = new GUIStyle(HoConstraintEditorTheme.Caption) { alignment = TextAnchor.MiddleRight };
                     noteStyle.normal.textColor = HoConstraintEditorTheme.ErrorColor;
-                    GUI.Label(nameRect, new GUIContent("⚠", "表达式解析不过：" + output.expression), noteStyle);
+                    GUI.Label(nameRect, new GUIContent("⚠", orderError != null
+                        ? orderError
+                        : "表达式解析不过：" + output.expression), noteStyle);
                 }
 
                 DrawModifierBadges(badgeRect, output);
@@ -844,6 +863,20 @@ ActiveRows().RemoveAt(index);
         /// <summary>**真的坏了**：有表达式但解析不过（常量行不算）。</summary>
         private static bool IsBrokenRow(HoFaceOutput output) =>
             output != null && !IsConstantRow(output) && !HoFaceExpression.TryParse(output.expression, out _, out _);
+
+        /// <summary>
+        /// `out("…")` **引用顺序**的逐行错误（画列表时整体算一次，见 <see cref="ActiveRows"/> 那段）。
+        /// 规则：只能引用**上面**的行；引用了下面的行 / 不存在的行 ⇒ 会话把这一行当常量行
+        /// （每帧输出 `defaultValue`）⇒ 面板上一样爆红。
+        /// </summary>
+        private string[] orderErrors = new string[0];
+
+        /// <summary>这一行的引用顺序错误（没有 / 越界就 null）。</summary>
+        private string DependencyError(int index)
+        {
+            if (orderErrors == null || index < 0 || index >= orderErrors.Length) return null;
+            return orderErrors[index];
+        }
 
         /// <summary>常量行在表达式那一栏显示的东西：`= 默认值`（人来读的就是"写多少"）。</summary>
         private static string ConstantRowText(HoFaceOutput output) =>

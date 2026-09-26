@@ -26,7 +26,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>引号 / 括号的最大嵌套层数。防的是解析期的深递归 —— 爆栈是进程级的，接不住。</summary>
         private const int MaxDepth = 32;
 
-        private enum NodeKind { Number, Variable, Nested, Unary, Binary, Call }
+        private enum NodeKind { Number, Variable, Nested, Unary, Binary, Call, Literal }
 
         private enum Op { Pos, Neg, Add, Sub, Mul, Div, Pow, Lt, Le, Gt, Ge, Eq, Ne, And, Or }
 
@@ -34,7 +34,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         private enum Builtin
         {
             Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Tanh, Abs, Sqrt, Log, Log10, Exp,
-            Round, Floor, Ceil, Sign, Atan2, Min, Max, Clamp, Approx, Lerp, Rand, Time, If
+            Round, Floor, Ceil, Sign, Atan2, Min, Max, Clamp, Approx, Lerp, Rand, Time, If,
+            /// <summary>
+            /// `out("输出行的参数名")` —— 读**上面某一行已经算完的输出值**（过完曲线与修饰符的那一份）。
+            /// 为什么是个函数而不是裸名字：输出行的参数名里带 `/`（`Ho/Drive/…`），裸标识符写不出来；
+            /// 而且**同名**时（输出行叫 `Brows`、输入通道也叫 `Brows`）必须能明确说"我要的是**输出**那一份"。
+            /// ⇒ 字符串参数（双引号）只允许出现在这里；别处写字符串是解析错误。
+            /// ⚠️ **只能引用上面的行**（按 profile 里的行序）：引用下面的行 = 那一行算不了 ⇒
+            /// 该行判为无效、**始终输出 defaultValue**，面板上爆红。见 <see cref="HoFaceOutputOrder"/>。
+            /// </summary>
+            Out
         }
 
         /// <summary>节点树用同一个类装，不为每种运算建一个类型 —— 这里要的是解析一次、每帧只读。</summary>
@@ -49,11 +58,22 @@ namespace Hollow.HoUnityTools.FaceTracking
             public Node right;
             public Node[] args;
             public HoFaceExpression nested;
+            public int pos;   // 出错时报位置用（目前只有"字符串写错地方"这一条会回头找它）
+        }
+
+        /// <summary>
+        /// 求值期的两个取值回调。**按值传**（两个引用，栈上），逐帧每行一次、不产生堆分配。
+        /// `Output` 可以是 null —— 那时候 `out(...)` 求值为 0。
+        /// </summary>
+        private struct Scope
+        {
+            public Func<string, float> Variable;
+            public Func<string, float> Output;
         }
 
         private enum TokenKind
         {
-            End = 0, Number, Identifier, Quoted,
+            End = 0, Number, Identifier, Quoted, String,
             Plus, Minus, Star, Slash, Caret, LParen, RParen, Comma,
             Lt, Le, Gt, Ge, EqEq, NotEq, And, Or
         }
@@ -102,6 +122,13 @@ namespace Hollow.HoUnityTools.FaceTracking
             try
             {
                 Node root = new Parser(text, 0).ParseAll();
+                // 双引号字符串只允许当 `out(...)` 的参数 —— 别处写字符串是写错了（多半想写单引号）。
+                int stray = FindStrayLiteral(root);
+                if (stray >= 0)
+                {
+                    error = "第 " + (stray + 1) + " 个字符处：字符串只能当 out(\"输出行的参数名\") 的参数";
+                    return false;
+                }
                 expression = new HoFaceExpression(text, root);
                 return true;
             }
@@ -121,9 +148,19 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>求值。变量由 variable(name) 提供；未知变量按 0 处理，绝不抛异常。</summary>
         public float Evaluate(Func<string, float> variable)
         {
+            return Evaluate(variable, null);
+        }
+
+        /// <summary>
+        /// 求值（带 `out("名字")` 的出口）。<paramref name="output"/> 为 null 时 `out(...)` 得 0。
+        /// 调用方必须保证"上面那些行**这一帧已经算完**"—— 顺序由 profile 的行序定，见 <see cref="HoFaceOutputOrder"/>。
+        /// </summary>
+        public float Evaluate(Func<string, float> variable, Func<string, float> output)
+        {
+            var scope = new Scope { Variable = variable, Output = output };
             try
             {
-                return Eval(_root, variable);
+                return Eval(_root, scope);
             }
             catch
             {
@@ -132,11 +169,79 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
         }
 
-        /// <summary>这条表达式引用到的变量名（去重，按首次出现顺序）。</summary>
+        /// <summary>这条表达式引用到的变量名（去重，按首次出现顺序）。`out(...)` 里的名字**不算变量**。</summary>
         public void CollectVariables(List<string> into)
         {
             if (into == null || _root == null) return;
             Collect(_root, into);
+        }
+
+        /// <summary>
+        /// 这条表达式用 `out("…")` 引用的**输出行名**（去重，按首次出现顺序）。
+        /// 顺序校验（只能引用上面的行）靠它 —— 见 <see cref="HoFaceOutputOrder"/>。
+        /// </summary>
+        public void CollectOutputRefs(List<string> into)
+        {
+            if (into == null || _root == null) return;
+            CollectOutputs(_root, into);
+        }
+
+        private static void CollectOutputs(Node node, List<string> into)
+        {
+            if (node == null) return;
+            switch (node.kind)
+            {
+                case NodeKind.Nested:
+                    if (node.nested != null) CollectOutputs(node.nested._root, into);
+                    return;
+                case NodeKind.Unary:
+                    CollectOutputs(node.left, into);
+                    return;
+                case NodeKind.Binary:
+                    CollectOutputs(node.left, into);
+                    CollectOutputs(node.right, into);
+                    return;
+                case NodeKind.Call:
+                    if (node.builtin == Builtin.Out && node.args != null && node.args.Length == 1
+                        && !string.IsNullOrEmpty(node.args[0].name) && !into.Contains(node.args[0].name))
+                    {
+                        into.Add(node.args[0].name);
+                    }
+                    if (node.args != null)
+                        for (int i = 0; i < node.args.Length; i++) CollectOutputs(node.args[i], into);
+                    return;
+                default:
+                    return;
+            }
+        }
+
+        /// <summary>找一个"没被 out 吃掉"的字符串字面量，返回它的位置（没有就 −1）。</summary>
+        private static int FindStrayLiteral(Node node)
+        {
+            if (node == null) return -1;
+            // `out("…")` 的第一个参数**就是**被吃掉的那个字符串，别当游离的。
+            if (node.kind == NodeKind.Call && node.builtin == Builtin.Out)
+            {
+                if (node.args == null || node.args.Length <= 1) return -1;
+                return FindStrayLiteral(node.args[1]);
+            }
+            if (node.kind == NodeKind.Literal) return node.pos;
+            int found = FindStrayLiteral(node.left);
+            if (found >= 0) return found;
+            found = FindStrayLiteral(node.right);
+            if (found >= 0) return found;
+            if (node.kind == NodeKind.Nested && node.nested != null)
+            {
+                found = FindStrayLiteral(node.nested._root);
+                if (found >= 0) return found;
+            }
+            if (node.args != null)
+                for (int i = 0; i < node.args.Length; i++)
+                {
+                    found = FindStrayLiteral(node.args[i]);
+                    if (found >= 0) return found;
+                }
+            return -1;
         }
 
         private static void Collect(Node node, List<string> into)
@@ -168,18 +273,20 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
         }
 
-        private static float Eval(Node node, Func<string, float> variable)
+        private static float Eval(Node node, Scope scope)
         {
             if (node == null) return 0f;
             switch (node.kind)
             {
                 case NodeKind.Number:
                     return Finite(node.number);
+                case NodeKind.Literal:
+                    return 0f;   // 字符串本身没有数值；只有 out(...) 会去看它的文本
                 case NodeKind.Variable:
-                    if (variable == null) return 0f;
+                    if (scope.Variable == null) return 0f;
                     try
                     {
-                        return Finite(variable(node.name));
+                        return Finite(scope.Variable(node.name));
                     }
                     catch
                     {
@@ -187,33 +294,33 @@ namespace Hollow.HoUnityTools.FaceTracking
                     }
                 case NodeKind.Nested:
                     // 引号里的式子**用到时才求值** —— if 的未选中分支永远走不到这里。
-                    return node.nested != null ? node.nested.Evaluate(variable) : 0f;
+                    return node.nested != null ? node.nested.Evaluate(scope.Variable, scope.Output) : 0f;
                 case NodeKind.Unary:
                 {
-                    float value = Eval(node.left, variable);
+                    float value = Eval(node.left, scope);
                     return node.op == Op.Neg ? -value : value; // value 已有限，取负不会变成非有限
                 }
                 case NodeKind.Binary:
-                    return EvalBinary(node, variable);
+                    return EvalBinary(node, scope);
                 case NodeKind.Call:
-                    return EvalCall(node, variable);
+                    return EvalCall(node, scope);
                 default:
                     return 0f;
             }
         }
 
-        private static float EvalBinary(Node node, Func<string, float> variable)
+        private static float EvalBinary(Node node, Scope scope)
         {
-            float a = Eval(node.left, variable);
+            float a = Eval(node.left, scope);
 
             // 逻辑与比较都返回 1/0；&& 和 || 短路，右侧不白算。
             switch (node.op)
             {
-                case Op.And: return a != 0f && Eval(node.right, variable) != 0f ? 1f : 0f;
-                case Op.Or: return a != 0f || Eval(node.right, variable) != 0f ? 1f : 0f;
+                case Op.And: return a != 0f && Eval(node.right, scope) != 0f ? 1f : 0f;
+                case Op.Or: return a != 0f || Eval(node.right, scope) != 0f ? 1f : 0f;
             }
 
-            float b = Eval(node.right, variable);
+            float b = Eval(node.right, scope);
             switch (node.op)
             {
                 case Op.Add: return Finite(a + b);
@@ -231,53 +338,67 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
         }
 
-        private static float EvalCall(Node node, Func<string, float> variable)
+        private static float EvalCall(Node node, Scope scope)
         {
             Node[] args = node.args;
             if (args == null || args.Length == 0) return 0f;
+
+            // `out("名字")`：读**上面那一行这一帧算完的值**。回调为 null（或引用了下面的行）⇒ 0。
+            if (node.builtin == Builtin.Out)
+            {
+                if (scope.Output == null) return 0f;
+                try
+                {
+                    return Finite(scope.Output(args[0].name));
+                }
+                catch
+                {
+                    return 0f;
+                }
+            }
 
             switch (node.builtin)
             {
                 case Builtin.If:
                     // 只算被选中的那一支：另一支里可能有 rand()/time()，算了既是副作用也是白费。
                     // 条件是引号里的嵌套表达式时，它在这里才第一次被求值 —— 这就是"引号延迟"的全部含义。
-                    return Eval(args[0], variable) != 0f ? Eval(args[1], variable) : Eval(args[2], variable);
+                    return Eval(args[0], scope) != 0f ? Eval(args[1], scope) : Eval(args[2], scope);
                 case Builtin.Time:
                 {
-                    float step = Eval(args[0], variable);
-                    float period = Eval(args[1], variable);
+                    float step = Eval(args[0], scope);
+                    float period = Eval(args[1], scope);
                     if (period <= 0f) return 0f; // 模数非正：没有周期可言（也算不到 NaN）
                     return Finite((step * Frame) % period);
                 }
                 case Builtin.Rand:
-                    return Finite(UnityEngine.Random.Range(Eval(args[0], variable), Eval(args[1], variable)));
+                    return Finite(UnityEngine.Random.Range(Eval(args[0], scope), Eval(args[1], scope)));
                 case Builtin.Clamp:
                     // Mathf.Clamp 的下限大于上限也不抛，只是按顺序夹一次。
-                    return Finite(Mathf.Clamp(Eval(args[0], variable), Eval(args[1], variable), Eval(args[2], variable)));
+                    return Finite(Mathf.Clamp(Eval(args[0], scope), Eval(args[1], scope), Eval(args[2], scope)));
                 case Builtin.Approx:
                 {
-                    float x = Eval(args[0], variable);
-                    float y = Eval(args[1], variable);
-                    float delta = Eval(args[2], variable);
+                    float x = Eval(args[0], scope);
+                    float y = Eval(args[1], scope);
+                    float delta = Eval(args[2], scope);
                     return Mathf.Abs(x - y) <= delta ? 1f : 0f; // 和比较运算符一样返回 1/0
                 }
                 case Builtin.Lerp:
                 {
-                    float x = Eval(args[0], variable);
-                    float y = Eval(args[1], variable);
-                    float t = Eval(args[2], variable);
+                    float x = Eval(args[0], scope);
+                    float y = Eval(args[1], scope);
+                    float t = Eval(args[2], scope);
                     // 不学 Mathf.Lerp 把 t 截到 [0,1]：这里是数学上的直线，外推也是合法用法。
                     return Finite(x + (y - x) * t);
                 }
             }
 
-            float a = Eval(args[0], variable);
+            float a = Eval(args[0], scope);
             switch (node.builtin)
             {
                 // atan2(x,y) 与 ExpressionSolver 一致：第一个参数当作 y（即 Math.Atan2(p0,p1)）。
-                case Builtin.Atan2: return Finite(Mathf.Atan2(a, Eval(args[1], variable)));
-                case Builtin.Min: return Finite(Mathf.Min(a, Eval(args[1], variable)));
-                case Builtin.Max: return Finite(Mathf.Max(a, Eval(args[1], variable)));
+                case Builtin.Atan2: return Finite(Mathf.Atan2(a, Eval(args[1], scope)));
+                case Builtin.Min: return Finite(Mathf.Min(a, Eval(args[1], scope)));
+                case Builtin.Max: return Finite(Mathf.Max(a, Eval(args[1], scope)));
                 case Builtin.Sin: return Finite(Mathf.Sin(a));
                 case Builtin.Cos: return Finite(Mathf.Cos(a));
                 case Builtin.Tan: return Finite(Mathf.Tan(a));
@@ -341,6 +462,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 case "approx": builtin = Builtin.Approx; arity = 3; return true;
                 case "lerp": builtin = Builtin.Lerp; arity = 3; return true;
                 case "if": builtin = Builtin.If; arity = 3; return true;
+                case "out": builtin = Builtin.Out; arity = 1; return true;
                 default: builtin = Builtin.Sin; arity = 0; return false;
             }
         }
@@ -495,6 +617,10 @@ namespace Hollow.HoUnityTools.FaceTracking
                     case TokenKind.Quoted:
                         Next();
                         return token.node;
+                    case TokenKind.String:
+                        // 只当 `out(...)` 的参数有意义；游离的由 TryParse 回头报错。
+                        Next();
+                        return new Node { kind = NodeKind.Literal, name = token.text, pos = token.pos };
                     case TokenKind.Identifier:
                         Next();
                         if (_token.kind == TokenKind.LParen) return ParseCall(token);
@@ -544,6 +670,15 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (args.Count != arity)
                     throw Error(nameToken, "函数 " + nameToken.text + " 要 " + arity + " 个参数，这里给了 " + args.Count + " 个");
 
+                // `out("…")` 的参数必须是**双引号字符串**（不能是变量、也不能是单引号里的表达式）。
+                if (builtin == Builtin.Out)
+                {
+                    if (args[0].kind != NodeKind.Literal)
+                        throw Error(nameToken, "out(...) 的参数要写成双引号里的输出行名，例如 out(\"Ho/Drive/Gate/Mouth\")");
+                    if (args[0].name.Length == 0)
+                        throw Error(nameToken, "out(\"\") 里没写名字");
+                }
+
                 return new Node { kind = NodeKind.Call, builtin = builtin, args = args.ToArray() };
             }
 
@@ -575,6 +710,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (c == '\'')
                 {
                     NextQuoted(start);
+                    return;
+                }
+                if (c == '"')
+                {
+                    NextString(start);
                     return;
                 }
 
@@ -643,6 +783,24 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (double.IsNaN(value) || value > float.MaxValue || value < float.MinValue)
                     throw Error(Sym(TokenKind.Number, start), "数字超出 float 范围：" + raw);
                 _token = new Token { kind = TokenKind.Number, number = (float)value, pos = start };
+            }
+
+            /// <summary>
+            /// 双引号字符串 —— **只给 `out("…")` 用**（输出行的参数名里带 `/`，裸标识符写不出来）。
+            /// 里面不做转义：参数名不会有引号，多一层转义规则只会多一个坑。
+            /// 写在别处由 <c>TryParse</c> 的"游离字符串"检查报错。
+            /// </summary>
+            private void NextString(int start)
+            {
+                int close = _text.IndexOf('"', start + 1);
+                if (close < 0) throw Error(Sym(TokenKind.String, start), "双引号没有闭合");
+                _token = new Token
+                {
+                    kind = TokenKind.String,
+                    text = _text.Substring(start + 1, close - start - 1),
+                    pos = start
+                };
+                _pos = close + 1;
             }
 
             private void NextQuoted(int start)
@@ -714,6 +872,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     case TokenKind.Number: return "数字";
                     case TokenKind.Identifier: return "变量 " + token.text;
                     case TokenKind.Quoted: return "单引号表达式";
+                    case TokenKind.String: return "字符串 \"" + token.text + "\"";
                     default: return "'" + OpText(token.kind) + "'";
                 }
             }
