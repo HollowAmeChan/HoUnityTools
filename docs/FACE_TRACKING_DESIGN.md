@@ -353,7 +353,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `HoVtsPacket.cs` | VTS 手机包的解析（纯静态、不碰 socket）：请求包原文 + `线名 → 原值` 摊平 |
 | `HoFaceOutputOwnership.cs` | **键级占用表**（§5.1） |
 | `HoFaceShadowLink.cs` | 会话 → 调试观察台的唯一联系点：登记"正在生效的影子 Animator" |
-| `HoFaceBlendTreePeek.cs` | 混合树观察台（`MonoBehaviour`）：把影子的参数与层权重抄到一个可见 Animator 上，好在 Animator 窗口里看红点。无渲染器、不读输出，**无损** |
+| `HoFaceBlendTreePeek.cs` | 混合树观察台（`MonoBehaviour`）：把影子的参数与层权重抄到一个可见 Animator 上，好在 Animator 窗口里看红点。无渲染器、不读输出，**无损**。Inspector 上**只有 `controller` 一个字段**（2026-09-27 简化：参数值的来源固定是"正在生效的会话"，不再有"跟随别的 Animator"那条路）；运行时自己补的 Animator 带 `HideInInspector`，不在 Inspector 上占一行 |
 | `HoFaceJelly.cs` | 一维阻尼谐振子（纯函数）。现在由独立的 `HoSpringConstraint` 使用（`Runtime/Constraints/HoSpringConstraint.cs:83`）——果冻**不在**面捕这条链里 |
 
 ### 8.2 Editor（`Editor/FaceTracking/`）

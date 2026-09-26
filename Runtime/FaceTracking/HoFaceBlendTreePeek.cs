@@ -8,8 +8,12 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// 于是你在 Animator 窗口里选中它，就能看见那棵树的红点与叶子明暗 —— 编辑器自带的混合树视图
     /// 看不到这些，因为真正的影子台是隐藏对象。
     ///
-    /// **用法**：新建一个空物体 → 只挂这个组件 → Play（并把面捕驱动起来）→ 选中它看 Animator 窗口。
-    /// 它需要一个 Animator，但**不需要你手动加**：运行时自己补一个 —— 所以那个空物体只是个挂载点。
+    /// **用法**：新建一个空物体 → 只挂这个组件 → **填一个 controller**（要观察的那份）→ Play 并把面捕驱动起来
+    /// → 选中它看 Animator 窗口。它需要一个 Animator，但**不需要你手动加**：运行时自己补一个
+    /// （补的那个用 `HideInInspector`，所以 Inspector 上不会多出一行）。
+    ///
+    /// **参数值从哪来**：只有一个来源 —— 正在生效的面捕会话（`HoFaceShadowLink.Active`，会话启动时登记进来）。
+    /// 没有会话在跑时它就静止在那儿，什么都不抄。
     ///
     /// **无损**：这个 Animator 不驱动任何渲染器、也不读任何输出，它求值出来的姿势没有去处；
     /// 参数只写它自己身上，角色 Animator 与影子台都不受影响。
@@ -17,12 +21,8 @@ namespace Hollow.HoUnityTools.FaceTracking
     [AddComponentMenu("HoUnityTools/Face Tracking/Ho Face Blend Tree Peek")]
     public sealed class HoFaceBlendTreePeek : MonoBehaviour
     {
-        [Tooltip("跟随哪个 Animator。留空 = 跟随当前正在生效的面捕会话（影子台）。"
-            + "也可以拖别的 Animator 进来观察 —— 那就与面捕无关了，任何管线都能用。")]
-        public Animator sourceAnimator;
-
-        [Tooltip("观察用的 controller。**留空最省事**：直接用来源正在跑的那一个。"
-            + "只有想对比「资产里的树」与「运行中的树」时才填。")]
+        [Tooltip("要观察的那份 controller（面板里填一个就行）。\n"
+            + "留空时退一步用**来源正在跑的那个** —— 想对比「资产里的树」与「运行中的树」时，填上资产里的那份。")]
         public RuntimeAnimatorController controller;
 
         private readonly HashSet<string> wanted = new HashSet<string>(System.StringComparer.Ordinal);
@@ -30,6 +30,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private Animator animator;
         private Animator boundSource;
         private bool intersectNextFrame;
+        private bool warnedNoController;
         private GUIStyle boxStyle;
 
         private void Awake()
@@ -40,8 +41,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 animator = gameObject.AddComponent<Animator>();
                 // **自己补的那一个不在 Inspector 上占一行**（2026-09-27 用户要求）：
-                // 这个物体只是个挂载点，要看的是 Animator 窗口里那棵树；面板上多出一行 Animator
-                // 只会让人以为"还得配一个"。用户自己挂的 Animator 保持原样（不是我们加的，不动它）。
+                // 用户自己挂的 Animator 保持原样（不是我们加的，不动它）。
                 animator.hideFlags = HideFlags.HideInInspector;
             }
             // 没有渲染器，不设 AlwaysAnimate 可能被剔除掉 —— 那窗口里就什么都不会动。
@@ -52,13 +52,24 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void Update()
         {
-            var live = sourceAnimator != null ? sourceAnimator : HoFaceShadowLink.Active;
+            var live = HoFaceShadowLink.Active;          // 唯一来源：正在生效的面捕会话（影子台）
             if (live == null || live == animator) return;
 
             if (boundSource != live)
             {
                 var applied = controller != null ? controller : live.runtimeAnimatorController;
-                if (applied == null) return;
+                if (applied == null)
+                {
+                    // 静默失效最难查：这条只说一次，说清"为什么窗口里什么都没有"。
+                    if (!warnedNoController)
+                    {
+                        warnedNoController = true;
+                        Debug.LogWarning("[Ho 混合树观察台] 没有 controller 可跑：本组件上没填，来源（"
+                            + live.name + "）也没有正在跑的 controller ⇒ Animator 窗口里看不到树。", this);
+                    }
+                    return;
+                }
+                warnedNoController = false;
                 animator.runtimeAnimatorController = applied;
 
                 // 以来源的参数表为准建"要抄的名单"；绑定后下一帧取一次交集，免得两边版本不同时刷警告。
@@ -103,11 +114,11 @@ namespace Hollow.HoUnityTools.FaceTracking
         private void OnGUI()
         {
             if (!Application.isPlaying) return;
-            var live = sourceAnimator != null ? sourceAnimator : HoFaceShadowLink.Active;
+            var live = HoFaceShadowLink.Active;
             if (live == null) return;
             if (boxStyle == null) boxStyle = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, fontSize = 11 };
             GUILayout.BeginArea(new Rect(8f, 8f, 310f, 50f), boxStyle);
-            GUILayout.Label("Ho 混合树观察台　跟随：" + live.name);
+            GUILayout.Label("Ho 混合树观察台　源：" + live.name);
             GUILayout.Label("选中本物体 → Animator 窗口（无损：无渲染器、不读输出）");
             GUILayout.EndArea();
         }
