@@ -639,3 +639,21 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 
 **待标定**（都要实测）：① 下巴左右移到底时 `jawRight − jawLeft` 的读数；② 咀嚼时 `jawOpen` / `mouthClose`
 的**振幅与频率**（决定这棵树做动作够不够快）；③ 上下轴的刻度值（`−1 咬合 / 0 静息 / +? 张满`）。
+### 5.5 脸的其他部分：现在到什么程度（**2026-09-27 用户定：眼/眉暂缓，树里先 ARKit 直通**）
+
+嘴之外，用户问"还有哪些我忘记表达的状态"。全脸对一遍：
+
+| 区域 | 现在有什么 | 缺口 | 归类 |
+| --- | --- | --- | --- |
+| **眼睑** | `LidL`/`LidR`：`BlinkWide`（= `blink − wide`，±1）× `Squint`（0..1），左右**独立** | **笑眼**（`LidLExpr`/`LidRExpr` 已建，但**表情门没有来源**）；**wink**（单眼，门同样没来源） | 往后（等门来源） |
+| **注视** | `GazeL`/`GazeR`：手机自发的 ±1 标量直通 | **眼睑随视线**（往极端看时眼睑要跟，合同的 `LidGazeL/R`） | 往后（有信号） |
+| **眉** | `BrowCoreL`/`BrowCoreR`：`Height`（= 2×(outerUp − down)） × `InnerUp`（两侧同跟 `browInnerUp`），左右独立 | **眉眼接触**（压眉 × 睁大，合同的 `BrowEyeL/R`）；**中央眉 / 额头**（合同的 `BrowCenter`）；**左右内眉分开**（现在两侧同跟一根） | 往后（有信号） |
+| **颊 / 鼻** | `CheekSquint`（分侧）、`CheekPuff`（分侧）、`NoseSneer`（分侧） | **吸腮**（ARKit **没有**这根线）；**单侧鼓嘴**（只有一根 `cheekPuff`） | 没信号 ⇒ 推 / 换源 / 按键 |
+| **舌** | `MouthTongue`（4 格） | **舌的左右**（只有一根 `tongueOut`） | 没信号 |
+| **头 / 身体** | profile 里有 `Face/Angle/*`、`Face/Pos/*`、`Body/*` **出口行** | **一棵树都没有**（要转头/点头/身体晃动的话得接；Warudo 侧是另一条链） | 往后（数据已在） |
+| **嘴部已发布但没树用的轴** | `Mouth/Funnel`（圆唇/漏斗）、`Mouth/Press`（压唇/露齿） | 各自的树（合同的 `MouthSeal` / `MouthUpperRaise` / `MouthLowerDrop` 也是这一类） | 往后（有信号，口已经留好） |
+| **不是捕捉能给的** | —— | 眼泪、脸红、耳朵动、眨眼/表情门 | 按键 / 程序化 |
+
+**决定（2026-09-27 用户）**：**眼 / 眉这一族暂时不动**，树里就让它们**ARKit 直通**（现状就是：
+axes 由线直接/等价映射而来、`LidL/R`+`GazeL/R`+`BrowCoreL/R` 各一棵，副本等门来源）。
+⇒ **嘴这一族先做透**（§5.2 那张清单），眼眉的加细排到后面。
