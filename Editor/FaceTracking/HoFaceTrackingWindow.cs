@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using Hollow.HoUnityTools.Editor.Constraints;
 using Hollow.HoUnityTools.FaceTracking;
 using UnityEditor;
@@ -773,6 +774,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     // 按键 / 门控调试（`Ho/Drive/Gate/Expr/*`）就是靠它。
                     int overrides = session != null ? session.PreviewCount : 0;
                     HoConstraintEditorControls.Flex();
+                    // ── 拍快照（2026-09-27 加）───────────────────────────────────
+                    // 标定用：**做个动作 → 点一下 → Console 里就是那一帧所有"在动的行"**，
+                    // 一行一条 `参数名 = 值`，直接整段复制发给对方即可。
+                    // 为什么不做成"看几行"：判据常常在我们没盯着的那根线上（卷唇串扰就是例子）。
+                    if (HoConstraintEditorControls.Button(
+                            "拍快照",
+                            "把这一栏现在**所有非零行**打到 Console（一行一条，复制整段即可）—— 标定/取证用：做个动作、点一下",
+                            hasSession && named > 0, 76.0f)
+                        && session != null)
+                    {
+                        var snap = new StringBuilder();
+                        snap.Append("[Ho 面捕快照] ").Append(DateTime.Now.ToString("HH:mm:ss"))
+                            .Append("  （只列 |值| > 0.005 的行）");
+                        int shown = 0;
+                        for (int i = 0; i < rows.Count; i++)
+                        {
+                            if (rows[i] == null || string.IsNullOrEmpty(rows[i].parameter)) continue;
+                            float v = session.OutputValue(rows[i].parameter);
+                            if (float.IsNaN(v) || Mathf.Abs(v) <= 0.005f) continue;
+                            snap.Append('\n').Append(rows[i].parameter).Append(" = ").Append(v.ToString("F4"));
+                            shown++;
+                        }
+                        snap.Append("\n[Ho 面捕快照] 完（").Append(shown).Append(" 行非零 / 共 ").Append(named).Append(" 行）");
+                        Debug.Log(snap.ToString());
+                    }
                     if (HoConstraintEditorControls.Button(
                             overrides > 0 ? "清空覆盖（" + overrides + "）" : "清空覆盖",
                             "把这一栏里所有手动覆盖一次清掉（每行右边那四个按钮：不覆盖 / -1 / 0 / 1）",
