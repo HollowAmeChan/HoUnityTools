@@ -81,14 +81,24 @@ Ho/Drive/Lid/{Left,Right}/{BlinkWide,Squint} = eyeBlink − eyeWide / eyeSquint
 | **第 2 层：表情副本** | `Ho/Drive/Gate/Expr/<表情名>`（`Smile`、`Angry`、`Wink`…） | 这张表走"普通版"还是"按键表情版" | **本版不接**（§3.3）：默认 `0`，**中间层不写它** |
 
 ```
-Ho/00 Drive Tree (Direct)
-└─ Mouth            ← 权重 = Ho/Drive/Gate/Mouth            （第 1 层）
-     ├─ MouthCoreSwitch（Simple1D，blendParameter = Ho/Drive/Gate/Expr/Smile）
-     │    ├─ 阈值 0 → MouthCore（Direct：4 张条件切片，权重 = Slice/MouthCore/Funnel0Press0 …，和恒 1）
-     │    └─ 阈值 1 → MouthCoreExpr（Direct：同名切片，**同轴、不同姿势**）
-     ├─ MouthJaw      ← 权重 = 1（不参与表情副本：按键表情不该改下颌）
-     └─ MouthWidth      ← 权重 = 1
+Ho/00 Drive Tree (Direct)                      ← 根：每个区域一个子节点
+└─ MouthRegion (Direct)   ← 权重 = Ho/Drive/Gate/Mouth      （第 1 层，唯一那层门）
+     ├─ MouthCoreSwitch（Simple1D，blendParameter = Ho/Drive/Gate/Expr/Smile）  ← 权重 = Ho/Drive/W/One
+     │    ├─ 阈值 0 → MouthCore（FreeformCartesian2D：Form × Open，9 个槽位）
+     │    └─ 阈值 1 → MouthCoreExpr（同轴、不同姿势）
+     ├─ MouthJaw      ← 权重 = Ho/Drive/W/One（不参与表情副本：按键表情不该改下颌）
+     └─ MouthWidth    ← 权重 = Ho/Drive/W/One
 ```
+
+⚠️ **Direct 的每个子节点都必须挂一个参数** —— 所以"这一格永远全量生效"也要一个参数：
+**`Ho/Drive/W/One`（默认 1，中间层不写它）**。区域子树里那些表 / 1D 开关容器都挂它。
+（这正是我第一版清单漏掉的一格：只写了门的权重，没写"表本身的权重"——引擎不给默认值，必须显式挂。）
+
+⚠️ **条件切片（Funnel × Press）不进这张表，而是"以后再加的同级表"**：`MouthRegion` 下再加
+`MouthCoreFunnel` / `MouthCorePress` / `MouthCoreFunnelPress` 三张同轴表，权重分别挂**对应的 `Slice/MouthCore/*` 参数**，
+`MouthCore` 自己挂 `Slice/MouthCore/Funnel0Press0`（`(1−f)(1−p)`）—— 四条和恒为 1。
+**没做的切片必须复用基础片段**（契约 §F），留空 Motion 会让权重和不足 1 ⇒ 掺进 WD 的启动值。
+**骨架（2026-09-27 生成的那份）只有基础表**，切片等有了条件姿势再加。
 
 **副本用「1D 交叉淡入树」实现，不用"两个互补权重的兄弟节点"** —— 这是本节最要紧的一条：
 
@@ -246,19 +256,26 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 
 ## 10. 手搭清单（在混合树编辑器里照这个建；动画留空）
 
+> ✅ **骨架已经生成好了**（2026-09-27）：`D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\PTP_CTR_Face_VTS.controller`
+> —— 40 个参数、29 棵树、75 + 29 个**空 Motion 槽位**，一层一个状态 WD 开、无 Behaviour。
+> 生成脚本 `.research/make-vts-controller.ps1`（从老控制器的字段集取模板），核对脚本
+> `.research/check-controller.ps1` 对它报 **0 问题**。⚠️ 它还没在 Unity 里打开过（本机三个编辑器占着授权互斥量，
+> 跑不了 batchmode）—— 第一次打开时确认一下面板与「详情」栏；面板读不出来我再把生成器改成 Editor API 版。
+
 > 搭完先跑一次 `.research/check-controller.ps1 -Path <那份>.controller`：参数名/默认值/树形/门控接线一次核完
 > （验收清单见 §11 第 3 条）。**参数名敲错一个字符是静默失败**，这一步别省。
 
-**第 0 步 · 参数（全部 Float）**：**一共 39 个** = 下面这 **37 个由发货 profile 每帧写**
-（逐行的表达式与曲线见 [HO 参数规范](PARAMETER_HO.md) §3.7）+ **2 个表情门**（profile **不写**，
-留给按键来源）。不写全的名字以后查[命名权威](FACE_TRACKING_NAMING.md) §6。
+**第 0 步 · 参数（全部 Float）**：**一共 40 个** = 下面这 **37 个由发货 profile 每帧写**
+（逐行的表达式与曲线见 [HO 参数规范](PARAMETER_HO.md) §3.7）+ **1 个恒 1 权重** + **2 个表情门**
+（后三个 profile **都不写**）。不写全的名字以后查[命名权威](FACE_TRACKING_NAMING.md) §6。
 
-| 组 | 参数 | 默认值 |
-| --- | --- | --- |
-| 区域门（5） | `Ho/Drive/Gate/Mouth` · `EyeLeft` · `EyeRight` · `Brow` · `Cheek` | **1** |
-| 表情门（2，profile 不写） | `Ho/Drive/Gate/Expr/Smile` · `Ho/Drive/Gate/Expr/Angry` | **0** |
-| 轴（28） | `Mouth/Form` `Open` `Funnel` `Press` `Jaw` `Forward` `Pucker` `X` `TongueL` `TongueR`；`Lid/Left\|Right/BlinkWide` `Squint`；`Gaze/Left\|Right/X` `Y`；`Brow/Left\|Right/Y` `InnerUp`；`Cheek/Left\|Right/Squint` `Puff`；`Nose/Left\|Right/Sneer`（前缀都是 `Ho/Drive/`） | 0（`BlinkWide` 也是 0） |
-| 切片权重（4） | `Ho/Drive/Slice/MouthCore/{Funnel0Press0, Funnel1Press0, Funnel0Press1, Funnel1Press1}` | 0 |
+| 组 | 参数 | 默认值 | 谁写 |
+| --- | --- | --- | --- |
+| 区域门（5） | `Ho/Drive/Gate/Mouth` · `EyeLeft` · `EyeRight` · `Brow` · `Cheek` | **1** | 中间层常量行 |
+| **恒 1 权重（1）** | **`Ho/Drive/W/One`** —— Direct 的每个子节点都要挂参数，"这一格永远全量生效"也需要一个参数 | **1** | **没人写**（默认值就是 1） |
+| 表情门（2） | `Ho/Drive/Gate/Expr/Smile` · `Ho/Drive/Gate/Expr/Angry` | **0** | **没人写**（留给按键来源，§3.3） |
+| 轴（28） | `Mouth/Form` `Open` `Funnel` `Press` `Jaw` `Forward` `Pucker` `X` `TongueL` `TongueR`；`Lid/Left\|Right/BlinkWide` `Squint`；`Gaze/Left\|Right/X` `Y`；`Brow/Left\|Right/Y` `InnerUp`；`Cheek/Left\|Right/Squint` `Puff`；`Nose/Left\|Right/Sneer`（前缀都是 `Ho/Drive/`） | 0（`BlinkWide` 也是 0） | profile 各行 |
+| 切片权重（4） | `Ho/Drive/Slice/MouthCore/{Funnel0Press0, Funnel1Press0, Funnel0Press1, Funnel1Press1}` | 0 | profile 各行 |
 
 **第 1 步 · 层与状态**：一层（现控制器是 `Ho/00 Drive`）+ 一个状态；**Write Defaults 开**。
 
@@ -266,8 +283,10 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 
 **第 3 步 · 区域子树**（Direct，子节点见下）：`MouthRegion`（门 `Mouth`）、`EyeLeftRegion`（`EyeLeft`）、
 `EyeRightRegion`（`EyeRight`）、`BrowRegion`（`Brow`）、`CheekRegion`（`Cheek`）。
+**子树里的每个子节点都挂 `Ho/Drive/W/One`**（表整体按 1 加进去；分配发生在表内部）。
 
 **第 4 步 · 表（tranche 1）**：区域子树里的每个子节点要么是一张 2D 表、要么是一棵 1D 副本树。
+（1D 副本树的两个子节点是**子树**：阈值 `0` → 主版表、阈值 `1` → `…Expr` 副本 —— 这条形状还没实测，见 §3.1 末。）
 
 | 表 | 类型 | blendParameter X / Y | 子节点 | 槽位名 |
 | --- | --- | --- | --- | --- |
@@ -348,7 +367,9 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 2. **参数名**用 `Ho/Drive/<部位>/<轴>`（不借 VB/VTS 原名）。
 3. **眉毛**做，按 VB 现成的 `BrowLeftY/BrowRightY` × `BrowInnerUp`。
 4. **表情来源本版不接、也不测**：门参数建好、默认 `0`、中间层不写它（§3.3）。
-5. **骨架由你手搭**，我出清单（§10）；不写生成器。
+5. **骨架由我生成**（改成生成器，不再手搭）：`PTP_CTR_Face_VTS.controller` 已落在土豆的 FT 目录下，
+   形状即 §10，槽位全空 —— 生成脚本 `.research/make-vts-controller.ps1`，核对脚本报 0 问题。
+   ⚠️ 还没在 Unity 里打开过（授权互斥量），第一次打开要目视确认。
 6. **鼓腮与吐舌分左右**，各出一对 HQ 轴（`HQCheekPuffLeft/Right`、`HQTongueLeft/Right`，契约 HQ 39 → 43），
    树名/轴段词按 [命名权威](FACE_TRACKING_NAMING.md)（树族不再用 `M01` 那套编号）。
 

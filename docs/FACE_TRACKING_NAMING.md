@@ -96,6 +96,8 @@
 轴参数    Ho/Drive/<部位>[/<Left|Right>]/<轴>     例：Ho/Drive/Mouth/Form、Ho/Drive/Lid/Left/BlinkWide
 区域门    Ho/Drive/Gate/<Mouth|EyeLeft|EyeRight|Brow|Cheek>      默认 1，中间层写常量行
 表情门    Ho/Drive/Gate/Expr/<表情名>                            默认 0，中间层不写
+恒 1 权重 Ho/Drive/W/One                                         默认 1，没人写；**Direct 的每个子节点都要挂参数**，
+                                                                所以"永远全量生效"的那一格也得有个参数
 切片权重  Ho/Drive/Slice/<树名>/<切片名>                          例：Ho/Drive/Slice/MouthCore/Funnel0Press0
 ```
 
