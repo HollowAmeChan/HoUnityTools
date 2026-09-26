@@ -1,4 +1,4 @@
-# 配置层（Profiles）
+﻿# 配置层（Profiles）
 
 这里放**发货用的中间层配置**（`*.hoface.json`），当成一个仓库用。
 
