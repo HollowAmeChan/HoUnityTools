@@ -25,7 +25,7 @@
 | 3 | **树形 29 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 18 张表（13 主版 + 5 副本）+ 5 棵 1D 副本树 |
 | 4 | **槽位 104 个** | ⬜ **全是空 Motion** | 100% 未摆姿势 ⇒ **造型一条都还看不到**；但**轴值现在就能测**（§2.4）。**刻度已按实测收过一次圈**：`MouthCore` 的 Y（`Open`）= `0 / 0.4 / 0.75`（2026-09-27，见 §2.2 与 §2.3.1） |
 | 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 127 输出**（90 出口 + 37 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
-| 6 | **轴的修饰符** | 🟡 37 行**仍然一条 `smooth` 都没有** | 但形状/曲线已经开始按实测调：`Mouth/Open` 的响应曲线加了 **±0.03 死区**（2026-09-27）。其余 36 行的曲线仍是恒等（只是放宽范围防夹断）—— 见 §3.2 |
+| 6 | **轴的修饰符** | 🟡 **28 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
 | 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
 | 9 | **1D 树的孩子是子树** | ✅ **已实测**（2026-09-27） | 1D 的孩子是子树时**线性交叉淡入**；**四层嵌套（Direct → Direct → 1D → 2D）照旧**。数字见 §2.3.1 / [能力边界](BLEND_TREE_LIMITS.md) §10 —— 兜底形状不需要了 |
@@ -179,49 +179,49 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | — | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**（所以曲线给到 ±2）。**0 = 静息、+1 = 笑满；负侧由"下弯眉 + 噘嘴"驱动：实测噘嘴 = −0.5…−0.6，正是 `−pucker/2` 那一项** | +1 笑满、0 静息、**−0.5…−0.6（噘嘴）** |
-| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.03 死区 + 0.03..0.06 斜坡，之外恒等**（`MouthCore` 的 Y 刻度已缩到 0/.4/.75，量程归一在树里） | — | 0 闭 … 1 张满；**负侧也有值**（抿嘴比闭还"负"）。**实测：张满 0.75、半张 0.4、抿满 −0.16…−0.2、\|x\|<0.03 是"不张也不抿"的死区** | 0 … **0.75**（半张 0.4；抿嘴 −0.2…−0.16） |
-| `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | — | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
-| `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | — | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
-| `Ho/Drive/Mouth/Jaw` | `jawOpen` | 恒等 0…1 | — | 0 闭 … 1 张满；`MouthJaw` 表的主轴 | 待测 |
-| `Ho/Drive/Mouth/Forward` | `jawForward` | 恒等 0…1 | — | 下颌前伸；**现在树里只用了 0** | 待测 |
-| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | 恒等 −2…2 | — | **双向**：−1 噘嘴 … +1 展宽 | 待测 |
-| `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | 恒等 −2…2 | — | **双向**：+1 偏左（按表达式）… −1 偏右 | 待测 |
-| `Ho/Drive/Mouth/TongueL` | `tongueOut` | 恒等 0…1 | — | 舌左；**现在两侧同跟单侧原值** | 待测 |
-| `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | — | 舌右；同上 | 待测 |
+| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**（所以曲线给到 ±2）。**0 = 静息、+1 = 笑满；负侧由"下弯眉 + 噘嘴"驱动：实测噘嘴 = −0.5…−0.6，正是 `−pucker/2` 那一项** | +1 笑满、0 静息、**−0.5…−0.6（噘嘴）** |
+| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.03 死区 + 0.03..0.06 斜坡，之外恒等**（`MouthCore` 的 Y 刻度已缩到 0/.4/.75，量程归一在树里） | smooth 0.009 s | 0 闭 … 1 张满；**负侧也有值**（抿嘴比闭还"负"）。**实测：张满 0.75、半张 0.4、抿满 −0.16…−0.2、\|x\|<0.03 是"不张也不抿"的死区** | 0 … **0.75**（半张 0.4；抿嘴 −0.2…−0.16） |
+| `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | smooth 0.007 s | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
+| `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
+| `Ho/Drive/Mouth/Jaw` | `jawOpen` | 恒等 0…1 | smooth 0.009 s | 0 闭 … 1 张满；`MouthJaw` 表的主轴 | 待测 |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 恒等 0…1 | smooth 0.01 s | 下颌前伸；**现在树里只用了 0** | 待测 |
+| `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 噘嘴 … +1 展宽 | 待测 |
+| `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | 恒等 −2…2 | smooth 0.007 s | **双向**：+1 偏左（按表达式）… −1 偏右 | 待测 |
+| `Ho/Drive/Mouth/TongueL` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌左；**现在两侧同跟单侧原值** | 待测 |
+| `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌右；同上 | 待测 |
 
 **眼睑 / 注视（8）**
 
 | 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | 恒等 −1…1 | — | −1 睁大 · **0 中性** · +1 闭 | 待测 |
-| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 恒等 0…1 | — | 0 不眯 … 1 眯满 | 待测 |
-| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | 恒等 −1…1 | — | 同上（右） | 待测 |
-| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 恒等 0…1 | — | 同上（右） | 待测 |
-| `Ho/Drive/Gaze/Left/X` | `EyeLeft_x` | 恒等 −1…1 | — | 左眼水平；手机自己发的标量，**不重算** | 待测 |
-| `Ho/Drive/Gaze/Left/Y` | `EyeLeft_y` | 恒等 −1…1 | — | 左眼垂直 | 待测 |
-| `Ho/Drive/Gaze/Right/X` | `EyeRight_x` | 恒等 −1…1 | — | 右眼水平 | 待测 |
-| `Ho/Drive/Gaze/Right/Y` | `EyeRight_y` | 恒等 −1…1 | — | 右眼垂直 | 待测 |
+| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | 恒等 −1…1 | smooth 0.007 s | −1 睁大 · **0 中性** · +1 闭 | 待测 |
+| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 恒等 0…1 | smooth 0.007 s | 0 不眯 … 1 眯满 | 待测 |
+| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | 恒等 −1…1 | smooth 0.007 s | 同上（右） | 待测 |
+| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 恒等 0…1 | smooth 0.007 s | 同上（右） | 待测 |
+| `Ho/Drive/Gaze/Left/X` | `EyeLeft_x` | 恒等 −1…1 | smooth 0.007 s | 左眼水平；手机自己发的标量，**不重算** | 待测 |
+| `Ho/Drive/Gaze/Left/Y` | `EyeLeft_y` | 恒等 −1…1 | smooth 0.007 s | 左眼垂直 | 待测 |
+| `Ho/Drive/Gaze/Right/X` | `EyeRight_x` | 恒等 −1…1 | smooth 0.007 s | 右眼水平 | 待测 |
+| `Ho/Drive/Gaze/Right/Y` | `EyeRight_y` | 恒等 −1…1 | smooth 0.007 s | 右眼垂直 | 待测 |
 
 **眉（4）**
 
 | 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | 恒等 −2…2 | — | **0 = 静息**，−1 压眉 · +1 抬眉；VB 那条掺了偏嘴联动（说话时眉会动一点） | 待测 |
-| `Ho/Drive/Brow/Left/InnerUp` | `browInnerUp` | 恒等 0…1 | — | 内眉抬起 | 待测 |
-| `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 恒等 −2…2 | — | 同上（右） | 待测 |
-| `Ho/Drive/Brow/Right/InnerUp` | `browInnerUp` | 恒等 0…1 | — | 同上（两侧同跟一根） | 待测 |
+| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | 恒等 −2…2 | smooth 0.018 s | **0 = 静息**，−1 压眉 · +1 抬眉；VB 那条掺了偏嘴联动（说话时眉会动一点） | 待测 |
+| `Ho/Drive/Brow/Left/InnerUp` | `browInnerUp` | 恒等 0…1 | smooth 0.015 s | 内眉抬起 | 待测 |
+| `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 恒等 −2…2 | smooth 0.018 s | 同上（右） | 待测 |
+| `Ho/Drive/Brow/Right/InnerUp` | `browInnerUp` | 恒等 0…1 | smooth 0.015 s | 同上（两侧同跟一根） | 待测 |
 
 **颊 / 鼻（6）**
 
 | 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Cheek/Left/Squint` | `cheekSquintLeft` | 恒等 0…1 | — | 左颊上提 | 待测 |
-| `Ho/Drive/Cheek/Right/Squint` | `cheekSquintRight` | 恒等 0…1 | — | 右颊上提 | 待测 |
-| `Ho/Drive/Cheek/Left/Puff` | `cheekPuff` | 恒等 0…1 | — | 左鼓腮；**分侧是预留的**，现在两侧同跟 | 待测 |
-| `Ho/Drive/Cheek/Right/Puff` | `cheekPuff` | 恒等 0…1 | — | 右鼓腮；同上 | 待测 |
-| `Ho/Drive/Nose/Left/Sneer` | `noseSneerLeft` | 恒等 0…1 | — | 左鼻翼上提 | 待测 |
-| `Ho/Drive/Nose/Right/Sneer` | `noseSneerRight` | 恒等 0…1 | — | 右鼻翼上提 | 待测 |
+| `Ho/Drive/Cheek/Left/Squint` | `cheekSquintLeft` | 恒等 0…1 | smooth 0.009 s | 左颊上提 | 待测 |
+| `Ho/Drive/Cheek/Right/Squint` | `cheekSquintRight` | 恒等 0…1 | smooth 0.009 s | 右颊上提 | 待测 |
+| `Ho/Drive/Cheek/Left/Puff` | `cheekPuff` | 恒等 0…1 | smooth 0.01 s | 左鼓腮；**分侧是预留的**，现在两侧同跟 | 待测 |
+| `Ho/Drive/Cheek/Right/Puff` | `cheekPuff` | 恒等 0…1 | smooth 0.01 s | 右鼓腮；同上 | 待测 |
+| `Ho/Drive/Nose/Left/Sneer` | `noseSneerLeft` | 恒等 0…1 | smooth 0.009 s | 左鼻翼上提 | 待测 |
+| `Ho/Drive/Nose/Right/Sneer` | `noseSneerRight` | 恒等 0…1 | smooth 0.009 s | 右鼻翼上提 | 待测 |
 
 **区域门（5）与切片权重（4）** —— 这两组不是"手感轴"，调它们是改结构：
 
@@ -232,10 +232,31 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 `Ho/Drive/Gate/Expr/*`（`Smile` / `Angry`）**故意一行都不写**：它属于驱动"按键"的那一方。
 
-### 3.2 稳定化：修饰符（现在一条都没有）
+### 3.2 稳定化：修饰符（**2026-09-27 第一版已铺**）
 
-**事实**：这 37 行**连 `modifiers` 字段都没有**（= 一条修饰符都没挂）。而同一份 profile 的 90 行出口里有 **23 行带 `smooth`**，
-时间常数是**逐行自己定的**（VB 的形状：每路一个手感）：
+**现状**：28 根轴全部挂了 `smooth`（区域门与切片行**故意不挂** —— 见下），取值**照 VB 自己那套逐行口径**平移到轴上：
+
+| 轴 | `smooth` | 依据（VB 出口行里的同族时间常数） |
+| --- | --- | --- |
+| `Mouth/Open` | 0.009 | = VB `MouthOpen` |
+| `Mouth/Form` | 0.009 | 嘴部复合（`MouthSmile` 0.007 / `MouthOpen` 0.009），取该部位上界 |
+| `Mouth/Jaw` | 0.009 | 与 `MouthOpen` 同一物理运动 |
+| `Mouth/Funnel` · `Mouth/Press` · `Mouth/Pucker` · `Mouth/X` | 0.007 | = VB `MouthFunnel` / `MouthPressLipOpen` / `MouthPucker` / `MouthX` |
+| `Mouth/TongueL` · `TongueR` | 0.007 | 舌是小而快的动作，取最小档 |
+| `Mouth/Forward` | 0.010 | 没有对应行；下颌平移，比 `Jaw` 慢一档 |
+| `Lid/*/BlinkWide` · `Lid/*/Squint` | 0.007 | = VB `EyeOpenLeft/Right` —— **再大就会糊掉眨眼** |
+| `Gaze/*/X` · `Gaze/*/Y` | 0.007 | = VB `EyeLeftX/Y`、`EyeRightX/Y` —— **再大眼球会拖** |
+| `Brow/*/Y` | 0.018 | = VB `BrowLeftY` / `BrowRightY` |
+| `Brow/*/InnerUp` | 0.015 | = VB `BrowInnerUp` |
+| `Cheek/*/Squint` · `Nose/*/Sneer` | 0.009 | 肌肉类，与 VB `Brows` 同档 |
+| `Cheek/*/Puff` | 0.010 | 鼓腮是慢动作 |
+
+**为什么门与切片不挂**：
+
+* **区域门**是常量行 —— 挂 `smooth` 只会在开场把 1 从 0 爬上来（没意义）。真要"慢慢推上去"再加。
+* **4 条切片权重**还没接进树（§4）。接的时候**四条必须用同一个时间常数**（线性滤波下"和恒为 1"才守得住）。
+
+**调的时候的参考量级**（90 行出口里那 23 条，VB 自己的做法：**每路一个手感**）：
 
 | 量级 | 谁在用 |
 | --- | --- |
@@ -244,19 +265,19 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | 0.010 / 0.015 / 0.018 s | `FacePositionX/Y` 0.010、`BrowInnerUp` 0.015、`BrowLeftY`/`BrowRightY` 0.018 |
 | 0.042 s | `FaceAngleX/Y/Z`（头姿最重，抖动最明显） |
 
-**候选做法**（按"轴也走同一套逐行手感"）：给每根轴加 `smooth`，量级照上表同部位的取值起步；抖得厉害的轴
-（`Gaze/*`、`Lid/*/BlinkWide`、`Cheek/*`）先用 0.007–0.012，观察"跟手 vs 抖"的取舍。写法：
+**写法**（每一行一个修饰符列表，按顺序叠加）：
 
 ```json
-"modifiers": [ { "kind": "smooth", "seconds": 0.012, "steps": [] } ]
+"modifiers": [ { "kind": "smooth", "seconds": 0.009, "steps": [] } ]
 ```
 
 * `kind`：`smooth`（时间常数，`seconds`）/ `steps`（维持：`steps[]` = `{trigger, target, hold, threshold}`，按 trigger 升序）/ `delay`（枚举上写着"未实现"，但**两侧不一致**：Unity 侧真的按每行 FIFO 延迟了、mod 侧会跳过它 —— 见[分工现状核对](FACE_PIPELINE_STATUS_2026_09_26.md) §3.2。要两端一致就先别用 `delay`）。
-* 多个修饰符**按列表顺序叠加**。
 * 编辑入口：「配置文件」窗口（`HoUnityTools/面捕/配置文件`）选中那一行，右边就是表达式 / 曲线 / 修饰符。
-  调试面板的「参数输出」栏是**只读**的观察面。
-* ⚠️ **出口行带平滑 ≠ 轴被平滑**：两批行各自独立求值（轴行不引用出口行），现在那 23 条 `smooth` 只作用在出口上。
-  要轴稳，就得**在轴上再挂一遍**（数值可以照同部位抄）。
+  调试面板的「参数输出」栏是**只读**的观察面（但它会把曲线点数与修饰符链摊出来，用来核对）。
+* ⚠️ **出口行带平滑 ≠ 轴被平滑**：两批行各自独立求值（轴行不引用出口行），那 23 条 `smooth` 只作用在出口上 ——
+  所以 §3.2 顶上那份取值是**在轴上又挂了一遍**（照同族数值抄，不是共享同一个滤波器）。
+* ⚠️ **短促事件别用大平滑**：眨眼（`Lid/*/BlinkWide`）、眼球扫视（`Gaze/*`）如果嫌抖，先想"是不是该用 `steps` 维持"，
+  加大 `smooth` 会把它们糊成慢动作。
 
 **调的时候必须知道的四条**：
 
@@ -293,8 +314,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 1. 🟡 **实机测 28 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`、`Mouth/Form`（§3.1）；其余 26 根仍是「待测」。
 2. 🟡 **按实测结果给 37 行加修饰符 / 修曲线**（§3.2 / §3.3）—— *你定数值*。已完成 / 待定：
    · ✅ `Mouth/Open`：**死区曲线已加**（`|v| ≤ 0.03 → 0`、`0.03…0.06` 斜坡、之外恒等）+ **树里刻度收成 `0/.4/.75`**（两个生成器都改了；`check-controller.ps1` 现在核对刻度）。
-   · ⬜ 37 行的 **`smooth`** 还没加（VB 那套逐行时间常数 0.007–0.042 s 可以直接照抄）；`Gaze/*`、`Lid/*/BlinkWide`、`Cheek/*` 是抖得最可能的三组。
-   · ⬜ `Mouth/Form` 负侧：先决定语义 —— ① 认可"负侧 = 噘嘴/下弯眉"⇒ **把 X0 那三格摆成噘嘴姿势**（改内容不改坐标）；② 想让噘嘴只走 `MouthWidth`/`Pucker` ⇒ **改表达式**（把 `− pucker` 去掉或减权），注意出口行 `MouthSmile` 是另一行、VTS 生态按它读。
+   · ✅ **28 根轴的 `smooth` 已铺第一版**（照 VB 同族口径：眼/注视/眨眼 0.007、嘴 0.007–0.010、眉 0.015/0.018、颊鼻 0.009/0.010）—— **等你实机试手感**，尤其看三处：眨眼会不会糊（0.007 已经是最小档）、眼球跟不跟手、`Cheek/*` 够不够快。
+   · ⬜ `Mouth/Form` 负侧：**语义还没定**（它现在 = 2×VB `MouthSmile` − 1，负侧同时被"下弯嘴角"和"噘嘴"驱动）—— 见 §3.1。
 3. **姿势烘焙工具**（*我做*）：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）存成**以槽位命名的多键片段**，
    文件名 = §2.2 的槽位名。现有 `HoBlendShapeClipBuilder` 只能一键一片段，填不了采样点。**排在动画前面。**
 4. ✅ **1D 树 + 子树嵌套已实测**（2026-09-27，见 §2.3.1 与[能力边界](BLEND_TREE_LIMITS.md) §10）：

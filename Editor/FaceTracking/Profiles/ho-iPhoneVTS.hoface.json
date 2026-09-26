@@ -2688,6 +2688,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here"
                     },
                     {
@@ -2700,6 +2703,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Lid/Left/Squint"
                     },
                     {
@@ -2712,6 +2718,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Lid/Right/BlinkWide"
                     },
                     {
@@ -2724,6 +2733,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Lid/Right/Squint"
                     },
                     {
@@ -2736,6 +2748,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row"
                     },
                     {
@@ -2754,6 +2769,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                       ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.03 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.03..0.06 是斜坡；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
                     },
                     {
@@ -2766,6 +2784,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)"
                     },
                     {
@@ -2778,6 +2799,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)"
                     },
                     {
@@ -2790,6 +2814,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Jaw (raw jawOpen; kept as its own degree of freedom)"
                     },
                     {
@@ -2802,6 +2829,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.01, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Forward (HQJawForward)"
                     },
                     {
@@ -2814,6 +2844,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)"
                     },
                     {
@@ -2826,6 +2859,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/X (VTS MouthX); +1 = pulled to the observed left"
                     },
                     {
@@ -2838,6 +2874,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/TongueL (HQTongueLeft): follows the single ARKit tongueOut until a sided source exists"
                     },
                     {
@@ -2850,6 +2889,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Mouth/TongueR (HQTongueRight): same as TongueL for now"
                     },
                     {
@@ -2862,6 +2904,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Gaze/Left/X: the iPhone sends its own eye scalars, so we do not re-derive them"
                     },
                     {
@@ -2874,6 +2919,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Gaze/Left/Y"
                     },
                     {
@@ -2886,6 +2934,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Gaze/Right/X"
                     },
                     {
@@ -2898,6 +2949,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
                         "notes":  "controller axis Gaze/Right/Y"
                     },
                     {
@@ -2910,6 +2964,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.018, "steps": [] }
+                                      ],
                         "notes":  "controller axis Brow/Left/Y = 2*VB BrowLeftY - 1 (0 = rest, +1 raised); VB mixes in the mouth pull"
                     },
                     {
@@ -2922,6 +2979,9 @@
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.018, "steps": [] }
+                                      ],
                         "notes":  "controller axis Brow/Right/Y = 2*VB BrowRightY - 1"
                     },
                     {
@@ -2934,6 +2994,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.015, "steps": [] }
+                                      ],
                         "notes":  "controller axis Brow/Left/InnerUp"
                     },
                     {
@@ -2946,6 +3009,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.015, "steps": [] }
+                                      ],
                         "notes":  "controller axis Brow/Right/InnerUp"
                     },
                     {
@@ -2958,6 +3024,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Cheek/Left/Squint"
                     },
                     {
@@ -2970,6 +3039,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Cheek/Right/Squint"
                     },
                     {
@@ -2982,6 +3054,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.01, "steps": [] }
+                                      ],
                         "notes":  "controller axis Cheek/Left/Puff (HQCheekPuffLeft): follows the single ARKit cheekPuff until a sided source exists"
                     },
                     {
@@ -2994,6 +3069,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.01, "steps": [] }
+                                      ],
                         "notes":  "controller axis Cheek/Right/Puff (HQCheekPuffRight): same as Left for now"
                     },
                     {
@@ -3006,6 +3084,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Nose/Left/Sneer"
                     },
                     {
@@ -3018,6 +3099,9 @@
                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
                                                ]
                                   },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
                         "notes":  "controller axis Nose/Right/Sneer"
                     },
                     {
