@@ -71,6 +71,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             public float[] XValues, YValues;
             /// <summary>稀疏表：这些 (i,j) 格子**物理上到不了**，不建（圈跟着斜切）。null = 摆满。</summary>
             public Vector2Int[] Skip;
+            /// <summary>逐格坐标覆盖：这些 (i,j) 格**不摆在刻度值上**（实测定），坐标单独给。</summary>
+            public CellPos[] Override;
+        }
+
+        /// <summary>一格的独立坐标（槽位名仍按索引编 ⇒ 挪坐标不改名、不用重烘）。</summary>
+        private sealed class CellPos
+        {
+            public int I, J;
+            public float X, Y;
         }
 
         /// <summary>一张 1D 表的定义：**只有一根轴**，刻度值就是阈值本身。</summary>
@@ -114,9 +123,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(1, 2) };
 
+        /// <summary>
+        /// **`MouthCore` 挪过位的那一格**（2026-09-27 用户实测定）：右上角 `(大笑 × 张满)`。
+        /// 实测"**大笑张嘴时嘴会收缩**"⇒ `Open` 到不了 0.75，摆 **0.6** 才是那个状态的真实位置。
+        /// ⚠️ 只挪**这一个点**（不是整行）：静息张嘴仍是 0.75、常态笑张嘴那格已挖掉。
+        /// 于是顶边从平线变成 **0.6 ↔ 0.75 的斜线** —— 圈仍是凸的，出界照旧投影到圈边（不外推），
+        /// 代价是 `(Form 0.75…1, Open > 0.6)` 那块会落到这条斜边上（越靠右越接近"大笑张嘴"）。
+        /// ⚠️ 槽位名按索引编（`A3X<i>Y<j>`），所以挪坐标**不改名、不用重烘**。
+        /// </summary>
+        private static readonly CellPos[] MouthCoreOverride =
+        {
+            new CellPos { I = 2, J = 2, X = 1f, Y = 0.6f }
+        };
+
         private static readonly TableSpec[] Tables =
         {
-            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip },
+            new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
@@ -251,8 +273,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(spec.Name, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
-                            new Vector2(spec.XValues[i], spec.YValues[j]));
+                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
                         filled++;
                     }
                 }
@@ -272,8 +293,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(copy.Value, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
-                            new Vector2(spec.XValues[i], spec.YValues[j]));
+                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
                     }
                 slotCounts[copy.Value] = CountCells(spec);
                 trees[copy.Value] = tree;
@@ -373,6 +393,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static string SlotName(string tree, string xToken, string yToken, int xCount, int i, int j)
         {
             return tree + "__" + xToken + "__" + yToken + "__A" + xCount + "X" + i + "Y" + j;
+        }
+
+        /// <summary>
+        /// 这一格摆在哪个坐标：默认 = 该列的 X 刻度 × 该行的 Y 刻度；
+        /// 有逐格覆盖（实测定"这一格不在刻度值上"）时用覆盖值 —— 槽位名仍是按索引编的，所以挪坐标不改名。
+        /// </summary>
+        private static Vector2 CellPosition(TableSpec spec, int i, int j)
+        {
+            if (spec.Override != null)
+                foreach (var cell in spec.Override)
+                    if (cell.I == i && cell.J == j) return new Vector2(cell.X, cell.Y);
+            return new Vector2(spec.XValues[i], spec.YValues[j]);
         }
 
         /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>
