@@ -13,7 +13,7 @@
 
 ## `【经验参】`：每一行都带的一行「哪些数是经验参」（2026-09-27 用户定）
 
-**约定**：`ho-iPhoneVTS.hoface.json` 里**每一条行**（69 输入 + 132 输出）的 `notes` **末尾**都有
+**约定**：`ho-iPhoneVTS.hoface.json` 里**每一条行**（71 输入 + 134 输出）的 `notes` **末尾**都有
 一行 `【经验参】…`，用同一套话术，`grep '【经验参】'` 一次就能看全：
 
 | 情况 | 写成什么 |
@@ -34,7 +34,7 @@
 
 | 文件 | 是什么 |
 |---|---|
-| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：**69 条输入行**（67 条设备线 + 2 条**外部开关** `HoAutoInvertedV` / `HoExternalInvertedV`，Warudo 在 VTS 接收器之后 append）+ **132 行输出** = **90 条出口**（原始 ARKit 52 + 官方 VTS 20 + VB 自造 5 + 姿态向量 12 + `FaceFound`，2026-09-27 之前只有这 90 行）+ **39 行控制器轴 `Ho/Drive/*`**（轴 / 区域门 / `MouthCore` 切片权重，喂新控制器；逐行见 `docs/PARAMETER_HO.md` §3.7）+ **3 行风格化内部行 `Ho/Style/*`**（规则二的基准行 + 倒V 的「写自己」+ 它那条「关其他」**同名**行 —— 走输出表缓存，**不写控制器**，见 `docs/VTS_HQ_CONTROLLER.md` §5.6）。公式机械取自本机 VBridger，见下 |
+| `ho-iPhoneVTS.hoface.json` | **正式中间层**（这一层现在只有它）：**71 条输入行**（67 条设备线 + 4 条**外部开关** `HoAutoInvertedV` / `HoExternalInvertedV` / `HoAutoCheek` / `HoExternalCheek`，Warudo 在 VTS 接收器之后 append）+ **134 行输出** = **90 条出口**（原始 ARKit 52 + 官方 VTS 20 + VB 自造 5 + 姿态向量 12 + `FaceFound`，2026-09-27 之前只有这 90 行）+ **39 行控制器轴 `Ho/Drive/*`**（轴 / 区域门 / `MouthCore` 切片权重，喂新控制器；逐行见 `docs/PARAMETER_HO.md` §3.7）+ **5 行风格化内部行 `Ho/Style/*`**（规则二的基准行 + **两个形态**各自的「写自己」与「关其他」**同名**行：倒V、鼓嘴 —— 走输出表缓存，**不写控制器**，见 `docs/VTS_HQ_CONTROLLER.md` §5.6）。公式机械取自本机 VBridger，见下 |
 | `ho-debug-iphoneVTS.hoface.json` | **iPhone 上的 VTS** 的**纯直通参考**：67 输入 / 67 输出，零改名、零曲线 |
 | `ho-debug-androidVTS.hoface.json` | **安卓手机上的 VTS** 的**纯直通参考**：65 输入 / 65 输出，同上 |
 
