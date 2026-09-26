@@ -563,6 +563,8 @@ HoFaceOutput output = ActiveRows()[index];
 
             bool bad = IsBrokenRow(output);
             bool constant = IsConstantRow(output);
+            // 曲线被人动过（死区 / 增益 / 分段）⇒ 整行点亮，扫描 129 行时一眼找得出来。
+            bool shaped = !bad && !constant && IsCurveShaped(output.curve);
             string name = string.IsNullOrEmpty(output.parameter) ? "(未命名)" : output.parameter;
 
             // ⚠️ 横向滚动条的**真正来源**就在这一行。
@@ -591,7 +593,7 @@ HoFaceOutput output = ActiveRows()[index];
                 bool isSelected = index == selected;
 
                 EditorGUI.DrawRect(row, isSelected ? SelectedRowTint : RowTint);
-                DrawRowCurveBackground(content, output, bad, constant, isSelected, accent);
+                DrawRowCurveBackground(content, output, bad, constant, shaped, isSelected, accent);
             }
 
             // 角标占掉右上角（名字与表达式都让开它，免得压字）。
@@ -737,14 +739,20 @@ ActiveRows().RemoveAt(index);
         ///  平白多了一整套缓存、销毁、泄漏要考虑，见 git 历史。）
         /// </summary>
         /// <param name="area">已经让开右侧按钮区的可用矩形（调用方算好）。</param>
-        private void DrawRowCurveBackground(Rect area, HoFaceOutput output, bool bad, bool constant, bool selected, Color accent)
+        /// <param name="shaped">
+        /// 这条曲线**被人动过**（形状不是 `v = t`）：整行换成提醒色、线也画亮 —— 见 {@link IsCurveShaped}。
+        /// 为什么连底色一起换：扫这 129 行时要找的是"哪些行的曲线是手调的"，
+        /// 这比"这一行属于原始量还是合成量"更值得第一眼看到（后者还能从名字与表达式读出来）。
+        /// </param>
+        private void DrawRowCurveBackground(Rect area, HoFaceOutput output, bool bad, bool constant, bool shaped, bool selected, Color accent)
         {
             if (area.width < 16.0f || area.height < 8.0f) return;
 
             // 极淡的底色：给"这一行属于哪一堆"一个氛围，不影响读字。
             // 选中的那行多压一点，让"整行可点"在视觉上说得通。
-            Color tint = accent;
-            tint.a = bad ? 0.18f : (constant ? 0.12f : (selected ? 0.14f : 0.08f));
+            // 曲线改过的行整行换提醒色（一层很淡的琥珀），扫一眼就知道"这几行是手调的"。
+            Color tint = shaped ? HoConstraintEditorTheme.WarningColor : accent;
+            tint.a = shaped ? 0.10f : (bad ? 0.18f : (constant ? 0.12f : (selected ? 0.14f : 0.08f)));
             EditorGUI.DrawRect(area, tint);
 
             // **常量行不画曲线**：它的值不走曲线（空表达式 ⇒ 取 defaultValue），画出来只会误导。
@@ -784,12 +792,34 @@ ActiveRows().RemoveAt(index);
             }
 
             // 曲线是**背景**，所以墨色要淡到不跟文字抢；选中的那行略亮一点。
-            Color line = accent;
-            line.a = bad ? 0.55f : (selected ? 0.45f : 0.30f);
+            // ⚠️ 例外：**改过的曲线要画亮**（曲线本来就只有 3 条是手调的，亮出来不会吵）——
+            //    用提醒色、线加粗，这样"这一行的曲线有形状"在一屏里读得出来。
+            Color line = shaped ? HoConstraintEditorTheme.WarningColor : accent;
+            line.a = shaped ? 0.90f : (bad ? 0.55f : (selected ? 0.45f : 0.30f));
             Color previous = Handles.color;
             Handles.color = line;
-            Handles.DrawAAPolyLine(1.5f, points);
+            Handles.DrawAAPolyLine(shaped ? 2.0f : 1.5f, points);
             Handles.color = previous;
+        }
+
+        /// <summary>
+        /// **这条曲线"改过"没有** —— 判据是**形状**，不是范围：只要有关键点**不落在 `v = t` 这条直线上**，
+        /// 就算被人为整形过（死区 / 增益 / 分段 / 换标度都算）。
+        ///
+        /// 为什么不看"关键点数 &gt; 2"：`FaceAngle` 那种是 3 个点但全在直线上（只是范围 ±30），
+        /// 画出来跟默认的 45° 线一模一样，标成"改过"只会误导。
+        /// 同理**只改范围**（`±1 → ±2`）也不算：形状没变、一眼看不出来，也就不该亮。
+        /// 反过来，"死区曲线"（某一段压成平台）恰恰会破坏 `v = t`，所以一定能亮。
+        /// </summary>
+        private static bool IsCurveShaped(AnimationCurve curve)
+        {
+            if (curve == null) return false;
+            Keyframe[] keys = curve.keys;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (Mathf.Abs(keys[i].value - keys[i].time) > 1e-4f) return true;
+            }
+            return false;
         }
 
         /// <summary>行颜色：**原始量绿**（没被动过的源）、**合成量蓝**，选自主题强调色。</summary>
@@ -1039,7 +1069,14 @@ HoFaceOutput output = ActiveRows()[index];
                 HoConstraintEditorControls.Label("", HoConstraintEditorTheme.LabelWidth);
                 Rect strip = HoConstraintEditorControls.NextFlexible(80.0f);
                 string summary = CurveSummary(output.curve);
-                EditorGUI.LabelField(strip, summary, HoConstraintEditorTheme.Caption);
+                // 曲线改过的行：这里的读数也点亮（跟左边那一行的琥珀色对上）。
+                var summaryStyle = new GUIStyle(HoConstraintEditorTheme.Caption);
+                if (IsCurveShaped(output.curve))
+                {
+                    summaryStyle.normal.textColor = HoConstraintEditorTheme.WarningColor;
+                }
+
+                EditorGUI.LabelField(strip, summary, summaryStyle);
                 if (Event.current.type == EventType.Repaint && !string.IsNullOrEmpty(summary))
                 {
                     EditorGUI.DrawRect(new Rect(strip.x, strip.yMax - 1.0f, strip.width, 1.0f), HoConstraintEditorTheme.SeparatorColor);
