@@ -147,6 +147,11 @@
   Ho/Style/MouthGate = out("Ho/Style/MouthGate") * (1 - clamp(out("Ho/Style/InvertedV"), 0, 1))
                         ↑ 读的是**上一条同名行**（基准）                    ↑ 本形态
 （加鼓嘴：照抄最后那一行、把形态名换成 Ho/Style/Cheek —— **已有的行一个字都不用改**）
+（✅ **2026-09-28 加了第三个风格轴**：`Ho/Style/CatMouth = 判定 × HoAutoCatMouth + HoExternalCatMouth`
+ —— 跟倒V 那行**同形**；但它是**变体**，**不写 MouthGate**（没有"关其他"）：倒V / 鼓嘴是关掉整块
+ "张嘴 × 笑"，猫嘴是在那块**内部**换整张嘴 ⇒ 它只发一条契约行
+ `Ho/Drive/Style/CatMouth = out("Ho/Style/CatMouth")` 去喂控制器里的变体开关。）
+
 （✅ **2026-09-27 已加**：控制器那侧的**契约行** `Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`
 与 `Ho/Drive/Style/InvertedV = out("Ho/Style/InvertedV")` 都已落地 —— 前者压在 `MouthRegion` 的三个
 "张嘴 × 笑"孩子上当权重，后者喂倒V 那棵 1D 子树。见[控制器 §5.6](VTS_HQ_CONTROLLER.md)）

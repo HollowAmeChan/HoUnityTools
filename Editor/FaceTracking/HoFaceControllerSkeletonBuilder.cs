@@ -57,7 +57,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
             // 卷唇（2026-09-27）：上下两根线**一起增减** ⇒ 中间层平均成一根 `Mouth/Roll`，表也跟着变成 1D。
-            "Ho/Drive/Mouth/Roll",
+            "Ho/Drive/Style/CatMouth",
             "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
             "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
             // 注视（2026-09-27）：**两棵树删了**（朝向交给 Warudo 的 LookAt + IK），这 4 根轴照旧发布当出口
@@ -243,7 +243,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// **`Mouth/Roll` 的两个阈值：0.15 / 0.30**（2026-09-28 实测重定，A 批 24 段 + B 批 12 段）。
-        /// 这根轴的判据那一次也一起换了（见 profile 里 `Ho/Drive/Mouth/Roll` 那一行）：
+        /// 这根轴的判据那一次也一起换了（见 profile 里 `Ho/Drive/Style/CatMouth` 那一行）：
         /// `下唇卷 × clamp((嘴角方向 − 0.12)/0.10, 0, 1)`，所以**读数的量纲也变了** ——
         /// 猫嘴三段实测 **0.434~0.460**（全过满档），最坏的非目标（常态笑：嘴角门开着但下唇几乎不卷）
         /// **0.075**（离起点还有 2 倍）⇒ `0.15` 是起点、`0.30` 是满档。
@@ -288,7 +288,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         // ⚠️ **2026-09-28 砍过 3 格又撤回了 —— 变体表与主版一样保持 8 格**（用户定）。
         //    当时看图觉得"猫嘴开着时 `Open` 顶行（0.6 / 0.75）与『中性形 + 张嘴』到不了"
-        //    （`X0Y1` / `X0Y2` / `X2Y2`），但**常开**（直接写 `Ho/Drive/Mouth/Roll` ≥ 0.30，见
+        //    （`X0Y1` / `X0Y2` / `X2Y2`），但**常开**（直接写 `Ho/Drive/Style/CatMouth` ≥ 0.30，见
         //    `docs/VTS_HQ_CONTROLLER.md` §2.2）会把嘴钉在猫嘴版上 —— 那时任意 Form × Open 都会被采到，
         //    少一格就是"没烘的那几根键回默认、嘴塌"（WD 开）。用户原话：
         //    「还是要留着，因为如果用户加了常开，那些范围还是会采到的」。
@@ -300,7 +300,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly VariantSwitchSpec[] VariantSwitches =
         {
-            new VariantSwitchSpec { Name = "MouthCoreRollSwitch", Main = "MouthCore", Variant = "MouthCoreRoll", Parameter = "Ho/Drive/Mouth/Roll", Thresholds = RollTicks }
+            new VariantSwitchSpec { Name = "MouthCoreRollSwitch", Main = "MouthCore", Variant = "MouthCoreRoll", Parameter = "Ho/Drive/Style/CatMouth", Thresholds = RollTicks }
         };
 
         /// <summary>

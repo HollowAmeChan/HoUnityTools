@@ -92,8 +92,9 @@
 
 ⚠️ **嘴没有副本**（2026-09-27 用户定，已删 `MouthCoreExpr` + `MouthCoreSwitch`）：
 「按键表情版本身对于嘴张嘴笑没有意义」—— 夸张的笑嘴 = `Form` 更大，轴上本来就够得到；
-**只有轴上到不了的"性质"才值得开副本**（笑眼、怒眉）。要"按键强制某个嘴型"，就直接写对应的轴值
-（例：猫嘴 = 写 `Ho/Drive/Mouth/Roll` ≥ 0.30），不需要第二张表。
+**只有轴上到不了的"性质"才值得开副本**（笑眼、怒眉）。要"按键强制某个嘴型"，走**增量开关**而不要
+直接写轴（例：猫嘴 = 写 `HoExternalCatMouth` = 1 —— 跟倒V 的 `HoExternalInvertedV` 同形，
+见 §3.2 与[控制器 §5.7.19](VTS_HQ_CONTROLLER.md)），不需要第二张表。
 
 ### 3.1 轴驱动的变体（**另一类**：不是按键表情）
 
@@ -102,8 +103,8 @@
 
 | 东西 | 名字 | 例 |
 | --- | --- | --- |
-| 变体树 | `<树名><驱动它的轴段词>` | `MouthCoreRoll`（由 `Roll` 轴选中的 `MouthCore` 变体 = 猫嘴版整嘴） |
-| 1D 开关容器 | `<变体树名>Switch`，`blendParameter` = 那根轴 | `MouthCoreRollSwitch`（blend = `Ho/Drive/Mouth/Roll`，阈值 0.15 / 0.30） |
+| 变体树 | `<树名><驱动它的轴段词>` | `MouthCoreRoll`（由**风格轴** `Ho/Drive/Style/CatMouth` 选中的 `MouthCore` 变体 = 猫嘴版整嘴）。⚠️ 树名里的 `Roll` 是**旧轴名**留下的；改它要连带动 8 个槽位名与槽位 GUID，所以 2026-09-28 只改了轴名 |
+| 1D 开关容器 | `<变体树名>Switch`，`blendParameter` = 那根轴 | `MouthCoreRollSwitch`（blend = `Ho/Drive/Style/CatMouth`，阈值 0.15 / 0.30） |
 
 ⚠️ **变体 vs 副本**：机制一样（1D + 两张整表），区别在**谁选**——副本由**按键表情门**选（0/1），
 变体由**某根轴**选（实测档位）。名字上用 `Expr` / `<轴段词>` 区分，一眼能看出是哪一类。
@@ -207,7 +208,8 @@
   + `LidL`/`LidR`（**名字恰好合规**）+ `EyeRegion`/`LipRegion`（区域名待换成 `EyeLeftRegion`/`MouthRegion`），
   叶子参数是**裸 ARKit 名**（`jawOpen`、`eyeBlinkLeft`…）。新控制器按本文重建，老的那份不动。
 * **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）
-  —— **41 行 `Ho/Drive/*` 已经加进 profile 了**（31 根轴 + 4 个区域门 + 4 条切片 + **2 条形态契约行**；逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+  —— **41 行 `Ho/Drive/*` 已经加进 profile 了**（30 根轴 + 4 个区域门 + 4 条切片 + **3 条形态契约行**（`Gate/MouthStyle`、`Style/InvertedV`、`Style/CatMouth`）；逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+
   [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3），出口那 90 行按原样保留。
 
 ## 9. 已经用这套名字落地的树（对照 §2 的 42 家族）
