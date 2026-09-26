@@ -23,7 +23,7 @@
 | 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（43 参数 / 31 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
 | 2 | **参数表 43 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、31 根轴 = `0`、4 条切片权重 = `0` |
 | 3 | **树形 31 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 20 张表（15 主版 = 14 张 2D + **1 张 1D**，加 5 张副本）+ 5 棵 1D 开关树 |
-| 4 | **槽位 114 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `0/+0.75/+1`、`Roll` 的 = `0/.5/1`，负侧交给别的表；**右上角 `X2Y2` 单独挪到 0.6**） |
+| 4 | **槽位 114 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `0/+0.75/+1`、**`Roll` 的 = `0/.18/.45`**，负侧交给别的表；**右上角 `X2Y2` 单独挪到 0.6**） |
 | 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = 打包暂存副本（`.research/pkgcopy`）；**67 输入 / 130 输出**（90 出口 + 40 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
 | 6 | **轴的修饰符** | 🟡 **31 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
@@ -55,7 +55,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 │   ├─ MouthCoreSwitch          Simple1D  blendParameter = Ho/Drive/Gate/Expr/Smile   （0 → 主版，1 → 副本）
 │   │   ├─ MouthCore            FreeformCartesian2D  **8 格**（静息/常态笑/大笑 × 闭/半开/张满，顶行中间挖掉、右上角挪到 0.6）
 │   │   └─ MouthCoreExpr        FreeformCartesian2D  8 格（同主版）
-│   ├─ MouthLipRoll             **Simple1D 3 格**（卷唇量：不卷 / 内卷 / 咬唇）
+│   ├─ MouthLipRoll             **Simple1D 3 格**（牙齿咬+内卷嘴的程度：不卷 / 只卷嘴=猫嘴 / 咬唇最强）
 │   ├─ MouthJaw                 FreeformCartesian2D  3 格
 │   ├─ MouthWidth               FreeformCartesian2D  9 格
 │   ├─ MouthCorner              FreeformCartesian2D  9 格   （嘴角残差表：中间那格 = 零修正）
@@ -79,7 +79,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `MouthCore` | `Mouth/Form`（读作**净笑量**）0 静息 · **+0.75 常态笑** · **+1 大笑**（**只管正值**） | `Mouth/Open` 0 闭 · 0.4 半开 · 0.75 张满（**只管正值**）；⚠️ **大笑那格挪到 0.6** | **8** | 外嘴基础：**唇的轮廓与口孔**，只回答「**笑到什么程度 × 张多大**」；⚠️ 顶行中间那格不要（嘴张到最大时半笑/全笑分辨不出来）；⚠️ `X2Y2`（大笑×张满）摆 **0.6** —— 实测大笑张嘴时嘴会收缩 | 只写唇/口孔，**不写下颌与下巴**；负侧三族全在别的表 | `MouthCore__Form__Open__A3X<i>Y<j>` |
 | `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 8 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` |
 | `MouthJaw` | `Mouth/Jaw` 0 · 0.5 · 1 | `Mouth/Forward` 只有 0（Y 只用 `Y0`） | 3 | 下颌/口内：**下颌骨与下巴**随开度 | 只写颌/下巴；不前伸 | `MouthJaw__Jaw__Forward__A3X<i>Y0` |
-| **`MouthLipRoll`** | `Mouth/Roll` **0 不卷 · 0.5 内卷（不咬）· 1 咬唇** | —（**1D 表，没有 Y 轴**） | **3** | **卷唇 / 咬唇量**：这一个数就说完了"嘴唇往里卷了多少" | 只写**卷唇那几根键** | `MouthLipRoll__Roll__A3X<i>` |
+| **`MouthLipRoll`** | `Mouth/Roll` **0 不卷 · 0.18 只卷嘴（不咬，= 猫嘴）· 0.45 咬唇最强** | —（**1D 表，没有 Y 轴**） | **3** | **"牙齿咬 + 嘴唇内卷"的程度**：这一个数就说完了（**不分上下唇**）；三档按实测收圈 —— 最强咬唇只到 0.45、光卷嘴 ≈0.18 | 只写**卷唇那几根键** | `MouthLipRoll__Roll__A3X<i>` |
 | `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差） | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
 | `MouthCorner` | `Mouth/CornerL` −1 左嘴角苦 · 0 · +1 左嘴角笑 | `Mouth/CornerR` 同上（右） | 9 | **左右嘴角残差**（不对称：左笑右苦也能表达）；中间那格 = **零修正** | 只写**嘴角**那几根键；唇的轮廓归 `MouthCore` | `MouthCorner__CornerL__CornerR__A3X<i>Y<j>` |
 | `MouthTongue` | `Mouth/TongueL` 0 / 1 | `Mouth/TongueR` 0 / 1 | 4 | 舌（分左右）：舌头两组键 | 舌相关键 | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` |
@@ -102,8 +102,19 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
   但刻度一旦改成非等距（像 `Mouth/Open` 的 0/0.4/0.75）就会**静默错位** —— 生成器与 Unity 端两边都写死。
 * ⚠️ **`MouthLipRoll` 是 1D**（2026-09-27 用户实测定）：原来拿 `mouthRollUpper` / `mouthRollLower` 两张 2D 轴，
   实测**两根线一起增减**（"横向纵向都在表达同一件事"）⇒ 第二维是死的。中间层把两根线平均成一根 `Mouth/Roll`，
-  表跟着收成 1D、三档正好是三个真实状态（0 不卷 / 0.5 内卷不咬 / 1 咬唇）。
-  和 `Form`/`Open` 那次是**同一个病**：一维格子摆成二维，多出来的那一维只贡献退化。
+  表跟着收成 1D。
+  **语义：一根轴 = "牙齿咬住 + 嘴唇内卷的程度"**（用户原话："根本就不需要跟 ARKit 那样分上下"）——
+  三档就是三个真实状态，而且**刻度按实测收过圈**（老刻度 `0.5 / 1` 够不着）：
+
+  | 档 | 轴值（实测） | 是什么 | 备注 |
+  | --- | --- | --- | --- |
+  | `X0` | **0** | 不卷 | 静息 |
+  | `X1` | **≈ 0.18** | **只卷嘴、不咬** | ⭐ **二次元的"猫嘴"就是这一档**（嘴唇内翻、牙齿不动） |
+  | `X2` | **0.45** | **牙齿咬住、内卷到最强** | 实测的**上限**：高于 0.45 一律钳到这一档 = 正确饱和 |
+
+  ⚠️ 这三档**不是等距的** ⇒ 1D 表的阈值必须显式写死（`m_UseAutomaticThresholds: 0`），
+  否则 Unity 会把它们平摊成 0 / 0.5 / 1（静默错位）。和 `Form`/`Open` 那次是**同一个病**：
+  一维格子摆成二维、多出来的那一维只贡献退化。
   ⚠️ 削掉的是**控制器轴**（`Ho/Drive/Mouth/RollUp`/`RollDown` 两行不再存在）：`mouthRollUpper` / `mouthRollLower`
   仍是 profile 的**输入行**（也仍有老出口行 `MouthRollUpper`/`Lower`），下游 VTS 生态照旧拿得到这两根线。
 * **没摆的格不用补洞**：基础表没摆 = 复用同一份低维基础姿势；修正表没摆 = **零残差**。所以"最少起步"先摆中性格加两端就能开跑（契约 §F）。
@@ -243,7 +254,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌右；同上 | 待测 |
 | `Ho/Drive/Mouth/CornerL` | `clamp(mouthSmileLeft - mouthFrownLeft, -1, 1)` | 恒等 −1…1 | smooth 0.009 s | **左嘴角**：−1 苦（下弯）· 0 静息 · +1 笑（上翘）= 合同表 D 的 `HQSmileFrownLeft`；**与右侧完全独立** | 待测 |
 | `Ho/Drive/Mouth/CornerR` | `clamp(mouthSmileRight - mouthFrownRight, -1, 1)` | 恒等 −1…1 | smooth 0.009 s | 右嘴角；同上（`HQSmileFrownRight`） | 待测 |
-| `Ho/Drive/Mouth/Roll` | `(mouthRollUpper + mouthRollLower) / 2` | 恒等 0…1 | smooth 0.009 s | **卷唇量**（上下两根线的平均）= 合同表 D 的 `HQUpperLipRoll`/`HQLowerLipRoll` **合并成一根轴**；喂 `MouthLipRoll`（**1D 表**）。三档就是三个真实状态：**0 不卷 / 0.5 内卷（不咬，`Open` 掉到 −0.07）/ 1 咬唇（−0.14）**。⚠️ 两根线本身没被删：`mouthRollUpper`/`mouthRollLower` 仍是 profile 的输入行与出口行，只是**控制器轴**不再各占一维 | 待测 |
+| `Ho/Drive/Mouth/Roll` | `(mouthRollUpper + mouthRollLower) / 2` | 恒等 0…1 | smooth 0.009 s | **"牙齿咬 + 嘴唇内卷"的程度**（上下两根线的平均，**不分上下唇**）= 合同表 D 的 `HQUpperLipRoll`/`HQLowerLipRoll` **合并成一根轴**；喂 `MouthLipRoll`（**1D 表**）。三档按实测收圈：**0 不卷 / 0.18 只卷嘴（不咬，= 二次元猫嘴）/ 0.45 咬唇最强**。⚠️ 两根线本身没被删：`mouthRollUpper`/`mouthRollLower` 仍是 profile 的输入行与出口行，只是**控制器轴**不再各占一维 | **0 … 0.45**（0.18 = 只卷嘴 / 0.45 = 咬唇上限） |
 
 > ⚠️ **中间层必须保留"能算出负值"的项**（2026-09-27 用户定 —— 别把它们当成冗余清理掉）：
 > `−mouthClose`（闭唇）、`−0.2×(mouthRollUpper+mouthRollLower)`（卷唇）、`−pucker`、`−mouthFrown*` 这些**负项就是"正值的抑制量"**。
@@ -442,12 +453,12 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 
 按依赖顺序（✅ = 已完成；后面标了谁做）：
 
-1. 🟡 **实机测 31 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`（+0.4 半张 / +0.75 张满 / **大笑张嘴 ≈0.6** / **−0.07 不咬唇内卷 / −0.14 咬唇**）、`Mouth/Form`（+0.75 常态笑、+1 大笑、−0.4 卷唇咬唇、−0.5…−0.7 噘嘴/苦脸）、`Mouth/Roll`（两根线一起增减 ⇒ 收成 1D，三档 0/.5/1）；其余 28 根仍是「待测」。
+1. 🟡 **实机测 31 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`（+0.4 半张 / +0.75 张满 / **大笑张嘴 ≈0.6** / **−0.07 不咬唇内卷 / −0.14 咬唇**）、`Mouth/Form`（+0.75 常态笑、+1 大笑、−0.4 卷唇咬唇、−0.5…−0.7 噘嘴/苦脸）、`Mouth/Roll`（两根线一起增减 ⇒ 收成 1D；**只卷嘴 ≈0.18 / 咬唇最强 0.45** ⇒ 刻度收成 `0/.18/.45`）；其余 28 根仍是「待测」。
 2. 🟡 **按实测结果给 40 行加修饰符 / 修曲线**（§3.2 / §3.3）—— *你定数值*。已完成 / 待定：
    · ✅ `Mouth/Open`：**死区曲线已加**（`|v| ≤ 0.03 → 0`、`0.03…0.06` 斜坡、之外恒等）+ **树里刻度收成 `0/.4/.75`，右上角再单独挪到 0.6**（两个生成器都改了；`check-controller.ps1` 现在核对刻度、并把那个被挪的坐标钉死）。
    · ✅ **31 根轴的 `smooth` 已铺第一版**（照 VB 同族口径：眼/注视/眨眼 0.007、嘴 0.007–0.010、眉 0.015/0.018、颊鼻 0.009/0.010）—— **等你实机试手感**，尤其看三处：眨眼会不会糊（0.007 已经是最小档）、眼球跟不跟手、`Cheek/*` 够不够快。
    · ✅ **`Mouth/Form` 的语义已定 = 选项 C**：加了 `MouthCorner`（嘴角残差表）+ 两根轴 `Mouth/CornerL/R`，嘴角的夸张与不对称归它，噘嘴归 `MouthWidth`，`Form` 的表达式与出口行都不动（§3.4）。
-   · ✅ **`MouthLipRoll` 从 2D 收成 1D**（2026-09-27 用户实测定）：上下两根卷唇线一起增减 ⇒ 中间层平均成一根 `Mouth/Roll`，表 = 3 格 1D（0 不卷 / 0.5 内卷 / 1 咬唇）。文本生成器与 Unity 生成器两边同步改完。
+   · ✅ **`MouthLipRoll` 从 2D 收成 1D，刻度再按实测收成 `0/.18/.45`**（2026-09-27 用户实测定）：上下两根卷唇线一起增减 ⇒ 中间层平均成一根 `Mouth/Roll`；语义是"牙齿咬 + 内卷嘴的程度"（**不分上下唇**），三档 = 不卷 / 只卷嘴（**二次元猫嘴**）/ 咬唇最强（实测上限 0.45，够不到 1）。文本生成器与 Unity 生成器两边同步改完。
 3. **姿势烘焙工具**（*我做*）：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）写进**已经建好的那份槽位片段**
    （`Animations/<槽位名>.anim`，§2.2 就是清单）。现有 `HoBlendShapeClipBuilder` 只能一键一片段、值恒 100，
    填不了采样点。**排在动画前面。**

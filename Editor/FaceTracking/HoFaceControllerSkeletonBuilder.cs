@@ -156,18 +156,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         };
 
         /// <summary>
-        /// **`Mouth/Roll` 专用刻度：0 / 0.5 / 1**（2026-09-27 用户实测定）。
-        /// 三档正好是三个真实状态：**0 = 不卷 / 0.5 = 内卷（不咬）/ 1 = 咬唇**。
+        /// **`Mouth/Roll` 专用刻度：0 / 0.18 / 0.45**（2026-09-27 用户实测定）。
+        /// 三档正好是三个真实状态：**0 = 不卷 / 0.18 = 只卷嘴（不咬，二次元的"猫嘴"用这一档）/
+        /// 0.45 = 牙齿咬住内卷到最强**。
+        /// ⚠️ 这根轴**到不了 1**：实测最强咬唇只有 0.45 ⇒ 老刻度 `0.5 / 1` 有两档永远够不着
+        /// （和 `Mouth/Open` 那次同一个病）。高于 0.45 一律钳到"咬唇"那一档 = 正确饱和，不是丢信息。
         /// ⚠️ 和 2D 表不同，1D 表的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：
-        /// 自动模式会忽略我们写的值、在 `[0,1]` 上把三档平摊成 0 / 0.5 / 1 —— 这次刚好一样，
-        /// 但刻度一旦改成非等距（像 `Mouth/Open` 的 0 / 0.4 / 0.75）就会静默错位。
+        /// 自动模式会忽略我们写的值、在 `[0,1]` 上把三档平摊成 0 / 0.5 / 1 —— 这次数值不是等距的，
+        /// 靠自动模式会**静默错位**。
         /// </summary>
-        private static readonly float[] RollTicks = { 0f, 0.5f, 1f };
+        private static readonly float[] RollTicks = { 0f, 0.18f, 0.45f };
 
         /// <summary>
         /// 1D 表（一根轴）：卷唇/咬唇自己的表（契约里预留的 `MouthLipRoll`）。
         /// 从 2D 收成 1D 的原因：`mouthRollUpper` 与 `mouthRollLower` **一起增减**，
         /// 第二维是死的（和 `Form`/`Open` 那次同一个病）⇒ 中间层把两根线平均成一根轴 `Mouth/Roll`。
+        /// 语义 = **"牙齿咬 + 嘴唇内卷的程度"一根轴**（不分上下唇）。
         /// </summary>
         private static readonly Simple1DSpec[] Simple1DTables =
         {

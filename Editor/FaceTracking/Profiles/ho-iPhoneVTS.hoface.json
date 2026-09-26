@@ -2937,7 +2937,7 @@
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- contract HQ*LipRoll collapsed to ONE axis (the two lines move together in practice, so a 2D table wastes a dimension). 1D thresholds: 0 = no roll, 0.5 = tucked, 1 = biting"
+                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- contract HQ*LipRoll collapsed to ONE axis (upper and lower lines move together on this device, so a 2D table wastes a dimension); it means ONE thing: how hard the teeth bite down while the lips tuck in (upper/lower split is not needed). MEASURED 2026-09-27: lips tucked without teeth ~= 0.18 (this is the anime cat-mouth pose), strongest teeth-bite = 0.45 -- the axis never reaches 1, so the 1D table ticks are re-scaled to 0 / 0.18 / 0.45, and anything above 0.45 saturates on the bite pose"
                         },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",

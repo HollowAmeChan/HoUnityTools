@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 卷唇量（上下两根线**一起增减** ⇒ 2026-09-27 中间层平均成一根轴、表收成 1D） |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | **"牙齿咬 + 嘴唇内卷"的程度**（一根轴，**不分上下唇**）：上下两根线一起增减 ⇒ 2026-09-27 中间层平均成一根 `Mouth/Roll`、表收成 1D；刻度按实测 `0 不卷 / 0.18 只卷嘴（猫嘴）/ 0.45 咬唇最强` |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |
