@@ -1,4 +1,4 @@
-﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
+# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
@@ -214,7 +214,7 @@
 
 | 已落地 | 说明 |
 | --- | --- |
-| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**9 张 2D 表 + 2 张 1D 表 + 1 张变体表 + 4 张副本 + 5 个 1D 开关 + 4 个区域 + 根 = 控制器共 26 棵树 / 89 个槽位**（2026-09-27 那一轮：删 `MouthCoreExpr`/`MouthCoreSwitch`（嘴没有按键表情版）、删 `GazeL`/`GazeR`（朝向交给 Warudo 的 LookAt + IK）、删 `CheekSquint`/`CheekPuff`（二次元表现不了）、`NoseSneer` 收成 `NoseUp` 1D；加 `MouthCoreRoll`+开关、`MouthForward` 1D、`MouthJaw` 换轴） |
+| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**9 张 2D 表 + 2 张 1D 表 + 1 张变体表 + 4 张副本 + 5 个 1D 开关 + 4 个区域 + 根 = 控制器共 26 棵树 / 88 个槽位**（2026-09-27 那一轮：删 `MouthCoreExpr`/`MouthCoreSwitch`（嘴没有按键表情版）、删 `GazeL`/`GazeR`（朝向交给 Warudo 的 LookAt + IK）、删 `CheekSquint`/`CheekPuff`（二次元表现不了）、`NoseSneer` 收成 `NoseUp` 1D；加 `MouthCoreRoll`+开关、`MouthForward` 1D、`MouthJaw` 换轴） |
 | **`MouthCorner`**（2026-09-27 加） | 轴 = 本文 §2 那一行的 `CornerL` × `CornerR`（= 合同表 D 的 `HQSmileFrownLeft/Right`）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在 `MouthWidth`，`Form` 的表达式与出口行都不动。见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.4 |
 
 其余家族（`MouthSeal`、`MouthShrugSplit`、`MouthUpperRaise`、`MouthLowerDrop`、`LidGaze*`、`BrowCenter`、

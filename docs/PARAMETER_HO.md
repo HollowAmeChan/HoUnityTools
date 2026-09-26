@@ -1,4 +1,4 @@
-﻿# HO 参数规范（我们的中间层选什么）
+# HO 参数规范（我们的中间层选什么）
 
 > 这份是**我们自己的**目标词表的唯一权威表。跟 [参数标准表](PARAMETER_STANDARDS.md) 的分工：
 > 那份记**外部标准怎么定**（VTS / ARKit / VMC / VRM / VRCFT 各自的规定，逐条带官方 URL），
@@ -509,7 +509,7 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
 | `Ho/Drive/Mouth/Jaw` | `clamp(jawOpen - mouthClose, -1, 1)` | **−1 咬合/压 · 0 静息 · +1 张开** | 下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧 |
-| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1 | `HQJawForward` |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。**2026-09-27 实测**：静息 ≈0 / **噘嘴单独 ≈0.05**（串扰，用户已认）/ **噘嘴+前顶 = 0.14 = 满**（用户：「噘嘴的同时下巴前顶才是最大」）⇒ 喂 `MouthForward` 1D 表时刻度从 `0/0.5/1` **砍成 `0/0.12` 两档**。⚠️ 因为满档**需要噘嘴参与**，Roll 那种噘嘴门在这根轴上不能用 |
 | `Ho/Drive/Mouth/Pucker` | `((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker` | −1 … +1 | 双向 |
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | **+1 偏左** … −1 偏右 | 双向 |
 | `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |

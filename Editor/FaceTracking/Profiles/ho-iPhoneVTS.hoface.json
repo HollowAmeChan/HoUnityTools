@@ -2847,7 +2847,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.01, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Forward (HQJawForward)"
+                        "notes":  "controller axis Mouth/Forward (HQJawForward). 2026-09-27 裸线口径实测（用户三次动作）：静息 ≈ 0（三次校准后静息里它不在动过的名单内）、噘嘴单独 ≈ 0.05、噘嘴 + 前顶 = 0.14 = 满（用户：噘嘴的同时下巴前顶才是最大）=> 满量程只有 0.13 上下，所以 MouthForward 那棵 1D 表的刻度砍成两档 0 / 0.12（原来照 0/0.5/1 铺的三档是没实测的占位）。⚠️ 口径 = 原样线性，用户已认噘嘴那 0.05 的串扰（噘嘴单独会顶出约 42% 的前顶姿势）；要减就是在这里减掉 mouthPucker 贡献的那一项（未做）。⚠️ 满档需要噘嘴参与 => Roll 那种噘嘴门在这根轴上不能用"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Pucker",

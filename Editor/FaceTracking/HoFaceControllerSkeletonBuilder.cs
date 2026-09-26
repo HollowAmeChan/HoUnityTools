@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -137,8 +137,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly float[] JawOpen = { 0f, 0.75f };
 
-        /// <summary>下巴前伸的三档（`jawForward` 0..1；待标定）。</summary>
-        private static readonly float[] ForwardTicks = { 0f, 0.5f, 1f };
+        /// <summary>
+        /// 下巴前伸的**两档：静置 / 满**（2026-09-27 用户定「前顶完全不需要三挡，一档就行」）。
+        /// 原来的 `0 / 0.5 / 1` 是没实测的占位，实测把量程打穿了：裸 `jawForward` 满量程只有 **0.13**
+        /// （两次读数 0.13 / 0.14）—— 静息 ≈0、**噘嘴单独 ≈0.05**（串扰）、**噘嘴+前顶 = 满**
+        /// （用户：「噘嘴的同时下巴前顶才是最大」）。满档摆 `0.12` 而不是踩在峰值上：照 `Roll` 的先例
+        /// 留余量，弱一天也能真的到 100%。⚠️ 噘嘴单独那 0.05 会顶出 ~42% 的前顶姿势，**用户已认**
+        /// （口径 = 原样线性）；要改就是中间层再减掉那 0.05。
+        /// </summary>
+        private static readonly float[] ForwardTicks = { 0f, 0.12f };
 
         /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
         private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
