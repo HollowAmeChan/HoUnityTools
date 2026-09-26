@@ -2894,6 +2894,36 @@
                                       ],
                         "notes":  "controller axis Mouth/TongueR (HQTongueRight): same as TongueL for now"
                     },
+                        {
+                            "parameter":  "Ho/Drive/Mouth/CornerL",
+                            "expression":  "clamp(mouthSmileLeft - mouthFrownLeft, -1, 1)",
+                            "defaultValue":  0,
+                            "curve":  {
+                                    "keys":  [
+                                                { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                    ]
+                            },
+                            "modifiers":  [
+                                    { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                            ],
+                            "notes":  "controller axis Mouth/CornerL = clamp(mouthSmileLeft - mouthFrownLeft) (contract HQSmileFrownLeft, -1 sad .. +1 smile); the MouthCorner table holds the left-corner residual, MouthCore keeps the lip contour"
+                        },
+                        {
+                            "parameter":  "Ho/Drive/Mouth/CornerR",
+                            "expression":  "clamp(mouthSmileRight - mouthFrownRight, -1, 1)",
+                            "defaultValue":  0,
+                            "curve":  {
+                                    "keys":  [
+                                                { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                    ]
+                            },
+                            "modifiers":  [
+                                    { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                            ],
+                            "notes":  "controller axis Mouth/CornerR = clamp(mouthSmileRight - mouthFrownRight) (contract HQSmileFrownRight, -1 sad .. +1 smile); the MouthCorner table holds the right-corner residual"
+                        },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
                         "expression":  "EyeLeft_x",

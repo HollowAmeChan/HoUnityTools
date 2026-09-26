@@ -33,12 +33,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static readonly string[] RegionGates = { "Mouth", "EyeLeft", "EyeRight", "Brow", "Cheek" };
 
-        /// <summary>轴参数（部位/轴 → 名字）：28 根，见设计稿 §7。</summary>
+        /// <summary>轴参数（部位/轴 → 名字）：30 根，见设计稿 §3.1。</summary>
         private static readonly string[] Axes =
         {
             "Ho/Drive/Mouth/Form", "Ho/Drive/Mouth/Open", "Ho/Drive/Mouth/Funnel", "Ho/Drive/Mouth/Press",
             "Ho/Drive/Mouth/Jaw", "Ho/Drive/Mouth/Forward", "Ho/Drive/Mouth/Pucker", "Ho/Drive/Mouth/X",
             "Ho/Drive/Mouth/TongueL", "Ho/Drive/Mouth/TongueR",
+            // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
+            "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
             "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
             "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
             "Ho/Drive/Gaze/Left/X", "Ho/Drive/Gaze/Left/Y", "Ho/Drive/Gaze/Right/X", "Ho/Drive/Gaze/Right/Y",
@@ -84,6 +86,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = Two, YValues = OpenMeasured },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
+            // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
+            new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/CornerL", Y = "Ho/Drive/Mouth/CornerR", XToken = "CornerL", YToken = "CornerR", XValues = Two, YValues = Two },
             new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
@@ -116,7 +120,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>区域 → 直接挂在它下面的子节点（表名或开关名）。</summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreSwitch,MouthJaw,MouthWidth,MouthTongue" },
+            { "MouthRegion", "Mouth", "MouthCoreSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
             { "EyeLeftRegion", "EyeLeft", "LidLSwitch,GazeL" },
             { "EyeRightRegion", "EyeRight", "LidRSwitch,GazeR" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },

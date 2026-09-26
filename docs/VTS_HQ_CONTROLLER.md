@@ -5,7 +5,7 @@
 | 节 | 回答什么 | 什么时候看 |
 | --- | --- | --- |
 | [§1 当前进度](#1-当前进度) | 什么已经落地、什么还是空的 | 想知道"能不能开跑" |
-| [§2 树与叶子](#2-现在的树每格叶子是什么语义) | 29 棵树长什么样、**每一格代表什么姿势** | **实机测灵敏度** |
+| [§2 树与叶子](#2-现在的树每格叶子是什么语义) | 30 棵树长什么样、**每一格代表什么姿势** | **实机测灵敏度** |
 | [§3 轴的口](#3-每根轴中间层输出行公式修饰符) | 每根轴由哪条中间层输出行喂、公式与曲线是什么、修饰符现状 | **调稳定性 / 调手感**、调中间层 |
 | [§4 下一步](#4-下一步) | 按依赖顺序还剩什么 | 接着干 |
 
@@ -20,18 +20,18 @@
 
 | # | 东西 | 状态 | 落在哪 / 判据 |
 | --- | --- | --- | --- |
-| 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（40 参数 / 29 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
-| 2 | **参数表 40 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、28 根轴 = `0`、4 条切片权重 = `0` |
-| 3 | **树形 29 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 18 张表（13 主版 + 5 副本）+ 5 棵 1D 副本树 |
-| 4 | **槽位 104 个** | ⬜ **全是空 Motion** | 100% 未摆姿势 ⇒ **造型一条都还看不到**；但**轴值现在就能测**（§2.4）。**刻度已按实测收过一次圈**：`MouthCore` 的 Y（`Open`）= `0 / 0.4 / 0.75`（2026-09-27，见 §2.2 与 §2.3.1） |
-| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 127 输出**（90 出口 + 37 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
-| 6 | **轴的修饰符** | 🟡 **28 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
+| 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（42 参数 / 30 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
+| 2 | **参数表 42 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、30 根轴 = `0`、4 条切片权重 = `0` |
+| 3 | **树形 30 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 19 张表（14 主版 + 5 副本）+ 5 棵 1D 副本树 |
+| 4 | **槽位 113 个** | ⬜ **全是空 Motion** | 100% 未摆姿势 ⇒ **造型一条都还看不到**；但**轴值现在就能测**（§2.4）。**刻度已按实测收过一次圈**：`MouthCore` 的 Y（`Open`）= `0 / 0.4 / 0.75`（2026-09-27，见 §2.2 与 §2.3.1） |
+| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 129 输出**（90 出口 + 39 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
+| 6 | **轴的修饰符** | 🟡 **30 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
 | 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
 | 9 | **1D 树的孩子是子树** | ✅ **已实测**（2026-09-27） | 1D 的孩子是子树时**线性交叉淡入**；**四层嵌套（Direct → Direct → 1D → 2D）照旧**。数字见 §2.3.1 / [能力边界](BLEND_TREE_LIMITS.md) §10 —— 兜底形状不需要了 |
 | 10 | **姿势烘焙工具** | ⬜ 没有 | 现有「形态键动画」工具（`HoBlendShapeClipBuilder.cs`）出的是"一键一片段、值恒 100"，**填不了 2D 采样点** |
 | 11 | **表情门来源** | ⬜ 未定 | 手机协议 `Hotkey` 实测恒 −1（两台设备）；候选 = VTS API 适配器 / 本地按键（面板覆盖或 Warudo 键盘节点）/ VB 输出成线 |
-| 12 | **Warudo 侧** | ⬜ bundle 还是 09-25 那份 | `hoface-controller-test.bundle` 里**不含**这 40 个口 ⇒ Warudo 侧现在拿不到轴；profile 沙箱那份已经是最新 |
+| 12 | **Warudo 侧** | ⬜ bundle 还是 09-25 那份 | `hoface-controller-test.bundle` 里**不含**这 42 个口 ⇒ Warudo 侧现在拿不到轴；profile 沙箱那份已经是最新 |
 | 13 | **调试观察面** | ✅ | 面板「参数输出」每行四个覆盖按钮（不覆盖 / −1 / 0 / 1）+ 「清空覆盖（N）」；「预览混合树」把影子台显示到 Hierarchy |
 
 **改形状 / 核对的入口**（改设计时走这里，**别手改资产**）：
@@ -47,7 +47,7 @@
 
 ## 2. 现在的树：每格叶子是什么语义
 
-### 2.1 结构（29 棵 = 1 根 + 5 区域 + 18 表 + 5 个 1D 开关）
+### 2.1 结构（30 棵 = 1 根 + 5 区域 + 19 表 + 5 个 1D 开关）
 
 ```text
 Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}
@@ -57,6 +57,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 │   │   └─ MouthCoreExpr        FreeformCartesian2D  9 格
 │   ├─ MouthJaw                 FreeformCartesian2D  3 格
 │   ├─ MouthWidth               FreeformCartesian2D  9 格
+│   ├─ MouthCorner              FreeformCartesian2D  9 格   （嘴角残差表：中间那格 = 零修正）
 │   └─ MouthTongue              FreeformCartesian2D  4 格
 ├─ EyeLeftRegion                Direct   → LidLSwitch（LidL / LidLExpr 6+6）+ GazeL（9）
 ├─ EyeRightRegion               Direct   → LidRSwitch（LidR / LidRExpr 6+6）+ GazeR（9）
@@ -78,6 +79,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 9 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A3X<i>Y<j>` |
 | `MouthJaw` | `Mouth/Jaw` 0 · 0.5 · 1 | `Mouth/Forward` 只有 0（Y 只用 `Y0`） | 3 | 下颌/口内：**下颌骨与下巴**随开度 | 只写颌/下巴；不前伸 | `MouthJaw__Jaw__Forward__A3X<i>Y0` |
 | `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差） | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
+| `MouthCorner` | `Mouth/CornerL` −1 左嘴角苦 · 0 · +1 左嘴角笑 | `Mouth/CornerR` 同上（右） | 9 | **左右嘴角残差**（不对称：左笑右苦也能表达）；中间那格 = **零修正** | 只写**嘴角**那几根键；唇的轮廓归 `MouthCore` | `MouthCorner__CornerL__CornerR__A3X<i>Y<j>` |
 | `MouthTongue` | `Mouth/TongueL` 0 / 1 | `Mouth/TongueR` 0 / 1 | 4 | 舌（分左右）：舌头两组键 | 舌相关键 | `MouthTongue__TongueL__TongueR__A2X<i>Y<j>` |
 | `LidL` | `Lid/Left/BlinkWide` −1 睁大 · 0 中性 · +1 闭 | `Lid/Left/Squint` 0 不眯 · 1 眯满 | 6 | 左眼睑完整姿势（闭/睁大 × 眯） | 左眼睑相关键 | `LidL__BlinkWide__Squint__A3X<i>Y<j>` |
 | `LidLExpr` | 同 `LidL` | 同 `LidL` | 6 | 笑眼版（`Gate/Expr/Smile`） | 同上 | `LidLExpr__BlinkWide__Squint__A3X<i>Y<j>` |
@@ -99,7 +101,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ### 2.3 灵敏度现在能测到什么程度
 
 * **能测**：每根轴**实际会走到多少**（手机做动作 / 说话 → 看轴值）。这是"曲线与修饰符该怎么调"的唯一依据。
-* **不能测**：造型好不好看 —— 104 格全是空 Motion，插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
+* **不能测**：造型好不好看 —— 113 格全是空 Motion，插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
 
 #### 2.3.1 轴超出槽位范围会怎样（**2026-09-27 实测**）
 
@@ -155,10 +157,10 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 > **死区那一件事只有曲线能做精确**：树里"两行同姿势"的平台也会被远处的孩子按距离权重掺进来，不是平的。
 
-### 2.4 怎么测（一次把 28 根轴测完）
+### 2.4 怎么测（一次把 30 根轴测完）
 
 1. 面板「对象」段：控制器 = `PTP_CTR_Face_VTS`、配置文件 = `ho-iPhoneVTS.hoface.json`、调试对象 = 角色 → 连接 → 开始驱动（或「自动驱动」默认开，按 Play 即跑）。
-2. 打开「预览混合树」（默认开）→ Hierarchy 里选中 `Ho Face Shadow` → **Animator 窗口的 Parameters**：这 40 个口就是控制器真实看到的值，逐根看范围最直接。
+2. 打开「预览混合树」（默认开）→ Hierarchy 里选中 `Ho Face Shadow` → **Animator 窗口的 Parameters**：这 42 个口就是控制器真实看到的值，逐根看范围最直接。
    （另一条路：面板「参数输出」栏 —— 那里是中间层写出去的值，同一份；每行右边的覆盖按钮可以**把某根轴钉成 −1 / 0 / 1** 手动试。）
 3. 做动作并记**实际到达的极值**：例如"说一句话，`Mouth/Open` 只到 0.35"、"闭嘴时 `Lid/Left/BlinkWide` 到 0.8 不到 1"、"`Cheek/Left/Squint` 几乎不动"。
 4. 把结果填回 **§3 每张表的「实测范围」列**（现在都是"待测"）—— 那一列 + §3.2 的修饰符说明就是"怎么把它调稳"的输入。
@@ -169,13 +171,13 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ## 3. 每根轴：中间层输出行、公式、修饰符
 
 **轴参数名 = profile 输出行的 `parameter` 名**（同名，都在 `Ho/Drive/…` 下）。中间层每帧按名字写进控制器；
-控制器里没有的名字会被静默跳过，所以**面板「参数输出」栏里这 37 行一个都不该显示"不在控制器里"** —— 那是最快的接线自检。
+控制器里没有的名字会被静默跳过，所以**面板「参数输出」栏里这 39 行一个都不该显示"不在控制器里"** —— 那是最快的接线自检。
 
-### 3.1 逐根轴的口（37 行里的 28 根轴 + 5 个区域门 + 4 条切片）
+### 3.1 逐根轴的口（39 行里的 30 根轴 + 5 个区域门 + 4 条切片）
 
 > 「实测范围」留空 = 等 §2.4 的实机结果回填；调曲线/修饰符前先有这一列。
 
-**嘴（10）**
+**嘴（12）**
 
 | 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
@@ -189,6 +191,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | `Ho/Drive/Mouth/X` | `(mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight)` | 恒等 −2…2 | smooth 0.007 s | **双向**：+1 偏左（按表达式）… −1 偏右 | 待测 |
 | `Ho/Drive/Mouth/TongueL` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌左；**现在两侧同跟单侧原值** | 待测 |
 | `Ho/Drive/Mouth/TongueR` | `tongueOut` | 恒等 0…1 | smooth 0.007 s | 舌右；同上 | 待测 |
+| `Ho/Drive/Mouth/CornerL` | `clamp(mouthSmileLeft - mouthFrownLeft, -1, 1)` | 恒等 −1…1 | smooth 0.009 s | **左嘴角**：−1 苦（下弯）· 0 静息 · +1 笑（上翘）= 合同表 D 的 `HQSmileFrownLeft`；**与右侧完全独立** | 待测 |
+| `Ho/Drive/Mouth/CornerR` | `clamp(mouthSmileRight - mouthFrownRight, -1, 1)` | 恒等 −1…1 | smooth 0.009 s | 右嘴角；同上（`HQSmileFrownRight`） | 待测 |
 
 **眼睑 / 注视（8）**
 
@@ -234,7 +238,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 ### 3.2 稳定化：修饰符（**2026-09-27 第一版已铺**）
 
-**现状**：28 根轴全部挂了 `smooth`（区域门与切片行**故意不挂** —— 见下），取值**照 VB 自己那套逐行口径**平移到轴上：
+**现状**：30 根轴全部挂了 `smooth`（区域门与切片行**故意不挂** —— 见下），取值**照 VB 自己那套逐行口径**平移到轴上：
 
 | 轴 | `smooth` | 依据（VB 出口行里的同族时间常数） |
 | --- | --- | --- |
@@ -305,7 +309,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 两个等值关键点若沿用斜率 1 的切线，Unity 会按平滑切线插值、在平台两端**过冲**（实测过一次：
 同样的键序，切线配错时 `v(−0.01)` 会跑出 **+0.0089** 而不是 0）。正确配法见 §3.1 里 `Mouth/Open` 的键。
 
-### 3.4 `Mouth/Form` 到底是"悲伤"吗（**2026-09-27 待拍**）
+### 3.4 `Mouth/Form` 的语义与"嘴角分家"（**2026-09-27 已定：选项 C**）
 
 **它现在是什么**：`2 × VB MouthSmile − 1`，展开成
 
@@ -323,15 +327,21 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 | 实测：**噘嘴 = −0.5**、**噘嘴+苦脸 = −0.7**、纯苦脸（公式上限）= −1.0 | 负侧**七成来自噘嘴**。你那次 −0.7 是"做苦脸时嘴角被带动下弯"（反推 frown ≈ 0.2×2），**不是公式读了眉** |
 | 正侧实测到 **+1**（笑满），负侧只到 **−0.7** | 与 `Open`（0…0.75）同类：**实测范围比理论窄、而且左右不对称** |
 
-**为什么非得决定**：`MouthCore` 的 X 轴就是它 —— **X0 那三格摆什么姿势，取决于"−1 代表什么"**：
+**决定：选项 C —— 一根轴一件事，把"嘴角"单独立成 `MouthCorner` 表**（已落地）：
 
-| 选项 | X0 摆什么 | 后果 |
+| 谁 | 管什么 | 轴 |
 | --- | --- | --- |
-| **A · 认下 VB 语义** | 一格里同时照顾"苦嘴 + 噘嘴"的中间姿势（幅度得小） | 公式与出口行都不动；但**噘嘴永远带一点苦相**（两件事共用一个刻度），也做不出明显的苦相 |
-| **B · 把 pucker 拆出去** | X0 = 纯"嘴角下垂 / 不笑"，可以摆明显的苦相 | 要**改表达式**（去掉 `− pucker`）；噘嘴交给 `MouthWidth`（它的 X 轴 `Mouth/Pucker` 负侧本来就是噘嘴）。⚠️ 出口行 `MouthSmile` 是另一行、下游 VTS 生态按它读 —— **轴与出口在这里有意分叉**（要写进 notes）。⚠️ 拆掉之后负侧只剩 frown，实测大概只到 **−0.2…−0.5** ⇒ X 刻度多半也要跟着收（像 `Open` 那样改成 `−0.5 / 0 / +1`） |
-| **C · 再加一张表** | `MouthCore` 的 X0 保持中性 | 用契约里已经预留的 `MouthCorner`（左右嘴角 笑/苦 修正表）专做嘴角 —— 语义最干净，但结构变化最大（多一张表 + 4~9 个槽位） |
+| `MouthCore` | **唇的轮廓与口孔**（基础） | `Form` × `Open` |
+| **`MouthCorner`**（新） | **左右嘴角的笑/苦**（残差表，中间格 = 零修正，可表达"左笑右苦"） | `Mouth/CornerL` × `Mouth/CornerR` |
+| `MouthWidth` | 嘴宽 / 偏嘴残差（**噘嘴在这里**） | `Mouth/Pucker` × `Mouth/X` |
 
-**倾向 B**（一根轴一件事），`MouthCorner` 留到真需要"左右不对称嘴角"时再上。**等你拍。**
+* 两根新轴 = 合同表 D 里早就写好的 `HQSmileFrownLeft/Right`（`clamp(smile − frown)`），**不是新发明**；
+  命名走[命名权威](FACE_TRACKING_NAMING.md) 的树表（`MouthCorner`：`CornerL` × `CornerR`）。
+* `Form` 的表达式**没有改**（出口行 `MouthSmile` 与轴仍然一致，下游 VTS 生态不受影响）；
+  分家体现在**树的分工**上：`MouthCore` 的 X0 摆**小幅/中性**的唇形，嘴角的夸张与不对称归 `MouthCorner`。
+  ⇒ 这样既不用动出口契约，也不再有"噘嘴被迫演成苦相"的问题（噘嘴只走 `MouthWidth`）。
+* 摆姿势时的分工（**Direct 是加法，别撞键**）：`MouthCore` = 唇/口孔；`MouthCorner` = **只有嘴角那几根键**；
+  `MouthWidth` = 嘴宽/偏嘴残差。`MouthCorner` 的中间格留空 = **零修正**（契约 §F 的 fallback）。
 
 ---
 
@@ -339,18 +349,18 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 
 按依赖顺序（✅ = 已完成；后面标了谁做）：
 
-1. 🟡 **实机测 28 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`、`Mouth/Form`（§3.1）；其余 26 根仍是「待测」。
-2. 🟡 **按实测结果给 37 行加修饰符 / 修曲线**（§3.2 / §3.3）—— *你定数值*。已完成 / 待定：
+1. 🟡 **实机测 30 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`、`Mouth/Form`（§3.1）；其余 28 根仍是「待测」。
+2. 🟡 **按实测结果给 39 行加修饰符 / 修曲线**（§3.2 / §3.3）—— *你定数值*。已完成 / 待定：
    · ✅ `Mouth/Open`：**死区曲线已加**（`|v| ≤ 0.03 → 0`、`0.03…0.06` 斜坡、之外恒等）+ **树里刻度收成 `0/.4/.75`**（两个生成器都改了；`check-controller.ps1` 现在核对刻度）。
-   · ✅ **28 根轴的 `smooth` 已铺第一版**（照 VB 同族口径：眼/注视/眨眼 0.007、嘴 0.007–0.010、眉 0.015/0.018、颊鼻 0.009/0.010）—— **等你实机试手感**，尤其看三处：眨眼会不会糊（0.007 已经是最小档）、眼球跟不跟手、`Cheek/*` 够不够快。
-   · ⬜ `Mouth/Form` 负侧：**语义还没定**（它现在 = 2×VB `MouthSmile` − 1，负侧同时被"下弯嘴角"和"噘嘴"驱动）—— 见 §3.1。
+   · ✅ **30 根轴的 `smooth` 已铺第一版**（照 VB 同族口径：眼/注视/眨眼 0.007、嘴 0.007–0.010、眉 0.015/0.018、颊鼻 0.009/0.010）—— **等你实机试手感**，尤其看三处：眨眼会不会糊（0.007 已经是最小档）、眼球跟不跟手、`Cheek/*` 够不够快。
+   · ✅ **`Mouth/Form` 的语义已定 = 选项 C**：加了 `MouthCorner`（嘴角残差表）+ 两根轴 `Mouth/CornerL/R`，嘴角的夸张与不对称归它，噘嘴归 `MouthWidth`，`Form` 的表达式与出口行都不动（§3.4）。
 3. **姿势烘焙工具**（*我做*）：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）存成**以槽位命名的多键片段**，
    文件名 = §2.2 的槽位名。现有 `HoBlendShapeClipBuilder` 只能一键一片段，填不了采样点。**排在动画前面。**
 4. ✅ **1D 树 + 子树嵌套已实测**（2026-09-27，见 §2.3.1 与[能力边界](BLEND_TREE_LIMITS.md) §10）：
    1D 的两个孩子是子树时**线性交叉淡入**（g=0/.25/.5/.75/1 → 0/25/50/75/100），
    **四层嵌套（Direct → Direct → 1D → 2D）照旧求值**。兜底形状（Direct 兄弟 + 中间层补权重）**不需要**了。
    （同一轮还跑通了 **Unity 侧生成器**：`HoFaceControllerSkeletonBuilder.Build()` 在 batchmode 里建出来的是
-   40 参数 / 29 树，`MouthCore` 的 9 格坐标 = `0/.4/.75`，与文本生成器**逐位一致**。）
+   42 参数 / 30 树，`MouthCore` 的 9 格坐标 = `0/.4/.75`，与文本生成器**逐位一致**。）
 5. **切片接线**（*等条件姿势*）：`MouthCoreFunnel` / `MouthCorePress` / `FunnelPress` 三张同级表 + `MouthCore` 自己挂
    `Slice/MouthCore/Funnel0Press0`。**没做的切片必须复用基础片段**，否则权重和不足 1 会掺进启动姿势。
    摆切片时**别让点落在别的点构成的边/线上**（那会圈内外跳变，见 §2.3.1）。
@@ -358,5 +368,5 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
    ② 本地按键（面板覆盖 / Warudo 官方键盘节点写同一个参数）；③ VB 若把表情输出成线。
 7. **Warudo 侧补上**（*我*）：按新控制器重建 `hoface-controller-test.bundle`（现在那份 09-25 的不含这 40 个口），
    profile 沙箱副本已经是最新，不用再拷。
-8. **接线自检**（随时可跑）：面板「参数输出」栏里这 37 行**一个都不该显示"不在控制器里"**；槽位"缺哪些动画"能在
+8. **接线自检**（随时可跑）：面板「参数输出」栏里这 39 行**一个都不该显示"不在控制器里"**；槽位"缺哪些动画"能在
    「详情」栏列出来；`.research/check-controller.ps1` 退出码 0（现在还会核**刻度**）。
