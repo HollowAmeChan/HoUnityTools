@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 0.02 / 0.12）。轴 = **`√(上×下)` 上下同卷判据**（只动一根 ⇒ 0，这就是"区分噘嘴"）× **±0.02 死区** × **`1 + 4·jawOpen²` 下颌增益** × **噘嘴门 `1 − clamp((mouthPucker − 0.4)/0.3, 0, 1)`**；**按键要强制猫嘴就直接写这个参数**（≥0.12） |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 0.02 / 0.12）。轴 = **`√(上×下)` 上下同卷判据**（只动一根 ⇒ 0，这就是"区分噘嘴"）× **±0.02 死区** × **`1 + 4·jawOpen²` 下颌增益** × **噘嘴门 `1 − clamp((mouthPucker − 0.5)/0.3, 0, 1)`**；**按键要强制猫嘴就直接写这个参数**（≥0.12） |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |

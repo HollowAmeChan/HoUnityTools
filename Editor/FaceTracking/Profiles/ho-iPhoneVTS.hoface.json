@@ -1,4 +1,4 @@
-{
+﻿{
     "format":  "ho-face-middleware",
     "version":  2,
     "displayName":  "ho-iPhoneVTS",
@@ -2926,7 +2926,7 @@
                         },
                         {
                             "parameter":  "Ho/Drive/Mouth/Roll",
-                            "expression":  "clamp(sqrt(mouthRollUpper * mouthRollLower) * clamp((sqrt(mouthRollUpper * mouthRollLower) - 0.02) / 0.03, 0, 1) * (1 + 4 * jawOpen * jawOpen) * (1 - clamp((mouthPucker - 0.4) / 0.3, 0, 1)), 0, 1)",
+                            "expression":  "clamp(sqrt(mouthRollUpper * mouthRollLower) * clamp((sqrt(mouthRollUpper * mouthRollLower) - 0.02) / 0.03, 0, 1) * (1 + 4 * jawOpen * jawOpen) * (1 - clamp((mouthPucker - 0.5) / 0.3, 0, 1)), 0, 1)",
                             "defaultValue":  0,
                             "curve":  {
                                           "keys":  [
@@ -2937,7 +2937,7 @@
                             "modifiers":  [
                                     { "kind": "smooth", "seconds": 0.009, "steps": [] }
                             ],
-                            "notes":  "controller axis Mouth/Roll -- drives MouthCoreRollSwitch (1D, thresholds 0.02 / 0.12) which cross-fades TWO WHOLE MOUTH TABLES (MouthCore = resting / MouthCoreRoll = cat-mouth variant). 这一行 = **上下同卷判据 × 死区 × 下颌增益 × 噘嘴门**（都写在表达式里，曲线恒等）：\n  ① **几何平均 `sqrt(rollUpper * rollLower)`**（2026-09-27 用户四条 5 秒实测）：**上下两根线必须一起动**才算卷唇 —— 两根一起动时 √积 ≈ 平均（所以旧的 0.18 / 0.45 口径不变），**只动一根时（噘嘴/噪声）直接归 0**。实测：真猫嘴 (0.355, 0.576) ⇒ 0.452；噘嘴 (≈0, 0.124) ⇒ **0**；静息 (≈0, 0.016) ⇒ **0**；M 收音 (0.021, 0.039) ⇒ 0.008。\n  ② 死区：结果 <= 0.02 归 0，0.02..0.05 乘数形式斜坡，之上恒等。\n  ③ 下颌增益 `1 + 4*jawOpen²`：张嘴时设备会把读数压低（用户报压到跟噪声分不清）⇒ 乘回来；增益必须在死区**之后**（否则噪声一起放大），且只看 jawOpen（看 Open 会形成正反馈回路）。\n  ④ 噘嘴门 `1 - clamp((mouthPucker - 0.4)/0.3, 0, 1)`：第二道独立保险 —— 静息基线 0.26..0.35 不碰、噘嘴 0.975 直接掐死、真猫嘴 0.03 不碰。\n  ⚠️ 常数（4 / 0.4 / 0.3 / 死区 0.02）都是待标定占位；标定见 docs/VTS_HQ_CONTROLLER.md §2.4。\n  ⚠️ 读数不再是两根线的原始平均；原始值仍由 G1 的 mouthRollUpper/mouthRollLower 出口行无损直通。\n  要**按键强制猫嘴**：直接写这个参数 >= 0.12。"
+                            "notes":  "controller axis Mouth/Roll -- drives MouthCoreRollSwitch (1D, thresholds 0.02 / 0.12) which cross-fades TWO WHOLE MOUTH TABLES (MouthCore = resting / MouthCoreRoll = cat-mouth variant). 这一行 = **上下同卷判据 × 死区 × 下颌增益 × 噘嘴门**（都写在表达式里，曲线恒等）：\n  ① **几何平均 `sqrt(rollUpper * rollLower)`**（2026-09-27 用户四条 5 秒实测）：**上下两根线必须一起动**才算卷唇 —— 两根一起动时 √积 ≈ 平均（所以旧的 0.18 / 0.45 口径不变），**只动一根时（噘嘴/噪声）直接归 0**。实测：真猫嘴 (0.355, 0.576) ⇒ 0.452；噘嘴 (≈0, 0.124) ⇒ **0**；静息 (≈0, 0.016) ⇒ **0**；M 收音 (0.021, 0.039) ⇒ 0.008。\n  ② 死区：结果 <= 0.02 归 0，0.02..0.05 乘数形式斜坡，之上恒等。\n  ③ 下颌增益 `1 + 4*jawOpen²`：张嘴时设备会把读数压低（用户报压到跟噪声分不清）⇒ 乘回来；增益必须在死区**之后**（否则噪声一起放大），且只看 jawOpen（看 Open 会形成正反馈回路）。\n  ④ 噘嘴门 `1 - clamp((mouthPucker - 0.5)/0.3, 0, 1)`：第二道独立保险 —— **门开在 0.5** 是因为这台设备的 `mouthPucker` 静息偏置本来就有 ≈0.2（iPhone 203 帧实测 mean 0.1992 / 现场静息 0.17..0.35，见 docs/PARAMETER_DEVICE_VERIFICATION.md），开低了会误掐；噘嘴 0.975 照样掐死、真猫嘴 0.03 不碰。\n  ⚠️ 常数（4 / 0.4 / 0.3 / 死区 0.02）都是待标定占位；标定见 docs/VTS_HQ_CONTROLLER.md §2.4。\n  ⚠️ 读数不再是两根线的原始平均；原始值仍由 G1 的 mouthRollUpper/mouthRollLower 出口行无损直通。\n  要**按键强制猫嘴**：直接写这个参数 >= 0.12。"
                         },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
