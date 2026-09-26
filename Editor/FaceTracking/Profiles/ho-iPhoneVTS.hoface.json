@@ -2924,36 +2924,21 @@
                             ],
                             "notes":  "controller axis Mouth/CornerR = clamp(mouthSmileRight - mouthFrownRight) (contract HQSmileFrownRight, -1 sad .. +1 smile); the MouthCorner table holds the right-corner residual"
                         },
-                            {
-                                "parameter":  "Ho/Drive/Mouth/RollUp",
-                                "expression":  "mouthRollUpper",
-                                "defaultValue":  0,
-                                "curve":  {
-                                        "keys":  [
-                                                    { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                        ]
-                                },
-                                "modifiers":  [
-                                        { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                ],
-                                "notes":  "controller axis Mouth/RollUp = mouthRollUpper (contract HQUpperLipRoll); upper lip rolled inward - the lip-roll/bite family lives in the MouthLipRoll table"
+                        {
+                            "parameter":  "Ho/Drive/Mouth/Roll",
+                            "expression":  "(mouthRollUpper + mouthRollLower) / 2",
+                            "defaultValue":  0,
+                            "curve":  {
+                                    "keys":  [
+                                                { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                    ]
                             },
-                            {
-                                "parameter":  "Ho/Drive/Mouth/RollDown",
-                                "expression":  "mouthRollLower",
-                                "defaultValue":  0,
-                                "curve":  {
-                                        "keys":  [
-                                                    { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                    { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                        ]
-                                },
-                                "modifiers":  [
-                                        { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                ],
-                                "notes":  "controller axis Mouth/RollDown = mouthRollLower (contract HQLowerLipRoll); measured: roll sum ~0.5 = lips tucked without biting (-0.07 on Open), ~1.0 = biting (-0.14)"
-                            },
+                            "modifiers":  [
+                                    { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                            ],
+                            "notes":  "controller axis Mouth/Roll = (mouthRollUpper + mouthRollLower)/2 -- contract HQ*LipRoll collapsed to ONE axis (the two lines move together in practice, so a 2D table wastes a dimension). 1D thresholds: 0 = no roll, 0.5 = tucked, 1 = biting"
+                        },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
                         "expression":  "EyeLeft_x",

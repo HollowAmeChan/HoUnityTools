@@ -34,7 +34,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static readonly string[] RegionGates = { "Mouth", "EyeLeft", "EyeRight", "Brow", "Cheek" };
 
-        /// <summary>轴参数（部位/轴 → 名字）：32 根，见设计稿 §3.1。</summary>
+        /// <summary>轴参数（部位/轴 → 名字）：31 根，见设计稿 §3.1。</summary>
         private static readonly string[] Axes =
         {
             "Ho/Drive/Mouth/Form", "Ho/Drive/Mouth/Open", "Ho/Drive/Mouth/Funnel", "Ho/Drive/Mouth/Press",
@@ -42,8 +42,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             "Ho/Drive/Mouth/TongueL", "Ho/Drive/Mouth/TongueR",
             // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
-            // 卷唇（2026-09-27）：`Form`/`Open` 的负侧只由"卷唇"驱动 ⇒ 整族搬来 MouthLipRoll（HQ*LipRoll）
-            "Ho/Drive/Mouth/RollUp", "Ho/Drive/Mouth/RollDown",
+            // 卷唇（2026-09-27）：上下两根线**一起增减** ⇒ 中间层平均成一根 `Mouth/Roll`，表也跟着变成 1D。
+            "Ho/Drive/Mouth/Roll",
             "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
             "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
             "Ho/Drive/Gaze/Left/X", "Ho/Drive/Gaze/Left/Y", "Ho/Drive/Gaze/Right/X", "Ho/Drive/Gaze/Right/Y",
@@ -71,6 +71,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             public float[] XValues, YValues;
             /// <summary>稀疏表：这些 (i,j) 格子**物理上到不了**，不建（圈跟着斜切）。null = 摆满。</summary>
             public Vector2Int[] Skip;
+        }
+
+        /// <summary>一张 1D 表的定义：**只有一根轴**，刻度值就是阈值本身。</summary>
+        private sealed class Simple1DSpec
+        {
+            public string Name;
+            public string Parameter, Token;
+            public float[] Values;
         }
 
         private static readonly float[] Two = { -1f, 0f, 1f };     // 双向轴：负端 / 中性 / 正端
@@ -109,9 +117,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly TableSpec[] Tables =
         {
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip },
-            // 卷唇/咬唇**自己的表**（契约里预留的 `MouthLipRoll`）：轴就是原始两根线，不经过 Form/Open。
-            // 2×2 正好是四个真实状态：不卷 / 上卷 / 下卷 / 上下都卷（= 咬唇）。
-            new TableSpec { Name = "MouthLipRoll", X = "Ho/Drive/Mouth/RollUp", Y = "Ho/Drive/Mouth/RollDown", XToken = "RollUp", YToken = "RollDown", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/Jaw", Y = "Ho/Drive/Mouth/Forward", XToken = "Jaw", YToken = "Forward", XValues = Unit, YValues = new[] { 0f } },
             new TableSpec { Name = "MouthWidth", X = "Ho/Drive/Mouth/Pucker", Y = "Ho/Drive/Mouth/X", XToken = "Pucker", YToken = "LeftRight", XValues = Two, YValues = Two },
             // 嘴角（2026-09-27 选项 C）：**残差表** —— 中间那格 = 零修正，所以两轴都用 3 刻度（0 = 静息）
@@ -126,6 +131,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new TableSpec { Name = "CheekSquint", X = "Ho/Drive/Cheek/Left/Squint", Y = "Ho/Drive/Cheek/Right/Squint", XToken = "CheekL", YToken = "CheekR", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "CheekPuff", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "NoseSneer", X = "Ho/Drive/Nose/Left/Sneer", Y = "Ho/Drive/Nose/Right/Sneer", XToken = "SneerL", YToken = "SneerR", XValues = ZeroOne, YValues = ZeroOne }
+        };
+
+        /// <summary>
+        /// **`Mouth/Roll` 专用刻度：0 / 0.5 / 1**（2026-09-27 用户实测定）。
+        /// 三档正好是三个真实状态：**0 = 不卷 / 0.5 = 内卷（不咬）/ 1 = 咬唇**。
+        /// ⚠️ 和 2D 表不同，1D 表的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：
+        /// 自动模式会忽略我们写的值、在 `[0,1]` 上把三档平摊成 0 / 0.5 / 1 —— 这次刚好一样，
+        /// 但刻度一旦改成非等距（像 `Mouth/Open` 的 0 / 0.4 / 0.75）就会静默错位。
+        /// </summary>
+        private static readonly float[] RollTicks = { 0f, 0.5f, 1f };
+
+        /// <summary>
+        /// 1D 表（一根轴）：卷唇/咬唇自己的表（契约里预留的 `MouthLipRoll`）。
+        /// 从 2D 收成 1D 的原因：`mouthRollUpper` 与 `mouthRollLower` **一起增减**，
+        /// 第二维是死的（和 `Form`/`Open` 那次同一个病）⇒ 中间层把两根线平均成一根轴 `Mouth/Roll`。
+        /// </summary>
+        private static readonly Simple1DSpec[] Simple1DTables =
+        {
+            new Simple1DSpec { Name = "MouthLipRoll", Parameter = "Ho/Drive/Mouth/Roll", Token = "Roll", Values = RollTicks }
         };
 
         /// <summary>平行副本（按键表情）：主版 → 副本名。</summary>
@@ -191,7 +215,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
 
-            // ── 参数（40 个）───────────────────────────────────────────────────
+            // ── 参数（43 个）───────────────────────────────────────────────────
             var parameters = new List<AnimatorControllerParameter>();
             foreach (string gate in RegionGates) parameters.Add(Float("Ho/Drive/Gate/" + gate, 1f));
             parameters.Add(Float(OneWeight, 1f));                                  // Direct 子节点都要挂权重
@@ -255,6 +279,20 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 trees[copy.Value] = tree;
             }
 
+            foreach (var spec in Simple1DTables)
+            {
+                var tree = NewTree(controller, spec.Name, BlendTreeType.Simple1D);
+                tree.blendParameter = spec.Parameter;
+                tree.useAutomaticThresholds = false;
+                for (int i = 0; i < spec.Values.Length; i++)
+                {
+                    string slot = SlotName1D(spec.Name, spec.Token, spec.Values.Length, i);
+                    tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), spec.Values[i]);
+                }
+                slotCounts[spec.Name] = spec.Values.Length;
+                trees[spec.Name] = tree;
+            }
+
             for (int s = 0; s < Switches.GetLength(0); s++)
             {
                 var tree = NewTree(controller, Switches[s, 0], BlendTreeType.Simple1D);
@@ -302,7 +340,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             return "路径：" + path + "\n"
                 + "参数 " + parameters.Count + " 个（区域门 5 + W/One 1 + 表情门 2 + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + "）\n"
-                + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 副本 " + Copies.GetLength(0) + " + 开关 " + Switches.GetLength(0) + "）\n"
+                + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 1D 表 " + Simple1DTables.Length + " + 副本 " + Copies.GetLength(0) + " + 开关 " + Switches.GetLength(0) + "）\n"
                 + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree
                 + "核对：`.research/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";
         }
@@ -335,6 +373,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static string SlotName(string tree, string xToken, string yToken, int xCount, int i, int j)
         {
             return tree + "__" + xToken + "__" + yToken + "__A" + xCount + "X" + i + "Y" + j;
+        }
+
+        /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>
+        private static string SlotName1D(string tree, string token, int count, int i)
+        {
+            return tree + "__" + token + "__A" + count + "X" + i;
         }
 
         /// <summary>
