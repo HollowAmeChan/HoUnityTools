@@ -179,7 +179,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**（所以曲线给到 ±2）。**0 = 静息、+1 = 笑满；负侧由"下弯眉 + 噘嘴"驱动：实测噘嘴 = −0.5…−0.6，正是 `−pucker/2` 那一项** | +1 笑满、0 静息、**−0.5…−0.6（噘嘴）** |
+| `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**。**0 = 静息、+1 = 笑满；负侧由"嘴角下弯 + 噘嘴"驱动（没有眉/眼）** ⇒ 它是"嘴部情绪轴"，**不是纯 sad**（见 §3.4） | +1 笑满、0 静息、**−0.5…−0.7（噘嘴 / 噘嘴+苦脸）** |
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.03 死区 + 0.03..0.06 斜坡，之外恒等**（`MouthCore` 的 Y 刻度已缩到 0/.4/.75，量程归一在树里） | smooth 0.009 s | 0 闭 … 1 张满；**负侧也有值**（抿嘴比闭还"负"）。**实测：张满 0.75、半张 0.4、抿满 −0.16…−0.2、\|x\|<0.03 是"不张也不抿"的死区** | 0 … **0.75**（半张 0.4；抿嘴 −0.2…−0.16） |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | smooth 0.007 s | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
@@ -304,6 +304,34 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ⚠️ 曲线做"平台段"（死区）时**切线要给 0**：`inT`/`outT` 是 Unity 关键帧的 in/out tangent，
 两个等值关键点若沿用斜率 1 的切线，Unity 会按平滑切线插值、在平台两端**过冲**（实测过一次：
 同样的键序，切线配错时 `v(−0.01)` 会跑出 **+0.0089** 而不是 0）。正确配法见 §3.1 里 `Mouth/Open` 的键。
+
+### 3.4 `Mouth/Form` 到底是"悲伤"吗（**2026-09-27 待拍**）
+
+**它现在是什么**：`2 × VB MouthSmile − 1`，展开成
+
+```text
+Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRight)/2
+         − (mouthFrownLeft + mouthFrownRight) − mouthPucker ] / 2        理论范围 ±1.5
+```
+
+⇒ 语义上是**"嘴部情绪轴（嘴角上翘 ↔ 下垂）"**，但**不等于"悲伤"**：
+
+| 事实 | 含义 |
+| --- | --- |
+| 负侧有**两类**来源 | ① `mouthFrown*` 嘴角下弯（真·苦/不悦）② `mouthPucker` 噘嘴（**非情绪**，是嘴形） |
+| 公式里**没有眉、没有眼** | "悲伤"那套还包括内眉抬起（`browInnerUp`）、压眉（`browDown`）、上睑下垂 —— 那三样在别的轴上（`Brow/*/InnerUp`、`Brow/*/Y`、`Lid/*`），**不在这根轴里** |
+| 实测：**噘嘴 = −0.5**、**噘嘴+苦脸 = −0.7**、纯苦脸（公式上限）= −1.0 | 负侧**七成来自噘嘴**。你那次 −0.7 是"做苦脸时嘴角被带动下弯"（反推 frown ≈ 0.2×2），**不是公式读了眉** |
+| 正侧实测到 **+1**（笑满），负侧只到 **−0.7** | 与 `Open`（0…0.75）同类：**实测范围比理论窄、而且左右不对称** |
+
+**为什么非得决定**：`MouthCore` 的 X 轴就是它 —— **X0 那三格摆什么姿势，取决于"−1 代表什么"**：
+
+| 选项 | X0 摆什么 | 后果 |
+| --- | --- | --- |
+| **A · 认下 VB 语义** | 一格里同时照顾"苦嘴 + 噘嘴"的中间姿势（幅度得小） | 公式与出口行都不动；但**噘嘴永远带一点苦相**（两件事共用一个刻度），也做不出明显的苦相 |
+| **B · 把 pucker 拆出去** | X0 = 纯"嘴角下垂 / 不笑"，可以摆明显的苦相 | 要**改表达式**（去掉 `− pucker`）；噘嘴交给 `MouthWidth`（它的 X 轴 `Mouth/Pucker` 负侧本来就是噘嘴）。⚠️ 出口行 `MouthSmile` 是另一行、下游 VTS 生态按它读 —— **轴与出口在这里有意分叉**（要写进 notes）。⚠️ 拆掉之后负侧只剩 frown，实测大概只到 **−0.2…−0.5** ⇒ X 刻度多半也要跟着收（像 `Open` 那样改成 `−0.5 / 0 / +1`） |
+| **C · 再加一张表** | `MouthCore` 的 X0 保持中性 | 用契约里已经预留的 `MouthCorner`（左右嘴角 笑/苦 修正表）专做嘴角 —— 语义最干净，但结构变化最大（多一张表 + 4~9 个槽位） |
+
+**倾向 B**（一根轴一件事），`MouthCorner` 留到真需要"左右不对称嘴角"时再上。**等你拍。**
 
 ---
 
