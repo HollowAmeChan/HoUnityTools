@@ -2760,10 +2760,10 @@
                         "curve":  {
                                       "keys":  [
                                                    { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": -0.06, "v": -0.06, "inT": 1, "outT": 2 },
-                                                   { "t": -0.03, "v": 0, "inT": 2, "outT": 0 },
-                                                   { "t": 0.03, "v": 0, "inT": 0, "outT": 2 },
-                                                   { "t": 0.06, "v": 0.06, "inT": 2, "outT": 1 },
+                                                   { "t": -0.05, "v": -0.05, "inT": 1, "outT": 1.667 },
+                                                   { "t": -0.02, "v": 0, "inT": 1.667, "outT": 0 },
+                                                   { "t": 0.02, "v": 0, "inT": 0, "outT": 1.667 },
+                                                   { "t": 0.05, "v": 0.05, "inT": 1.667, "outT": 1 },
                                                    { "t": 0.4, "v": 0.4, "inT": 1, "outT": 1 },
                                                    { "t": 0.75, "v": 0.75, "inT": 1, "outT": 1 },
                                                    { "t": 2, "v": 2, "inT": 1, "outT": 1 }
@@ -2772,7 +2772,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.03 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.03..0.06 是斜坡；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
+                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.03..0.06 是斜坡；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Funnel",

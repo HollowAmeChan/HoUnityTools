@@ -23,7 +23,7 @@
 | 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（42 参数 / 30 树 / 1 层 1 状态 / WD 开）；导入日志 32 对象全解析、无报错 |
 | 2 | **参数表 42 个** | ✅ | 5 区域门 = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、30 根轴 = `0`、4 条切片权重 = `0` |
 | 3 | **树形 30 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ 5 个区域 Direct → 19 张表（14 主版 + 5 副本）+ 5 棵 1D 副本树 |
-| 4 | **槽位 119 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过两次圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `−1/0/+0.75/+1`） |
+| 4 | **槽位 127 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。刻度已按实测收过两次圈（`Open` 的 Y = `0/.4/.75`、`Form` 的 X = `−1/0/+0.75/+1`） |
 | 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = Warudo 沙箱副本；**67 输入 / 129 输出**（90 出口 + 39 轴行）；`Mouth/Open` 已带**死区曲线**（§3.1） |
 | 6 | **轴的修饰符** | 🟡 **30 根轴已挂 `smooth`**（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` 带 ±0.03 死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
@@ -53,8 +53,8 @@
 Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth, EyeLeft, EyeRight, Brow, Cheek}
 ├─ MouthRegion                  Direct   子节点权重 = Ho/Drive/W/One
 │   ├─ MouthCoreSwitch          Simple1D  blendParameter = Ho/Drive/Gate/Expr/Smile   （0 → 主版，1 → 副本）
-│   │   ├─ MouthCore            FreeformCartesian2D  12 格（X 四档：苦/静息/常态笑/大笑）
-│   │   └─ MouthCoreExpr        FreeformCartesian2D  12 格
+│   │   ├─ MouthCore            FreeformCartesian2D  16 格（X 四档：苦/静息/常态笑/大笑；Y 四档含咬唇）
+│   │   └─ MouthCoreExpr        FreeformCartesian2D  16 格
 │   ├─ MouthJaw                 FreeformCartesian2D  3 格
 │   ├─ MouthWidth               FreeformCartesian2D  9 格
 │   ├─ MouthCorner              FreeformCartesian2D  9 格   （嘴角残差表：中间那格 = 零修正）
@@ -75,8 +75,8 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 树 | X 轴（刻度） | Y 轴（刻度） | 格 | 一格代表什么 | 分工（该写哪些键） | 槽位名模板 |
 | --- | --- | --- | ---: | --- | --- | --- |
-| `MouthCore` | `Mouth/Form` −1 苦/垂嘴角 · 0 静息 · **+0.75 常态笑** · **+1 大笑**（**按实测定**：常态笑落在 0.75，大笑才到 1 ⇒ 两个真实状态各要一格） | `Mouth/Open` **0 闭 · 0.4 半开 · 0.75 张满**（**按实测定**：张满只到 0.75、半张 0.4） | 12 | 外嘴基础：**唇的轮廓与口孔** | 只写唇/口孔，**不写下颌与下巴**；嘴角的夸张与不对称归 `MouthCorner` | `MouthCore__Form__Open__A4X<i>Y<j>` |
-| `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 12 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A4X<i>Y<j>` |
+| `MouthCore` | `Mouth/Form` −1 苦/垂嘴角 · 0 静息 · **+0.75 常态笑** · **+1 大笑**（**按实测定**：常态笑落在 0.75，大笑才到 1 ⇒ 两个真实状态各要一格） | `Mouth/Open` **−0.14 咬唇内卷 · 0 闭 · 0.4 半开 · 0.75 张满**（**按实测定**：负侧是不咬唇内卷 −0.07 / 咬唇内卷 −0.14；正侧张满只到 0.75、半张 0.4） | 16 | 外嘴基础：**唇的轮廓与口孔** | 只写唇/口孔，**不写下颌与下巴**；嘴角的夸张与不对称归 `MouthCorner` | `MouthCore__Form__Open__A4X<i>Y<j>` |
+| `MouthCoreExpr` | 同 `MouthCore` | 同 `MouthCore` | 16 | `Gate/Expr/Smile`=1 时的外嘴：同轴、整套换成表情版（夸张的笑/怒嘴形） | 同上（副本是平行姿势，不是叠加） | `MouthCoreExpr__Form__Open__A4X<i>Y<j>` |
 | `MouthJaw` | `Mouth/Jaw` 0 · 0.5 · 1 | `Mouth/Forward` 只有 0（Y 只用 `Y0`） | 3 | 下颌/口内：**下颌骨与下巴**随开度 | 只写颌/下巴；不前伸 | `MouthJaw__Jaw__Forward__A3X<i>Y0` |
 | `MouthWidth` | `Mouth/Pucker` −1 收 · 0 · +1 展 | `Mouth/X` −1 偏右 · 0 · +1 偏左 | 9 | 对 `MouthCore` 的**嘴宽 / 偏嘴修正**（写残差） | **不重复写完整外嘴** | `MouthWidth__Pucker__LeftRight__A3X<i>Y<j>` |
 | `MouthCorner` | `Mouth/CornerL` −1 左嘴角苦 · 0 · +1 左嘴角笑 | `Mouth/CornerR` 同上（右） | 9 | **左右嘴角残差**（不对称：左笑右苦也能表达）；中间那格 = **零修正** | 只写**嘴角**那几根键；唇的轮廓归 `MouthCore` | `MouthCorner__CornerL__CornerR__A3X<i>Y<j>` |
@@ -97,15 +97,23 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 * **没摆的格不用补洞**：基础表没摆 = 复用同一份低维基础姿势；修正表没摆 = **零残差**。所以"最少起步"先摆中性格加两端就能开跑（契约 §F）。
 * ⚠️ **`LidL`/`LidR` 的 Y 只有 0 / 1 两档**（半眯 `Squint=0.5` 没有格，由插值给出）；`MouthJaw` 的 Y 只有 `Y0`（不前伸）。这是"稀疏、非方阵"允许的用法，不是漏了。
 * ⚠️ **`GazeL/GazeR` 的 X 方向**：我们原样直通 `EyeLeft_x`/`EyeRight_x`，没有翻符号，所以 **`X0`(−1) 到底是"内"还是"外"要靠实测定**（§2.4 第一项就是它）。
+* ⚠️ **`MouthCore` 的 Y0（−0.14）不是"张开"而是"咬唇内卷"**：`Open` 是**嘴唇张开量**，卷唇算"比中性更闭合"。
+  实测两档：不咬唇内卷 **−0.07**（落在 Y0 与 Y1 之间，约一半）、咬紧内卷 **−0.14**（正好 Y0）。撇嘴 ±0.01 由曲线的 ±0.02 死区抹平。
+* ⚠️ **卷唇/咬唇同时把 `Form` 拉到 −0.4**（物理上它就是噘嘴那一族，`Form` 的负侧含 `−pucker/2`）。
+  所以**那一格的姿势落在 X0~X1 之间**（在 Y0 这条线上按距离权重，大致 6:4）⇒ 要摆的是 **`A4X0Y0` + `A4X1Y0` 两格**
+  （`MouthCore` 与 `MouthCoreExpr` 各两次 = 4 份片段）。想让"咬唇"有自己一整格，就得在 X 上再加一根 **−0.4** 的刻度。
+* ⚠️ **刻度是按索引命名的**（`A<n>X<i>Y<j>`）：往某个轴**中间或底部插一格，上面所有格子的编号都会顺移** ⇒
+  已经烘好姿势之后改刻度 = 片段与语义错位。**先把刻度定死再烘**；真要改，就手动改名/搬移已烘的片段
+  （生成器只建缺的、**不会替你搬**）。
 
 ### 2.3 灵敏度现在能测到什么程度
 
 * **能测**：每根轴**实际会走到多少**（手机做动作 / 说话 → 看轴值）。这是"曲线与修饰符该怎么调"的唯一依据。
-* **不能测**：造型好不好看 —— 119 格现在都是**空片段**（没有曲线的命名 clip），插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
+* **不能测**：造型好不好看 —— 127 格现在都是**空片段**（没有曲线的命名 clip），插值出来的还是启动姿势。插值行为要等第一张表真填上才看得到。
 
 #### 2.3.1 轴超出槽位范围会怎样（**2026-09-27 实测**）
 
-我们的 13 张表都是**摆满的矩形网格**（3×3 / 3×2 / 2×2 / 3×1）。这种表的实测行为：
+我们的 14 张表都是**摆满的矩形网格**（4×4 / 4×3 / 3×3 / 3×2 / 2×2 / 3×1）。这种表的实测行为：
 
 | 轴的位置 | Unity 的行为 |
 | --- | --- |
@@ -182,7 +190,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | 轴参数 | profile 表达式（原文） | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
 | `Ho/Drive/Mouth/Form` | `((2 - (mouthFrownLeft + mouthFrownRight + mouthPucker) + (mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2))) / 2) - 1` | 恒等 −1…2 | smooth 0.009 s | = 2×`MouthSmile` − 1，展开是 **`[(smileL+smileR) + (dimpleL+dimpleR)/2 − (frownL+frownR) − pucker] / 2`** ⇒ 自然范围 **±1.5**。**0 = 静息、+1 = 笑满；负侧由"嘴角下弯 + 噘嘴"驱动（没有眉/眼）** ⇒ 它是"嘴部情绪轴"，**不是纯 sad**（见 §3.4） | **+0.75 常态笑、+1 大笑**（两个都要格）、0 静息、−0.5…−0.7（噘嘴 / 噘嘴+苦脸） |
-| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.03 死区 + 0.03..0.06 斜坡，之外恒等**（`MouthCore` 的 Y 刻度已缩到 0/.4/.75，量程归一在树里） | smooth 0.009 s | 0 闭 … 1 张满；**负侧也有值**（抿嘴比闭还"负"）。**实测：张满 0.75、半张 0.4、抿满 −0.16…−0.2、\|x\|<0.03 是"不张也不抿"的死区** | 0 … **0.75**（半张 0.4；抿嘴 −0.2…−0.16） |
+| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | **±0.02 死区 + 0.02..0.05 斜坡，之外恒等**（`MouthCore` 的 Y 刻度已收成 −0.14/0/0.4/0.75，量程归一在树里） | smooth 0.009 s | **它不是"下颌开度"而是"嘴唇张开量"**：闭紧（`−mouthClose`，系数 1）与**卷唇**（`−0.2×(rollU+rollL)`）都算"比中性更闭合"。**实测：张满 0.75、半张 0.4；负侧只由卷唇驱动 —— 不咬唇内卷 −0.07、咬紧内卷 −0.14；撇嘴 ±0.01 是设备耦合（`mouthLeft/Right` 根本不在公式里）、已被死区抹平** | 0 … **0.75**；负侧 **−0.07 / −0.14** |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 恒等 −1…2 | smooth 0.007 s | 0 普通 … 1 漏斗形；张嘴时被扣一点 | 待测 |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | 恒等 −2…2 | smooth 0.007 s | **双向**：−1 卷/压唇 … +1 展唇露齿 | 待测 |
 | `Ho/Drive/Mouth/Jaw` | `jawOpen` | 恒等 0…1 | smooth 0.009 s | 0 闭 … 1 张满；`MouthJaw` 表的主轴 | 待测 |
@@ -369,7 +377,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 
 按依赖顺序（✅ = 已完成；后面标了谁做）：
 
-1. 🟡 **实机测 30 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`（0…0.75/半张 0.4）、`Mouth/Form`（+0.75 常态笑、+1 大笑、−0.5…−0.7 噘嘴/苦脸）；其余 28 根仍是「待测」。
+1. 🟡 **实机测 30 根轴的灵敏度**（§2.4）—— *进行中*。已回填：`Mouth/Open`（+0.4 半张 / +0.75 张满 / **−0.07 不咬唇内卷 / −0.14 咬唇**）、`Mouth/Form`（+0.75 常态笑、+1 大笑、−0.4 卷唇咬唇、−0.5…−0.7 噘嘴/苦脸）；其余 28 根仍是「待测」。
 2. 🟡 **按实测结果给 39 行加修饰符 / 修曲线**（§3.2 / §3.3）—— *你定数值*。已完成 / 待定：
    · ✅ `Mouth/Open`：**死区曲线已加**（`|v| ≤ 0.03 → 0`、`0.03…0.06` 斜坡、之外恒等）+ **树里刻度收成 `0/.4/.75`**（两个生成器都改了；`check-controller.ps1` 现在核对刻度）。
    · ✅ **30 根轴的 `smooth` 已铺第一版**（照 VB 同族口径：眼/注视/眨眼 0.007、嘴 0.007–0.010、眉 0.015/0.018、颊鼻 0.009/0.010）—— **等你实机试手感**，尤其看三处：眨眼会不会糊（0.007 已经是最小档）、眼球跟不跟手、`Cheek/*` 够不够快。
