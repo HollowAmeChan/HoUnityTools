@@ -518,12 +518,12 @@ V3.0 版没有。我们用 V3.0。
 | `Ho/Drive/Mouth/Roll` | `clamp(√(上×下) × 死区 × (1 + 4·jawOpen²) × 噘嘴门, 0, 1)`（上/下 = `mouthRollUpper`/`mouthRollLower`） | 真猫嘴 ≈0.45（满档）· 噘嘴/静息 = 0 · M 收音 ≈0.008 | **卷唇开关的输入**（上下两根线**合并成一根轴**，2026-09-27 用户实测定：两根一起增减、**不用跟 ARKit 那样分上下**）；驱动 `MouthCoreRollSwitch`（**轴驱动的变体开关**，阈值 `0.02 / 0.12`）在**两张作者画过的整嘴表**之间交叉淡入（`MouthCore` 静息嘴 ↔ `MouthCoreRoll` 猫嘴版；用户定"不需要区分两段卷嘴" ⇒ **0.18 及以上都停在猫嘴版**）。**这一行 = 上下同卷判据 × 死区 × 下颌增益 × 噘嘴门**：**`√(上×下)`**（两根一起动才算卷唇；只动一根 ⇒ 0 ⇒ 噘嘴不误触）、结果 `≤ 0.02 → 0`（0.02..0.05 乘数形式斜坡、之上恒等）再乘 **`1 + 4·jawOpen²`**、再乘 **`1 − clamp((mouthPucker − 0.5)/0.3, 0, 1)`** —— 设备在张嘴时会把这根读数压低（用户实测"压到跟噪声分不清"），乘数把它乘回来；增益必须放在死区**之后**（否则噪声一起放大），且只能看 `jawOpen`（看 `Open` 会形成正反馈回路）。⭐ **张嘴时这根轴照样有值**（读数随张嘴降低但仍能到 0.18）⇒ 它因此独立成表、不并进 `MouthCore`；闭嘴卷唇是最准的猫嘴。⭐ **按键要强制猫嘴就直接写这个参数**（写 ≥0.18 即可）。上下两根线仍是输入行/出口行，只是不再各占一维 |
 | `Ho/Drive/Gaze/Left\|Right/X` | `EyeLeft_x` / `EyeRight_x` | −1 … +1 | 手机自己就发左右眼标量，不重算；**哪边是内要实测定** |
 | `Ho/Drive/Gaze/Left\|Right/Y` | `EyeLeft_y` / `EyeRight_y` | −1 … +1 | |
-| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft) + ((mouthRight - mouthLeft) / 8))` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `BrowLeftY` − 1（VB 静息 0.5，且掺了偏嘴） |
-| `Ho/Drive/Brow/Right/Y` | `2 * ((browOuterUpRight - browDownRight) + ((mouthLeft - mouthRight) / 8))` | 同上（右） | 同上；偏嘴那一项左右反号 |
+| `Ho/Drive/Brow/Left/Y` | `2 * ((browOuterUpLeft - browDownLeft*死区) + ((mouthRight - mouthLeft) / 8))`，死区 = `clamp((browDownLeft − 0.24) / 0.02, 0, 1)` | −1 压眉 … **0 静息** … +1 抬眉 | = 2×VB `BrowLeftY` − 1（VB 静息 0.5，且掺了偏嘴）。⚠️ **2026-09-27 加死区**：校准后三次静息实测 `browDown*` 就有 0.108…0.2083（偏嘴项 ≈0）⇒ 旧公式把中性脸钉在 −0.24…−0.38，落进 `BrowCoreL` 两档 X 轴的"压眉"格 62…71%。死区**只掐 `browDown` 那一项**，偏嘴项照留；真皱眉/皱鼻的读数 0.83（⇒ −1.66 饱和）在拐点之上，一点没削 |
+| `Ho/Drive/Brow/Right/Y` | 同上（右），死区 = `clamp((browDownRight − 0.24) / 0.02, 0, 1)` | 同上（右） | 同上；偏嘴那一项左右反号 |
 | `Ho/Drive/Brow/Left\|Right/InnerUp` | `browInnerUp` | 0 … 1 | |
 | `Ho/Drive/Cheek/Left\|Right/Squint` | `cheekSquintLeft` / `cheekSquintRight` | 0 … 1 | ⚠️ **没有树消费**（二次元角色表现不了颊）—— 照旧发布当出口 |
 | `Ho/Drive/Cheek/Left\|Right/Puff` | `cheekPuff` | 0 … 1 | **分侧**自由度：先两侧同跟单侧原值 |
-| `Ho/Drive/Nose/Up` | `(noseSneerLeft + noseSneerRight) / 2` | 0 … 1 | **鼻子上顶**（唯一留下的鼻状态；连带的内眼睑/眯眼/眉内下由物理共动带出） |
+| `Ho/Drive/Nose/Up` | `((noseSneerLeft + noseSneerRight) / 2) * clamp((((noseSneerLeft + noseSneerRight) / 2) − 0.18) / 0.02, 0, 1)` | 0 … 1 | **鼻子上顶**（唯一留下的鼻状态；连带的内眼睑/眯眼/眉内下由物理共动带出）。⚠️ **2026-09-27 加死区**（与眉同形）：三次静息实测 `noseSneer*` 0.085…0.1514 ⇒ 中性脸白吃 `NoseUp` 表的鼻上顶格 13…21%；真动作（挤眼+鼻上抬）实测 0.70，在拐点之上 ⇒ 表里那个 0.7 档精确命中不变 |
 | `Ho/Drive/Gate/{Mouth,Eye,Brow,Nose}` | **空**（常量行）+ `defaultValue = 1` | 0 / 1 | 行侧区域门（**4 个**：左右眼并成一个、颊 → 鼻）；**常量行不过曲线**（`HoFaceAnimationSession.cs:316`），但修饰符照走 |
 | `Ho/Drive/Slice/MouthCore/{Funnel0Press0,Funnel1Press0,Funnel0Press1,Funnel1Press1}` | `(1−F)(1−P)` / `F(1−P)` / `(1−F)P` / `FP`，F、P 内联 | 0 … 1，**四条和恒为 1** | `MouthCore` 的条件切片权重（Funnel × Press 双线性） |
 
