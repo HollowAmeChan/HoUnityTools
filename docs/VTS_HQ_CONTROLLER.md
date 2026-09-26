@@ -259,8 +259,12 @@ Slice:  Ho/Drive/Slice/<树名>/<切片>（中间层算的分区权重；副本�
 > ✅ **骨架已经生成好了**（2026-09-27）：`D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\PTP_CTR_Face_VTS.controller`
 > —— 40 个参数、29 棵树、75 + 29 个**空 Motion 槽位**，一层一个状态 WD 开、无 Behaviour。
 > 生成脚本 `.research/make-vts-controller.ps1`（从老控制器的字段集取模板），核对脚本
-> `.research/check-controller.ps1` 对它报 **0 问题**。⚠️ 它还没在 Unity 里打开过（本机三个编辑器占着授权互斥量，
-> 跑不了 batchmode）—— 第一次打开时确认一下面板与「详情」栏；面板读不出来我再把生成器改成 Editor API 版。
+> `.research/check-controller.ps1` 对它报 **0 问题**。
+>
+> ⚠️ 那份是**文本生成**的，还没在 Unity 里打开过（本机四个编辑器占着授权互斥量，`-batchmode` 起不来）。
+> **Unity 侧的兜底/重建入口是菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`**
+> （`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`，用 Unity 自己的 API 建同一份形状；
+> API 用法照抄我们跑通的 `Tests~/FaceTrackingValidation.cs`）。**面板读不出来就用它重建一份。**
 
 > 搭完先跑一次 `.research/check-controller.ps1 -Path <那份>.controller`：参数名/默认值/树形/门控接线一次核完
 > （验收清单见 §11 第 3 条）。**参数名敲错一个字符是静默失败**，这一步别省。
