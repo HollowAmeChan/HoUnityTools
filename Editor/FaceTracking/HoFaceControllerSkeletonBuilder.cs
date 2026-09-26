@@ -82,6 +82,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             public float X, Y;
         }
 
+        /// <summary>轴驱动的变体开关：一张 1D 树，两个孩子都是**整张表**。</summary>
+        private sealed class VariantSwitchSpec
+        {
+            public string Name;
+            public string Main, Variant, Parameter;
+            public float[] Thresholds;
+        }
+
         /// <summary>一张 1D 表的定义：**只有一根轴**，刻度值就是阈值本身。</summary>
         private sealed class Simple1DSpec
         {
@@ -156,27 +164,42 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         };
 
         /// <summary>
-        /// **`Mouth/Roll` 专用刻度：0 / 0.18**（2026-09-27 用户实测定）。
-        /// **只剩两档** —— **0 = 不卷 / 0.18 = 只卷嘴（不咬，二次元的"猫嘴"就是这一档）**。
-        /// 实测的两段（只卷嘴 0.18 / 牙齿咬住最强 0.45）**不再分开**：用户定
-        /// 「不需要区分两段卷嘴，压成一个开关都行」⇒ 0.45 及以上的咬唇**并入猫嘴**（高于 0.18 都停在第二档）。
-        /// ⚠️ 这根轴**到不了 1**（实测最强 0.45）⇒ 刻度就摆在 `0 / 0.18`，没有够不着的档。
-        /// ⚠️ 和 2D 表不同，1D 表的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：
-        /// 自动模式会忽略我们写的值、在 `[0,1]` 上平摊两档 —— 静默错位。
+        /// **`Mouth/Roll` 的两个阈值：0.02 / 0.18**（2026-09-27 用户实测定）。
+        /// `0.18` = 只卷嘴（= 二次元的"猫嘴"）**满档**；实测的咬唇最强 0.45 也停在这里
+        /// （用户定「不需要区分两段卷嘴」）。`0.02` = 死区出口。
+        /// ⚠️ 这根轴**到不了 1**（实测最强 0.45）⇒ 满档阈值就是 0.18，没有够不着的档。
+        /// ⚠️ 1D 的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：自动模式会忽略存下来的值、
+        /// 在 `[m_MinThreshold, m_MaxThreshold] = [0,1]` 上把两档平摊成 0 与 1 ⇒ 静默错位。
         /// </summary>
-        private static readonly float[] RollTicks = { 0f, 0.18f };
+        private static readonly float[] RollTicks = { 0.02f, 0.18f };
 
         /// <summary>
-        /// 1D 表（一根轴）：卷唇自己的表（契约里预留的 `MouthLipRoll`）。
-        /// 从 2D 收成 1D 的原因：`mouthRollUpper` 与 `mouthRollLower` **一起增减**，
-        /// 第二维是死的（和 `Form`/`Open` 那次同一个病）⇒ 中间层把两根线平均成一根轴 `Mouth/Roll`。
-        /// 语义 = **"牙齿咬 + 嘴唇内卷的程度"一根轴**（不分上下唇），行为上就是一个**开关**：
-        /// 关 = 静息嘴、开 = 猫嘴。⚠️ 这张表**必须只写卷唇那几根键**（`Direct` 是加法，
-        /// 张嘴卷唇时它会与 `MouthCore` 同时生效并相加）。
+        /// 1D 片段表（一根轴、孩子是动画片段）：**现在没有表用它**（卷唇改成"变体开关"之后空着）。
+        /// 留着是因为一维形状还多（命名权威里的例子 `MouthShrugBase__Shrug__A3X1`），回来时不用重写。
         /// </summary>
-        private static readonly Simple1DSpec[] Simple1DTables =
+        private static readonly Simple1DSpec[] Simple1DTables = { };
+
+        /// <summary>
+        /// **轴驱动的变体表**（不是按键表情副本）：与主版**同轴、同刻度、同稀疏格**，整套姿势换成变体版。
+        /// 数组元素 = { 变体树名, 主版树名 }。名字规则见命名权威 §3：变体 = `<树名><驱动它的轴段词>`。
+        /// 2026-09-27：卷唇不再当"残差车道"，改成在两张"笑 × 张"2D 表之间**分叉** ——
+        /// 静息嘴（`MouthCore`）↔ 猫嘴版（`MouthCoreRoll`）。这样那个时刻的嘴是**作者画过的两张整嘴表**
+        /// 按权重淡入 ⇒ 混态有人负责，而不是几条残差相加。
+        /// ⚠️ 代价（用户已认）：变体表被选中时必须是**完整嘴姿势**（WD 开着，没烘的格会让那几根键回默认、嘴塌），
+        /// 所以"作者要画整张嘴"，我们不替他拷贝。
+        /// </summary>
+        private static readonly string[,] Variants =
         {
-            new Simple1DSpec { Name = "MouthLipRoll", Parameter = "Ho/Drive/Mouth/Roll", Token = "Roll", Values = RollTicks }
+            { "MouthCoreRoll", "MouthCore" }
+        };
+
+        /// <summary>
+        /// 轴驱动的变体开关（1D 树，两个孩子都是整表，阈值显式写死）：
+        /// 名字 / 主版 / 变体 / 驱动它的轴 / 两个阈值。
+        /// </summary>
+        private static readonly VariantSwitchSpec[] VariantSwitches =
+        {
+            new VariantSwitchSpec { Name = "MouthCoreRollSwitch", Main = "MouthCore", Variant = "MouthCoreRoll", Parameter = "Ho/Drive/Mouth/Roll", Thresholds = RollTicks }
         };
 
         /// <summary>
@@ -184,6 +207,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// ⚠️ **嘴没有副本**（2026-09-27 用户定）：「按键表情版本身对于嘴张嘴笑没有意义」——
         /// 夸张的笑嘴 = `Form` 更大，轴上已经够得到 ⇒ `MouthCoreExpr` 与 `MouthCoreSwitch` 整个删掉。
         /// 眼/眉的副本照留：它们表达的是轴上到不了的"性质"（笑眼、怒眉）。
+        /// ⚠️ 嘴现在的第二张表是**变体**（`MouthCoreRoll`，由轴选），不是副本（由表情门选）——
+        /// 两者机制相同但语义不同，别混。
         /// </summary>
         private static readonly string[,] Copies =
         {
@@ -202,12 +227,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// 区域 → 直接挂在它下面的子节点（表名或开关名）。
-        /// ⚠️ `MouthCore` **必须直接挂在 `MouthRegion` 下**：删掉 `MouthCoreSwitch` 之后它就是普通一员，
-        /// 漏挂 = 整张基础嘴表变孤儿树、状态走不到它（把嘴的姿势整块丢掉）。
+        /// ⚠️ 嘴这一格挂的是**开关** `MouthCoreRollSwitch`（它下面才是两张整嘴表）。
+        /// 这类"删了开关 / 换了层级忘了重挂"会让整张表变孤儿树（树在、槽位名也对，但状态走不到它）
+        /// —— 真栽过一次，是片段探针先撞出来的，`.research/check-controller.ps1` 现在也会核可达性。
         /// </summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCore,MouthLipRoll,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
             { "EyeLeftRegion", "EyeLeft", "LidLSwitch,GazeL" },
             { "EyeRightRegion", "EyeRight", "LidRSwitch,GazeR" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
@@ -312,6 +338,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 trees[copy.Value] = tree;
             }
 
+            // 变体表：与主版**同轴、同刻度、同稀疏格**（整套姿势换成变体版），所以直接复用主版的 spec
+            for (int v = 0; v < Variants.GetLength(0); v++)
+            {
+                TableSpec spec = FindTable(Variants[v, 1]);
+                var tree = NewTree(controller, Variants[v, 0], BlendTreeType.FreeformCartesian2D);
+                tree.blendParameter = spec.X;
+                tree.blendParameterY = spec.Y;
+                tree.useAutomaticThresholds = false;
+                for (int j = 0; j < spec.YValues.Length; j++)
+                    for (int i = 0; i < spec.XValues.Length; i++)
+                    {
+                        if (Skipped(spec, i, j)) continue;
+                        string slot = SlotName(Variants[v, 0], spec.XToken, spec.YToken, spec.XValues.Length, i, j);
+                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
+                    }
+                slotCounts[Variants[v, 0]] = CountCells(spec);
+                trees[Variants[v, 0]] = tree;
+            }
+
             foreach (var spec in Simple1DTables)
             {
                 var tree = NewTree(controller, spec.Name, BlendTreeType.Simple1D);
@@ -334,6 +379,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 tree.AddChild(trees[Switches[s, 1]], 0f);   // 阈值 0 = 普通版
                 tree.AddChild(trees[Switches[s, 2]], 1f);   // 阈值 1 = 按键表情版
                 trees[Switches[s, 0]] = tree;
+            }
+
+            // 轴驱动的变体开关：两个孩子都是整表，阈值 = 该轴上的实测档位（显式写死，别让 Unity 平摊）
+            foreach (var spec in VariantSwitches)
+            {
+                var tree = NewTree(controller, spec.Name, BlendTreeType.Simple1D);
+                tree.blendParameter = spec.Parameter;
+                tree.useAutomaticThresholds = false;
+                tree.AddChild(trees[spec.Main], spec.Thresholds[0]);
+                tree.AddChild(trees[spec.Variant], spec.Thresholds[1]);
+                trees[spec.Name] = tree;
             }
 
             for (int r = 0; r < Regions.GetLength(0); r++)
@@ -373,7 +429,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             return "路径：" + path + "\n"
                 + "参数 " + parameters.Count + " 个（区域门 5 + W/One 1 + 表情门 2 + 轴 " + Axes.Length + " + 切片 " + MouthCoreSlices.Length + "）\n"
-                + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 1D 表 " + Simple1DTables.Length + " + 副本 " + Copies.GetLength(0) + " + 开关 " + Switches.GetLength(0) + "）\n"
+                + "树 " + trees.Count + " 棵（根 1 + 区域 5 + 表 " + Tables.Length + " + 变体 " + Variants.GetLength(0)
+                + " + 副本 " + Copies.GetLength(0) + " + 开关 " + (Switches.GetLength(0) + VariantSwitches.Length) + "）\n"
                 + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree
                 + "核对：`.research/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";
         }

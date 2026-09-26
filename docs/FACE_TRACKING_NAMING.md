@@ -1,4 +1,4 @@
-# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
+﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | **卷唇开关**（一根轴，**不分上下唇**）：上下两根线一起增减 ⇒ 2026-09-27 中间层平均成一根 `Mouth/Roll`、表收成 1D；**只剩两档** `0 不卷 / 0.18 只卷嘴（= 猫嘴）`（咬唇最强 0.45 并入这一档，用户定「不需要区分两段卷嘴」），轴带 **±0.02 死区**。⭐ **张嘴时这根轴照样有值**（读数降低但仍到得了 0.18）⇒ 它为此独立成表；**按键要强制猫嘴就直接写这个参数**（≥0.18） |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 0.02 / 0.18）。轴带 **±0.02 死区**；⭐ 张嘴时这根轴照样有值（读数降低但仍到得了 0.18）；**按键要强制猫嘴就直接写这个参数**（≥0.18） |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |
@@ -94,6 +94,21 @@
 「按键表情版本身对于嘴张嘴笑没有意义」—— 夸张的笑嘴 = `Form` 更大，轴上本来就够得到；
 **只有轴上到不了的"性质"才值得开副本**（笑眼、怒眉）。要"按键强制某个嘴型"，就直接写对应的轴值
 （例：猫嘴 = 写 `Ho/Drive/Mouth/Roll` ≥ 0.18），不需要第二张表。
+
+### 3.1 轴驱动的变体（**另一类**：不是按键表情）
+
+同一种"两个孩子都是整表"的 1D 树，但**由某根轴的值选**、阈值 = 那根轴上的**实测档位**（不是 0/1）。
+语义上是**分叉**：那个时刻的姿势一定是**作者画过的两张表之一（或两者的加权）**，而不是几条残差相加。
+
+| 东西 | 名字 | 例 |
+| --- | --- | --- |
+| 变体树 | `<树名><驱动它的轴段词>` | `MouthCoreRoll`（由 `Roll` 轴选中的 `MouthCore` 变体 = 猫嘴版整嘴） |
+| 1D 开关容器 | `<变体树名>Switch`，`blendParameter` = 那根轴 | `MouthCoreRollSwitch`（blend = `Ho/Drive/Mouth/Roll`，阈值 0.02 / 0.18） |
+
+⚠️ **变体 vs 副本**：机制一样（1D + 两张整表），区别在**谁选**——副本由**按键表情门**选（0/1），
+变体由**某根轴**选（实测档位）。名字上用 `Expr` / `<轴段词>` 区分，一眼能看出是哪一类。
+⚠️ 变体表被选中时必须是**完整姿势**（WD 开着，没烘的格会让那几根键回默认）⇒ 作者要为用到的格画整张。
+⚠️ 阈值必须显式写死（`m_UseAutomaticThresholds: 0`），否则 Unity 会在 `[0,1]` 上平摊两档、静默错位。
 
 ## 4. 参数、门、切片
 
@@ -199,7 +214,7 @@
 
 | 已落地 | 说明 |
 | --- | --- |
-| `MouthCore` · `MouthLipRoll` · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**15 张表（14 张 2D + `MouthLipRoll` 1D）+ 4 张副本 = 19 棵表；控制器共 29 棵树 / 105 个槽位**（2026-09-27 删掉 `MouthCoreExpr`/`MouthCoreSwitch` 之后） |
+| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**15 张 2D 表 + 1 张变体表 + 4 张副本 + 5 个 1D 开关 = 控制器共 30 棵树 / 111 个槽位**（2026-09-27：删 `MouthCoreExpr`/`MouthCoreSwitch`，加 `MouthCoreRoll` + `MouthCoreRollSwitch`；卷唇不再是独立表） |
 | **`MouthCorner`**（2026-09-27 加） | 轴 = 本文 §2 那一行的 `CornerL` × `CornerR`（= 合同表 D 的 `HQSmileFrownLeft/Right`）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在 `MouthWidth`，`Form` 的表达式与出口行都不动。见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.4 |
 
 其余家族（`MouthSeal`、`MouthShrugSplit`、`MouthUpperRaise`、`MouthLowerDrop`、`LidGaze*`、`BrowCenter`、
