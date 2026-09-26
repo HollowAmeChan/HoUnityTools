@@ -43,7 +43,7 @@
 | `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
-| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | **"牙齿咬 + 嘴唇内卷"的程度**（一根轴，**不分上下唇**）：上下两根线一起增减 ⇒ 2026-09-27 中间层平均成一根 `Mouth/Roll`、表收成 1D；刻度按实测 `0 不卷 / 0.18 只卷嘴（猫嘴）/ 0.45 咬唇最强`，轴带 **±0.02 死区**。⭐ **张嘴时这根轴照样有值**（读数降低但仍到得了 0.18）⇒ 它为此独立成表 |
+| `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | **卷唇开关**（一根轴，**不分上下唇**）：上下两根线一起增减 ⇒ 2026-09-27 中间层平均成一根 `Mouth/Roll`、表收成 1D；**只剩两档** `0 不卷 / 0.18 只卷嘴（= 猫嘴）`（咬唇最强 0.45 并入这一档，用户定「不需要区分两段卷嘴」），轴带 **±0.02 死区**。⭐ **张嘴时这根轴照样有值**（读数降低但仍到得了 0.18）⇒ 它为此独立成表；**按键要强制猫嘴就直接写这个参数**（≥0.18） |
 | `MouthLipPress` | Mouth | PressL | PressR | Open, Pucker | 左右压唇 |
 | `MouthStretch` | Mouth | StretchL | StretchR | Open, Form | 左右横向拉伸 |
 | `MouthDimple` | Mouth | DimpleL | DimpleR | Open, Form | 酒窝/嘴角收紧 |
@@ -83,12 +83,17 @@
 
 | 东西 | 名字 |
 | --- | --- |
-| 副本树 | `<树名>Expr`（例：`MouthCoreExpr`、`LidLExpr`、`BrowCoreLExpr`） |
+| 副本树 | `<树名>Expr`（例：`LidLExpr`、`BrowCoreLExpr`） |
 | 1D 开关容器 | `<树名>Switch`，`blendParameter` = 表情门 |
 | 表情门 | `Ho/Drive/Gate/Expr/<表情名>`（`Smile` / `Angry` / `Wink`…）；**默认 0，中间层不写它** |
 
-一个门可以同时驱动多张表的副本（`Smile` 同时改嘴、眼睑、眉 ⇒ 三棵 1D 树共用一个参数）。
-第一版给 `MouthCore`、`LidL`/`LidR`、`BrowCoreL`/`BrowCoreR` 做副本（已在骨架里），见 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §2.1。
+一个门可以同时驱动多张表的副本（`Smile` 同时改眼睑、眉 ⇒ 两棵 1D 树共用一个参数）。
+第一版给 `LidL`/`LidR`、`BrowCoreL`/`BrowCoreR` 做副本（已在骨架里），见 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §2.1。
+
+⚠️ **嘴没有副本**（2026-09-27 用户定，已删 `MouthCoreExpr` + `MouthCoreSwitch`）：
+「按键表情版本身对于嘴张嘴笑没有意义」—— 夸张的笑嘴 = `Form` 更大，轴上本来就够得到；
+**只有轴上到不了的"性质"才值得开副本**（笑眼、怒眉）。要"按键强制某个嘴型"，就直接写对应的轴值
+（例：猫嘴 = 写 `Ho/Drive/Mouth/Roll` ≥ 0.18），不需要第二张表。
 
 ## 4. 参数、门、切片
 
@@ -111,7 +116,7 @@
 ```text
 二维： <树名>__<X语义>__<Y语义>__A<n>X<i>Y<j>       例：LidL__BlinkWide__Squint__A3X2Y0
 一维： <树名>__<轴语义>__A<n>X<i>                例：MouthShrugBase__Shrug__A3X1
-副本： 把 <树名> 换成 <树名>Expr                   例：MouthCoreExpr__Form__Open__A3X0Y0
+副本： 把 <树名> 换成 <树名>Expr                   例：LidLExpr__BlinkWide__Squint__A3X0Y0
 ```
 
 * `<X语义>`/`<Y语义>` 用 §2 表里的轴段词（`Form`/`Open`/`BlinkWide`/`UpDown`…），**不变形**。
@@ -194,7 +199,7 @@
 
 | 已落地 | 说明 |
 | --- | --- |
-| `MouthCore`（+ `MouthCoreExpr`）· `MouthJaw` · `MouthWidth` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：13 张主版 + 5 张副本 = 18 张表 |
+| `MouthCore` · `MouthLipRoll` · `MouthJaw` · `MouthWidth` · `MouthCorner` · `MouthTongue` · `LidL`/`LidR`（+ `Expr`）· `GazeL`/`GazeR` · `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `CheekSquint` · `CheekPuff` · `NoseSneer` | tranche 1：**15 张表（14 张 2D + `MouthLipRoll` 1D）+ 4 张副本 = 19 棵表；控制器共 29 棵树 / 105 个槽位**（2026-09-27 删掉 `MouthCoreExpr`/`MouthCoreSwitch` 之后） |
 | **`MouthCorner`**（2026-09-27 加） | 轴 = 本文 §2 那一行的 `CornerL` × `CornerR`（= 合同表 D 的 `HQSmileFrownLeft/Right`）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在 `MouthWidth`，`Form` 的表达式与出口行都不动。见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.4 |
 
 其余家族（`MouthSeal`、`MouthShrugSplit`、`MouthUpperRaise`、`MouthLowerDrop`、`LidGaze*`、`BrowCenter`、

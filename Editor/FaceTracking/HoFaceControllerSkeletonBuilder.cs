@@ -111,7 +111,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// ⚠️ **负侧不要**（用户定）：`Form` 的负侧混了三件事，全部搬走 —— 苦 → `MouthCorner`（嘴角）、
         /// 噘 → `MouthWidth`、卷唇/咬唇 → `MouthLipRoll`。于是这张表**只管"笑 × 张嘴"两块正值**，
         /// 回到干净的 3×3（没有负行/负列，也就没有要挖的死角）。
-        /// ⚠️ 只给 `MouthCore` / `MouthCoreExpr` 的 X 用；`MouthWidth` 的 X/Y 仍是 `Two`（没有实测数据）。
+        /// ⚠️ 只给 `MouthCore` 的 X 用；`MouthWidth` 的 X/Y 仍是 `Two`（没有实测数据）。
         /// </summary>
         private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
 
@@ -156,49 +156,58 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         };
 
         /// <summary>
-        /// **`Mouth/Roll` 专用刻度：0 / 0.18 / 0.45**（2026-09-27 用户实测定）。
-        /// 三档正好是三个真实状态：**0 = 不卷 / 0.18 = 只卷嘴（不咬，二次元的"猫嘴"用这一档）/
-        /// 0.45 = 牙齿咬住内卷到最强**。
-        /// ⚠️ 这根轴**到不了 1**：实测最强咬唇只有 0.45 ⇒ 老刻度 `0.5 / 1` 有两档永远够不着
-        /// （和 `Mouth/Open` 那次同一个病）。高于 0.45 一律钳到"咬唇"那一档 = 正确饱和，不是丢信息。
+        /// **`Mouth/Roll` 专用刻度：0 / 0.18**（2026-09-27 用户实测定）。
+        /// **只剩两档** —— **0 = 不卷 / 0.18 = 只卷嘴（不咬，二次元的"猫嘴"就是这一档）**。
+        /// 实测的两段（只卷嘴 0.18 / 牙齿咬住最强 0.45）**不再分开**：用户定
+        /// 「不需要区分两段卷嘴，压成一个开关都行」⇒ 0.45 及以上的咬唇**并入猫嘴**（高于 0.18 都停在第二档）。
+        /// ⚠️ 这根轴**到不了 1**（实测最强 0.45）⇒ 刻度就摆在 `0 / 0.18`，没有够不着的档。
         /// ⚠️ 和 2D 表不同，1D 表的阈值必须**显式写死**（`m_UseAutomaticThresholds: 0`）：
-        /// 自动模式会忽略我们写的值、在 `[0,1]` 上把三档平摊成 0 / 0.5 / 1 —— 这次数值不是等距的，
-        /// 靠自动模式会**静默错位**。
+        /// 自动模式会忽略我们写的值、在 `[0,1]` 上平摊两档 —— 静默错位。
         /// </summary>
-        private static readonly float[] RollTicks = { 0f, 0.18f, 0.45f };
+        private static readonly float[] RollTicks = { 0f, 0.18f };
 
         /// <summary>
-        /// 1D 表（一根轴）：卷唇/咬唇自己的表（契约里预留的 `MouthLipRoll`）。
+        /// 1D 表（一根轴）：卷唇自己的表（契约里预留的 `MouthLipRoll`）。
         /// 从 2D 收成 1D 的原因：`mouthRollUpper` 与 `mouthRollLower` **一起增减**，
         /// 第二维是死的（和 `Form`/`Open` 那次同一个病）⇒ 中间层把两根线平均成一根轴 `Mouth/Roll`。
-        /// 语义 = **"牙齿咬 + 嘴唇内卷的程度"一根轴**（不分上下唇）。
+        /// 语义 = **"牙齿咬 + 嘴唇内卷的程度"一根轴**（不分上下唇），行为上就是一个**开关**：
+        /// 关 = 静息嘴、开 = 猫嘴。⚠️ 这张表**必须只写卷唇那几根键**（`Direct` 是加法，
+        /// 张嘴卷唇时它会与 `MouthCore` 同时生效并相加）。
         /// </summary>
         private static readonly Simple1DSpec[] Simple1DTables =
         {
             new Simple1DSpec { Name = "MouthLipRoll", Parameter = "Ho/Drive/Mouth/Roll", Token = "Roll", Values = RollTicks }
         };
 
-        /// <summary>平行副本（按键表情）：主版 → 副本名。</summary>
+        /// <summary>
+        /// 平行副本（按键表情）：主版 → 副本名。
+        /// ⚠️ **嘴没有副本**（2026-09-27 用户定）：「按键表情版本身对于嘴张嘴笑没有意义」——
+        /// 夸张的笑嘴 = `Form` 更大，轴上已经够得到 ⇒ `MouthCoreExpr` 与 `MouthCoreSwitch` 整个删掉。
+        /// 眼/眉的副本照留：它们表达的是轴上到不了的"性质"（笑眼、怒眉）。
+        /// </summary>
         private static readonly string[,] Copies =
         {
-            { "MouthCore", "MouthCoreExpr" }, { "LidL", "LidLExpr" }, { "LidR", "LidRExpr" },
+            { "LidL", "LidLExpr" }, { "LidR", "LidRExpr" },
             { "BrowCoreL", "BrowCoreLExpr" }, { "BrowCoreR", "BrowCoreRExpr" }
         };
 
         /// <summary>1D 开关：名字 / 主版 / 副本 / 用哪个表情门。</summary>
         private static readonly string[,] Switches =
         {
-            { "MouthCoreSwitch", "MouthCore", "MouthCoreExpr", "Smile" },
             { "LidLSwitch", "LidL", "LidLExpr", "Smile" },
             { "LidRSwitch", "LidR", "LidRExpr", "Smile" },
             { "BrowCoreLSwitch", "BrowCoreL", "BrowCoreLExpr", "Angry" },
             { "BrowCoreRSwitch", "BrowCoreR", "BrowCoreRExpr", "Angry" }
         };
 
-        /// <summary>区域 → 直接挂在它下面的子节点（表名或开关名）。</summary>
+        /// <summary>
+        /// 区域 → 直接挂在它下面的子节点（表名或开关名）。
+        /// ⚠️ `MouthCore` **必须直接挂在 `MouthRegion` 下**：删掉 `MouthCoreSwitch` 之后它就是普通一员，
+        /// 漏挂 = 整张基础嘴表变孤儿树、状态走不到它（把嘴的姿势整块丢掉）。
+        /// </summary>
         private static readonly string[,] Regions =
         {
-            { "MouthRegion", "Mouth", "MouthCoreSwitch,MouthLipRoll,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
+            { "MouthRegion", "Mouth", "MouthCore,MouthLipRoll,MouthJaw,MouthWidth,MouthCorner,MouthTongue" },
             { "EyeLeftRegion", "EyeLeft", "LidLSwitch,GazeL" },
             { "EyeRightRegion", "EyeRight", "LidRSwitch,GazeR" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
