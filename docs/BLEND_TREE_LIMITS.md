@@ -126,7 +126,7 @@ Direct 树对**每一个属性**的结果是：
 ## 6. 一个正面例子：会重叠的语义要并进同一棵树
 
 > §6–§9 讲的是**处方与证据**（参考实现的片段、当年的实测数字）。
-> **我们的代码里现在不生成任何树** —— 控制器由使用者在 Unity 的混合树编辑器里装配，
+> ⚠️ **2026-09-28 更正：控制器现在是脚本生成的**（`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs` 的菜单项 + `.research/make-vts-controller.ps1` 写活资产 + `.research/check-controller.ps1` 报 0 问题；形状硬编码）。下面 §6–§9 里"控制器由作者摆"的表述都按这一条读；
 > 这些格子名、轴名、树形都是作者的事。下面说的是"若要重叠语义，该怎么摆"。
 
 ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是同一块，裸输入里两者同时非 0 →

@@ -1,0 +1,117 @@
+# 嘴系统 review（2026-09-28）
+
+**范围**：整张嘴 —— `MouthRegion` + 嘴的 profile 行 + 控制器里那 7 个孩子 + 相关文档。
+**一句话结论**：**轴/结构层可以验收**（机械检查全绿、检查器 0 问题、83 槽位）；**4 处耦合要你拍板**、**文档有一批"复述漂移"要清**。
+
+---
+
+## 1. 机械检查：全绿（"顺序排错了"这一类没有）
+
+| 检查 | 结果 | 谁在盯 |
+| --- | --- | --- |
+| 修饰符顺序（`steps` 必须在 `smooth` 之前：先过阈值、再平滑） | **0 问题** | `.research/mouth-audit.py` |
+| `out("行名")` 只能引用**上面**的行、且行必须存在 | **0 问题** | 台架 `HoFaceOutputOrder.Validate`（profile-json-test 359 条） |
+| 曲线 key 按 `t` 升序 / 无 NaN | **0 问题** | 同上 |
+| `steps` 释放点 < 触发点（`trigger − |threshold|`） | **0 问题** | 同上 |
+| `Gate/*` 行 `defaultValue` = 1、普通轴 = 0 | **0 问题** | 同上 |
+| 树从根可达 / 区域孩子的权重逐条接线 / 槽位名与坐标 | **0 问题** | `.research/check-controller.ps1` |
+| 活资产 vs 生成器 vs 检查器（三处定义） | 一致（本轮两次结构改动同步过） | 同上 |
+
+⇒ profile 的行序、修饰符顺序、曲线顺序、1D 阈值顺序、区域孩子清单**全部被机检钉住**。
+
+## 2. 耦合与规则：4 条要拍板 + 3 条已知
+
+| # | 症状 | 严重度 | 建议 |
+| --- | --- | --- | --- |
+| **M1** | 舌头那棵树的口径**自相矛盾**：「每格把**张嘴量**烘进去」 vs 「嘴形 / 下颌仍归 `MouthCore` / `MouthJaw`」—— 同一根键两个写者 ⇒ 混合树里会**加权平均**（谁的意图都不是） | 高 | 舌头 4 格**只写舌头键**；嘴的张开由 mouth 区域按真实 `jawOpen` 拥有。若坚持让舌头态控制张嘴，就得**加一道 tongue 门**把嘴形那几块压掉（结构要加东西） |
+| **M2** | 风格子树（倒V / 鼓嘴）**不过形态门**（它们本身就是"被门放行的东西"）⇒ 它们的片段若写了 jaw / tongue / 颊的键，就会与 `MouthJaw` / `MouthTongue` / `Cheek` 抢 | 中 | 写成**作者契约**（每个风格片段只写"它要改的那几根唇键"），或把门扩到更多孩子 |
+| **M3** | `Ho/Style/CatMouth` 与 `InvertedV` / `Cheek` **不互斥**：判据实际很少同现（倒V 要 `pucker ≥ 0.41`、猫嘴要 `dimple` 高），但**没有强制** ⇒ 同时亮就是两个写者 | 中 | 一行修法：风格行乘 `(1 − clamp(out("Ho/Style/CatMouth"), 0, 1))`。要不要做取决于实机有没有同现 |
+| **M4** | 猫嘴亮时 `MouthShift` **不过门** | 低 | 由构造 benign（猫嘴时 `Mouth/X` ≈ 0：dimple 0.072；`Mouth/Y` 要 pucker ≥ 0.45）⇒ 实机确认即可 |
+| 已知 | **猫嘴的 0/1 锁存会把嘴宽轴掐成 0** —— 这就是"width 到 2 就归零"那个 bug 的机制（同一个 0/1 线的两个下游）；触发线抬到 **0.28** 之后余量够 | — | 保留并记录（§3.2 的 `维持` 参数） |
+| 已知 | **信号归属重叠**：`mouthLeft/Right` 同时喂 `Mouth/X`（整嘴平移）与 `Cheek/*/Puff`（鼓嘴左右） | — | 已用**颊门** `clamp((cheekPuff − 0.05)/0.05)` 挡住纯撇嘴（`cheekPuff` 静息 ≤0.0181）⇒ 实测可行；"撇嘴"本身还没量过，留一条待办 |
+
+**结构性不变式（这条最该写下来）**：嘴区域对**一根唇键**的最坏 `Σw = 5`（三个带门的孩子 + 倒V + 鼓嘴都写它）
+⇒ 余项 `(1 − Σw)·默认值 = −4 × 默认值` ⇒ **"默认值 = 0"是这套架构的硬前提**（模型静息全 0）。
+这就是"角点要不要写 0"真正该管的事：**default ≠ 0 的键，片段里写 0 也压不住**（`(1−Σw)·default` 那一项躲不掉）。
+⇒ 建议验收加一条：跑一次"模型静息探针"，确认这些嘴键在进树时的值都是 0。
+
+## 3. 文档：三路只读审计共报 **约 130 处**过时/自相矛盾
+
+| 文档组 | 条数 | 典型 |
+| --- | --- | --- |
+| `VTS_HQ_CONTROLLER.md` | **61** | `MouthCore` 还写 3×3=8 格 / `A3X`（实际 4×3 减 (2,2) = 11 格 / `A4X`）；`Mouth/Roll` 旧名残留约 10 处；`33 根轴` / `47·44 个口` / `90·89 槽位`；`Mouth/Open` 死区 ±0.03（实际 ±0.02）；§3.4 的旧 `Form` 公式（现在是 sad 两段式，不含 `mouthPucker`） |
+| `FACE_TRACKING_NAMING.md` / `PARAMETER_HO.md` / 合同 + catalog | 30 | NAMING §5 的**「方阵」规则**（实际 `A<n>` = X 档数、允许非方阵：4×3 / 3×2）；`Cheek/*/Puff` 写成裸 `cheekPuff`；合同/catalog 里 `MouthTongue` 还写"分左右 2D" |
+| `BLEND_TREE_LIMITS` / `CONTROLLER_STRUCTURE` / `MIDDLE_LAYER` / `TRAPS` / 流水线状态 | 42 | **「我们的代码里现在不生成任何树」**（现在是生成器 + 检查器）；**「`Ho/Drive/Gate/*` 已删干净」**（活资产有 5 个）；**「行之间互相引用 = 不做」**（`out()` 已落地，是形态门的机制）；**「树产不出参数」**（已被两版本实测推翻） |
+
+**三类根因**（修法不同）：
+1. **现状陈述翻篇**了没人回头改（"不生成树"、"门控已删"、能力说反）—— 这类最危险，会让人按错的模型设计；
+2. **改名 / 删除残留**（`Mouth/Roll`、`Mouth/Corner*`、`Mouth/Pucker 没消费`）—— 机械可扫；
+3. **数字复述漂移**（同一批数字在 60+ 处复述，改一处不改其他）—— **这是结构问题**。
+
+**本轮已清**：改名 `Mouth/Roll` → `Ho/Drive/Style/CatMouth`、`33 根轴` → 29、`47/44 个口` → 43、`44 行` → 40、
+`Mouth/Open` 死区 ±0.02、`skip (1,2)` → `(2,2)`、`A3X2Y2` → `A4X3Y2`、`LIMITS` 的"不生成树"翻篇句、
+NAMING 的"方阵"规则、`PARAMETER_HO` 的 `Cheek` 公式、以及本轮结构改动的全部落点（§5）。
+
+**建议的结构性修法**（比逐条修省事，也防再漂）：
+* **数字只留一个出处** = 本文档 §4；其他文档改成链接，别再复述；
+* 历史流水账（§5.7.x）统一加"（当时）"标记，明确它不是现状；
+* 快照类文档（`FACE_PIPELINE_STATUS_2026_09_26.md`）顶部加过期横幅，指向本文档 §4。
+
+## 4. 嘴的现状（**唯一出处**，2026-09-28 深夜）
+
+* **参数 43 / 树 27 / 槽位 83**（2D 主表 6 + 2D 变体 1 + 2D 副本 4 + 2D 形态 1 + 1D 片段表 5 + 1D 开关 5）；
+  资产实测 **109 个孩子**（83 命名槽位 + 26 子树引用）；所有树 `m_NormalizedBlendValues: 0`、WD 开。
+* **嘴区域 7 个孩子 + 权重**：
+  `MouthCoreRollSwitch@Gate/MouthStyle` · `MouthJaw@W/One` · `MouthShift@Gate/MouthStyle` ·
+  `MouthWidth@Gate/MouthStyle` · `MouthTongue@W/One` · `InvertedV@W/One` · `Cheek@W/One`
+* **每张表**：
+
+| 树 | 形状 | 轴与刻度 | 格数 |
+| --- | --- | --- | --- |
+| `MouthCore` | 2D | `Mouth/Form`（**−1 苦** / 0 / 0.75 / 1）× `Mouth/Open`（0 / 0.4 / 0.75），挖 `(2,2)` | **11** |
+| `MouthCoreRoll` | 2D（猫嘴版整嘴，与主版同轴同刻度） | 同上 | **11** |
+| `MouthShift` | 2D | `Mouth/X`（±0.95，±0.20 死区）× `Mouth/Y`（0 / +1），挖"上移 × 侧移"两角 | **4**（T 形） |
+| `MouthWidth` | **1D** | `Mouth/Pucker`：−0.93 窄 / −0.09 中 / +2.0 宽 | **3** |
+| `MouthTongue` | **1D** | `Mouth/TongueL`（借名，伸出量）：0 / 0.3333 / 0.6667 / 1 | **4** |
+| `MouthJaw` | **1D** | `Mouth/Jaw`：0 咬合·闭（咀嚼走这档）/ 0.75 张开 | **2** |
+| `Cheek` | 2D | `Cheek/Left|Right/Puff`（0 / 1） | **4** |
+| `InvertedV` | **1D** | `Style/InvertedV`（0/1） | **2** |
+| `MouthCoreRollSwitch` | 1D 开关 | `Style/CatMouth` 两档 **0.15 / 0.30**（喂进来的是 0/1 ⇒ 等于恒等） | — |
+
+* **轴 → 消费者**：
+
+| 轴 | 消费者 |
+| --- | --- |
+| `Mouth/Form` · `Mouth/Open` | `MouthCore` / `MouthCoreRoll` |
+| `Mouth/X` · `Mouth/Y` | `MouthShift` |
+| `Mouth/Jaw` | `MouthJaw` |
+| `Mouth/Pucker` | `MouthWidth` |
+| `Mouth/TongueL` | `MouthTongue` |
+| `Cheek/Left|Right/Puff` | `Cheek` |
+| `Style/InvertedV` | `InvertedV` |
+| `Gate/MouthStyle` | `MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`（三个孩子的权重） |
+| **无树消费**（只当出口） | `Mouth/Forward` · `Mouth/Funnel` · `Mouth/Press` · `Mouth/JawSide` · `Mouth/TongueR` |
+
+* **猫嘴**：判据 `clamp(mouthRollLower × clamp((嘴角方向 − 0.12)/0.10, 0, 1) × (1 + 3·jawOpen²), 0, 1) × HoAutoCatMouth + HoExternalCatMouth`，
+  再 `维持(trigger 0.28 / threshold 0.26 ⇒ 释放点 0.02 / hold 0.2)` + `平滑 0.08 s` ⇒ 输出是 **0/1 迟滞**；
+  两个下游：控制器变体开关、嘴宽轴那道门。
+* **形态门**：`Ho/Style/MouthGate`（内部）→ `Ho/Drive/Gate/MouthStyle`（控制器）；`MouthGate = 1 × (1 − InvertedV) × (1 − Cheek)`。
+* **进度**：**83 格全没画**（`.research/clip-progress.py` 探针：`0/83 slots have curves`）⇒ 现在能验收的是**轴值**（面板），不是造型。
+* **未做**：Warudo bundle / mod 仍是旧的（要 append `HoExternalCatMouth` / `HoAutoCatMouth` 等）；歪舌头的侧向通道还没量（3+3 段）；`Mouth/JawSide` 与 `Mouth/TongueR` 现在是**没有树的出口**。
+
+## 5. 本轮（review 这一轮）改了什么
+
+* **结构**：`MouthJaw` 2D 6 格 → **1D 2 格**（咬合/闭 ↔ 张；用户「左右两个点完全没必要」，实测咬紧时侧偏只有 0.02~0.04）；
+  `MouthShift` 3×2 → **4 格 T 形**（挖"上移 × 侧移"两角：噘嘴时嘴居中 ⇒ `Mouth/X` ≈ 0）；槽位 **89/90 → 83**。
+* **代码三处同步**：`HoFaceControllerSkeletonBuilder.cs` · `.research/make-vts-controller.ps1` · `.research/check-controller.ps1`；
+  资产重生成（新建 6 个空片段、删掉 11 个孤儿；都是空片段 ⇒ 没丢东西）；检查器 **0 问题（43 / 27 / 83）**。
+* **文档**：见 §3"本轮已清"；新增 §5.7.28–§5.7.31 四条流水 + 本文件。
+* **工具**（`.research/`，只读审计用）：`mouth-audit.py`（规则/耦合/顺序机检）、`clip-progress.py`（哪些格子真画了）、
+  `param-usage.py`（哪些参数真有树消费）、`census-matrix.py`（48 段普查矩阵）、`fix-raw-newlines.py`（notes 里的真换行）。
+
+## 6. 待你拍板
+
+1. **M1** 舌头 4 格只写舌头键（推荐）还是加一道 tongue 门让舌头态控制张嘴？
+2. **M3** 猫嘴要不要显式压掉倒V / 鼓嘴（一行代价）？
+3. **cheek 树**留不留（4 格；2026-09-27 你验收过「鼓脸…你做的非常好」）？
+4. 文档清理：按 §3 的"结构性修法"重构（数字只留一个出处），还是继续逐条修？

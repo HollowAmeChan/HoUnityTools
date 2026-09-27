@@ -199,6 +199,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 所以跟 `MouthJaw` 的 Y 一个处理：**负侧一律钳到 0 那一档** ⇒ 3×2 = 6 格。
         /// </summary>
         private static readonly float[] ShiftYMeasured = { 0f, 1f };
+
+        /// <summary>
+        /// **`MouthShift` 挖掉的 2 格**（2026-09-28 深夜，用户问「同理 shift 的两个角点是不是也能删了」⇒ 对）：
+        /// 删的是 **`(0,1) 左上` / `(2,1) 右上`**（"上移 × 侧移"），**不是**下面那两个。
+        /// 理由（跟 jaw 的「咬合 × 侧偏」同一类 —— 次要维的信号只存在于主要的某一档）：
+        /// `Mouth/Y` 的正侧是**噘嘴判据**（要 `mouthPucker ≥ 0.45`），而「整嘴平移」那几段实测
+        /// `mouthPucker` 只有 **0.22~0.37** ⇒ Y = 0；反过来噘嘴时嘴是**居中**的（`dimple` 0.072 ⇒ `Mouth/X` ≈ 0）
+        /// ⇒「上移 × 侧移」这个组合在设备上到不了 ✓
+        /// ⇒ 剩 **4 格** = 下排三点（左 / 中 / 右）+ 上中一点（T 形）；"上移+侧移"的输入会被投影到 T 的两条斜边
+        /// ⇒ 得到"一半侧移 + 一半上移"的插值（圈外点投影到圈边做凸组合，见 BLEND_TREE_LIMITS §9）。
+        /// ⚠️ **不能删下面那两个**：下排左/右就是「整嘴左右移动」本体（实测 `mouthLeft/Right` 0.963~0.976）。
+        /// </summary>
+        private static readonly Vector2Int[] MouthShiftSkip = { new Vector2Int(0, 1), new Vector2Int(2, 1) };
         /// <summary>
         /// **`MouthWidth`（1D 3 格，2026-09-28 傍晚重返）** 的刻度 —— 轴就是既有的 `Mouth/Pucker`
         /// （= `2×dimple − pucker`）。9 段补录实测（`静态 / 抿嘴嘴宽 / 收嘴不撅`）：
@@ -254,43 +267,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new CellPos { I = 3, J = 2, X = 0.926f, Y = 0.596f }
         };
 
-        /// <summary>
-        /// **`MouthJaw` 的 6 个点：手工拉的自由点集**（2026-09-27 用户定：「以后我直接一边测一边拉值」）。
-        /// 用户在 Unity 的 Animator 窗口里把 6 个点全拉过了，下面是**从资产里读回来的真值**
-        /// （读法：`.research/controller-struct.ps1 -Path &lt;资产&gt;` —— 把 GUID 解析成槽位名再逐点列坐标）：
-        /// <code>
-        ///   A3X0Y0 (-0.342,-0.015)   A3X1Y0 (0,0)          A3X2Y0 (0.34,-0.01)
-        ///   A3X0Y1 (-0.541, 0.374)   A3X1Y1 (0.006, 0.902) A3X2Y1 (0.534, 0.354)
-        /// </code>
-        /// 形状：**下面那排往里收**（±0.65 → ±0.34）、**上面左右两个角点往外推**（±0.4 → ±0.54）、
-        /// 张满那格抬到 0.9 —— 正是用户说的「两个角点挪到连线的往外凸一点点的位置」。
-        /// ⇒ `JawSide` / `JawOpen` 那两个数组**只当索引骨架**（槽位名里只带 X 的档数），
-        ///   坐标一律以这里为准。⚠️ 以后他再拉点：**先读资产、再改这里**，不要反过来。
-        /// ⚠️ 槽位名按**索引**编（`A3X&lt;i&gt;Y&lt;j&gt;`）⇒ 挪坐标**不改名、不新增片段**。
-        /// </summary>
-        private static readonly CellPos[] MouthJawOverride =
-        {
-            new CellPos { I = 0, J = 0, X = -0.342f, Y = -0.015f },
-            new CellPos { I = 1, J = 0, X = 0f, Y = 0f },
-            new CellPos { I = 2, J = 0, X = 0.34f, Y = -0.01f },
-            new CellPos { I = 0, J = 1, X = -0.541f, Y = 0.374f },
-            new CellPos { I = 1, J = 1, X = 0.006f, Y = 0.902f },
-            new CellPos { I = 2, J = 1, X = 0.534f, Y = 0.354f }
-        };
+        // ⚠️ **`MouthJaw` 的"6 个手拉自由点"已退役**（2026-09-28 深夜用户判定：「左右两个点完全没必要」）。
+        //    那些点是 2026-09-27 用户在 Animator 窗口里一个一个拉的（从资产读回来的真值，留档）：
+        //      A3X0Y0 (-0.342,-0.015)   A3X1Y0 (0,0)           A3X2Y0 (0.34,-0.01)
+        //      A3X0Y1 (-0.541, 0.374)   A3X1Y1 (0.006, 0.902)  A3X2Y1 (0.534, 0.354)
+        //    为什么删得掉：① 下巴左右**只在"微张 / 解放咬颌"时才到 0.52**，咬紧时只有 0.02~0.04
+        //    （"只挤嘴角"的伪影反而 0.05~0.2）⇒「咬合 × 侧偏」那两格物理上到不了；② 剩下的左右两点
+        //    意味着"张满·中"要靠左右 50/50 混，或者牺牲 Y 的分辨率 —— 用户判定不值 ⇒ **下巴只留上下两档**。
+        //    `Ho/Drive/Mouth/JawSide` 照旧发布（出口；以后想要回来再建一张 2D 表 + 手拉点）。
 
         private static readonly TableSpec[] Tables =
         {
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
-            // 下巴（2026-09-27 用户定「就是下巴上下左右这棵树」）：**X = 左右（3 档）× Y = 上下（2 档）= 6 格**。
-            // ⚠️ 上下只有两档：咬合 / 咀嚼 = **0 那一档**（轴本身是双极的，负侧钳到 Y0）。
-            // ⚠️ 左右两格**不摆在张满那一行**：搬到 (X, 0.45) —— 见 `MouthJawOverride`。
-            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen, Override = MouthJawOverride },
+            // ⚠️ **下巴 2026-09-28 深夜从 2D 6 格降成 1D 2 格**（只留上下）—— 见下面的 `Simple1DTables`。
 
-            // 整嘴平移（2026-09-28 下午新建）：**3×3** —— X = 左右（±0.95）· Y = 上下（±1）。
-            // 中心格 = 零位移（残差表的规矩）；8 个外圈格 = 八个方向的位移。
-            // 整嘴平移（3×2 = 6 格）：X = 左右（±0.95）· Y = 上下（**只有两档**：0 与 +1，
-            // 负侧钳到 0 —— 用户实测下移到不了，见 `ShiftYMeasured` 的注释）。
-            new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured },
+            // 整嘴平移（2026-09-28 下午新建，当晚从 3×2 收成 **4 格 T 形**）：X = 左右（±0.95）·
+            // Y = 上下（0 / +1，负侧钳到 0）；**上移的左右两角挖掉**（`MouthShiftSkip`，见其注释）。
+            new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured, Skip = MouthShiftSkip },
             // ⭐ **舌头是 1D 4 格，不是 2D 表** —— 见下面的 `Simple1DTables`。
             //    用户 2026-09-28 深夜四句话定形：①「其实也只需要一个 1d 树分三段就行了吧」→
             //    ②「不行我感觉还是要五点」→ ③「5 点不是你想的那样，我想的是**默认态在左下角**，的四点」→
@@ -350,7 +343,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 每格自己把该有的张嘴量烘进去（穿模由作者那 4 段负责）。见 `TongueTicks` 的注释。
             // 轴借 `Ho/Drive/Mouth/TongueL`（两根 TongueL/R 本来就是 tongueOut 的占位；做「歪舌头」时
             // 量轴换新的 `TongueOut`，这 5 格的名字与位置都不用动）。
-            new Simple1DSpec { Name = "MouthTongue", Parameter = "Ho/Drive/Mouth/TongueL", Token = "Tongue", Values = TongueTicks }
+            new Simple1DSpec { Name = "MouthTongue", Parameter = "Ho/Drive/Mouth/TongueL", Token = "Tongue", Values = TongueTicks },
+            // 下巴（2026-09-28 深夜：**1D 2 格** —— 咬合/闭 ↔ 张开）。用户判定「左右两个点完全没必要」：
+            // 下巴左右只在"微张/解放咬颌"时才到 0.52、咬紧时 0.02~0.04 ⇒ 侧偏那两维不值得占格子；
+            // 咀嚼走"咬合"这一档（`Mouth/Jaw` 的 0 档）。`JawOpen` = {0, 0.75} 直接当两档刻度。
+            // ⚠️ `Ho/Drive/Mouth/JawSide` 照旧发布（出口，没有树消费）。
+            new Simple1DSpec { Name = "MouthJaw", Parameter = "Ho/Drive/Mouth/Jaw", Token = "Jaw", Values = JawOpen }
         };
 
         /// <summary>
