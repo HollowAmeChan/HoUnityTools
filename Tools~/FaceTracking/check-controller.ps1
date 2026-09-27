@@ -316,6 +316,8 @@ $slotSpec = [ordered]@{
     #    —— 删的是 `(0,1)` 左上 / `(2,1)` 右上（噘嘴时嘴居中 ⇒ `Mouth/X` ≈ 0）。下面那排左/右是本体，不能删。
     'MouthShift'  = @{ x = 'LeftRight'; y = 'UpDown';   a = 3; ys = @(0, 1); skip = @('0,1', '2,1') }
     # 舌头（2026-09-28 深夜）：**不在 2D 清单里** —— 它是 1D 5 格，见下面 `$simple1DSlot` 的 `MouthTongue`。
+    # 下巴（2026-09-28 深夜用户定）：2D **T 形 4 格** —— 左右只在「张开」那档有真信号，两个角不建
+    'MouthJaw'    = @{ x = 'JawSide'; y = 'Jaw'; a = 3; ys = @(0, 1); skip = @('0,0', '2,0') }
     'LidL'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
     'LidR'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
     # 颊轴（2026-09-27 加）：两根轴各两档 ⇒ 4 格。⚠️ 姿势还没画（现在是空片段），槽位名先钉死。
@@ -345,7 +347,6 @@ $simple1DSlot = [ordered]@{
     # ⚠️ 4 个刻度是**占位**（等分；`tongueOut` 还没实测过）。
     'MouthTongue'  = @{ t = 'Tongue';    a = 4; thr = @(0.0, 0.3333, 0.6667, 1.0) }
     # 下巴（2026-09-28 深夜）：**1D 2 格**（咬合/闭 ↔ 张开），轴 = `Mouth/Jaw`；刻度就是原 2D 表的 Y 两档。
-    'MouthJaw'     = @{ t = 'Jaw';       a = 2; thr = @(0.0, 0.75) }
 }
 
 # 刻度核对（2026-09-27 加）：坐标是**语义**（轴值 → 姿势），所以它必须等于生成器里那套刻度。
@@ -368,6 +369,8 @@ $scaleOf = [ordered]@{
     'LidR'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
     # 颊轴：0 / 1 两档（轴本身就是 0~1 的形状权重）⇒ 4 个点的坐标只能是 0 / 1
     'Cheek'       = @{ x = @(0.0, 1.0);       y = @(0.0, 1.0) }
+    # 下巴：JawSide 实测单侧只到 0.52（±0.65 老刻度够不着）· Jaw 0 / 0.75
+    'MouthJaw'    = @{ x = @(-0.52, 0.0, 0.52); y = @(0.0, 0.75) }
 }
 foreach ($c in $slotCopyOf.Keys) { $scaleOf[$c] = $scaleOf[$slotCopyOf[$c]] }
 
@@ -429,22 +432,28 @@ foreach ($name in $slotSpec.Keys) {
 $exactPos = [ordered]@{
     # ⚠️ **`MouthCore` 8 个点全是手工拉的**（2026-09-27 用户第二次改：拉了 X1/X2 两列）⇒ 逐个钉死。
     #    顺序（不能反）：**先读资产 → 再改两个生成器 → 最后改这里**。
-    'MouthCore__Form__Open__A4X0Y0'     = @(-0.5, 0.0)
-    'MouthCore__Form__Open__A4X0Y1'     = @(-0.5, 0.4)
-    'MouthCore__Form__Open__A4X0Y2'     = @(-0.5, 0.75)
-    'MouthCore__Form__Open__A4X1Y0'     = @(0.0, 0.0)
-    'MouthCore__Form__Open__A4X2Y0'     = @(0.482, -0.017)
-    'MouthCore__Form__Open__A4X3Y0'     = @(0.907, -0.024)
-    'MouthCore__Form__Open__A4X1Y1'     = @(0.0, 0.4)
-    'MouthCore__Form__Open__A4X2Y1'     = @(0.47, 0.336)
-    'MouthCore__Form__Open__A4X3Y1'     = @(0.968, 0.267)
-    'MouthCore__Form__Open__A4X1Y2'     = @(0.0, 0.75)
-    'MouthCore__Form__Open__A4X3Y2'     = @(0.926, 0.596)
+    '嘴苦闭'       = @(-0.5, 0.0)
+    '嘴苦半张'     = @(-0.5, 0.4)
+    '嘴苦满'       = @(-0.5, 0.75)
+    '嘴平闭'       = @(0.0, 0.0)
+    '嘴笑闭'       = @(0.482, -0.017)
+    '嘴大笑闭'     = @(0.907, -0.024)
+    '嘴平半张'     = @(0.0, 0.4)
+    '嘴笑半张'     = @(0.47, 0.336)
+    '嘴大笑半张'   = @(0.968, 0.267)
+    '嘴平满'       = @(0.0, 0.75)
+    '嘴大笑满'     = @(0.926, 0.596)
     # ⚠️ 下巴那 6 个手拉点 2026-09-28 深夜退役（用户「左右两个点完全没必要」）⇒ 不在这里钉了。
 }
 foreach ($slot in $exactPos.Keys) {
-    $tree = $slot -replace '__.*$', ''
-    if (-not $trees.ContainsKey($tree)) { continue }
+    $tree = $null
+    foreach ($tn in $script:slotNames.Keys) {
+        $tbl = $script:slotNames[$tn]
+        $flat = @()
+        if ($tbl.Count -gt 0 -and $tbl[0] -is [System.Array]) { foreach ($c in $tbl) { $flat += $c } } else { $flat = @($tbl) }
+        if ($flat -contains $slot) { $tree = $tn; break }
+    }
+    if (-not $tree -or -not $trees.ContainsKey($tree)) { continue }
     $kid = @($trees[$tree].Kids | Where-Object { $_.Name -eq $slot })
     if ($kid.Count -ne 1) { $problems.Add("逐格移位的槽位 $slot 在树 $tree 里找不到（或不止一个）"); continue }
     $want = $exactPos[$slot]

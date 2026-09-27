@@ -606,18 +606,24 @@ if (-not $NoClips) {
         $clipCount++
     }
 
-    # 孤儿片段：表变稀疏（挖掉死角）之后，被去掉的格子会留下没人引用的 `.anim` ⇒ 删掉。
-    # 只删**符合槽位命名**的文件（`*__A*X<i>[Y<j>].anim`），别的文件一律不碰。
+    # 孤儿片段：**只清"旧矩阵命名"的残留**（`*__A<i>X<j>[Y<k>].anim`）。
+    # ⚠️ 2026-09-28 深夜起：生成器**不再生成任何片段**（叶子 Direct 树留空，作者手填），所以这张
+    #    清理表只会越来越空 —— 它现在的作用就是"把以前那套矩阵名的残留扫掉"。
+    # ⚠️ **保险**：只删匹配上面那个正则的文件 ⇒ 作者自己命名的片段（`嘴平闭.anim` 这种）永远不碰。
+    #    反过来说：**别用 `xxx__A3X1Y2` 这种名字给自己的片段命名**，那会被当成残留删掉。
     $live = @{}
     foreach ($clip in $script:clips) { $live[$clip.Name + '.anim'] = $true }
     $orphans = 0
+    $orphanNames = @()
     foreach ($file in Get-ChildItem -LiteralPath $ClipFolder -Filter '*.anim') {
         if ($file.Name -notmatch '__A\d+X\d+(Y\d+)?\.anim$') { continue }
         if ($live.ContainsKey($file.Name)) { continue }
         Remove-Item -LiteralPath $file.FullName -Force
         if (Test-Path -LiteralPath ($file.FullName + '.meta')) { Remove-Item -LiteralPath ($file.FullName + '.meta') -Force }
+        $orphanNames += $file.Name
         $orphans++
     }
-    "clips -> $ClipFolder  (新建 $clipCount · 保留已有 $clipKept · 删掉孤儿 $orphans)"
+    if ($orphans -gt 0) { "  删掉的旧矩阵名残留（" + $orphans + "）：" + ($orphanNames -join ', ') }
+    "clips -> $ClipFolder  (新建 $clipCount · 保留已有 $clipKept · 清掉旧矩阵名残留 $orphans)"
 }
 "  params=$($params.Count) trees=$($script:treeIds.Count) slots=$($script:clips.Count) clips=$clipCount kept=$clipKept"
