@@ -394,6 +394,15 @@ function SlotGuid([string]$name) {
     return ([System.BitConverter]::ToString($md5.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
 }
 
+# 叶子 Direct 树的名字：唯一来源 HoSlotNames.psd1（改词只改那个文件）
+$script:slotNames = Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'HoSlotNames.psd1')
+function SlotDisplay([string]$tree, [int]$i, [int]$j) {
+    $t = $script:slotNames[$tree]
+    if ($null -eq $t) { throw "HoSlotNames.psd1 里没有 $tree 的名字" }
+    if ($t.Count -gt 0 -and $t[0] -is [System.Array]) { return $t[$i][$j] }
+    return $t[$i]
+}
+
 function SlotKids([string]$tree, [array]$xv, [array]$yv, [string]$xt, [string]$yt, $skip = $null, $over = $null) {
     $kids = @()
     foreach ($j in 0..($yv.Count - 1)) {
@@ -406,20 +415,16 @@ function SlotKids([string]$tree, [array]$xv, [array]$yv, [string]$xt, [string]$y
             $y = $yv[$j]
             if ($over -and $over.ContainsKey("$i,$j")) { $x = $over["$i,$j"][0]; $y = $over["$i,$j"][1] }
             $name = ("{0}__{1}__{2}__A{3}X{4}Y{5}" -f $tree, $xt, $yt, $xv.Count, $i, $j)
-            $motion = '{fileID: 0}'
-            if (-not $NoClips) {
-                $guid = SlotGuid $name
-                $motion = "{fileID: 7400000, guid: $guid, type: 2}"
-                $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
-            }
-            # 叶子 = 一棵 Direct 树（名字同槽位名），里面暂时只有"原片段"一个孩子、权重恒 1
-            WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
+            # 叶子 = 一棵**空**的 Direct 树（中文状态名来自 HoSlotNames.psd1），孩子由作者手填
+            $display = SlotDisplay $tree $i $j
+            if (-not $display) { continue }
+            WriteTree $display 4 'Blend' 'Blend' @()
             $kids += @{
-                motion = "{fileID: $(TreeId $name)}"
+                motion = "{fileID: $(TreeId $display)}"
                 x      = $x
                 y      = $y
                 direct = 'Blend'
-                name   = $name
+                name   = $display
             }
         }
     }
@@ -431,20 +436,16 @@ function SlotKids1D([string]$tree, [array]$xv, [string]$xt) {
     $kids = @()
     for ($i = 0; $i -lt $xv.Count; $i++) {
         $name = ("{0}__{1}__A{2}X{3}" -f $tree, $xt, $xv.Count, $i)
-        $motion = '{fileID: 0}'
-        if (-not $NoClips) {
-            $guid = SlotGuid $name
-            $motion = "{fileID: 7400000, guid: $guid, type: 2}"
-            $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
-        }
-        WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
+        $display = SlotDisplay $tree $i 0
+        if (-not $display) { continue }
+        WriteTree $display 4 'Blend' 'Blend' @()
         $kids += @{
-            motion = "{fileID: $(TreeId $name)}"
+            motion = "{fileID: $(TreeId $display)}"
             x      = 0
             y      = 0
             direct = 'Blend'
             thr    = $xv[$i]
-            name   = $name
+            name   = $display
         }
     }
     return $kids
@@ -455,19 +456,15 @@ function SlotKidsDirect([string]$tree, [string]$side, [array]$cells) {
     $kids = @()
     foreach ($cell in $cells) {
         $name = ("{0}__Gate__{1}" -f $tree, $cell)
-        $motion = '{fileID: 0}'
-        if (-not $NoClips) {
-            $guid = SlotGuid $name
-            $motion = "{fileID: 7400000, guid: $guid, type: 2}"
-            $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
-        }
-        WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
+        $display = SlotDisplay $tree $cells.IndexOf($cell) 0
+        if (-not $display) { continue }
+        WriteTree $display 4 'Blend' 'Blend' @()
         $kids += @{
-            motion = "{fileID: $(TreeId $name)}"
+            motion = "{fileID: $(TreeId $display)}"
             x      = 0
             y      = 0
             direct = "Ho/Drive/Lid/$side/Gate/$cell"
-            name   = $name
+            name   = $display
         }
     }
     return $kids

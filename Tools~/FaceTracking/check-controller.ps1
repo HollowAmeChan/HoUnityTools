@@ -40,6 +40,7 @@ if (Test-Path -LiteralPath $ClipFolder) {
 #    + 4 切片权重 + 1 形态权重（`Ho/Drive/Style/InvertedV`）。默认值：门 = 1、其余 = 0。
 #    （上午删掉 `Mouth/X`（§5.7.22）→ 下午重建它并加过嘴角那两根（§5.7.23）→ 傍晚删掉嘴角那两根、
 #     `MouthWidth` 以 1D 3 格回来（§5.7.24）。）
+$script:slotNames = Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'HoSlotNames.psd1')
 $expected = @{}
 $prof = Get-Content -LiteralPath $Profile -Encoding UTF8 -Raw | ConvertFrom-Json
 foreach ($row in $prof.outputs) {
@@ -375,7 +376,8 @@ foreach ($name in $slotSpec.Keys) {
     $spec = $slotSpec[$name]
     if ($spec.direct) {
         $wantD = New-Object System.Collections.Generic.List[string]
-        foreach ($cell in $spec.direct) { $wantD.Add(("{0}__Gate__{1}" -f $name, $cell)) }
+        $tblD = $script:slotNames[$name]
+        for ($k = 0; $k -lt $spec.direct.Count; $k++) { if ($tblD[$k]) { $wantD.Add($tblD[$k]) } }
         $kidsD = @($trees[$name].Kids | Where-Object { $_.Name -ne '<空 Motion>' -and $_.Name -ne '?' } | ForEach-Object { $_.Name })
         $wrongD = @($kidsD | Where-Object { $wantD -notcontains $_ })
         if ($wrongD.Count -gt 0) { $problems.Add("Direct 表 $name 的槽位名不在清单里（$($wrongD.Count) 个）：$($wrongD -join ', ')") }
@@ -383,11 +385,16 @@ foreach ($name in $slotSpec.Keys) {
         continue
     }
     $want = New-Object System.Collections.Generic.List[string]
-    foreach ($j in $spec.ys) {
-        foreach ($i in 0..($spec.a - 1)) {
-            # 稀疏表：被挖掉的格子（物理上到不了）不在清单里
-            if ($spec.skip -and ($spec.skip -contains "$i,$j")) { continue }
-            $want.Add(("{0}__{1}__{2}__A{3}X{4}Y{5}" -f $name, $spec.x, $spec.y, $spec.a, $i, $j))
+    $tbl = $script:slotNames[$name]
+    if ($null -eq $tbl) { $problems.Add("HoSlotNames.psd1 里没有 $name 的名字") }
+    else {
+        $is2D = ($tbl.Count -gt 0 -and $tbl[0] -is [System.Array])
+        foreach ($j in $spec.ys) {
+            foreach ($i in 0..($spec.a - 1)) {
+                if ($spec.skip -and ($spec.skip -contains "$i,$j")) { continue }
+                $nm = if ($is2D) { $tbl[$i][$j] } else { $tbl[$i] }
+                if ($nm) { $want.Add($nm) }
+            }
         }
     }
     $kids = @($trees[$name].Kids | Where-Object { $_.Name -ne '<空 Motion>' -and $_.Name -ne '?' } | ForEach-Object { $_.Name })
@@ -486,7 +493,7 @@ foreach ($name in $simple1DSlot.Keys) {
     $spec = $simple1DSlot[$name]
     if ($trees[$name].Type -ne 'Simple1D') { $problems.Add("1D 表 $name 类型应为 Simple1D，实际 $($trees[$name].Type)") }
     $want = New-Object System.Collections.Generic.List[string]
-    for ($i = 0; $i -lt $spec.a; $i++) { $want.Add(("{0}__{1}__A{2}X{3}" -f $name, $spec.t, $spec.a, $i)) }
+    for ($i = 0; $i -lt $spec.a; $i++) { $want.Add(("{0}" -f $script:slotNames[$name][$i])) }
     $names = @($trees[$name].Kids | Where-Object { $_.Name -ne '<空 Motion>' } | ForEach-Object { $_.Name })
     $wrong = @($names | Where-Object { $want -notcontains $_ })
     if ($wrong.Count -gt 0) { $problems.Add("1D 表 $name 的槽位名不在清单里（$($wrong.Count) 个）：$($wrong -join ', ')") }
@@ -537,7 +544,8 @@ foreach ($name in $simple1DSlot.Keys) {
     if (-not $trees.ContainsKey($name)) { continue }
     $slotTotal += @($trees[$name].Kids | Where-Object { $_.Name -ne '<空 Motion>' -and $_.Name -ne '?' }).Count
 }
-if ($slotTotal -ne 65) { $problems.Add("槽位总数应为 65，实际 $slotTotal") }
+if ($slotTotal -eq 0) { $notes.Add("叶子 Direct 树全部留空（新架构）：作者手填，槽位片段数不再核对") }
+else { $notes.Add("槽位片段 $slotTotal 个（作者手填的）") }
 
 # ── 报告 ─────────────────────────────────────────────────────────────────────
 "=== $Path ==="
