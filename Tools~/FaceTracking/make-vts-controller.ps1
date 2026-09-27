@@ -418,7 +418,7 @@ function SlotKids([string]$tree, [array]$xv, [array]$yv, [string]$xt, [string]$y
             # 叶子 = 一棵**空**的 Direct 树（中文状态名来自 HoSlotNames.psd1），孩子由作者手填
             $display = SlotDisplay $tree $i $j
             if (-not $display) { continue }
-            WriteTree $display 4 'Blend' 'Blend' @()
+            WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
             $kids += @{
                 motion = "{fileID: $(TreeId $display)}"
                 x      = $x
@@ -438,7 +438,7 @@ function SlotKids1D([string]$tree, [array]$xv, [string]$xt) {
         $name = ("{0}__{1}__A{2}X{3}" -f $tree, $xt, $xv.Count, $i)
         $display = SlotDisplay $tree $i 0
         if (-not $display) { continue }
-        WriteTree $display 4 'Blend' 'Blend' @()
+        WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
         $kids += @{
             motion = "{fileID: $(TreeId $display)}"
             x      = 0
@@ -458,7 +458,7 @@ function SlotKidsDirect([string]$tree, [string]$side, [array]$cells) {
         $name = ("{0}__Gate__{1}" -f $tree, $cell)
         $display = SlotDisplay $tree $cells.IndexOf($cell) 0
         if (-not $display) { continue }
-        WriteTree $display 4 'Blend' 'Blend' @()
+        WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
         $kids += @{
             motion = "{fileID: $(TreeId $display)}"
             x      = 0
