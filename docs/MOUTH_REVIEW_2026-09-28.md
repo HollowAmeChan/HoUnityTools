@@ -1,4 +1,4 @@
-# 嘴系统 review（2026-09-28）
+﻿# 嘴系统 review（2026-09-28）
 
 **范围**：整张嘴 —— `MouthRegion` + 嘴的 profile 行 + 控制器里那 7 个孩子 + 相关文档。
 **一句话结论**：**轴/结构层可以验收**（机械检查全绿、检查器 0 问题、83 槽位）；**4 处耦合要你拍板**、**文档有一批"复述漂移"要清**。
@@ -14,7 +14,7 @@
 | 曲线 key 按 `t` 升序 / 无 NaN | **0 问题** | 同上 |
 | `steps` 释放点 < 触发点（`trigger − |threshold|`） | **0 问题** | 同上 |
 | `Gate/*` 行 `defaultValue` = 1、普通轴 = 0 | **0 问题** | 同上 |
-| 树从根可达 / 区域孩子的权重逐条接线 / 槽位名与坐标 | **0 问题** | `.research/check-controller.ps1` |
+| 树从根可达 / 区域孩子的权重逐条接线 / 槽位名与坐标 | **0 问题** | `Tools/FaceTracking/check-controller.ps1` |
 | 活资产 vs 生成器 vs 检查器（三处定义） | 一致（本轮两次结构改动同步过） | 同上 |
 
 ⇒ profile 的行序、修饰符顺序、曲线顺序、1D 阈值顺序、区域孩子清单**全部被机检钉住**。
@@ -143,7 +143,7 @@ NAMING 的"方阵"规则、`PARAMETER_HO` 的 `Cheek` 公式、以及本轮结�
 
 * **结构**：`MouthJaw` 2D 6 格 → **1D 2 格**（咬合/闭 ↔ 张；用户「左右两个点完全没必要」，实测咬紧时侧偏只有 0.02~0.04）；
   `MouthShift` 3×2 → **4 格 T 形**（挖"上移 × 侧移"两角：噘嘴时嘴居中 ⇒ `Mouth/X` ≈ 0）；槽位 **89/90 → 83**。
-* **代码三处同步**：`HoFaceControllerSkeletonBuilder.cs` · `.research/make-vts-controller.ps1` · `.research/check-controller.ps1`；
+* **代码三处同步**：`HoFaceControllerSkeletonBuilder.cs` · `Tools/FaceTracking/make-vts-controller.ps1` · `Tools/FaceTracking/check-controller.ps1`；
   资产重生成（新建 6 个空片段、删掉 11 个孤儿；都是空片段 ⇒ 没丢东西）；检查器 **0 问题（43 / 27 / 83）**。
 * **文档**：见 §3"本轮已清"；新增 §5.7.28–§5.7.31 四条流水 + 本文件。
 * **工具**（`.research/`，只读审计用）：`mouth-audit.py`（规则/耦合/顺序机检）、`clip-progress.py`（哪些格子真画了）、
