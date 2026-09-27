@@ -2844,23 +2844,23 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/Form",
-                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp(1 - (eyeBlinkLeft - 0.10) / 0.10, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
+                        "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/Form",
-                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) * clamp(1 - (eyeBlinkRight - 0.10) / 0.10, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
+                        "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",
