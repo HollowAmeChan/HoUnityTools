@@ -171,6 +171,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] JawOpen = { 0f, 0.75f };
 
         /// <summary>
+        /// **`Mouth/Jaw`（= 裸 `jawOpen` 的正侧）的三档实测刻度**：0 闭 · 0.4 半张 · 0.75 张满。
+        /// 与 `MouthCore` 的 Y（`Mouth/Open` = 0 / 0.4 / 0.75）同一套口径，都来自口腔开度实测
+        /// （半张 `jawOpen` 0.367~0.434、张满 0.74~0.79）；区别只是 `Mouth/Open` 还带卷唇 / 漏斗修正。
+        /// ⚠️ **舌头那张表的 Y 用它**：舌头长在下颌上，张开量决定舌根位置、也决定"舌头过不过得去嘴唇"。
+        /// </summary>
+        private static readonly float[] JawOpenMeasured = { 0f, 0.4f, 0.75f };
+
+        /// <summary>
+        /// **`MouthTongue` 挖掉的 4 格**（2026-09-28 深夜）：只留 **4 个角 + 对角线上那 1 个点** = 5 格。
+        /// 索引：X = 舌头伸出量（0 / 0.5 / 1，`Unit`）· Y = 下颌张开量（0 / 0.4 / 0.75，`JawOpenMeasured`）
+        /// ⇒ 留 (0,0) 常态 · (2,0) 舌伸嘴不张 · (0,2) 张嘴不伸舌 · (2,2) 舌伸 + 张大 ·
+        ///   **(1,1) 半舌半张 = 对角线上那一点**。
+        /// ⚠️ 那个中点就是"穿模那一帧"的负责人 —— 少了它，中间态只能由四角线性混出来。
+        /// </summary>
+        private static readonly Vector2Int[] MouthTongueSkip =
+        {
+            new Vector2Int(1, 0), new Vector2Int(2, 1), new Vector2Int(0, 1), new Vector2Int(1, 2)
+        };
+
+        /// <summary>
         /// **2026-09-28 当天三版之后的刻度** —— 上午删 2D 的 `MouthWidth`（§5.7.22）、下午建整嘴平移 +
         /// 嘴角 3×3（§5.7.23）、傍晚按用户判定收成「**整嘴平移 3×2 + 嘴宽 1D 3 格**」（§5.7.24）。
         /// · `Mouth/X`（整嘴左右平移）：刻度 **±0.95**（整嘴右移 `mouthLeft` 0.963~0.967、左移 `mouthRight`
@@ -283,7 +303,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 整嘴平移（3×2 = 6 格）：X = 左右（±0.95）· Y = 上下（**只有两档**：0 与 +1，
             // 负侧钳到 0 —— 用户实测下移到不了，见 `ShiftYMeasured` 的注释）。
             new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured },
-            new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },
+            // ⭐ **舌头：`tongueOut` × `jawOpen` 的 4 角 + **对角线上补 1 点** = 5 格**（2026-09-28 深夜用户定）。
+            //    原话：「tongueOut 跟 jawOpen 的 4 角树，因为这个很容易穿模，我们需要额外在 y=x 线上补一个状态也就是 5 点」。
+            //    ⚠️ 不补那一点时，四角线性混出来的中间态就是"舌头顶穿嘴唇"的那一帧 —— 补上之后中段有人负责。
+            //    ⚠️ 4 个**边中点**不建（`MouthTongueSkip`）：这张表的语义就是"4 角 + 中心"。
+            //    ⚠️ 旧版两根轴**同源**（X/Y 都吃 `tongueOut`）⇒ 4 格里只有对角线两格采得到，另两格是死的。
+            new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/Jaw", XToken = "Tongue", YToken = "Jaw", XValues = Unit, YValues = JawOpenMeasured, Skip = MouthTongueSkip },
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
