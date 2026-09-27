@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -253,9 +253,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly CellPos[] MouthCoreOverride =
         {
             // 苦那一列（Form −1）：2026-09-28 傍晚新增，坐标与 X0 列对称（作者可再拉）
-            new CellPos { I = 0, J = 0, X = -1f, Y = 0f },
-            new CellPos { I = 0, J = 1, X = -1f, Y = 0.4f },
-            new CellPos { I = 0, J = 2, X = -1f, Y = 0.75f },
+            new CellPos { I = 0, J = 0, X = -0.5f, Y = 0f },
+            new CellPos { I = 0, J = 1, X = -0.5f, Y = 0.4f },
+            new CellPos { I = 0, J = 2, X = -0.5f, Y = 0.75f },
             // 原来那 8 个（用户手拉的真值；索引整体 +1，因为左边多了一列苦）
             new CellPos { I = 1, J = 0, X = 0f, Y = 0f },
             new CellPos { I = 2, J = 0, X = 0.482f, Y = -0.017f },
