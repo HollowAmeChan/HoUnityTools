@@ -350,7 +350,7 @@ result.controller.ApplyOverrides(overrides);                 // 片段是过滤�
 
 | 桶 | 位置 | 进版本库 | 内容 | 谁改 |
 | --- | --- | --- | --- | --- |
-| **本机设置** | `UserSettings/HoUnityTools/FaceTracking.asset` | ✗ | 手机 IP、上次连接状态 | 面板即时写（这台机器的事，不该同步给别人） |
+| **本机设置** | `UserSettings/HoUnityTools~/FaceTracking.asset` | ✗ | 手机 IP、上次连接状态 | 面板即时写（这台机器的事，不该同步给别人） |
 | **组件配置** | 场景 / Prefab 上的组件 | ✓ | 输出分组、通道表、路径映射、未应用标记 | 用户改；**不写盘到控制器**，直到点按钮 |
 | **我们产出的控制器** | `Assets/FaceTracking/Controllers/`（建议约定） | ✓ | 加工后的控制器（生成段 + `(EDIT THIS)` 段） | 生成期写；生成段勿手改 |
 | **源控制器** | 用户原来放哪就哪 | ✓ | Jerry 模板 / 自己做的控制器 | **我们只读，从不改写** |

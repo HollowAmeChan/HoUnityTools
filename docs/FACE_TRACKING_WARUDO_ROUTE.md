@@ -686,7 +686,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 **现在的做法**：`Runtime/FaceTracking/HoFaceProfileJson.cs` —— 自己写的读写器
 （`HoFaceProfile` 退化成"格式的名字 + 入口"）。顺带多了两件事：未知字段统一跳过（向前兼容照旧）、**报错带字符位置**。
 
-✅ **验证**：`.research/profile-json-test` 离线跑**包里的真源码**（桩件顶替 UnityEngine）→ **154/154 通过**
+✅ **验证**：`Tools~/FaceTracking/profile-json-test` 离线跑**包里的真源码**（桩件顶替 UnityEngine）→ **154/154 通过**
 （2026-09-26 复核重跑），含 `写→读→写 文本完全一致（字节稳定）`、行数与曲线关键点、修饰符**顺序**往返、
 转义与 Unicode 往返、坏 JSON 报字符位置。
 ✅ **线上判据（历史）**：`Player.log` 里处理链状态行 = `ho-2d-test1.hoface.json#… · 输入行 128 / 输出行 56`
@@ -814,8 +814,8 @@ AvatarCloneParent：Character Avatar Clone Parent
 
 | 测什么 | 怎么跑 | 现在的结果 |
 |---|---|---|
-| 中间层配置的 JSON 读写 + VTS 收包解析 | `dotnet run --project .research/profile-json-test` | **154/154 通过**（2026-09-26 复核重跑；做法与包侧 `Tests~/` 无关，跑的是真源码 + 桩件） |
-| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project .research/expression-coverage` | **19/19 通过**（2026-09-26 复核重跑） |
+| 中间层配置的 JSON 读写 + VTS 收包解析 | `dotnet run --project Tools~/FaceTracking/profile-json-test` | **154/154 通过**（2026-09-26 复核重跑；做法与包侧 `Tests~/` 无关，跑的是真源码 + 桩件） |
+| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project Tools~/FaceTracking/expression-coverage` | **19/19 通过**（2026-09-26 复核重跑） |
 | 包侧整体能不能编译（含编辑器） | `.warudo-mod-research/.tools/compile-check-package.ps1`（整包）/ `compile-check-editor.ps1` | 全绿（引用表是显式列框架 + `UnityEditor.dll`；**别改成通配所有 dll** —— 会淹出约 2000 条假 `CS0433`） |
 | mod 脚本能不能对着真机 DLL 编译 | `Assets/HoWarudoModTests/tools/compile-check.ps1`（**mod 工程里**，`-ModsRoots Mods,Mods-Ho`） | 全绿（引用表含 `UMod.dll` / `UMod-Interface.dll`；含 UMod 沙箱 lint） |
 | Warudo 侧会话级行为（面板 / 影子台 / 断流回中性） | `Tests~/FaceTrackingValidation.cs` 拷进一次性工程批处理跑（[批处理验证](pitfalls/VALIDATION_LOOP.md)） | 成功标记 `HO_FACE_TESTS_ALL_PASSED` |

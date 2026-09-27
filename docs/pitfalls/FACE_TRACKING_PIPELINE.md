@@ -1,4 +1,4 @@
-# 面捕流水线的坑：值没到、包丢了、时间对不上
+﻿# 面捕流水线的坑：值没到、包丢了、时间对不上
 
 正本：[面捕工作流](../FACE_TRACKING_WORKFLOW.md)（怎么用）、[面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)（值怎么加工）、
 [面捕设计与已验证机制](../FACE_TRACKING_DESIGN.md)（机制层）。
@@ -20,7 +20,7 @@
 
 怎么办：**我们自己的 JSON 只在 `HoJsonReader` 上写**（手写状态机），三份实现：
 `Runtime/FaceTracking/HoJson.cs`（读取器，文件头记着这三次）、`HoVtsPacket.cs`（手机包）、
-`HoFaceProfileJson.cs`（配置文件）。判据：离线台架 `.research/profile-json-test`（87 条）+
+`HoFaceProfileJson.cs`（配置文件）。判据：离线台架 `Tools~/FaceTracking/profile-json-test`（87 条）+
 `Tests~/FaceTrackingValidation.cs`。**新加任何要落盘/来自网络的结构，都不许再碰 `JsonUtility`。**
 
 ## 2. 两个时钟：包到了、合并里也有值，**通道就是不写**

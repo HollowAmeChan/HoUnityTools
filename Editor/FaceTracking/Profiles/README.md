@@ -198,7 +198,7 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 ## 改了生成器或配置之后
 
 ```powershell
-dotnet run --project .research\profile-json-test
+dotnet run --project Tools~\FaceTracking\profile-json-test
 ```
 
 这条会用**我们自己的解析器**（不是肉眼看 JSON）验这三份文件：

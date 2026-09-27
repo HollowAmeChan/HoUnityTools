@@ -1,6 +1,6 @@
 ﻿# fix-slot-guids.ps1 -- put slot clips back on the "GUID = md5('ho-face-slot:<slot name>')" scheme.
 #
-# WHY: `Tools/FaceTracking/make-vts-controller.ps1` does not have an asset database -- it derives each slot
+# WHY: `Tools~/FaceTracking/make-vts-controller.ps1` does not have an asset database -- it derives each slot
 # clip's GUID from the slot name and writes both the `.anim.meta` and the controller reference from
 # it. Six clips (the two `InvertedV` + four `Cheek` cells, added 2026-09-27) were created on disk
 # with editor-generated random GUIDs instead, so a future regeneration would reference GUIDs that

@@ -1,4 +1,4 @@
-# HO 参数规范（我们的中间层选什么）
+﻿# HO 参数规范（我们的中间层选什么）
 
 > 这份是**我们自己的**目标词表的唯一权威表。跟 [参数标准表](PARAMETER_STANDARDS.md) 的分工：
 > 那份记**外部标准怎么定**（VTS / ARKit / VMC / VRM / VRCFT 各自的规定，逐条带官方 URL），
@@ -32,7 +32,7 @@
 
 | 改了哪一层 | 包侧怎么验 | mod 侧怎么验 |
 |---|---|---|
-| `Runtime/FaceTracking/` 里**搬过去的那 11 份** | `dotnet run --project .research/profile-json-test`（154 条）+ `.research/expression-coverage`（19 条）+ `.research/compile-check-pkg.ps1`（整包三遍：Runtime 玩家视图 / Runtime+Editor / `Tests~`） | **先跑 `.research/sync-modcore.ps1`**，再 `Assets/HoWarudoModTests/tools/compile-check.ps1`；最后**人要真构建一次**（FastBuild → `.warudo`） |
+| `Runtime/FaceTracking/` 里**搬过去的那 11 份** | `dotnet run --project Tools~/FaceTracking/profile-json-test`（154 条）+ `Tools~/FaceTracking/expression-coverage`（19 条）+ `.research/compile-check-pkg.ps1`（整包三遍：Runtime 玩家视图 / Runtime+Editor / `Tests~`） | **先跑 `.research/sync-modcore.ps1`**，再 `Assets/HoWarudoModTests/tools/compile-check.ps1`；最后**人要真构建一次**（FastBuild → `.warudo`） |
 | 只动编辑器面板 / 会话 / 配置 | 批处理 Unity 用例（成功标记 `HO_FACE_TESTS_ALL_PASSED`，见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）+ `.warudo-mod-research/.tools/compile-check-editor.ps1` | 不涉及；但改了 `*.hoface.json` 要重导进沙箱（节点上的 `重读配置`） |
 | 只动 mod 的节点 / 接收器 / 控制器 | 不涉及（但别把包侧的公共类型改名，会连带崩 mod） | `tools/compile-check.ps1` —— **它的 UMod 沙箱 lint 只有 mod 侧有**：Roslyn 放过 `System.Reflection` / `System.IO`，UMod 的 `RunCodeValidation` 会让你**真构建失败** |
 
@@ -490,7 +490,7 @@ V3.0 版没有。我们用 V3.0。
 外加这一组 `Ho/Drive/<部位>/<轴>`，让新控制器直接按名取轴。
 
 ⚠️ **为什么是"新增"而不是"把出口名改掉"**：G1–G3 的名字是**下游契约**（VTS 生态、Hub 消费者、
-离线台架 `.research/profile-json-test` 的 §3 表格核对都按名字守它们）。改名的收益只是少一份重复，
+离线台架 `Tools~/FaceTracking/profile-json-test` 的 §3 表格核对都按名字守它们）。改名的收益只是少一份重复，
 代价是把一条对外契约改掉 —— 不值。
 
 ⚠️ **为什么表达式这么长（都是内联展开）**：**输出行之间不能互相引用** ——

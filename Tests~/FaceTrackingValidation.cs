@@ -1,4 +1,4 @@
-// Copy to Assets/Editor of a disposable validation project and invoke HoFaceTrackingValidation.RunBatch.
+﻿// Copy to Assets/Editor of a disposable validation project and invoke HoFaceTrackingValidation.RunBatch.
 // The marker file .ho-face-validation in that project's root is required before touching its scene.
 using System;
 using System.Globalization;
@@ -51,7 +51,7 @@ public static class HoFaceTrackingValidation
             ParserTests();
             // ReceiverTests() 删掉了：iFacialMocap 接收端这个类已经不存在（只剩 VTS 一条路），
             // 起 socket 的那几条断言没有对象了。协议解析的覆盖在 ParserTests 的 VTS 那一段，
-            // 以及离线台架 .research/profile-json-test（它连请求报文和 52 个键名一起验）。
+            // 以及离线台架 Tools~/FaceTracking/profile-json-test（它连请求报文和 52 个键名一起验）。
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var root = new GameObject("HoFaceValidation");
             var animator = root.AddComponent<Animator>();
@@ -1424,7 +1424,7 @@ public static class HoFaceTrackingValidation
         // iFacialMocap 报文断言（值不除 100 / 线名不改 / head_0..5 / leftEye_1 / 缺键不补 0 /
         // NaN 计数 / 未知线名照收 / 只有姿态也算一帧）跟着那份代码一起删掉，没有对象可测了。
         // "接收端只交原样、不换算"这条规矩对 VTS 照样断言；键名与请求报文的逐条覆盖在
-        // .research/profile-json-test（离线台架，不用起 Unity）。
+        // Tools~/FaceTracking/profile-json-test（离线台架，不用起 Unity）。
         var culture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
         try

@@ -1,11 +1,11 @@
-﻿# fix-bom.ps1 -- re-add the UTF-8 BOM to Tools/FaceTracking/*.ps1 files that lost it.
+﻿# fix-bom.ps1 -- re-add the UTF-8 BOM to Tools~/FaceTracking/*.ps1 files that lost it.
 #
 # WHY: the `edit` / `write` tools write UTF-8 without a BOM, and PowerShell 5.1 reads a .ps1
 # as ANSI when there is no BOM -- Chinese comments then turn into mojibake and the script
 # fails to PARSE (not just prints garbage). This has bitten the harness three times.
 # This file is deliberately ASCII-only so it parses no matter how it was written.
 #
-# Usage: pwsh -File Tools/FaceTracking/fix-bom.ps1 [-Path <dir>]
+# Usage: pwsh -File Tools~/FaceTracking/fix-bom.ps1 [-Path <dir>]
 param([string] $Path = (Join-Path $PSScriptRoot '.'))
 
 $fixed = 0; $ok = 0

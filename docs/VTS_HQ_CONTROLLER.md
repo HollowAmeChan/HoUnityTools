@@ -21,7 +21,7 @@
 
 | # | 东西 | 状态 | 落在哪 / 判据 |
 | --- | --- | --- | --- |
-| 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`Tools/FaceTracking/check-controller.ps1` 报 **0 问题**（**55 参数** / **16 树** / **61 槽位** / 1 层 1 状态 / WD 开 / **每棵树都从根可达** / **区域子节点的权重接线逐条钉死**）；导入日志全解析、无报错 |
+| 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`Tools~/FaceTracking/check-controller.ps1` 报 **0 问题**（**55 参数** / **16 树** / **61 槽位** / 1 层 1 状态 / WD 开 / **每棵树都从根可达** / **区域子节点的权重接线逐条钉死**）；导入日志全解析、无报错 |
 | 2 | **参数表 57 个** | ✅ | **4 区域门** = `1`、**形态门 `Gate/MouthStyle`** = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、**43 根轴** = `0`、4 条切片权重 = `0`、**形态权重 `Style/InvertedV`** = `0`（⚠️ 2026-09-28 当天三版：上午删 `MouthWidth`/`Mouth/X`（§5.7.22）→ 下午建 `MouthShift` + 嘴角 3×3（§5.7.23）→ **傍晚删嘴角那两根、`MouthWidth` 以 1D 回来**（§5.7.24）；**深夜 +14 根眼睑情绪/权重轴**（§5.7.36）） |
 | 3 | **树形 27 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ **4 个区域 Direct**（嘴 / 眼 / 眉 / 鼻）→ **6 张 2D 主表**（`MouthCore` / `MouthShift` / `LidL` / `LidR` / `BrowCoreL` / `BrowCoreR`）+ 1 张 2D 变体表（`MouthCoreRoll`）+ 4 张 2D 副本 + **1 张 2D 形态表**（`Cheek`，鼓嘴）+ **5 张 1D 片段表**（`NoseUp` / `InvertedV` / **`MouthWidth`** / **`MouthTongue`（舌头）** / **`MouthJaw`（下巴）**）+ 5 棵 1D 开关树。⚠️ 嘴的开关是**轴驱动的变体开关**（在静息嘴 / 猫嘴版之间分叉）；注视与颊的树已删（朝向交给 Warudo 的 LookAt + IK、颊二次元表现不了）、**前伸的树已删**（线降级成辅助变量，§5.4.1） |
 | 4 | **槽位 95 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。⚠️ **`MouthCore` 的坐标是用户在 Animator 窗口里手工拉的**（**11 个点**：8 个手拉的 + 傍晚补的苦列 3 个）；**`MouthJaw` / `MouthShift` 2026-09-28 深夜各挖掉几格**（§5.7.30 / §5.7.31）；`Roll` 是开关阈值 **0.15 / 0.30**（判据 = 下唇卷 × 嘴角门(膝 0.12) × 下颌增益 + 维持/平滑，§2.2 / §5.7.17）；**两条形态子树那 6 格也是空的**（倒V 姿势 / 左鼓 / 右鼓 / 双鼓 —— 用户的画） |
@@ -39,8 +39,8 @@
 **改形状 / 核对的入口**（改设计时走这里，**别手改资产**）：
 
 * 生成：菜单 `HoUnityTools/面捕/生成控制器骨架（VTS 原生语义）`（`Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`）
-  或文本生成器 `Tools/FaceTracking/make-vts-controller.ps1`。
-* 核对：`Tools/FaceTracking/check-controller.ps1 -Path <那份>.controller` —— 参数名 / 类型 / 默认值 / 层状态与 WD /
+  或文本生成器 `Tools~/FaceTracking/make-vts-controller.ps1`。
+* 核对：`Tools~/FaceTracking/check-controller.ps1 -Path <那份>.controller` —— 参数名 / 类型 / 默认值 / 层状态与 WD /
   树形与轴 / Direct 子节点有没有挂参数，一次核完。**名字敲错一个字符 = 那条值被静默丢掉**（面板只会说"不在控制器里"），
   这一步别省。它靠文本解析，替代不了 Unity 自己报的错，也不检查槽位内容。
 * 包侧门：`.research/compile-check-pkg.ps1`（+ 改到 `.ps1` 时 `ensure-bom.ps1 -Fix`）。
@@ -94,7 +94,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ⚠️ **区域这一格挂的是开关**（`MouthCoreRollSwitch`），两张整嘴表在它下面。**这类"换了层级 / 删了开关忘了重挂"
 会让整张表变成孤儿树**（树还在、槽位名也对，但状态走不到它 ⇒ 那一整块姿势丢失）——真栽过一次：
 删 `MouthCoreSwitch` 时忘了把 `MouthCore` 挂回区域，是**片段探针**先撞出来的（它从状态数到的片段少了 8 个）。
-`Tools/FaceTracking/check-controller.ps1` 现在会从根走一遍可达性并报错（已用负向测试验证它会响）。
+`Tools~/FaceTracking/check-controller.ps1` 现在会从根走一遍可达性并报错（已用负向测试验证它会响）。
 
 ⚠️ **Direct 的每个子节点都必须挂一个参数**（不挂就不参与混合）—— 所以"这一格永远全量生效"也要一个参数：
 **`Ho/Drive/W/One`（默认 1，没人写它）**。区域子树里的表与 1D 开关全部挂它；只有 5 个区域子树挂区域门。
@@ -215,7 +215,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
   静息张嘴（`X0Y2`）**仍在 0.75**、常态笑张嘴（`X1Y2`）已挖掉。**大笑那一列仍是三段**（闭 / 半开 / 0.6）——
   "大笑从闭嘴到张嘴依旧需要三段"是用户的原话，所以挖掉的只是**常态笑**那一格、不是整行。
   * 机制：生成器两边的**逐格坐标覆盖**（文本端 `over` / Unity 端 `Override`）。
-    ⚠️ 槽位名按索引编（`A3X<i>Y<j>`）⇒ **挪坐标不改名、不用重烘**；`Tools/FaceTracking/check-controller.ps1` 现在把这两个坐标钉死。
+    ⚠️ 槽位名按索引编（`A3X<i>Y<j>`）⇒ **挪坐标不改名、不用重烘**；`Tools~/FaceTracking/check-controller.ps1` 现在把这两个坐标钉死。
   * 代价（**已知、接受**）：顶边从平线变成 **0.6 ↔ 0.75 的斜线** ⇒ `(Form≥0.75, Open>0.6)` 那块落在斜边上，
     越靠右越接近"大笑张嘴"；"同一个 Y 值在不同列含义不同"这条从此成立（`Y2` 在 X0 列是 0.75、在 X2 列是 0.6）。
   * 圈仍是**凸的**、`X2Y2` 仍是圈的顶点 ⇒ 出界照旧"投影到圈边、两个端点混合"，**永不外推**（§2.3.1）。
@@ -263,7 +263,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 路 | 怎么做 | 代价 |
 | --- | --- | --- |
-| **A · 挪槽位** ✅ **2026-09-27 已落地** | `Mouth/Open` 的 Y 刻度从 `0 / .5 / 1` 改成 **`0 / .4 / .75`**，外加**逐格移位**：右上角 `X2Y2`（大笑×张满）单独摆 **0.6**（改的是两个生成器的刻度表 / 覆盖表 + 重新生成资产；`Tools/FaceTracking/check-controller.ps1` 现在会**核对刻度**、并把那个被挪的坐标钉死） | Hub / 面板 / Warudo 读到的**仍是原始值**（0.75 = 满在那棵树里，别的消费者不知道）；且插值形状本就不可手算，挪完"半格"不在正中；逐格移位还会让**顶边变斜**（§2.2） |
+| **A · 挪槽位** ✅ **2026-09-27 已落地** | `Mouth/Open` 的 Y 刻度从 `0 / .5 / 1` 改成 **`0 / .4 / .75`**，外加**逐格移位**：右上角 `X2Y2`（大笑×张满）单独摆 **0.6**（改的是两个生成器的刻度表 / 覆盖表 + 重新生成资产；`Tools~/FaceTracking/check-controller.ps1` 现在会**核对刻度**、并把那个被挪的坐标钉死） | Hub / 面板 / Warudo 读到的**仍是原始值**（0.75 = 满在那棵树里，别的消费者不知道）；且插值形状本就不可手算，挪完"半格"不在正中；逐格移位还会让**顶边变斜**（§2.2） |
 | **B · 中间层曲线** 🟡 只用来做死区 | 曲线的横轴是表达式的值、纵轴是写出去的值（`HoFaceCurve.Transfer` 范围外按端点算） | 轴上写出去的就是曲线给出的数 ⇒ **Hub / Warudo 一起受益**；但曲线在 profile 里（三份副本要一起更新）。**量程没有走 B**：`0.4 → 0.5`、`0.75 → 1` 那次映射改成了挪刻度，所以轴值仍是原始口径 |
 
 **实际采用的是 A + "曲线只管死区"**（2026-09-27）：`Mouth/Open` 的响应曲线是
@@ -304,7 +304,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 4. 把结果填回 **§3 每张表的「实测范围」列**（现在都是"待测"）—— 那一列 + §3.2 的修饰符说明就是"怎么把它调稳"的输入。
 5. 顺手验一条方向性：`GazeL/R` 的 ±1 哪边是内（§2.2 末）。（`Mouth/X` 那根平移轴的符号方向已由 2026-09-28 的 41 段实测钉死：`+` 往左 / `−` 往右，§5.7.23。）
 6. **标定卷唇（猫嘴）的判据**（§3.1；2026-09-27 建、**2026-09-28 整个换掉**）：用「配置输入行」栏的
-   **`记 5 秒`** 各录一次，跑 `.research/take-analysis`（**与 profile 同一个求值器**）看这一行的
+   **`记 5 秒`** 各录一次，跑 `Tools~/FaceTracking/take-analysis`（**与 profile 同一个求值器**）看这一行的
    `min/avg/max` —— **① 真猫嘴**（应 ≥ 0.30 = 满档，实测 0.434~0.460）、
    **② 抿嘴（压紧 / 嘴角下扬）**（应 = 0.00）、**③ 用力说话**（应 = 0.00 —— 它的下唇卷有 0.21，
    单看唇卷会误触发）、**④ 笑**（常态笑最坏 0.075，应 < 0.15 = 开关起点）、
@@ -691,7 +691,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 7. **Warudo 侧补上**（*我*）：按新控制器重建 `hoface-controller-test.bundle`（现在那份 09-25 的不含这 43 个参数），
    profile 副本已经同步，不用再拷。
 8. **接线自检**（随时可跑）：面板「配置输出行」栏里这 40 行**一个都不该显示"不在控制器里"**；槽位"缺哪些动画"能在
-   「详情」栏列出来；`Tools/FaceTracking/check-controller.ps1` 退出码 0（现在还会核**刻度**）。
+   「详情」栏列出来；`Tools~/FaceTracking/check-controller.ps1` 退出码 0（现在还会核**刻度**）。
 
 ---
 
@@ -996,9 +996,9 @@ coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为�
    他手拉主版时变体不会跟着动 ⇒ 每次同步完都要镜像一次。
    ✅ **检查器现在有一条硬检查**：`变体 / 副本必须与主版逐点一致`（按后缀配对），
    2026-09-27 拿镜像前那份备份**反向验证过**（5 个点全被抓住，逐条报出两边坐标）。
-4. **改两个生成器**：`Tools/FaceTracking/make-vts-controller.ps1` 的 `$mouthCoreOver` / `$mouthJawOver`
+4. **改两个生成器**：`Tools~/FaceTracking/make-vts-controller.ps1` 的 `$mouthCoreOver` / `$mouthJawOver`
    （**所有点全给**）与 `HoFaceControllerSkeletonBuilder.cs` 的 `MouthCoreOverride` / `MouthJawOverride`。
-5. **改检查脚本**：`Tools/FaceTracking/check-controller.ps1` 的 `$exactPos`（每个点逐个钉死）
+5. **改检查脚本**：`Tools~/FaceTracking/check-controller.ps1` 的 `$exactPos`（每个点逐个钉死）
    与 `$scaleOf[<表>]`（这一列现在列的是"这些点用到的坐标值"，不再是刻度）。
 6. **验证**：① 拿检查脚本**直接对他那份资产**跑（必须 exit 0）；
    ② 用生成器输出到**临时路径**（`-Out $env:TEMP\x.controller -ClipFolder $env:TEMP\xclips`），
@@ -1114,14 +1114,14 @@ coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为�
 | 2 | 控制器 | 改 Direct 权重 | ✅ `MouthRegion` 的 **`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`** → `Gate/MouthStyle`（⚠️ **`MouthJaw` / `MouthTongue` 不动**：下巴/舌头跟风格化不冲突） |
 | 3 | 控制器 | 建**倒V**树 | ✅ `InvertedV`：`Simple1D`，blend = `Ho/Drive/Style/InvertedV`，**2 格**（中性 / 倒V 姿势），阈值 0 / 1 显式写死 |
 | 4 | 控制器 | 建**鼓嘴**树 | ✅ `Cheek`：`FreeformCartesian2D`，X = `Cheek/Left/Puff`、Y = `Cheek/Right/Puff`，**4 角**：中性(0,0) / 左(1,0) / 右(0,1) / 双(1,1) |
-| 5 | 资产 | 那 6 格的空片段 | ✅ 已建（`InvertedV__InvertedV__A2X0` / `A2X1`、`Cheek__PuffL__PuffR__A2X0Y0`…`X1Y1`）—— ⚠️ **姿势还没画**（倒V / 左鼓 / 右鼓 / 双鼓是用户的画）；6 份的 GUID 已改回**槽位名派生**（`md5('ho-face-slot:<槽位名>')`，与生成器一致，`Tools/FaceTracking/fix-slot-guids.ps1`） |
-| 6 | 中间层（我） | **三条契约行** + 全套同步 | ✅ profile **73 输入 / 137 输出**；`check-controller.ps1` 期望表（44 / 27 / 92 + **区域子节点权重逐条** + 6 个新槽位）与两个生成器（`HoFaceControllerSkeletonBuilder` / `Tools/FaceTracking/make-vts-controller.ps1`）同步；台架 **339 条全绿** |
+| 5 | 资产 | 那 6 格的空片段 | ✅ 已建（`InvertedV__InvertedV__A2X0` / `A2X1`、`Cheek__PuffL__PuffR__A2X0Y0`…`X1Y1`）—— ⚠️ **姿势还没画**（倒V / 左鼓 / 右鼓 / 双鼓是用户的画）；6 份的 GUID 已改回**槽位名派生**（`md5('ho-face-slot:<槽位名>')`，与生成器一致，`Tools~/FaceTracking/fix-slot-guids.ps1`） |
+| 6 | 中间层（我） | **三条契约行** + 全套同步 | ✅ profile **73 输入 / 137 输出**；`check-controller.ps1` 期望表（44 / 27 / 92 + **区域子节点权重逐条** + 6 个新槽位）与两个生成器（`HoFaceControllerSkeletonBuilder` / `Tools~/FaceTracking/make-vts-controller.ps1`）同步；台架 **339 条全绿** |
 
 **核对证据（本轮都跑过）** —— ⚠️ **下面这几行是 2026-09-27 那次的原话/原输出**（那时 `MouthWidth` 还在：
 参数 44 / 树 27 / 槽位 92）；**2026-09-28 上午删 `MouthWidth` 之后是 43 / 26 / 83**、
 **当天傍晚收口之后是 43 / 27 / 89**（§5.7.22–§5.7.24），原文照留当档：
 
-* `Tools/FaceTracking/check-controller.ps1 -Path <那份>.controller` → **0 问题**（44 参数 / 27 树 / 92 槽位；区域权重与逐格坐标逐个钉死）。
+* `Tools~/FaceTracking/check-controller.ps1 -Path <那份>.controller` → **0 问题**（44 参数 / 27 树 / 92 槽位；区域权重与逐格坐标逐个钉死）。
 * 文本生成器输出到**临时路径** → 同一份检查器 exit 0 ⇒ 生成器与"期望形状"一致（**没有拿它覆盖用户的资产**）。
 * Unity 侧生成器（`HoControllerBuilderProbe.RunBatch`，batchmode）→ `HO_BUILD params=44 trees=27`，
   `MouthRegion kids: MouthCoreRollSwitch@…Gate/MouthStyle MouthJaw@…W/One MouthWidth@…Gate/MouthStyle
@@ -1260,7 +1260,7 @@ coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为�
 挤眼 ×3、笑 ×3、再噘嘴 ×3）：读数取 `mouthPucker × 死区 × 鼻门`，`trigger 0.80`。
 锚点全部重写：静息 max **0.3797** / 挤眼 max **0.7769** / 真噘嘴 min **0.9634** / 笑 max 0.0463；
 `noseSneer`：真噘嘴 ≤**0.2942**、挤眼 ≥**0.7821**。分析脚本与原始数据在
-`.research/take-analysis`（候选式用**和 profile 同一个求值器**离线跑，缝从 +0.1865 提到 **+0.9634**）。
+`Tools~/FaceTracking/take-analysis`（候选式用**和 profile 同一个求值器**离线跑，缝从 +0.1865 提到 **+0.9634**）。
 ⚠️ **压唇（`mouthPress`）不能当门**：用户「噘嘴拉满」那一组自己就压到 0.32~0.49，与挤眼（0.46~0.66）重叠。
 ⚠️ 还没量到的邻居：**鼓嘴**（真动作）、**抿嘴**、**"眯眼但不皱鼻"的挤眼** —— 鼻门目前只被一个用力型挤眼验证过。
 
@@ -1410,7 +1410,7 @@ Roll = clamp( √(上×下)                                    ← 上下唇都�
 
 落盘：`.research/takes-roll.txt` / `.research/takes-smile.txt`（`=== 标签` 分段，标签用上表的词），
 候选式写 `.research/take-features-roll.txt` / `-smile.txt`，跑
-`dotnet run -c Release -- <takes> <features> [target]`（`.research/take-analysis`，**与 profile 同一个求值器**）。
+`dotnet run -c Release -- <takes> <features> [target]`（`Tools~/FaceTracking/take-analysis`，**与 profile 同一个求值器**）。
 
 **这批已铺好**（2026-09-27；用户定：**先录数据、公式一个字不改**，A 批范围 = 目标 + ①~⑦ = **24 段**）：
 
@@ -1445,7 +1445,7 @@ Roll = clamp( √(上×下)                                    ← 上下唇都�
 
 数据与结论留档：`.research/结论-2026-09-27-猫嘴.md`（24 段 = 8 组 × 3：猫嘴 / 闭唇咀嚼 / 说话 /
 张嘴咀嚼 / 张满 / 抿嘴 / 噘嘴 / 挤眼；候选式 `.research/take-features-roll.txt`，分析器输出
-`.research/take-analysis-roll-out.txt`）。⚠️ **8 组的标签是按录制顺序推的，还没经用户点头。**
+`Tools~/FaceTracking/take-analysis-roll-out.txt`）。⚠️ **8 组的标签是按录制顺序推的，还没经用户点头。**
 ⚠️ **profile / 控制器都还没动**（等标签确认）。
 
 | 发现 | 数字 |
@@ -1526,7 +1526,7 @@ B 批把三件事验掉了：
 * profile 那一行：`Ho/Drive/Style/CatMouth = clamp(mouthRollLower × clamp((((酒窝左+右)/2) − ((苦左+右)/2) − 0.20)/0.10, 0, 1), 0, 1)`
   （去掉 `√(上×下)`、下颌增益、噘嘴门；SHA256 从 `0FF14EB6…` → `BBBB73E1…`）；
 * 控制器资产：`MouthCoreRollSwitch` 两个 `m_Threshold` **0.02 / 0.12 → 0.15 / 0.30**；
-* `Tools/FaceTracking/make-vts-controller.ps1` 的 `$rollTicks`、`HoFaceControllerSkeletonBuilder.RollTicks`、
+* `Tools~/FaceTracking/make-vts-controller.ps1` 的 `$rollTicks`、`HoFaceControllerSkeletonBuilder.RollTicks`、
   `check-controller.ps1` 的 `$switchSpec` 三处一起改；
 * 台架：旧的那一组「√(上×下) / 死区 / 下颌增益 / 噘嘴门」断言整块换成新的 12 条锚点
   （猫嘴三段 / 常态笑 / 抿嘴两种 / 用力说话 / 说话 / 咀嚼 / 张满 / 噘嘴 / 挤眼 / 门边界 / 上唇不参与 / 下颌不参与）；
@@ -1622,7 +1622,7 @@ B 批把三件事验掉了：
 #### 5.7.11 A 批（21 段）结果：「只咬下唇」这个动作**没有可用信号**（2026-09-28）
 
 数据与结论留档：`.research/结论-2026-09-28-下唇咬.md`、`.research/takes-bite.txt`、
-分析器输出 `.research/take-analysis-bite-out.txt`（21 段）与 `take-analysis-all57-out.txt`（57 段合并）。
+分析器输出 `Tools~/FaceTracking/take-analysis-bite-out.txt`（21 段）与 `take-analysis-all57-out.txt`（57 段合并）。
 
 | 组 | 下唇卷 | 酒窝 | 苦 | 嘴角方向 |
 | --- | ---: | ---: | ---: | ---: |
@@ -1677,7 +1677,7 @@ B 批把三件事验掉了：
 #### 5.7.13 强力度那批（12 段，2026-09-28）：**姿势强度才是关键**，不是判据也不是动作
 
 数据：`.research/takes-bite2.txt`（12 段：静置 / 强咬紧闭·微张·大张）；
-输出：`.research/take-analysis-bite2-out.txt`（12 段）与 `take-analysis-all69-out.txt`（69 段合并）。
+输出：`Tools~/FaceTracking/take-analysis-bite2-out.txt`（12 段）与 `take-analysis-all69-out.txt`（69 段合并）。
 
 | 组 | 下唇卷 | 酒窝 | 苦 | 嘴角方向 | 门(膝0.20) | 下颌 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1745,7 +1745,7 @@ B 批把三件事验掉了：
 #### 5.7.15 完整姿势那批（12 段，2026-09-28）：**紧闭那一档被"嘴角门"乘成 0**
 
 数据：`.research/takes-cat3.txt`（静置 / 猫嘴紧 / 猫嘴微张 / 猫嘴大张）；
-`.research/take-analysis-all81-out.txt`（81 段合并，目标 = `猫嘴`）。
+`Tools~/FaceTracking/take-analysis-all81-out.txt`（81 段合并，目标 = `猫嘴`）。
 
 | 组 | 下唇卷 | 上唇卷 | 下颌 | 闭唇 | 酒窝 | 苦 | 嘴角方向 | 旧门(膝0.20) | 现值 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2184,7 +2184,7 @@ Y− 改成"相对唇门 + 0.10 s 钝峰"）⇒ 见 §5.7.23。
 
 做这次改动看 diff 时发现：`notes` 是**单行 json 字符串**（换行必须是 `\n` 两个字符），但历史上有 12 处写成了**真的换行**（早期 payload 编辑时留下的）⇒ 配置**只对宽松解析器有效**（中间层手写的 `HoJson` 能吃，所以一直没炸），`json.load` / jq 直接报
 `Invalid control character at: line 2776 column 3378`。
-⭐ 修法：`.research/fix-raw-newlines.py`（带字符串状态机：只在字符串**内部**把真换行换成 `\n`、顺手吃掉续行的缩进），改完 `json.load` **严格解析通过**（73 输入 / 136 输出）。
+⭐ 修法：`Tools~/FaceTracking/fix-raw-newlines.py`（带字符串状态机：只在字符串**内部**把真换行换成 `\n`、顺手吃掉续行的缩进），改完 `json.load` **严格解析通过**（73 输入 / 136 输出）。
 ⭐ 证明"只动了空白"：`.research/compare-profile-json.py` 把 HEAD 版本（宽松解析）与新版（严格解析）逐字段比 —— **136 行里只有 3 个字段不同**：`Ho/Drive/Mouth/Pucker` 的 `expression` 与 `notes`（①的有意改动）+ `Ho/Drive/Mouth/Y` 的 `notes`（只差一个 `\n` 后面的两个空格缩进）。
 ⇒ 以后再写 notes：**要么单行 + `\n` 转义、要么别带换行**；payload 里要写字面 `\n` 就得写 `\\n`（写成 `\n` 会被当成真换行 —— 这次就是这么来的）。
 
@@ -2271,14 +2271,14 @@ Y = `Ho/Drive/Mouth/Jaw`（**下颌张开量**，刻度 **0 / 0.4 / 0.75**），
 
 **④ 计数**：槽位 **89 → 90**（舌头 4 → 5 格）；参数仍 **43**、树仍 **27**、`Ho/Drive/*` 行仍 **40**、输出行仍 **136**、轴仍 **29**。
 三处已同步：`HoFaceControllerSkeletonBuilder.cs`（`MouthTongue` 的 `TableSpec` + 新增 `JawOpenMeasured` / `MouthTongueSkip`）、
-`Tools/FaceTracking/make-vts-controller.ps1`（`$tables` + `$tongueSkip` + `$jawOpenMeasured`）、`Tools/FaceTracking/check-controller.ps1`
+`Tools~/FaceTracking/make-vts-controller.ps1`（`$tables` + `$tongueSkip` + `$jawOpenMeasured`）、`Tools~/FaceTracking/check-controller.ps1`
 （槽位规则 `a=3 / ys=0,1,2 / skip='1,0','2,1','0,1','1,2'`、刻度核对、槽位总数 90）。
 资产已重新生成：**新建 5 个空片段 · 删掉 4 个孤儿**，检查器报 **0 问题**（43 参数 / 27 树 / 90 槽位）。
 
 **⑤ 下一步（歪舌头）**：ARKit 52 项里**只有 `tongueOut` 一个**舌头通道
 （[枚举清单](https://docs.unity3d.com/Packages/com.unity.xr.arkit-face-tracking@3.1/api/UnityEngine.XR.ARKit.ARKitBlendShapeLocation.html)）
 ⇒ 左右只能靠**代理通道**（同侧的唇 / 颊 / 下颌不对称）或手动 / 外部（VTS 自定义参数 / Warudo append / 面板覆盖）。
-要录 3+3 段（舌中 / 舌左 / 舌右，可选再加"舌顶左颊 / 右颊"），用 `.research/take-analysis` 找缝；
+要录 3+3 段（舌中 / 舌左 / 舌右，可选再加"舌顶左颊 / 右颊"），用 `Tools~/FaceTracking/take-analysis` 找缝；
 `TongueL` / `TongueR` 两根轴留着当**侧向开关**，量轴到时候再换一根新的（`TongueOut`）—— 那 4 格的位置和名字不用动。
 
 **⑥ 待画（作者）**：`MouthTongue` **5 格** · `MouthShift` 6 格 · `MouthWidth` 3 格 · `MouthCore` 苦列 3 格。
@@ -2307,8 +2307,8 @@ Y = `Ho/Drive/Mouth/Jaw`（**下颌张开量**，刻度 **0 / 0.4 / 0.75**），
 * ⚠️ 刻度 0 / 0.3333 / 0.6667 / 1 是**占位**（等分）：`tongueOut` 从来没实测过 ⇒ 第一轮「舌头伸出·居中」录完再收圈。
 * 计数：**槽位 89**（舌头 1D 4 格 —— 格数与最早那版 2D 4 格相同）；树仍 **27**，树型账 **2D 主表 8 → 7、1D 片段表 3 → 4**。
 * 三处同步：`HoFaceControllerSkeletonBuilder.cs`（`Simple1DTables` + `TongueTicks`；2D 的 `TableSpec` 与
-  `JawOpenMeasured` / `MouthTongueSkip` 已删）、`Tools/FaceTracking/make-vts-controller.ps1`（`$simple1D['MouthTongue']` + `$tongueTicks`）、
-  `Tools/FaceTracking/check-controller.ps1`（`Simple1D` + `$simple1DSlot` 的 `a=4 / thr=0,0.3333,0.6667,1`）。
+  `JawOpenMeasured` / `MouthTongueSkip` 已删）、`Tools~/FaceTracking/make-vts-controller.ps1`（`$simple1D['MouthTongue']` + `$tongueTicks`）、
+  `Tools~/FaceTracking/check-controller.ps1`（`Simple1D` + `$simple1DSlot` 的 `a=4 / thr=0,0.3333,0.6667,1`）。
 * 资产：新建 4 个 `MouthTongue__Tongue__A4X{0..3}` 空片段、删掉 5 个旧孤儿；
   检查器 **0 问题（43 参数 / 27 树 / 90 槽位）**。
 * ⚠️ **教训（记一笔）**："5 点"我按 2D 的"4 角 + 中心"理解，实际是**一维序列**（默认 + 4 步）——
@@ -2344,8 +2344,8 @@ Y = `Ho/Drive/Mouth/Jaw`（**下颌张开量**，刻度 **0 / 0.4 / 0.75**），
   "上移 + 侧移"的输入会被**投影到 T 的两条斜边**（圈外点投影到圈边做凸组合，BLEND_TREE_LIMITS §9）
   ⇒ 拿到"一半侧移 + 一半上移"的插值，而不是什么都没有 ✓；
 * ⚠️ 凸包仍是四点凸的 ✓ 不会碰到"点落在别的点构成的边上 ⇒ 非单调"那条坑（实测过）；
-* 三处同步：builder（`MouthShiftSkip`）、`Tools/FaceTracking/make-vts-controller.ps1`（`$mouthShiftSkip`）、
-  `Tools/FaceTracking/check-controller.ps1`（槽位规则 `skip = @('0,1','2,1')`、槽位总数 83）；
+* 三处同步：builder（`MouthShiftSkip`）、`Tools~/FaceTracking/make-vts-controller.ps1`（`$mouthShiftSkip`）、
+  `Tools~/FaceTracking/check-controller.ps1`（槽位规则 `skip = @('0,1','2,1')`、槽位总数 83）；
 * 资产已重生成：删 2 个空片段；检查器 **0 问题（43 参数 / 27 树 / 83 槽位）**。
 
 ---
@@ -2376,8 +2376,8 @@ Y = `Ho/Drive/Mouth/Jaw`（**下颌张开量**，刻度 **0 / 0.4 / 0.75**），
 * 槽位名**不改**（按索引编：`MouthCore__Form__Open__A4X0Y*`）⇒ 不新增片段、不用重烘 ✓；
 * **猫嘴变体 `MouthCoreRoll` 自动跟着走**（两支共用同一份 override；检查器"变体与主版逐点一致"那条已经核过 ✓）；
 * 副作用（好的）：输入 `x < −0.5`（比如实测的 −0.7）现在会被**投影到苦列**（左边界）⇒ 苦姿势拿满权重 ✓；
-* 三处同步：`HoFaceControllerSkeletonBuilder.cs`（`MouthCoreOverride`）、`Tools/FaceTracking/make-vts-controller.ps1`（`$mouthCoreOver`）、
-  `Tools/FaceTracking/check-controller.ps1`（`$scaleOf['MouthCore'].x` 与 `$exactPos` 三条）。
+* 三处同步：`HoFaceControllerSkeletonBuilder.cs`（`MouthCoreOverride`）、`Tools~/FaceTracking/make-vts-controller.ps1`（`$mouthCoreOver`）、
+  `Tools~/FaceTracking/check-controller.ps1`（`$scaleOf['MouthCore'].x` 与 `$exactPos` 三条）。
 * ⚠️ `Form` 的**刻度数组**（`FormSmile = −1 / 0 / 0.75 / 1`）不动：它现在只是"索引骨架"（决定槽位名里的 `A4`），
   真正的位置一律由 override 说了算。
 
@@ -2433,9 +2433,9 @@ Lid/<侧>/Form      = clamp(clamp((eyeSquint{侧} − 0.05) / 0.05, 0, 1) × cla
 * 膝 **0.05 / 宽 0.05 被实测确认**（静止 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.103 ⇒ 1.0）。
 * 顺带：builder 那份"发布轴"清单里 `Lid/*/Squint` 的陈名（§5.7.34 改名漏了它）+ 两份文档的轴表一起改成 `Form`。
 
-**③ 验证**：新增 `.research/eye-probe`（编**运行期那版**求值器、带 `out()` 回调、按行序整链算）逐场景核对 ——
+**③ 验证**：新增 `Tools~/FaceTracking/eye-probe`（编**运行期那版**求值器、带 `out()` 回调、按行序整链算）逐场景核对 ——
 静止 / 眯眼 / 眯眼笑 的 X 与 Form 与上表**逐位一致**。⚠️ 这次验证还顺带暴露两件事：
-* **探针自己有个坑（已修）**：`.research/chain-probe/core/` 是 **mod core 的旧副本**，那份求值器的 `TryResolve` 里没有 `out` ⇒ 第一次跑出来眼睑 `Form` **五个场景全 0**（假警报，差点当成公式错）。真 mod core（`…\BreakWarudo\…\Core\HoFaceExpression.cs`）**有 `out`** ⇒ 重新 sync 后，两份互相独立的求值器（运行期那版 + mod core）对同一批场景给出同一组数 ✓。
+* **探针自己有个坑（已修）**：`Tools~/FaceTracking/chain-probe/core/` 是 **mod core 的旧副本**，那份求值器的 `TryResolve` 里没有 `out` ⇒ 第一次跑出来眼睑 `Form` **五个场景全 0**（假警报，差点当成公式错）。真 mod core（`…\BreakWarudo\…\Core\HoFaceExpression.cs`）**有 `out`** ⇒ 重新 sync 后，两份互相独立的求值器（运行期那版 + mod core）对同一批场景给出同一组数 ✓。
 * **闭眼端还没实测**：闭眼时 `eyeSquint` 抬多少决定去污会不会"减过头"。假设 `eyeSquint = 0.05` ⇒ X = 0.745 ✓（正常闭）；假设抬到 0.30 ⇒ X = **−0.230**（跑到**睁大**侧 ✗）且 `Form` 反而 +1（假笑 ✗）。⇒ **下一步必须补录「闭眼」3 次**，再决定泄漏项要不要随闭合量衰减（`3.9·eyeSquint·(1 − eyeBlink)` 或按闭合量分段）。
 
 #### 5.7.36 眼睑情绪升到**归一化 4 分量**（中性是常量）+ 闭合三分区（2026-09-28 深夜，用户定架构）
@@ -2465,7 +2465,7 @@ Lid/<侧>/Form      = clamp(clamp((eyeSquint{侧} − 0.05) / 0.05, 0, 1) × cla
 内部行 `Weight/Sum`（三份证据之和）给四根权重读，避免表达式抄四遍；`Lid/*/Form` 改成 **`喜证据 − 悲证据`**
 （**值与原式逐位相同**，从此单一出处）。
 
-**④ 验证**（`.research/eye-probe` = 运行期求值器 + `out()` 回调、按行序整链；场景由 `.research/eye-scenarios.py` 造）：
+**④ 验证**（`Tools~/FaceTracking/eye-probe` = 运行期求值器 + `out()` 回调、按行序整链；场景由 `Tools~/FaceTracking/eye-scenarios.py` 造）：
 
 | 场景 | 中性 | 喜 | 怒 | 悲 | Σ情绪 | 闭/睁/睁大 | Σ闭合 | 喜×睁大 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

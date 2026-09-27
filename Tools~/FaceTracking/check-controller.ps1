@@ -5,7 +5,7 @@
 # 所以参数名/默认值/门控接线这类东西值得机器核一遍，别靠眼睛。
 #
 # 用法：
-#   powershell -File Tools/FaceTracking/check-controller.ps1 -Path <x.controller>
+#   powershell -File Tools~/FaceTracking/check-controller.ps1 -Path <x.controller>
 #
 # 退出码：0 = 参数与结构都过；1 = 有问题（逐条打出来）。
 param(

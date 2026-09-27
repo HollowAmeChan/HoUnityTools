@@ -1,8 +1,8 @@
-// HoVtsPacket.cs  --  VTS 手机包（JSON）→「线名 → 原值」
+﻿// HoVtsPacket.cs  --  VTS 手机包（JSON）→「线名 → 原值」
 //
 // 【为什么单独一个文件、而且不碰 socket】
 // 解析是这条链上最容易出错、也最值得单独验的一步。抽成纯静态函数之后，
-// 它可以脱离 Unity / Warudo 在离线测试里跑（见 .research/profile-json-test），
+// 它可以脱离 Unity / Warudo 在离线测试里跑（见 Tools~/FaceTracking/profile-json-test），
 // 而不是只能"连上手机试试看"。
 //
 // 【为什么不用 JsonUtility（第三次了）】

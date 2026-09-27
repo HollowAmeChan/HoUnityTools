@@ -32,7 +32,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     ///    那些坐标在下面那些 `Override` 表里；**先读资产、再改这里**，顺序反了就把他的手改冲掉。
     ///
     /// ⚠️ 形状表（哪棵树混哪两根轴、哪些槽位、谁挂哪个门）在这里是**硬编码**的，跟着设计稿走；
-    /// 生成出来的资产用 `Tools/FaceTracking/check-controller.ps1` 对着**发货 profile** 反推的期望集核一遍。
+    /// 生成出来的资产用 `Tools~/FaceTracking/check-controller.ps1` 对着**发货 profile** 反推的期望集核一遍。
     /// </summary>
     public static class HoFaceControllerSkeletonBuilder
     {
@@ -440,7 +440,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 区域 → 直接挂在它下面的子节点（表名或开关名）。
         /// ⚠️ 嘴这一格挂的是**开关** `MouthCoreRollSwitch`（它下面才是两张整嘴表）。
         /// 这类"删了开关 / 换了层级忘了重挂"会让整张表变孤儿树（树在、槽位名也对，但状态走不到它）
-        /// —— 真栽过一次，是片段探针先撞出来的，`Tools/FaceTracking/check-controller.ps1` 现在也会核可达性。
+        /// —— 真栽过一次，是片段探针先撞出来的，`Tools~/FaceTracking/check-controller.ps1` 现在也会核可达性。
         /// </summary>
         private static readonly string[,] Regions =
         {
@@ -676,7 +676,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 + "树 " + trees.Count + " 棵（根 1 + 区域 " + Regions.GetLength(0) + " + 表 " + Tables.Length + " + 1D 表 " + Simple1DTables.Length + " + 变体 " + Variants.GetLength(0)
                 + " + 副本 " + Copies.GetLength(0) + " + 开关 " + (Switches.GetLength(0) + VariantSwitches.Length) + "）\n"
                 + "槽位 " + slots + " 个（片段：" + clipFolder + "，新建 " + clipsCreated + " · 保留已有 " + clipsKept + "）：\n" + perTree
-                + "核对：`Tools/FaceTracking/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";
+                + "核对：`Tools~/FaceTracking/check-controller.ps1 -Path <这份>`（参数名/默认值/树形/槽位名与坐标/门控接线一次核完）";
         }
 
         /// <summary>槽位片段放哪：控制器同级的 `Animations/`。</summary>

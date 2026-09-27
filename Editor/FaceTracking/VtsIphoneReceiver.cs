@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -22,7 +22,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// 为什么必须这样：这里原来自己写了一套 `JsonUtility.FromJson&lt;VtsTrackingData&gt;`，
     /// 而载荷里的 `BlendShapes` 是 `List&lt;嵌套类&gt;` —— **正是 Warudo 那边静默丢掉 52 个形态键的那个模式**
     /// （见 Runtime/FaceTracking/HoJson.cs 记的三次事故）。搬家之后 Unity 侧与 Warudo 侧读的是同一份解析器、
-    /// 同一份离线测试（`.research/profile-json-test`，87 条）。
+    /// 同一份离线测试（`Tools~/FaceTracking/profile-json-test`，87 条）。
     ///
     /// 本接收端**只交原样**：字段名照抄载荷里的名字（`Rotation` → `Rotation_x/y/z`），形态键数值也不做换算。
     /// 哪一段是"角度"、哪一段是"位置"、要不要 `* 0.0174533`，全写在中间层的输入行里。
