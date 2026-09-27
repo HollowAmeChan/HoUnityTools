@@ -29,7 +29,7 @@
    * VB 那些**静息 0.5** 的量（`MouthSmile`、`BrowLeftY`/`BrowRightY`）**进控制器前必须重映射**（`2x − 1`）——
      否则"中性在哪"会一棵树一个说法，而 0..1 的默认曲线还会把负半边**静默夹掉**（[HO 参数规范](PARAMETER_HO.md) §3.7 有那两行的实际写法）。
 
-## 2. 42 个树名（权威表）
+## 2. 42 个树名（权威表；⚠️ 另有**我们自建**的 `MouthShift`，不在上游契约里）
 
 `X × Y` 是二维主轴（1D 的写「轴（1D）」），条件轴不规定采样数。
 
@@ -38,9 +38,10 @@
 | `MouthCore` | Mouth | Form | Open | Funnel, Press | 外嘴核心：嘴唇轮廓/口孔 |
 | `MouthJaw` | Mouth | JawSide | Jaw | JawSide | 下颌/口内（与 `MouthCore` 划清键）。⚠️ 我们实现成 **左右 3 档 × 上下 2 档 = 6 格**（上下含 `mouthClose` 的咬合/咀嚼侧） |
 | `MouthSeal` | Mouth | Seal | Jaw | Open, Form, Funnel | 闭唇时保留下颌运动 |
-| ~~`MouthWidth`~~ | Mouth | Pucker | LeftRight | Open, Form | 嘴宽/偏嘴修正。⚠️ **我们的骨架 2026-09-28 把这棵树删了**（[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)）：单根平移轴拆成"左右两半嘴角（2×2）+ 整嘴平移（3×3）"，等实测回来再建（**契约名本身仍保留**） |
+| ~~`MouthWidth`~~ | Mouth | Pucker | LeftRight | Open, Form | 嘴宽/偏嘴修正。⚠️ **我们的骨架 2026-09-28 上午把这棵树删了、当天下午按 41 段实测重建成 `MouthShift`（整嘴平移）+ 换轴后的 `MouthCorner`**（[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)；**契约名本身仍保留**） |
+| **`MouthShift`** | Mouth | LeftRight | UpDown | Open, Form | **整嘴平移**（嘴整体左右/上下挪、**唇形不变**）。⚠️ **这个树名是我们自建的**（上游契约表里没有）。实现成 **3×3 = 9 格**的**残差表**（中间格 = 零位移）；轴 = `Mouth/X`（`(mouthLeft − mouthRight) + (smileL − smileR)`，**有符号**、曲线 ±0.20 死区）× `Mouth/Y`（上 = 噘嘴判据、下 = 闭唇张开下颌）。建它的理由与实测见[控制器 §5.7.23](VTS_HQ_CONTROLLER.md) |
 | `MouthShrugSplit` | Mouth | ShrugUp | ShrugDown | Open, Pucker | 上下耸唇细分 |
-| `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称） |
+| `MouthCorner` | Mouth | CornerL | CornerR | Open, Funnel, Press | 左右嘴角（不对称）。⚠️ **我们的骨架 2026-09-28 下午换轴**：`Mouth/LipPress` × `Mouth/CornerSkew`（槽位名 `MouthCorner__LipPress__Skew__A3X<i>Y<j>`）—— 理由：抿嘴与"两边一起外拉"在**嘴角**这一层分不开（`dimple` 0.795 vs 0.577），能分开它们的是**唇**（`press` 0.643 vs 0.318、`shrug` 0.845 vs 0.600），见[控制器 §5.7.23](VTS_HQ_CONTROLLER.md) |
 | `MouthUpperRaise` | Mouth | UpperL | UpperR | Open, Press | 上唇左右展开/露齿 |
 | `MouthLowerDrop` | Mouth | LowerL | LowerR | Open, Press | 下唇左右展开/露齿 |
 | `MouthLipRoll` | Mouth | Roll（1D） | — | Open, Jaw | 见 §3.1：我们**没有把它做成独立表**，而是把 `Mouth/Roll` 当**变体开关**用（`MouthCoreRollSwitch`：静息嘴 ↔ 猫嘴版整嘴，阈值 **0.15 / 0.30**）。轴 = **下唇卷 × 嘴角门**（2026-09-28 换：`clamp(mouthRollLower × clamp((嘴角方向 − 0.12)/0.10, 0, 1), 0, 1)`，`嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2`）—— 旧口径 `√(上×下) × 死区 × 下颌增益 × 噘嘴门` 已被 36 段实测推翻（缝 −0.24）；**按键要强制猫嘴就直接写这个参数**（≥0.30） |
@@ -124,7 +125,7 @@
 
 代码只认其中 4 个名字（`HoFaceNaming.cs`：`Ho/Drive` 根、`BlinkWide`、`Squint`、`LidAxis()`），
 其余全是**作者约定** + 中间层配置文件里的行名。**这些行现在真的写出来了**：发货那份
-`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 40 行 `Ho/Drive/*`（逐行清单见
+`Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` 里 44 行 `Ho/Drive/*`（逐行清单见
 [HO 参数规范](PARAMETER_HO.md) §3.7）。
 
 ## 5. 槽位名（= 片段名）
@@ -152,7 +153,11 @@ VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下�
 | `Press` | `Mouth/Press` | +1 展/露齿 / −1 压/卷 | VB `MouthPressLipOpen`（双向） |
 | `Jaw` | `Mouth/Jaw` | +1 张口 | ARKit `jawOpen`；`Forward` = `jawForward` |
 | `Pucker` | `Mouth/Pucker` | +1 展 / −1 收 | VB `MouthPucker`（dimple−pucker 合成，双向） |
-| ~~`LeftRight`~~ | ~~`Mouth/X`~~ | — | ⚠️ **2026-09-28 退役**（[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)）：原式 = `(mouthLeft − mouthRight) + (smileL − smileR)`（+1 偏左 / −1 偏右；**旧词典写作 `RightLeft` 是猜的，与公式相反**）；左右平移改由"左右两半嘴角（2×2）+ 整嘴平移（3×3）"承担 |
+| `LeftRight` | `Mouth/X` | **+1 往左 / −1 往右** | **整嘴左右平移**（2026-09-28 **上午退役、当天下午随 `MouthShift` 重建**，[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)）：`(mouthLeft − mouthRight) + (smileL − smileR)`，曲线 **±0.20 死区**（把"撇嘴"那点位移压成 0）。⚠️ **旧词典写作 `RightLeft` 是猜的，与公式相反**。实测：整嘴平移 `mouthLeft/Right` **0.963~0.976** vs 嘴角撇 **0.047~0.136** ⇒ 缝 **+0.594** |
+| `UpDown`（嘴） | `Mouth/Y` | **+1 上 / −1 下** | **整嘴上下平移**（2026-09-28 下午新建）：+ 上 = 噘嘴判据（膝 0.45 + 鼻门 0.54/0.05）、− 下 = 闭唇张开下颌（膝 0.18 + **相对唇门** `(mouthClose − jawOpen + 0.10)/0.10`）。⚠️ 上侧是"准开关"（静息底噪 0.78 以下没有可用中间档） |
+| `LipPress` | `Mouth/LipPress` | **0 舒展 … +1 压紧** | **唇压紧 ↔ 舒展**（`MouthCorner` 3×3 的 X 轴）= `(max(pressL,pressR) + max(shrugU,shrugL)) / 2`；三档实测 **0.14 静置 / 0.54 两边一起外拉 / 0.77 抿嘴** |
+| `Skew` | `Mouth/CornerSkew` | **+1 往右撇 / −1 往左撇** | **嘴角歪**（`MouthCorner` 3×3 的 Y 轴）= `CornerL − CornerR`（`out()` 读上面两行 ⇒ 必须排在它们之后）；三档实测 **−0.17 往左 / 0 / +0.08 往右** |
+| `CornerL` / `CornerR` | `Mouth/CornerL`、`CornerR` | **0…1（是"量"、不钳 0/1）** | **该半嘴角的外拉量**（2026-09-28 下午**重新定义**）= `dimple + stretch − smile − frown`（× 下颌门 `(0.20 − jawOpen)/0.10`）；原来是半边 `smile − frown`（sad 折进 `Mouth/Form` 负半轴后作废）。⚠️ **必须减 `smile`/`frown`**，否则笑把 dimple 顶到 0.33、直接点着嘴角层 |
 | `Shrug` / `ShrugUp` / `ShrugDown` | `Mouth/Shrug` | +1 耸 | VB `MouthShrug`（合并）/ 上下拆分 |
 | `TongueL` / `TongueR` | `Mouth/TongueL`、`TongueR` | 0…1 | `HQTongueLeft/Right`（先两侧同跟 `tongueOut`） |
 | `PuffL` / `PuffR` | `Cheek/PuffL`、`PuffR` | 0…1 | `HQCheekPuffLeft/Right`（先两侧同跟 `cheekPuff`） |
@@ -168,7 +173,7 @@ VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下�
 ### 6.1 名字为什么还叫 `Form`（2026-09-27 用户定：**不改**）
 
 有人（包括用户）提过把它改叫 `Smile` —— 因为**选项 C 之后它确实只剩"笑量"这一件事**
-（负侧三族各回各家：苦 → `MouthCorner`、噘 → 倒V 形态（原 `MouthWidth`，2026-09-28 已删）、卷唇 → `MouthLipRoll`，
+（负侧三族各回各家：苦 → `MouthCorner`、噘 → 倒V 形态（原 `MouthWidth`，2026-09-28 上午已删、下午重建成 `MouthShift`）、卷唇 → `MouthLipRoll`，
 树的 X 只留 `0 静息 / +0.75 常态笑 / +1 大笑`），"多重形态"那层含义已经没了。三家对照如下：
 
 | 血统 | 这根轴叫什么 | 中性 / 量纲 |
@@ -209,7 +214,7 @@ VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下�
   + `LidL`/`LidR`（**名字恰好合规**）+ `EyeRegion`/`LipRegion`（区域名待换成 `EyeLeftRegion`/`MouthRegion`），
   叶子参数是**裸 ARKit 名**（`jawOpen`、`eyeBlinkLeft`…）。新控制器按本文重建，老的那份不动。
 * **中间层配置**（`ho-iPhoneVTS.hoface.json`）里的输出行名还是 VB/VTS 原名（`MouthOpen`、`MouthSmile`…）
-  —— **40 行 `Ho/Drive/*` 已经加进 profile 了**（29 轴 + 4 个区域门 + 4 条切片 + **3 条形态契约行**（`Gate/MouthStyle`、`Style/InvertedV`、`Style/CatMouth`）；逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
+  —— **44 行 `Ho/Drive/*` 已经加进 profile 了**（33 轴 + 4 个区域门 + 4 条切片 + **3 条形态契约行**（`Gate/MouthStyle`、`Style/InvertedV`、`Style/CatMouth`）；逐行公式见 [参数规范 §3.7](PARAMETER_HO.md) 与
 
   [控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3），出口那 90 行按原样保留。
 
@@ -217,8 +222,9 @@ VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下�
 
 | 已落地 | 说明 |
 | --- | --- |
-| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthCorner` · `MouthTongue` · **`Cheek`（鼓嘴，4 格）** · `LidL`/`LidR`（+ `Expr`）· `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `NoseUp` · **`InvertedV`（倒V，2 格）** | tranche 1：**8 张 2D 主表 + 1 张 2D 变体表 + 4 张 2D 副本 + 1 张 2D 形态表（`Cheek`）+ 2 张 1D 片段表（`NoseUp` / `InvertedV`）+ 5 个 1D 开关 + 4 个区域 + 根 = 控制器共 26 棵树 / 83 个槽位**（⚠️ **2026-09-28 删 `MouthWidth` 9 格 ⇒ 92→83、27→26**，见[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)；2026-09-27 那一轮：删 `MouthCoreExpr`/`MouthCoreSwitch`（嘴没有按键表情版）、删 `GazeL`/`GazeR`（朝向交给 Warudo 的 LookAt + IK）、删 ARKit 的 `CheekSquint`/`CheekPuff`（二次元表现不了）、`NoseSneer` 收成 `NoseUp` 1D、`MouthJaw` 换轴、加 `MouthCoreRoll`+开关；**`MouthForward` 1D 建了又删** —— 那根线降级成辅助变量/出口，见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)；当晚再加**两条风格化形态子树** `InvertedV` / `Cheek` + 形态门，见[控制器 §5.6](VTS_HQ_CONTROLLER.md)） |
-| **`MouthCorner`**（2026-09-27 加） | 轴 = 本文 §2 那一行的 `CornerL` × `CornerR`（= 合同表 D 的 `HQSmileFrownLeft/Right`）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在"嘴宽那根轴"（`MouthWidth`，2026-09-28 已删）、`Form` 的表达式与出口行都不动。
+| `MouthCore` **+ `MouthCoreRoll`（变体）** · `MouthJaw` · `MouthShift` · `MouthCorner` · `MouthTongue` · **`Cheek`（鼓嘴，4 格）** · `LidL`/`LidR`（+ `Expr`）· `BrowCoreL`/`BrowCoreR`（+ `Expr`）· `NoseUp` · **`InvertedV`（倒V，2 格）** | tranche 1：**9 张 2D 主表（+ `MouthShift`）+ 1 张 2D 变体表 + 4 张 2D 副本 + 1 张 2D 形态表（`Cheek`）+ 2 张 1D 片段表（`NoseUp` / `InvertedV`）+ 5 个 1D 开关 + 4 个区域 + 根 = 控制器共 27 棵树 / 92 个槽位**（⚠️ 2026-09-28 **上午删 `MouthWidth` 9 格 ⇒ 92→83、27→26；当天下午重建 `MouthShift` + `MouthCorner` 换轴 ⇒ 83→92、26→27**，见[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)；2026-09-27 那一轮：删 `MouthCoreExpr`/`MouthCoreSwitch`（嘴没有按键表情版）、删 `GazeL`/`GazeR`（朝向交给 Warudo 的 LookAt + IK）、删 ARKit 的 `CheekSquint`/`CheekPuff`（二次元表现不了）、`NoseSneer` 收成 `NoseUp` 1D、`MouthJaw` 换轴、加 `MouthCoreRoll`+开关；**`MouthForward` 1D 建了又删** —— 那根线降级成辅助变量/出口，见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)；当晚再加**两条风格化形态子树** `InvertedV` / `Cheek` + 形态门，见[控制器 §5.6](VTS_HQ_CONTROLLER.md)） |
+| **`MouthCorner`**（2026-09-27 加；⚠️ **2026-09-28 下午换轴**：`LipPress` × `Skew`） | 轴 = `Mouth/LipPress` × `Mouth/CornerSkew`（原先 = `CornerL` × `CornerR`，即合同表 D 的 `HQSmileFrownLeft/Right`；换轴理由见[控制器 §5.7.23](VTS_HQ_CONTROLLER.md)）。**立它的理由**：`Mouth/Form` 的负侧同时被"嘴角下弯"和"噘嘴"驱动（实测噘嘴 −0.5、噘嘴+苦脸 −0.7），一根轴两件事 ⇒ 把**嘴角**单独拆出来做残差表，噘嘴留在"嘴宽那根轴"（`MouthWidth`，2026-09-28 上午已删、下午重建成 `MouthShift` —— 整嘴平移现在也在那张表里）、`Form` 的表达式与出口行都不动。
+
 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.4 |
 
 其余家族（`MouthSeal`、`MouthShrugSplit`、`MouthUpperRaise`、`MouthLowerDrop`、`LidGaze*`、`BrowCenter`、

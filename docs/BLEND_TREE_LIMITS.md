@@ -224,7 +224,7 @@ ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是同一块，裸输入�
 | 权重和 | 上面每一种**和都为 1** | 权重和恒为 1（缺角时靠负权重维持） |
 | 1D 树的孩子是子树 | g = 0 / .25 / .5 / .75 / 1 → `sx` = 0 / 25 / 50 / 75 / 100 | **线性交叉淡入**，与"孩子是 clip"无差别 |
 | 四层嵌套（Direct → Direct → 1D → 2D） | 端点仍精确（0 与 100），无报错 | 嵌套层数不是问题 |
-| **Normalize Blend Values**（Inspector 上那个复选框，手册没写） | 1D/2D：**开与关读数逐位相同**（129.9286 / 151.5 / 72.92857、超范围也是同样的 201.5）⇒ **对 1D/2D 是空操作**。Direct：**开了会真的归一化**（见 §10.2） | 我们生成的 25 棵树都写 `m_NormalizedBlendValues: 0`，**别动它** |
+| **Normalize Blend Values**（Inspector 上那个复选框，手册没写） | 1D/2D：**开与关读数逐位相同**（129.9286 / 151.5 / 72.92857、超范围也是同样的 201.5）⇒ **对 1D/2D 是空操作**。Direct：**开了会真的归一化**（见 §10.2） | 我们生成的 27 棵树都写 `m_NormalizedBlendValues: 0`，**别动它** |
 
 ### 10.1 奇数阵缺一角（3×3 少一个角）：会不会"压回原点"？
 
@@ -259,14 +259,15 @@ ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是同一块，裸输入�
 
 ### 10.2 Normalize Blend Values（那个复选框）
 
-| 混合类型 | 复选框**关**（我们生成的 26 棵树都是这个） | 复选框**开** |
+| 混合类型 | 复选框**关**（我们生成的 27 棵树都是这个） | 复选框**开** |
 | --- | --- | --- |
 | 1D / 2D | —— | **空操作**：同一棵树开/关，内部点、非对称点、超范围点读数**逐位相同** |
 | **Direct**（两个孩子写同一个属性，权重 0.6 / 0.8） | **加法**：`100×0.6 + 200×0.8 = 220`；两个都写 100 时 `= 140` | **归一化**：权重被除以它们的和 ⇒ `0.4286×100 + 0.5714×200 = **157.14**` |
 
-⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 6 个孩子，2026-09-28 删 `MouthWidth` 后 = `MouthCoreRollSwitch` / `MouthJaw` / `MouthCorner` / `MouthTongue` / `InvertedV` / `Cheek`；其中两个"张嘴 × 笑"的孩子挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 2×门）。
-**2026-09-28 起 `.research/check-controller.ps1` 加了一条断言：26 棵树的 `m_NormalizedBlendValues` 必须全是 0**
-（⚠️ 加这条断言时是 **27** 棵；2026-09-28 删掉 `MouthWidth` 之后 = **26**，见[控制器 §5.7.22](VTS_HQ_CONTROLLER.md)）
+⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 **7 个孩子** = `MouthCoreRollSwitch` / `MouthJaw` / `MouthShift` / `MouthCorner` / `MouthTongue` / `InvertedV` / `Cheek`；其中 **3 个**（"张嘴 × 笑" / 整嘴平移 / 嘴角）挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 3×门）。
+**2026-09-28 起 `.research/check-controller.ps1` 加了一条断言：27 棵树的 `m_NormalizedBlendValues` 必须全是 0**
+（⚠️ 加这条断言时是 **27** 棵；2026-09-28 **上午**删掉 `MouthWidth` 之后 = **26**、**当天下午**重建 `MouthShift` 之后 = **27**，见[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)）
+
 
 （对 1D/2D 是空操作，对 Direct 是**载荷**；有人手滑勾上一次，整个区域就会被摊薄 —— 负例验过会报错）。
 
