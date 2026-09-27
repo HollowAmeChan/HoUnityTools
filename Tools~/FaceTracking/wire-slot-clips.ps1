@@ -28,16 +28,22 @@ $slots = @($slots | Where-Object { $_ } | Sort-Object -Unique)
 # ② 找同名片段的 GUID
 $guidOf = @{}
 foreach ($f in Get-ChildItem -LiteralPath $SearchRoot -Recurse -Filter *.anim -ErrorAction SilentlyContinue) {
-    if ($slots -notcontains $f.BaseName) { continue }
-    if ($guidOf.ContainsKey($f.BaseName)) {
-        "  [!] 重名片段：$($f.BaseName)（这一个在 $($f.DirectoryName)，已忽略）"
-        continue
-    }
+    # 开关动画库的文件名是 `<预制件>__<类别>__<状态>__<键名>`（例如 potato_build__BS__On__HO-嘴平闭）
+    # ⇒ 先把键名抠出来，再对槽位名（允许 `HO-` 前缀：模型上的"状态键"就长这样）
+    $mKey = [regex]::Match($f.BaseName, '(?:^|__)(?:BS|GB|GBC)__(On|Off)__(?<key>.+)$')
+    if (-not $mKey.Success) { continue }
+    $key = $mKey.Groups['key'].Value
+    $clipState = $mKey.Groups[1].Value
+    $slot = $null
+    if ($slots -contains $key) { $slot = $key }
+    elseif ($key -like 'HO-*' -and $slots -contains $key.Substring(3)) { $slot = $key.Substring(3) }
+    if (-not $slot) { continue }
+    if ($guidOf.ContainsKey($slot) -and $clipState -ne 'On') { continue }   # On 优先于 Off
     $meta = $f.FullName + '.meta'
     if (-not (Test-Path -LiteralPath $meta)) { "  [!] 没有 .meta：$($f.FullName)"; continue }
     $m = Select-String -LiteralPath $meta -Pattern '^guid: ([0-9a-f]{32})' | Select-Object -First 1
     if (-not $m) { "  [!] meta 里没 guid：$meta"; continue }
-    $guidOf[$f.BaseName] = $m.Matches[0].Groups[1].Value
+    $guidOf[$slot] = $m.Matches[0].Groups[1].Value
 }
 "工程里找到的同名片段 $($guidOf.Count) 个"
 
@@ -45,9 +51,9 @@ foreach ($f in Get-ChildItem -LiteralPath $SearchRoot -Recurse -Filter *.anim -E
 $text = [System.IO.File]::ReadAllText($Controller)
 $filled = 0; $already = 0; $noClip = 0; $noTree = 0
 foreach ($slot in $slots) {
-    if (-not $guidOf.ContainsKey($slot)) { $noClip++; continue }
     $i = $text.IndexOf('m_Name: ' + $slot)
-    if ($i -lt 0) { $noTree++; "  [!] 控制器里没有这棵树：$slot"; continue }
+    if ($i -lt 0) { $noTree++; continue }          # 被挖掉的格子本来就没有树
+    if (-not $guidOf.ContainsKey($slot)) { $noClip++; continue }
     $j = $text.IndexOf('m_Name: ', $i + 1)
     if ($j -lt 0) { $j = $text.Length }
     $block = $text.Substring($i, $j - $i)
@@ -62,6 +68,10 @@ foreach ($slot in $slots) {
     $filled++
 }
 "挂上 $filled · 已有内容跳过 $already · 没有同名片段 $noClip · 控制器里没这棵树 $noTree"
+if ($noClip -gt 0) {
+    $missing = @($slots | Where-Object { -not $guidOf.ContainsKey($_) })
+    "  还缺片段的槽位（$($missing.Count) 个，= 你的待做清单）：" + ($missing -join ' · ')
+}
 
 if ($Apply) {
     [System.IO.File]::WriteAllText($Controller, $text, (New-Object System.Text.UTF8Encoding($false)))
