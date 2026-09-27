@@ -48,8 +48,6 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private string _report = "";
         /// <summary>批处理期间用它查"这份片段是不是已经存在"（StartAssetEditing 里 LoadAssetAtPath 看不到刚建的）。</summary>
         private static Dictionary<string, AnimationClip> _existingClips;
-        /// <summary>静置姿态的两种来源：false = 当前姿势（采样）；true = T-pose（全肌肉 0）。</summary>
-        private bool _poseTpose;
         private bool _editingAssets;
 
         [MenuItem("HoUnityTools/开关动画生成器", false, 6)]
@@ -120,17 +118,6 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 if (GUILayout.Button(new GUIContent("生 成", "生成选中的三族开关动画；已存在片段按「覆盖动画」决定重写还是跳过。"), GUILayout.Height(30f)))
                     Generate();
                 GUI.backgroundColor = Color.white;
-                GUI.backgroundColor = new Color(0.86f, 0.92f, 1f);
-                if (GUILayout.Button(new GUIContent("生成静置姿态动画",
-                        "弹保存窗口，把当前姿势 k 成一份单帧片段：根下每个 Transform 的本地 position/rotation/scale 都写一遍。\n" +
-                        "根物体自己不写（角色位置交给别处）；空节点也写（骨骼多半是空节点）。\n" +
-                        "⚠️ 要「场景里摆好的姿势」就拖场景物体；拖预制件资产则用它存储的姿势。"),
-                        GUILayout.Height(30f)))
-                    GeneratePose();
-                GUI.backgroundColor = Color.white;
-                _poseTpose = EditorGUILayout.ToggleLeft(
-                    new GUIContent("T-pose", "勾上 = 全肌肉写 0（T-pose）；不勾 = 采样角色当前姿势。"),
-                    _poseTpose, GUILayout.Width(70f));
             }
 
             if (!string.IsNullOrEmpty(_status)) EditorGUILayout.HelpBox(_status, MessageType.None);
@@ -325,189 +312,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             }
         }
 
-        /// <summary>
-        /// 生成"静置姿态"片段：**先弹保存窗口**（默认名 `&lt;预制件&gt;__POSE__静置.anim`、默认目录 = 第一排那个文件夹），
-        /// 然后把根下每个 Transform 的本地 TRS 按**当前值**写成单帧常量，就地覆盖（引用不丢）。
-        /// 用途：叶子槽里那些"什么都不该动"的状态 —— 播它，角色就定在当前姿势上，
-        /// 不会被 Write Defaults 的默认值（模型自带的浮空姿势）拽走。
-        /// ⚠️ 根物体自己的 Transform **不写**（角色位置/朝向交给别处）；空节点**要写**（骨骼多半没组件）。
-        /// ⚠️ 姿势来源：拖场景里的物体 ⇒ 用场景里摆好的；拖预制件资产 ⇒ 用它存储的。
-        /// </summary>
-        /// <summary>
-        /// 生成"静置姿态"片段（**Humanoid 优先**）：
-        ///   · 角色的 Avatar 是 Human（人形）⇒ 写 **Humanoid 肌肉曲线**：`RootT/RootQ` + `HumanTrait.MuscleName[i]` 每条一根。
-        ///     这才是 Humanoid 片段 —— Generic 的 transform 曲线在 Humanoid 上会被 Unity **忽略**并报
-        ///     "Binding warning: Some generic clip(s) animate transforms that are already bound by a Humanoid avatar"。
-        ///   · Avatar 不是 Human ⇒ 退回写 Transform 曲线（Generic 那套）。
-        /// 姿势来源：不勾 T-pose = 采样角色**当前姿势**（HumanPoseHandler）；勾上 = 全肌肉 0 + RootT 0 + RootQ 单位（T-pose）。
-        /// 根下没被 humanoid 映射的物体（头发/配饰/CTR_* 等）在"当前姿势"模式下另外写 Transform 曲线。
-        /// ⚠️ 先弹保存窗口；就地覆盖（引用不丢）；批量写；播放模式下拒绝执行。
-        /// </summary>
-        private void GeneratePose()
-        {
-            if (_prefab == null) { _status = "先填预制件（要姿势片段就拖场景里那个摆好姿势的物体）。"; return; }
-            if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
-            {
-                EditorUtility.DisplayDialog("先退出播放模式",
-                    "静置姿态要写几千条曲线，播放模式下改片段会让 Animator 反复重绑、界面假死。\n请先停止播放再点。",
-                    "好");
-                _status = "已拦下：先退出播放模式。";
-                return;
-            }
 
-            bool isAsset = !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(_prefab));
-
-            // 先弹保存窗口（还没加载任何东西，取消也不脏）
-            string defName = _prefab.name + (_poseTpose ? "__POSE__T姿势" : "__POSE__静置");
-            string dir = string.IsNullOrEmpty(_folder) ? "Assets" : _folder;
-            string picked = EditorUtility.SaveFilePanel("静置姿态片段保存到哪", dir, defName, "anim");
-            if (string.IsNullOrEmpty(picked)) { _status = "已取消（没生成）。"; return; }
-            string assetPath = ToAssetPath(picked);
-            int slash = assetPath.LastIndexOf('/');
-            if (slash > 0) EnsureFolder(assetPath.Substring(0, slash));
-
-            GameObject root = isAsset ? PrefabUtility.LoadPrefabContents(AssetDatabase.GetAssetPath(_prefab)) : _prefab;
-            try
-            {
-                var bindings = new List<EditorCurveBinding>();
-                var values = new List<float>();
-                string how;
-
-                // ── Humanoid：写肌肉曲线 ────────────────────────────────────────────
-                Animator animator = root.GetComponentInChildren<Animator>(true);
-                if (animator != null && animator.avatar != null && animator.avatar.isHuman)
-                {
-                    Vector3 bodyPos = Vector3.zero;
-                    Quaternion bodyRot = Quaternion.identity;
-                    float[] muscles = new float[HumanTrait.MuscleCount];
-                    if (!_poseTpose)
-                    {
-                        var handler = new HumanPoseHandler(animator.avatar, animator.transform);
-                        try
-                        {
-                            var pose = new HumanPose();
-                            handler.GetHumanPose(ref pose);
-                            bodyPos = pose.bodyPosition;
-                            bodyRot = pose.bodyRotation;
-                            pose.muscles.CopyTo(muscles, 0);
-                        }
-                        finally { handler.Dispose(); }
-                    }
-
-                    Add(bindings, values, "RootT.x", bodyPos.x);
-                    Add(bindings, values, "RootT.y", bodyPos.y);
-                    Add(bindings, values, "RootT.z", bodyPos.z);
-                    Add(bindings, values, "RootQ.x", bodyRot.x);
-                    Add(bindings, values, "RootQ.y", bodyRot.y);
-                    Add(bindings, values, "RootQ.z", bodyRot.z);
-                    Add(bindings, values, "RootQ.w", bodyRot.w);
-                    for (int i = 0; i < muscles.Length; i++)
-                        Add(bindings, values, HumanTrait.MuscleName[i], muscles[i]);
-                    how = "Humanoid 肌肉 " + muscles.Length + " 条 + RootT/RootQ"
-                          + (_poseTpose ? "（T-pose：全 0）" : "（采样当前姿势）");
-
-                    // 没被 humanoid 映射的东西（头发/配饰）另外按 Transform 写 —— T-pose 模式下不写（免得和肌肉打架）
-                    if (!_poseTpose)
-                    {
-                        int n = AddTransforms(root, bindings, values);
-                        if (n > 0) how += " + Transform " + n * 10 + " 条（未映射物体）";
-                    }
-                }
-                else
-                {
-                    // ── 非 Humanoid：退回 Transform 曲线 ───────────────────────────
-                    int n = AddTransforms(root, bindings, values);
-                    how = "Transform " + n * 10 + " 条（Avatar 不是 Human ⇒ Generic 片段；在 Humanoid 角色上会被忽略）";
-                }
-
-                WriteCurves(assetPath, bindings, values, _overwrite);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-                _report = "静置姿态：" + assetPath + "\n" + how
-                          + (isAsset ? "\n⚠️ 用的是预制件里存储的姿势（想用场景里摆好的，请拖场景物体）" : "");
-                _status = "静置姿态生成完成。";
-            }
-            finally
-            {
-                if (isAsset) PrefabUtility.UnloadPrefabContents(root);
-            }
-        }
-
-        private static void Add(List<EditorCurveBinding> bindings, List<float> values, string property, float value)
-        {
-            bindings.Add(EditorCurveBinding.FloatCurve("", typeof(Animator), property));
-            values.Add(value);
-        }
-
-        /// <summary>根下每个 Transform（根自己跳过）写 10 条本地 TRS，返回物体数。</summary>
-        private static int AddTransforms(GameObject root, List<EditorCurveBinding> bindings, List<float> values)
-        {
-            int n = 0;
-            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
-            {
-                if (tr == root.transform) continue;
-                string path = PathOf(tr, root.transform);
-                Vector3 p = tr.localPosition;
-                Quaternion q = tr.localRotation;
-                Vector3 s = tr.localScale;
-                var one = new (string, float)[]
-                {
-                    ("m_LocalPosition.x", p.x), ("m_LocalPosition.y", p.y), ("m_LocalPosition.z", p.z),
-                    ("m_LocalRotation.x", q.x), ("m_LocalRotation.y", q.y),
-                    ("m_LocalRotation.z", q.z), ("m_LocalRotation.w", q.w),
-                    ("m_LocalScale.x", s.x), ("m_LocalScale.y", s.y), ("m_LocalScale.z", s.z),
-                };
-                foreach (var item in one)
-                {
-                    bindings.Add(EditorCurveBinding.FloatCurve(path, typeof(Transform), item.Item1));
-                    values.Add(item.Item2);
-                }
-                n++;
-            }
-            return n;
-        }
-
-        /// <summary>和 <see cref="Write"/> 同一套"就地改"规则，只是每条曲线的值各自给、路径由调用方给全。</summary>
-        private static void WriteCurves(string assetPath, List<EditorCurveBinding> bindings, List<float> values,
-                                        bool overwrite)
-        {
-            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
-            if (clip == null)
-            {
-                clip = new AnimationClip { name = System.IO.Path.GetFileNameWithoutExtension(assetPath) };
-                AssetDatabase.CreateAsset(clip, assetPath);
-            }
-            else if (!overwrite)
-            {
-                return;   // 已存在且不覆盖 ⇒ 跳过（引用保持不动）
-            }
-
-            // ⚠️ 一定要**批量**：逐条 SetEditorCurve 时，每写一条 Unity 都会标脏 + 让用到它的 Animator 重绑
-            //（几千条曲线 = 假死）；SetEditorCurves 一次提交，再套 StartAssetEditing 把自动导入压到最后一并做。
-            var wanted = new HashSet<string>(bindings.Select(BindingKey), StringComparer.Ordinal);
-            var stale = new List<EditorCurveBinding>();
-            foreach (EditorCurveBinding b in AnimationUtility.GetCurveBindings(clip))
-                if (!wanted.Contains(BindingKey(b))) stale.Add(b);
-
-            AssetDatabase.StartAssetEditing();
-            try
-            {
-                if (stale.Count > 0)
-                    AnimationUtility.SetEditorCurves(clip, stale.ToArray(), new AnimationCurve[stale.Count]);
-
-                var curves = new AnimationCurve[bindings.Count];
-                for (int i = 0; i < bindings.Count; i++)
-                    curves[i] = new AnimationCurve(new Keyframe(0f, values[i]));
-                AnimationUtility.SetEditorCurves(clip, bindings.ToArray(), curves);
-
-                clip.frameRate = 60f;
-                EditorUtility.SetDirty(clip);
-            }
-            finally
-            {
-                AssetDatabase.StopAssetEditing();
-            }
-        }
 
         private static void Count(int status, ref int created, ref int updated, ref int skipped)
         {
