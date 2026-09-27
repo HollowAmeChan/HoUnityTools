@@ -24,8 +24,8 @@
 | 1 | **控制器资产** | ✅ 已生成、Unity 已导入 | `BREAK_URP/Assets/Hollow/土豆/FT/PTP_CTR_Face_VTS.controller`；`.research/check-controller.ps1` 报 **0 问题**（**43 参数** / **27 树** / **89 槽位** / 1 层 1 状态 / WD 开 / **每棵树都从根可达** / **区域子节点的权重接线逐条钉死**）；导入日志全解析、无报错 |
 | 2 | **参数表 43 个** | ✅ | **4 区域门** = `1`、**形态门 `Gate/MouthStyle`** = `1`、`Ho/Drive/W/One` = `1`、2 个表情门 = `0`、**29 根轴** = `0`、4 条切片权重 = `0`、**形态权重 `Style/InvertedV`** = `0`（⚠️ 2026-09-28 当天三版：上午删 `MouthWidth`/`Mouth/X`（§5.7.22）→ 下午建 `MouthShift` + 嘴角 3×3（§5.7.23）→ **傍晚删嘴角那两根、`MouthWidth` 以 1D 回来**（§5.7.24）） |
 | 3 | **树形 27 棵** | ✅ | 根 `Ho/00 Drive Tree`（Direct）→ **4 个区域 Direct**（嘴 / 眼 / 眉 / 鼻）→ **6 张 2D 主表**（`MouthCore` / `MouthShift` / `LidL` / `LidR` / `BrowCoreL` / `BrowCoreR`）+ 1 张 2D 变体表（`MouthCoreRoll`）+ 4 张 2D 副本 + **1 张 2D 形态表**（`Cheek`，鼓嘴）+ **5 张 1D 片段表**（`NoseUp` / `InvertedV` / **`MouthWidth`** / **`MouthTongue`（舌头）** / **`MouthJaw`（下巴）**）+ 5 棵 1D 开关树。⚠️ 嘴的开关是**轴驱动的变体开关**（在静息嘴 / 猫嘴版之间分叉）；注视与颊的树已删（朝向交给 Warudo 的 LookAt + IK、颊二次元表现不了）、**前伸的树已删**（线降级成辅助变量，§5.4.1） |
-| 4 | **槽位 83 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。⚠️ **`MouthCore` 的坐标是用户在 Animator 窗口里手工拉的**（**11 个点**：8 个手拉的 + 傍晚补的苦列 3 个）；**`MouthJaw` / `MouthShift` 2026-09-28 深夜各挖掉几格**（§5.7.30 / §5.7.31）；`Roll` 是开关阈值 **0.15 / 0.30**（判据 = 下唇卷 × 嘴角门(膝 0.12) × 下颌增益 + 维持/平滑，§2.2 / §5.7.17）；**两条形态子树那 6 格也是空的**（倒V 姿势 / 左鼓 / 右鼓 / 双鼓 —— 用户的画） |
-| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = 打包暂存副本（`.research/pkgcopy`）；**73 输入 / 136 输出**（90 出口 + **40 行 `Ho/Drive/*`** = 37 轴/区域门/切片权重 + **3 条形态契约行**（`Gate/MouthStyle`、`Style/InvertedV`、`Style/CatMouth`）+ 6 条 `Ho/Style/*` 内部行 —— 规则二的**基准行** + 倒V 的「写自己」与其「关其他」同名行 + 鼓嘴的「写自己」与其「关其他」同名行 + 猫嘴的「写自己」（⚠️ 猫嘴**不关其他**：它不关整块"张嘴 × 笑"，它是变体开关在**块内部**换整张嘴）；输入里多**六条外部开关** `HoAutoInvertedV` / `HoExternalInvertedV` / `HoAutoCheek` / `HoExternalCheek` / `HoAutoCatMouth` / `HoExternalCatMouth`，都是 Warudo 在 VTS 接收器之后 append 的入口 —— 设备线仍是 67）；**3 根轴带死区曲线**（`Mouth/Open` ±0.02、`Mouth/Jaw` ±0.05、`Mouth/JawSide` ±0.05，§3.1） |
+| 4 | **槽位 95 个** | 🟡 **已各填一份「空片段」**（2026-09-27） | 片段在 `Assets/Hollow/土豆/FT/Animations/`，**文件名 = 槽位名 = 语义** ⇒ 混合树每格都显示名字而不是 None；空片段不写任何曲线 ⇒ **运行期行为与空 Motion 完全相同**。姿势还一条没摆 ⇒ **造型看不到**，但**轴值现在就能测**（§2.4）。⚠️ **`MouthCore` 的坐标是用户在 Animator 窗口里手工拉的**（**11 个点**：8 个手拉的 + 傍晚补的苦列 3 个）；**`MouthJaw` / `MouthShift` 2026-09-28 深夜各挖掉几格**（§5.7.30 / §5.7.31）；`Roll` 是开关阈值 **0.15 / 0.30**（判据 = 下唇卷 × 嘴角门(膝 0.12) × 下颌增益 + 维持/平滑，§2.2 / §5.7.17）；**两条形态子树那 6 格也是空的**（倒V 姿势 / 左鼓 / 右鼓 / 双鼓 —— 用户的画） |
+| 5 | **中间层 profile** | ✅ 三份完全一致（SHA256 相同） | 包内 `Editor/FaceTracking/Profiles/ho-iPhoneVTS.hoface.json` = BREAK_URP rig 副本 = 打包暂存副本（`.research/pkgcopy`）；**74 输入 / 136 输出**（第 7 个注入开关 = `HoExternalEyeSync`）（90 出口 + **40 行 `Ho/Drive/*`** = 37 轴/区域门/切片权重 + **3 条形态契约行**（`Gate/MouthStyle`、`Style/InvertedV`、`Style/CatMouth`）+ 6 条 `Ho/Style/*` 内部行 —— 规则二的**基准行** + 倒V 的「写自己」与其「关其他」同名行 + 鼓嘴的「写自己」与其「关其他」同名行 + 猫嘴的「写自己」（⚠️ 猫嘴**不关其他**：它不关整块"张嘴 × 笑"，它是变体开关在**块内部**换整张嘴）；输入里多**六条外部开关** `HoAutoInvertedV` / `HoExternalInvertedV` / `HoAutoCheek` / `HoExternalCheek` / `HoAutoCatMouth` / `HoExternalCatMouth`，都是 Warudo 在 VTS 接收器之后 append 的入口 —— 设备线仍是 67）；**3 根轴带死区曲线**（`Mouth/Open` ±0.02、`Mouth/Jaw` ±0.05、`Mouth/JawSide` ±0.05，§3.1） |
 | 6 | **轴的修饰符** | 🟡 **29 根轴已挂 `smooth`**（含没有树的注视/颊/`JawSide`/`TongueR` 那几根）（2026-09-27，照 VB 同族口径；见 §3.2） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` / `Mouth/Jaw` / `Mouth/JawSide` 带死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
 | 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
@@ -114,7 +114,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | **`MouthShift`**（2026-09-28 下午新建，当晚挖成 **4 格 T 形**） | `Mouth/X` **−0.95 往右 · 0 静息 · +0.95 往左**（**有符号**；曲线 ±0.20 死区） | `Mouth/Y` **0 静息 · +1 上**（⚠️ 只有两档：负侧钳到 0 —— 用户实测「shift 根本不会往下移动」，§5.7.24）；**"上移 × 侧移"两角已挖**（`(0,1)` 左上 / `(2,1)` 右上：噘嘴时嘴居中 ⇒ `Mouth/X` ≈ 0，两者到不了一起） | **4** | **整嘴平移残差**：嘴整体左右/上下挪、**唇形不变**；中间那格 = **零位移**。判据见 §5.7.23（X = `(mouthLeft − mouthRight) + (smileL − smileR)`；Y+ = 噘嘴判据、Y− = 闭唇张开下颌） | 只写**整嘴位移**那几根键（唇线整体移动），**不重画唇形**（唇形归 `MouthCore`） | `MouthShift__LeftRight__UpDown__A3X<i>Y{0,1}` |
 | **`MouthWidth`**（2026-09-28 傍晚**以 1D 3 格重返**） | `Mouth/Pucker`（= `2×(dimpleL + dimpleR) − pucker`，⚠️ 2×**和**）**−0.93 收嘴不撅（窄）· −0.09 静态（中）· +2.0 抿嘴嘴宽（宽）** | —（1D，没有 Y 轴） | 3 | **嘴宽**：嘴整体变窄 ↔ 变宽（收缩 ↔ 舒张）。⭐ 用户判定「收缩舒张根本没必要做左右两半拆两半，直接整体移动嘴更能表现出来，**这一行只需要一根轴 3 状态就够了**」⇒ 上午那版 2D 与下午那版嘴角 3×3 都删掉，改回 1D（§5.7.24）。⚠️ 刻度按 9 段补录实测，**宽端量纲是 2**（抿嘴嘴宽 = 4×0.525 − 0.104 = 1.996） | 只写**嘴宽**那几根键；唇的轮廓归 `MouthCore`、整嘴位移归 `MouthShift` | `MouthWidth__Pucker__A3X<i>` |
 | **`MouthTongue`**（2026-09-28 深夜重做成 **1D 4 格**） | `Mouth/TongueL`（**伸出量**）**0 / 0.3333 / 0.6667 / 1** ⚠️ **占位**（`tongueOut` 还没实测过） | —（1D，没有 Y 轴） | **4** | **默认（不出舌，左下角）+ 沿对角线 3 步**：姿势序列沿 (伸出量, 张开量) 的对角线走 —— 舌出来多少、嘴就张多少 ⇒ 不穿模。用户三句话定形：「其实也只需要一个 1d 树分三段就行了吧」→「不行我感觉还是要五点」→「5 点不是你想的那样，我想的是**默认态在左下角**，的四点」。⚠️ 别做成 2D 表：那 5 个点在 2D 里**共线**（实测共线/退化点集不可预测、会出负权重 ✗），而且把 `jawOpen` 当第二根轴会让"只张嘴不伸舌"把舌头也带出来 ✗ | 舌相关键 + **每段自己把该有的张嘴量烘进去** | `MouthTongue__Tongue__A4X<i>`（i = 0…3） |
-| `LidL` | `Lid/Left/BlinkWide` −1 睁大 · 0 中性 · +1 闭 | `Lid/Left/Squint` 0 不眯 · 1 眯满 | 6 | 左眼睑完整姿势（闭/睁大 × 眯） | 左眼睑相关键 | `LidL__BlinkWide__Squint__A3X<i>Y<j>` |
+| `LidL` | `Lid/Left/BlinkWide` −1 睁大 · 0 中性 · +1 闭（**同眨开关开着时**两眼用同一个共享值） | `Lid/Left/Form` **−1 sad · 0 · +1 笑眼**（读 `Mouth/Form` 的负半轴当 sad 源） | **9** | 左眼睑完整姿势（闭/睁大 × sad/笑）。⚠️ **2026-09-28 深夜第二轴由 `Squint` 改名 `Form` 并升成双极**（§5.7.34）；横向收缩不做独立轴 ⇒ 画在格子里 | 左眼睑相关键 | `LidL__BlinkWide__Form__A3X<i>Y<j>` |
 | `LidLExpr` | 同 `LidL` | 同 `LidL` | 6 | 笑眼版（`Gate/Expr/Smile`） | 同上 | `LidLExpr__BlinkWide__Squint__A3X<i>Y<j>` |
 | `LidR` / `LidRExpr` | 同 `LidL`（右） | 同 `LidL`（右） | 6 / 6 | 右眼睑（主版 / 笑眼版） | 右眼睑相关键 | `LidR__BlinkWide__Squint__A3X<i>Y<j>` |
 | `BrowCoreL` | `Brow/Left/Y` −1 压眉 · +1 抬眉 | `Brow/Left/InnerUp` 0 / 1 | 4 | 左眉姿势：压/抬 × 内眉抬起 | 左眉相关键 | `BrowCoreL__Height__InnerUp__A2X<i>Y<j>` |
@@ -2379,7 +2379,34 @@ Y = `Ho/Drive/Mouth/Jaw`（**下颌张开量**，刻度 **0 / 0.4 / 0.75**），
 * 三处同步：`HoFaceControllerSkeletonBuilder.cs`（`MouthCoreOverride`）、`.research/make-vts-controller.ps1`（`$mouthCoreOver`）、
   `.research/check-controller.ps1`（`$scaleOf['MouthCore'].x` 与 `$exactPos` 三条）。
 * ⚠️ `Form` 的**刻度数组**（`FormSmile = −1 / 0 / 0.75 / 1`）不动：它现在只是"索引骨架"（决定槽位名里的 `A4`），
-  真正的位置一律由 override 说了算。**下次先问清"点在哪个空间里"再建树。**
+  真正的位置一律由 override 说了算。
+
+---
+
+#### 5.7.34 眼睑第二轴 `Squint` → **`Form`**（双极，sad 接嘴）+ **同眨就一个开关**（2026-09-28 深夜，用户定）
+
+**① 第二轴改名 + 升双极**：`Ho/Drive/Lid/<侧>/Squint` → **`.../Form`**（与嘴 `Mouth/Form` 同名同义 ✓），
+判据 `clamp(clamp((eyeSquint{侧} − 0.05) / 0.05, 0, 1) − clamp(−out("Ho/Drive/Mouth/Form"), 0, 1), −1, 1)`：
+* **正侧 = 物理眯眼** ✓（真笑才眯 ⇒「假笑只动嘴不动眼」正好是我们要的）；
+* **负侧 = 接嘴的苦** ✓（用户：「眼睛读不到悲伤，但可以接入嘴的特征」）⇒ 复用已经标定过的苦判据（闭嘴 `frown` / 张嘴 `stretch` 残差）；
+* 两侧相消（苦笑同现 ≈ 0，期望行为；要「苦优先」改成 `if`）。
+⇒ 刻度 **−1 / 0 / +1** ⇒ 每眼 **3×3 = 9 格**；**横向收缩不做独立轴**（Live2D 标准里也没有；画在格的形状里 ✓）。
+⚠️ **顺序**：它读 `Mouth/Form` ⇒ 两条 `Form` 行必须排在 `Mouth/Form` **之后**（第一版排在前面，台架当场抓到"永远输出默认值 0"✗）。
+
+**② 同眨 = 一个开关，不做自动判定**：用户判定「不需要自动判定 —— 那种拿表达不了的语义根本不会出现」⇒
+只加一个输入 `HoExternalEyeSync`（默认 0，套用 `HoAuto*`/`HoExternal*` 注入线前缀 ✓）：
+```
+Lid/<侧>/BlinkWide = (eyeBlink{侧} − eyeWide{侧}) × (1 − clamp(HoExternalEyeSync,0,1))
+                   + (max(blinkL,blinkR) − min(wideL,wideR)) × clamp(HoExternalEyeSync,0,1)
+```
+共享值取"更狠的那只" ⇒ 闭就闭到位；开关开着时 **wink 会变成两眼一起闭**（要 wink 就关掉 ✓）。
+⛔ 曾设计过"自动判定"（两眼差值门 × 眨动膝 ⇒ `Ho/Drive/Lid/Sync` 判据行）——**用户否掉**，连带 **没有** `HoAutoEyeSync`、
+**没有** 判据行 ⇒ 输出行/轴/参数计数一个都没变（只多一个输入开关）。
+
+**③ 计数与影响**：输入 **73 → 74**；输出行 136 / `Ho/Drive/*` 40 / 轴 29 / 控制器参数 43 **全不变** ✓；
+槽位 **83 → 95**（眼睑四棵树各 6 → 9）；资产重生成（新建 36 个空片段、删 24 个旧空片段 ✓ 零损失）。
+三处同步：builder（`LidL`/`LidR` 的 `YValues` 0/1 → `Two`）、生成器、检查器（期望树/槽位规则 `ys=@(0,1,2)`/刻度/槽位总数 95）✓。
+台架 **364 passed / 0 failed**。**下次先问清"点在哪个空间里"再建树。**
 
 
 

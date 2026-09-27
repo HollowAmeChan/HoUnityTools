@@ -292,8 +292,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             //    **一根轴（伸出量）上的 4 个状态**，"张嘴"由作者**烘进每一段片段**里。
             //    ⚠️ 别建成 2D 表：① 那些点在 2D 里**共线**（实测共线/退化点集不可预测、会出负权重）；
             //       ② 把 `jawOpen` 当第二根轴会让"只张嘴不伸舌"把舌头也带出来 ✗。
-            new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
-            new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
+            new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
+            new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
             new TableSpec { Name = "BrowCoreL", X = "Ho/Drive/Brow/Left/Y", Y = "Ho/Drive/Brow/Left/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
             new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },

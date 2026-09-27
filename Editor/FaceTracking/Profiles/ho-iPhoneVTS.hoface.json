@@ -626,7 +626,13 @@
                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                        "modifiers":  [  ],
                        "notes":  "**猫嘴的外部开关（常开）**（与 `HoExternalInvertedV` / `HoExternalCheek` 同形，2026-09-28）：Warudo 在 VTS 接收器之后 append 这个名字就是「增量的入口」，中间层按名字读它、**加在判定之前**（写 1 就必亮；与自动同时开也只是把读数顶到 2 —— 开关只看 ≥0.30，饱和，不会多切一份）。\n⭐ **这就是「全量猫嘴」的入口**：自动路径只覆盖「嘴角往后拉（`Form > 0`）× `Open ≈ 0…0.4`」（含住 / 微张 / 大张）；常开之后**8 格全部可达**（中性形张嘴、大笑张嘴那几格只有这时才活）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。\n【经验参】无（外部开关②；defaultValue = 0 —— 没人 append 时不常开；写 1 就常开）"
-                   }
+                   },
+                    {
+                        "parameter":  "HoExternalEyeSync",
+                        "expression":  "HoExternalEyeSync",
+                        "defaultValue":  0,
+                        "notes":  "**同眨开关**（2026-09-28 深夜用户定）：1 = 两眼用同一个共享值 `(max(blinkL,blinkR) − min(wideL,wideR))`（闭就闭到位）；0 = 各自直通（wink 照旧）。⚠️ **没有 auto 版** —— 用户判定不需要自动判定（那种拿表达不了的语义根本不会出现），一个开关就够。⚠️ 开着时 wink 会变成两眼一起闭。Warudo 在 VTS 接收器之后 append（不 append 取默认 0）"
+                    }
                ],
     "outputs":  [
                     {
@@ -2793,7 +2799,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
-                        "expression":  "eyeBlinkLeft - eyeWideLeft",
+                        "expression":  "(eyeBlinkLeft - eyeWideLeft) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft, eyeBlinkRight) - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2804,26 +2810,11 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Lid/Left/Squint",
-                        "expression":  "eyeSquintLeft",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Lid/Left/Squint\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/BlinkWide",
-                        "expression":  "eyeBlinkRight - eyeWideRight",
+                        "expression":  "(eyeBlinkRight - eyeWideRight) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft, eyeBlinkRight) - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2834,22 +2825,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Lid/Right/Squint",
-                        "expression":  "eyeSquintRight",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Lid/Right/Squint\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                        "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Form",
@@ -2865,6 +2841,26 @@
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
                         "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归倒V 形态 —— ⚠️ `MouthWidth` 2026-09-28 已整棵删掉，噘现在只走倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Left/Form",
+                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Lid/Right/Form",
+                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",
