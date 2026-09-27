@@ -1,4 +1,4 @@
-﻿# HO 参数规范（我们的中间层选什么）
+# HO 参数规范（我们的中间层选什么）
 
 > 这份是**我们自己的**目标词表的唯一权威表。跟 [参数标准表](PARAMETER_STANDARDS.md) 的分工：
 > 那份记**外部标准怎么定**（VTS / ARKit / VMC / VRM / VRCFT 各自的规定，逐条带官方 URL），
@@ -500,10 +500,10 @@ V3.0 版没有。我们用 V3.0。
 
 | 参数 | 表达式（内联） | 值域 | 说明 |
 | --- | --- | --- | --- |
-| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | −1 睁大 … **0 中性** … +1 闭 | 中间层**曾经内置**这几行，现在只是普通行 |
-| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 0 … 1 | |
-| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | −1 … 0 … +1 | |
-| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 0 … 1 | |
+| `Ho/Drive/Lid/Left/BlinkWide` | `clamp((eyeBlinkLeft - 3.9 * eyeSquintLeft - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)` | −1 睁大 … **0 中性** … +1 闭 | 中间层**曾经内置**这几行，现在只是普通行。**2026-09-28 深夜去污**：实测 `eyeBlink` 混着 `3.9·eyeSquint` 的下眼睑泄漏 + 0.06 静止偏置（见[控制器 §5.7.35](VTS_HQ_CONTROLLER.md)） |
+| `Ho/Drive/Lid/Left/Form` | `clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp(1 - out("Ho/Drive/Lid/Left/BlinkWide") / 0.20, 0, 1) - clamp(-out("Ho/Drive/Mouth/Form"), 0, 1), -1, 1)` | −1 sad … 0 … +1 笑眼 | 原 `…/Squint`（恒等 0…1），**2026-09-28 深夜改名升双极**；正侧门在**去污后的** `BlinkWide` 上 |
+| `Ho/Drive/Lid/Right/BlinkWide` | 同左（`…Right`） | −1 … 0 … +1 | 同上 |
+| `Ho/Drive/Lid/Right/Form` | 同左（`…Right`） | −1 sad … 0 … +1 笑眼 | 同上 |
 | `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（2026-09-28：**负半轴 = sad**，两段式判据；"噘"已从这根轴移出，归倒V 形态 —— 原 `MouthWidth` 表 2026-09-28 上午已删、当天下午重建成 `MouthShift` + `MouthCorner`，见[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)） | −1 sad … 0 … +1 笑 |
  = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5）。⚠️ 名字**读作"净笑量"**，`Form` 是保留的（Cubism `ParamMouthForm` / VTS 推荐接法；不改名的理由见[命名权威](FACE_TRACKING_NAMING.md) §6.1） |
 | `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.02 死区**（手机"不张也不抿"时就在这个区间抖），0.02…0.05 是斜坡，之外恒等 —— 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 |

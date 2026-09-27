@@ -1,4 +1,4 @@
-﻿# VTS / VBridger 面部参数空间：哪些轴成矩阵，轴怎样产生
+# VTS / VBridger 面部参数空间：哪些轴成矩阵，轴怎样产生
 
 2026-09-25。按用户明确的设计问题整理：**确定需要共同评价的轴与条件；采多少点、是否方阵、每点做什么姿势，由模型/动画作者决定。**
 此前[路线调查](VTS_CREATOR_WORKFLOW_RESEARCH.md)里的54/99等数字只是采样举例，不作为制作规格。
@@ -204,11 +204,11 @@ VoiceSilence是接管/回退信号；时间、新鲜度、开关也属于控制�
 ```text
 空间：左眼睑
 X参数：Ho/Drive/Lid/Left/BlinkWide
-X来源：eyeBlinkLeft − eyeWideLeft（当前中间层已有）
+X来源：eyeBlinkLeft − 3.9·eyeSquintLeft − 0.06 − eyeWideLeft（去污后的闭合量；2026-09-28 深夜实测，见[控制器 §5.7.35](VTS_HQ_CONTROLLER.md)）
 X含义：−1睁大，0中性，+1闭眼
-Y参数：Ho/Drive/Lid/Left/Squint
-Y来源：eyeSquintLeft（当前中间层已有）
-Y含义：0不眯，1眯眼
+Y参数：Ho/Drive/Lid/Left/Form
+Y来源：clamp((eyeSquintLeft − 0.05)/0.05) × 睁眼门(门在去污后的 BlinkWide 上) − clamp(−Mouth/Form)（_1 苦 / 0 / +1 笑眼）
+Y含义：−1苦，0中性，+1笑眼
 控制属性：作者指定的左眼睑形态键集合
 附加条件：是否保留EyeSmile/视线修正，由作者决定
 采样点：[作者填写(x,y,动画)]；不规定方阵与格数

@@ -68,8 +68,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
             // 卷唇（2026-09-27）：上下两根线**一起增减** ⇒ 中间层平均成一根 `Mouth/Roll`，表也跟着变成 1D。
             "Ho/Drive/Style/CatMouth",
-            "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Squint",
-            "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Squint",
+            "Ho/Drive/Lid/Left/BlinkWide", "Ho/Drive/Lid/Left/Form",
+            "Ho/Drive/Lid/Right/BlinkWide", "Ho/Drive/Lid/Right/Form",
             // 注视（2026-09-27）：**两棵树删了**（朝向交给 Warudo 的 LookAt + IK），这 4 根轴照旧发布当出口
             "Ho/Drive/Gaze/Left/X", "Ho/Drive/Gaze/Left/Y", "Ho/Drive/Gaze/Right/X", "Ho/Drive/Gaze/Right/Y",
             "Ho/Drive/Brow/Left/Y", "Ho/Drive/Brow/Left/InnerUp", "Ho/Drive/Brow/Right/Y", "Ho/Drive/Brow/Right/InnerUp",

@@ -1,4 +1,4 @@
-﻿# VTS 原生语义控制器：现在落到哪 · 每格叶子的语义 · 每根轴的口
+# VTS 原生语义控制器：现在落到哪 · 每格叶子的语义 · 每根轴的口
 
 **这份文档只记三件事**，不再当计划书：
 
@@ -366,10 +366,10 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 | 轴参数 | profile 表达式 | 曲线 | 修饰符 | 语义 / 值域 | 实测范围 |
 | --- | --- | --- | --- | --- | --- |
-| `Ho/Drive/Lid/Left/BlinkWide` | `eyeBlinkLeft - eyeWideLeft` | 恒等 −1…1 | smooth 0.007 s | −1 睁大 · **0 中性** · +1 闭 | 待测 |
-| `Ho/Drive/Lid/Left/Squint` | `eyeSquintLeft` | 恒等 0…1 | smooth 0.007 s | 0 不眯 … 1 眯满 | 待测 |
-| `Ho/Drive/Lid/Right/BlinkWide` | `eyeBlinkRight - eyeWideRight` | 恒等 −1…1 | smooth 0.007 s | 同上（右） | 待测 |
-| `Ho/Drive/Lid/Right/Squint` | `eyeSquintRight` | 恒等 0…1 | smooth 0.007 s | 同上（右） | 待测 |
+| `Ho/Drive/Lid/Left/BlinkWide` | `clamp((eyeBlinkLeft - 3.9 * eyeSquintLeft - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)` | 恒等 −1…1 | smooth 0.007 s | −1 睁大 · **0 中性** · +1 闭；**2026-09-28 深夜去污**（减 `3.9·eyeSquint` 泄漏 + 0.06 静止偏置，§5.7.35） | 静止 0.00 · 眯眼 0.00 · 眯眼笑 0.01（实测，去污后） |
+| `Ho/Drive/Lid/Left/Form` | `clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp(1 - out("Ho/Drive/Lid/Left/BlinkWide") / 0.20, 0, 1) - clamp(-out("Ho/Drive/Mouth/Form"), 0, 1), -1, 1)` | 恒等 −1…1 | smooth 0.007 s | −1 sad（接嘴 `Mouth/Form` 负半轴）· 0 · +1 笑眼；睁眼门门在**去污后的** `BlinkWide` 上 | 静止 0 · 眯眼 +0.56 · 眯眼笑 +1.0 · 闭眼 0（实测） |
+| `Ho/Drive/Lid/Right/BlinkWide` | 同左（`eyeBlinkRight / eyeWideRight`） | 恒等 −1…1 | smooth 0.007 s | 同上（右） | 待测 |
+| `Ho/Drive/Lid/Right/Form` | 同左（`eyeSquintRight` / `out("Ho/Drive/Lid/Right/BlinkWide")`） | 恒等 −1…1 | smooth 0.007 s | 同上（右） | 待测 |
 | `Ho/Drive/Gaze/Left/X` | `EyeLeft_x` | 恒等 −1…1 | smooth 0.007 s | 左眼水平；手机自己发的标量，**不重算** | 待测 |
 | `Ho/Drive/Gaze/Left/Y` | `EyeLeft_y` | 恒等 −1…1 | smooth 0.007 s | 左眼垂直 | 待测 |
 | `Ho/Drive/Gaze/Right/X` | `EyeRight_x` | 恒等 −1…1 | smooth 0.007 s | 右眼水平 | 待测 |
@@ -2407,6 +2407,36 @@ Lid/<侧>/BlinkWide = (eyeBlink{侧} − eyeWide{侧}) × (1 − clamp(HoExterna
 槽位 **83 → 95**（眼睑四棵树各 6 → 9）；资产重生成（新建 36 个空片段、删 24 个旧空片段 ✓ 零损失）。
 三处同步：builder（`LidL`/`LidR` 的 `YValues` 0/1 → `Two`）、生成器、检查器（期望树/槽位规则 `ys=@(0,1,2)`/刻度/槽位总数 95）✓。
 台架 **364 passed / 0 failed**。**下次先问清"点在哪个空间里"再建树。**
+
+#### 5.7.35 眼睑 X 轴**去污**：`eyeBlink` 里混着 `3.9 × eyeSquint`（2026-09-28 深夜，实测标定）
+
+**① 为什么**：闭眼那次 bug（"闭眼居然会拉 `Form` 起来……闭眼也加笑也加"）的根因**不是门写窄了**，而是 `eyeBlink` 这根线本身就混着
+下眼睑上抬（眯与闭是同一块形变，手机分不开）。用户录入 **静止 / 眯眼 / 眯眼笑 各 3 次 × 2 轮**（`.research/takes-eyes.raw.txt`，18 段）：
+
+| 状态 | `eyeSquint` | `eyeBlink` | `mouthSmile` 左/右 | 去污后 X | `Form` |
+| --- | --- | --- | --- | --- | --- |
+| 静止 | 0.021 | 0.146 | 0.082 / 0.120 | **+0.004** | 0 |
+| 眯眼 | 0.078 | 0.348 | 0.192 / 0.265 | **−0.016** | **+0.560** |
+| 眯眼笑 | 0.103 | 0.477 | 0.670 / 0.692 | **+0.015** | **+1.000** |
+
+最小二乘 `blink ≈ 0.063 + 3.88·squint`，减完残差 0.064 / 0.05 / 0.07 **近似恒定** ⇒ 泄漏项就是 `3.9·eyeSquint`，`0.06` 是静止偏置（拟合截距）。
+
+**② 公式**（`BlinkWide` 两侧 + `Form` 两侧，四条行）：
+```
+Lid/<侧>/BlinkWide = clamp((eyeBlink{侧} − 3.9·eyeSquint{侧} − 0.06) × (1 − clamp(HoExternalEyeSync,0,1))
+                          + (max(blinkL−3.9·squintL, blinkR−3.9·squintR) − 0.06 − min(wideL,wideR)) × clamp(…), −1, 1)
+Lid/<侧>/Form      = clamp(clamp((eyeSquint{侧} − 0.05) / 0.05, 0, 1) × clamp((0.50 − out(BlinkWide)) / 0.25, 0, 1)
+                          − clamp(−out(Mouth/Form), 0, 1), −1, 1)
+```
+* X 轴刻度是 **−1 / 0 / +1**（`Two`）⇒ 静止必须正好落在 0。改之前静止 X = **0.146**（不在中性点）、眯眼笑 X = **0.47**（眼睛在笑的时候闭掉一半）—— 这正是"要去掉的同源组分"。
+* **睁眼门改成门在 `out(BlinkWide)`（去污后的闭合量）上**：原来门 `eyeBlink` 0.10~0.20，而**眯眼实测 blink = 0.348 ⇒ 原门恒为 0，眯眼根本生不出笑眼**（第二处 bug）。新门 `clamp((0.50 − X)/0.25, 0, 1)` = **死区 0.25 + 宽 0.25**（X ≤ 0.25 ⇒ 1；X ≥ 0.50 ⇒ 0）：同一「眯眼笑」两轮 X = 0.004 / 0.015 ⇒ 都给 1.0 ✓（门若贴边，第二次录的会掉到 0.69）。
+* 膝 **0.05 / 宽 0.05 被实测确认**（静止 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.103 ⇒ 1.0）。
+* 顺带：builder 那份"发布轴"清单里 `Lid/*/Squint` 的陈名（§5.7.34 改名漏了它）+ 两份文档的轴表一起改成 `Form`。
+
+**③ 验证**：新增 `.research/eye-probe`（编**运行期那版**求值器、带 `out()` 回调、按行序整链算）逐场景核对 ——
+静止 / 眯眼 / 眯眼笑 的 X 与 Form 与上表**逐位一致**。⚠️ 这次验证还顺带暴露两件事：
+* **探针自己有个坑（已修）**：`.research/chain-probe/core/` 是 **mod core 的旧副本**，那份求值器的 `TryResolve` 里没有 `out` ⇒ 第一次跑出来眼睑 `Form` **五个场景全 0**（假警报，差点当成公式错）。真 mod core（`…\BreakWarudo\…\Core\HoFaceExpression.cs`）**有 `out`** ⇒ 重新 sync 后，两份互相独立的求值器（运行期那版 + mod core）对同一批场景给出同一组数 ✓。
+* **闭眼端还没实测**：闭眼时 `eyeSquint` 抬多少决定去污会不会"减过头"。假设 `eyeSquint = 0.05` ⇒ X = 0.745 ✓（正常闭）；假设抬到 0.30 ⇒ X = **−0.230**（跑到**睁大**侧 ✗）且 `Form` 反而 +1（假笑 ✗）。⇒ **下一步必须补录「闭眼」3 次**，再决定泄漏项要不要随闭合量衰减（`3.9·eyeSquint·(1 − eyeBlink)` 或按闭合量分段）。
 
 
 

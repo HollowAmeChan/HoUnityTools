@@ -1,4 +1,4 @@
-namespace Hollow.HoUnityTools.FaceTracking
+﻿namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
     /// 面捕参数的**命名规则 —— 唯一出处**。会话、面板、用例、文档都从这里取词，不许各自拼字符串。
@@ -37,7 +37,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>左右侧的英文名，用于参数名（ASCII）。</summary>
         public static string Side(int side) => side == 0 ? "Left" : "Right";
 
-        /// <summary>眼睑的两根轴参数：<c>Ho/Drive/Lid/Left/BlinkWide</c> 与 <c>…/Squint</c>。</summary>
+        /// <summary>眼睑的两根轴参数：<c>Ho/Drive/Lid/Left/BlinkWide</c> 与 <c>…/Form</c>。</summary>
         public static string LidAxis(int side, bool horizontal) =>
             ParameterRoot + "/Lid/" + Side(side) + "/" + (horizontal ? LidOpenAxis : LidSquintAxis);
     }

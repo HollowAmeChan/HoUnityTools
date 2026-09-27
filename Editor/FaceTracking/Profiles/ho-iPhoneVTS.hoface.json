@@ -2799,7 +2799,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
-                        "expression":  "(eyeBlinkLeft - eyeWideLeft) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft, eyeBlinkRight) - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1)",
+                        "expression":  "clamp((eyeBlinkLeft - 3.9 * eyeSquintLeft - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2810,11 +2810,11 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。"
+                        "notes":  "controller axis Lid/Left/BlinkWide (-1 wide, 0 neutral, +1 closed); used to be a built-in output row, now a normal row here\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。\n⭐ **2026-09-28 深夜实测：`eyeBlink` 里混着 `3.9 × eyeSquint` 的下眼睑泄漏**（静止/眯眼/眯眼笑 各 3 次 × 2 轮：`eyeSquint` 0.021 → 0.078 → 0.102，`eyeBlink` 0.146 → 0.35 → 0.47；最小二乘拟合 `blink ≈ 0.063 + 3.88·squint`，减完残差 0.064/0.05/0.07 近似恒定）⇒ 这行改成 `eyeBlink − 3.9·eyeSquint − 0.06`（0.06 = 静止偏置，即拟合截距）。不改的话：静止 X = 0.146 不在中性点（轴刻度是 −1/0/+1）、眯眼笑 X = 0.47 会让眼睛在笑的时候闭掉一半。⚠️ **待实测**：真正闭眼时 `eyeSquint` 会抬多少（**闭眼那一次还没录**）⇒ 若闭眼时 X 到不了 1，就补一次「闭眼」录样，把泄漏系数改成随闭合量衰减。"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/BlinkWide",
-                        "expression":  "(eyeBlinkRight - eyeWideRight) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft, eyeBlinkRight) - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1)",
+                        "expression":  "clamp((eyeBlinkRight - 3.9 * eyeSquintRight - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2825,7 +2825,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。"
+                        "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。\n⭐ **2026-09-28 深夜实测：`eyeBlink` 里混着 `3.9 × eyeSquint` 的下眼睑泄漏**（静止/眯眼/眯眼笑 各 3 次 × 2 轮：`eyeSquint` 0.021 → 0.078 → 0.102，`eyeBlink` 0.146 → 0.35 → 0.47；最小二乘拟合 `blink ≈ 0.063 + 3.88·squint`，减完残差 0.064/0.05/0.07 近似恒定）⇒ 这行改成 `eyeBlink − 3.9·eyeSquint − 0.06`（0.06 = 静止偏置，即拟合截距）。不改的话：静止 X = 0.146 不在中性点（轴刻度是 −1/0/+1）、眯眼笑 X = 0.47 会让眼睛在笑的时候闭掉一半。⚠️ **待实测**：真正闭眼时 `eyeSquint` 会抬多少（**闭眼那一次还没录**）⇒ 若闭眼时 X 到不了 1，就补一次「闭眼」录样，把泄漏系数改成随闭合量衰减。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Form",
@@ -2844,23 +2844,23 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/Form",
-                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp(1 - (eyeBlinkLeft - 0.10) / 0.10, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Left/BlinkWide\")) / 0.25, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
+                        "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007\n⭐ **2026-09-28 深夜实测标定**：膝 0.05 / 宽 0.05 **被实测确认**（静止 `eyeSquint` 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.102 ⇒ 1.0）。⚠️ **门改成门在 `out(BlinkWide)` 上**：原来门 `eyeBlink` 0.10~0.20，而**眯眼实测 blink = 0.35 ⇒ 原门恒为 0，眯眼根本生不出笑眼**（bug）。去污后：静止/眯眼/眯眼笑 X ≈ 0 ⇒ 门 1 ⇒ 正侧 0 / 0.56 / 1.0 ✓；闭眼 X ≈ 1 ⇒ 门 0 ⇒ 不来假笑 ✓。门 = `clamp((0.50 − out(BlinkWide)) / 0.25, 0, 1)`：**死区 0.25 + 宽 0.25**（X ≤ 0.25 ⇒ 1，X ≥ 0.50 ⇒ 0；**占位**，等闭眼录样校正）—— 实测同一「眯眼笑」两轮 X = 0 / 0.063 ⇒ 死区保证两者都给 1.0（若门宽贴 0.20 会让第二轮掉到 0.69）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/Form",
-                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) * clamp(1 - (eyeBlinkRight - 0.10) / 0.10, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Right/BlinkWide\")) / 0.25, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007"
+                        "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007\n⭐ **2026-09-28 深夜实测标定**：膝 0.05 / 宽 0.05 **被实测确认**（静止 `eyeSquint` 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.102 ⇒ 1.0）。⚠️ **门改成门在 `out(BlinkWide)` 上**：原来门 `eyeBlink` 0.10~0.20，而**眯眼实测 blink = 0.35 ⇒ 原门恒为 0，眯眼根本生不出笑眼**（bug）。去污后：静止/眯眼/眯眼笑 X ≈ 0 ⇒ 门 1 ⇒ 正侧 0 / 0.56 / 1.0 ✓；闭眼 X ≈ 1 ⇒ 门 0 ⇒ 不来假笑 ✓。门 = `clamp((0.50 − out(BlinkWide)) / 0.25, 0, 1)`：**死区 0.25 + 宽 0.25**（X ≤ 0.25 ⇒ 1，X ≥ 0.50 ⇒ 0；**占位**，等闭眼录样校正）—— 实测同一「眯眼笑」两轮 X = 0 / 0.063 ⇒ 死区保证两者都给 1.0（若门宽贴 0.20 会让第二轮掉到 0.69）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Open",
