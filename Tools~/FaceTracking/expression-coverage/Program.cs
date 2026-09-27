@@ -90,10 +90,10 @@ internal static class Coverage
         Section("G 覆盖不到的地方（本轮实测，不是猜）");
         // G1 VB 自带 stabil(var,dif)：**有状态**的迟滞防抖，纯函数表达不了。
         bool stabilParses = HoFaceExpression.TryParse("stabil(jawOpen, 0.1)", out _, out string stabilError);
-        Console.WriteLine($"  [{(stabilParses ? "FAIL" : "缺口")}] VB 的 stabil(var,dif)（迟滞防抖）");
+        Console.WriteLine($"  [{(stabilParses ? "FAIL" : "有对应")}] VB 的 stabil(var,dif)（迟滞防抖）-> 我们的 steps 修饰符（迟滞 + 最短保持，输出二元）");
         Console.WriteLine($"         TryParse = {stabilParses}" + (stabilParses ? "" : $"（{stabilError}）"));
         Console.WriteLine("         → 表达式是纯函数，做不了「记住上一帧」；要补就得做成输出行的修饰符（像 Smooth/Delay 那样）");
-        if (stabilParses) failed++; else passed++;
+        if (stabilParses) failed++; else passed++;   // 表达式本身做不了（要记住上一帧），但输出行的 steps 修饰符就是它
 
         // G2 缺键语义：VB 只在收到键时写全局变量（缺键 = 保持上一帧），我们读不到就是 0。
         float missing = 0f;
