@@ -264,9 +264,10 @@ ARKit 的 `eyeBlink` 与 `eyeSquint` 在模型上闭的是同一块，裸输入�
 | 1D / 2D | —— | **空操作**：同一棵树开/关，内部点、非对称点、超范围点读数**逐位相同** |
 | **Direct**（两个孩子写同一个属性，权重 0.6 / 0.8） | **加法**：`100×0.6 + 200×0.8 = 220`；两个都写 100 时 `= 140` | **归一化**：权重被除以它们的和 ⇒ `0.4286×100 + 0.5714×200 = **157.14**` |
 
-⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 **7 个孩子** = `MouthCoreRollSwitch` / `MouthJaw` / `MouthShift` / `MouthCorner` / `MouthTongue` / `InvertedV` / `Cheek`；其中 **3 个**（"张嘴 × 笑" / 整嘴平移 / 嘴角）挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 3×门）。
+⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 **7 个孩子** = `MouthCoreRollSwitch` / `MouthJaw` / `MouthShift` / `MouthWidth` / `MouthTongue` / `InvertedV` / `Cheek`；其中 **3 个**（"张嘴 × 笑" / 整嘴平移 / 嘴宽）挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 3×门）。
 **2026-09-28 起 `.research/check-controller.ps1` 加了一条断言：27 棵树的 `m_NormalizedBlendValues` 必须全是 0**
-（⚠️ 加这条断言时是 **27** 棵；2026-09-28 **上午**删掉 `MouthWidth` 之后 = **26**、**当天下午**重建 `MouthShift` 之后 = **27**，见[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)）
+（⚠️ 加这条断言时是 **27** 棵；2026-09-28 **上午**删掉 `MouthWidth` 之后 = **26**、**下午**重建 `MouthShift` 之后 = **27**、**傍晚**删 `MouthCorner` 并把 `MouthWidth` 换成 1D ⇒ 仍是 **27**，见[控制器 §5.7.22–§5.7.24](VTS_HQ_CONTROLLER.md)）
+
 
 
 （对 1D/2D 是空操作，对 Direct 是**载荷**；有人手滑勾上一次，整个区域就会被摊薄 —— 负例验过会报错）。
