@@ -3003,7 +3003,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): **the tongue tree's X axis = how far the tongue is out**（2026-09-28 深夜起；名字里的 L 是历史遗留 —— 这根通道本来就是给「分侧」留的，现在先当**伸出量**用，做歪舌头时量轴会换成新的 `TongueOut`）。\\n⭐ 舌头那张表 `MouthTongue` = `tongueOut` × `jawOpen` 的 **4 角 + 对角线上补 1 点 = 5 格**（§5.7.28）：Y 轴是 `Ho/Drive/Mouth/Jaw`（裸 jawOpen 正侧，刻度 0 / 0.4 / 0.75）。\\n⚠️ `tongueOut` **从来没实测过**（126 段那批里没有舌头动作）⇒ 树上的 X 刻度 0 / 0.5 / 1 是**占位**，第一轮录完再收圈。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): **the tongue table's only axis = how far the tongue is out**（2026-09-28 深夜起；名字里的 L 是历史遗留 —— 这根通道本来就是给「分侧」留的，现在先当**伸出量**用，做歪舌头时量轴会换成新的 `TongueOut`）。\\n⭐ 舌头那条表 `MouthTongue` = **1D 5 格**（§5.7.29）：**默认（不出舌）+ 沿对角线 4 步** —— 沿 (伸出量, 张开量) 的对角线走（舌出来多少、嘴就张多少 = 不穿模）⇒ 一根轴上的 5 个状态，**张嘴量烘在每段片段里**（所以没有 Y 轴；嘴形 / 下颌仍归 `MouthCore` / `MouthJaw`）。刻度 0 / 0.25 / 0.5 / 0.75 / 1。\\n⚠️ `tongueOut` **从来没实测过**（126 段那批里没有舌头动作）⇒ 树上的 X 刻度 0 / 0.5 / 1 是**占位**，第一轮录完再收圈。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/TongueR",

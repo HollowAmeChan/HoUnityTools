@@ -127,6 +127,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static readonly float[] Two = { -1f, 0f, 1f };     // 双向轴：负端 / 中性 / 正端
         private static readonly float[] Unit = { 0f, 0.5f, 1f };   // 单端轴：0 / 半 / 满
+        /// <summary>
+        /// **舌头的 1D 五档**（2026-09-28 深夜用户定：「默认态在左下角，的四点」）：
+        /// **默认（不出舌，左下角）+ 沿对角线 4 步** —— 沿 (伸出量, 张开量) 的对角线走，
+        /// 所以在一根轴上就是 5 个状态；"张嘴"由作者烘进每段片段里（舌出来多少、嘴就张多少 = 不穿模）。
+        /// ⚠️ 刻度是**占位**：`tongueOut` 从来没实测过（126 段那批里没有一个舌头动作）⇒ 先等分，
+        /// 第一轮「舌头伸出·居中」录完再按实测收圈（同 `Mouth/Open` 的做法）。
+        /// </summary>
+        private static readonly float[] TongueTicks = { 0f, 0.25f, 0.5f, 0.75f, 1f };
         private static readonly float[] Ends = { -1f, 1f };        // 两档
         private static readonly float[] ZeroOne = { 0f, 1f };
 
@@ -169,26 +177,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 放在后面的话 `Tables` 构造时读到的还是 `null`（真栽过一次：探针报 NullReference）。
         /// </summary>
         private static readonly float[] JawOpen = { 0f, 0.75f };
-
-        /// <summary>
-        /// **`Mouth/Jaw`（= 裸 `jawOpen` 的正侧）的三档实测刻度**：0 闭 · 0.4 半张 · 0.75 张满。
-        /// 与 `MouthCore` 的 Y（`Mouth/Open` = 0 / 0.4 / 0.75）同一套口径，都来自口腔开度实测
-        /// （半张 `jawOpen` 0.367~0.434、张满 0.74~0.79）；区别只是 `Mouth/Open` 还带卷唇 / 漏斗修正。
-        /// ⚠️ **舌头那张表的 Y 用它**：舌头长在下颌上，张开量决定舌根位置、也决定"舌头过不过得去嘴唇"。
-        /// </summary>
-        private static readonly float[] JawOpenMeasured = { 0f, 0.4f, 0.75f };
-
-        /// <summary>
-        /// **`MouthTongue` 挖掉的 4 格**（2026-09-28 深夜）：只留 **4 个角 + 对角线上那 1 个点** = 5 格。
-        /// 索引：X = 舌头伸出量（0 / 0.5 / 1，`Unit`）· Y = 下颌张开量（0 / 0.4 / 0.75，`JawOpenMeasured`）
-        /// ⇒ 留 (0,0) 常态 · (2,0) 舌伸嘴不张 · (0,2) 张嘴不伸舌 · (2,2) 舌伸 + 张大 ·
-        ///   **(1,1) 半舌半张 = 对角线上那一点**。
-        /// ⚠️ 那个中点就是"穿模那一帧"的负责人 —— 少了它，中间态只能由四角线性混出来。
-        /// </summary>
-        private static readonly Vector2Int[] MouthTongueSkip =
-        {
-            new Vector2Int(1, 0), new Vector2Int(2, 1), new Vector2Int(0, 1), new Vector2Int(1, 2)
-        };
 
         /// <summary>
         /// **2026-09-28 当天三版之后的刻度** —— 上午删 2D 的 `MouthWidth`（§5.7.22）、下午建整嘴平移 +
@@ -303,12 +291,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 整嘴平移（3×2 = 6 格）：X = 左右（±0.95）· Y = 上下（**只有两档**：0 与 +1，
             // 负侧钳到 0 —— 用户实测下移到不了，见 `ShiftYMeasured` 的注释）。
             new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured },
-            // ⭐ **舌头：`tongueOut` × `jawOpen` 的 4 角 + **对角线上补 1 点** = 5 格**（2026-09-28 深夜用户定）。
-            //    原话：「tongueOut 跟 jawOpen 的 4 角树，因为这个很容易穿模，我们需要额外在 y=x 线上补一个状态也就是 5 点」。
-            //    ⚠️ 不补那一点时，四角线性混出来的中间态就是"舌头顶穿嘴唇"的那一帧 —— 补上之后中段有人负责。
-            //    ⚠️ 4 个**边中点**不建（`MouthTongueSkip`）：这张表的语义就是"4 角 + 中心"。
-            //    ⚠️ 旧版两根轴**同源**（X/Y 都吃 `tongueOut`）⇒ 4 格里只有对角线两格采得到，另两格是死的。
-            new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/Jaw", XToken = "Tongue", YToken = "Jaw", XValues = Unit, YValues = JawOpenMeasured, Skip = MouthTongueSkip },
+            // ⭐ **舌头是 1D 5 格，不是 2D 表** —— 见下面的 `Simple1DTables`。
+            //    用户 2026-09-28 深夜三句话定形：①「其实也只需要一个 1d 树分三段就行了吧」→
+            //    ②「不行我感觉还是要五点」→ ③「5 点不是你想的那样，我想的是**默认态在左下角**，的四点」
+            //    = **默认（左下角）+ 沿对角线 4 步**：姿势序列沿 (伸出量, 张开量) 的对角线走
+            //    （舌出来多少、嘴就张多少 ⇒ 才不穿模），所以在树上就是**一根轴（伸出量）上的 5 个状态**，
+            //    "张嘴"由作者**烘进每一段片段**里。
+            //    ⚠️ 别建成 2D 表：① 2D 里这 5 个点是**共线**的（实测共线/退化点集不可预测、会出负权重）；
+            //       ② 把 `jawOpen` 当第二根轴会让"只张嘴不伸舌"把舌头也带出来 ✗。
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
@@ -355,7 +345,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 嘴宽（2026-09-28 傍晚：`MouthWidth` 以 **1D 3 格**回来）—— 轴就是**既有的**
             // `Ho/Drive/Mouth/Pucker`（= `2×dimple − pucker`，本来就在发布、之前没有树消费）。
             // 三档实测：窄 收嘴不撅 / 中 静态 / 宽 抿嘴嘴宽。
-            new Simple1DSpec { Name = "MouthWidth", Parameter = "Ho/Drive/Mouth/Pucker", Token = "Pucker", Values = MouthWidthMeasured }
+            new Simple1DSpec { Name = "MouthWidth", Parameter = "Ho/Drive/Mouth/Pucker", Token = "Pucker", Values = MouthWidthMeasured },
+            // 舌头（2026-09-28 深夜）：**1D 5 格** —— 默认（不出舌，左下角）→ 4 步 → 舌伸满；
+            // 每格自己把该有的张嘴量烘进去（穿模由作者那 5 段负责）。见 `TongueTicks` 的注释。
+            // 轴借 `Ho/Drive/Mouth/TongueL`（两根 TongueL/R 本来就是 tongueOut 的占位；做「歪舌头」时
+            // 量轴换新的 `TongueOut`，这 5 格的名字与位置都不用动）。
+            new Simple1DSpec { Name = "MouthTongue", Parameter = "Ho/Drive/Mouth/TongueL", Token = "Tongue", Values = TongueTicks }
         };
 
         /// <summary>
