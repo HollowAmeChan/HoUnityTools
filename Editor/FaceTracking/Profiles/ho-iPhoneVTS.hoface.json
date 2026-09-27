@@ -3172,6 +3172,336 @@
                                       ],
                         "notes":  "睁（中性闭合）分区 = 剩下的：因为两道死区不重叠，三个分区**恒等于 1** ⇒ 闭合也是一个幂等分割。"
                     },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/NeutralClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Neutral\") * out(\"Ho/Drive/Lid/Left/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/NeutralOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Neutral\") * out(\"Ho/Drive/Lid/Left/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/NeutralWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Neutral\") * out(\"Ho/Drive/Lid/Left/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/HappyClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Happy\") * out(\"Ho/Drive/Lid/Left/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Happy × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/HappyOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Happy\") * out(\"Ho/Drive/Lid/Left/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Happy × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/AngerClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Anger\") * out(\"Ho/Drive/Lid/Left/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/AngerOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Anger\") * out(\"Ho/Drive/Lid/Left/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/AngerWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Anger\") * out(\"Ho/Drive/Lid/Left/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/SadClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Sad\") * out(\"Ho/Drive/Lid/Left/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/SadOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Sad\") * out(\"Ho/Drive/Lid/Left/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Gate/SadWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Weight/Sad\") * out(\"Ho/Drive/Lid/Left/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/NeutralClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Neutral\") * out(\"Ho/Drive/Lid/Right/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/NeutralOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Neutral\") * out(\"Ho/Drive/Lid/Right/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/NeutralWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Neutral\") * out(\"Ho/Drive/Lid/Right/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Neutral × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/HappyClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Happy\") * out(\"Ho/Drive/Lid/Right/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Happy × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/HappyOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Happy\") * out(\"Ho/Drive/Lid/Right/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Happy × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/AngerClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Anger\") * out(\"Ho/Drive/Lid/Right/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/AngerOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Anger\") * out(\"Ho/Drive/Lid/Right/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/AngerWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Anger\") * out(\"Ho/Drive/Lid/Right/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Anger × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/SadClosed",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Sad\") * out(\"Ho/Drive/Lid/Right/Closure/Closed\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Closed）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/SadOpen",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Sad\") * out(\"Ho/Drive/Lid/Right/Closure/Open\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Open）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Gate/SadWide",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Weight/Sad\") * out(\"Ho/Drive/Lid/Right/Closure/Wide\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
+                    },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/Form",
                         "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Happy\") - out(\"Ho/Drive/Lid/Left/Evidence/Sad\"), -1, 1)",
