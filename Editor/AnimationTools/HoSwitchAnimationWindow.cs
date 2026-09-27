@@ -1,4 +1,4 @@
-// HoSwitchAnimationWindow.cs -- 开关动画生成器（2026-09-28 用户定的形态键工具升级版）
+﻿// HoSwitchAnimationWindow.cs -- 开关动画生成器（2026-09-28 用户定的形态键工具升级版）
 //
 // 干什么：给一个**预制件**，按三族成对生成「开关动画」——
 //   BS  形态键      ：<预制件>__BS__On|Off__<键名>        值 100 / 0（全 prefab 上这根键的所有网格一起）
@@ -114,6 +114,14 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 GUI.backgroundColor = new Color(0.75f, 1f, 0.75f);
                 if (GUILayout.Button(new GUIContent("生 成", "生成选中的三族开关动画；已存在片段按「覆盖动画」决定重写还是跳过。"), GUILayout.Height(30f)))
                     Generate();
+                GUI.backgroundColor = Color.white;
+                GUI.backgroundColor = new Color(0.86f, 0.92f, 1f);
+                if (GUILayout.Button(new GUIContent("生成静置姿态动画",
+                        "弹保存窗口，把当前姿势 k 成一份单帧片段：根下每个 Transform 的本地 position/rotation/scale 都写一遍。\n" +
+                        "根物体自己不写（角色位置交给别处）；空节点也写（骨骼多半是空节点）。\n" +
+                        "⚠️ 要「场景里摆好的姿势」就拖场景物体；拖预制件资产则用它存储的姿势。"),
+                        GUILayout.Height(30f)))
+                    GeneratePose();
                 GUI.backgroundColor = Color.white;
             }
 
@@ -291,6 +299,92 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             {
                 if (isAsset) PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        /// <summary>
+        /// 生成"静置姿态"片段：**先弹保存窗口**（默认名 `&lt;预制件&gt;__POSE__静置.anim`、默认目录 = 第一排那个文件夹），
+        /// 然后把根下每个 Transform 的本地 TRS 按**当前值**写成单帧常量，就地覆盖（引用不丢）。
+        /// 用途：叶子槽里那些"什么都不该动"的状态 —— 播它，角色就定在当前姿势上，
+        /// 不会被 Write Defaults 的默认值（模型自带的浮空姿势）拽走。
+        /// ⚠️ 根物体自己的 Transform **不写**（角色位置/朝向交给别处）；空节点**要写**（骨骼多半没组件）。
+        /// ⚠️ 姿势来源：拖场景里的物体 ⇒ 用场景里摆好的；拖预制件资产 ⇒ 用它存储的。
+        /// </summary>
+        private void GeneratePose()
+        {
+            if (_prefab == null) { _status = "先填预制件（要姿势片段就拖场景里那个摆好姿势的物体）。"; return; }
+
+            bool isAsset = !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(_prefab));
+
+            // 先弹保存窗口（还没加载任何东西，取消也不脏）
+            string dir = string.IsNullOrEmpty(_folder) ? "Assets" : _folder;
+            string picked = EditorUtility.SaveFilePanel("静置姿态片段保存到哪", dir,
+                                                        _prefab.name + "__POSE__静置", "anim");
+            if (string.IsNullOrEmpty(picked)) { _status = "已取消（没生成）。"; return; }
+            string assetPath = ToAssetPath(picked);
+            int slash = assetPath.LastIndexOf('/');
+            if (slash > 0) EnsureFolder(assetPath.Substring(0, slash));
+
+            GameObject root = isAsset ? PrefabUtility.LoadPrefabContents(AssetDatabase.GetAssetPath(_prefab)) : _prefab;
+            try
+            {
+                var bindings = new List<EditorCurveBinding>();
+                var values = new List<float>();
+                foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (tr == root.transform) continue;
+                    string path = PathOf(tr, root.transform);
+                    Vector3 p = tr.localPosition;
+                    Quaternion q = tr.localRotation;
+                    Vector3 s = tr.localScale;
+                    var one = new (string, float)[]
+                    {
+                        ("m_LocalPosition.x", p.x), ("m_LocalPosition.y", p.y), ("m_LocalPosition.z", p.z),
+                        ("m_LocalRotation.x", q.x), ("m_LocalRotation.y", q.y),
+                        ("m_LocalRotation.z", q.z), ("m_LocalRotation.w", q.w),
+                        ("m_LocalScale.x", s.x), ("m_LocalScale.y", s.y), ("m_LocalScale.z", s.z),
+                    };
+                    foreach (var item in one)
+                    {
+                        bindings.Add(EditorCurveBinding.FloatCurve(path, typeof(Transform), item.Item1));
+                        values.Add(item.Item2);
+                    }
+                }
+
+                WriteCurves(assetPath, bindings, values, _overwrite);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                _report = "静置姿态：" + assetPath + "\n" + bindings.Count + " 条曲线 / " + (bindings.Count / 10) + " 个物体"
+                          + (isAsset ? "\n⚠️ 用的是预制件里存储的姿势（想用场景里摆好的，请拖场景物体）" : "");
+                _status = "静置姿态生成完成。";
+            }
+            finally
+            {
+                if (isAsset) PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        /// <summary>和 <see cref="Write"/> 同一套"就地改"规则，只是每条曲线的值各自给、路径由调用方给全。</summary>
+        private static void WriteCurves(string assetPath, List<EditorCurveBinding> bindings, List<float> values,
+                                        bool overwrite)
+        {
+            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
+            if (clip == null)
+            {
+                clip = new AnimationClip { name = System.IO.Path.GetFileNameWithoutExtension(assetPath) };
+                AssetDatabase.CreateAsset(clip, assetPath);
+            }
+            else if (!overwrite)
+            {
+                return;   // 已存在且不覆盖 ⇒ 跳过（引用保持不动）
+            }
+
+            var wanted = new HashSet<string>(bindings.Select(BindingKey), StringComparer.Ordinal);
+            foreach (EditorCurveBinding b in AnimationUtility.GetCurveBindings(clip))
+                if (!wanted.Contains(BindingKey(b))) AnimationUtility.SetEditorCurve(clip, b, null);
+            for (int i = 0; i < bindings.Count; i++)
+                AnimationUtility.SetEditorCurve(clip, bindings[i], new AnimationCurve(new Keyframe(0f, values[i])));
+            clip.frameRate = 60f;
+            EditorUtility.SetDirty(clip);
         }
 
         private static void Count(int status, ref int created, ref int updated, ref int skipped)
