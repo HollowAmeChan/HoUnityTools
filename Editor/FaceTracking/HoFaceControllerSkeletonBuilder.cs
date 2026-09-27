@@ -138,6 +138,35 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private static readonly float[] Two = { -1f, 0f, 1f };     // 双向轴：负端 / 中性 / 正端
+
+        /// <summary>眼睑的 11 个状态点 = 4 情绪（中性/喜/怒/悲）× 3 闭合（闭/睁/睁大）**减去 `睁大×喜`**。
+        /// 那一格不建，因为喜证据里有一道「不许睁大」的门 ⇒ `w喜 × w睁大 ≡ 0`（§5.7.36）。
+        /// ⚠️ 顺序 = 控制器里的孩子顺序；槽位名 `LidL__Gate__HappyOpen` 就是语义。</summary>
+        private static readonly string[] LidCells =
+        {
+            "NeutralClosed", "NeutralOpen", "NeutralWide",
+            "HappyClosed", "HappyOpen",
+            "AngerClosed", "AngerOpen", "AngerWide",
+            "SadClosed", "SadOpen", "SadWide",
+        };
+
+        /// <summary>
+        /// **Direct 张量积表**：每个孩子挂一个**门参数**（不是轴）——
+        /// `Ho/Drive/Lid/&lt;侧&gt;/Gate/&lt;情绪&gt;&lt;闭合&gt;` = `w情绪 × w闭合`，11 个相加恒 = 1
+        /// ⇒ 输出是这 11 张姿势的凸组合，`default` 不参与（§5.7.38 起眼睑就是这张表）。
+        /// </summary>
+        private sealed class DirectTableSpec
+        {
+            public string Name, Side;
+            public string[] Cells;
+        }
+
+        private static readonly DirectTableSpec[] DirectTables =
+        {
+            new DirectTableSpec { Name = "LidL", Side = "Left",  Cells = LidCells },
+            new DirectTableSpec { Name = "LidR", Side = "Right", Cells = LidCells },
+        };
+
         private static readonly float[] Unit = { 0f, 0.5f, 1f };   // 单端轴：0 / 半 / 满
         /// <summary>
         /// **舌头的 1D 四档**（2026-09-28 深夜用户定：「默认态在左下角，的四点」→ 随后「你改少点吧，四个状态差不多」）：
@@ -304,8 +333,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             //    **一根轴（伸出量）上的 4 个状态**，"张嘴"由作者**烘进每一段片段**里。
             //    ⚠️ 别建成 2D 表：① 那些点在 2D 里**共线**（实测共线/退化点集不可预测、会出负权重）；
             //       ② 把 `jawOpen` 当第二根轴会让"只张嘴不伸舌"把舌头也带出来 ✗。
-            new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
-            new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
             // ⚠️ 颊那两棵 **ARKit** 树 + 鼻那棵 2D 表都删了（2026-09-27）：颊（`cheekSquint`）在二次元角色上表现不了；
             //    鼻收成**一个状态**（鼻子上顶）⇒ 挪到下面的 1D 片段表（`NoseUp`）。
@@ -559,6 +586,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), spec.Values[i]);
                 }
                 slotCounts[spec.Name] = spec.Values.Length;
+                trees[spec.Name] = tree;
+            }
+
+            // Direct 张量积表：孩子 = 具名状态点，各自挂一个门参数（`AttachDirect` 跟区域那套是同一个 API）
+            for (int d = 0; d < DirectTables.Length; d++)
+            {
+                DirectTableSpec spec = DirectTables[d];
+                var tree = NewTree(controller, spec.Name, BlendTreeType.Direct);
+                for (int i = 0; i < spec.Cells.Length; i++)
+                {
+                    string slot = spec.Name + "__Gate__" + spec.Cells[i];
+                    AttachDirect(tree, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
+                                 "Ho/Drive/Lid/" + spec.Side + "/Gate/" + spec.Cells[i]);
+                }
+                slotCounts[spec.Name] = spec.Cells.Length;
                 trees[spec.Name] = tree;
             }
 

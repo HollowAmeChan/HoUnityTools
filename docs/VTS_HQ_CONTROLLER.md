@@ -2533,9 +2533,11 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
   `LidL__Gate__NeutralOpen` / `…__HappyOpen` / `…__AngerWide` / `…__SadClosed` …（共 11 个/眼）。
   资产：`新建 22 · 保留已有 43 · 删掉孤儿 18`（旧网格槽位全是空的 ⇒ 零损失）⇒ 槽位 **61 → 65**，
   树仍 16、参数仍 85；检查器 **0 问题**。
-* ⏳ **还差的镜像**：`HoFaceControllerSkeletonBuilder.cs`（编辑器面板用的那份）**还是 2D 两张眼睑表** ——
-  builder / 生成器 / 检查器三处同步这条规矩，这次只补了后两处。面板再装配一次会把眼睑表退回 2D，
-  下次动手先补它（`Tables` 里去掉 `LidL`/`LidR`、加一份 Direct 表规格 + 同样的 11 门接线）。
+* ✅ **三处同步已补齐**（2026-09-28 深夜）：`HoFaceControllerSkeletonBuilder.cs` 也换成 Direct 表 ——
+  新增 `LidCells`（11 个具名状态点）+ `DirectTableSpec`/`DirectTables`，写入循环复用区域那套
+  `AttachDirect(tree, SlotClip(...), "Ho/Drive/Lid/<侧>/Gate/<情绪><闭合>")`，`Tables` 里那两条 2D 规格删掉。
+  ⚠️ **这份 `.cs` 没有本地编译验证**（本机能跑的是生成器 + 检查器那两份，`.cs` 只有编辑器面板会用）
+  ⇒ 第一次在面板里装配时留意编译报错；引用的都是既有 API（`AttachDirect` / `SlotClip` / `NewTree`），类型都在同一个类里。
 
 
 
