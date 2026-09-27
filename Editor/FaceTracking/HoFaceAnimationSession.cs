@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.Constraints;
@@ -806,7 +806,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private void Rebuild()
         {
-            var next = HoFaceAnimationAssets.Compile(Settings, shape => { int i = HoFaceTrackingChannels.IndexOf(shape); return i >= 0 && selected[i]; });
+            // ⚠️ 2026-09-28 用户定：**不许再按"通道表"过滤输出键**。
+            // 旧控制器的片段写的是 52 个标准 ARKit 键 ⇒ 那张表恰好等于"要写的键"，所以一直没暴露；
+            // 新架构里控制器写的是**模型自己的状态键**（`HO-嘴平闭` / `HO-颊左鼓` / `JellyEye` …）⇒
+            // 一旦按通道表过滤，这些键全被丢掉 ⇒ 影子台上算完了却一个都不抄 ⇒ **脸完全不动**。
+            // 现在：控制器里写的键**全部允许写**（至于是不是这台模型上真有的键，由绑定时按网格现查）。
+            var next = HoFaceAnimationAssets.Compile(Settings, null);
             try
             {
                 var nextKeys = new HashSet<(SkinnedMeshRenderer, int)>();

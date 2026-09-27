@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -503,7 +503,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         string shape = curve.propertyName.Substring("blendShape.".Length);
                         // 只收我们有通道、且这个区域被打开的标准 ARKit 键。控制器是搬来的，可能还写了
                         // 别的键（别人的模型专有键），那些不归我们驱动 —— 不猜、也不写。
-                        if (!Allowed(settings, shape) || (outputFilter != null && !outputFilter(shape))) continue;
+                        // ⚠️ 2026-09-28 用户定：**不再按输入通道过滤输出键**。
+                        // 旧架构里"输入键名 == 输出键名"（都是 52 个 ARKit 键），所以这道 `Allowed(settings, shape)`
+                        // 看起来无害；新架构里控制器写的是**模型自己的状态键**（`HO-嘴平闭` / `HO-颊左鼓` / `JellyEye` …）
+                        // ⇒ 它们不是输入通道 ⇒ 被这道筛全判 false ⇒ 影子台算完一个都不抄 ⇒ **脸完全不动**。
+                        // 现在：控制器里写的键**全部允许写**；"这台模型上到底有没有这根键"由绑定到网格时现查。
+                        if (outputFilter != null && !outputFilter(shape)) continue;
                         string path = curve.path;
                         Transform node = path.Length == 0 ? settings.TargetAnimator().transform : settings.TargetAnimator().transform.Find(path);
                         var renderer = node != null ? node.GetComponent<SkinnedMeshRenderer>() : null;
