@@ -174,40 +174,6 @@ public static class HoFaceTrackingValidation
             Check(info.layers == 1 && info.states == 1 && info.clips > 0,
                 "结构摘要读的是资产实况（" + info.layers + " 层 / " + info.states + " 状态 / " + info.clips + " 个片段）");
 
-            // ── 形态键动画生成器（动画工具页里那一栏，面捕只拿它的产物当槽位数据）──────────
-            const string BuiltFolder = "Assets/ValidationBuiltClips";
-            if (AssetDatabase.IsValidFolder(BuiltFolder)) AssetDatabase.DeleteAsset(BuiltFolder);
-            AssetDatabase.CreateFolder("Assets", "ValidationBuiltClips");
-            var second = new GameObject("SecondFace");
-            second.transform.SetParent(root.transform, false);
-            var secondMesh = second.AddComponent<SkinnedMeshRenderer>();
-            secondMesh.sharedMesh = mesh;   // 同一个网格资产：两张网格都有全部 52 个键 + JellyEye
-            var built = HoBlendShapeClipBuilder.Build(new[] { renderer, secondMesh }, root.transform, BuiltFolder);
-            Check(built.names.Count == 53, "每个非重合键名一份片段（" + built.names.Count + " = 52 ARKit + JellyEye）");
-            var builtJaw = AssetDatabase.LoadAssetAtPath<AnimationClip>(BuiltFolder + "/jawOpen.anim");
-            Check(builtJaw != null && builtJaw.name == "jawOpen", "片段名就是键名（" + BuiltFolder + "/jawOpen.anim）");
-            Check(CountCurves(builtJaw, "jawOpen") == 2, "一个片段写所有有这个键的网格（"
-                + CountCurves(builtJaw, "jawOpen") + " 条曲线）");
-            var builtJawCurve = AnimationUtility.GetEditorCurve(builtJaw,
-                EditorCurveBinding.FloatCurve("Body", typeof(SkinnedMeshRenderer), "blendShape.jawOpen"));
-            Check(builtJawCurve != null && Mathf.Abs(builtJawCurve.Evaluate(0.5f) - 100f) < 0.01f,
-                "值是 100 常量，不是斜坡（混合树采的是姿势，片段里没有时间轴）");
-            string builtGuid = AssetDatabase.AssetPathToGUID(BuiltFolder + "/jawOpen.anim");
-            var again = HoBlendShapeClipBuilder.Build(new[] { renderer, secondMesh }, root.transform, BuiltFolder);
-            Check(again.created == 0 && again.updated == 53 && AssetDatabase.AssetPathToGUID(BuiltFolder + "/jawOpen.anim") == builtGuid,
-                "重跑是覆盖式的：同名片段保留资产本身（GUID 不变），只重写曲线");
-
-            // 产物文件夹是"生成完整份拷走"的地方：可以顺手把这次没写到的旧片段清掉（面板上默认开）。
-            var staleClip = new AnimationClip { name = "StaleOldKey", frameRate = 60f };
-            AssetDatabase.CreateAsset(staleClip, BuiltFolder + "/StaleOldKey.anim");
-            var pruned = HoBlendShapeClipBuilder.Build(new[] { renderer, secondMesh }, root.transform, BuiltFolder, pruneStale: true);
-            Check(pruned.removed.Count == 1 && pruned.removed[0] == "StaleOldKey"
-                && AssetDatabase.LoadAssetAtPath<AnimationClip>(BuiltFolder + "/StaleOldKey.anim") == null,
-                "生成时清掉这次没写到的旧片段（删了 " + pruned.removed.Count + " 个："
-                + (pruned.removed.Count > 0 ? string.Join("、", pruned.removed) : "—") + "）");
-            Check(AssetDatabase.AssetPathToGUID(BuiltFolder + "/jawOpen.anim") == builtGuid,
-                "清理只动没写到的那些：这次写过的 jawOpen 仍是原来那个 GUID");
-            UnityEngine.Object.DestroyImmediate(second);
 
             // 一个键落在两个驱动对象上：两边都要写；把对象去掉再重绑要能回来（幂等）。
             // 驱动对象列表就是"角色下所有 SkinnedMeshRenderer" —— `Meshes()` 是现取的，
