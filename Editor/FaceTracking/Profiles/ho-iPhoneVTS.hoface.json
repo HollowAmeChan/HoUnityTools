@@ -2736,7 +2736,7 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
-                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * HoAutoInvertedV) + HoExternalInvertedV",
+                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * clamp((mouthFunnel - 0.12) / 0.04, 0, 1) * HoAutoInvertedV) + HoExternalInvertedV",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05 } ] }, { "kind": "smooth", "seconds": 0.08, "steps": [] } ],
@@ -2781,7 +2781,8 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**三个孩子**：`MouthCoreRollSwitch` / `MouthShift` / `MouthCorner`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突；`MouthWidth` 2026-09-28 已整棵删掉、当天由 `MouthShift`（整嘴平移 3×3）+ `MouthCorner`（嘴角 3×3）取代）。
+                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**三个孩子**：`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突）。\n⭐ 当天走了三版：上午删掉 2D 的 `MouthWidth`（§5.7.22）⇒ 下午建 `MouthShift`（整嘴平移）+ 把它换成 `MouthCorner`（嘴角 3×3，§5.7.23）⇒ 傍晚用户判定「收缩舒张不必拆左右，一根轴 3 状态就够，左右交给整嘴平移」⇒ `MouthCorner` 删掉、`MouthWidth` 以 **1D 3 格**回来（§5.7.24）。
+
 \n⭐ `out(\"…\")` 读的是**上面最近写过这个名字**的那一行 ⇒ 这里读到的是**最后一条**同名行（= 全部形态合起来的门）✓，以后再加形态也不用改这一行。\n【经验参】无（只是转发 out(同名)；门的值由形态行决定）"
                     },
                     {
@@ -2984,8 +2985,8 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided)\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **2026-09-28：`MouthWidth` 整棵删掉 ⇒ 这根轴从此没有树消费它** —— 照旧每帧发布当出口/辅助变量（与 `Mouth/Funnel` / `Mouth/Press` / `Mouth/Forward`、`Cheek/*`、`Gaze/*` 同一待遇）。新的「整嘴平移 3×3 + 嘴角 2×2」等实测回来再建
-（§5.7.22）。"
+                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided) —— **2026-09-28 傍晚起是「嘴宽」那根 1D 表的轴**（`MouthWidth` 以 1D 3 格回来，见 §5.7.24）。\n⭐ 为什么用它：9 段补录的三态实测 —— `2×(dimpleL + dimpleR) − pucker` = **−0.93 收嘴不撅（窄）/ −0.09 静态（中）/ +2.0 抿嘴嘴宽（宽）**（⚠️ 是 **2×和**，所以宽端量纲是 2）；而另一根候选 `(press + shrug) / 2` 把「收嘴不撅」排在静态**之下**（0.09 < 0.17）⇒ 是反的、弃用。\n（其余组读数：笑 +0.36、撇嘴 +0.33 落在中偏宽；苦 −0.02、说话 −0.03、咀嚼 −0.11；噘嘴 / 抿紧 −0.96。）\n【经验参】无（表达式是机械换算；平滑：0.007）；树的三个刻度 −0.93 / −0.09 / +2.0 来自 9 段补录实测
+"
 
                     },
                     {
@@ -3053,66 +3054,6 @@
                                       ],
                         "notes":  "controller axis Mouth/Y = **整嘴上下平移**（2026-09-28 新建；用户定「上复用噘嘴那边的算法、下用闭唇张开下颌」）。\n⭐ **正侧 = 噘嘴判据**（与倒V 同源，膝 **0.45**，比倒V 的 0.41 更保守且本批等价）：`mouthPucker × clamp((mouthPucker − 0.45)/0.02, 0, 1) × 鼻门(0.54/0.05)`。114 段老语料实测：单通道缝 **+0.171**、加鼻门后全局最坏 **+0.951**；⚠️ 膝不能低于 0.41（静息 max 0.3797 / 挤眼 max 0.7769 会顶满）。\n⭐ **负侧 = 闭唇张开下颌**：`clamp((jawOpen × clamp((mouthClose − jawOpen + 0.10)/0.10, 0, 1) − 0.18)/0.10, 0, 1)`。\n  ⚠️ 门是「**嘴唇相对下颌是闭的**」而不是固定地板：说话那个瞬态是 `jawOpen` 0.65 而 `mouthClose` 只有 0.28 ⇒ 相对门压成 **0**；真正的闭嘴下颌下拉是 `jawOpen ≈ mouthClose`（0.25/0.25）⇒ 满档。\n  ⚠️ **与「咀嚼」只能靠幅度分**：咀嚼就是「闭唇 + 下颌动」，帧级同形（段内均值 jawOpen 0.084~0.090 ⇒ 0；宽嚼峰值 0.37 会短暂推一下）⇒ 挂 **smooth 0.10s** 钝峰；阈值/平滑是**手感参，要现场调**（面板「配置输出行」看读数）。\n⚠️ 上下互不误触（实测）：噘嘴 `jawOpen` 0.075~0.087 ⇒ 下侧 0；闭嘴下颌下拉 `mouthPucker` 0.257~0.315 ⇒ 上侧 0。\n⚠️ 与 `MouthJaw` 的分工：`MouthJaw` = 下巴自己的形变，这棵树 = 唇线整体位移的残差（§5.7.23）。刻度 ±1，也挂形态门。\n【经验参】上膝 0.45/0.02 + 鼻门 0.54/0.05（114 段：噘嘴下界 0.9511 / 非目标上界 0.7800）；下膝 0.18/0.10 + 相对唇门 0.10（41 段：闭嘴下颌下拉 0.217~0.277 满档、咀嚼均值 0.085 归零）；平滑 0.10s（手感参）"
                     },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/LipPress",
-                        "expression":  "(max(mouthPressLeft, mouthPressRight) + max(mouthShrugUpper, mouthShrugLower)) / 2",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.012, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/LipPress = **唇压紧 ↔ 舒展**（2026-09-28 新建；嘴角 3×3 的 X 轴）。\n⭐ **为什么不是「嘴角的收缩/舒张」**：实测（41 段）**抿嘴的嘴角读数跟「两边一起外拉」几乎一样**（`dimple` 0.795 vs 0.577 —— 抿嘴还更高；按嘴角判据算出来 0.53 vs 0.48）⇒「抿」在**嘴角**这一层不可分。真正能分开它俩的是**嘴唇**：`press` 0.643 vs 0.318、`shrug` 0.845 vs 0.600 ⇒ 这根轴按唇读。\n⭐ **三档实测锚点**（段内均值）：**0.14 静置**（press 0.078 / shrug 0.178）· **0.54 两边一起外拉**（0.318 / 0.635；撇嘴左 0.56、苦 0.47 也落这一带）· **0.77 抿嘴（抿成一条线）**（0.643 / 0.857）。⇒ 树的 X 刻度就摆这三个值。\n⚠️ **撇嘴会落在中间那一档**（press 0.32~0.45）⇒ 它靠 Y 轴（嘴角歪）分到「外拉 + 左/右」格 —— 那两格的美术就是撇嘴。\n⚠️ 与 VTS 直通那根 `Ho/Drive/Mouth/Press`（= `MouthPressLipOpen`）**不是一回事**，别混（那根照旧发布、没有树消费）。\n【经验参】三档 0.14 / 0.54 / 0.77 来自 41 段实测；平滑 0.012s（VB 同族）"
-                    },
-                    {
-                            "parameter":  "Ho/Drive/Mouth/CornerL",
-                            "expression":  "clamp((mouthDimpleLeft + mouthStretchLeft - mouthSmileLeft - mouthFrownLeft) * clamp((0.2 - jawOpen) / 0.1, 0, 1), -1, 1)",
-                            "defaultValue":  0,
-                            "curve":  {
-                                    "keys":  [
-                                                { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                    ]
-                            },
-                            "modifiers":  [
-                                    { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                            ],
-                            "notes":  "controller axis Mouth/CornerL = **左半嘴角的外拉量**（2026-09-28 重新定义；原来是半边 `smile − frown` —— sad 折进 `Mouth/Form` 负半轴之后那个语义作废了）。\n⭐ 判据 = `dimpleL + stretchL − smileL − frownL`（**必须减 smile/frown**：不减的话笑会把 dimple 顶到 0.33、直接点着嘴角层）× 下颌门 `clamp((0.20 − jawOpen)/0.10, 0, 1)`。**这一行是「量」，不钳到 0/1**（嘴角 3×3 的 Y 轴要的是 L 与 R 的差）。\n⭐ 实测（41 段）：静置 ≈0.03 · 单侧撇嘴 0.06~0.23 · 两边外拉 + 抿嘴 0.48~0.67 · 说话/咀嚼/苦/笑 ≈0（门下或减项归零）。\n【经验参】下颌门 0.20/0.10（撇嘴 jawOpen 0.016、挡路的说话 0.25）；平滑 0.009s"
-                        },
-                    {
-                            "parameter":  "Ho/Drive/Mouth/CornerR",
-                            "expression":  "clamp((mouthDimpleRight + mouthStretchRight - mouthSmileRight - mouthFrownRight) * clamp((0.2 - jawOpen) / 0.1, 0, 1), -1, 1)",
-                            "defaultValue":  0,
-                            "curve":  {
-                                    "keys":  [
-                                                { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                    ]
-                            },
-                            "modifiers":  [
-                                    { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                            ],
-                            "notes":  "controller axis Mouth/CornerR = **右半嘴角的外拉量**，与左半完全对称（2026-09-28 重新定义），也是「量」不钳 0/1。\n⭐ ARKit 的 `mouthDimpleLeft/Right` 是**原生左右分开**的两条线 —— 但人做「只撇一侧」时两侧会一起抬（实测 嘴角往左撇 dimpleL 0.213 / dimpleR 0.246；往右撇 0.113 / 0.107）⇒ 嘴角 3×3 的 Y 轴用「差」而不是「两侧各自的量」。\n【经验参】下颌门 0.20/0.10；平滑 0.009s"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/CornerSkew",
-                        "expression":  "clamp(out(\"Ho/Drive/Mouth/CornerL\") - out(\"Ho/Drive/Mouth/CornerR\"), -1, 1)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.012, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/CornerSkew = **嘴角歪**（2026-09-28 新建；嘴角 3×3 的 Y 轴）= `CornerL − CornerR`（用 `out()` 读**上面**那两行 —— 所以这一行必须排在 `CornerL` / `CornerR` 之后）。\n⭐ **三档实测锚点**：**−0.17 嘴角往左撇**（cornerL 0.063 / cornerR 0.230）· **0 中**（静置 0.00；两边外拉 +0.05 / 抿嘴 −0.03 也落这档）· **+0.08 嘴角往右撇**（0.224 / 0.141）。⇒ 刻度就摆这三个值（−0.17 / 0 / 0.08）。\n⚠️ **左右余量不对称且薄**（往左 −0.17 vs 往右 +0.08）—— 这是人做得不对称，不是设备问题；想加余量：把单侧嘴做夸张一点。\n⚠️ 用**差**而不是「两侧各自的量」的原因见 `Mouth/CornerL`：人做单侧时两侧一起抬（差值才是干净的那一维）。\n【经验参】三档 −0.17 / 0 / +0.08 来自 41 段实测；平滑 0.012s"
-                        },
                                         {
                         "parameter":  "Ho/Drive/Style/CatMouth",
                         "expression":  "out(\"Ho/Style/CatMouth\")",

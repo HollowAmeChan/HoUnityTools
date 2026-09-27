@@ -9,7 +9,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：47 个参数 + 27 棵树 + 92 个**空槽位**，
+    /// **生成「VTS 原生语义」控制器的骨架**（2026-09-27）：43 个参数 + 27 棵树 + 89 个**空槽位**，
     /// ⚠️ **2026-09-28：`MouthWidth`（嘴宽/偏嘴残差，9 槽位 + 轴 `Mouth/Pucker` × `Mouth/X`）整棵删掉**（用户定）。
     ///    单根左右平移轴要拆成"左右两半的嘴角"，新的"整嘴平移 3×3 + 嘴角 2×2"等实测回来再建 ——
     ///    见 `docs/VTS_HQ_CONTROLLER.md` §5.7.22 与 `.research/结论-2026-09-28-嘴综合移动.md`。
@@ -48,9 +48,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly string[] RegionGates = { "Mouth", "Eye", "Brow", "Nose" };
 
         /// <summary>
-        /// 轴参数（部位/轴 → 名字）：34 根，见设计稿 §3.1。
-        /// ⚠️ 2026-09-28 当天两进两出：上午 `Mouth/X` 随 `MouthWidth` 一起退役，下午按「整嘴平移」**重建**
-        /// （`Mouth/X` + `Mouth/Y`），并新增嘴角 3×3 的两根轴（`Mouth/LipPress` / `Mouth/CornerSkew`）。
+        /// 轴参数（部位/轴 → 名字）：30 根，见设计稿 §3.1。
+        /// ⚠️ 2026-09-28 当天三进三出：上午 `Mouth/X` 随 `MouthWidth` 一起退役；下午按「整嘴平移」重建
+        /// （`Mouth/X` + `Mouth/Y`）并加过嘴角 3×3 的两根轴；傍晚用户判定「收缩舒张不必拆左右、一根轴
+        /// 3 状态就够，左右交给整嘴平移」⇒ **删掉嘴角那两根**，`MouthWidth` 以 **1D 3 格**回来
+        /// （轴就是既有的 `Ho/Drive/Mouth/Pucker`，不新增轴）。
         /// ⚠️ 有些轴**没有树消费**（注视 4 根、`Cheek/*` 4 根、`Funnel` / `Press`）—— 它们照旧发布当出口，
         /// 谁要用谁取（注视那 4 根就是给 Warudo 的 LookAt / 别的消费者留的）。
         /// </summary>
@@ -58,12 +60,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             "Ho/Drive/Mouth/Form", "Ho/Drive/Mouth/Open", "Ho/Drive/Mouth/Funnel", "Ho/Drive/Mouth/Press",
             "Ho/Drive/Mouth/Jaw", "Ho/Drive/Mouth/JawSide", "Ho/Drive/Mouth/Forward", "Ho/Drive/Mouth/Pucker",
-            // 整嘴平移（2026-09-28 下午重建）：X = 左右（实测 ±0.96，缝 +0.59）、Y = 上下（上=噘嘴判据、下=闭唇下颌下拉）
+            // 整嘴平移（2026-09-28 下午重建；傍晚确认只有 6 个可达状态 ⇒ 树是 3×2）
             "Ho/Drive/Mouth/X", "Ho/Drive/Mouth/Y",
-            // 嘴角 3×3 的两根轴：X = 唇压紧↔舒展（抿/外拉/静三档）、Y = 嘴角歪（L−R）
-            "Ho/Drive/Mouth/LipPress", "Ho/Drive/Mouth/CornerSkew",
             "Ho/Drive/Mouth/TongueL", "Ho/Drive/Mouth/TongueR",
-            // 嘴角（选项 C）：把"嘴角笑/苦"从 Form 的负侧分出来，专供 MouthCorner 表（合同时 HQSmileFrownLeft/Right）
+            // 嘴宽（2026-09-28 傍晚落地）：`MouthWidth` = **1D 3 格**（窄 收嘴不撅 / 中 静态 / 宽 抿嘴嘴宽），
+            // 轴 = 既有的 `Ho/Drive/Mouth/Pucker`（不新增轴）；左右那一维交给 `MouthShift`（整嘴平移 3×2）。
             "Ho/Drive/Mouth/CornerL", "Ho/Drive/Mouth/CornerR",
             // 卷唇（2026-09-27）：上下两根线**一起增减** ⇒ 中间层平均成一根 `Mouth/Roll`，表也跟着变成 1D。
             "Ho/Drive/Style/CatMouth",
@@ -140,16 +141,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] OpenMeasured = { 0f, 0.4f, 0.75f };
 
         /// <summary>
-        /// **`Mouth/Form` 专用刻度：0 / 0.75 / 1**（2026-09-27 用户实测定）。
+        /// **`Mouth/Form` 专用刻度：−1 / 0 / 0.75 / 1**（2026-09-27 实测两端 + 2026-09-28 傍晚补的 sad 列）。
+        /// ⚠️ **−1 那一列 = 苦**（sad 折进 `Form` 负半轴之后，负侧终于有语义了；用户定「四列，补 3 格」）：
+        /// 要画的是「苦 × 闭 / 半张 / 张满」三格（跟正侧的笑那三格对应）。
         /// 「**常态笑**」在 0.75 左右、「**大笑**」才到 1 —— 两个都是真实状态，各要一个采样点。
-        /// ⚠️ **负侧不要**（用户定）：`Form` 的负侧混了三件事，全部搬走 —— 苦 → `MouthCorner`（嘴角）、
-        /// 噘 → 倒V 形态、卷唇/咬唇 → `MouthCoreRoll` 变体。于是这张表**只管"笑 × 张嘴"两块正值**，
-        /// （2026-09-28 `MouthWidth` 整棵删掉 ⇒ 负侧那三件事现在的去处是：苦 → `MouthCorner`、噘 → 倒V 形态。）
+        /// ⚠️ **负侧现在的归属**（2026-09-28 傍晚重排）：**苦 = 这张表的 −1 列本身**（sad 折进 `Form` 负半轴之后
+        /// 负侧终于有语义了 ⇒ 用户定「四列，补 3 格」）；噘 → 倒V 形态（加了 funnel 门，只认"真撅"）；
+        /// 卷唇/咬唇 → `MouthCoreRoll` 变体；嘴宽 → `MouthWidth`（1D 3 格）。
+
 
         /// 回到干净的 3×3（没有负行/负列，也就没有要挖的死角）。
         /// ⚠️ 只给 `MouthCore` 的 X 用（`MouthWidth` 2026-09-28 已删 ⇒ 现在没有别的表吃 `Form`）。
         /// </summary>
-        private static readonly float[] FormSmile = { 0f, 0.75f, 1f };
+        private static readonly float[] FormSmile = { -1f, 0f, 0.75f, 1f };
 
         /// <summary>
         /// 下巴**左右**轴（`JawSide`）自己的三档（2026-09-27 用户定「还是六个动画，只不过把最大值弄到
@@ -167,32 +171,49 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] JawOpen = { 0f, 0.75f };
 
         /// <summary>
-        /// **2026-09-28 下午重建的刻度（全部来自 41 段新语料实测）** —— 上午那版 `MouthWidth` 已删。
+        /// **2026-09-28 当天三版之后的刻度** —— 上午删 2D 的 `MouthWidth`（§5.7.22）、下午建整嘴平移 +
+        /// 嘴角 3×3（§5.7.23）、傍晚按用户判定收成「**整嘴平移 3×2 + 嘴宽 1D 3 格**」（§5.7.24）。
         /// · `Mouth/X`（整嘴左右平移）：刻度 **±0.95**（整嘴右移 `mouthLeft` 0.963~0.967、左移 `mouthRight`
         ///   0.967~0.976 ⇒ 满档 0.96）；曲线里带 **±0.20 死区**（撇嘴只有 0.047~0.136）。
-        /// · `Mouth/Y`（整嘴上下）：±1（正侧 = 噘嘴判据膝 0.45 + 鼻门；负侧 = 闭唇下颌下拉膝 0.18）。
-        /// · `Mouth/LipPress`（嘴角 3×3 的 X）：**0.14 静置 / 0.54 两边一起外拉 / 0.77 抿嘴**。
-        ///   ⚠️ 「抿」在**嘴角**上与「外拉」不可分（dimple 0.795 vs 0.577）⇒ 这根轴按**唇**读。
-        /// · `Mouth/CornerSkew`（嘴角 3×3 的 Y = CornerL − CornerR）：**−0.17 往左撇 / 0 / +0.08 往右撇**。
-        ///   ⚠️ 左右不对称且薄（人做得不对称）；想加余量得把单侧动作做夸张。
+        /// · `Mouth/Y`（整嘴上下）：**只有两档 0 / +1** —— 负侧（闭唇下颌下拉）在真机上到不了 / 被咀嚼抢，
+        ///   用户实测「shift 根本不会往下移动，只有 6 个点的状态」⇒ 跟 `MouthJaw` 的 Y 一样钳到 0。
+        /// · `MouthWidth`（1D 3 格，轴 = **既有的** `Mouth/Pucker`）：**−0.95 收嘴不撅（窄）/ −0.16 静态（中）/
+        ///   +0.95 抿嘴嘴宽（宽）**（9 段补录实测；另一根候选 `(press+shrug)/2` 是反的、弃用）。
         /// ⚠️ 槽位名按**索引**编（`A3X&lt;i&gt;Y&lt;j&gt;`）⇒ 挪刻度**不改名、不新增片段**（命名权威 §5）；
-        /// 但**换轴（token）会换槽位名** ⇒ 旧片段变孤儿、由生成器的孤儿清理删掉（MouthCorner 这一批就是）。
+        /// 但**换轴（token）会换槽位名** ⇒ 旧片段变孤儿、由生成器的孤儿清理删掉。
+        /// ⚠️ `MouthCore` 现在是**四列**（Form = −1 / 0 / 0.75 / 1）：−1 那一列 = 苦（要画 苦×闭/半张/张满），
+        /// 挖掉的那格索引从 `(1,2)` 变成 **`(2,2)`**。
         /// </summary>
         private static readonly float[] ShiftXMeasured = { -0.95f, 0f, 0.95f };
-        private static readonly float[] ShiftYMeasured = { -1f, 0f, 1f };
-        private static readonly float[] LipPressMeasured = { 0.14f, 0.54f, 0.77f };
-        private static readonly float[] SkewMeasured = { -0.17f, 0f, 0.08f };
+        /// <summary>
+        /// **整嘴平移的 Y 只有两档**（2026-09-28 傍晚用户实测「shift 根本不会往下移动，只有 6 个点的状态」）：
+        /// 下移那一档**不存在**（`Mouth/Y` 的负半边 = 闭唇下颌下拉，实测在真机上到不了 / 被咀嚼抢），
+        /// 所以跟 `MouthJaw` 的 Y 一个处理：**负侧一律钳到 0 那一档** ⇒ 3×2 = 6 格。
+        /// </summary>
+        private static readonly float[] ShiftYMeasured = { 0f, 1f };
+        /// <summary>
+        /// **`MouthWidth`（1D 3 格，2026-09-28 傍晚重返）** 的刻度 —— 轴就是既有的 `Mouth/Pucker`
+        /// （= `2×dimple − pucker`）。9 段补录实测（`静态 / 抿嘴嘴宽 / 收嘴不撅`）：
+        /// **−0.93 收嘴不撅（窄）· −0.09 静态（中）· +2.0 抿嘴嘴宽（宽）**。
+        /// ⚠️ 注意这根轴是 `2×(dimpleL + dimpleR) − pucker`（**2×和**，不是 2×均值）⇒ 宽端的量纲是 2 不是 1
+        /// （抿嘴嘴宽 4×0.525 − 0.104 = 1.996）。笑 0.78 / 撇嘴 0.815 落在中偏宽。
+
+        /// ⚠️ 另一根候选 `(press + shrug) / 2` 把「收嘴不撅」排在静态**之下**（0.09 &lt; 0.17）⇒ 反的、弃用。
+        /// ⚠️ 4 格的格子名仍按**索引**编（`A3X&lt;i&gt;`）⇒ 换刻度不改名。
+        /// </summary>
+        private static readonly float[] MouthWidthMeasured = { -0.93f, -0.09f, 2.0f };
 
         /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
         private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
 
         /// <summary>
-        /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)`。
+        /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)` —— 现在 Form 是
+        /// 四档（−1 / 0 / 0.75 / 1）⇒ 索引相应地是 **`(2, 2)`**（不是旧的三档时的 `(1, 2)`）。
         /// 嘴张到最大时**半笑与全笑分辨不出来** ⇒ 这一格没有独立语义。
         /// 顶行左右两个角**留着**（"张嘴不笑" 与 "大笑张嘴" 都是真实状态），
         /// 而且挖掉的是**矩形内部**的一点、不是圈上的角 ⇒ 表仍是完整矩形，出界照旧是干净的钳制。
         /// </summary>
-        private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(1, 2) };
+        private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(2, 2) };
 
         /// <summary>
         /// **`MouthCore` 的 8 个点：手工拉的自由点集**（2026-09-27 用户第二次改，从资产读回来的真值）。
@@ -210,14 +231,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly CellPos[] MouthCoreOverride =
         {
-            new CellPos { I = 0, J = 0, X = 0f, Y = 0f },
-            new CellPos { I = 1, J = 0, X = 0.482f, Y = -0.017f },
-            new CellPos { I = 2, J = 0, X = 0.907f, Y = -0.024f },
-            new CellPos { I = 0, J = 1, X = 0f, Y = 0.4f },
-            new CellPos { I = 1, J = 1, X = 0.47f, Y = 0.336f },
-            new CellPos { I = 2, J = 1, X = 0.968f, Y = 0.267f },
-            new CellPos { I = 0, J = 2, X = 0f, Y = 0.75f },
-            new CellPos { I = 2, J = 2, X = 0.926f, Y = 0.596f }
+            // 苦那一列（Form −1）：2026-09-28 傍晚新增，坐标与 X0 列对称（作者可再拉）
+            new CellPos { I = 0, J = 0, X = -1f, Y = 0f },
+            new CellPos { I = 0, J = 1, X = -1f, Y = 0.4f },
+            new CellPos { I = 0, J = 2, X = -1f, Y = 0.75f },
+            // 原来那 8 个（用户手拉的真值；索引整体 +1，因为左边多了一列苦）
+            new CellPos { I = 1, J = 0, X = 0f, Y = 0f },
+            new CellPos { I = 2, J = 0, X = 0.482f, Y = -0.017f },
+            new CellPos { I = 3, J = 0, X = 0.907f, Y = -0.024f },
+            new CellPos { I = 1, J = 1, X = 0f, Y = 0.4f },
+            new CellPos { I = 2, J = 1, X = 0.47f, Y = 0.336f },
+            new CellPos { I = 3, J = 1, X = 0.968f, Y = 0.267f },
+            new CellPos { I = 1, J = 2, X = 0f, Y = 0.75f },
+            new CellPos { I = 3, J = 2, X = 0.926f, Y = 0.596f }
         };
 
         /// <summary>
@@ -254,12 +280,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 整嘴平移（2026-09-28 下午新建）：**3×3** —— X = 左右（±0.95）· Y = 上下（±1）。
             // 中心格 = 零位移（残差表的规矩）；8 个外圈格 = 八个方向的位移。
+            // 整嘴平移（3×2 = 6 格）：X = 左右（±0.95）· Y = 上下（**只有两档**：0 与 +1，
+            // 负侧钳到 0 —— 用户实测下移到不了，见 `ShiftYMeasured` 的注释）。
             new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured },
-            // 嘴角（2026-09-28 下午改成 **3×3**）：X = 唇压紧↔舒展（0.14 静 / 0.54 外拉 / 0.77 抿）、
-            // Y = 嘴角歪（−0.17 左 / 0 / +0.08 右）。中间格 = 零修正（残差表的规矩）。
-            // ⚠️ 上午那版是 `CornerL × CornerR`（半边 smile−frown，3×3）—— 「抿」与「外拉」在嘴角上同值
-            //    （dimple 0.795 vs 0.577）⇒ 改成「唇压紧 × 歪」之后 9 格才都落得下（§5.7.23）。
-            new TableSpec { Name = "MouthCorner", X = "Ho/Drive/Mouth/LipPress", Y = "Ho/Drive/Mouth/CornerSkew", XToken = "LipPress", YToken = "Skew", XValues = LipPressMeasured, YValues = SkewMeasured },
             new TableSpec { Name = "MouthTongue", X = "Ho/Drive/Mouth/TongueL", Y = "Ho/Drive/Mouth/TongueR", XToken = "TongueL", YToken = "TongueR", XValues = ZeroOne, YValues = ZeroOne },
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Squint", XToken = "BlinkWide", YToken = "Squint", XValues = Two, YValues = ZeroOne },
@@ -303,7 +326,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 倒V（2026-09-27 加）：**一个固定姿势** —— 形态门在中间层是"维持"（迟滞）出来的 0/1
             // ⇒ 两档阈值就是 0 / 1。⚠️ 它吃的是**契约行** `Ho/Drive/Style/InvertedV`：
             // 控制器看不见中间层的内部行 `Ho/Style/InvertedV`，中间层把它的值转发成这个控制器参数。
-            new Simple1DSpec { Name = "InvertedV", Parameter = InvertedVWeight, Token = "InvertedV", Values = ZeroOne }
+            new Simple1DSpec { Name = "InvertedV", Parameter = InvertedVWeight, Token = "InvertedV", Values = ZeroOne },
+            // 嘴宽（2026-09-28 傍晚：`MouthWidth` 以 **1D 3 格**回来）—— 轴就是**既有的**
+            // `Ho/Drive/Mouth/Pucker`（= `2×dimple − pucker`，本来就在发布、之前没有树消费）。
+            // 三档实测：窄 收嘴不撅 / 中 静态 / 宽 抿嘴嘴宽。
+            new Simple1DSpec { Name = "MouthWidth", Parameter = "Ho/Drive/Mouth/Pucker", Token = "Pucker", Values = MouthWidthMeasured }
         };
 
         /// <summary>
@@ -372,7 +399,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             //    倒V / 鼓嘴亮起来时，中间层把门压到 0，于是**整块"张嘴 × 笑"**让位给形态。
             //    `MouthJaw` / `MouthTongue` 与两条形态子树保持恒 1（下巴/舌头跟风格化不冲突；
             //    形态子树本身就是"被门放行的东西"，再挂门就套娃了）。
-            { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Style,MouthJaw,MouthShift@Style,MouthCorner@Style,MouthTongue,InvertedV,Cheek" },
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Style,MouthJaw,MouthShift@Style,MouthWidth@Style,MouthTongue,InvertedV,Cheek" },
             // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
             { "EyeRegion", "Eye", "LidLSwitch,LidRSwitch" },
             { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
@@ -415,7 +442,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
 
-            // ── 参数（47 个 = 4 区域门 + 1 形态门 + W/One + 2 表情门 + 34 轴 + 4 切片 + 1 形态权重）──
+            // ── 参数（43 个 = 4 区域门 + 1 形态门 + W/One + 2 表情门 + 30 轴 + 4 切片 + 1 形态权重）──
 
 
             var parameters = new List<AnimatorControllerParameter>();
