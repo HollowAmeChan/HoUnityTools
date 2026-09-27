@@ -167,6 +167,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new DirectTableSpec { Name = "LidR", Side = "Right", Cells = LidCells },
         };
 
+        /// <summary>叶子 = 一棵 Direct 树（名字同槽位名），里面暂时只有「原片段」一个孩子、权重恒 1。
+        /// 形状占位：作者/工具后面往这棵树里插预制部件孩子，权重自己接。</summary>
+        private static Motion LeafParts(AnimatorController controller, string slot, Motion clip)
+        {
+            var leaf = NewTree(controller, slot, BlendTreeType.Direct);
+            AttachDirect(leaf, clip, OneWeight);
+            return leaf;
+        }
+
         private static readonly float[] Unit = { 0f, 0.5f, 1f };   // 单端轴：0 / 半 / 满
         /// <summary>
         /// **舌头的 1D 四档**（2026-09-28 深夜用户定：「默认态在左下角，的四点」→ 随后「你改少点吧，四个状态差不多」）：
@@ -605,14 +614,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
 
 
-            /// <summary>叶子 = 一棵 Direct 树（名字同槽位名），里面暂时只有"原片段"一个孩子、权重恒 1。
-            /// 形状占位：作者/工具后面往这棵树里插预制部件孩子，权重自己接。</summary>
-            private static Motion LeafParts(AnimatorController controller, string slot, Motion clip)
-            {
-                var leaf = NewTree(controller, slot, BlendTreeType.Direct);
-                AttachDirect(leaf, clip, OneWeight);
-                return leaf;
-            }
 
             for (int s = 0; s < Switches.GetLength(0); s++)
             {
