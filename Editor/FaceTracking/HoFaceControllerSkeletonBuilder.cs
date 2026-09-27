@@ -92,7 +92,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         };
 
         /// <summary>表情门（默认 0，**中间层不写**：留给驱动"按键"的那一方）。</summary>
-        private static readonly string[] ExpressionGates = { "Smile", "Angry" };
+        private static readonly string[] ExpressionGates = { };
 
         /// <summary>一张 2D 表的定义：X/Y 参数 + 每个刻度的轴值 + 槽位名里那两段词 + 挖掉的格子。</summary>
         private sealed class TableSpec
@@ -299,8 +299,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             new TableSpec { Name = "LidL", X = "Ho/Drive/Lid/Left/BlinkWide", Y = "Ho/Drive/Lid/Left/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
             new TableSpec { Name = "LidR", X = "Ho/Drive/Lid/Right/BlinkWide", Y = "Ho/Drive/Lid/Right/Form", XToken = "BlinkWide", YToken = "Form", XValues = Two, YValues = Two },
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
-            new TableSpec { Name = "BrowCoreL", X = "Ho/Drive/Brow/Left/Y", Y = "Ho/Drive/Brow/Left/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
-            new TableSpec { Name = "BrowCoreR", X = "Ho/Drive/Brow/Right/Y", Y = "Ho/Drive/Brow/Right/InnerUp", XToken = "Height", YToken = "InnerUp", XValues = Ends, YValues = ZeroOne },
             // ⚠️ 颊那两棵 **ARKit** 树 + 鼻那棵 2D 表都删了（2026-09-27）：颊（`cheekSquint`）在二次元角色上表现不了；
             //    鼻收成**一个状态**（鼻子上顶）⇒ 挪到下面的 1D 片段表（`NoseUp`）。
             // 颊轴（2026-09-27 加）：**鼓嘴**形态用的 2D 表 —— X = 左颊 / Y = 右颊，各两档 = 4 格。
@@ -396,17 +394,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// </summary>
         private static readonly string[,] Copies =
         {
-            { "LidL", "LidLExpr" }, { "LidR", "LidRExpr" },
-            { "BrowCoreL", "BrowCoreLExpr" }, { "BrowCoreR", "BrowCoreRExpr" }
         };
 
         /// <summary>1D 开关：名字 / 主版 / 副本 / 用哪个表情门。</summary>
         private static readonly string[,] Switches =
         {
-            { "LidLSwitch", "LidL", "LidLExpr", "Smile" },
-            { "LidRSwitch", "LidR", "LidRExpr", "Smile" },
-            { "BrowCoreLSwitch", "BrowCoreL", "BrowCoreLExpr", "Angry" },
-            { "BrowCoreRSwitch", "BrowCoreR", "BrowCoreRExpr", "Angry" }
         };
 
         /// <summary>
@@ -423,8 +415,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             //    形态子树本身就是"被门放行的东西"，再挂门就套娃了）。
             { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Style,MouthJaw,MouthShift@Style,MouthWidth@Style,MouthTongue,InvertedV,Cheek" },
             // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
-            { "EyeRegion", "Eye", "LidLSwitch,LidRSwitch" },
-            { "BrowRegion", "Brow", "BrowCoreLSwitch,BrowCoreRSwitch" },
+            { "EyeRegion", "Eye", "LidL,LidR" },
             { "NoseRegion", "Nose", "NoseUp" }
         };
 
