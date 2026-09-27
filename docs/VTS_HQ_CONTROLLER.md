@@ -2528,8 +2528,14 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
   检查器 **0 问题**、行序检查 **0 问题**。
 * ⚠️ 又一次栽在 `out()` 行序上：门行插在 `Closure/Wide` 之后，而 `Closure/Open` 排在 `Wide` **后面** ⇒ 4 条门恒读 0；
   锚点改成 `Closure/Open`（每侧最后一条闭合行）后 0 问题。**插行前先确认锚点是不是该组最后一行。**
-* ⏭ **还没换的**：`LidL`/`LidR` 仍是 2D 9 格表。换成 Direct（11 个子节点挂这 11 个门）要动**生成器的树/槽位机制**
-  （`SlotKids` 那个"网格"写法要加一条 Direct 变体：11 个具名孩子 + 各自的 `directBlendParameter`）+ 检查器的槽位规则/槽位总数 ⇒ 下一步。
+* ✅ **2026-09-28 深夜已换**：`LidL`/`LidR` 从 2D 9 格换成 **Direct 11 门表**（生成器 `WriteTree $t 4 …` + 新的
+  `SlotKidsDirect`：11 个具名孩子，各自的 `directBlendParameter` = 上面那 11 个门）。槽位名变得**一眼可读**：
+  `LidL__Gate__NeutralOpen` / `…__HappyOpen` / `…__AngerWide` / `…__SadClosed` …（共 11 个/眼）。
+  资产：`新建 22 · 保留已有 43 · 删掉孤儿 18`（旧网格槽位全是空的 ⇒ 零损失）⇒ 槽位 **61 → 65**，
+  树仍 16、参数仍 85；检查器 **0 问题**。
+* ⏳ **还差的镜像**：`HoFaceControllerSkeletonBuilder.cs`（编辑器面板用的那份）**还是 2D 两张眼睑表** ——
+  builder / 生成器 / 检查器三处同步这条规矩，这次只补了后两处。面板再装配一次会把眼睑表退回 2D，
+  下次动手先补它（`Tables` 里去掉 `LidL`/`LidR`、加一份 Direct 表规格 + 同样的 11 门接线）。
 
 
 
