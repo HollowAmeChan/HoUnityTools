@@ -312,6 +312,15 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private void GeneratePose()
         {
             if (_prefab == null) { _status = "先填预制件（要姿势片段就拖场景里那个摆好姿势的物体）。"; return; }
+            if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                // 播放模式下改片段：每写一条曲线 Animator/影子台都会重绑一次 ⇒ 几千条 = 卡死。
+                EditorUtility.DisplayDialog("先退出播放模式",
+                    "静置姿态要写几千条曲线，播放模式下改片段会让 Animator 反复重绑、界面假死。\n请先停止播放再点。",
+                    "好");
+                _status = "已拦下：先退出播放模式。";
+                return;
+            }
 
             bool isAsset = !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(_prefab));
 
@@ -378,13 +387,31 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                 return;   // 已存在且不覆盖 ⇒ 跳过（引用保持不动）
             }
 
+            // ⚠️ 一定要**批量**：逐条 SetEditorCurve 时，每写一条 Unity 都会标脏 + 让用到它的 Animator 重绑
+            //（几千条曲线 = 假死）；SetEditorCurves 一次提交，再套 StartAssetEditing 把自动导入压到最后一并做。
             var wanted = new HashSet<string>(bindings.Select(BindingKey), StringComparer.Ordinal);
+            var stale = new List<EditorCurveBinding>();
             foreach (EditorCurveBinding b in AnimationUtility.GetCurveBindings(clip))
-                if (!wanted.Contains(BindingKey(b))) AnimationUtility.SetEditorCurve(clip, b, null);
-            for (int i = 0; i < bindings.Count; i++)
-                AnimationUtility.SetEditorCurve(clip, bindings[i], new AnimationCurve(new Keyframe(0f, values[i])));
-            clip.frameRate = 60f;
-            EditorUtility.SetDirty(clip);
+                if (!wanted.Contains(BindingKey(b))) stale.Add(b);
+
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                if (stale.Count > 0)
+                    AnimationUtility.SetEditorCurves(clip, stale.ToArray(), new AnimationCurve[stale.Count]);
+
+                var curves = new AnimationCurve[bindings.Count];
+                for (int i = 0; i < bindings.Count; i++)
+                    curves[i] = new AnimationCurve(new Keyframe(0f, values[i]));
+                AnimationUtility.SetEditorCurves(clip, bindings.ToArray(), curves);
+
+                clip.frameRate = 60f;
+                EditorUtility.SetDirty(clip);
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+            }
         }
 
         private static void Count(int status, ref int created, ref int updated, ref int skipped)
