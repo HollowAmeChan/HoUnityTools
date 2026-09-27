@@ -530,7 +530,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(spec.Name, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
+                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
                         filled++;
                     }
                 }
@@ -550,7 +550,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(copy.Value, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
+                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
                     }
                 slotCounts[copy.Value] = CountCells(spec);
                 trees[copy.Value] = tree;
@@ -569,7 +569,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     {
                         if (Skipped(spec, i, j)) continue;
                         string slot = SlotName(Variants[v, 0], spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
+                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
                     }
                 slotCounts[Variants[v, 0]] = CountCells(spec);
                 trees[Variants[v, 0]] = tree;
@@ -583,7 +583,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int i = 0; i < spec.Values.Length; i++)
                 {
                     string slot = SlotName1D(spec.Name, spec.Token, spec.Values.Length, i);
-                    tree.AddChild(SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept), spec.Values[i]);
+                    tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), spec.Values[i]);
                 }
                 slotCounts[spec.Name] = spec.Values.Length;
                 trees[spec.Name] = tree;
@@ -597,11 +597,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 for (int i = 0; i < spec.Cells.Length; i++)
                 {
                     string slot = spec.Name + "__Gate__" + spec.Cells[i];
-                    AttachDirect(tree, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept),
+                    AttachDirect(tree, LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)),
                                  "Ho/Drive/Lid/" + spec.Side + "/Gate/" + spec.Cells[i]);
                 }
                 slotCounts[spec.Name] = spec.Cells.Length;
                 trees[spec.Name] = tree;
+            }
+
+
+            /// <summary>叶子 = 一棵 Direct 树（名字同槽位名），里面暂时只有"原片段"一个孩子、权重恒 1。
+            /// 形状占位：作者/工具后面往这棵树里插预制部件孩子，权重自己接。</summary>
+            private static Motion LeafParts(AnimatorController controller, string slot, Motion clip)
+            {
+                var leaf = NewTree(controller, slot, BlendTreeType.Direct);
+                AttachDirect(leaf, clip, OneWeight);
+                return leaf;
             }
 
             for (int s = 0; s < Switches.GetLength(0); s++)

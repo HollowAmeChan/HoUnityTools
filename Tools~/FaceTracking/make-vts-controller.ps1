@@ -412,8 +412,10 @@ function SlotKids([string]$tree, [array]$xv, [array]$yv, [string]$xt, [string]$y
                 $motion = "{fileID: 7400000, guid: $guid, type: 2}"
                 $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
             }
+            # 叶子 = 一棵 Direct 树（名字同槽位名），里面暂时只有"原片段"一个孩子、权重恒 1
+            WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
             $kids += @{
-                motion = $motion
+                motion = "{fileID: $(TreeId $name)}"
                 x      = $x
                 y      = $y
                 direct = 'Blend'
@@ -435,8 +437,9 @@ function SlotKids1D([string]$tree, [array]$xv, [string]$xt) {
             $motion = "{fileID: 7400000, guid: $guid, type: 2}"
             $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
         }
+        WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
         $kids += @{
-            motion = $motion
+            motion = "{fileID: $(TreeId $name)}"
             x      = 0
             y      = 0
             direct = 'Blend'
@@ -458,8 +461,9 @@ function SlotKidsDirect([string]$tree, [string]$side, [array]$cells) {
             $motion = "{fileID: 7400000, guid: $guid, type: 2}"
             $script:clips.Add([pscustomobject]@{ Name = $name; Guid = $guid })
         }
+        WriteTree $name 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
         $kids += @{
-            motion = $motion
+            motion = "{fileID: $(TreeId $name)}"
             x      = 0
             y      = 0
             direct = "Ho/Drive/Lid/$side/Gate/$cell"
