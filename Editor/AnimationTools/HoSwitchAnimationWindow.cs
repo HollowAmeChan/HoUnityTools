@@ -48,6 +48,8 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private string _report = "";
         /// <summary>批处理期间用它查"这份片段是不是已经存在"（StartAssetEditing 里 LoadAssetAtPath 看不到刚建的）。</summary>
         private static Dictionary<string, AnimationClip> _existingClips;
+        /// <summary>静置姿态的两种来源：false = 当前姿势（采样）；true = T-pose（全肌肉 0）。</summary>
+        private bool _poseTpose;
         private bool _editingAssets;
 
         [MenuItem("HoUnityTools/开关动画生成器", false, 6)]
@@ -126,6 +128,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                         GUILayout.Height(30f)))
                     GeneratePose();
                 GUI.backgroundColor = Color.white;
+                _poseTpose = EditorGUILayout.ToggleLeft(
+                    new GUIContent("T-pose", "勾上 = 全肌肉写 0（T-pose）；不勾 = 采样角色当前姿势。"),
+                    _poseTpose, GUILayout.Width(70f));
             }
 
             if (!string.IsNullOrEmpty(_status)) EditorGUILayout.HelpBox(_status, MessageType.None);
@@ -328,12 +333,21 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         /// ⚠️ 根物体自己的 Transform **不写**（角色位置/朝向交给别处）；空节点**要写**（骨骼多半没组件）。
         /// ⚠️ 姿势来源：拖场景里的物体 ⇒ 用场景里摆好的；拖预制件资产 ⇒ 用它存储的。
         /// </summary>
+        /// <summary>
+        /// 生成"静置姿态"片段（**Humanoid 优先**）：
+        ///   · 角色的 Avatar 是 Human（人形）⇒ 写 **Humanoid 肌肉曲线**：`RootT/RootQ` + `HumanTrait.MuscleName[i]` 每条一根。
+        ///     这才是 Humanoid 片段 —— Generic 的 transform 曲线在 Humanoid 上会被 Unity **忽略**并报
+        ///     "Binding warning: Some generic clip(s) animate transforms that are already bound by a Humanoid avatar"。
+        ///   · Avatar 不是 Human ⇒ 退回写 Transform 曲线（Generic 那套）。
+        /// 姿势来源：不勾 T-pose = 采样角色**当前姿势**（HumanPoseHandler）；勾上 = 全肌肉 0 + RootT 0 + RootQ 单位（T-pose）。
+        /// 根下没被 humanoid 映射的物体（头发/配饰/CTR_* 等）在"当前姿势"模式下另外写 Transform 曲线。
+        /// ⚠️ 先弹保存窗口；就地覆盖（引用不丢）；批量写；播放模式下拒绝执行。
+        /// </summary>
         private void GeneratePose()
         {
             if (_prefab == null) { _status = "先填预制件（要姿势片段就拖场景里那个摆好姿势的物体）。"; return; }
             if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                // 播放模式下改片段：每写一条曲线 Animator/影子台都会重绑一次 ⇒ 几千条 = 卡死。
                 EditorUtility.DisplayDialog("先退出播放模式",
                     "静置姿态要写几千条曲线，播放模式下改片段会让 Animator 反复重绑、界面假死。\n请先停止播放再点。",
                     "好");
@@ -344,9 +358,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             bool isAsset = !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(_prefab));
 
             // 先弹保存窗口（还没加载任何东西，取消也不脏）
+            string defName = _prefab.name + (_poseTpose ? "__POSE__T姿势" : "__POSE__静置");
             string dir = string.IsNullOrEmpty(_folder) ? "Assets" : _folder;
-            string picked = EditorUtility.SaveFilePanel("静置姿态片段保存到哪", dir,
-                                                        _prefab.name + "__POSE__静置", "anim");
+            string picked = EditorUtility.SaveFilePanel("静置姿态片段保存到哪", dir, defName, "anim");
             if (string.IsNullOrEmpty(picked)) { _status = "已取消（没生成）。"; return; }
             string assetPath = ToAssetPath(picked);
             int slash = assetPath.LastIndexOf('/');
@@ -357,31 +371,59 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             {
                 var bindings = new List<EditorCurveBinding>();
                 var values = new List<float>();
-                foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                string how;
+
+                // ── Humanoid：写肌肉曲线 ────────────────────────────────────────────
+                Animator animator = root.GetComponentInChildren<Animator>(true);
+                if (animator != null && animator.avatar != null && animator.avatar.isHuman)
                 {
-                    if (tr == root.transform) continue;
-                    string path = PathOf(tr, root.transform);
-                    Vector3 p = tr.localPosition;
-                    Quaternion q = tr.localRotation;
-                    Vector3 s = tr.localScale;
-                    var one = new (string, float)[]
+                    Vector3 bodyPos = Vector3.zero;
+                    Quaternion bodyRot = Quaternion.identity;
+                    float[] muscles = new float[HumanTrait.MuscleCount];
+                    if (!_poseTpose)
                     {
-                        ("m_LocalPosition.x", p.x), ("m_LocalPosition.y", p.y), ("m_LocalPosition.z", p.z),
-                        ("m_LocalRotation.x", q.x), ("m_LocalRotation.y", q.y),
-                        ("m_LocalRotation.z", q.z), ("m_LocalRotation.w", q.w),
-                        ("m_LocalScale.x", s.x), ("m_LocalScale.y", s.y), ("m_LocalScale.z", s.z),
-                    };
-                    foreach (var item in one)
-                    {
-                        bindings.Add(EditorCurveBinding.FloatCurve(path, typeof(Transform), item.Item1));
-                        values.Add(item.Item2);
+                        var handler = new HumanPoseHandler(animator.avatar, animator.transform);
+                        try
+                        {
+                            var pose = new HumanPose();
+                            handler.GetHumanPose(ref pose);
+                            bodyPos = pose.bodyPosition;
+                            bodyRot = pose.bodyRotation;
+                            pose.muscles.CopyTo(muscles, 0);
+                        }
+                        finally { handler.Dispose(); }
                     }
+
+                    Add(bindings, values, "RootT.x", bodyPos.x);
+                    Add(bindings, values, "RootT.y", bodyPos.y);
+                    Add(bindings, values, "RootT.z", bodyPos.z);
+                    Add(bindings, values, "RootQ.x", bodyRot.x);
+                    Add(bindings, values, "RootQ.y", bodyRot.y);
+                    Add(bindings, values, "RootQ.z", bodyRot.z);
+                    Add(bindings, values, "RootQ.w", bodyRot.w);
+                    for (int i = 0; i < muscles.Length; i++)
+                        Add(bindings, values, HumanTrait.MuscleName[i], muscles[i]);
+                    how = "Humanoid 肌肉 " + muscles.Length + " 条 + RootT/RootQ"
+                          + (_poseTpose ? "（T-pose：全 0）" : "（采样当前姿势）");
+
+                    // 没被 humanoid 映射的东西（头发/配饰）另外按 Transform 写 —— T-pose 模式下不写（免得和肌肉打架）
+                    if (!_poseTpose)
+                    {
+                        int n = AddTransforms(root, bindings, values);
+                        if (n > 0) how += " + Transform " + n * 10 + " 条（未映射物体）";
+                    }
+                }
+                else
+                {
+                    // ── 非 Humanoid：退回 Transform 曲线 ───────────────────────────
+                    int n = AddTransforms(root, bindings, values);
+                    how = "Transform " + n * 10 + " 条（Avatar 不是 Human ⇒ Generic 片段；在 Humanoid 角色上会被忽略）";
                 }
 
                 WriteCurves(assetPath, bindings, values, _overwrite);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-                _report = "静置姿态：" + assetPath + "\n" + bindings.Count + " 条曲线 / " + (bindings.Count / 10) + " 个物体"
+                _report = "静置姿态：" + assetPath + "\n" + how
                           + (isAsset ? "\n⚠️ 用的是预制件里存储的姿势（想用场景里摆好的，请拖场景物体）" : "");
                 _status = "静置姿态生成完成。";
             }
@@ -389,6 +431,40 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             {
                 if (isAsset) PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        private static void Add(List<EditorCurveBinding> bindings, List<float> values, string property, float value)
+        {
+            bindings.Add(EditorCurveBinding.FloatCurve("", typeof(Animator), property));
+            values.Add(value);
+        }
+
+        /// <summary>根下每个 Transform（根自己跳过）写 10 条本地 TRS，返回物体数。</summary>
+        private static int AddTransforms(GameObject root, List<EditorCurveBinding> bindings, List<float> values)
+        {
+            int n = 0;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (tr == root.transform) continue;
+                string path = PathOf(tr, root.transform);
+                Vector3 p = tr.localPosition;
+                Quaternion q = tr.localRotation;
+                Vector3 s = tr.localScale;
+                var one = new (string, float)[]
+                {
+                    ("m_LocalPosition.x", p.x), ("m_LocalPosition.y", p.y), ("m_LocalPosition.z", p.z),
+                    ("m_LocalRotation.x", q.x), ("m_LocalRotation.y", q.y),
+                    ("m_LocalRotation.z", q.z), ("m_LocalRotation.w", q.w),
+                    ("m_LocalScale.x", s.x), ("m_LocalScale.y", s.y), ("m_LocalScale.z", s.z),
+                };
+                foreach (var item in one)
+                {
+                    bindings.Add(EditorCurveBinding.FloatCurve(path, typeof(Transform), item.Item1));
+                    values.Add(item.Item2);
+                }
+                n++;
+            }
+            return n;
         }
 
         /// <summary>和 <see cref="Write"/> 同一套"就地改"规则，只是每条曲线的值各自给、路径由调用方给全。</summary>
