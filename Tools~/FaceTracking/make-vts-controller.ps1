@@ -170,7 +170,6 @@ $simple1D = [ordered]@{
     # ⚠️ 它吃的是**契约行** `Ho/Drive/Style/InvertedV`（控制器看不见内部行 `Ho/Style/InvertedV`）。
     'InvertedV'    = @{ p = 'Ho/Drive/Style/InvertedV'; v = @(0.0, 1.0);      t = 'InvertedV' }
     # 下巴（2026-09-28 深夜）：**1D 2 格**（咬合/闭 ↔ 张开）—— 见上面 `$mouthJawOver` 位置的退役说明。
-    'MouthJaw'     = @{ p = 'Ho/Drive/Mouth/Jaw';      v = $jawOpen;          t = 'Jaw' }
     # 舌头（2026-09-28 深夜）：**1D 4 格** —— 默认（不出舌，左下角）→ 3 步 → 舌伸满；
     # 每格自己把该有的张嘴量烘进去（穿模由作者那 4 段负责）。见上面 `$tongueTicks` 的注释。
     # 轴借 `Ho/Drive/Mouth/TongueL`（那两根本来就是 tongueOut 的占位；做「歪舌头」时量轴换新的 `TongueOut`，
@@ -182,6 +181,10 @@ $tables = [ordered]@{
     # ⚠️ **下巴 2026-09-28 深夜从 2D 6 格降成 1D 2 格**（只留上下）—— 见上面 `$simple1D` 的 `MouthJaw`。
 
     # 整嘴平移（2026-09-28 下午新建，傍晚收成 **3×2 = 6 格**）：X = 左右（±0.95）· Y = 上下（0 / +1，负侧钳到 0）。
+    # 下巴（2026-09-28 深夜用户定：2D **T 形 4 格**）—— 左右只在"张开"那一档有真信号（实测 0.52；
+    # 咬合态真动只有 0.02–0.04）⇒ 两个"合×左右"的角不建，落上去时靠混合投影到边上。
+    # ⚠️ 中间那一列故意沿用旧槽名（下巴合/下巴张）⇒ 作者已填的姿势原地不动，只新增左右两格。
+    'MouthJaw'    = @{ x = 'Ho/Drive/Mouth/JawSide'; y = 'Ho/Drive/Mouth/Jaw'; xv = @(-0.52, 0.0, 0.52); yv = @(0.0, 0.75); xt = 'JawSide'; yt = 'Jaw'; skip = @('0,0', '2,0') }
     'MouthShift'  = @{ x = 'Ho/Drive/Mouth/X'; y = 'Ho/Drive/Mouth/Y'; xv = $shiftXMeasured; yv = $shiftYMeasured; xt = 'LeftRight'; yt = 'UpDown'; skip = $mouthShiftSkip }
     # 舌头（2026-09-28 深夜）：**不在 `$tables` 里** —— 它是 1D 5 格，见上面 `$simple1D` 的 `MouthTongue`。
     # ⚠️ **注视两棵树删掉了**（2026-09-27 用户定「warudo 有单独的 lookat 节点做这个事情，是有 ik 的」）——
