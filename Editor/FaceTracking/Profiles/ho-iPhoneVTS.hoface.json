@@ -2842,9 +2842,339 @@
                                       ],
                         "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归倒V 形态 —— ⚠️ `MouthWidth` 2026-09-28 已整棵删掉，噘现在只走倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。"
                     },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Evidence/Happy",
+                        "expression":  "clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Left/BlinkWide\")) / 0.25, 0, 1) * clamp((out(\"Ho/Drive/Lid/Left/BlinkWide\") + 0.25) / 0.25, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：喜的**证据**（未归一化）。第一项 = 物理眯眼膝 0.05（实测静止 0.021 / 眯眼 0.078 / 眯眼笑 0.103）；第二项 = **不许闭**的门（X ≥ 0.50 ⇒ 0，即闭眼不来假笑）；第三项 = **不许睁大**的门（X ≤ −0.25 ⇒ 0）—— 这一项就是「睁大×喜 不建状态点」的前提：它使 `w喜 × w睁大` **恒为 0** ⇒ 门里不需要任何合并特判，剩下的状态点 Σ = 1 仍然精确成立。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Evidence/Anger",
+                        "expression":  "clamp((browDownLeft - 0.45) / 0.15, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：怒的**证据**。用 `browDown`（压眉）——眼周情绪里「怒」只有这一个候选通道。⚠️ **千万别用 `noseSneer`**：实测它在眯眼/眯眼笑时就抬到 0.33（静止 0.14）⇒ 跟眯眼耦合，当怒用会「笑着凶」。⚠️ **膝 0.45 是占位**：已知静止 browDown 0.10~0.25（历史样）、压眉那组样 0.90~0.95（`takes-all-57.txt`），中间没量到 ⇒ 录一次「怒」3 次就能把踝收紧。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Evidence/Sad",
+                        "expression":  "clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：悲的**证据**——眼睛读不到悲伤，所以**接嘴的已标定判据**（用户 2026-09-28 定）。⚠️ 将来可以再加 `browInnerUp`（眉心上抬是眼周悲的经典通道；实测静止 0.051 / 眯眼 0.041 / 眯眼笑 0.049 ⇒ 现在没用上），但需要先录苦脸样才能标定。⚠️ 本行**没有**「不许睁大」的门⇒ 悲×睁大（惊恐）先留状态点；若你判定也不可达，加一道同样的门，那一格就不用留。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Weight/Sum",
+                        "expression":  "out(\"Ho/Drive/Lid/Left/Evidence/Happy\") + out(\"Ho/Drive/Lid/Left/Evidence/Anger\") + out(\"Ho/Drive/Lid/Left/Evidence/Sad\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "内部行（不发布成轴）：三份证据之和。下面四个权重全读它，避免把三条证据表达式拄四遍。⚠ `max(Sum, 1)` 就是归一化的分母——它保证除法永远不会 0/0。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Weight/Neutral",
+                        "expression":  "clamp(1 - out(\"Ho/Drive/Lid/Left/Weight/Sum\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "中性权重 = **常量补项** `1 − Σ其余`（用户定：补成 4 分量）。⚠ 用 `clamp` 而不是 `max`：三份证据可能同时满到 > 1，那时中性归 0，其余三个各自被 `max(Sum,1)` 除一下 ⇒ Σ 仍 = 1。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Weight/Happy",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Happy\") / max(out(\"Ho/Drive/Lid/Left/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Weight/Anger",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Anger\") / max(out(\"Ho/Drive/Lid/Left/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Weight/Sad",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Sad\") / max(out(\"Ho/Drive/Lid/Left/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Closure/Closed",
+                        "expression":  "clamp((out(\"Ho/Drive/Lid/Left/BlinkWide\") - 0.25) / 0.75, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "闭合分区之一：只吃 X > 0.25（**死区 0.25**）。死区是占位：它让「不许睁大/不许闭」两道门能在同一点归零，从而使不存在的状态点权重恒为 0（门里无需合并）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Closure/Wide",
+                        "expression":  "clamp((-out(\"Ho/Drive/Lid/Left/BlinkWide\") - 0.25) / 0.75, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "睁大分区：只吃 X < −0.25。⚠️ **睁大这一路现在一条实测都没有**（`eyeWide` 根本不进台死统计行）⇒ 死区 0.25 / 满档 1.0 全是占位，等一次「睁大」录样。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Left/Closure/Open",
+                        "expression":  "clamp(1 - out(\"Ho/Drive/Lid/Left/Closure/Closed\") - out(\"Ho/Drive/Lid/Left/Closure/Wide\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "睁（中性闭合）分区 = 剩下的：因为两道死区不重叠，三个分区**恒等于 1** ⇒ 闭合也是一个幂等分割。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Evidence/Happy",
+                        "expression":  "clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Right/BlinkWide\")) / 0.25, 0, 1) * clamp((out(\"Ho/Drive/Lid/Right/BlinkWide\") + 0.25) / 0.25, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：喜的**证据**（未归一化）。第一项 = 物理眯眼膝 0.05（实测静止 0.021 / 眯眼 0.078 / 眯眼笑 0.103）；第二项 = **不许闭**的门（X ≥ 0.50 ⇒ 0，即闭眼不来假笑）；第三项 = **不许睁大**的门（X ≤ −0.25 ⇒ 0）—— 这一项就是「睁大×喜 不建状态点」的前提：它使 `w喜 × w睁大` **恒为 0** ⇒ 门里不需要任何合并特判，剩下的状态点 Σ = 1 仍然精确成立。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Evidence/Anger",
+                        "expression":  "clamp((browDownRight - 0.45) / 0.15, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：怒的**证据**。用 `browDown`（压眉）——眼周情绪里「怒」只有这一个候选通道。⚠️ **千万别用 `noseSneer`**：实测它在眯眼/眯眼笑时就抬到 0.33（静止 0.14）⇒ 跟眯眼耦合，当怒用会「笑着凶」。⚠️ **膝 0.45 是占位**：已知静止 browDown 0.10~0.25（历史样）、压眉那组样 0.90~0.95（`takes-all-57.txt`），中间没量到 ⇒ 录一次「怒」3 次就能把踝收紧。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Evidence/Sad",
+                        "expression":  "clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "目的：悲的**证据**——眼睛读不到悲伤，所以**接嘴的已标定判据**（用户 2026-09-28 定）。⚠️ 将来可以再加 `browInnerUp`（眉心上抬是眼周悲的经典通道；实测静止 0.051 / 眯眼 0.041 / 眯眼笑 0.049 ⇒ 现在没用上），但需要先录苦脸样才能标定。⚠️ 本行**没有**「不许睁大」的门⇒ 悲×睁大（惊恐）先留状态点；若你判定也不可达，加一道同样的门，那一格就不用留。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Weight/Sum",
+                        "expression":  "out(\"Ho/Drive/Lid/Right/Evidence/Happy\") + out(\"Ho/Drive/Lid/Right/Evidence/Anger\") + out(\"Ho/Drive/Lid/Right/Evidence/Sad\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "内部行（不发布成轴）：三份证据之和。下面四个权重全读它，避免把三条证据表达式拄四遍。⚠ `max(Sum, 1)` 就是归一化的分母——它保证除法永远不会 0/0。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Weight/Neutral",
+                        "expression":  "clamp(1 - out(\"Ho/Drive/Lid/Right/Weight/Sum\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "中性权重 = **常量补项** `1 − Σ其余`（用户定：补成 4 分量）。⚠ 用 `clamp` 而不是 `max`：三份证据可能同时满到 > 1，那时中性归 0，其余三个各自被 `max(Sum,1)` 除一下 ⇒ Σ 仍 = 1。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Weight/Happy",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Right/Evidence/Happy\") / max(out(\"Ho/Drive/Lid/Right/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Weight/Anger",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Right/Evidence/Anger\") / max(out(\"Ho/Drive/Lid/Right/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Weight/Sad",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Right/Evidence/Sad\") / max(out(\"Ho/Drive/Lid/Right/Weight/Sum\"), 1), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "归一化后的情绪权重 `w = c / max(Σc, 1)`（Σc > 1 时按比例缩到 1）。⚠ 四个权重加起来**恒等于 1**（证据全 0 时中性拿 1）⇒ 将来 Direct 表的 Σ门 = (Σw情绪)×(Σw闭合) = 1 精确成立，default 不会漏进来。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Closure/Closed",
+                        "expression":  "clamp((out(\"Ho/Drive/Lid/Right/BlinkWide\") - 0.25) / 0.75, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "闭合分区之一：只吃 X > 0.25（**死区 0.25**）。死区是占位：它让「不许睁大/不许闭」两道门能在同一点归零，从而使不存在的状态点权重恒为 0（门里无需合并）。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Closure/Wide",
+                        "expression":  "clamp((-out(\"Ho/Drive/Lid/Right/BlinkWide\") - 0.25) / 0.75, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "睁大分区：只吃 X < −0.25。⚠️ **睁大这一路现在一条实测都没有**（`eyeWide` 根本不进台死统计行）⇒ 死区 0.25 / 满档 1.0 全是占位，等一次「睁大」录样。"
+                    },
+                        {
+                        "parameter":  "Ho/Drive/Lid/Right/Closure/Open",
+                        "expression":  "clamp(1 - out(\"Ho/Drive/Lid/Right/Closure/Closed\") - out(\"Ho/Drive/Lid/Right/Closure/Wide\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "[]": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "睁（中性闭合）分区 = 剩下的：因为两道死区不重叠，三个分区**恒等于 1** ⇒ 闭合也是一个幂等分割。"
+                    },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/Form",
-                        "expression":  "clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Left/BlinkWide\")) / 0.25, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Happy\") - out(\"Ho/Drive/Lid/Left/Evidence/Sad\"), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
@@ -2854,7 +3184,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Right/Form",
-                        "expression":  "clamp(clamp((eyeSquintRight - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Right/BlinkWide\")) / 0.25, 0, 1) - clamp(-out(\"Ho/Drive/Mouth/Form\"), 0, 1), -1, 1)",
+                        "expression":  "clamp(out(\"Ho/Drive/Lid/Right/Evidence/Happy\") - out(\"Ho/Drive/Lid/Right/Evidence/Sad\"), -1, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": -1, "v": -1, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [
