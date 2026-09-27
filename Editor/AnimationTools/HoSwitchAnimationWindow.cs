@@ -46,6 +46,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private Vector2 _scroll;
         private string _status = "";
         private string _report = "";
+        /// <summary>批处理期间用它查"这份片段是不是已经存在"（StartAssetEditing 里 LoadAssetAtPath 看不到刚建的）。</summary>
+        private Dictionary<string, AnimationClip> _existingClips;
+        private bool _editingAssets;
 
         [MenuItem("HoUnityTools/开关动画生成器", false, 6)]
         private static void Open()
@@ -201,6 +204,18 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             try
             {
                 EnsureFolder(_folder);
+
+                // 加速：把"这次要碰的片段"先扫一遍（批处理期间 LoadAssetAtPath 看不到本次新建的），
+                // 然后 StartAssetEditing 把 266 次资产导入压到最后一次性做 —— 原来一份一份导入是最慢的一步。
+                _existingClips = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+                foreach (string g in AssetDatabase.FindAssets("t:AnimationClip", new[] { _folder }))
+                {
+                    string p = AssetDatabase.GUIDToAssetPath(g);
+                    _existingClips[p] = AssetDatabase.LoadAssetAtPath<AnimationClip>(p);
+                }
+                AssetDatabase.StartAssetEditing();
+                _editingAssets = true;
+
                 string pf = root.name;
                 int created = 0, updated = 0, skipped = 0, warnAnimatorRoot = 0;
                 var expected = new HashSet<string>(StringComparer.Ordinal);
@@ -278,6 +293,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
                     log.AppendLine("GBC：组件 " + n + " 个 ⇒ " + (n * 2) + " 个片段。");
                 }
 
+                AssetDatabase.StopAssetEditing();
+                _editingAssets = false;
+                _existingClips = null;
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
 
@@ -297,6 +315,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             }
             finally
             {
+                if (_editingAssets) { AssetDatabase.StopAssetEditing(); _editingAssets = false; _existingClips = null; }
                 if (isAsset) PrefabUtility.UnloadPrefabContents(root);
             }
         }
@@ -445,7 +464,9 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
             string name = string.Join("__", new[] { prefabName, cat, state }.Concat(path).ToArray());
             expected.Add(name);
             string assetPath = folder + "/" + name + ".anim";
-            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
+            AnimationClip clip = null;
+            if (_existingClips != null) _existingClips.TryGetValue(assetPath, out clip);
+            else clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
             bool isNew = clip == null;
             if (isNew)
             {
