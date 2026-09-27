@@ -47,7 +47,7 @@ namespace Hollow.HoUnityTools.Editor.AnimationTools
         private string _status = "";
         private string _report = "";
         /// <summary>批处理期间用它查"这份片段是不是已经存在"（StartAssetEditing 里 LoadAssetAtPath 看不到刚建的）。</summary>
-        private Dictionary<string, AnimationClip> _existingClips;
+        private static Dictionary<string, AnimationClip> _existingClips;
         private bool _editingAssets;
 
         [MenuItem("HoUnityTools/开关动画生成器", false, 6)]
