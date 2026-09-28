@@ -90,3 +90,25 @@ Tools~/FaceTracking/
 3. docs 区：建新权威文档（先写新、内容从旧文档搬），再删/归档被合并的旧文档
 4. `VTS_HQ_CONTROLLER.md` 拆成 现状 / 历史
 5. `docs/README.md` 重写为唯一入口；最后跑一遍**悬空引用扫描**（文档互引 + `.cs` 引用）
+
+## 5. 执行进度（边做边更新）
+
+| 步骤 | 状态 | 提交 |
+| --- | --- | --- |
+| 1 删构建垃圾 + `.gitignore` | ✅ 完成 | `b9c2875` |
+| 2 Tools 区归档（23 项）+ README 重写 | ✅ 完成 | `1b7dfed` |
+| 3 docs 历史/研究类进 `archive/`、`measurements` 补说明、`PENDULUM` 归到功能目录 | ✅ 完成 | `469e36f` |
+| 4 子目录里的悬空 markdown 链接（archive / pitfalls / 完善的功能 共 6 个文件） | ✅ 完成 | 本轮 |
+| 5 权威文档合并：`PIPELINE.md` / `CONTROLLER.md` / `AXES.md` / `DECISIONS.md` / `PARAMETERS.md` | ⏳ 子代理在写 | — |
+| 6 顶层悬空链接修复 + `docs/README.md` 重写为唯一入口 | ⏳ | — |
+| 7 `.cs` 注释里的旧路径（3 处） | ⏸ **等用户不在调 Unity 时**（改 `.cs` 会触发重编译） | — |
+
+### 7 的三处（先列好，到时照做）
+
+| 文件:行 | 现在写的 | 应该改成 |
+| --- | --- | --- |
+| `Editor/AnimationTools/HoAnimationPreviewTimeline.cs:20` | `docs/EDITOR_UI_SYSTEM.md` | `docs/完善的功能/EDITOR_UI_SYSTEM.md` |
+| `Editor/Constraints/HoPendulumConstraintEditor.cs:102` | `docs/PENDULUM_CONSTRAINT.md` | `docs/完善的功能/PENDULUM_CONSTRAINT.md`（⚠️ 这条是**本次重组**搬出来的） |
+| `Runtime/Constraints/HoLookAtConstraint.cs:10` | `docs/LOOKAT_CONSTRAINT.md` | `docs/完善的功能/LOOKAT_CONSTRAINT.md` |
+
+⚠️ 另外 `docs/measurements/README.md` 那条悬空引用**已经修好**（补齐了说明文件，见 `469e36f`）。
