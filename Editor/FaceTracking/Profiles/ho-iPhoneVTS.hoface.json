@@ -3900,7 +3900,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Nose/Up",
-                        "expression":  "((noseSneerLeft + noseSneerRight) / 2) * clamp((((noseSneerLeft + noseSneerRight) / 2) - 0.18) / 0.02, 0, 1)",
+                        "expression":  "clamp(out(\"Ho/Drive/Mouth/Y\"), 0, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -3911,7 +3911,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Nose/Up -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 DEAD ZONE (x * clamp((x - 0.18) / 0.02, 0, 1)): the same three calibrated 5 s rest takes gave noseSneer 0.089..0.1514, which put the neutral face 13..21 percent into the nose-up cell of the NoseUp 1D table; the real action (squint + nose push) measured 0.70 avg / 0.75 max, far above the knee, so the 0.7 tick stays valid. 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。\n【经验参】死区膝 0.18、过渡 0.02（三次静置 noseSneer 0.089..0.1514 实测）；平滑 0.009s（VB 同族）；/2 那个平均是机械的"
+                        "notes":  "controller axis Nose/Up ⭐⭐ **2026-09-29 用户定：这一条不再裸通、改成「嘴上移的跟随量」** —— 原式是 `noseSneer 平均 × 膝(0.18)`，**机械换算没错**，但用户实测「**抬头会把鼻子上顶顶起来**」：静息 `noseSneer` 就在 0.10~0.17、膝 0.18 ⇒ **余量只有 ~0.03**，姿态耦合一抬就越过膝（同族的还有 `eyeBlink ≈ 0.063 + 3.88×eyeSquint`、`noseSneer` 在眯眼时抬到 0.33）。\n⇒ 决定：**完全不考虑真实鼻子的移动**，把它降成 **`out(\"Ho/Drive/Mouth/Y\")` 的正侧跟随**（`clamp(..., 0, 1)`）：噘嘴 / 嘴上移时鼻子跟着上顶 —— 用户原话「**这样更适合二次元角色**」。\n⚠️ 代价：真鼻子动（皱鼻/嗅）不再单独驱动这根轴（要回来就得重新量，并先解决俯仰耦合）。\n⚠️ 名字仍是 `Ho/Drive/Nose/Up`（契约 + 控制器参数 + `NoseUp` 1D 2 格表不动）；**语义变了**。\n⚠️ `noseSneer` 仍然被两处当**门**用（`Mouth/Y` 的正侧鼻门 0.54/0.05、倒V 的鼻门）：那两处没动。\n⚠️ 顺序：本行读 `out(Mouth/Y)` ⇒ 必须排在 `Mouth/Y` **之后**（台架的顺序检查盯着）。 -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 DEAD ZONE (x * clamp((x - 0.18) / 0.02, 0, 1)): the same three calibrated 5 s rest takes gave noseSneer 0.089..0.1514, which put the neutral face 13..21 percent into the nose-up cell of the NoseUp 1D table; the real action (squint + nose push) measured 0.70 avg / 0.75 max, far above the knee, so the 0.7 tick stays valid. 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。\n【经验参】死区膝 0.18、过渡 0.02（三次静置 noseSneer 0.089..0.1514 实测）；平滑 0.009s（VB 同族）；/2 那个平均是机械的"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Mouth",

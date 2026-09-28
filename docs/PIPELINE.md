@@ -684,7 +684,6 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `census-table.py` | 解析**面板导出的统计文本**（`=== 组名` + 每次 `min avg max 波动`）按组打表 |
 | `jaw-take-census.py` | 下巴那批：通道定名、**阶梯归因**（输入没解释的跳变）、表达式 A/B、锁存门模拟 |
 | `jaw-side-fit.py` | 「平移下巴」那批：各组横向振幅 / `(JawSide, Jaw)` 落点 / 伪影对照 / 离现有格子的距离 |
-| `trace-row-dump.py` | 一次录样里某几行的取值与元数据（含"运行时用的是哪份表达式"的对账） |
 
 ### 6.3 资产 / 配置的速查与对照
 
@@ -694,7 +693,6 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | `clip-dump.py` | 速查一个 `.anim` 写了什么（形变键 + 值） |
 | `profile-row-diff.py` | 若干份 profile 的同一批行并排打（表达式 / 修饰符 / 曲线 / notes 尾 + 括号平衡） |
 | `controller-block-diff.py` | 两份 `.controller` 的**语义**对照（fileID 归一化后按块比多重集） |
-| `probe-arkit-keys.py` | 探 ARKit 那套键与片段的配对（大小写不敏感） |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 `.ps1` 按 ANSI 读，中文全糊 |
 
 ⚠️ **生成前先切走 Animator 窗口**：生成器是**纯文本写盘**（不走 AssetDatabase 导入）⇒ Unity 重新导入时旧子资产被销毁，
@@ -727,8 +725,8 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 
 | 测什么 | 怎么跑 | 现在的结果 |
 | --- | --- | --- |
-| 中间层配置的 JSON 读写 + VTS 收包解析 | `dotnet run --project Tools~/FaceTracking/profile-json-test`（⚠️ 该工程现已在 `Tools~/FaceTracking/archive/`） | **154/154 通过**（2026-09-26 复核重跑） |
-| 表达式求值器对 VBridger 的覆盖 | `dotnet run --project Tools~/FaceTracking/expression-coverage`（⚠️ 同上，已归档） | **19/19 通过**（2026-09-26 复核重跑） |
+| 中间层配置的 JSON 读写 + VTS 收包解析 | 离线台架（`profile-json-test`，（⚠️ 工程 2026-09-29 已删，要复现见 `Tools~/FaceTracking/archive/README.md` 墓碑）） | **154/154 通过**（2026-09-26 复核重跑） |
+| 表达式求值器对 VBridger 的覆盖 | 覆盖台架（`expression-coverage`，（⚠️ 工程 2026-09-29 已删，要复现见 `Tools~/FaceTracking/archive/README.md` 墓碑）） | **19/19 通过**（2026-09-26 复核重跑） |
 | 包侧整体能不能编译 | `.warudo-mod-research/.tools/compile-check-package.ps1`（整包）/ `compile-check-editor.ps1` | 全绿（**别改成通配所有 dll** —— 会淹出约 2000 条假 `CS0433`） |
 
 ### 6.5 三次真事故（规则因此变硬）

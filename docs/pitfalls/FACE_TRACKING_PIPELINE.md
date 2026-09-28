@@ -20,7 +20,7 @@
 
 怎么办：**我们自己的 JSON 只在 `HoJsonReader` 上写**（手写状态机），三份实现：
 `Runtime/FaceTracking/HoJson.cs`（读取器，文件头记着这三次）、`HoVtsPacket.cs`（手机包）、
-`HoFaceProfileJson.cs`（配置文件）。判据：离线台架 `Tools~/FaceTracking/profile-json-test`（87 条）+
+`HoFaceProfileJson.cs`（配置文件）。判据：离线台架（`profile-json-test`，（⚠️ 工程 2026-09-29 已删，要复现见 `Tools~/FaceTracking/archive/README.md` 墓碑），87 条）+
 `Tests~/FaceTrackingValidation.cs`。**新加任何要落盘/来自网络的结构，都不许再碰 `JsonUtility`。**
 
 ## 2. 两个时钟：包到了、合并里也有值，**通道就是不写**
