@@ -30,6 +30,16 @@
 
 ## 其它相关但不在这里的东西
 
+### 单区域隔离与嘴部点位对照（2026-09-28）
+
+`isolate-regions.py <源.controller> <源.hoface.json> <新输出目录>` 会生成当前单状态控制器的剪枝副本，保留原动画引用；不修改原控制器、原动画或调试选择。
+本轮主线为VTS大预设：优先使用`DIAG_MouthCore_Aligned6/9/11`与Manual配置独立扫Sad/Smile–Open，然后接回原大预设。
+`--append-identical`只允许给本工具生成的目录补缺；源哈希必须相同，已有资产内容必须相同。
+该工具的6/9点对照针对当前11点嘴表（闭4、半开4、全开3），不是通用任意嘴型自动简化器。
+实测与使用步骤见`docs/MOUTH_ISOLATION_DIAGNOSIS_2026_09_28.md`。
+
+`sync-mouth-points.py <六点源.controller> <九点.controller> <十一点.controller> --backup-dir <备份目录>` 将用户调好的六个锚点同步到细分诊断版，其余中间点插值为待测初值。只修改MouthCore坐标，写入前备份，保留六点源、动画引用、树结构与GUID。当前9点/11点已按六点现场测试结果同步，继续用原VTS大预设测试；中性/smile半张点只细化一段开口。
+
 * `Tests~/`：Unity 批处理验证用例（拷进一次性工程跑）；
 * `.research/`：一次性探针（`eye-probe` / `chain-probe` / `profile-verify` …）、面捕语料、资产 surgery 脚本；
 * `docs/VTS_HQ_CONTROLLER.md`：控制器的当前状态与每一节决策记录（改结构请顺手加一节）。

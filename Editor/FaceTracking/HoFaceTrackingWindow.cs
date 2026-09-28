@@ -54,6 +54,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool logExpanded;
         private bool hintExpanded;
         private string lastProblem = "";
+        private bool traceExpanded = true;
+        [SerializeField] private string traceLabel = "";
+        [SerializeField] private int traceIntervalChoice;
+        [SerializeField] private string lastTraceFile = "";
+        [SerializeField] private int lastTraceSamples;
+        private HoFaceTraceRecorder traceRecorder;
+        private static readonly string[] TraceIntervals = { "0.2 秒", "0.05 秒", "0.02 秒", "每次求解" };
+        private static readonly double[] TraceSeconds = { 0.2, 0.05, 0.02, 0 };
 
         /// <summary>
         /// **动态参数 Hub**：在调试对象的子层级里**自动找**一个 <see cref="HoFaceSemanticHub"/>。
@@ -247,7 +255,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             HoFaceFirewall.Refresh();
         }
 
-        private void OnDisable() => EditorApplication.update -= Refresh;
+        private void OnDisable()
+        {
+            EditorApplication.update -= Refresh;
+            StopRecording(false);
+            traceRecorder?.Stop("window-closed");
+            RememberTraceResult();
+        }
 
         private void Refresh()
         {
@@ -290,16 +304,81 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var environment = HoFaceInputEnvironment.instance;
             // **整页滚轮滚动**（2026-09-27 用户：「给这个完整的界面加上滚轮能上下滚动，现在太长的就看不了了」）：
             // 一整个滚动视图套住下面所有栏 —— 滚轮到哪儿都滚页面，内部各栏**不再各自开滚动**。
-            pageScroll = EditorGUILayout.BeginScrollView(pageScroll);
-            DrawTitle();
-            // 五栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
-            DrawObjectSection(environment);      // 一、对象：调试对象 / 控制器 / 配置文件 / 连接
-            DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥（只读）
-            DrawReceiverInputSection();          // 三、接收器输入行：手机发来的**裸线名**（纯调试）
-            DrawConfigInputSection();            // 三·五、配置输入行：线名 → 规范名**活在什么值上**（可覆盖）
-            DrawOutputSection();                 // 三·六、配置输出行：中间层**求出来的值**（可覆盖）
-            DrawDiagnoseSection(environment);    // 四、排查：权限、端口、连接、包统计、问题
-            EditorGUILayout.EndScrollView();
+            using (var scroll = new EditorGUILayout.ScrollViewScope(pageScroll))
+            {
+                pageScroll = scroll.scrollPosition;
+                DrawTitle();
+                // 五栏，竖排（这套布局是单列分节；要真并排得先给 HoConstraintEditorControls 加列支持）。
+                DrawObjectSection(environment);      // 一、对象：调试对象 / 控制器 / 配置文件 / 连接
+                DrawProfileSection();                // 二、配置详情：这份 profile 吃啥、怎么处理、输出啥（只读）
+                DrawTraceSection();                  // 同次求解的输入和输出时序；独立于静态统计。
+                DrawReceiverInputSection();          // 三、接收器输入行：手机发来的**裸线名**（纯调试）
+                DrawConfigInputSection();            // 三·五、配置输入行：线名 → 规范名**活在什么值上**（可覆盖）
+                DrawOutputSection();                 // 三·六、配置输出行：中间层**求出来的值**（可覆盖）
+                DrawDiagnoseSection(environment);    // 四、排查：权限、端口、连接、包统计、问题
+            }
+        }
+
+        private void RememberTraceResult()
+        {
+            if (traceRecorder == null || traceRecorder.Recording) return;
+            lastTraceFile = traceRecorder.FilePath;
+            lastTraceSamples = traceRecorder.Samples;
+        }
+
+        private void DrawTraceSection()
+        {
+            RememberTraceResult();
+            bool active = traceRecorder != null && traceRecorder.Recording;
+            string summary = active ? traceRecorder.Samples + " 条 · " + traceRecorder.Elapsed.ToString("F1") + "s" : "输入与输出同步记录";
+            if (!HoConstraintEditorSectionGui.DrawSectionHeader(ref traceExpanded, "时序录制", summary, HoConstraintEditorTheme.AccentDriver)) return;
+            using (HoConstraintEditorControls.Card())
+            {
+                using (HoConstraintEditorControls.Row(true))
+                using (new EditorGUI.DisabledScope(active))
+                {
+                    HoConstraintEditorControls.Label("动作标签", 64);
+                    traceLabel = EditorGUI.TextField(HoConstraintEditorControls.NextFlexible(120), traceLabel, HoConstraintEditorTheme.Field);
+                }
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("采样间隔", 64);
+                    using (new EditorGUI.DisabledScope(active))
+                        traceIntervalChoice = EditorGUI.Popup(HoConstraintEditorControls.Next(96),
+                            Mathf.Clamp(traceIntervalChoice, 0, TraceSeconds.Length - 1), TraceIntervals);
+                    HoConstraintEditorControls.Flex();
+                    var session = HoFaceInputHub.Session(settings);
+                    using (new EditorGUI.DisabledScope(!active && session == null))
+                    {
+                    if (HoConstraintEditorControls.Button(active ? "停止并保存" : "录时序 5 秒",
+                        "同一次求解记录原始线名、有效输入、每行公式值、曲线值和最终输出。\n"
+                        + "0.2秒适合慢动作；查瞬间跳变选每次求解。记录真实时间，卡顿不补造样本。\n"
+                        + "完成后保存到工程 Logs/HoFaceTraces，Console 输出路径。", true, 120))
+                    {
+                        if (active) traceRecorder.Stop();
+                        else
+                        {
+                            try { traceRecorder = new HoFaceTraceRecorder(session, traceLabel, TraceSeconds[traceIntervalChoice]); }
+                            catch (ExitGUIException) { throw; }
+                            catch (Exception e) { Debug.LogError("[Ho 面捕时序] 无法开始：" + e.Message); }
+                        }
+                    }
+                    }
+                }
+                // Keep the same GUILayout groups through start/stop and play-mode reloads.
+                // Recorder callbacks can change state between Layout and Repaint.
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    bool saved = !string.IsNullOrEmpty(lastTraceFile);
+                    HoConstraintEditorControls.Caption(saved ? "已保存 " + lastTraceSamples + " 条" : "尚无录制文件");
+                    HoConstraintEditorControls.Flex();
+                    using (new EditorGUI.DisabledScope(!saved || !System.IO.File.Exists(lastTraceFile)))
+                    {
+                        if (HoConstraintEditorControls.Button("定位录制文件", lastTraceFile, true, 120))
+                            EditorUtility.RevealInFinder(lastTraceFile);
+                    }
+                }
+            }
         }
 
         private void DrawTitle()

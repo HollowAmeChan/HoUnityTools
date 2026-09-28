@@ -22,7 +22,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     ///   2. 动画求值之后，把影子上算出来的形态键值抄到角色真实 Renderer，且只抄面捕拥有的键。
     /// 角色的 Animator / Controller / 其它任何动画都不受影响，LookAt 与 HoBlink 照常工作。
     /// </summary>
-    public sealed class HoFaceAnimationSession : IDisposable
+    public sealed partial class HoFaceAnimationSession : IDisposable
     {
         public readonly HoFaceDebugSettings Settings;
         public HoFaceCompiledController Compiled { get; private set; }
@@ -362,6 +362,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 影子算完 → 中间层这一帧的输出行都定了 → 按名字写进角色身上那片 Hub
             // （Warudo 侧由「HoFace写动态参数」节点做同一件事：写的是参数处理/合并字典那份字典）。
             PublishSemantics();
+            TraceCompleted?.Invoke(this, frameNow, deltaTime);
         }
 
         /// <summary>
@@ -470,9 +471,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
                 // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
                 //    ⇒ 走同一条路：**始终输出 defaultValue**。
-                float value = expressions[row] != null
-                    ? output.Transform(expressions[row].Evaluate(Lookup, LookupOutput))
-                    : output.defaultValue;
+                float expressionValue = expressions[row] != null
+                    ? expressions[row].Evaluate(Lookup, LookupOutput) : output.defaultValue;
+                float value = expressions[row] != null ? output.Transform(expressionValue) : output.defaultValue;
+                traceExpressions[row] = expressionValue;
+                traceCurves[row] = value;
                 value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), frameNow);
 
                 // ⑤ **极小值归零**（2026-09-27 用户实测）：面板用 F4 显示，于是"影子台里是
@@ -766,6 +769,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             outputs = new HoFaceOutput[rows.Count];
             expressions = new HoFaceExpression[rows.Count];
             outputValues = new float[rows.Count];
+            traceExpressions = new float[rows.Count];
+            traceCurves = new float[rows.Count];
+            TraceRevision++;
             outputSmooth = new float[rows.Count];
             stepIndex = new int[rows.Count];
             stepUntil = new double[rows.Count];
