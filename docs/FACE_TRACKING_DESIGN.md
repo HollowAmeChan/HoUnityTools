@@ -1,4 +1,6 @@
-# 面捕设计：已验证的机制层
+﻿# 面捕设计：已验证的机制层
+
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/PIPELINE.md；本文保留作历史参考。
 
 日期：2026-09-25。这份只讲**今天仍然成立**的东西：输入路线、中间层配置的语义、影子台、键的占用表、时钟与线程、验收。
 
@@ -386,7 +388,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 
 网络接收与调试启动**只存在于编辑器流程**：接收端、宿主、面板全在 `Editor/` 下，所以它们不进玩家构建。
 由于本仓库还服务 Warudo 构建，添加新 Runtime 组件时要验证 FastBuild 对组件和程序集的收集
-（见 [Warudo FastBuild](WARUDO_FAST_BUILD.md)）。
+（见 [Warudo FastBuild](完善的功能/WARUDO_FAST_BUILD.md)）。
 
 ## 9. 实施状态与验收
 

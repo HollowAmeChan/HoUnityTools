@@ -1,4 +1,4 @@
-# 混合树的坑（都实测过）
+﻿# 混合树的坑（都实测过）
 
 用例在 `Tests~/FaceTrackingValidation.cs`，探针阶段的日志行是 `HO_WDON` / `HO_WDOFF` / `HO_WDZERO` / `HO_MATRIX`。
 能力模型与判据见 [混合树的能力边界](../BLEND_TREE_LIMITS.md)。

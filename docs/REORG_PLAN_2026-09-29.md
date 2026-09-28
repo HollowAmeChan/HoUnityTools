@@ -53,7 +53,7 @@
 | **一次性探针脚本**（09-27 那批） | `eye-census.py` · `eye-scenarios.py` · `mouth-audit.py` · `param-usage.py` · `census-matrix.py` · `residual-channel-census.ps1` · `filter-takes.ps1` · `extract-takes-from-log.ps1` · `label-takes.ps1` · `list-take-labels.ps1` · `clip-progress.ps1` · `check-payload-pairs.ps1` · `sync-pkgcopy.ps1` · `fix-doc-encoding.ps1` · `fix-raw-newlines.py` · `apply-doc-edits.ps1` · `isolate-regions.py` · `sync-mouth-points.py` | **归档**（`isolate-regions.py` / `sync-mouth-points.py` 是嘴部隔离那轮的，先归档不删） |
 | **垃圾（已跟踪！）** | `bin/` `obj/` 共 **28** 个 · `__pycache__` **1** · `.pyc` **1** | **删 + 补 `.gitignore`**（本轮已做） |
 
-⚠️ 另外发现：`FACE_TRACKING_WARUDO_ROUTE.md` 等文档被 `.cs` 注释以**旧路径**引用（`docs/EDITOR_UI_SYSTEM.md` / `docs/LOOKUP…` / `docs/measurements/README.md`），
+⚠️ 另外发现：`FACE_TRACKING_WARUDO_ROUTE.md` 等文档被 `.cs` 注释以**旧路径**引用（`docs/完善的功能/EDITOR_UI_SYSTEM.md` / `docs/LOOKUP…` / `docs/measurements/README.md`），
 而文件其实在 `docs/完善的功能/` 或根本不存在 ⇒ 重组时必须**逐个对一遍悬空引用**（改 `.cs` 会触发你 Unity 重编译，等你不在调的时候再做）。
 
 ## 2. 目标结构（提议）
@@ -107,8 +107,8 @@ Tools~/FaceTracking/
 
 | 文件:行 | 现在写的 | 应该改成 |
 | --- | --- | --- |
-| `Editor/AnimationTools/HoAnimationPreviewTimeline.cs:20` | `docs/EDITOR_UI_SYSTEM.md` | `docs/完善的功能/EDITOR_UI_SYSTEM.md` |
-| `Editor/Constraints/HoPendulumConstraintEditor.cs:102` | `docs/PENDULUM_CONSTRAINT.md` | `docs/完善的功能/PENDULUM_CONSTRAINT.md`（⚠️ 这条是**本次重组**搬出来的） |
-| `Runtime/Constraints/HoLookAtConstraint.cs:10` | `docs/LOOKAT_CONSTRAINT.md` | `docs/完善的功能/LOOKAT_CONSTRAINT.md` |
+| `Editor/AnimationTools/HoAnimationPreviewTimeline.cs:20` | `docs/完善的功能/EDITOR_UI_SYSTEM.md` | `docs/完善的功能/EDITOR_UI_SYSTEM.md` |
+| `Editor/Constraints/HoPendulumConstraintEditor.cs:102` | `docs/完善的功能/PENDULUM_CONSTRAINT.md` | `docs/完善的功能/PENDULUM_CONSTRAINT.md`（⚠️ 这条是**本次重组**搬出来的） |
+| `Runtime/Constraints/HoLookAtConstraint.cs:10` | `docs/完善的功能/LOOKAT_CONSTRAINT.md` | `docs/完善的功能/LOOKAT_CONSTRAINT.md` |
 
 ⚠️ 另外 `docs/measurements/README.md` 那条悬空引用**已经修好**（补齐了说明文件，见 `469e36f`）。

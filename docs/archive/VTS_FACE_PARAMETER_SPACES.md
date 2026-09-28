@@ -56,7 +56,7 @@ lipRaise = mouthUpperUp_L + mouthUpperUp_R
 
 这里还有模型映射这一步：旧官方样例实际为 `MouthSmile 0…1 → ParamMouthForm −1…1`，因此**在这份样例内**可写 `Form = 2×MouthSmile − 1`。
 它同时把 Press 从±1.3映射到±1，把Funnel输入0…0.7映射到模型配置端点−1…1。
-这些是具体样例的校准，不是所有模型通用的阈值。[样例文件审计](../.research/vts-creator-workflow/official-sample-audit.json)
+这些是具体样例的校准，不是所有模型通用的阈值。[样例文件审计](../../.research/vts-creator-workflow/official-sample-audit.json)
 
 为自己的树定值域时，应明确写出每根轴的**中性、两端含义和映射曲线**，之后所有矩阵用同一份约定。
 例如可用Form −1…1、Open 0…1；但不能把VB的 `MouthSmile` 值未经映射直接塞进以0为中性的Form树。

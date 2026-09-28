@@ -525,8 +525,8 @@ VTS自身对Voice*的权重约束不自动适用于我们重新合成的数值�
 
 - [配套机器可读全表](VTS_HIGH_QUALITY_FACE_CATALOG.json)：98个VTS固定名字、52个原始ARKit、34个VB V3输出及曲线/平滑、43个HQ扩展、42个树族；所有`sample`均未指定。
 - `.research/vts-creator-workflow/build_hq_catalog.py`：从当日官方页面快照和本机预设生成表；检查去重、分类计数、52输入无遗漏、扩展命名及树族引用。
-- [旧官方样例映射审计](../.research/vts-creator-workflow/official-sample-audit.json)：同一模型的VB/普通VTS两套映射，证明供值能力变化与模型资产可分离；为2022样例，不冒充V3当前模板。
-- [原装预设逐字段审计](../.research/vts-creator-workflow/preset-audit.json)：本机十份预设的完整字段与差异。
+- [旧官方样例映射审计](../../.research/vts-creator-workflow/official-sample-audit.json)：同一模型的VB/普通VTS两套映射，证明供值能力变化与模型资产可分离；为2022样例，不冒充V3当前模板。
+- [原装预设逐字段审计](../../.research/vts-creator-workflow/preset-audit.json)：本机十份预设的完整字段与差异。
 - [轴关系证据与推导](VTS_FACE_PARAMETER_SPACES.md)：公式、中性、参考血统及已证实/设计配对的区分。
 - [创作者四轴外嘴实例](https://www.reddit.com/r/Live2D/comments/vjdbr4/)、[官方2024眉眼章节](https://www.youtube.com/watch?v=pZx_I_Y6kq4)、[官方2024嘴部章节](https://www.youtube.com/watch?v=7ZpOy3_E3Zo)。章节证明相关组合被讨论，**不代表表E整套树结构都是官方成品的逐项复制**。
 

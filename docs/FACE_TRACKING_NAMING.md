@@ -1,12 +1,14 @@
 ﻿# 面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位
 
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/CONTROLLER.md；本文保留作历史参考。
+
 **这里定名字，别处只引用。** 名字是唯一能把「混合树里的格子」与「去 DCC 做形态键时的那张清单」对上的东西；
 散着拼字符串迟早会漂（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5 原来那条规矩说的就是这件事）。
 2026-09-27 起，**树族不再用编号**（`M01`/`E01L`/`B01L`… 那套只对表内部排序友好，读起来没有任何信息）。
 
-分工：**42 个树名的清单**由本文 §2 与 [契约表 E2](VTS_HIGH_QUALITY_FACE_CONTRACT.md)（机器可读版在
+分工：**42 个树名的清单**由本文 §2 与 [契约表 E2](archive/VTS_HIGH_QUALITY_FACE_CONTRACT.md)（机器可读版在
 [配套目录](VTS_HIGH_QUALITY_FACE_CATALOG.json) 的 `tree_families`）共同表达；
-**轴的公式与来源**在 [契约表 C/D](VTS_HIGH_QUALITY_FACE_CONTRACT.md) 与 [参数空间](VTS_FACE_PARAMETER_SPACES.md)；
+**轴的公式与来源**在 [契约表 C/D](archive/VTS_HIGH_QUALITY_FACE_CONTRACT.md) 与 [参数空间](archive/VTS_FACE_PARAMETER_SPACES.md)；
 **这一版控制器要做哪些树**在 [控制器：进度与轴口](VTS_HQ_CONTROLLER.md)（§2 是已落地的树与叶子语义）。
 
 ## 1. 规则
@@ -140,7 +142,7 @@
 * `A<n>` = **X 轴刻度数**（⚠️ **允许非方阵**：嘴上就有 4×3 的 `MouthCore` 与 3×2 的 `MouthShift`，分别写 `A4` / `A3`）；`X<i>Y<j>` 从 0 起、**左下为原点、永不出现负号**，可小数（`X0.5`）。
 * **方阵不必铺满**：X 走三档、Y 只用 `Y0`/`Y2` 是合法的（眼睑那 6 个槽位就是这么摆的）。
   ⚠️ **2026-09-28 更正：不再是"方阵"** —— 形状由 `A<n>`（X 档数）与规则表里的 `ys`（Y 档数）一起决定；照"方阵+留空"去读会把 3×2 表的 `Y1` 当成"3 行里的中间行"（实际是 2 行的顶行）（[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §5.1 有完整论证）。
-* 一个槽位 = **一个多键姿势片段**（不是"一键一片段"）；未填的槽有明确的 fallback（[契约表 §F](VTS_HIGH_QUALITY_FACE_CONTRACT.md)）。
+* 一个槽位 = **一个多键姿势片段**（不是"一键一片段"）；未填的槽有明确的 fallback（[契约表 §F](archive/VTS_HIGH_QUALITY_FACE_CONTRACT.md)）。
 
 ## 6. 轴段词（槽位名里那两段从哪来）
 
@@ -186,7 +188,7 @@ VB `MouthSmile` 静息 0.5 ⇒ **必须重映射成 0 中性**。⚠️ 见下�
 **决定保留 `Form`**，理由三条：
 
 1. **它不是自造词**：Cubism 标准参数就叫 `ParamMouthForm`，而且 VTS 官方把 `MouthSmile` 推荐接进它；
-   我们自己的合同（[高质量契约](VTS_HIGH_QUALITY_FACE_CONTRACT.md) E1）也早就把它定义成
+   我们自己的合同（[高质量契约](archive/VTS_HIGH_QUALITY_FACE_CONTRACT.md) E1）也早就把它定义成
    "`MouthSmile` 经模型校准映射，建议 −1…1、中性 0" —— 换名等于把一个有出处的术语换成半个新词。
 2. **改叫 `Smile` 会撞字面**：控制器里已有 `Ho/Drive/Gate/Expr/Smile`（**0/1 表情门**，切夸张版姿势）。
    两者路径不同、不会撞参数，但读者会在同一份面板里看到两个 "Smile"（一个连续量、一个开关）。

@@ -1,5 +1,7 @@
 ﻿# 面捕方案总览：VTS 裸输入 → 中间层反算 → 喂进 Warudo 官方面捕蓝图
 
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/PIPELINE.md；本文保留作历史参考。
+
 > **这份文档只讲 Warudo 侧的落地**：产物怎么划分（几个 mod / 几个节点）、Tracking 层怎么用、节点之间怎么连线。
 > Unity 侧的机制 → [面捕设计：已验证的机制层](FACE_TRACKING_DESIGN.md)；怎么用 → [面捕工作流](FACE_TRACKING_WORKFLOW.md)；
 > 值怎么加工 → [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)；控制器长什么样 → [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md)；

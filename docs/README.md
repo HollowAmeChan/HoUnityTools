@@ -1,63 +1,41 @@
 ﻿# HoUnityTools 文档
 
-这里记录跨 Blender、Unity 和 Warudo 的工具约定，以及已经验证过的构建流程。
+**唯一入口。** 现在在跑的那套方案只有四份权威文档 + 命名权威；其余都在 `pitfalls/`（踩坑）与 `archive/`（过程记录）。
+（2026-09-29 重组：原 20 篇顶层文档 → 4 篇权威 + 归档；审查与判定见 [REORG_PLAN_2026-09-29.md](REORG_PLAN_2026-09-29.md)。）
 
-## 面捕
+## 现在在跑什么
 
-**入口全在菜单 `HoUnityTools/面捕/` 下面那三个页：调试面板 / 控制器编辑 / 配置文件。**
-角色预制件上**零组件** —— 调试状态落在 `Assets/HoFaceDebugSettings.json`，每帧由菜单宿主推。
+面捕主线：**VTS / iPhone 裸输入 → 中间层（profile 里的输入行 / 表达式 / 曲线）→ 控制器（混合树）→ 角色与 Warudo**。
+角色预制件上**零组件**：调试状态落在 `Assets/HoFaceDebugSettings.json`，三个页都在菜单 `HoUnityTools/面捕/` 下（调试面板 / 控制器编辑 / 配置文件）。
 
-- [**面捕工作流**](FACE_TRACKING_WORKFLOW.md)：怎么用 —— 三个页各管什么、首次接线、什么会写盘、排查清单（症状 → 先看哪）。**§2.1 是方向：终点是"动画 = 状态"，现在这套 ARKit 映射是过渡件。**
-- [**参数实机验证表**](PARAMETER_DEVICE_VERIFICATION.md)：**设备实测哪些参数真的在动** —— 逐键的**语义 + 触发情况**（`§0.2`，语义抄官方、触发是实测总结）、两台各自的 `MOVES` / `WEAK` / `CONSTANT-NONZERO` / `NEVER-MOVES` 与统计量、以及**安卓 ↔ 苹果对比**（`§3`：线名集合差 22 组、量级与零点也差）。表由 `.warudo-mod-research/.tools/analyze-dump-stats.ps1` 从 `Player.log` 的自动 dump 生成。**协议里有、设备也发、读数却永远不变的，只有这张表能告诉你。**
-- [**面捕中间层处理**](FACE_TRACKING_MIDDLE_LAYER.md)：**值是怎么被加工的** —— 输入行（线名 → 规范名）与输出行（规范名 → 参数）、表达式语言、曲线、有序修饰符、配置文件格式与它的精确语义。
-- [**混合树的能力边界**](BLEND_TREE_LIMITS.md)：静态姿势树的代数边界与完整Animator的区别；已更正“不能写Animator参数”的旧结论，原生参数曲线在两个Unity版本实测可用。
-- [**控制器的输出范围与实测能力**](ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)：**我们到底写哪些东西、凭什么这么定** —— 控制器只写**姿态**（形态键 + 骨骼，曲线绑定）与**语义**（写 Hub）；显隐 / 组件档位 / 材质 MPB / 对象引用**全部不做**（组件不再是写入目标，改成读 Hub）。含两版 Unity 的能力实测表（这些证据留着，**将来放开时不用重测**）、Warudo/Animancer 约束、绑定清单，以及 ⚠️ **还没实现**的物理阶段与时钟提案。
-- [**动态参数（语义输出）**](FACE_TRACKING_DYNAMIC_PARAMETERS.md)：控制器那条**很薄的第二输出**怎么走 —— 值在 `HoFaceSemanticHub`（纯存值：**一格一个 `(名字, 值)` 键值对**，格由写的人运行期按名字开；按名字读/写就在它自己身上，**没有表、也没有第二个组件**）、**写的人是中间层**（Unity 会话 / Warudo 的「HoFace写动态参数」节点，名字 = 配置里输出行的 `parameter`）、`P/` 前缀只在生成期用。⚠️ Unity 侧现场跑通过、**换成现在的形状后要重跑**（回归门 = 用例 `stage 18`），**Warudo 侧的节点连线与面板还没验**。它**五天里改过五次设计**——那几个被删掉的形状（曲线写 `values.<i>`、控制器状态上的写手、槽表、「把手」）**为什么留不住**收在[踩坑](pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
-- [**面捕设计：已验证的机制层**](FACE_TRACKING_DESIGN.md)：影子台（`shadow.Update(0f)` 一次同步求值）、键的占用表、为什么不用 PlayableGraph、唯一时钟与线程、播放模式切换时的收摊与接回、验收现状（116 条断言 + 怎么重跑；⚠️ 2026-09-26 改过夹具后**还没重跑**）。
-- [**面捕控制器结构**](FACE_TRACKING_CONTROLLER_STRUCTURE.md)：控制器是**作品** —— 参考实现的三层结构、一棵 Direct 树管整张脸、装配模型（填动画 + 重绑形态键曲线）、命名约定与判别性实验。
-- [**VTS → VB → 高质量混合树全量契约（当前设计入口）**](VTS_HIGH_QUALITY_FACE_CONTRACT.md)：98个公开VTS固定参数、52原始形变、34个原装VB V3输出、**43个**拟定HQ扩展和42个高级树族；含全量矩阵、条件轴及选择性填动画的fallback规则，不限定格数。[机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json)。**树族 2026-09-27 起用树名（`MouthCore`…）而不是编号。**
-- [**面捕命名权威：树名 / 参数 / 门 / 切片 / 槽位**](FACE_TRACKING_NAMING.md)：**名字只在这里定** —— 树名 = 部位 + 语义 + 侧别（`LidL`、`BrowCoreR`）、42 个树名全表、轴段词与正端、参数/门/切片的名字形状、槽位名格式（`<树名>__<X>__<Y>__A<n>X<i>Y<j>`，左下原点、方阵可稀疏）、平行副本与区域子树的命名，以及"改名字要动哪几处"的流程。**写任何树名/槽位名之前先查它。**
-- [**VTS / VB 参数空间与轴来源**](VTS_FACE_PARAMETER_SPACES.md)：哪些参数组成2D、哪些是高维空间的条件切片、哪些应先保留1D；逐轴给出来源公式，不规定采样格数。
-- [**VTS / VB 创作者路线调查**](VTS_CREATOR_WORKFLOW_RESEARCH.md)：十份预设差异、麦克风契约、官方示例实际映射与教程证据；其中动画预算仅为演算示例，采样由作者决定。
-- [**VTS 原生语义控制器：进度与轴口**](VTS_HQ_CONTROLLER.md)：**不再是计划书**，只记三件事 —— **当前进度**（43 参数 / **27 树** / **83 个**空片段槽位（2026-09-28 深夜：舌头 1D 4 格、下巴 1D 2 格、整嘴平移挖成 4 格，§5.7.29–§5.7.31） / **40 行**轴已进 profile 三份同步 / **29 根轴**已挂 `smooth` / 切片未接线 / Warudo bundle 还是老的）、**每格叶子的语义**（27 棵树的结构 + 每张表的轴刻度与"这一格代表什么姿势"，实机测灵敏度按 §2.4 走）、**每根轴的中间层输出行与公式**（逐轴的表达式原文、曲线、语义与值域，加 §3.2 的修饰符现状与四条调参陷阱）。含实测事实：手机协议 `Hotkey` **恒为 −1**（两台设备），按键表情来源得另接。
-- [**面捕在 Warudo 的路线**](FACE_TRACKING_WARUDO_ROUTE.md)：那一边的产物划分（**现在是 1 个 mod / 10 个节点**，**"2 mod"是目标** —— 先看 §2.0 的"今天真实存在什么 / 目标形态"两栏）、为什么要走它的 **Tracking 层**、Warudo 的硬约束（无 asmdef / 无 ScriptableObject / 无 DLL / 无反射 / 无 System.IO）。⚠️ **面捕这一系列横跨两个仓库**（本包 + 另一个仓库里的 mod `Assets/HoWarudoModTests/Mods-Ho/`）：**单边绿不算验过** —— 两边各自那一关、以及两条会静默出错的规矩，见 §8 与 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7。
-- [**参数标准表**](PARAMETER_STANDARDS.md)：**下游到底认哪些名字**的权威依据（逐行表格 + 官方 URL + 未验证标记）—— VTS 追踪参数/语音/手部/控制器、VTS API 与注入规则、自定义参数、Cubism 标准参数与参数组、ARKit 52、iFacialMocap 线协议、VMC 协议地址与 HumanBodyBones、VRM 0.x/1.0、VRCFT Unified Expressions（附录）。**写任何参数名之前先查它。**
-- [**HO 参数规范**](PARAMETER_HO.md)：**我们自己选什么** —— 出口是**两份并行 + 一套额外**，共 **90 行**：**原始 ARKit 52**（无损直通，**裸规范名** `eyeBlinkLeft`/`jawOpen`）+ **官方 VTS 追踪参数 20**（合成、有损）+ VB 自造 5 + 姿态向量 12 + 信号 `FaceFound`；**另加 40 行控制器轴
+| 想看什么 | 去哪 |
+| --- | --- |
+| **整条路怎么走**：层间分工、数据流、每一步的权威文件与工具 | [PIPELINE.md](PIPELINE.md) |
+| **控制器长什么样**：树型 / 区域门 / 2D 表 / Direct 张量积表 / 变体开关 / 槽位命名 / 装配与检查流程 / **混合树实测边界** | [CONTROLLER.md](CONTROLLER.md) |
+| **每根轴的现状**：表达式原文 / 曲线 / 修饰符 / 谁消费 / 实测定论与刻度 | [AXES.md](AXES.md) |
+| **参数**：三套名字（VTS 线名 / ARKit 名 / 我们的规范名）怎么对应、设备逐键实测、哪些我们不用 | [PARAMETERS.md](PARAMETERS.md) |
+| **名字怎么起**（写任何树名/槽位名之前先查它） | [FACE_TRACKING_NAMING.md](FACE_TRACKING_NAMING.md) · [机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json) · `Runtime/FaceTracking/HoFaceTrackingChannels.cs` 的 `Names`（52 条规范名） |
+| **工具怎么跑**（生成 / 接线 / 检查 / 录样速查速统速对 / 资产速查） | [`Tools~/FaceTracking/README.md`](../Tools~/FaceTracking/README.md) |
+| **动态参数（语义输出 → Warudo Hub）** | [FACE_TRACKING_DYNAMIC_PARAMETERS.md](FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
+| **Warudo 那一边**（mod / 节点 / 硬约束 / 跨仓规矩） | [FACE_TRACKING_WARUDO_ROUTE.md](FACE_TRACKING_WARUDO_ROUTE.md) |
+| **实测是怎么来的** | [measurements/README.md](measurements/README.md) |
 
+## 其它工具（与面捕无关）
 
- `Ho/Drive/*`**（§3.7：轴 + 区域门 + 切片权重，喂新控制器，**不计入 90**）。含输入契约（iPhone 实测 67 线，52 个形态量**全部在动**）、**三个词汇表与那条换算规则**、值域约定（官方只规定两个参数的范围；**0.5 中立位是 VB 私有的**）、逐参数公式全表（机械提取，不手抄）、**算不出来的 9 行 / 11 个及原因**。跟标准表的分工：那份记外部怎么定，这份记我们选什么。⚠️ **§0.0 是跨仓规矩**：这套功能落在**两个仓库**上（本包 + mod），**改一处必须两边都验**。
+都在 [完善的功能/](完善的功能/)：Warudo FastBuild · 摆锤约束 · 跟随约束 · 约束面板设计系统 · 动画剪辑直通预览 · 眨眼约束（含果冻眼） · 注视约束。
 
-## 其他工具
+## 踩过的坑
 
-- [Warudo FastBuild 设计与验证](WARUDO_FAST_BUILD.md)：FastBuild 的流程、SDK 约束、依赖处理和排错方法。
-- [摆锤约束设计与验证](PENDULUM_CONSTRAINT.md)：摆锤约束的模型、输出绑定、水瓶液面预设与验证结论。
-- [跟随约束坐标系规则](FOLLOW_CONSTRAINT.md)：跟随约束的坐标系与父子规则。
-- [约束面板设计系统](EDITOR_UI_SYSTEM.md)：约束类 Inspector 共用的尺寸栅格、色板与自绘控件库（眨眼面板已按它重画）。
-- [动画剪辑直通预览](ANIMATION_CLIP_PREVIEW.md)：填一条 clip 就能播、不需要 AnimatorController 的组件（倍速 / 拖帧 / 暂停）；含机制、已知限制与验证探针。
-- [眨眼约束设计与验证](BLINK_CONSTRAINT.md)：自动眨眼 + 果冻眼（规则 / 弹簧 / ramp / 合并策略）。
-- [注视约束设计与验证](LOOKAT_CONSTRAINT.md)：眼→头颈→脊椎的优先级瀑布、鼠标与目标物体两种驱动。
+[pitfalls/](pitfalls/) —— 按"看到什么症状"来找（**症状 → 原因 → 怎么办**）：面捕流水线、动态参数五次改设计、混合树、形态键输出、
+Unity YAML 与转储、Animator IK 与更新时机、鼠标输入、液体 shader、Unity 资产、编辑器 UI 与 Playable API、批处理验证、
+Warudo 打包、从蓝图里取证、文档编码、仓库与提交。
+**活文档只留结论；"当初怎么被咬的"都收在这里。**
 
-## 踩过的坑（按"看到什么症状"来找）
+## 归档（过程记录，不是现状）
 
-- [**踩过的坑**](pitfalls/README.md)：这一文件夹放**具体咬过我们一口的东西**（症状 → 原因 → 怎么办）：
-  **面捕流水线**（包到了但脸不动 / 实时输入整体不动 / JsonUtility 丢字段）、**动态参数的五次改设计**、混合树、形态键输出、
-  Unity YAML 与转储、Animator IK 与更新时机、鼠标输入、液体 shader、Unity 资产、编辑器 UI 与 Playable API、
-  批处理验证、Warudo 打包、**从蓝图里取证**、文档编码、仓库与提交。
-  活文档只留结论；**"当初怎么被咬的"都收在这里**。
-
-## 已归档（过程记录，不是现状）
-
-结论都已经抽进上面的活文档；下面这些留着是**"当初凭什么这么判断"的证据**。
-
-- [旧 Hotools 源码迁移说明](archive/MIGRATION.md)：迁移日期、两条源→目标路径与三个命名空间，以及旧 `Hotools/` 目录已删除。
-- [面捕的层间分工：参数生产层 vs 驱动层](archive/FACE_TRACKING_PIPELINE_SPLIT.md)：1100 行的论证日志（含大量「作废/撤销」标记）。仍独有的：§17 参考实现两棵大树的拆法、§21.3 VRCFT `Correctors` 的三条修正。
-- [面捕混合树入门与 Jerry ARKit 模板使用](archive/FACE_TRACKING_TEMPLATE_GUIDE.md)：讲 Jerry 现成模板的用法；我们改成装配模型、又改成"控制器编辑就地装配"之后，作业流程部分不再适用，但"模板里长什么样"仍是对照材料。
-- [面捕的 OSC / VRCFT 后端：调查保留](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：未来后端的调查（Av3Emulator 能力清单、VRCFT 链路、`forceRelevant`、OSCQuery 与发现过滤）。**首期没接 VRCFT**，留着是为了将来别重查一遍。
-- [ARKit `mouthClose` 调查报告](archive/arkit-mouthclose-report.md)：一次性调查，结论已体现在中间层行为里。
-- [VBridger 的中间层：一手逆向记录](archive/VBRIDGER_MIDDLE_LAYER_RESEARCH.md)：同类最成熟产品的存档格式（16 字符循环 XOR）、一行输出的全部字段、表达式语言与函数表、UI 词汇、输入曲线与校准的分层，以及它给我们的八条启示。**我们中间层的形状就是照它定的。**
-- [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md)：十份自带预设逐行统计出来的词汇表 —— **输入**（104 个规范名 + 每个数据源一张改名表：iFacialMocap `_L/_R`／FaceMotion3D `Left`／VTS `Left` 首字母大写；15 个 OVR viseme 的连续 + `_abs` 两条线；音频、头姿、全身骨链、`faceFound`）与**输出**（喂 VTS 就用它的追踪参数白名单 24 个、喂 VMC/VRM 就用 ARKit 原名、其余是自定义驼峰名），以及十种反复出现的映射公式与取值约定。**要对接下游时照这张表。**
-
-文档中的 Warudo 结论以 Warudo Mod Tool 0.14.4.8 和 Unity 2021.3.45f2 的实际构建结果为准。SDK 或 Unity 版本变化后，应重新检查构建日志和生成的 `.warudo` 内容。
+[archive/](archive/) —— 结论都已抽进上面的活文档；这里留的是**"当初凭什么这么判断"的证据**，以及被推翻的方案。
+决策日志（按日期，只增不改）在 [DECISIONS.md](DECISIONS.md)；原 `VTS_HQ_CONTROLLER.md`（279 KB 的决策日志 + 现状混合体）已拆成
+[AXES.md](AXES.md)（现状）与 [DECISIONS.md](DECISIONS.md)（历史），原文件保留为存根（仓库里有 48 处引用指向它）。
 
 ## 写文档的约定
 

@@ -67,7 +67,7 @@ VTS API 先声明自定义参数（名字、范围、默认值），再用 `Inje
 `set` 模式同参数只有一个插件覆盖写入者；`add` 允许多个插件累加；`weight` 的混合语义属于 `set`。持续控制要至少每秒续送一次。[VTS API](https://github.com/DenchiSoft/VTubeStudio#feeding-in-data-for-default-or-custom-parameters)
 
 **我们的现行链路只接 VTS 手机 UDP 原始包。** `HoVtsPacket.cs` 读取 `BlendShapes`、头/眼向量、FaceFound、Hotkey 等；没有桌面 `Voice*` 音频适配器。
-因此“电脑 VTS 打开麦克风”不能被当成“我们的中间层已经拿到 VoiceA”。手机第三方原始流与桌面 WebSocket 参数 API 是不同接口。[官方 UDP 示例](https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest)、[现行解析器](../Runtime/FaceTracking/HoVtsPacket.cs)
+因此“电脑 VTS 打开麦克风”不能被当成“我们的中间层已经拿到 VoiceA”。手机第三方原始流与桌面 WebSocket 参数 API 是不同接口。[官方 UDP 示例](https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest)、[现行解析器](../../Runtime/FaceTracking/HoVtsPacket.cs)
 
 以后做音频，需要实际接入一个音频数值来源，再合并到中间层输入：可评估读取桌面 VTS 的已计算参数、独立音频进程，或适合 Warudo 的音频模块。
 **这不是本轮已实现功能**；也不能把带 Burst/Job/依赖包的 uLipSync 不经验证直接塞进 Warudo mod。先保留接口，部署按 [Warudo 限制](../FACE_TRACKING_WARUDO_ROUTE.md) 单独验证。
@@ -103,7 +103,7 @@ VTS API 先声明自定义参数（名字、范围、默认值），再用 `Inje
 2. PlusVolume 的 `MouthOpen` 加的是 `(volume × .2)²`；`JawOpen` 与 `VoiceVolumePlusMouthOpen` 加的是 `volume × .2`。这些数值按本机预设记录，不能概括成三行相同音量混合。
 3. V3 把 `Eye_Squint_L/R` 改为 `EyeSquintLeft/Right`；还去掉 MouthX、Pucker、Funnel、Press、Shrug 公式中的 `1 − tongueOut` 抑制。**输出数不变，组合冲突风险仍会变**，尤其伸舌＋嘟嘴/压唇。
 
-逐字段 diff、所有公式/范围/曲线及源文件 SHA-256：[本轮审计 JSON](../.research/vts-creator-workflow/preset-audit.json)。
+逐字段 diff、所有公式/范围/曲线及源文件 SHA-256：[本轮审计 JSON](../../.research/vts-creator-workflow/preset-audit.json)。
 旧格式缺少现代 `on` 字段，不能按“字段缺失 = false”说它整份没启用。
 
 ## 4. 高级 VB 嘴的工作契约
@@ -158,7 +158,7 @@ V3 仅输出一组 EyeRightX/Y；如果要双眼完全独立注视，需要保�
 - 此旧样例用 `EyeSquintL/R` 输入名，和本机V2的 `Eye_Squint_L/R`、V3的 `EyeSquintLeft/Right` 都不同。旧样例不能直接充当新预设的即插即用绑定。
 - 它没有把本机预设里的所有额外输出都接上；尤其不能由它反推“每个VB模型都必须有鼓腮、伸舌和BrowInnerUp”。
 
-原文件、完整映射与校验哈希见 [官方样例审计](../.research/vts-creator-workflow/official-sample-audit.json)。
+原文件、完整映射与校验哈希见 [官方样例审计](../../.research/vts-creator-workflow/official-sample-audit.json)。
 本轮未解读 `.cmo3/.moc3` 内部几何，**没有把35个参数ID误报为35个形态键或验证过的keyform数量**。
 
 ## 5. 麦克风究竟增加哪些契约、哪些动画
@@ -235,7 +235,7 @@ VisemesARKit 实际输出仍为高级 MouthOpen、JawOpen、Funnel、Press、Puc
 如果眼球仍归 Warudo / LookAt，**去掉10个视线槽，89 / 94槽即可**。如果用既有五姿势眼睑而非每眼六格，再减2。
 “闭＋眯”和“闭”往往可共用片段；中性格也可能共享。实际唯一文件数在完成曲线绑定/姿势去重后统计，不提前冒充精确制作量。
 
-已列出104个唯一槽名及坐标：[制作槽清单 JSON](../.research/vts-creator-workflow/proposed-animation-slots.json)。其中99个 base、5个 audio_optional；没有创建占位 `.anim`。
+已列出104个唯一槽名及坐标：[制作槽清单 JSON](../../.research/vts-creator-workflow/proposed-animation-slots.json)。其中99个 base、5个 audio_optional；没有创建占位 `.anim`。
 
 ### 6.3 混合树应该怎样表达54格
 
