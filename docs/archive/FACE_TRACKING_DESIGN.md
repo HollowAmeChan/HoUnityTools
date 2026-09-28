@@ -1,6 +1,6 @@
 ﻿# 面捕设计：已验证的机制层
 
-> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/PIPELINE.md；本文保留作历史参考。
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 ../PIPELINE.md；本文保留作历史参考。
 
 日期：2026-09-25。这份只讲**今天仍然成立**的东西：输入路线、中间层配置的语义、影子台、键的占用表、时钟与线程、验收。
 
@@ -50,7 +50,7 @@
 ## 3. Av3Emulator 与 VRCFT：调查保留
 
 这两块都是**未来后端**的调查，与现在的 VTS 路线无关，内容已整段移入
-[面捕的 OSC / VRCFT 后端：调查保留（已归档）](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：
+[面捕的 OSC / VRCFT 后端：调查保留（已归档）](FACE_TRACKING_OSC_BACKEND_RESEARCH.md)：
 Av3Emulator 的能力清单与取舍、VRCFT 的链路、`forceRelevant`、OSCQuery 与发现过滤。
 
 一句话结论：**VRCFT 完全没有实施**。将来接的时候别把它当成"多开一个 UDP 端口"。
@@ -134,7 +134,7 @@ HoFaceInputHub.Merged       按环境顺序合并（逐线名判新鲜度）
 所以"没指定配置文件"**就是这一层不做事**：会话压根起不来，运行期也不会自动起
 （那等于"什么都不做还每秒重试一次"）。真正的坑在**指定之后**：
 输入行**只认配置文件里的那一份**，配置里漏了一条线名，那条链就静默失效（见
-[踩过的坑 · 面捕流水线](pitfalls/FACE_TRACKING_PIPELINE.md) §3）。
+[踩过的坑 · 面捕流水线](../pitfalls/FACE_TRACKING_PIPELINE.md) §3）。
 
 - 两类行同一套形状：**输入行** `规范名 = 曲线(表达式(线名…))` + 有序修饰符；**输出行** `参数名 = 曲线(表达式(规范名…))` + 有序修饰符（`Runtime/FaceTracking/HoFaceMiddleware.cs` 的 `HoFaceMiddleware` / `HoFaceOutput`）。
 - 表达式取变量分三级：① 52 个规范名（走通道整形后的值）→ ② 其它输入行的结果（`headRotX`…）→ ③ 合并后的**原始线名**（`EyeBlinkLeft`、`Rotation_x`…）（`HoFaceAnimationSession.Lookup`，`HoFaceAnimationSession.cs:304-311`）。
@@ -256,7 +256,7 @@ flowchart TD
 
 ### 6.2 HoLookAt 的接入
 
-以代码为准（[HoLookAtConstraint](../Runtime/Constraints/HoLookAtConstraint.cs)）：
+以代码为准（[HoLookAtConstraint](../../Runtime/Constraints/HoLookAtConstraint.cs)）：
 
 - `OnAnimatorIK` → `HandleAnimatorIK` 调 `Animator.SetLookAtPosition/Weight`；**Unity LookAt 的眼睛权重传 0**，眼睛由组件自己应用。不与 Animator 同物体时由 `HoLookAtIkRelay` 转发 IK 回调（`:671-697`）。
 - `LateUpdate` → `ApplyEyes`。EyeBones 模式走 `ApplyEyeBones`，ShapeKeys 模式交给独立的 `HoShapeKeyWriter`（`:660-668`）。
@@ -388,7 +388,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 
 网络接收与调试启动**只存在于编辑器流程**：接收端、宿主、面板全在 `Editor/` 下，所以它们不进玩家构建。
 由于本仓库还服务 Warudo 构建，添加新 Runtime 组件时要验证 FastBuild 对组件和程序集的收集
-（见 [Warudo FastBuild](完善的功能/WARUDO_FAST_BUILD.md)）。
+（见 [Warudo FastBuild](../完善的功能/WARUDO_FAST_BUILD.md)）。
 
 ## 9. 实施状态与验收
 
@@ -401,7 +401,7 @@ public static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequen
 | P2：实时输入 | **已通过（本地回环替代手机）** | 真实 UDP 包驱动到 60；中间层整条链（表达式 → 曲线 → 修饰符 → 参数 → 混合树）；断流回退；占用与交还在停止后清空；一个 Animator 一个会话 |
 | P3：LookAt 协作 | **部分** | 键级互斥已通过（面捕拥有的键被占用后 Ho 写入与清理都不覆盖它）；眼骨无漂移**未经自动化验收**（没有 humanoid Avatar） |
 | 后续：编辑模式实时预览 | 未开始 | — |
-| 后续：VRCFT / 原版 Jerry 模板 | 未开始 | 见 [已归档的研究](archive/FACE_TRACKING_OSC_BACKEND_RESEARCH.md) |
+| 后续：VRCFT / 原版 Jerry 模板 | 未开始 | 见 [已归档的研究](FACE_TRACKING_OSC_BACKEND_RESEARCH.md) |
 
 ### 9.2 三次真事故（都已修，规则因此变硬）
 
@@ -438,7 +438,7 @@ $c | Select-String "HO_FACE_TEST" | Select-Object -Last 3
 
 成功标记是 **`HO_FACE_TESTS_ALL_PASSED`**（`Tests~/FaceTrackingValidation.cs:1008`）；失败会抛 `HO_FACE_TEST_FAILED: <断言名>` 并 `Exit(1)`。
 断言总数 **116**（`Check` / `Near` 的调用点计数与之一致）。环境、会绊人的地方、一次性工程怎么搭，见
-[批处理验证这套用例怎么跑](pitfalls/VALIDATION_LOOP.md)。**UDP 端口被占时用例会明确跳过接收端那几条，而不是假装通过。**
+[批处理验证这套用例怎么跑](../pitfalls/VALIDATION_LOOP.md)。**UDP 端口被占时用例会明确跳过接收端那几条，而不是假装通过。**
 
 两条实时 UDP 断言**几帧内没驱动上来**时，用例会自己打一条 `HO_LIVE`（接收端统计 + 合并后的线名值 + 输入行落点）。
 看到它就照那几项往下切：`packets=0` 看 socket/端口，`hasJawWire=False` 看协议解析，`hubJaw=0.9` 但值不动看时钟与输入行。

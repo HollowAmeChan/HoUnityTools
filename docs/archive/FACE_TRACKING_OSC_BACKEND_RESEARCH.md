@@ -2,7 +2,7 @@
 
 > **已归档（2026-09-23）。** 这份是**未来后端**的调查记录：首期（现在也一样）走的是手机直连，
 > VRCFT 与 VRC 后端**完全没有实施** —— 现状与"为什么先不接"见
-> [面捕设计](../FACE_TRACKING_DESIGN.md) 的「Av3Emulator 与 VRCFT：调查保留」。
+> [面捕设计](FACE_TRACKING_DESIGN.md) 的「Av3Emulator 与 VRCFT：调查保留」。
 > 留在这里是因为，"将来真要接 VRCFT 时会撞上什么"这件事已经查过一遍了，别重查。
 
 ## 1. Av3Emulator 值得借鉴的部分

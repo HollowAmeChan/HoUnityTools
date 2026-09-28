@@ -1,9 +1,9 @@
 ﻿# HO 参数规范（现状）
 
 > **2026-09-29 重组**：本文由三份文档合并而成，**只保留现在在用的口径** ——
-> [`PARAMETER_HO.md`](PARAMETER_HO.md)（我们的参数规范）、
-> [`PARAMETER_DEVICE_VERIFICATION.md`](PARAMETER_DEVICE_VERIFICATION.md)（设备实测表）、
-> [`PARAMETER_STANDARDS.md`](PARAMETER_STANDARDS.md)（外部标准底表）。
+> [`PARAMETER_HO.md`](archive/PARAMETER_HO.md)（我们的参数规范）、
+> [`PARAMETER_DEVICE_VERIFICATION.md`](archive/PARAMETER_DEVICE_VERIFICATION.md)（设备实测表）、
+> [`PARAMETER_STANDARDS.md`](archive/PARAMETER_STANDARDS.md)（外部标准底表）。
 > 三份原文**保留作历史参考**（各自开头已加横幅）。
 > **被推翻的结论与研究过程没有带过来**；原文里自相矛盾、无法判定的一律照抄并标「原文如此」，集中在 §10。
 
@@ -597,15 +597,15 @@ VTS API 适配器），我们每帧写它就等于把它锁死。控制器里给
 
 | 文件 | 记什么 |
 |---|---|
-| [`PARAMETER_HO.md`](PARAMETER_HO.md) | **历史**：我们的参数规范原文（含被推翻的口径与研究过程） |
-| [`PARAMETER_DEVICE_VERIFICATION.md`](PARAMETER_DEVICE_VERIFICATION.md) | **历史**：设备实测原文 + 三张可刷新的生成表（§1.3 安卓 65 条 / §2.3 苹果 67 条 / §0.2 语义表） |
-| [`PARAMETER_STANDARDS.md`](PARAMETER_STANDARDS.md) | **历史**：外部标准底表（VTS / Cubism / ARKit / VMC / VRM / iFacialMocap / VRCFT，逐条带官方 URL） |
+| [`PARAMETER_HO.md`](archive/PARAMETER_HO.md) | **历史**：我们的参数规范原文（含被推翻的口径与研究过程） |
+| [`PARAMETER_DEVICE_VERIFICATION.md`](archive/PARAMETER_DEVICE_VERIFICATION.md) | **历史**：设备实测原文 + 三张可刷新的生成表（§1.3 安卓 65 条 / §2.3 苹果 67 条 / §0.2 语义表） |
+| [`PARAMETER_STANDARDS.md`](archive/PARAMETER_STANDARDS.md) | **历史**：外部标准底表（VTS / Cubism / ARKit / VMC / VRM / iFacialMocap / VRCFT，逐条带官方 URL） |
 | **本文** | **现状**：通道三名字对应 + 实测数字 + 出口/控制器口径 + 不用的清单 |
 | [`AXES.md`](AXES.md) | **现状**：每根轴的口 —— 表达式原文 / 曲线 / 修饰符 / 谁消费 / 刻度与实测定论（§6 的操作口径） |
 | [`CONTROLLER.md`](CONTROLLER.md) / [`DECISIONS.md`](DECISIONS.md) | **现状**：控制器结构 / 决策记录 |
 | [`VTS_HQ_CONTROLLER.md`](VTS_HQ_CONTROLLER.md) | **短存根**（原 279 KB 已拆到 `AXES.md` + `CONTROLLER.md`；别删，仓库里有 48 处引用指它） |
 | [`PIPELINE.md`](PIPELINE.md) | **现状**：整条流水线（VTS 裸输入 → 中间层 → 控制器 → Warudo / 输出） |
-| [`FACE_TRACKING_MIDDLE_LAYER.md`](FACE_TRACKING_MIDDLE_LAYER.md) | **历史**：值怎么被加工（两层行、缺键语义、曲线纪律） |
+| [`FACE_TRACKING_MIDDLE_LAYER.md`](archive/FACE_TRACKING_MIDDLE_LAYER.md) | **历史**：值怎么被加工（两层行、缺键语义、曲线纪律） |
 | `Runtime/FaceTracking/HoFaceTrackingChannels.cs` | **命名权威**：52 个规范名（`Names`）+ 别名表（`BuildIndices`，88 条） |
 | `docs/VTS_HIGH_QUALITY_FACE_CATALOG.json` | **命名权威**：`raw_arkit[]` 的 `name` / `vts_wire` / `vb_internal` 三名字对应 |
 

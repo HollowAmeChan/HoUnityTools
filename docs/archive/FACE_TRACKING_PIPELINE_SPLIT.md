@@ -1,10 +1,10 @@
 ﻿> **已归档（2026-09-23）。这是一份**过程记录**，不是现状。**
 > 它是从"解析 5 个商业面捕包"开始的一路论证日志，很多小节标着「作废 / 撤销 / 改判」，
 > 因为结论是在过程中长出来的。**要了解现状请读：**
-> [面捕工作流](../FACE_TRACKING_WORKFLOW.md)（怎么用）、
-> [面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)（值怎么被加工）、
-> [面捕控制器结构](../FACE_TRACKING_CONTROLLER_STRUCTURE.md)（生成物长什么样）、
-> [混合树的能力边界](../BLEND_TREE_LIMITS.md)（什么能进树）。
+> [面捕工作流](FACE_TRACKING_WORKFLOW.md)（怎么用）、
+> [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)（值怎么被加工）、
+> [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md)（生成物长什么样）、
+> [混合树的能力边界](BLEND_TREE_LIMITS.md)（什么能进树）。
 >
 > **这里仍然独有、值得回查的**：§17 参考实现两棵大树的拆法（六种模式）、
 > §21.3 VRCFT `Correctors` 的三条修正、§4 四段流水线的原始表述、§7/§8 早期决策。

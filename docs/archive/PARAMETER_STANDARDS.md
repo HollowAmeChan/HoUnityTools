@@ -1,6 +1,6 @@
 ﻿# 参数标准表（面捕与形态键的权威依据）
 
-> ⚠️ 2026-09-29 重组：现状已并入 docs/PARAMETERS.md；本文保留作历史参考。
+> ⚠️ 2026-09-29 重组：现状已并入 ../PARAMETERS.md；本文保留作历史参考。
 
 这份文档**只做一件事**：把"下游到底认哪些名字、什么值域、谁定的、跨模型稳不稳"逐行列清楚，
 让本仓库所有涉及"写参数 / 写形态键 / 生成动画 / 做映射"的设计都能引到这里，而不是各自凭记忆。
@@ -524,7 +524,7 @@ Eyebrows/Cheeks/Nose 10 = 眉 5 + 颊 3 + 鼻 2。**两组口径合计都是 52*
 > （文件头自称 "Names and order taken from developer.apple.com"）写的是
 > `JawForward,` **`JawRight, JawLeft`** `, JawOpen` —— **名字一致、顺序不同**。
 > （VBridger 的 `vtsKeys` 恰恰是按**索引**对齐的：见
-> [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md) §1.1，**别照抄那个做法**。）
+> [VBridger 的输入 / 输出参数格式](VBRIDGER_IO_VOCABULARY.md) §1.1，**别照抄那个做法**。）
 
 ### 3.3 已知坑（写死在这，别再踩）
 
@@ -538,7 +538,7 @@ Eyebrows/Cheeks/Nose 10 = 眉 5 + 颊 3 + 鼻 2。**两组口径合计都是 52*
 | `mouthRollLower/Upper` | 官方语义是"**向口腔内侧**卷"（往牙齿方向），不是向外翻 |
 | `mouthShrugLower/Upper` | 官方是 "**outward** movement"（向外），不是"向上耸" |
 | `browDown*` / `noseSneer*` | `browDown*` 只指**眉外侧**（"outer portion"）；`noseSneer*` 是"鼻翼**周围**上提" |
-| `jawForward` | 官方原文 = "The coefficient describing **forward movement** of the lower jaw."（`jawOpen` = "an **opening**"、`jawLeft/Right` = "leftward / rightward movement"）。⚠️ **"与 `jawOpen` 正交"那是我们从定义推的，Apple 没承诺** —— 它全家桶里**唯一**显式写"独立"的是 `mouthClose`（"closure of the lips *independent of jaw position*"）；每个系数的 Discussion 那张示意图还特意注明"其他系数全置 0.0"（**理想值**，不是设备行为）。实测这台 iPhone：**要张嘴才给值**、安卓不发 ⇒ 不要拿它当"张嘴"，也不要指望它只反映前伸（见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)） |
+| `jawForward` | 官方原文 = "The coefficient describing **forward movement** of the lower jaw."（`jawOpen` = "an **opening**"、`jawLeft/Right` = "leftward / rightward movement"）。⚠️ **"与 `jawOpen` 正交"那是我们从定义推的，Apple 没承诺** —— 它全家桶里**唯一**显式写"独立"的是 `mouthClose`（"closure of the lips *independent of jaw position*"）；每个系数的 Discussion 那张示意图还特意注明"其他系数全置 0.0"（**理想值**，不是设备行为）。实测这台 iPhone：**要张嘴才给值**、安卓不发 ⇒ 不要拿它当"张嘴"，也不要指望它只反映前伸（见[控制器 §5.4.1](../VTS_HQ_CONTROLLER.md)） |
 | `tongueOut` / `cheekPuff` 的平台支持 | 见 §1.1：只有手机端有（`cheekPuff` 只 iOS），webcam 永远没有数据；`tongueOut` 的 1.0 是"ARKit 能追踪到的最大程度"而非物理极限 |
 | **逐键机型门槛表不存在** | Apple 只给了整体要求（iOS 14 / 带 Neural Engine，或 iOS 13 及以下必须 TrueDepth）与 `tongueOut` 的 iOS 12.0；**没有"哪个键需要哪颗芯片"的官方矩阵** → 这类说法一律不要引用 |
 | 左右对称性 | 52 个里并非全部左右成对：做"单根轴"时要显式决定用左、右还是平均 |
@@ -978,7 +978,7 @@ UDP 载荷上限、每帧键数是否有任何保障。
    —— 这些都是 **VRChat** 的规则，**Unity Animator 没有这些限制**。社区流传的"256 个参数"来自一个
    资产条数缺陷报告，不是同步上限。
 3. **我们的中间层将来加一套"VRCFT 列"不需要改机制**：本来就是"一行 = 下游名 + 一条表达式"，
-   这正是 `docs/FACE_TRACKING_MIDDLE_LAYER.md` 里"按下游分表"的含义。
+   这正是 `docs/archive/FACE_TRACKING_MIDDLE_LAYER.md` 里"按下游分表"的含义。
 4. **值得抄的两条**：`0.75` 式"中性点显式化"、**有符号合并轴**（鼓腮/吸腮一根轴），比每个语义拆一根轴省参数。
 
 ### 7.5 未能确认

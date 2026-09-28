@@ -1,7 +1,7 @@
 ﻿# 面捕流水线的坑：值没到、包丢了、时间对不上
 
-正本：[面捕工作流](../FACE_TRACKING_WORKFLOW.md)（怎么用）、[面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)（值怎么加工）、
-[面捕设计与已验证机制](../FACE_TRACKING_DESIGN.md)（机制层）。
+正本：[面捕工作流](../archive/FACE_TRACKING_WORKFLOW.md)（怎么用）、[面捕中间层处理](../archive/FACE_TRACKING_MIDDLE_LAYER.md)（值怎么加工）、
+[面捕设计与已验证机制](../archive/FACE_TRACKING_DESIGN.md)（机制层）。
 这份只留**咬过我们的那些**，每条都带当时的现场。
 
 ## 1. `JsonUtility` 会**静默丢掉** `List<嵌套类>` 字段（咬过三次）

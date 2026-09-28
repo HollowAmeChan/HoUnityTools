@@ -8,7 +8,7 @@
 **本文只写现在的形状**。
 来源：用户与 GPT 的《Unity控制器链式用法》调查（导出稿）+ 本仓库现状核对。
 **这份文档只讲"语义参数"这一条新通道**；面捕的输入侧（线名 → 规范名 → 曲线）仍见
-[面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)。
+[面捕中间层处理](archive/FACE_TRACKING_MIDDLE_LAYER.md)。
 
 > ⚠️ 本文是**设计 + 未验证清单**。代码已落的是**一个类型**（`HoFaceSemanticHub`，
 > 两边程序集各一份、同一个实现、走 `.research/sync-modcore.ps1` 同步，**同步清单共 9 份**）。
@@ -17,7 +17,7 @@
 >
 > ✅ **已经实测掉的**（2026-09-25）：
 > ① `MonoBehaviour` 与 `ScriptableObject` **能在 mod 程序集里编译、且 lint clean** ——
->    `docs/FACE_TRACKING_WARUDO_ROUTE.md` 那条"不支持 ScriptableObject"说的是
+>    `docs/archive/FACE_TRACKING_WARUDO_ROUTE.md` 那条"不支持 ScriptableObject"说的是
 >    "**UMod 不替你加载 `.asset` 资源**"，不是"这个类型不能出现"；
 > ② **带自定义脚本的 Warudo 角色 mod 打包是既有能力**（FastBuild 把源码复制进包、UMod 编译，
 >    另有产物校验器专门查"复制的脚本有没有进程序集"）—— 用户确认"这条路绝对 ok"；
@@ -81,7 +81,7 @@ Face Capture → 中间层（*.hoface.json：输入行 / 曲线 / 输出行）
 发现它的办法只有两条：**跑一遍看 Hub 里的名字**（或面板的「配置输出行」栏），
 或者看节点/会话状态里那行**新声明**（新开出来的名字会点名）。
 ⚠️ **中性值不在任何表里**：中性 = `0`，是**静态规则**（想清就 `hub.Zero()`）。
-`0.5` 那种"中立位"是 VBridger 私有的约定，我们**不采用**（[HO 参数规范](PARAMETER_HO.md) §2）。
+`0.5` 那种"中立位"是 VBridger 私有的约定，我们**不采用**（[HO 参数规范](archive/PARAMETER_HO.md) §2）。
 
 ## 3. 命名前缀：只给"生成预制动画"那一步用
 
@@ -179,8 +179,8 @@ Hub 里也跟着是那个值 —— 覆盖走会话的 `SetPreview`，它在所�
 要就得自己写个组件去读参数、算完写 Hub。
 所以定了一条边界：**树 gate 只做一层**；要"两个开关的与"就在**中间层**乘好，作为一行输出喂进树。
 完整论述与现在这份控制器的形状见
-[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md) §3.3；引擎能力本身见
-[混合树能力边界](BLEND_TREE_LIMITS.md) §2 与 [踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §3。
+[控制器结构](archive/FACE_TRACKING_CONTROLLER_STRUCTURE.md) §3.3；引擎能力本身见
+[混合树能力边界](archive/BLEND_TREE_LIMITS.md) §2 与 [踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §3。
 
 ### 5.3 Hub 是"求值帧"里语义那**一格**，不是全部
 

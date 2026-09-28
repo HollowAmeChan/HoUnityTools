@@ -89,7 +89,7 @@ Tools~/FaceTracking/
 2. Tools 区：一次性探针 → `archive/`，重写 `Tools~/FaceTracking/README.md`（只列在跑的）
 3. docs 区：建新权威文档（先写新、内容从旧文档搬），再删/归档被合并的旧文档
 4. `VTS_HQ_CONTROLLER.md` 拆成 现状 / 历史
-5. `docs/README.md` 重写为唯一入口；最后跑一遍**悬空引用扫描**（文档互引 + `.cs` 引用）
+5. `../README.md` 重写为唯一入口；最后跑一遍**悬空引用扫描**（文档互引 + `.cs` 引用）
 
 ## 5. 执行进度（边做边更新）
 
@@ -100,7 +100,7 @@ Tools~/FaceTracking/
 | 3 docs 历史/研究类进 `archive/`、`measurements` 补说明、`PENDULUM` 归到功能目录 | ✅ 完成 | `469e36f` |
 | 4 子目录里的悬空 markdown 链接（archive / pitfalls / 完善的功能 共 6 个文件） | ✅ 完成 | 本轮 |
 | 5 权威文档合并：`PIPELINE.md`(88K) / `CONTROLLER.md`(74K) / `AXES.md`(46K) / `DECISIONS.md`(2722 行) / `PARAMETERS.md`(56K) | ✅ 完成 | 本轮 |
-| 6 顶层悬空链接修复 + `docs/README.md` 重写为唯一入口 + 全量 BOM | ✅ 完成（悬空 134 → 0 条真问题） | 本轮 |
+| 6 顶层悬空链接修复 + `../README.md` 重写为唯一入口 + 全量 BOM | ✅ 完成（悬空 134 → 0 条真问题） | 本轮 |
 | 7 `.cs` 里的旧描述（3 处文档路径 + 1 处旧计数） | ⏸ **等用户不在调 Unity 时** | — |
 
 ### 7 的三处（先列好，到时照做）

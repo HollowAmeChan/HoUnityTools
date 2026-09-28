@@ -1,6 +1,6 @@
 ﻿# 面捕方案总览：VTS 裸输入 → 中间层反算 → 喂进 Warudo 官方面捕蓝图
 
-> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/PIPELINE.md；本文保留作历史参考。
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 ../PIPELINE.md；本文保留作历史参考。
 
 > **这份文档只讲 Warudo 侧的落地**：产物怎么划分（几个 mod / 几个节点）、Tracking 层怎么用、节点之间怎么连线。
 > Unity 侧的机制 → [面捕设计：已验证的机制层](FACE_TRACKING_DESIGN.md)；怎么用 → [面捕工作流](FACE_TRACKING_WORKFLOW.md)；
@@ -100,7 +100,7 @@
 | `HoFace控制求解` | **正式** | **6 个**：与官方接收器**同形的 5 个**（`Is Tracked` / `BlendShapes` 字典 / `Head Position` / `Root Position` / `Bone Rotations` 数组）+ 一个 `状态`（多行：参数几个键 · 形状几个 · 有脸 · 头姿；+ `控制器：…`）。**零配置**（唯一那个"配置"是必填的 `控制器` bundle 选择 —— 它是求值场所，不是映射）；输入 = `参数`（字典）+ `有脸`（布尔，**默认 true**）+ `控制器`（**必填**，沙箱 `*.bundle` 下拉，见下面的 §2.0.2）。<br>⚠️ **没有可用的控制器就不吐任何输出**（5 个口全中性，`状态` 里点名原因）—— 见 §2.0.3。<br>⚠️ 它的 `NodeType.Id` **沿用旧「Ho Face 处理链」那个** `7c3a91d6-…`，所以升级时指官方三个节点的 5 根线不会断。 |
 | `HoFace写动态参数` | **正式（2026-09-26 加）** | **2 个**：`写入数` / `状态`。输入 = `角色`（**必填**，`HoFaceSemanticHub` 挂在它的子层级里）+ `动态参数`（字典 ← **参数处理的 `参数`**，或「HoStringFloatMerge」的 `字典`）。把**中间层那份参数**按**名字**写进角色 Hub（`SetFloat`，**没有表**）。⚠️ 它**只找不建**：角色上没有 Hub 就只在 `状态` 里报一句。 |
 | `HoStringFloat` 家族（5 个通用件，2026-09-27 加） | **正式** | **"名字 → 浮点"的表工具**：`HoStringFloat`（名字 + 值 → **`KeyValuePair<string,float>` 键值对**）· `HoStringFloatAppend`（表 + 键值对 → 追加后的表；**"再转字典"就是它**）· `HoStringFloatMerge`（两张表 → 一张，**下面的盖上面的**；原「Ho合并字典」改名，Id 不变）· `HoStringFloatDict`（面板手填多行 → 直接创建一张表）· `HoBool2Float`（bool → 1/0 —— 官方没有这个转换）。取证实录见 §3.5 / §3.5.1 与 mod `README.md` §1.1。 |
-| `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制；⑥ **显示认几类值**（`Describe`）：字符串原样、名→值的表（排序摊平）、**数组/列表逐项**（`[i] = (x, y, z, w)`）、`Vector3`/`Quaternion` 用 F3 —— ⚠️ 数组这条修过：`object` 口拿到 `Bone Rotations`（`Quaternion[]`）时只靠 `ToString()` 屏上只有 `UnityEngine.Quaternion[]` 一行，而官方「检查值」把数组序列化成 JSON，所以"官方的能出值"，差的不是口、是显示。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7–§8 |
+| `Ho调试日志` | **正式（通用件，跟面捕无关）** | 一个入口 + 一块**只读**显示 + 一个复制按钮（**没有任何输出口**）：`[DataInput] object 写入`（什么类型都能接）+ `[Markdown] [Transient] 日志`（**只读渲染、选不中**）+ `[Trigger(30)] 复制`（写 `GUIUtility.systemCopyBuffer`）。**为什么显示不是"能选中的多行框"**：值在动时框每帧重画、**选区被冲掉**（用户实测：Ctrl+A 还没复制就没了），所以复制只能交给按钮；`[Markdown]` 这一行是**照抄官方「查看值」**（`--attrs`：`[Markdown(13, False, False)] public String Text`）—— 控件由特性决定，照抄特性即复用同一控件（`InspectValueNode` 本身 public 非 sealed、`OnUpdate` virtual，继承也行，但它靠"字段被推"喂值，对我们不灵还是得 override）。**按钮用 `[Trigger]` 而不是 `[FlowInput]`**：官方节点的按钮全是 `[Trigger(order)]`（`CommentNode.Edit/Done`、`SetAssetPositionNode.AlignTargetWithAsset`…），它**不占口**；`[FlowInput]` 也能点，但会多一个 flow 出口 socket（第一版就是那么写的）。⚠️ 查官方用法要写 `--find-attr TriggerAttribute`（带后缀），写 `Trigger` 会静默返回空。**两条必须照抄**（实测）：① 写显示字段要「字段赋值 **+ `BroadcastDataInput`**」—— 只 `SetDataInput` 时端口有新值而界面**不重画**；② 输入口用 `object`（用 `string` 的话非字符串上游接不进来）；③ 上游**直接接在「日志」那一行上也可以** —— 节点会用 `Graph.GetInputDataConnections` 探到、然后不再覆盖它；④ **值不等推**：顺着连线取 `OutputNode` + `OutputPort`，调口上的求值器 **`DataOutputPort.ComputedValue`（public `Func<Object>`，非反射）**，端口/字段只作兜底 —— 实测"线接对了、口也对，字段就是不进值"，而且**不是每帧读**（10 Hz：直读=替上游求值一次，见 §8）（⚠️ 这步**不能**写成 `MethodInfo.Invoke`/`GetType().Name`：UMod 安全校验禁 `System.Reflection`，本地 lint 已能拦，见 [打包与工具链](../pitfalls/BUILD_AND_TOOLING.md) §4.1）；⑤ 断流**不清空**，保持最后一次内容方便复制；⑥ **显示认几类值**（`Describe`）：字符串原样、名→值的表（排序摊平）、**数组/列表逐项**（`[i] = (x, y, z, w)`）、`Vector3`/`Quaternion` 用 F3 —— ⚠️ 数组这条修过：`object` 口拿到 `Bone Rotations`（`Quaternion[]`）时只靠 `ToString()` 屏上只有 `UnityEngine.Quaternion[]` 一行，而官方「检查值」把数组序列化成 JSON，所以"官方的能出值"，差的不是口、是显示。**"看着接了却没值"它能自己定性**：每 0.5 秒（只在还没拿到值时）把「每个输入口接了什么」写进 `Player.log`，孤儿线的判据是 `DataConnection.InputPort == null`。坑记录见 [从蓝图里取证](../pitfalls/WARUDO_INSPECTION.md) §7–§8 |
 
 **📖 §2.0.2 控制器模式（**必填**，2026-09-25 加 / 当天改成必填）**：`HoFace控制求解` 有一个**必填**输入 —— 一个
 **AssetBundle**（沙箱里的文件，节点上是下拉列表），里面装着「控制器 + 它绑定的 rig 预制体」；
@@ -121,7 +121,7 @@
 （实测 `写入 jawOpen 0.186 / mouthSmileLeft 0.096 → 采到 0.2673 / 0.2194`，两个形状都跟着输入动）。
 **审查那条**：那次构建 `Illegal Assembly Reference = '0'`，唯一被点名的是 `System.IO`（`Path.GetFileName`，已改掉），
 也就是说 `UnityEngine.AssetBundle` **没被安全校验拦**。❓ 仍未验：真控制器（别人的 VRM 控制器）、骨骼那条（要 Humanoid Avatar）。
-细节见 mod `README.md` §1.1.2 / §1.6 / §1.7 与 [打包与工具链](pitfalls/BUILD_AND_TOOLING.md) §4.2 / §4.3。
+细节见 mod `README.md` §1.1.2 / §1.6 / §1.7 与 [打包与工具链](../pitfalls/BUILD_AND_TOOLING.md) §4.2 / §4.3。
 
 **📖 §2.0.3 控制器是唯一的求值路径（2026-09-25 定，当天落地）**：原来"没控制器就直接把参数装配成输出"
 那条退路**砍了** —— 它等于把量纲/曲线/名字的锅甩给下游，而且**不报错**（画面看着像在工作，实际全错）。
@@ -229,7 +229,7 @@ public void Evaluate(Dictionary<string, float> rawValues, float deltaTime, doubl
 **✅ 拆的时候是这么少接一次线的**：老「Ho Face 处理链」的 `NodeType.Id`（`7c3a91d6-4f2b-48e7-9a15-63d8f0b2c47e`）
 **给了控制求解** —— 连到官方三个应用节点的那 5 根线原样保住；参数处理拿了新 Id（`a41d0c86-…`），
 要重接的只有接收器过来的那几根（3 根 < 5 根）。背景：Id 或口名一变，老连线就是孤儿线
-（[从蓝图里取证](pitfalls/WARUDO_INSPECTION.md) §7）。
+（[从蓝图里取证](../pitfalls/WARUDO_INSPECTION.md) §7）。
 
 **✅ 第三条来源已落地：接收器的「VTS 服务端模式」（2026-09-25 写进 mod，未在 Warudo 里跑过）**
 
@@ -568,7 +568,7 @@ UMod 在编译后做 API 引用审查，命中即**构建失败** ——
 ⚠️ **"不支持 ScriptableObject"这条要读准**（2026-09-25 实测）：它指的是**UMod 不替你加载 `.asset` 资源**；
 `ScriptableObject` / `MonoBehaviour` 这两个**类型**在 mod 程序集里**能编译、本地 lint 也 clean**。
 所以"跟着角色预制件一起发的组件"（例如动态参数 Hub）是可行的 —— 那类 mod 打包本来就是既有能力
-（FastBuild 复制源码进包、UMod 编译）。详见 [动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
+（FastBuild 复制源码进包、UMod 编译）。详见 [动态参数](../pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
 → **推论：跨 mod 只能传 Unity 原生类型与 Warudo 自有类型**（同名类型在不同 mod 里是不同 `Type`，
 既不能反射对方的类型，也不能共享我们自己的类型）。这正是 §2.0 那个拆法的可行性边界。
 
@@ -703,7 +703,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 > **规则（覆盖所有数据路径）：我们的数据一律不用 `JsonUtility`** —— 配置文件读写、接收端线格式，
 > 全部走自写的读取器（`Runtime/FaceTracking/HoJson.cs`、`HoVtsPacket.cs`、`HoFaceProfileJson.cs`；
 > mod 侧是搬过去的那几份，见 `Core/PORTED.md`）。
-> 三次现场与排查入口 → [`pitfalls/FACE_TRACKING_PIPELINE.md`](pitfalls/FACE_TRACKING_PIPELINE.md) §1，本文不复述。
+> 三次现场与排查入口 → [`pitfalls/FACE_TRACKING_PIPELINE.md`](../pitfalls/FACE_TRACKING_PIPELINE.md) §1，本文不复述。
 
 ### 4.7 VTS 手机协议的确切形状（✅ 官方文档 + App 侧核对 + 运行期日志）
 
@@ -812,7 +812,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 * **搬过去的那 9 份改完必须先跑 `.research/sync-modcore.ps1`**，否则 mod 侧还是旧语义 ——
   而且**编译照样过**，表现是"Warudo 里和面板里不一样"。在 mod 的副本里改则会被下次同步**无声覆盖**。
   （`.research/drift-check.ps1` 能逐字节核"同步过没有"。）
-  完整规矩见 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7 与 [HO 参数规范](PARAMETER_HO.md) §0.0。
+  完整规矩见 [仓库与提交](../pitfalls/REPO_AND_GIT.md) §7 与 [HO 参数规范](PARAMETER_HO.md) §0.0。
 
 | 测什么 | 怎么跑 | 现在的结果 |
 |---|---|---|
@@ -820,7 +820,7 @@ AvatarCloneParent：Character Avatar Clone Parent
 | 表达式求值器对 VBridger 的覆盖 | `dotnet run --project Tools~/FaceTracking/expression-coverage` | **19/19 通过**（2026-09-26 复核重跑） |
 | 包侧整体能不能编译（含编辑器） | `.warudo-mod-research/.tools/compile-check-package.ps1`（整包）/ `compile-check-editor.ps1` | 全绿（引用表是显式列框架 + `UnityEditor.dll`；**别改成通配所有 dll** —— 会淹出约 2000 条假 `CS0433`） |
 | mod 脚本能不能对着真机 DLL 编译 | `Assets/HoWarudoModTests/tools/compile-check.ps1`（**mod 工程里**，`-ModsRoots Mods,Mods-Ho`） | 全绿（引用表含 `UMod.dll` / `UMod-Interface.dll`；含 UMod 沙箱 lint） |
-| Warudo 侧会话级行为（面板 / 影子台 / 断流回中性） | `Tests~/FaceTrackingValidation.cs` 拷进一次性工程批处理跑（[批处理验证](pitfalls/VALIDATION_LOOP.md)） | 成功标记 `HO_FACE_TESTS_ALL_PASSED` |
+| Warudo 侧会话级行为（面板 / 影子台 / 断流回中性） | `Tests~/FaceTrackingValidation.cs` 拷进一次性工程批处理跑（[批处理验证](../pitfalls/VALIDATION_LOOP.md)） | 成功标记 `HO_FACE_TESTS_ALL_PASSED` |
 | 官方节点的类型 / 端口 / 字段 | `dotnet run --project .research/warudo-knobs -- Warudo.Plugins.Core.dll <类型名>`（真机 DLL 在 `D:\steam\...\Warudo_Data\Managed`；`--attrs` 连特性一起打） | 本文 §2 / §3 的字段表就是这么来的 |
 | **图能搬哪些类型**（全量 port 词汇表）/ 有没有键值对 | `dotnet run --project .research/warudo-knobs -- <dll> --ports`（配 `DefaultScene.json` 的口 `typeKind` 统计） | §3.5：只有一种字典（`Dictionary<string,float>`，41 个口全是 BlendShape 语义）；官方**没有**任何口用 `Tuple`/`KeyValuePair`，**但它能用**（2026-09-27 探针实测）；手填走 `StructuredData` 行 |
 | Warudo 运行期行为 | 读 `AppData\LocalLow\HakuyaLabs\Warudo\Player.log`（会话日志另在 `Logs\WarudoLog-<启动时间>.log.gz`） | — |

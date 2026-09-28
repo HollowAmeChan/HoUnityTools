@@ -1,6 +1,6 @@
 ﻿# 面捕控制器：结构、就地装配与命名约定
 
-> ⚠️ 2026-09-29 重组：本文的现状部分已并入 docs/CONTROLLER.md；本文保留作历史参考。
+> ⚠️ 2026-09-29 重组：本文的现状部分已并入 ../CONTROLLER.md；本文保留作历史参考。
 
 日期：2026-09-25（§1 参考实现与 §2 判别性实验的数据来自 2026-09-22/23 的实测，2026-09-25 复核结论未变；
 §3 按"控制器编辑页就地装配"的现状重写）。
@@ -8,7 +8,7 @@
 本文讲三件事，全部是**源码 + 实测**读出来的：
 **①** 参考实现（Jerry 的 ARKit 模板）长什么样（§1）；**②** 我们怎么把一份控制器管起来（§2 判别性实验 + §3 就地装配）；
 **③** 命名约定（§5，给编树的人）。判别性实验「Direct 树 + Write Defaults 关闭会发散」的机制与完整数字收在
-[踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §1，本文只留结论与判据。
+[踩过的坑 · 混合树](../pitfalls/BLEND_TREE_TRAPS.md) §1，本文只留结论与判据。
 
 数据来源：`.research/VRCFaceTracking-Templates`、`.research/VRCFaceTracking` 与 `D:\UnityVrcVCC_Projects\VrcMaster`
 （本地检出，gitignore），实测用例是 `Tests~/FaceTrackingValidation.cs`。
@@ -28,7 +28,7 @@
 
 - **角色预制件上零组件**：调试状态全在上面那两个文件里（不是组件）。
 - 要驱动的网格 = 调试对象下**所有** `SkinnedMeshRenderer`（`HoFaceDebugSettings.Meshes()`，`HoFaceDebugSettings.cs:115-121`；每次调用返回**新表**）。
-- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**116 条断言**（用例里 116 处 `Check(`/`Near(` 调用；跑法见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）。
+- 验收：Unity 6000.3.15f1 批处理 `HO_FACE_TESTS_ALL_PASSED`（`Tests~/FaceTrackingValidation.cs:1008`），**116 条断言**（用例里 116 处 `Check(`/`Near(` 调用；跑法见 [批处理验证](../pitfalls/VALIDATION_LOOP.md)）。
   ⚠️ **2026-09-26 那次改动之后还没重跑过**：删掉内置默认表时改了这份用例（夹具改成用例自己搭），
   当时本机的 Unity 编辑器都开着（授权互斥量），批处理起不来。已验的是它**能编译**
   （`.research/compile-check-pkg.ps1` 的第三遍专门编 `Tests~`）与离线那两套用例
@@ -116,7 +116,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 | Direct + Write Defaults 关（基础动画也在写同一个键） | 98.98 → 246.28 → 1059.33 | 131.97 → 531.97 | **发散** |
 
 机制（`98.976` 精确等于递推 `out ← 0.6×100 + 0.4×out` 的第五项）与完整数字见
-[踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §1（探针日志行是 `HO_WDON` / `HO_WDOFF`，
+[踩过的坑 · 混合树](../pitfalls/BLEND_TREE_TRAPS.md) §1（探针日志行是 `HO_WDON` / `HO_WDOFF`，
 用例 `Tests~/FaceTrackingValidation.cs:781`、`:791`）。结论两条：
 
 - **Direct 树本身没问题** —— Unity 官方文档也明说 Direct 就是"把参数映射到子权重"，并点名可用于混合表情的形态键。
@@ -215,7 +215,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 | **旧面板 UI** | 旧按钮名（"按 Animator 填充 / 装配控制器 / 检查绑定"）在面板上没有了；现在的按钮是「原地装配 / 只填动画 / 只重绑网格」（`HoFaceControllerToolWindow.cs:255`、`:260`、`:265`），详情折叠栏叫「详情」（`:347-363`），槽位读数在 `Slots()`（`HoFaceAnimationAssets.cs:147-166`） | 上引行号。代码注释里那两处旧名（`HoFaceAnimationAssets.cs:61` 的「控制器结构」、`:145` 的「动画填充」）**2026-09-25 已跟着改成「详情」栏** |
 
 > 区域门控不是"做不到"（Direct 子节点挂参数就是门控，嵌套还是**相乘**的 —— 见
-> [踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §3），而是**我们不再替使用者决定**。
+> [踩过的坑 · 混合树](../pitfalls/BLEND_TREE_TRAPS.md) §3），而是**我们不再替使用者决定**。
 > 想门控就在自己的控制器里画。这条决定的完整论述在 [面捕设计](FACE_TRACKING_DESIGN.md) §5「为什么没有门控」。
 
 ### 3.3 门控归树、覆盖归输出阶段（2026-09-26 定）
@@ -241,7 +241,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 **"脚本写的工作台"**：我们的中间层、作者自己挂在角色上的组件、别的 mod 的脚本，都能按名字写
 （`HoFaceSemanticHub.SetFloat` 就在那儿）。真正的限制只有两条：
 ① **动画 clip 写不了它**（曲线写 `values.<i>` 那条路 2026-09-26 删了，见
-[坑档](pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md) §1）；
+[坑档](../pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md) §1）；
 ② **我们不提供"跑在控制器里"的写者**（那个状态机行为同一天也删了）。
 于是"**树内部算出来的量**"在**不往控制器里放代码**的前提下就没有出口了 ——
 而其中唯一实际会被要的，就是**有效门控**。它在门控上露出来：
@@ -259,7 +259,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 （`browInnerUp` / `jawOpen`…），**不是第二个开关**。树上"gate × 每键参数"的乘积是**普通混合权重**，
 不是门控 —— 下游要"某个键实际被应用了多少"，把两个值（都在 Hub 里）乘一下就行，那不需要重算门控规则。
 （引擎能力本身没变：嵌套 Direct 门控确实相乘，实测 `0.6 × 0.8 → 48`，见
-[踩过的坑 · 混合树](pitfalls/BLEND_TREE_TRAPS.md) §3 与 [混合树能力边界](BLEND_TREE_LIMITS.md) §2。
+[踩过的坑 · 混合树](../pitfalls/BLEND_TREE_TRAPS.md) §3 与 [混合树能力边界](BLEND_TREE_LIMITS.md) §2。
 这条规矩说的是**不要那样用**，不是"做不到"。）
 
 > **"行侧 gate" 现在可以做了**（2026-09-26 补完"每行的默认值"之后）：在配置文件里写一行**常量行**
@@ -287,7 +287,7 @@ OSCm/Proxy/FT/v2/*  31 个    ← 混合树实际读的是这一层
 ### 4.1 成对通道与双向轴：一手取证（2026-09-23）
 
 **为什么单开一节**：本节的结论来自 **原始 YAML**（并用 `.meta` 把 GUID 解成片段名），不是来自
-`.research/` 里的转储 —— 那些转储有两处会骗人，规矩见 [踩过的坑 · YAML 与转储](pitfalls/UNITY_YAML_AND_DUMPS.md)。
+`.research/` 里的转储 —— 那些转储有两处会骗人，规矩见 [踩过的坑 · YAML 与转储](../pitfalls/UNITY_YAML_AND_DUMPS.md)。
 
 一手资产（都在本机）：
 - **A** = `D:\Unity_Fork\HoUnityTools\.research\VRCFaceTracking-Templates\Packages\adjerry91.vrcft.templates\Animators\ARkit Blendshapes\FX - Face Tracking - ARKit Blendshapes.controller`
@@ -490,4 +490,4 @@ python .research/inspect_shared_controller.py    # → .research/shared-controll
 ```
 
 **解析这些 YAML 的坑（字段名、子资产、转储会骗人的地方）单开了一份**：
-[踩过的坑 · Unity YAML 与转储](pitfalls/UNITY_YAML_AND_DUMPS.md)。
+[踩过的坑 · Unity YAML 与转储](../pitfalls/UNITY_YAML_AND_DUMPS.md)。

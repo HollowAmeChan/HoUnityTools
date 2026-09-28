@@ -3,11 +3,11 @@
 > **已归档（2026-09-23）。** 这是从 `Saves\*.vbridger` 十份自带预设（已解密成 JSON）里**逐行统计**
 > 出来的词汇表与规则，用来回答两个问题：**它的输入是什么**、**它发出去的参数是什么格式**。
 > 前置的存档格式与字段说明见 [VBridger 的中间层：一手逆向记录](VBRIDGER_MIDDLE_LAYER_RESEARCH.md)；
-> 我们自己那套中间层见 [面捕中间层处理](../FACE_TRACKING_MIDDLE_LAYER.md)。
+> 我们自己那套中间层见 [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)。
 > 逐行原始数据（10 份预设 × 314 行全量表、输入并集表、min/max/smooth 直方图）在
 > `.research/vbridger/VOCABULARY.md`（不进仓库），本文只留结论。
 > ⚠️ **本文 §5 的"下游标准"已升级**：现在有一份**逐行、逐条带官方 URL 的权威表** →
-> [参数标准表](../PARAMETER_STANDARDS.md)（VTS 追踪参数全表 + 注入规则 + Cubism 标准参数 +
+> [参数标准表](PARAMETER_STANDARDS.md)（VTS 追踪参数全表 + 注入规则 + Cubism 标准参数 +
 > ARKit 52 + iFacialMocap 线协议 + VMC 地址 + HumanBodyBones + VRM 0.x/1.0 + VRCFT 附录）。
 > 对接下游时**以那份为准**；本文提供的是"VBridger 当年怎么做"这一层证据。
 

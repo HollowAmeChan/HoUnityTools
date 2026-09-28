@@ -1,7 +1,7 @@
 ﻿# HoUnityTools 文档
 
 **唯一入口。** 现在在跑的那套方案只有四份权威文档 + 命名权威；其余都在 `pitfalls/`（踩坑）与 `archive/`（过程记录）。
-（2026-09-29 重组：原 20 篇顶层文档 → 4 篇权威 + 归档；审查与判定见 [REORG_PLAN_2026-09-29.md](REORG_PLAN_2026-09-29.md)。）
+（2026-09-29 重组：原 20 篇顶层文档 → 4 篇权威 + 归档；审查与判定见 [REORG_PLAN_2026-09-29.md](archive/REORG_PLAN_2026-09-29.md)。）
 
 ## 现在的状态（唯一有效口径）
 
@@ -25,10 +25,10 @@
 | **控制器长什么样**：树型 / 区域门 / 2D 表 / Direct 张量积表 / 变体开关 / 槽位命名 / 装配与检查流程 / **混合树实测边界** | [CONTROLLER.md](CONTROLLER.md) |
 | **每根轴的现状**：表达式原文 / 曲线 / 修饰符 / 谁消费 / 实测定论与刻度 | [AXES.md](AXES.md) |
 | **参数**：三套名字（VTS 线名 / ARKit 名 / 我们的规范名）怎么对应、设备逐键实测、哪些我们不用 | [PARAMETERS.md](PARAMETERS.md) |
-| **名字怎么起**（写任何树名/槽位名之前先查它） | [FACE_TRACKING_NAMING.md](FACE_TRACKING_NAMING.md) · [机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json) · `Runtime/FaceTracking/HoFaceTrackingChannels.cs` 的 `Names`（52 条规范名） |
+| **名字怎么起**（写任何树名/槽位名之前先查它） | [CONTROLLER.md](CONTROLLER.md) §3（命名形状）· [机器可读目录](VTS_HIGH_QUALITY_FACE_CATALOG.json) · `Runtime/FaceTracking/HoFaceTrackingChannels.cs` 的 `Names`（52 条规范名） |
 | **工具怎么跑**（生成 / 接线 / 检查 / 录样速查速统速对 / 资产速查） | [`Tools~/FaceTracking/README.md`](../Tools~/FaceTracking/README.md) |
-| **动态参数（语义输出 → Warudo Hub）** | [FACE_TRACKING_DYNAMIC_PARAMETERS.md](FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
-| **Warudo 那一边**（mod / 节点 / 硬约束 / 跨仓规矩） | [FACE_TRACKING_WARUDO_ROUTE.md](FACE_TRACKING_WARUDO_ROUTE.md) |
+| **动态参数（语义输出 → Warudo Hub）** | [FACE_TRACKING_DYNAMIC_PARAMETERS.md](FACE_TRACKING_DYNAMIC_PARAMETERS.md)（活的，没被合并） |
+| **Warudo 那一边**（mod / 节点 / 硬约束 / 跨仓规矩） | [PIPELINE.md](PIPELINE.md) §7 |
 | **实测是怎么来的** | [measurements/README.md](measurements/README.md) |
 
 ## 其它工具（与面捕无关）
@@ -47,6 +47,22 @@ Warudo 打包、从蓝图里取证、文档编码、仓库与提交。
 [archive/](archive/) —— 结论都已抽进上面的活文档；这里留的是**"当初凭什么这么判断"的证据**，以及被推翻的方案。
 决策日志（按日期，只增不改）在 [DECISIONS.md](DECISIONS.md)；原 `VTS_HQ_CONTROLLER.md`（279 KB 的决策日志 + 现状混合体）已拆成
 [AXES.md](AXES.md)（现状）与 [DECISIONS.md](DECISIONS.md)（历史），原文件保留为存根（仓库里有 48 处引用指向它）。
+
+## 待办（不在文档区，等你说不在调 Unity 时改）
+
+`.cs` 注释里有 **7 处**指向 docs 的路径已经过期（**都是注释，不影响运行**；改 `.cs` 会触发你 Unity 重编译，所以留着）。
+按「内容现在在哪」改，别指回 archive：
+
+| 注释里写的 | 该改成 |
+| --- | --- |
+| `docs/FACE_TRACKING_NAMING.md` | `docs/CONTROLLER.md`（§3 命名形状） |
+| `docs/FACE_TRACKING_CONTROLLER_STRUCTURE.md` | `docs/CONTROLLER.md` |
+| `docs/BLEND_TREE_LIMITS.md` | `docs/CONTROLLER.md`（§8 混合树实测边界） |
+| `docs/FACE_TRACKING_MIDDLE_LAYER.md` | `docs/PIPELINE.md`（§3 中间层） |
+| `docs/EDITOR_UI_SYSTEM.md` · `docs/LOOKAT_CONSTRAINT.md` · `docs/PENDULUM_CONSTRAINT.md` | `docs/完善的功能/` 下同名文件 |
+
+另外 `HoFaceControllerSkeletonBuilder.cs` 的类注释还写着「43 个参数 + 27 棵树 + 89 个空槽位」——
+按口径**不该在文档/注释里写死数量**，那句删掉或改成「跑 `check-controller.ps1` 看当前值」。
 
 ## 写文档的约定
 

@@ -1,6 +1,6 @@
 ﻿# 从蓝图里取证：会看漏的那些事
 
-正本：[面捕在 Warudo 的路线](../FACE_TRACKING_WARUDO_ROUTE.md)（官方那张图的逐节点解码）、
+正本：[面捕在 Warudo 的路线](../archive/FACE_TRACKING_WARUDO_ROUTE.md)（官方那张图的逐节点解码）、
 [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md)。
 这份只留**我们真的因此下过错误结论**的那些。取证的手段就四样：**反射 DLL / 场景文件 / `Player.log` / mod 源码**。
 

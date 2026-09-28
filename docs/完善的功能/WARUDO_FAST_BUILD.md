@@ -142,7 +142,7 @@ FastBuild 通过反射查找这个入口，因此 HoUnityTools 包本身不强�
 它把一个 `AnimatorController` 和**它驱动的那套预制体**打成一个 `AssetBundle` 文件，给 Warudo 的
 「HoFace控制求解」节点用。为什么必须是 bundle：运行时读不了 `.controller`（编辑器格式），
 而运行时**枚举不了一个 `AnimationClip` 的绑定**，所以包里必须带原配的那套层级（详见
-[面捕路线](../FACE_TRACKING_WARUDO_ROUTE.md) §2.0.2）。
+[面捕路线](../archive/FACE_TRACKING_WARUDO_ROUTE.md) §2.0.2）。
 
 | 输入 | 说明 |
 | --- | --- |

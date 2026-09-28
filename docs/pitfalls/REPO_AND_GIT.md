@@ -55,7 +55,7 @@ mod 是同一套逻辑的**运行期**（`Mods-Ho/HoFaceTracking/`）。
 | 直接改 mod 的 `Core/` 副本 | **别改**（那 6 行文件头就是提醒），改包侧再同步 | 下次同步**无声覆盖** |
 | 包侧的公共类型 / 命名空间 / 菜单名 | 两边都重编译一遍 | mod 是**另一份源码**，包侧改了它不会自动跟过去 |
 | mod 的节点 / 接收器 / 控制器 | `Assets/HoWarudoModTests/tools/compile-check.ps1` | Roslyn 全绿也可能**真构建失败**：`System.Reflection` / `System.IO` 只有 UMod 的 `RunCodeValidation` 拦（§4.1 of [构建与工具](BUILD_AND_TOOLING.md)） |
-| 只在 Unity 面板里看到"绿" | 别下结论 —— 面板绿只证明包侧那一半 | 见 [HO 参数规范 §0.0](../PARAMETER_HO.md) 那张"改了哪一层 / 两边各怎么验"的表 |
+| 只在 Unity 面板里看到"绿" | 别下结论 —— 面板绿只证明包侧那一半 | 见 [HO 参数规范 §0.0](../archive/PARAMETER_HO.md) 那张"改了哪一层 / 两边各怎么验"的表 |
 
 ⚠️ **"两边各写一份"是本项目的既定做法，而且不止这一处**（两边都要存在的类型、角色预制件上的资产…）：
 别为某一处单独找"少写一份"的路子（不引用包侧、也不开子 asmdef），**清单 + 同步是唯一的保证**。

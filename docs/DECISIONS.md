@@ -103,7 +103,7 @@
 
 设计**怎么推出来**的（为什么分这些表、门为什么嵌套两层、副本为什么用 1D 树）不再写在这里：结论已经落在控制器资产
 与 §2/§3 的表里，推导过程看 git 历史。能表达什么看[契约表](archive/VTS_HIGH_QUALITY_FACE_CONTRACT.md) §E，
-名字怎么拼看[命名权威](FACE_TRACKING_NAMING.md)，引擎能/不能算什么看[混合树踩坑](pitfalls/BLEND_TREE_TRAPS.md)。
+名字怎么拼看[命名权威](archive/FACE_TRACKING_NAMING.md)，引擎能/不能算什么看[混合树踩坑](pitfalls/BLEND_TREE_TRAPS.md)。
 **最后更新：2026-09-27。**
 
 ---
@@ -120,7 +120,7 @@
 | 6 | **轴的修饰符** | 🟡 **35 根轴已挂 `smooth`**（含没有树的注视/颊/`JawSide`/`TongueR` 那几根）（2026-09-27，照 VB 同族口径；见 §3.2）。⚠️ **2026-09-28 深夜新增的 8 根权重轴（`Lid/*/Weight/*`）故意不挂**：它们是归一化后的凸权重，四个相加必须**精确** = 1（各自独立平滑会让 Σ 在过渡期 < 1 ⇒ Direct 的 `(1−Σw)·default` 漏进来） | 区域门与 4 条切片**故意不挂**；曲线：`Mouth/Open` / `Mouth/Jaw` / `Mouth/JawSide` 带死区，其余仍是恒等（只是放宽范围防夹断） |
 | 7 | **两层门** | ✅ 结构在 | 区域门 = 中间层**常量行**（写 `1`）；`Gate/Expr/*` **一行都没写**（留给按键来源，谁写谁锁死） |
 | 8 | **切片权重（Funnel × Press 4 条）** | 🟡 profile 里算了，**树里没接** | 骨架里没有切片表；等条件姿势到位再加同级表（§4） |
-| 9 | **1D 树的孩子是子树** | ✅ **已实测**（2026-09-27） | 1D 的孩子是子树时**线性交叉淡入**；**四层嵌套（Direct → Direct → 1D → 2D）照旧**。数字见 §2.3.1 / [能力边界](BLEND_TREE_LIMITS.md) §10 —— 兜底形状不需要了 |
+| 9 | **1D 树的孩子是子树** | ✅ **已实测**（2026-09-27） | 1D 的孩子是子树时**线性交叉淡入**；**四层嵌套（Direct → Direct → 1D → 2D）照旧**。数字见 §2.3.1 / [能力边界](archive/BLEND_TREE_LIMITS.md) §10 —— 兜底形状不需要了 |
 | 10 | **姿势烘焙工具** | ⬜ 没有 | 现有「形态键动画」工具（`HoBlendShapeClipBuilder.cs`）出的是"一键一片段、值恒 100"，**填不了 2D 采样点** |
 | 11 | **表情门来源** | ⬜ 未定（**只剩眼/眉**） | 手机协议 `Hotkey` 实测恒 −1（两台设备）；候选 = VTS API 适配器 / 本地按键（面板覆盖或 Warudo 键盘节点）/ VB 输出成线。⚠️ **嘴不再吃这个门**：`MouthCoreExpr` 已删，"按键强制猫嘴"改成直接写 `Mouth/Roll ≥ 0.12` |
 | 12 | **Warudo 侧** | ⬜ bundle 还是 09-25 那份 | `hoface-controller-test.bundle` 里**不含**这 43 个参数 ⇒ Warudo 侧现在拿不到轴；沙箱里的 profile 已经是最新 |
@@ -214,7 +214,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 | **`NoseUp`** | `Nose/Up` 0 不顶 / 1 上顶 | —（**1D 表**） | **2** | **鼻子上顶**（用户定：颊在二次元表现不了 ⇒ 颊两棵树删掉，鼻只留这一个状态）。它连带的内眼睑上抬 / 眯眼 / 眉毛内下移**由物理共动带出**，不单独做检测 | 鼻相关键 | `NoseUp__Up__A2X<i>` |
 
 * 槽位名 = `<树名>__<X段词>__<Y段词>__A<n>X<i>Y<j>`（`n` = X 轴刻度数，`i`/`j` 从 **0** 起）；
-  **1D 表少一段词与 `Y<j>`**：`<树名>__<轴段词>__A<n>X<i>`。段词与副本后缀的规则见[命名权威](FACE_TRACKING_NAMING.md) §5。
+  **1D 表少一段词与 `Y<j>`**：`<树名>__<轴段词>__A<n>X<i>`。段词与副本后缀的规则见[命名权威](archive/FACE_TRACKING_NAMING.md) §5。
 * ⚠️ **2026-09-28 上午删了 `MouthWidth`（嘴宽 / 偏嘴残差，9 格）、当天下午按 41 段实测重建**（§5.7.22 / §5.7.23）：
   它那两个轴随之拆掉 —— `Mouth/Pucker` **照旧发布当出口**（⚠️ 当时的实情：没有树消费它；**2026-09-28 傍晚起它是 `MouthWidth`（1D 3 格）的轴**（§5.7.24），剩下 `Mouth/Funnel` / `Mouth/Press` /
   `Mouth/Forward` 同一种待遇）、`Mouth/X` **上午退役、下午随 `MouthShift` 重建**（现在吃 `mouthLeft/Right`，不再借 `dimple`）。
@@ -333,7 +333,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 
 ⇒ **一句话**：**输出永远在"最外围孩子围成的圈"里面，永不外推** —— 圈内距离权重、圈外投影到圈边。
 所以"轴超了"最坏是**停在圈上**，不会画出畸形造型。但四件事得记着（详见
-[能力边界](BLEND_TREE_LIMITS.md) §10 / §10.1 与[踩坑](pitfalls/BLEND_TREE_TRAPS.md) §6）：
+[能力边界](archive/BLEND_TREE_LIMITS.md) §10 / §10.1 与[踩坑](pitfalls/BLEND_TREE_TRAPS.md) §6）：
 
 1. **分辨率白扔**：`Mouth/Open` 实测只到 0.75，而槽位摆到 1 ⇒ 最后 1/4 的插值空间永远用不到
    （把槽位挪到实测范围可以救，且挪完照样安全落在圈上 —— 见下面的"两条路"）。
@@ -343,7 +343,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 4. **圈的形状决定"停在哪儿"**：摆满矩形 ⇒ 出界停在矩形边界那一格；缺角 ⇒ 停在缺口那条新边上；**顶边斜切** ⇒
    停在斜边上（§2.2 那条"右上角挪到 0.6"）。三者都安全，姿势不同。
 
-**⚠️ Inspector 里两个别碰的地方**（详见[能力边界](BLEND_TREE_LIMITS.md) §11）：
+**⚠️ Inspector 里两个别碰的地方**（详见[能力边界](archive/BLEND_TREE_LIMITS.md) §11）：
 
 * **`Compute Positions` 按钮绝对不要点**：它按每个孩子的**根运动速度**算 Pos，而我们的姿势片段没有位移
   ⇒ 一点下去**所有孩子都会被算到 (0,0)**，整棵树塌掉。
@@ -416,7 +416,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 ### 3.1 逐根轴的口（40 行 = 30 根轴 + 4 个区域门 + 4 条切片 + 2 条形态契约行）
 
 > ⚠️ **两种数法都对、别混**：本节把 `Ho/Drive/Style/CatMouth` 算进"轴"（⇒ **30 根轴**），
-> [参数规范 §3.7](PARAMETER_HO.md) 把它算进"契约行"（⇒ **29 轴 + 3 契约行**）—— 是同一份 40 行。
+> [参数规范 §3.7](archive/PARAMETER_HO.md) 把它算进"契约行"（⇒ **29 轴 + 3 契约行**）—— 是同一份 40 行。
 > ⚠️ **`Ho/Drive/Mouth/X`（整嘴左右平移）2026-09-28 上午退役、当天下午随 `MouthShift` 重建**（§5.7.22 / §5.7.23）；
 > 重建时**同时新增** `Mouth/Y`（整嘴上下）；**傍晚把嘴角那两根（`Mouth/LipPress` / `Mouth/CornerSkew`）连同
 > `CornerL` / `CornerR` 一起删掉**（§5.7.24）——
@@ -591,7 +591,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 > 选项 C 之后这棵树只用它的正半边，叫 `Smile` 也说得通 —— 但 `Smile` 在我们控制器里已经是
 > `Gate/Expr/Smile`（0/1 表情门），而 VRCFT 那个双向名 `SmileSad`/`SmileFrown` 又会指向一处树里
 > 没有的负列；`Form` 则是 Cubism 的标准参数名（`ParamMouthForm`，VTS 官方推荐接法）。
-> 三家的对照与完整理由见[命名权威](FACE_TRACKING_NAMING.md) §6.1。
+> 三家的对照与完整理由见[命名权威](archive/FACE_TRACKING_NAMING.md) §6.1。
 
 **它现在是什么**：`2 × VB MouthSmile − 1`，展开成
 
@@ -621,7 +621,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 | **`MouthCoreRoll`**（新，2026-09-27） | **猫嘴**：整套嘴的变体版（嘴唇内翻压在牙上） | `Mouth/Form` × `Mouth/Open`（同一张 2D 表），由 `Ho/Drive/Style/CatMouth` 在开关里选中 |
 
 * 新轴（`CornerL/R`、`Roll`）= 合同表 D 里早就写好的 `HQSmileFrownLeft/Right` 与
-  `HQUpperLipRoll` / `HQLowerLipRoll`（后两根合并成 `Roll`），**不是新发明**；命名走[命名权威](FACE_TRACKING_NAMING.md) 的树表。
+  `HQUpperLipRoll` / `HQLowerLipRoll`（后两根合并成 `Roll`），**不是新发明**；命名走[命名权威](archive/FACE_TRACKING_NAMING.md) 的树表。
 * `Form` 的表达式**没有改**（出口行 `MouthSmile` 与轴仍然一致，下游 VTS 生态不受影响）；
   分家体现在**树的分工**上：`MouthCore` 只管**正值**（笑 × 张嘴），负侧三族各回各家。
   ⇒ 这样既不用动出口契约，也不再有"噘嘴被迫演成苦相""咬唇混进张开量"的问题。⭐
@@ -756,7 +756,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
      加了 `out("输出行的参数名")`（双引号字符串；参数名带 `/`，裸标识符写不出来；
      用函数是为了**防止与输入通道重名**）。**按行序求值**；**引用下面的行 ⇒ 该行爆红 +
      始终输出 `defaultValue`**（引用不存在的行、输入行里用 `out` 也一样无效）。
-     只在"上面"找 ⇒ 依赖图按构造是 DAG，不需要环检测。规格见[中间层 §5.4](FACE_TRACKING_MIDDLE_LAYER.md)。
+     只在"上面"找 ⇒ 依赖图按构造是 DAG，不需要环检测。规格见[中间层 §5.4](archive/FACE_TRACKING_MIDDLE_LAYER.md)。
      台架 26 条新断言（221 passed）；`HoFaceExpression` / `HoFaceMiddleware` 已同步到 Warudo mod 的 Core。
      ⭐ 这是为**风格化特殊形态**（鼓嘴 / 倒V / 苦嘴）准备的：它们要关掉整块"张嘴 × 笑"（§5.6）。
    · ✅ `Mouth/Open`：**死区曲线已加**（`|v| ≤ 0.02 → 0`、`0.02…0.05` 斜坡、之外恒等）+ **树里刻度收成 `0/.4/.75`，右上角再单独挪到 0.6**（两个生成器都改了；`check-controller.ps1` 现在核对刻度、并把那个被挪的坐标钉死）。
@@ -767,7 +767,7 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 3. **姿势烘焙工具**（*我做*）：把调试面板里调好的滑条姿势（会话 `SetPreview` 那套）写进**已经建好的那份槽位片段**
    （`Animations/<槽位名>.anim`，§2.2 就是清单）。现有 `HoBlendShapeClipBuilder` 只能一键一片段、值恒 100，
    填不了采样点。**排在动画前面。**
-4. ✅ **1D 树 + 子树嵌套已实测**（2026-09-27，见 §2.3.1 与[能力边界](BLEND_TREE_LIMITS.md) §10）：
+4. ✅ **1D 树 + 子树嵌套已实测**（2026-09-27，见 §2.3.1 与[能力边界](archive/BLEND_TREE_LIMITS.md) §10）：
    1D 的两个孩子是子树时**线性交叉淡入**（g=0/.25/.5/.75/1 → 0/25/50/75/100），
    **四层嵌套（Direct → Direct → 1D → 2D）照旧求值**。兜底形状（Direct 兄弟 + 中间层补权重）**不需要**了。
    （同一轮还跑通了 **Unity 侧生成器**：`HoFaceControllerSkeletonBuilder.Build()` 在 batchmode 里建出来的骨架，
@@ -1073,11 +1073,11 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 coefficients are set to 0.0**" —— 那是**理想值**，不是设备行为。
 ⇒ **不是"故意设计成联动"，是"从没承诺过不联动"**：它把一张脸拟合成一组基，基之间近似正交但不可能真正交；
 再加上生理上下颌本来就是"转动 + 平移"一起动。
-⚠️ [参数标准表](PARAMETER_STANDARDS.md) §5 里那句"与 `jawOpen` 正交"是**我们从定义推的**，不是 Apple 的承诺。
+⚠️ [参数标准表](archive/PARAMETER_STANDARDS.md) §5 里那句"与 `jawOpen` 正交"是**我们从定义推的**，不是 Apple 的承诺。
 
 **② 设备实测**（我们自己的两份记录）：`jawForward` **要张嘴**（闭嘴时几乎不给值）、**安卓根本不发**；
 `JawRight` 是**跳变**的（114 帧 range 0.043 → 120 帧 0.600）；`JawLeft` 静息 0.019。
-见[设备实测](PARAMETER_DEVICE_VERIFICATION.md)。
+见[设备实测](archive/PARAMETER_DEVICE_VERIFICATION.md)。
 
 **③ VBridger 的做法：整个下颌系只用 `jawOpen` 一根。** 把 7 份预设（含我们那份母本
 `AdvancedARKit_V3.0`）的 `store` 全解析了一遍：
@@ -1986,7 +1986,7 @@ B 批把三件事验掉了：
 但它的下唇卷只有 0.075 < 触发线 0.15。真出现误触发：抬膝到 0.14，或把 `trigger` 抬到 0.20。
 
 台架加了 3 条断言（`④b` 后的实机三档 + 用力说话最薄余量 + 门边界改成 0.12/0.22），
-profile 那两行与 `docs/PARAMETER_HO.md` / `docs/FACE_TRACKING_NAMING.md` / §2.2 / §3.1 同步。
+profile 那两行与 `docs/archive/PARAMETER_HO.md` / `docs/archive/FACE_TRACKING_NAMING.md` / §2.2 / §3.1 同步。
 
 #### 5.7.18 猫嘴版变体表**试砍 3 格、当场撤回**：8 格一格不少（2026-09-28）
 
@@ -2103,8 +2103,8 @@ sad = max( (mouthFrownLeft + mouthFrownRight) / 2 ,
 发货 profile **137 → 136 输出行**、`Ho/Drive/*` **41 → 40 行**（轴 **30 → 29**；本节 §3.1 那种把
 `Style/CatMouth` 算作轴的数法是 **31 → 30**）。`Ho/Drive/Mouth/Pucker` **保留**（照旧发布当出口，
 从此没有树消费它 —— 与 `Mouth/Funnel` / `Mouth/Press` / `Mouth/Forward` 同一种待遇）；
-`Ho/Drive/Mouth/X` 随树一起退役。§2.1 / §2.2 / §3.1 / §3.4 / §5.2 / §5.6 与[命名权威](FACE_TRACKING_NAMING.md)
-§2 / §6、[参数规范](PARAMETER_HO.md) §3.7 都已按新状态改过。
+`Ho/Drive/Mouth/X` 随树一起退役。§2.1 / §2.2 / §3.1 / §3.4 / §5.2 / §5.6 与[命名权威](archive/FACE_TRACKING_NAMING.md)
+§2 / §6、[参数规范](archive/PARAMETER_HO.md) §3.7 都已按新状态改过。
 
 **上移（Y+）复用噘嘴 / 倒V 判据 —— 已用 114 段语料验证**（原始输出 `.research/y-scan-out.txt`，
 候选式 `.research/take-features-y.txt`）：

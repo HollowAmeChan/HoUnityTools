@@ -1,6 +1,6 @@
 ﻿# HO 参数规范（我们的中间层选什么）
 
-> ⚠️ 2026-09-29 重组：现状已并入 docs/PARAMETERS.md；本文保留作历史参考。
+> ⚠️ 2026-09-29 重组：现状已并入 ../PARAMETERS.md；本文保留作历史参考。
 
 > 这份是**我们自己的**目标词表的唯一权威表。跟 [参数标准表](PARAMETER_STANDARDS.md) 的分工：
 > 那份记**外部标准怎么定**（VTS / ARKit / VMC / VRM / VRCFT 各自的规定，逐条带官方 URL），
@@ -35,10 +35,10 @@
 | 改了哪一层 | 包侧怎么验 | mod 侧怎么验 |
 |---|---|---|
 | `Runtime/FaceTracking/` 里**搬过去的那 11 份** | `dotnet run --project Tools~/FaceTracking/profile-json-test`（154 条）+ `Tools~/FaceTracking/expression-coverage`（19 条）+ `.research/compile-check-pkg.ps1`（整包三遍：Runtime 玩家视图 / Runtime+Editor / `Tests~`） | **先跑 `.research/sync-modcore.ps1`**，再 `Assets/HoWarudoModTests/tools/compile-check.ps1`；最后**人要真构建一次**（FastBuild → `.warudo`） |
-| 只动编辑器面板 / 会话 / 配置 | 批处理 Unity 用例（成功标记 `HO_FACE_TESTS_ALL_PASSED`，见 [批处理验证](pitfalls/VALIDATION_LOOP.md)）+ `.warudo-mod-research/.tools/compile-check-editor.ps1` | 不涉及；但改了 `*.hoface.json` 要重导进沙箱（节点上的 `重读配置`） |
+| 只动编辑器面板 / 会话 / 配置 | 批处理 Unity 用例（成功标记 `HO_FACE_TESTS_ALL_PASSED`，见 [批处理验证](../pitfalls/VALIDATION_LOOP.md)）+ `.warudo-mod-research/.tools/compile-check-editor.ps1` | 不涉及；但改了 `*.hoface.json` 要重导进沙箱（节点上的 `重读配置`） |
 | 只动 mod 的节点 / 接收器 / 控制器 | 不涉及（但别把包侧的公共类型改名，会连带崩 mod） | `tools/compile-check.ps1` —— **它的 UMod 沙箱 lint 只有 mod 侧有**：Roslyn 放过 `System.Reflection` / `System.IO`，UMod 的 `RunCodeValidation` 会让你**真构建失败** |
 
-**两条会静默出错的跨仓规矩**（同 [仓库与提交](pitfalls/REPO_AND_GIT.md) §7）：
+**两条会静默出错的跨仓规矩**（同 [仓库与提交](../pitfalls/REPO_AND_GIT.md) §7）：
 
 1. 改了包侧那 11 份却**没跑同步** ⇒ mod 侧还是旧语义，**而且编译照样过**；表现是"Warudo 里和面板里不一样"。
 2. 直接在 mod 的 `Core/` 副本里改 ⇒ 下次同步**无声覆盖**（那 6 行文件头就是提醒）。
@@ -233,7 +233,7 @@ viseme_XX_abs = 1.0 / 0.0                                             ← 15 个
 > | `ho-debug-androidVTS` | 65 | **40 / 52** | 小驼峰 + `_L/_R` 命中别名表；剩 12 个它不发 |
 >
 > 所以那两份调试配置的定位是**实测记录**，不是"能跑的配置"——见
-> [Profiles/README.md](../Editor/FaceTracking/Profiles/README.md)。
+> [Profiles/README.md](../../Editor/FaceTracking/Profiles/README.md)。
 >
 > ⚠️ **核这类事别用 PowerShell**：它的 `-contains`/`-eq`/`-match` **默认忽略大小写**，
 > 会让上面第二行假报成 52/52；而"只比 52 个规范名"又会漏掉别名表、把第三行报成 12/52。
@@ -487,7 +487,7 @@ V3.0 版没有。我们用 V3.0。
 ### 3.7 控制器轴：`Ho/Drive/*`（**40 行 = 29 轴 + 4 区域门 + 4 切片权重 + 3 契约行，不计入上面的 90**）
 
 **这一组不是"给下游的出口"，是"喂控制器的口径"**（2026-09-27 加，见
-[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3 与[命名权威](FACE_TRACKING_NAMING.md)）：
+[控制器：进度与轴口](../VTS_HQ_CONTROLLER.md) §3 与[命名权威](FACE_TRACKING_NAMING.md)）：
 发货那份 profile 现在**同时**写两份东西 —— 上面 G1–G3 那些**出口名**（VTS 生态照旧按那些名字读），
 外加这一组 `Ho/Drive/<部位>/<轴>`，让新控制器直接按名取轴。
 
@@ -502,30 +502,30 @@ V3.0 版没有。我们用 V3.0。
 
 | 参数 | 表达式（内联） | 值域 | 说明 |
 | --- | --- | --- | --- |
-| `Ho/Drive/Lid/Left/BlinkWide` | `clamp((eyeBlinkLeft - 3.9 * eyeSquintLeft - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)` | −1 睁大 … **0 中性** … +1 闭 | 中间层**曾经内置**这几行，现在只是普通行。**2026-09-28 深夜去污**：实测 `eyeBlink` 混着 `3.9·eyeSquint` 的下眼睑泄漏 + 0.06 静止偏置（见[控制器 §5.7.35](VTS_HQ_CONTROLLER.md)） |
+| `Ho/Drive/Lid/Left/BlinkWide` | `clamp((eyeBlinkLeft - 3.9 * eyeSquintLeft - 0.06) * (1 - clamp(HoExternalEyeSync, 0, 1)) + (max(eyeBlinkLeft - 3.9 * eyeSquintLeft, eyeBlinkRight - 3.9 * eyeSquintRight) - 0.06 - min(eyeWideLeft, eyeWideRight)) * clamp(HoExternalEyeSync, 0, 1), -1, 1)` | −1 睁大 … **0 中性** … +1 闭 | 中间层**曾经内置**这几行，现在只是普通行。**2026-09-28 深夜去污**：实测 `eyeBlink` 混着 `3.9·eyeSquint` 的下眼睑泄漏 + 0.06 静止偏置（见[控制器 §5.7.35](../VTS_HQ_CONTROLLER.md)） |
 | `Ho/Drive/Lid/Left/Form` | `clamp(clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp(1 - out("Ho/Drive/Lid/Left/BlinkWide") / 0.20, 0, 1) - clamp(-out("Ho/Drive/Mouth/Form"), 0, 1), -1, 1)` | −1 sad … 0 … +1 笑眼 | 原 `…/Squint`（恒等 0…1），**2026-09-28 深夜改名升双极**；正侧门在**去污后的** `BlinkWide` 上 |
 | `Ho/Drive/Lid/Right/BlinkWide` | 同左（`…Right`） | −1 … 0 … +1 | 同上 |
 | `Ho/Drive/Lid/Right/Form` | 同左（`…Right`） | −1 sad … 0 … +1 笑眼 | 同上 |
-| `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（2026-09-28：**负半轴 = sad**，两段式判据；"噘"已从这根轴移出，归倒V 形态 —— 原 `MouthWidth` 表 2026-09-28 上午已删、当天下午重建成 `MouthShift` + `MouthCorner`，见[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)） | −1 sad … 0 … +1 笑 |
+| `Ho/Drive/Mouth/Form` | `((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2`（2026-09-28：**负半轴 = sad**，两段式判据；"噘"已从这根轴移出，归倒V 形态 —— 原 `MouthWidth` 表 2026-09-28 上午已删、当天下午重建成 `MouthShift` + `MouthCorner`，见[控制器 §5.7.22 / §5.7.23](../VTS_HQ_CONTROLLER.md)） | −1 sad … 0 … +1 笑 |
  = 2×`MouthSmile` − 1（**必须**重映射：VB 静息 0.5）。⚠️ 名字**读作"净笑量"**，`Form` 是保留的（Cubism `ParamMouthForm` / VTS 推荐接法；不改名的理由见[命名权威](FACE_TRACKING_NAMING.md) §6.1） |
-| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.02 死区**（手机"不张也不抿"时就在这个区间抖），0.02…0.05 是斜坡，之外恒等 —— 见[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 |
+| `Ho/Drive/Mouth/Open` | `(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)` | 0 … 1 | **实测张满只到 0.75、半张 0.4、大笑张嘴 ≈0.6** ⇒ 控制器的 `MouthCore` 把 Y 刻度摆成 `0 / 0.4 / 0.75`、**右上角（大笑×张满）单独挪到 0.6**（量程归在树里）；**响应曲线带 ±0.02 死区**（手机"不张也不抿"时就在这个区间抖），0.02…0.05 是斜坡，之外恒等 —— 见[控制器：进度与轴口](../VTS_HQ_CONTROLLER.md) §3.1 |
 | `Ho/Drive/Mouth/Funnel` | `mouthFunnel - (jawOpen * .2)` | 0 … 1（负侧也有值） | |
 | `Ho/Drive/Mouth/Press` | `((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)` | −1 压/卷 … +1 展/露齿 | 双向 |
 | `Ho/Drive/Mouth/Jaw` | `clamp(if((jawOpen - mouthClose) < 0, jawOpen - mouthClose, jawOpen), -1, 1)`（2026-09-28 修正：正侧 = `jawOpen` 本身，负侧保留差值 —— 闭嘴下颌下拉 `jawOpen` 0.28 曾被 `mouthClose` 0.28 整份抵消 ⇒ 轴恒 0） | **−1 咬合/压 · 0 静息 · +1 张开** |
  下巴的**竖直**轴（双极）。`mouthClose` 并进来是为了检出**闭着嘴唇时的下颌运动（咀嚼）**；⚠️ 安卓不发 `mouthClose`（直通参考 65 输入）⇒ 那边只剩正侧。**2026-09-27 加 ±0.05 死区曲线**（`|v| ≤ 0.05 → 0`、`0.05…0.08` 斜坡、之外恒等；用户「两个轴的曲线都加一点去噪」）。⚠️⚠️ **咀嚼就长在这根轴上 —— 振幅 ≤0.05 会被死区整个抹掉**，振幅待测 |
-| `Ho/Drive/Mouth/JawSide` | `jawRight - jawLeft` | −1 偏左 · 0 居中 · +1 偏右（⚠️ **实测单侧只到 0.52**） ⚠️ **2026-09-28 深夜起没有树消费**（下巴表降成 1D 只留上下，§5.7.30）；照旧发布当出口 | 下巴的**左右**轴（双极，合同表 `HQJawX`）。**2026-09-27 加同形 ±0.05 死区曲线**；树里 X 刻度按实测收到 `−0.65 / 0 / +0.65`。⚠️ 这根线**咬颌态相关**（咬紧时真动只有 0.02–0.04，而"只挤嘴角"的伪影有 0.05–0.2；**微张解放咬颌才到 0.52**）⇒ 见[控制器 §5.4.2](VTS_HQ_CONTROLLER.md) |
-| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）。实测记录（只留档，不驱动任何东西）：静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14。为什么不做见[控制器 §5.4.1](VTS_HQ_CONTROLLER.md)（VB 七份预设里这根线出现 **0 次**） |
-| `Ho/Drive/Mouth/X` | `clamp((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight), -1, 1)` | **+1 往左 · 0 静息 · −1 往右** | **整嘴左右平移（有符号）**。⭐ 2026-09-28 **上午退役、当天下午随 `MouthShift` 重建**（[控制器 §5.7.22 / §5.7.23](VTS_HQ_CONTROLLER.md)）：判据里**不再借 `dimple`**（dimple 归嘴角层 —— 两层不许吃同一个信号）。**曲线带 ±0.20 死区**（0.20…0.30 斜坡），把"嘴角撇"那点位移压成 0。实测：整嘴平移 `mouthLeft/Right` **0.963~0.976** vs 嘴角撇 **0.047~0.136** ⇒ 缝 **+0.594** |
-| `Ho/Drive/Mouth/Y` | `clamp(mouthPucker * clamp((mouthPucker - 0.45) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) - clamp((jawOpen * clamp((mouthClose - jawOpen + 0.1) / 0.1, 0, 1) - 0.35) / 0.1, 0, 1), -1, 1)` | **+1 上 · 0 静息 ·（负侧到不了 ⇒ 树里钳到 0）** | **整嘴上下平移**（2026-09-28 下午新建、傍晚收成**只有 0 / +1 两档**：用户实测「shift 根本不会往下移动，只有 6 个点的状态」，[控制器 §5.7.23 / §5.7.24](VTS_HQ_CONTROLLER.md)）：**+ 上 = 噘嘴判据**（膝 **0.45** + 鼻门 0.54/0.05；⛔ 2026-09-28 深夜试过"只认真撅"的 funnel 门又撤了 —— 用户日常噘嘴与收紧嘴不撅同值，门一加上移就没了）；
+| `Ho/Drive/Mouth/JawSide` | `jawRight - jawLeft` | −1 偏左 · 0 居中 · +1 偏右（⚠️ **实测单侧只到 0.52**） ⚠️ **2026-09-28 深夜起没有树消费**（下巴表降成 1D 只留上下，§5.7.30）；照旧发布当出口 | 下巴的**左右**轴（双极，合同表 `HQJawX`）。**2026-09-27 加同形 ±0.05 死区曲线**；树里 X 刻度按实测收到 `−0.65 / 0 / +0.65`。⚠️ 这根线**咬颌态相关**（咬紧时真动只有 0.02–0.04，而"只挤嘴角"的伪影有 0.05–0.2；**微张解放咬颌才到 0.52**）⇒ 见[控制器 §5.4.2](../VTS_HQ_CONTROLLER.md) |
+| `Ho/Drive/Mouth/Forward` | `jawForward` | 0 … 1（⚠️ **裸线满量程只有 0.13**） | `HQJawForward`。⚠️ **2026-09-27 起降级成「辅助变量 / 出口」—— 不做树了**（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）。实测记录（只留档，不驱动任何东西）：静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14。为什么不做见[控制器 §5.4.1](../VTS_HQ_CONTROLLER.md)（VB 七份预设里这根线出现 **0 次**） |
+| `Ho/Drive/Mouth/X` | `clamp((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight), -1, 1)` | **+1 往左 · 0 静息 · −1 往右** | **整嘴左右平移（有符号）**。⭐ 2026-09-28 **上午退役、当天下午随 `MouthShift` 重建**（[控制器 §5.7.22 / §5.7.23](../VTS_HQ_CONTROLLER.md)）：判据里**不再借 `dimple`**（dimple 归嘴角层 —— 两层不许吃同一个信号）。**曲线带 ±0.20 死区**（0.20…0.30 斜坡），把"嘴角撇"那点位移压成 0。实测：整嘴平移 `mouthLeft/Right` **0.963~0.976** vs 嘴角撇 **0.047~0.136** ⇒ 缝 **+0.594** |
+| `Ho/Drive/Mouth/Y` | `clamp(mouthPucker * clamp((mouthPucker - 0.45) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) - clamp((jawOpen * clamp((mouthClose - jawOpen + 0.1) / 0.1, 0, 1) - 0.35) / 0.1, 0, 1), -1, 1)` | **+1 上 · 0 静息 ·（负侧到不了 ⇒ 树里钳到 0）** | **整嘴上下平移**（2026-09-28 下午新建、傍晚收成**只有 0 / +1 两档**：用户实测「shift 根本不会往下移动，只有 6 个点的状态」，[控制器 §5.7.23 / §5.7.24](../VTS_HQ_CONTROLLER.md)）：**+ 上 = 噘嘴判据**（膝 **0.45** + 鼻门 0.54/0.05；⛔ 2026-09-28 深夜试过"只认真撅"的 funnel 门又撤了 —— 用户日常噘嘴与收紧嘴不撅同值，门一加上移就没了）；
 
 114 段老语料：单通道缝 +0.171、加鼻门全局最坏 +0.951）；**− 下 = 闭唇张开下颌**（膝 **0.35**/0.10 + **相对唇门** `(mouthClose − jawOpen + 0.10)/0.10` —— 说话那个瞬态 `jawOpen` 0.65 / `mouthClose` 0.28 ⇒ 0，真·闭嘴下颌下拉 `jawOpen ≈ mouthClose` ⇒ 满档）。⚠️ 与"咀嚼"只能靠**幅度**分：均值 0.085 ⇒ 0，但**峰值 0.2~0.37**（用户实机：不张嘴咀嚼 `jawOpen` 一上来就到 0.2）⇒ **膝 2026-09-28 晚从 0.18 抬到 0.35** + `smooth 0.10 s`；
 ⚠️ 与 `MouthJaw` 是**骨骼级分工**（下巴形变 vs 唇线整体位移） |
-| `Ho/Drive/Mouth/Pucker` | `(((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker) * (1 - clamp((out("Ho/Style/CatMouth") - 0.25) / 0.15, 0, 1))` | −1 … +1 | 双向。⭐ **2026-09-28 晚再乘「猫嘴门」**（膝 **0.25/0.15** —— 2026-09-28 深夜从 0.15/0.15 **抬上来**：0.15 会误伤「抿嘴嘴宽」，那一档的猫嘴权重只有 0.145、正好压在膝上 ⇒ 用户报「width 到 2 后立刻就归零了」；详见[控制器 §5.7.26](VTS_HQ_CONTROLLER.md)）⚠️ **§5.7.27 更正**：猫嘴判据经「维持」后是 **0/1** ⇒ 膝写 0.15 还是 0.25 **效果一样**（0 ⇒ 门 1、1 ⇒ 门 0）；真正管「切不切」的是**触发线**，已从 0.15 抬到 **0.28**）
+| `Ho/Drive/Mouth/Pucker` | `(((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker) * (1 - clamp((out("Ho/Style/CatMouth") - 0.25) / 0.15, 0, 1))` | −1 … +1 | 双向。⭐ **2026-09-28 晚再乘「猫嘴门」**（膝 **0.25/0.15** —— 2026-09-28 深夜从 0.15/0.15 **抬上来**：0.15 会误伤「抿嘴嘴宽」，那一档的猫嘴权重只有 0.145、正好压在膝上 ⇒ 用户报「width 到 2 后立刻就归零了」；详见[控制器 §5.7.26](../VTS_HQ_CONTROLLER.md)）⚠️ **§5.7.27 更正**：猫嘴判据经「维持」后是 **0/1** ⇒ 膝写 0.15 还是 0.25 **效果一样**（0 ⇒ 门 1、1 ⇒ 门 0）；真正管「切不切」的是**触发线**，已从 0.15 抬到 **0.28**）
 
-—— 猫嘴 `dimple` 0.78~0.84 ⇒ 不加门时这根轴算到 ≈3.1、永远顶满宽档（用户报「猫嘴态下应该只有收缩没有扩宽」；形态门只挡倒V/鼓嘴、不挡块内变体的猫嘴）。⭐ **2026-09-28 傍晚起是 `MouthWidth`（嘴宽，1D 3 格）的轴**：刻度 **−0.93 收嘴不撅（窄）/ −0.09 静态（中）/ +2.0 抿嘴嘴宽（宽）**（9 段补录实测；⚠️ 表达式是 `2×`**和**`（dimpleL + dimpleR）` ⇒ 宽端量纲是 2，抿嘴嘴宽 = 4×0.525 − 0.104 = 1.996）。见[控制器 §5.7.24](VTS_HQ_CONTROLLER.md) |
+—— 猫嘴 `dimple` 0.78~0.84 ⇒ 不加门时这根轴算到 ≈3.1、永远顶满宽档（用户报「猫嘴态下应该只有收缩没有扩宽」；形态门只挡倒V/鼓嘴、不挡块内变体的猫嘴）。⭐ **2026-09-28 傍晚起是 `MouthWidth`（嘴宽，1D 3 格）的轴**：刻度 **−0.93 收嘴不撅（窄）/ −0.09 静态（中）/ +2.0 抿嘴嘴宽（宽）**（9 段补录实测；⚠️ 表达式是 `2×`**和**`（dimpleL + dimpleR）` ⇒ 宽端量纲是 2，抿嘴嘴宽 = 4×0.525 − 0.104 = 1.996）。见[控制器 §5.7.24](../VTS_HQ_CONTROLLER.md) |
 
 
-| `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | `TongueL` = **舌头那条 1D 表（4 格）的轴（伸出量）**；`TongueR` = **现在没有树消费**（发布给出口 `HQTongueRight`），留给「歪舌头」的侧向开关（2026-09-28 深夜，[控制器 §5.7.29](VTS_HQ_CONTROLLER.md)） |
+| `Ho/Drive/Mouth/TongueL` / `TongueR` | `tongueOut` | 0 … 1 | `TongueL` = **舌头那条 1D 表（4 格）的轴（伸出量）**；`TongueR` = **现在没有树消费**（发布给出口 `HQTongueRight`），留给「歪舌头」的侧向开关（2026-09-28 深夜，[控制器 §5.7.29](../VTS_HQ_CONTROLLER.md)） |
 | `Ho/Drive/Style/CatMouth`（**契约行**；2026-09-28 从 `Ho/Drive/Mouth/Roll` 改名 + 拆行） | `out("Ho/Style/CatMouth")` —— **判据住在风格行** `Ho/Style/CatMouth`：`clamp(mouthRollLower × clamp((嘴角方向 − 0.12) / 0.10, 0, 1) × (1 + 3·jawOpen²), 0, 1)`，`嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2`。⭐ **膝 0.12**（2026-09-28 实机报数，§5.7.17）：用户三档（做住 / 张嘴 / 大张）的嘴角方向是 0.50 / 0.25 / 0.17 ⇒ 膝 0.20 时后两档读数只有 0.05 / 0 ⇒「张嘴立刻就掉回去」；膝 0.12 后是 0.40 / 0.10 / 0.044，而最坏非目标（用力说话 0.096）仍在膝下 | 真猫嘴 **0.434~0.460**（过满档）· 最坏非目标（常态笑）0.075 · 抿嘴/用力说话/说话/咀嚼/张满/噘嘴/挤眼/闭唇咀嚼 = 0 | **卷唇开关的输入**，驱动 `MouthCoreRollSwitch`（**轴驱动的变体开关**，阈值 **`0.15 / 0.30`**）在**两张作者画过的整嘴表**之间交叉淡入（`MouthCore` 静息嘴 ↔ `MouthCoreRoll` 猫嘴版）。⭐ **2026-09-28 换过判据**（旧口径 = `√(上×下) × 死区(0.02/0.03) × (1+4·jawOpen²) × 噘嘴门`，36 段实测缝 **−0.24** ⇒ "说话"就是目标的 3 倍）：实测证明这个动作的物理量是 **下唇内卷 + 嘴角往后拉** —— ① 下唇卷 `mouthRollLower`（用户的猫嘴上唇几乎不卷 0.026~0.032，所以"要求两根一起卷"是错的）；② **嘴角门**（猫嘴 0.358~0.503 vs 非目标 ≤0.096：抿嘴的下唇卷 0.362~0.396 ≈ 猫嘴、用力说话 0.151~0.211 —— **都被这道门挡住**）。⭐ **下颌增益 `1 + 3·jawOpen²` 是 2026-09-28 加回的**（用户「咬唇下张大嘴回弹到没猫嘴、很难维持」）：设备张嘴时把唇线压低 ⇒ 读数随下颌掉；它**只乘在过了嘴角门的读数上**（36 段里"下颌动得大"的动作门都是 0）⇒ 干扰项一个没放大。⚠️ `mouthPucker` 不再参与（那道具不需要了）。⭐ **常开走增量开关**（2026-09-28 用户更正：「这个常开应该是跟自动倒V那样一样的 gate 增量开关」）：写 **`HoExternalCatMouth = 1`**（跟倒V 的 `HoExternalInvertedV`、鼓嘴的 `HoExternalCheek` 同形；再配 `HoAutoCatMouth = 0` 就只留常开）⇒ 风格行 = 判定 + 1 ⇒ 本行 = 1 ⇒ 开关满档、**8 格全可达**。直接写这根轴 ≥ 0.30 也满档，但那是**绕过中间层**的旁路。
 ⚠️ 已知缺口：笑会把门顶开（酒窝 0.374、苦 0）⇒「笑 + 下唇卷 ≥0.15」会开始淡入（实测余量 2 倍）。上下两根线仍是输入行/出口行，只是不再各占一维；读数不再是"原始唇卷"，原始值由 G1 出口行无损直通 |
 | `Ho/Drive/Gaze/Left\|Right/X` | `EyeLeft_x` / `EyeRight_x` | −1 … +1 | 手机自己就发左右眼标量，不重算；**哪边是内要实测定** |
@@ -545,7 +545,7 @@ VTS API 适配器），我们每帧写它就等于把它锁死。控制器里给
 ⚠️ **上面这张表是"我们选了什么口径"**；发货 profile 里**逐行的表达式原文、曲线范围、修饰符现状**（33 根轴已挂 `smooth`，
 
 
-取值照 VB 同族平移；区域门与切片行不挂）与"哪根轴要调稳"的操作口径在[控制器：进度与轴口](VTS_HQ_CONTROLLER.md) §3.1 / §3.2 —— 两边同名同义，
+取值照 VB 同族平移；区域门与切片行不挂）与"哪根轴要调稳"的操作口径在[控制器：进度与轴口](../VTS_HQ_CONTROLLER.md) §3.1 / §3.2 —— 两边同名同义，
 改公式时**两处一起改**（还有 4 条切片行内联了 `Funnel` / `Press` 的副本，见那节第 3 条陷阱）。
 
 ---
@@ -808,4 +808,4 @@ VB 那 20 行里大部分都在这个量级，真正"黏"的只有 `FaceAngle`�
 | [设备验证表](PARAMETER_DEVICE_VERIFICATION.md) | **这台设备实测发了什么、动了多少**（生成表，可由脚本刷新） |
 | **本文件** | **我们选什么**：目标词表 + 逐参数定义 + 公式来源 |
 | [面捕中间层](FACE_TRACKING_MIDDLE_LAYER.md) | 值怎么被加工（两层行、缺键语义、曲线纪律） |
-| [VBridger 的输入 / 输出参数格式](archive/VBRIDGER_IO_VOCABULARY.md) | 归档：VB 那 100 个输入变量与 314 行出口的一手记录 |
+| [VBridger 的输入 / 输出参数格式](VBRIDGER_IO_VOCABULARY.md) | 归档：VB 那 100 个输入变量与 314 行出口的一手记录 |
