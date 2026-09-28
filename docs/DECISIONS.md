@@ -2757,3 +2757,18 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
   工具三处同步：生成器 `$mouthWidthMeasured = @(0.0, 0.5, 1.0)`、检查器 `'MouthWidth' … thr = @(0.0, 0.5, 1.0)`、构建器 `MouthWidthMeasured = { 0f, 0.5f, 1f }`（顺手把 `NoseUpTicks` 的 0.7 改成 1 —— 用户 09-29 定的值，一直没落进 `.cs`）。
 **⑤ 出口行不受影响**：VTS 出口 `MouthPucker` 走的是另一套原始公式 `((dimpleR + dimpleL) × 2) − mouthPucker`，不读这根轴 ⇒ 归一化只在控制器内部生效。
 **⑥ 教训（写脚本改 `.controller` 时必须遵守）**：我第一版补丁脚本用 `text[:s] + body2 + text[e:]` 替换块，**漏掉了块头部** `--- !u!206 &id` ⇒ 文件当场坏掉（块数 21→20、出现悬空引用 `206000011`）。是 `check-controller-integrity.py` 抓到的 ✓ —— **文本级改控制器后一律跑它**。正确写法：`text[:s] + '--- !u!206 &%s\n' % fid + body2 + text[e:]`。
+
+---
+
+## 2026-09-29 · 大控制器清零 + 嘴组联合件
+
+**① 触发**：用户「这个控制器效果不错已经算过了，可以把现在的两个大控制器合成一个嘴组控制器了，我联合看效果」。
+**② 先把大控制器的欠账补上**（不清零就合 = 把没验收的几何混进联合视图）：
+  * `MouthCore` 的 11 格（＋镜像变体 `MouthCoreRoll` 的 11 格）按槽位名对齐到**用户手调验收过的那组值**（隔离件已删，值在 `check-controller.ps1` 的 `$exactPos`）；共改 20 格（另 2 格本来就相等）。
+  * `NoseUp` 的刻度 0.7 → **1**（用户 09-29 定的值，之前只在隔离件里落过盘）。
+  * 改前备份：`%TEMP%\PTP_CTR_Face_VTS.beforeMouthCoreAlign.controller`、`…beforeNoseUp1.controller`、`…beforeShift06.controller`。
+  ⇒ **大控制器 `PTP_CTR_Face_VTS.controller` 现在检查器隔离模式 0 缺/错**（53 → 0）。这是那笔"待合并"的账第一次结清。
+**③ 嘴组联合件**：`isolate-trees.py <大控制器> …/Diagnostics/DIAG_MouthGroup.controller --root-children MouthRegion,NoseRegion` ⇒ 保留 MouthRegion **全部 7 个孩子**（`MouthCoreRollSwitch`→`MouthCore`/`MouthCoreRoll`、`MouthJaw`、`MouthShift`、`MouthWidth`、`MouthTongue`、`InvertedV`、`Cheek`）＋ `NoseRegion`（`EyeRegion` 剪掉）。58 棵树 / 61 块，**0 缺/错**。
+**④ 顺带修的两个脚本 bug**（都拦住了，没写坏东西）：
+  * `m_Name` 的两种写法：**ASCII 名不带引号、中文名带引号 + `\uXXXX` 转义** ⇒ 只认带引号的正则会把 `MouthCore` 整棵树跳过（第一版补丁「改了 0 格」就是这个原因）。判据：`v.startswith('"')` 再 `json.loads`。
+  * rig 里那份说明同步加了「嘴组：怎么观察」一节。
