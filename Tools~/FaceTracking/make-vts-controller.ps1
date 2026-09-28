@@ -189,29 +189,15 @@ $simple1D = [ordered]@{
     # 这 4 格的名字与位置都不用动）。
     'MouthTongue'  = @{ p = 'Ho/Drive/Mouth/TongueL';  v = $tongueTicks;      t = 'Tongue' }
 }
-# ⭐ **`MouthJaw` 的左右两格搬到实测落点**（2026-09-29，同场 15 段补录：5 个唇/颌状态 × 3 次、反复平移下巴）。
-#   实测各组横向读数（`jawRight − jawLeft` 的 p90）：唇闭三组 **≤0.033**（进 ±0.05 死区 ⇒ 恒 0）、
-#   **张嘴第一段 0.312**（`Mouth/Jaw` ≈0.38~0.45）、**张嘴满 0.515**（`Jaw` ≈0.66~0.85）。
-#   ⇒ ① **唇闭着时这根线是死的**：下巴横移在闭嘴态设备测不到（「不张嘴横移拉不到满」无解，已写进文档 §5.4.2）；
-#      ② 真正常发生的可读状态是**张嘴第一段**，落点 ≈(±0.40, 0.42) —— 用户 2026-09-27 的原话就是「改成 −0.4,0.45 这样」，
-#         当时没落地，现在用同场实测补上。
-#   ⇒ 附带好处：顶行不再是三个共线格（共线在 FreeformCartesian2D 里是退化输入，项目里舌头那棵树记过）。
-#   代价（用户已认）：**张嘴满 + 横移**从"满"退到部分 —— 用户判定那个状态「几乎不会触发」。
-#   ⚠️ 坐标只决定"什么时候播"：那两格的片段各自只驱动一个整姿势形变（`blendShape.HO-下巴左/右`）
-#      ⇒ **挪位置不用重烘美术**。
-$mouthJawOver = @{
-    '0,1' = @(-0.40, 0.42)   # 下巴右（X 负端）
-    '2,1' = @(0.40, 0.42)    # 下巴左（X 正端）
-}
 $tables = [ordered]@{
     'MouthCore'   = @{ x = 'Ho/Drive/Mouth/Form';  y = 'Ho/Drive/Mouth/Open';  xv = $formSmile;  yv = $openMeasured;  xt = 'Form';     yt = 'Open'; skip = $mouthCoreSkip; over = $mouthCoreOver }
     # ⚠️ **下巴 2026-09-28 深夜从 2D 6 格降成 1D 2 格**（只留上下）—— 见上面 `$simple1D` 的 `MouthJaw`。
 
     # 整嘴平移（2026-09-28 下午新建，傍晚收成 **3×2 = 6 格**）：X = 左右（±0.95）· Y = 上下（0 / +1，负侧钳到 0）。
-    # 下巴（2026-09-29：仍是 2D 4 格，但**左右两格搬到实测落点** (±0.40, 0.42)，见上面 `$mouthJawOver`）。
-    # 咬合态（`Jaw`=0）横向实测 ≤0.05（进死区）⇒ 两个"合×左右"的角仍然不建。
-    # ⚠️ 中间那一列故意沿用旧槽名（下巴合/下巴张）⇒ 作者已填的姿势原地不动。
-    'MouthJaw'    = @{ x = 'Ho/Drive/Mouth/JawSide'; y = 'Ho/Drive/Mouth/Jaw'; xv = @(-0.52, 0.0, 0.52); yv = @(0.0, 0.75); xt = 'JawSide'; yt = 'Jaw'; skip = @('0,0', '2,0'); over = $mouthJawOver }
+    # 下巴（2026-09-28 深夜用户定：2D **T 形 4 格**）—— 左右只在"张开"那一档有真信号（实测 0.52；
+    # 咬合态真动只有 0.02–0.04）⇒ 两个"合×左右"的角不建，落上去时靠混合投影到边上。
+    # ⚠️ 中间那一列故意沿用旧槽名（下巴合/下巴张）⇒ 作者已填的姿势原地不动，只新增左右两格。
+    'MouthJaw'    = @{ x = 'Ho/Drive/Mouth/JawSide'; y = 'Ho/Drive/Mouth/Jaw'; xv = @(-0.52, 0.0, 0.52); yv = @(0.0, 0.75); xt = 'JawSide'; yt = 'Jaw'; skip = @('0,0', '2,0') }
     'MouthShift'  = @{ x = 'Ho/Drive/Mouth/X'; y = 'Ho/Drive/Mouth/Y'; xv = $shiftXMeasured; yv = $shiftYMeasured; xt = 'LeftRight'; yt = 'UpDown'; skip = $mouthShiftSkip }
     # 舌头（2026-09-28 深夜）：**不在 `$tables` 里** —— 它是 1D 5 格，见上面 `$simple1D` 的 `MouthTongue`。
     # ⚠️ **注视两棵树删掉了**（2026-09-27 用户定「warudo 有单独的 lookat 节点做这个事情，是有 ik 的」）——

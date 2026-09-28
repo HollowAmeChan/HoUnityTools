@@ -930,13 +930,17 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 **② 「闭嘴全张颌」在人脸上根本做不出来**：那一组的 `jawOpen` 只到 **0.327**（张嘴满是 0.785）——**唇闭着时这台设备对下颌开度的读数封顶在 ~0.33**
 （与 2026-09-27「闭嘴下颌下拉」实测的 0.29 同一条规律）⇒ 用户「不做这个状态」这个判定有数据支撑 ✓。
 
-**③ 左右两格从 (±0.52, 0.75) 搬到 (±0.40, 0.42)** —— 那正是**张嘴第一段**（横向 0.31~0.45、`Jaw` 0.36~0.45）的落点，
-也正是用户 2026-09-27 说过的「改成 −0.4,0.45 这样」（当时没落地，这次用同场实测补上）。三处同步一起改：
-* `Tools~/FaceTracking/make-vts-controller.ps1`：新增 `$mouthJawOver` + `MouthJaw` 表加 `over =`；
-* `Tools~/FaceTracking/check-controller.ps1`：刻度清单 `x = ±0.40/0`、`y = 0/0.42/0.75`；
-* `Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`：**补上 2D 表 + `MouthJawOverride`**（这份之前停在 1D 2 格的老版本，与生成器/资产不同步），
-  并把它那份停在 ±0.65 的 `JawSide` 刻度对齐成 ±0.52；
-* 资产（rig 里那份 `.controller`）**外科改**：只在 MouthJaw 块里动 2 个坐标，改前备份到 `.research/jaw-side-2026-09-29/`。
+**③ 左右两格该从 (±0.52, 0.75) 搬到 (±0.40, 0.42)** —— 那正是**张嘴第一段**（横向 0.31~0.45、`Jaw` 0.36~0.45）的落点，
+也正是用户 2026-09-27 说过的「改成 −0.4,0.45 这样」（当时没落地，这次用同场实测补上）。
+⚠️ **2026-09-29 当天落地过一次又撤回了 —— 这条现在是"决策已定、尚未落地"**：改完才知道**用户正在单独调 jaw 组分**
+（`DIAG_MouthJaw.controller` / `DIAG_MouthCore9_Jaw.controller`，02:03 那批），而主控制器是**纯文本写盘** ⇒ 会触发 Unity 重导入、
+把正开着的 Animator 引用刷掉。⇒ 主控制器**已逐字节还原**（连脚本误加的那个 UTF-8 BOM 一起去掉），三个工具文件也一并回退。
+**待办：等用户单独调完 jaw 组再一次性搬**，要动四处：
+* `Tools~/FaceTracking/make-vts-controller.ps1`：给 `MouthJaw` 表加 `$mouthJawOver` + `over =`；
+* `Tools~/FaceTracking/check-controller.ps1`：刻度清单改 `x = ±0.40/0`、`y = 0/0.42/0.75`；
+* `Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`：补 2D 表 + `MouthJawOverride`（这份**现在仍是 1D 2 格、`JawSide` 还是 ±0.65**，与生成器/资产不同步）；
+* 资产：只在 MouthJaw 块里动 2 个坐标（备份在 `.research/jaw-side-2026-09-29/PTP_CTR_Face_VTS.before-cellmove.controller`）。
+  ⚠️ **别用 `utf-8-sig` 去写那份 `.controller`** —— 它原本没有 BOM（脚本加上了，已随还原去掉）。
 
 **代价与附带好处**：**张嘴满 + 横移**从「满」退到部分（用户判定那个状态几乎不会触发 ✓）；附带**顶行不再是三个共线格**——
 共线点在 `FreeformCartesian2D` 里是退化输入（舌头那棵树记过：不可预测、可能出负权重）。
