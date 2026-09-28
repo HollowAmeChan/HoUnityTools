@@ -1,6 +1,6 @@
 ﻿# 形态键输出：写死 100、清场、族别混用
 
-正本是 [眨眼约束](../BLINK_CONSTRAINT.md)（合并方式 / 清场）与 [注视约束](../LOOKAT_CONSTRAINT.md)（族别 / 重复注册）。
+正本是 [眨眼约束](../完善的功能/BLINK_CONSTRAINT.md)（合并方式 / 清场）与 [注视约束](../完善的功能/LOOKAT_CONSTRAINT.md)（族别 / 重复注册）。
 
 ## 1. "形态键怎么调都是 100"
 

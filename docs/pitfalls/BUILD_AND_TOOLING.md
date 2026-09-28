@@ -1,6 +1,6 @@
 ﻿# Warudo 打包、工具链与系统脚本
 
-正本：[Warudo FastBuild](../WARUDO_FAST_BUILD.md)；防火墙那条来自面捕面板的「排查」栏（[面捕工作流](../FACE_TRACKING_WORKFLOW.md)）。
+正本：[Warudo FastBuild](../完善的功能/WARUDO_FAST_BUILD.md)；防火墙那条来自面捕面板的「排查」栏（[面捕工作流](../FACE_TRACKING_WORKFLOW.md)）。
 
 ## 1. 缺 `.csproj` → 整条链完全静默
 

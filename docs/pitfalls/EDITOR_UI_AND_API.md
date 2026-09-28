@@ -1,6 +1,6 @@
 ﻿# 编辑器 UI 与 Playable API
 
-正本：[约束面板设计系统](../EDITOR_UI_SYSTEM.md)（令牌与控件）、[动画剪辑直通预览](../ANIMATION_CLIP_PREVIEW.md)（§9–§11 那几条来自
+正本：[约束面板设计系统](../完善的功能/EDITOR_UI_SYSTEM.md)（令牌与控件）、[动画剪辑直通预览](../完善的功能/ANIMATION_CLIP_PREVIEW.md)（§9–§11 那几条来自
 `Runtime/AnimationTools/HoAnimationPreviewer.cs`）。
 
 ## 1. GUILayout 按"剩余宽度的百分比"分配空间

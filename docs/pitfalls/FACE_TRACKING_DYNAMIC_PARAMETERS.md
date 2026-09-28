@@ -1,7 +1,7 @@
-# 动态参数（Hub）的坑：五天里改了五次设计
+﻿# 动态参数（Hub）的坑：五天里改了五次设计
 
 正本：[动态参数（语义输出）](../FACE_TRACKING_DYNAMIC_PARAMETERS.md)（现在的形状）、
-[控制器输出范围与实测能力](../ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)（我们到底写哪些东西）。
+[控制器输出范围与实测能力](../archive/ANIMATOR_OUTPUT_PIPELINE_DESIGN.md)（我们到底写哪些东西）。
 这份只留**被删掉的形状、它们为什么留不住**，以及现场真咬过我们的两个坑。
 
 判据是"当时真的发生了、而且下次还会发生"：**下面每一版都真的写进过代码**，
@@ -150,7 +150,7 @@ Unity 侧的现场与批处理用例都测不到 Warudo 的节点行为 —— �
 怎么办：
 
 * 别再加"应用 XX 组件 / 应用材质 / 应用部件状态"这类 node（原来那几行规划都删了）；
-* 要放开某一类之前，先看[控制器输出范围](../ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §2 的能力表 ——
+* 要放开某一类之前，先看[控制器输出范围](../archive/ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §2 的能力表 ——
   **那些实测仍然有效，不用重测**；
 * ⚠️ Hub 的槽是 **float**：非 float 语义（开关 / 档位 / 向量 / 颜色 / 引用）经过 Hub 时
   要自己定编码（0/1 当真假、三个槽当一个向量），这是收窄的代价。
@@ -162,5 +162,5 @@ Unity 侧的现场与批处理用例都测不到 Warudo 的节点行为 —— �
 怎么办：2026-09-25 用普通 `.anim` + `AnimatorController`、绑定
 `path="" / type=Animator / propertyName="Derived"` 直接验证 —— **两个 Unity 版本都通过**。
 判据留档：`Tests~` 之外的一次性实验在 `.research/controller-capabilities/`，
-摘要表见[控制器输出范围](../ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §2。
+摘要表见[控制器输出范围](../archive/ANIMATOR_OUTPUT_PIPELINE_DESIGN.md) §2。
 **教训**：这类"引擎能力"的结论只认实测，看到"某某专属"的说法先去量一次。
