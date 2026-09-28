@@ -3959,13 +3959,13 @@
                         "notes":  "**契约行**：猫嘴风格权重（0/1）—— 喂控制器里那个**变体开关** `MouthCoreRollSwitch`（`blendParameter` = 这根线，两档阈值 0.15 / 0.30），它在**静息嘴 / 猫嘴版整嘴表**之间交叉淡入。\n⭐ **2026-09-28 从 `Ho/Drive/Mouth/Roll` 改名过来**（用户：「改成风格化的轴值这样用户看得懂了」）：判据与增量开关搬到中间层的 `Ho/Style/CatMouth`，本行只做发布 —— 与倒V 的 `Ho/Drive/Style/InvertedV` **完全同形**（现在三个风格轴一个机制）。\n⭐ **常开 = 全量猫嘴**：`HoExternalCatMouth = 1`（Warudo append / 面板「配置输入行」覆盖 / VTS 自定义参数）⇒ 本行 = 1 ⇒ 开关满档、**8 格全部可达**（自动路径只覆盖「嘴角往后拉 × `Open ≈ 0…0.4`」那一段）。\n⚠️ 树名 / 开关名 / 槽位名仍是 `MouthCoreRoll*`（只改了轴名）。\n【经验参】控制器里的两档 0.15 / 0.30 来自 36 段实测（猫嘴 0.434~0.460、最坏非目标 0.075）；改判据要重标\n⭐⭐ **2026-09-28 深夜：触发线 0.15 → 0.28、释放带 threshold 0.13 → 0.26 ⇒ **释放点仍是 0.02**（锁存是有意的：§5.7.14/5.7.15 用户「很难维持表演这个猫嘴」⇒ 点亮后要挂得住；所以**防误报只能靠触发线**，不能靠释放线）** —— 用户报「width 到 2 后立刻就归零」并确认「这时候确实切到猫嘴去了」。\n⭐ **机制（重要，之前理解错了）**：`维持` 的输出是**二值**（`HoFaceAnimationSession.Step` 返回 `steps[next].target`，只在 0 与 target 之间跳），所以**这一行实际是「0/1 + 迟滞」**，真正决定「切不切」的是 **trigger**；控制器里那两档 0.15 / 0.30 作用在 0/1 上等于恒等（0 ⇒ 静息嘴、1 ⇒ 满档猫嘴）。\n⚠️ 旧参数 `trigger 0.15 / threshold 0.13` ⇒ **释放点 = 0.15 − 0.13 = 0.02**，也就是「只要碰过 0.15 就一直粘住，直到判据掉回 0.02」⇒ 一旦误触发就**整段动作都粘在猫嘴上**（这次用户看到的正是这个：抿嘴嘴宽碰过 0.15 之后，猫嘴版整段挂着 ⇒ 嘴宽轴被门掐成 0）\n（用户看到的「切到猫嘴」与「嘴宽轴被门掐成 0」是**同一个事件** —— 门读的就是这根 0/1 线）。\n⭐ **新触发线 0.28 怎么来的（同一批 126 段 + 9 段补录，取缝的中点）**：判据值 J = `rollLower × 嘴角门 × (1+3·jawOpen²)` —— 正例 **猫嘴 J ≈ 0.447**（rollLower 0.447 / 嘴角方向 0.417）vs 误报最坏 **抿嘴嘴宽 J ≈ 0.146**（rollLower 0.146 / 嘴角方向 0.525）与 **强咬紧 ≈ 0.139** ⇒ 缝 [0.146, 0.447]、取中点 **0.28** ⇒ 误报留 **1.9 倍**余量、正例留 **1.6 倍**。\n⚠️ **代价（照数据说清）**：`猫嘴微张`（J≈0.150）、`猫嘴紧`（嘴角门本来就是 0）在新触发线下**不再自动点亮** —— 但它们在旧参数下也只有 0~4% 的淡入（开关第一档 0.15）⇒ 观感上等于没有；要那两种形态请用外部开关（`HoExternalCatMouth = 1` 或面板「配置输入行」覆盖）。\n⚠️ 这条**不是**「把判据改严」：判据表达式一个字没动（它的缝只有 [0.146, 0.447]，再动就要伤人），动的是**决策线**。\n"
                     },
                     {
-                        "parameter":  "Ho/Style/InvertedV/Read",
-                        "expression":  "mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1)",
+                        "parameter":  "Ho/Style/InvertedV/PuckerGate",
+                        "expression":  "clamp((mouthPucker - 0.51) / 0.45, 0, 1)",
 
                         "defaultValue":  0,
                         "curve":  { "keys": [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "噘嘴读数：mouthPucker × 死区(0.41/0.02)。死区写在式子里，曲线是恒等。"
+                        "notes":  "噘嘴门（1 = 真噘）：把 mouthPucker 映成 0..1 —— 静息 0.3797 到 0 就归零。\n膝 0.51（+0.10，用户定：说话舔舌误触）/ 宽 0.45（真噘地板 0.9634 处刚好到 1）。\n⚠️ 形状是**斜坡不是门**：门形（`x × clamp((x−膝)/0.02)`）过膝就恒等 ⇒ 抬膝对读数毫无影响。\n起亮点：维持 trigger 0.88 ⇒ mouthPucker ≈ 0.906。"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV/NoseGate",
@@ -3987,7 +3987,7 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
-                        "expression":  "out(\"Ho/Style/InvertedV/Read\") * out(\"Ho/Style/InvertedV/NoseGate\") * out(\"Ho/Style/InvertedV/OpenGate\")",
+                        "expression":  "out(\"Ho/Style/InvertedV/PuckerGate\") * out(\"Ho/Style/InvertedV/NoseGate\") * out(\"Ho/Style/InvertedV/OpenGate\")",
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
@@ -4001,7 +4001,7 @@
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.05}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
-                        "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。\n维持 trigger 0.88 / threshold 0.05 ⇒ 释放 0.83：取误触天花板 0.7769（挤眼皱鼻）与真噘地板 0.9634 之间那条空带的中点。"
+                        "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。\n维持 trigger 0.88 / threshold 0.05 ⇒ 释放 0.83；配 PuckerGate 的斜坡 ⇒ **mouthPucker ≈ 0.906 起亮**（说话舔舌到不了；真噘 0.9634 有余量）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Style/InvertedV",
