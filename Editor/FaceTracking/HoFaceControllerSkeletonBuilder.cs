@@ -268,6 +268,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ShiftYMeasured = { 0f, 1f };
 
         /// <summary>
+        /// **`Cheek` 的刻度（2026-09-29 用户定）**：`0 / 0.3 / 1` ——
+        /// 0 = 颊不动（小月牙**藏在脸里**）· 0.3 = 小月牙**挪出来** · 1 = 月牙被**移动**（0.3 以上连续）。
+        /// ⚠️ 中间层那两根轴的曲线负责压成台状（0.40 以下严格 0、0.40 处瞬跳到 0.3），
+        ///    否则轴落在 0 与 0.3 之间就会把「半出来的月牙」画出来 ⇒ 穿模。
+        /// </summary>
+        private static readonly float[] CheekPuffTicks = { 0f, 0.3f, 1f };
+
+        /// <summary>3×3 里先不建的两格：一侧「移动」、另一侧「才出来」的组合（落到那里会被凸包投影成邻居的混合）。</summary>
+        private static readonly Vector2Int[] CheekSkip = { new Vector2Int(1, 2), new Vector2Int(2, 1) };
+
+        /// <summary>
         /// **`MouthShift` 不再挖角**（2026-09-29 用户定：「其实补俩同名的点就够了吧」）——
         /// 上排左右两格补回来、**复用同侧下排的片段**（见 `MouthShiftReuse`）。
         /// 历史：2026-09-28 深夜曾挖掉 `(0,1)` 左上 / `(2,1)` 右上（"上移 × 侧移"在设备上到不了），
@@ -373,11 +384,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ⚠️ 注视两棵树删了（2026-09-27：朝向交给 Warudo 的 LookAt + IK）；4 根轴照旧发布当出口
             // ⚠️ 颊那两棵 **ARKit** 树 + 鼻那棵 2D 表都删了（2026-09-27）：颊（`cheekSquint`）在二次元角色上表现不了；
             //    鼻收成**一个状态**（鼻子上顶）⇒ 挪到下面的 1D 片段表（`NoseUp`）。
-            // 颊轴（2026-09-27 加）：**鼓嘴**形态用的 2D 表 —— X = 左颊 / Y = 右颊，各两档 = 4 格。
+            // 颊轴（2026-09-27 加）：**鼓嘴**形态用的 2D 表 —— X = 左颊 / Y = 右颊。
             // ⚠️ 与上面删掉的那两棵**不是一回事**：它们吃 ARKit 的 `cheekSquint`，这张吃
             //    `Ho/Drive/Cheek/Left|Right/Puff`（两条**鼓嘴颊轴**）—— 单边鼓时嘴唇被推过去（`mouthLeft/Right`
-            //    0.67~0.87）把左右分开，双鼓时它们 ≈0.03、靠 `cheekPuff` 同时点亮两侧。姿势还没画（空片段）。
-            new TableSpec { Name = "Cheek", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = ZeroOne, YValues = ZeroOne }
+            //    0.67~0.87）把左右分开，双鼓时它们 ≈0.03、靠 `cheekPuff` 同时点亮两侧。
+            // ⭐ **2026-09-29 用户定：刻度 {0,1} → {0, 0.3, 1}**：0 = 月牙藏在脸里 · 0.3 = 月牙挪出来 · 1 = 月牙被移动；
+            //    3×3 里只摆 7 格（`(1,2)` / `(2,1)` 先不建）。⚠️ 配套：中间层那两根轴要压成台状（0.40 以下严格 0、
+            //    0.40 瞬跳到 0.3），否则轴落在 0 与 0.3 之间会把「半出来的月牙」画出来 ⇒ 穿模。
+            new TableSpec { Name = "Cheek", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = CheekPuffTicks, YValues = CheekPuffTicks, Skip = CheekSkip },
         };
 
         /// <summary>
@@ -794,8 +808,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return new Vector2(spec.XValues[i], spec.YValues[j]);
         }
 
-        /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>
-        private static string SlotName1D(string tree, string token, int count, int i)
+        /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>        private static string SlotName1D(string tree, string token, int count, int i)
         {
             return tree + "__" + token + "__A" + count + "X" + i;
         }

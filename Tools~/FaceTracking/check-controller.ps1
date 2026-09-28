@@ -344,8 +344,9 @@ $slotSpec = [ordered]@{
     'MouthJaw'    = @{ x = 'JawSide'; y = 'Jaw'; a = 3; ys = @(0, 1); skip = @('0,0', '2,0') }
     'LidL'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
     'LidR'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
-    # 颊轴（2026-09-27 加）：两根轴各两档 ⇒ 4 格。⚠️ 姿势还没画（现在是空片段），槽位名先钉死。
-    'Cheek'       = @{ x = 'PuffL';    y = 'PuffR';     a = 2; ys = @(0, 1) }
+    # 颊轴（2026-09-27 加）：两根轴各 **3 档 {0, 0.3, 1}**（2026-09-29 用户定）⇒ 3×3 里摆 7 格。
+    # 0.3 = 小月牙从脸里挪出来那一档，1 = 月牙被移动；`(1,2)`/`(2,1)` 先不建。
+    'Cheek'       = @{ x = 'PuffL';    y = 'PuffR';     a = 3; ys = @(0, 1, 2); skip = @('1,2', '2,1') }
 }
 # 副本表的槽位规则与主版一致（槽位名前缀换成 `<主版>Expr`）。⚠️ 嘴 2026-09-27 起没有副本
 $slotCopyOf = [ordered]@{ }
@@ -394,8 +395,8 @@ $scaleOf = [ordered]@{
     # 舌头（2026-09-28 深夜）：**不在 2D 刻度清单里** —— 1D 5 格的阈值在 `$simple1DSlot` / `$scaleOf1D`。
     'LidL'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
     'LidR'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
-    # 颊轴：0 / 1 两档（轴本身就是 0~1 的形状权重）⇒ 4 个点的坐标只能是 0 / 1
-    'Cheek'       = @{ x = @(0.0, 1.0);       y = @(0.0, 1.0) }
+    # 颊轴：0 / 0.3 / 1 三档（0.3 = 月牙挪出来那一档；轴曲线负责把 0 与 0.3 之间压掉）
+    'Cheek'       = @{ x = @(0.0, 0.3, 1.0);  y = @(0.0, 0.3, 1.0) }
     # 下巴：JawSide 实测单侧只到 0.52（±0.65 老刻度够不着）· Jaw 0 / 0.75
     'MouthJaw'    = @{ x = @(-0.52, 0.0, 0.52); y = @(0.0, 0.75) }
 }
