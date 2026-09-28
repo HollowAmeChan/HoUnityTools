@@ -941,6 +941,11 @@ Form = [ (mouthSmileLeft + mouthSmileRight) + (mouthDimpleLeft + mouthDimpleRigh
 * `Editor/FaceTracking/HoFaceControllerSkeletonBuilder.cs`：补 2D 表 + `MouthJawOverride`（这份**现在仍是 1D 2 格、`JawSide` 还是 ±0.65**，与生成器/资产不同步）；
 * 资产：只在 MouthJaw 块里动 2 个坐标（备份在 `.research/jaw-side-2026-09-29/PTP_CTR_Face_VTS.before-cellmove.controller`）。
   ⚠️ **别用 `utf-8-sig` 去写那份 `.controller`** —— 它原本没有 BOM（脚本加上了，已随还原去掉）。
+  ⚠️⚠️ **分工（2026-09-29 用户定，别再犯）**：**状态点永远由用户手调**（他在 Animator 窗口里拉）；
+  中间层这一侧只负责**轴值表达式**（判据 / 换算），外加把**每个状态实测落在哪**交给他当摆点依据。
+  ⇒ 这一节真正的产出是上面那张**落点表**，不是"替他把格子搬好"。
+  摆点依据：**张嘴第一段** 下巴左 ≈(+0.35, Jaw 0.40) / 下巴右 ≈(−0.45, Jaw 0.36)；
+  **张嘴满** 下巴左 ≈(+0.54, Jaw 0.61) / 下巴右 ≈(−0.42, Jaw 0.69)；**唇闭三组** ≤0.05（在死区里，别给它们摆点）。
 
 **代价与附带好处**：**张嘴满 + 横移**从「满」退到部分（用户判定那个状态几乎不会触发 ✓）；附带**顶行不再是三个共线格**——
 共线点在 `FreeformCartesian2D` 里是退化输入（舌头那棵树记过：不可预测、可能出负权重）。
