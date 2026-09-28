@@ -2743,4 +2743,17 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 - **可重复叠加**：原来所有修饰符状态都是"每行一份"（`smooth[row]`、`stepRows[row]`、FIFO 每行一条）⇒ **同一行叠两个同类修饰符会共用状态**（今天早先那行 `[平滑, 维持, 平滑]` 的两个平滑就是串成一个怪滤波器）。改成按 **`行 × 第几个修饰符`** 开槽（`modifierOffset` + `modifierSlots`），输入行与输出行各一套。⇒ 两个平滑 = 真级联，两个维持互不干扰。
 - **多条规则写同一个值**：修饰符状态挂在**行**上（不是名字上）⇒ 同名链的每条链行各有各的计时器；共享的只有输出表（后写覆盖先写，那是设计）。这条在改完后依然成立，且更精确。
 - **改动面**：`Runtime/FaceTracking/HoFaceMiddleware.cs`（`HoFaceStep` 两个字段）· `HoFaceProfileJson.cs`（读写，0 不写）· `Editor/FaceTracking/HoFaceAnimationSession.cs`（`Step()` 的候选计时 + 槽位化 + 数组分配）· `HoFaceProfilePanel`（面板两个数字格）。⚠️ **需要 Unity 重编译一次**；编译前的旧运行时读这份 profile 会忽略两个新字段 ⇒ 去抖暂时失效（其余照旧）。
-- **验证**：`profile-verify` 引用了 Runtime 源码，`dotnet build` **0 错误**且真读取器解析通过；`Editor/` 那两份不在该工程里，只能人工核对（括号平衡 + 全文复查引用点）。
+- **验证**：`profile-verify` 引用了 Runtime 源码，`dotnet build` **0 错误**且真读取器解析通过；`Editor/` 那两份不在该工程里，只能人工核对（括号平衡 + 全文复查引用点）—— 后来发现 rig 里有 Unity 生成的 `HoUnityTools.Editor.csproj`（源码指向仓库），`dotnet build` 它就能**真编译** Editor 侧，**0 错误**。
+
+---
+
+## 2026-09-29 · 宽度轴归一化到 0…1（`MouthWidth`）
+
+**① 用户报的问题**（原文）：「mouthwidth 现在轴值跟状态点摆放有问题，首先轴值就不能为负数，根本就做不到缩嘴，其次是嘴满这边填的 2 应该改成 1 满，我们表达式就输出不了 2」。
+**② 先量后改**：中间层那条链并没有夹值 —— `Ho/Style/MouthWidth/Read → Ho/Style/MouthWidth → Ho/Drive/Mouth/Pucker` 三行的曲线都是恒等（前两行是空曲线），发布路径也只 `shadow.SetFloat(参数, 值)`（`Finite01` 只用在输入模式上）。所以"负不了"不是夹出来的，而是**刻度本身的量纲不对**：轴在 `−0.93…+2.0`，而实测的常用范围够不到 −0.93（缩满）也够不到 +2.0（抿嘴嘴宽那种极端），刻度数字既带负号又大于 1。
+**③ 做法**：**归一化**到 `0…1` —— 中间层 `Ho/Style/MouthWidth/Read` 的曲线换成**分段线性映射**：`−0.93 → 0`、中刻度 `−0.09 → 0.5`、`+2.0 → 1`，并把拐点 **−0.09 单独成一个键**（两侧斜率不同：(0.5/0.84) 与 (0.5/2.09)；少了这个键就等于让一段跨过拐点，切线缩放不再逐段等价）。原来的 `±0.05 死区 / ±0.08 斜坡` 一并按同一斜率缩放、保留；范围外按端点算（raw ≤ −0.93 ⇒ 0，raw ≥ 2.0 ⇒ 1）。
+  ⇒ **逐段等价**：同样的输入驱动同样的形态，只是树的刻度数字变成 `0 / 0.5 / 1`（非负、满端为 1）。校验过的映射：raw −0.5 ⇒ 0.256 · −0.09 ⇒ 0.500 · 0 ⇒ 0.522 · 0.5 ⇒ 0.641 · 1.0 ⇒ 0.761 · 2.0 ⇒ 1.000。
+**④ 控制器侧**：用户要求**大控制器也改** ⇒ `PTP_CTR_Face_VTS.controller` 的 `MouthWidth` 三个 `m_Threshold` 改成 `0 / 0.5 / 1`（改前备份在 `%TEMP%\PTP_CTR_Face_VTS.beforeWidthNorm.controller`）；联合诊断件 `DIAG_PuckerNose.controller` 重新生成后同样改（同一 GUID）。
+  工具三处同步：生成器 `$mouthWidthMeasured = @(0.0, 0.5, 1.0)`、检查器 `'MouthWidth' … thr = @(0.0, 0.5, 1.0)`、构建器 `MouthWidthMeasured = { 0f, 0.5f, 1f }`（顺手把 `NoseUpTicks` 的 0.7 改成 1 —— 用户 09-29 定的值，一直没落进 `.cs`）。
+**⑤ 出口行不受影响**：VTS 出口 `MouthPucker` 走的是另一套原始公式 `((dimpleR + dimpleL) × 2) − mouthPucker`，不读这根轴 ⇒ 归一化只在控制器内部生效。
+**⑥ 教训（写脚本改 `.controller` 时必须遵守）**：我第一版补丁脚本用 `text[:s] + body2 + text[e:]` 替换块，**漏掉了块头部** `--- !u!206 &id` ⇒ 文件当场坏掉（块数 21→20、出现悬空引用 `206000011`）。是 `check-controller-integrity.py` 抓到的 ✓ —— **文本级改控制器后一律跑它**。正确写法：`text[:s] + '--- !u!206 &%s\n' % fid + body2 + text[e:]`。

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -264,18 +264,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly Vector2Int[] MouthShiftSkip = { new Vector2Int(0, 1), new Vector2Int(2, 1) };
         /// <summary>
         /// **`MouthWidth`（1D 3 格，2026-09-28 傍晚重返）** 的刻度 —— 轴就是既有的 `Mouth/Pucker`
-        /// （= `2×dimple − pucker`）。9 段补录实测（`静态 / 抿嘴嘴宽 / 收嘴不撅`）：
-        /// **−0.93 收嘴不撅（窄）· −0.09 静态（中）· +2.0 抿嘴嘴宽（宽）**。
-        /// ⚠️ 注意这根轴是 `2×(dimpleL + dimpleR) − pucker`（**2×和**，不是 2×均值）⇒ 宽端的量纲是 2 不是 1
+        /// （= `2×dimple − pucker`）。9 段补录实测的**原值**：`−0.93 收嘴不撅（窄）· −0.09 静态（中）· +2.0 抿嘴嘴宽（宽）`。
+        /// ⭐ **2026-09-29 归一化到 0…1**（用户定：轴不能为负、满端填 1）：中间层那条曲线把 −0.93…+2.0
+        /// **分段线性**映到 0…1（拐点仍落在中刻度上）⇒ 形态行为逐段等价，只是刻度数字变成 `0 / 0.5 / 1`。
+        /// ⚠️ 原轴是 `2×(dimpleL + dimpleR) − pucker`（**2×和**，不是 2×均值）⇒ 归一化前宽端量纲是 2
         /// （抿嘴嘴宽 4×0.525 − 0.104 = 1.996）。笑 0.78 / 撇嘴 0.815 落在中偏宽。
-
         /// ⚠️ 另一根候选 `(press + shrug) / 2` 把「收嘴不撅」排在静态**之下**（0.09 &lt; 0.17）⇒ 反的、弃用。
-        /// ⚠️ 4 格的格子名仍按**索引**编（`A3X&lt;i&gt;`）⇒ 换刻度不改名。
         /// </summary>
-        private static readonly float[] MouthWidthMeasured = { -0.93f, -0.09f, 2.0f };
+        private static readonly float[] MouthWidthMeasured = { 0f, 0.5f, 1f };
 
-        /// <summary>鼻子上顶的两档：不顶 / 顶。</summary>
-        private static readonly float[] NoseUpTicks = { 0f, 0.7f };   // 0.7 = 实测（挤眼+鼻上抬：avg 0.70 / max 0.75）
+        /// <summary>鼻子上顶的两档：不顶 / 顶。⭐ 顶 = **1**（2026-09-29 用户定；实测 0.70/0.75 只是"平均/最大"，刻度取 1 让满档干净）。</summary>
+        private static readonly float[] NoseUpTicks = { 0f, 1f };
 
         /// <summary>
         /// **`MouthCore` 挖掉的一格**（2026-09-27 用户定）：顶行中间 `(Form 0.75 × Open 0.75)` —— 现在 Form 是
