@@ -563,6 +563,33 @@ foreach ($sw in $switchSpec.Keys) {
     foreach ($w in $want.kids) { if ($names -notcontains $w) { $problems.Add("1D 开关 $sw 少了子节点 $w（实际 $($names -join ', ')）") } }
 }
 
+# ── 曲线 ↔ 刻度 对齐（2026-09-29 加，用户：「台阶跟我们动画最好精准对上，不然鼓嘴移动不会从初始位置开始」）──
+# 台状曲线的**落点必须精确等于表里的刻度**：落在刻度之间 ⇒ 混合出半个状态（月牙半出来 ⇒ 穿模；
+# 或者"移动"从半路开始而不是从"出来"那个姿势开始）。这里把"哪一个落点该等于哪个刻度"钉死。
+$curveAlign = @(
+    # 颊的两根轴：落点只允许 {0, 0.3, 1}，而且必须**有一个精确的 0.3**（= 「月牙挪出来」那一档）
+    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.3, 1.0); riser = 0.3 }
+    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.3, 1.0); riser = 0.3 }
+)
+foreach ($spec in $curveAlign) {
+    $row = @($prof.outputs | Where-Object { $_.parameter -eq $spec.row })
+    if ($row.Count -eq 0) { continue }
+    $keys = $row[0].curve.keys
+    if ($null -eq $keys -or @($keys).Count -lt 2) {
+        $problems.Add("$($spec.row) 没有可用曲线 —— 表里有 0.3 这一档就必须配台状曲线（否则轴会落在刻度之间）")
+        continue
+    }
+    $vals = @($keys | ForEach-Object { [double]$_.v })
+    $outside = @($vals | Where-Object { -not (HasNearValue $spec.ticks $_) })
+    if ($outside.Count -gt 0) {
+        $problems.Add("$($spec.row) 的曲线落点不在表 $($spec.tree) 的刻度里：" + (($outside | Sort-Object -Unique) -join ', ') + "（轴会停在刻度之间 ⇒ 混合出半个状态）")
+    }
+    if (-not (HasNearValue $vals ([double]$spec.riser))) {
+        $problems.Add("$($spec.row) 的曲线里没有精确的 $($spec.riser) 落点（= 表里「出来」那一档；没有它，移动就不是从出来的姿势开始）")
+    }
+    else { $notes.Add("曲线对齐 $($spec.row)：落点 " + (($vals | Sort-Object -Unique) -join ' / ') + " ⊆ 刻度 " + ($spec.ticks -join ' / ') + " ✓") }
+}
+
 # ── 复用检查（2026-09-29 加）：**两个格子指向同一个动作**是有意的设计（`MouthShift` 上排左右复用同侧下排），
 #    但必须**精确复用同侧那一个** —— 接错了（比如右上指到嘴左移）会静默变成一个很怪的姿势，别处都看不出来。
 #    ⚠️ 同名本身不是错：Unity 里混合树的孩子只是「动作 + 坐标 + 阈值」，两格指向同一个动作完全合法。
