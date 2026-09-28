@@ -2883,7 +2883,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/X",
-                        "expression":  "clamp((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight), -1, 1)",
+                        "expression":  "clamp(((mouthLeft - mouthRight) + (jawLeft - jawRight)) * 0.5 + (mouthSmileLeft - mouthSmileRight), -1, 1)",
                         "defaultValue":  0,
                         "curve":  {
                                       "keys":  [
@@ -2898,7 +2898,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Mouth/X = **整嘴左右平移**\n（2026-09-28 重建，41 段实测）。\n⭐ 判据 = `(mouthLeft − mouthRight) + (smileL − smileR)`：ARKit 的 `mouthLeft/Right` 本来就是「嘴整体左/右移」的语义，实测干净得离谱 —— 整嘴右移 `mouthLeft` **0.963~0.967**、整嘴左移 `mouthRight` **0.967~0.976**，而同一个人「嘴角往左/右撇」只有 **0.047~0.136** ⇒ 差 **7~9 倍**（缝 +0.594）。\n⭐ **曲线 = 死区 ±0.20（0.20~0.30 斜坡、0.30 之上近恒等）**：把「撇嘴」那点位移压成 0，只有真的整嘴平移才推得动。\n⚠️ 旧版里借来的 `3 × (dimpleL − dimpleR)` **已拿掉** —— dimple 归嘴角层，两层不许吃同一个信号（否则一个动作被推两遍）。\n⚠️ 刻度摆 **±0.95**（实测满档 0.96）；这棵树挂形态门（倒V / 鼓嘴亮起来时让位）。\n【经验参】死区膝 0.20、过渡 0.10（整嘴平移 0.96 vs 嘴角撇 ≤0.14）；0.95 = 刻度；平滑 0.009s"
+                        "notes":  "整嘴左右平移：**嘴与下巴两路取平均** + 嘴角不对称那一项。\n判据 = `((mouthLeft − mouthRight) + (jawLeft − jawRight)) / 2 + (smileL − smileR)`。\n为什么加下巴那一路：15 次「平移下巴」实测 corr(嘴差, 颌差) = 0.92~0.99（同一动作、同号），而且下颌读数普遍更强（张嘴第一段那档是 2 倍）⇒ 只吃嘴那一路时，闭嘴/半张的平移进不了死区、嘴不动。\n为什么取平均而不是相加：相加会把满横移顶到 1.4 以上（半程就饱和）；平均保持原标定（满横移 ≈ 0.93 ≈ 树上 ±0.95 刻度）。\n⚠️ 符号：`jawLeft − jawRight` 与 `mouthLeft − mouthRight` **同号**（实测），不是 `JawSide` 那行的 `jawRight − jawLeft`。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Y",
@@ -3991,7 +3991,7 @@
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2, "enterSeconds": 0.5, "exitSeconds": 0.25}]}],
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2, "enterSeconds": 0.75, "exitSeconds": 0.25}]}],
                         "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\n维持 trigger 0.88 / 迟滞 0.2 / 最短保持 0.1s / **进维持 0.5s、退维持 0.25s**（硬计时器：在触发线之上连续待够 0.5s 才点亮；掉到释放线之下连续 0.25s 才熄灭）。\n实际点亮 ≈ 0.5s + 平滑爬升 0.17s ≈ 0.67s（想卡到 0.5s 就把进维持降到 0.35）。\n三条线换算到 mouthPucker（膝 0.7 / 宽 0.26）：点亮 0.929 / 释放 0.877。\n⚠️ 去抖挂在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路必须瞬时。"
                     },
                     {
