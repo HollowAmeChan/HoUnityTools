@@ -9,6 +9,9 @@
 #
 # 退出码：0 = 参数与结构都过；1 = 有问题（逐条打出来）。
 param(
+    # 隔离模式：只查这份控制器**有**的东西（DIAG_* 那种单区控制器天然缺树/缺参数）。
+    # 「缺」降级成注；树类型 / 轴接线 / 刻度与逐格坐标 / 槽位名 / 变体镜像 / WD / Normalize 照旧严格。
+    [switch] $Isolation,
     [Parameter(Mandatory = $true)][string] $Path,
     [string] $Profile = 'D:\Unity_Fork\HoUnityTools\Editor\FaceTracking\Profiles\ho-iPhoneVTS.hoface.json',
     [string] $ClipFolder = 'D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\Animations'
@@ -140,7 +143,7 @@ foreach ($id in $docs.Keys) {
 
 # 参数核对
 foreach ($n in ($expected.Keys | Sort-Object)) {
-    if (-not $declared.ContainsKey($n)) { $problems.Add("缺参数：$n"); continue }
+    if (-not $declared.ContainsKey($n)) { if ($Isolation) { $notes.Add("缺参数：$n") } else { $problems.Add("缺参数：$n") }; continue }
     if ($declared[$n].Type -ne '1') { $problems.Add("参数 $n 不是 Float（type=$($declared[$n].Type)）") }
     if ([Math]::Abs($declared[$n].Default - $expected[$n]) -gt 0.0001) {
         $problems.Add("参数 $n 默认值应为 $($expected[$n])，实际 $($declared[$n].Default)")
@@ -237,7 +240,7 @@ if ($normalizedOn.Count -gt 0) {
 
 foreach ($name in $expectedTrees.Keys) {
     $want = $expectedTrees[$name]
-    if (-not $trees.ContainsKey($name)) { $problems.Add("缺树：$name（$($want.type)）"); continue }
+    if (-not $trees.ContainsKey($name)) { if ($Isolation) { $notes.Add("缺树：$name（$($want.type)）") } else { $problems.Add("缺树：$name（$($want.type)）") }; continue }
     $got = $trees[$name]
     if ($got.Type -ne $want.type) { $problems.Add("树 $name 类型应为 $($want.type)，实际 $($got.Type)") }
     if ($want.x -and $got.X -ne $want.x) { $problems.Add("树 $name 的 X 参数应为 $($want.x)，实际 $($got.X)") }
@@ -371,7 +374,8 @@ $scaleOf = [ordered]@{
     #    其余格仍在 0 / 0.4 / 0.75 上 —— 所以这一列是"刻度 ∪ 移位值"，移位那格由 $exactPos 钉死。
     # ⚠️ MouthCore 也是**手工拉的自由点集**（8 个点全拉过）⇒ 这一列列的是 8 个点用到的全部坐标值，
     #    真正的规格在下面的 $exactPos 里（8 个点逐个钉死）。
-    'MouthCore'   = @{ x = @(-0.5, 0.0, 0.47, 0.482, 0.907, 0.926, 0.968); y = @(-0.024, -0.017, 0.0, 0.267, 0.336, 0.4, 0.596, 0.75) }
+    # ⭐ 权威 = 隔离控制器 `Diagnostics_20260928/DIAG_MouthCore_Aligned11.controller`（2026-09-29 用户定）
+    'MouthCore'   = @{ x = @(-0.5, -0.4225, -0.345, -0.048, -0.03, -0.012, 0.382, 0.3905, 0.776, 0.811, 0.846); y = @(-0.007, -0.0035, 0, 0.25, 0.32825, 0.4065, 0.463, 0.507, 0.813, 0.926) }
     # ⚠️ 下巴 2026-09-28 深夜降成 **1D 2 格** ⇒ 不在 2D 刻度表里（6 个手拉点已退役，见 `$simple1DSlot`）。
     # 整嘴平移（2026-09-28 下午新建、傍晚收成 **3×2**）：X ±0.95（满档 0.96）· Y **只有 0 / +1 两档**
     'MouthShift'  = @{ x = @(-0.95, 0.0, 0.95); y = @(0.0, 1.0) }
@@ -443,20 +447,20 @@ foreach ($name in $slotSpec.Keys) {
 # 逐格移位：这些槽位**故意不在刻度值上**（实测定），坐标在这里钉死 ——
 # 生成器（文本端 `over` / Unity 端 `Override`）改刻度或挪点时，这一条会立刻响。
 $exactPos = [ordered]@{
-    # ⚠️ **`MouthCore` 8 个点全是手工拉的**（2026-09-27 用户第二次改：拉了 X1/X2 两列）⇒ 逐个钉死。
-    #    顺序（不能反）：**先读资产 → 再改两个生成器 → 最后改这里**。
-    '嘴苦闭'       = @(-0.5, 0.0)
-    '嘴苦半张'     = @(-0.5, 0.4)
-    '嘴苦满'       = @(-0.5, 0.75)
-    '嘴平闭'       = @(0.0, 0.0)
-    '嘴笑闭'       = @(0.482, -0.017)
-    '嘴大笑闭'     = @(0.907, -0.024)
-    '嘴平半张'     = @(0.0, 0.4)
-    '嘴笑半张'     = @(0.47, 0.336)
-    '嘴大笑半张'   = @(0.968, 0.267)
-    '嘴平满'       = @(0.0, 0.75)
-    '嘴大笑满'     = @(0.926, 0.596)
-    # ⚠️ 下巴那 6 个手拉点 2026-09-28 深夜退役（用户「左右两个点完全没必要」）⇒ 不在这里钉了。
+    # ⭐ **权威 = 隔离控制器**（2026-09-29 用户定：分块隔离的控制器才是真验收基准）：
+    #    `Diagnostics_20260928/DIAG_MouthCore_Aligned11.controller` 的 11 格坐标（`tree-dump.py` 读出）。
+    #    ⚠️ 用户挪点之后：**先读资产 → 再改生成器的 `$mouthCoreOver` → 最后改这里**（顺序不能反）。
+    '嘴苦闭'          = @(-0.5, 0)
+    '嘴苦半张'         = @(-0.4225, 0.463)
+    '嘴苦满'          = @(-0.345, 0.926)
+    '嘴平闭'          = @(-0.012, 0)
+    '嘴平半张'         = @(-0.03, 0.4065)
+    '嘴平满'          = @(-0.048, 0.813)
+    '嘴笑闭'          = @(0.382, -0.0035)
+    '嘴笑半张'         = @(0.3905, 0.32825)
+    '嘴大笑闭'         = @(0.776, -0.007)
+    '嘴大笑半张'        = @(0.811, 0.25)
+    '嘴大笑满'         = @(0.846, 0.507)
 }
 foreach ($slot in $exactPos.Keys) {
     $tree = $null

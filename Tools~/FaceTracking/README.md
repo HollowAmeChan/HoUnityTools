@@ -10,6 +10,7 @@
 | `make-vts-controller.ps1` | 从 profile 生成控制器骨架（区域 → 表 / Direct 张量积表 / 1D 表 / 开关 → 槽位 + 空片段）。**已存在的片段不覆盖**（作者烘进去的姿势安全） | `powershell -File Tools~/FaceTracking/make-vts-controller.ps1 -Template <模板.controller> [-ArkitPassthrough -ArkitProfile <p>] [-NoClips]`<br>⚠️ `-Template` **必填**；PowerShell 5.1 下还要显式给 `-ArkitProfile`（`$PSScriptRoot` 在 param 默认值里是空的） |
 | `wire-slot-clips.ps1` | 把 `Animations/` 里的片段接进槽位（按 `<槽位名>` 或 `HO-<槽位名>` 匹配，优先 On；幂等，会打印缺哪些） | `powershell -File Tools~/FaceTracking/wire-slot-clips.ps1 -Apply`<br>⚠️ **生成完必须跑**，否则槽位是空的（"动画没了"多半是这一步没跑） |
 | `check-controller.ps1` | 对着 profile 核控制器：参数名/默认值/树型/轴接线/槽位名/槽位总数/从根可达性/每格坐标 | `powershell -File Tools~/FaceTracking/check-controller.ps1 -Path <x.controller>` |
+| ↑ **隔离模式** `-Isolation` | 只查这份控制器**有**的东西（`DIAG_*` 单区控制器天然缺树/缺参数）：「缺」降级成注，树型/轴接线/**刻度与逐格坐标**/槽位名/变体镜像/WD/Normalize 照旧严格。**验收基准就是这些隔离控制器** | `… -Path <DIAG_xxx.controller> -Isolation` |
 | `check-controller-integrity.py` | 不依赖 profile 的**完整性**检查：块结构、悬空引用、状态机接线（"文件坏没坏一跑就知道"） | `python Tools~/FaceTracking/check-controller-integrity.py <x.controller>` |
 | `make-checker-fixture.ps1` | 造一份"形状正确"的夹具，验检查器的**通过路径**（检查器自己坏了也要能发现） | `powershell -File Tools~/FaceTracking/make-checker-fixture.ps1` |
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
