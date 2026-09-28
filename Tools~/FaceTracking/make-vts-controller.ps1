@@ -290,7 +290,8 @@ W '  m_ObjectHideFlags: 0'
 W '  m_CorrespondingSourceObject: {fileID: 0}'
 W '  m_PrefabInstance: {fileID: 0}'
 W '  m_PrefabAsset: {fileID: 0}'
-W '  m_Name: PTP_CTR_Face_VTS'
+# 资产内部名 = 输出文件名（Unity 显示的是这个，不是磁盘文件名）⇒ VTS 与 ARKit 两份各自叫自己的名字
+W ('  m_Name: ' + [System.IO.Path]::GetFileNameWithoutExtension($Out))
 W '  serializedVersion: 5'
 # ── ARKit 直通模式：把上面那套 VTS 规格整体换掉（参数 / 规格 / 区域全部重建）──────────
 # 为什么放在这里：参数是在下一行写进 YAML 的，规格是在更下面被树循环消费的 ⇒ 在这一点替换两样都来得及。
