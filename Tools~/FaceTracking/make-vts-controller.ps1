@@ -10,7 +10,9 @@
 #   * 「槽位名 = 片段名」这条约定从第一天就成立 —— 姿势烘焙直接往这些文件里写；
 #   * 空片段不写任何曲线 ⇒ 运行期行为与"空 Motion"完全相同（权重只由坐标决定）。
 param(
-    [string] $Template = 'D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\PTP_CTR_Face_ARKit.controller',
+    # 模板 = Unity 亲手写出来的那份 .controller（形状最保险）。2026-09-28：旧 ARKit 控制器要就地重建成
+    # "ARKit 直通"版本，所以模板改成这份备份（工具目录里，不再依赖测试工程里那份）。
+    [string] $Template = (Join-Path $PSScriptRoot 'templates\PTP_CTR_Face_ARKit.template.controller'),
     [string] $Out      = 'D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\PTP_CTR_Face_VTS.controller',
     [string] $Profile  = 'D:\Unity_Fork\HoUnityTools\Editor\FaceTracking\Profiles\ho-iPhoneVTS.hoface.json',
     [string] $ClipFolder = 'D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\Animations',
