@@ -2745,6 +2745,11 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 - **改动面**：`Runtime/FaceTracking/HoFaceMiddleware.cs`（`HoFaceStep` 两个字段）· `HoFaceProfileJson.cs`（读写，0 不写）· `Editor/FaceTracking/HoFaceAnimationSession.cs`（`Step()` 的候选计时 + 槽位化 + 数组分配）· `HoFaceProfilePanel`（面板两个数字格）。⚠️ **需要 Unity 重编译一次**；编译前的旧运行时读这份 profile 会忽略两个新字段 ⇒ 去抖暂时失效（其余照旧）。
 - **验证**：`profile-verify` 引用了 Runtime 源码，`dotnet build` **0 错误**且真读取器解析通过；`Editor/` 那两份不在该工程里，只能人工核对（括号平衡 + 全文复查引用点）—— 后来发现 rig 里有 Unity 生成的 `HoUnityTools.Editor.csproj`（源码指向仓库），`dotnet build` 它就能**真编译** Editor 侧，**0 错误**。
 
+**⑨ 同日第三轮：进维持 ×2 ⇒ 1.7 s**（用户：「V嘴维持现在调了好多遍了我感觉还是得改回最开始那种很难进入的状态，**现在这个进入加一倍吧**」）。
+`enterSeconds` 0.5 → 0.75 → 0.85 → **1.7**（退维持仍 0.25）⇒ 实际点亮 ≈ 1.7 + 平滑爬升 0.17 ≈ **1.87 s**。
+⚠️ 只动 `enterSeconds`，`trigger` 0.88 / `threshold` 0.2 / `hold` 0.1 一律不动（那三个决定"多像才够"与"多难退出"，与"要多持久"是两根轴）。
+⚠️ 顺手把 profile 那行 notes 里**过期的数字**（还写着 0.5 s / 0.67 s）对齐成现值 —— 「把工具对齐到资产」的同一类规矩。⚠️ 面板改了值之后**必须重新载入**才看得见（本轮只改文件，面板与 rig 都已同步）。
+
 ---
 
 ## 2026-09-29 · 宽度轴归一化到 0…1（`MouthWidth`）
