@@ -3960,12 +3960,12 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV/PuckerGate",
-                        "expression":  "clamp((mouthPucker - 0.51) / 0.45, 0, 1)",
+                        "expression":  "clamp((mouthPucker - 0.62) / 0.34, 0, 1)",
 
                         "defaultValue":  0,
-                        "curve":  { "keys": [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "curve":  { "keys": [  ] },
                         "modifiers":  [  ],
-                        "notes":  "噘嘴门（1 = 真噘）：把 mouthPucker 映成 0..1 —— 静息 0.3797 到 0 就归零。\n膝 0.51（+0.10，用户定：说话舔舌误触）/ 宽 0.45（真噘地板 0.9634 处刚好到 1）。\n⚠️ 形状是**斜坡不是门**：门形（`x × clamp((x−膝)/0.02)`）过膝就恒等 ⇒ 抬膝对读数毫无影响。\n起亮点：维持 trigger 0.88 ⇒ mouthPucker ≈ 0.906。"
+                        "notes":  "噘嘴门（1 = 真噘）：把 mouthPucker 映成 0..1 —— 静息 0.3797 到 0 就归零。\n膝 0.62 / 宽 0.34（斜坡；读数到 1 在 0.96）。起亮点 = 膝 + 维持 trigger 0.88 × 宽 ≈ **0.919**。\n⚠️ 必须是斜坡：门形（`x × clamp((x−膝)/0.02)`）过膝就恒等 ⇒ 抬膝对读数毫无影响。\n要再往上：膝 0.65 / 宽 0.31 ⇒ 0.923；0.70 / 0.26 ⇒ 0.929（越高越难误触，轻噘也越容易漏）。"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV/NoseGate",
