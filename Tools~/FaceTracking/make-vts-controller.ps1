@@ -18,7 +18,12 @@ param(
     [string] $Profile  = 'D:\Unity_Fork\HoUnityTools\Editor\FaceTracking\Profiles\ho-iPhoneVTS.hoface.json',
     [string] $ClipFolder = 'D:\Unity_Project\BREAK_URP\Assets\Hollow\土豆\FT\Animations',
     [switch] $NoClips,
-    [switch] $ForceClips
+    [switch] $ForceClips,
+    # ── ARKit 直通模式（2026-09-28 用户定）────────────────────────────────
+    # 结构：root(Direct) → 一个区域 → 每键一棵 1D 表（blendParameter = 键名，刻度 0/1 = Off/On 片段）。
+    # 键名用**规范名**（取自 ARKit 那份配置的输出行）；片段按**不区分大小写**在 ClipFolder 里找。
+    [switch] $ArkitPassthrough,
+    [string] $ArkitProfile = (Join-Path $PSScriptRoot '..\..\Editor\FaceTracking\Profiles\ho-iPhoneVTS.arkit.hoface.json')
 )
 $ErrorActionPreference = 'Stop'
 
@@ -282,6 +287,58 @@ W '  m_PrefabInstance: {fileID: 0}'
 W '  m_PrefabAsset: {fileID: 0}'
 W '  m_Name: PTP_CTR_Face_VTS'
 W '  serializedVersion: 5'
+# ── ARKit 直通模式：把上面那套 VTS 规格整体换掉（参数 / 规格 / 区域全部重建）──────────
+# 为什么放在这里：参数是在下一行写进 YAML 的，规格是在更下面被树循环消费的 ⇒ 在这一点替换两样都来得及。
+if ($ArkitPassthrough) {
+    $arkitProf = Get-Content -LiteralPath $ArkitProfile -Encoding UTF8 -Raw | ConvertFrom-Json
+    $arkitKeys = @($arkitProf.outputs |
+        Where-Object { $_.parameter -and $_.parameter -notlike 'Head/*' } |
+        ForEach-Object { $_.parameter } | Sort-Object -Unique)
+
+    $script:arkitClips = @{}
+    $missing = @()
+    foreach ($k in $arkitKeys) {
+        $found = @{}
+        foreach ($state in @('Off', 'On')) {
+            $pat = "potato_build__BS__{0}__*{1}.anim" -f $state, $k
+            $hit = Get-ChildItem -LiteralPath $ClipFolder -Filter $pat -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) {
+                $meta = $hit.FullName + '.meta'
+                if (Test-Path -LiteralPath $meta) {
+                    $m = Select-String -LiteralPath $meta -Pattern '^guid: ([0-9a-f]{32})' | Select-Object -First 1
+                    if ($m) { $found[$state] = $m.Matches[0].Groups[1].Value }
+                }
+            }
+        }
+        if ($found.ContainsKey('Off') -and $found.ContainsKey('On')) { $script:arkitClips[$k] = $found }
+        else { $missing += $k }
+    }
+    $paired = @($script:arkitClips.Keys | Sort-Object)
+    "ARKit 模式：键 $($arkitKeys.Count) 个 · 片段成对 $($paired.Count) · 缺片段 $($missing.Count)" +
+        $(if ($missing.Count -gt 0) { "`n  缺：" + ($missing -join ', ') } else { "" })
+
+    # 参数 = W/One + 区域门 + 每个键
+    $params = [ordered]@{}
+    $params['Ho/Drive/W/One'] = 1.0
+    $params['Ho/Drive/Gate/Arkit'] = 1.0
+    foreach ($k in $paired) { $params[$k] = 0.0 }
+
+    # 规格：只留 1D 表，其余全空
+    $tables = [ordered]@{}
+    $copies = [ordered]@{}
+    $variants = [ordered]@{}
+    $directTables = [ordered]@{}
+    $switches = [ordered]@{}
+    $variantSwitches = [ordered]@{}
+    $simple1D = [ordered]@{}
+    foreach ($k in $paired) { $simple1D[$k] = @{ p = $k; v = @(0.0, 1.0); t = '' } }
+
+    # 区域：一棵，孩子 = 所有 1D 表，权重恒 1
+    $regions = [ordered]@{ 'ArkitRegion' = $paired }
+    $gateOfRegion = [ordered]@{ 'ArkitRegion' = 'Arkit' }
+    $regionWeights = @{}   # 必须是 hashtable：下面区域循环用的是 .ContainsKey
+}
+
 W '  m_AnimatorParameters:'
 foreach ($n in $params.Keys) {
     W "  - m_Name: $n"
@@ -442,6 +499,22 @@ function SlotKids1D([string]$tree, [array]$xv, [string]$xt) {
     $kids = @()
     for ($i = 0; $i -lt $xv.Count; $i++) {
         $name = ("{0}__{1}__A{2}X{3}" -f $tree, $xt, $xv.Count, $i)
+        # ARKit 直通模式：这一格直接引用作者现成的开关片段（不建空槽）
+        if ($script:arkitClips -and $script:arkitClips.ContainsKey($tree)) {
+            $state = if ($i -eq 0) { 'Off' } else { 'On' }
+            $display = $tree + '__' + $state
+            $motion = "{fileID: 7400000, guid: $($script:arkitClips[$tree][$state]), type: 2}"
+            WriteTree $display 4 'Blend' 'Blend' @(@{ motion = $motion; x = 0; y = 0; direct = $wOne })
+            $kids += @{
+                motion = "{fileID: $(TreeId $display)}"
+                x      = 0
+                y      = 0
+                direct = 'Blend'
+                thr    = $xv[$i]
+                name   = $display
+            }
+            continue
+        }
         $display = SlotDisplay $tree $i 0
         if (-not $display) { continue }
         WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
