@@ -3991,7 +3991,7 @@
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2, "enterSeconds": 0.75, "exitSeconds": 0.25}]}],
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2, "enterSeconds": 0.85, "exitSeconds": 0.25}]}],
                         "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\n维持 trigger 0.88 / 迟滞 0.2 / 最短保持 0.1s / **进维持 0.5s、退维持 0.25s**（硬计时器：在触发线之上连续待够 0.5s 才点亮；掉到释放线之下连续 0.25s 才熄灭）。\n实际点亮 ≈ 0.5s + 平滑爬升 0.17s ≈ 0.67s（想卡到 0.5s 就把进维持降到 0.35）。\n三条线换算到 mouthPucker（膝 0.7 / 宽 0.26）：点亮 0.929 / 释放 0.877。\n⚠️ 去抖挂在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路必须瞬时。"
                     },
                     {

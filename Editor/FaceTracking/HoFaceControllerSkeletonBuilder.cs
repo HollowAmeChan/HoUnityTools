@@ -242,7 +242,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// ⚠️ `MouthCore` 现在是**四列**（Form = −1 / 0 / 0.75 / 1）：−1 那一列 = 苦（要画 苦×闭/半张/张满），
         /// 挖掉的那格索引从 `(1,2)` 变成 **`(2,2)`**。
         /// </summary>
-        private static readonly float[] ShiftXMeasured = { -0.95f, 0f, 0.95f };
+        private static readonly float[] ShiftXMeasured = { -0.6f, 0f, 0.6f };
         /// <summary>
         /// **整嘴平移的 Y 只有两档**（2026-09-28 傍晚用户实测「shift 根本不会往下移动，只有 6 个点的状态」）：
         /// 下移那一档**不存在**（`Mouth/Y` 的负半边 = 闭唇下颌下拉，实测在真机上到不了 / 被咀嚼抢），
