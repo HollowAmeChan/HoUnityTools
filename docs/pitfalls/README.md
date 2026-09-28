@@ -11,6 +11,7 @@
 | [混合树的坑](BLEND_TREE_TRAPS.md) | 摆树、看权重、怀疑"为什么不归一化 / 为什么发散" |
 | [面捕流水线](FACE_TRACKING_PIPELINE.md) | 包到了但脸不动、实时输入整体不动、换配置后失效、JsonUtility 丢字段 |
 | [形态（style）乱触发 / 想给状态加"维持一段时间才点亮"](../AXES.md) | 说话、舔舌、挤眼把 style 形态顶亮 —— 权威写法在 `AXES.md` §8「风格状态的触发逻辑」（斜坡 + 平滑去抖 + 维持，含换算表） |
+| [进维持 / 退维持**填多少都没变化**](../AXES.md) | 两个原因都真发生过（2026-09-29）：① 去抖只写在 `current ≥ 0` 分支里 ⇒ **单档配置**（倒V）每次点亮都从隐含档 `−1` 进来 ⇒ 永远不生效（用户填到 1000 才发现）；② 同一语义的**另一份实现**（Warudo 侧 `HoFaceChain`）连字段都没有。回归：`Tests~/FaceTraceValidation.cs` 的 `enter/exit dwell` 段 |
 | [动态参数（Hub）的五次改设计](../FACE_TRACKING_DYNAMIC_PARAMETERS.md) | 想把"控制器里的写手 / 槽表 / 曲线写下标"捡回来，或想把显隐、材质也塞进 Hub 时 |
 | [形态键输出](SHAPE_KEY_OUTPUT.md) | 键怎么都是 100、关掉规则不回 0、左右族/内外族混用 |
 | [Animator IK 与更新时机](UNITY_IK_AND_TIMING.md) | 头不动、IK 收不到、尾巴一阵一阵抽搐、和布料抢骨头 |

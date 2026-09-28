@@ -1,5 +1,6 @@
-// Copy into a disposable Unity project's Assets/Editor and run HoFaceTraceValidation.RunBatch.
+﻿// Copy into a disposable Unity project's Assets/Editor and run HoFaceTraceValidation.RunBatch.
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Hollow.HoUnityTools.Editor.FaceTracking;
@@ -78,6 +79,7 @@ public static class HoFaceTraceValidation
         var profilePath = Path.GetFullPath("Logs/trace-validation-profile.json");
         Directory.CreateDirectory("Logs");
         File.WriteAllText(profilePath,HoFaceProfileJson.Write(middleware));
+        string tracePath;
         var settings = new HoFaceDebugSettings {characterPath=go.name,faceControllerPath=path,profilePath=profilePath,startOnPlay=false};
         using (var session = new HoFaceAnimationSession(settings))
         {
@@ -122,7 +124,61 @@ public static class HoFaceTraceValidation
             System.Threading.Thread.Sleep(20);
             session.Tick(1f/60);
             Check(!timed.Recording && timed.Samples==0,"No fabricated sample beyond duration");
-            File.WriteAllText("face-trace-validation.txt","PASS: interval, gaps, same-solve stages, duplicate rows, overrides, profile changes, duration, partial save\n"+recorder.FilePath);
+            tracePath = recorder.FilePath;
+        }
+        File.WriteAllText("face-trace-validation.txt","PASS: interval, gaps, same-solve stages, duplicate rows, overrides, profile changes, duration, partial save, enter/exit dwell\n"+tracePath);
+
+        // ── 进 / 退维持（2026-09-29）────────────────────────────────────────────
+        // 这条 bug 是「去抖只在**档与档之间**判」：单档配置（倒V 就是）每次点亮都是隐含档 −1 → 0，
+        // 正好落在那个 guard 外面 ⇒ profile 里把进维持填到 1000 也毫无变化。两个方向都钉在这里。
+        // ⚠️ 单独开一个 session（上一个必须已经 Dispose）：两个 session 同时活着会各自建影子。
+        var dwell = new HoFaceMiddleware();
+        dwell.inputs.Add(new HoFaceOutput { parameter = "jawOpen", expression = "JawOpen" });
+        dwell.outputs.Add(new HoFaceOutput
+        {
+            parameter = "Dwell", expression = "jawOpen", curve = AnimationCurve.Linear(0, 0, 1, 1),
+            modifiers = new List<HoFaceModifier>
+            {
+                new HoFaceModifier
+                {
+                    kind = HoFaceModifierKind.Steps,
+                    steps = new List<HoFaceStep>
+                    {
+                        new HoFaceStep { trigger = .5f, target = 1, hold = 0f, threshold = .2f,
+                            enterSeconds = .3f, exitSeconds = .15f }
+                    }
+                }
+            }
+        });
+        var dwellPath = Path.GetFullPath("Logs/trace-dwell-profile.json");
+        File.WriteAllText(dwellPath, HoFaceProfileJson.Write(dwell));
+        var dwellSettings = new HoFaceDebugSettings
+            { characterPath = go.name, faceControllerPath = path, profilePath = dwellPath, startOnPlay = false };
+        using (var dwellSession = new HoFaceAnimationSession(dwellSettings))
+        {
+            // ⚠️ `维持` 的计时用 `HoFaceClock.Now`（**真实时钟**）——`Tick(dt)` 只喂平滑，
+            //    所以这里必须让**真实时间**过去，光发假 dt 顶不动"连续多久"。
+            Action<float> tickFor = seconds =>
+            {
+                DateTime until = DateTime.UtcNow.AddSeconds(seconds);
+                do { dwellSession.Tick(1f / 60f); System.Threading.Thread.Sleep(20); }
+                while (DateTime.UtcNow < until);
+            };
+            dwellSession.SetPreview("jawOpen", 1f);
+            tickFor(.2f);                                                      // 在触发线上 ~0.2s
+            Near(dwellSession.OutputValue("Dwell"), 0f, "Enter dwell: 0.2s is not enough");
+            tickFor(.25f);                                                     // 累计 ~0.45s
+            Near(dwellSession.OutputValue("Dwell"), 1f, "Enter dwell: lights up once 0.3s elapsed");
+            dwellSession.SetPreview("jawOpen", 0f);
+            tickFor(.06f);                                                     // 掉到释放线之下 ~0.06s
+            Near(dwellSession.OutputValue("Dwell"), 1f, "Exit dwell: still lit after 0.06s");
+            tickFor(.25f);                                                     // 累计 > 0.15s
+            Near(dwellSession.OutputValue("Dwell"), 0f, "Exit dwell: off once 0.15s elapsed");
+            dwellSession.SetPreview("jawOpen", 1f);                            // 第二次点亮也要等
+            tickFor(.2f);
+            Near(dwellSession.OutputValue("Dwell"), 0f, "Enter dwell applies again (not only the first entry)");
+            tickFor(.25f);
+            Near(dwellSession.OutputValue("Dwell"), 1f, "Second entry lights up too");
         }
         UnityEngine.Object.DestroyImmediate(go);
         UnityEngine.Object.DestroyImmediate(mesh);

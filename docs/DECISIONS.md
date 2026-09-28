@@ -2813,3 +2813,20 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 **⑦ 验证**：`profile-verify`（真读取器）**0 problem**，同名链 4 条（`Ho/Drive/Style/CatMouth` 在内）；生产控制器检查器 **0 缺/错**（参数 86 = 期望 86，含新门）；两份诊断件重新生成后隔离模式 **0 缺/错**；`HoUnityTools.Editor.csproj` 编译 **0 错误**；`check-controller-integrity.py` 改前改后结构一致。
 **⑧ 用户侧动作**：Unity **重编译一次**（Runtime 多了 `IsChainRow`）＋ 面板**重新载入** profile（别先按保存）＋ 控制器 **Reimport**（文本改的，Unity 不会自己看见）。
 **⑨ 教训（坑）**：① **同一个孩子的权重与参数表是两处**，只改一处 = 静默不生效（这次靠 `tree-dump.py` 复核 ＋ 检查器 `$regionChildWeight` 兜住）；② 文本补丁里**先插参数、再按旧偏移改后面**必然错位 —— 插入会移动后面所有偏移，必须**重新定位**（这次断言当场拦下，没写坏文件）；③ `compose-controller.py` 调子进程比中文标记时踩到编码（子进程按 cp936 输出）⇒ 给子进程定 `PYTHONIOENCODING=utf-8`。
+
+---
+
+## 2026-09-29 · 「进维持填到 1000 也没变化」= 两个真 bug；苦半张挪到 (−0.571, 0.329)
+
+**① 用户报的现象**（原话）：「我发现一个真 bug，`out("Ho/Style/InvertedV/PuckerGate") * out("Ho/Style/InvertedV/NoseGate") * out("Ho/Style/InvertedV/OpenGate")` 这一条的**进维持我改到了 1000 也没有变化**，这就是为啥我每次都再叫你往上加，其实是每次都没效果」。
+**② 根因一：真正驱动角色的那份求值器根本没读这两个字段**。同一份语义有**两处实现**：Unity 面板 / 预览那份 `Editor/FaceTracking/HoFaceAnimationSession.cs`；Warudo 侧那份 mod 的 `Core/HoFaceChain.cs`（公共源码靠 `Tests~/SyncFaceModCore.ps1` 同步 10 份，**求值器本身不在同步清单里**）。查证：mod 的 `HoFaceMiddleware.cs` 还是 **09-27 的旧版**（`SyncFaceModCore.ps1 -Check` 当场报 `source drift: HoFaceMiddleware.cs`）⇒ 它连 `enterSeconds` 字段都没有（读取器跳过未知字段）⇒ 填什么都读不到。
+**③ 根因二（更隐蔽，而且我们这边也错）：去抖的判据写在 `current ≥ 0` 分支里面**。`维持` 的状态里 **`−1` = 还没进任何档**（输出 0），而**单档配置（倒V 就是）每一次点亮都是 `−1 → 0`** —— 那个分支只在"档与档之间"进得去 ⇒ **单档配置的去抖永远不生效**（连 Unity 预览里也一样）。修法：把「进入 / 退出维持」的判断**移出 `current ≥ 0` 分支**（`hold` 与迟滞仍留在里面 —— 隐含档没有定义）。
+**④ 修法落地**：两份实现都改了（mod 那份补齐字段 ＋ 同构实现）。⚠️ 用户当场定：「**modtest 那边你别管了，那边全都没用了，我们这边改完会覆盖掉那边的全部东西**」⇒ **以我们这边为准**，那边不再维护。
+**⑤ 回归**：`Tests~/FaceTraceValidation.cs` 新增 `enter/exit dwell` 段 —— 进 0.3s 才亮、退 0.15s 才灭、**第二次进入同样要等**（钉住"不是只有第一次生效"）。
+**⑥ 顺手挖到的第三个坑（写用例时踩的）**：`维持` 的计时用 **`HoFaceClock.Now`（真实时钟）**，`Tick(deltaTime)` 只喂平滑 ⇒ 用例里发假 dt **顶不动"连续多久"**（第一版用例就是这么假过的：8 × 0.05s 之后仍然没亮）。用例改成 `tickFor(seconds)` 真等时间。
+**⑦ 验证**：一次性工程（`.research/UnityFaceValidation2`，包引用 `file:D:/Unity_Fork/HoUnityTools` ⇒ 跑的就是当前代码）批量跑 `HoFaceTraceValidation.RunBatch` ⇒ **`HO_FACE_TRACE_PASS`（exit 0）**；改动完成前那次是 `Exception: Enter dwell: lights up once 0.3s elapsed: 0 != 1` —— **说明这条用例真的会失败**，不是空跑。⚠️ 中途一次 Unity 进程没写日志（`$LASTEXITCODE` 空），改用 `Start-Process -Wait` 才拿得到退出码与日志。
+**⑧ 同日第二件：`MouthCore` 的「苦半张」挪点**（用户：「嘴苦半张控制点位置改到 −0.571，0.329，改这个得改两个版本的 core」）。
+资产：`PTP_CTR_Face_VTS.controller` 的 `MouthCore`「嘴苦半张」与变体 `MouthCoreRoll`「猫嘴苦半张」**两格都改**（(−0.4225, 0.463) → **(−0.571, 0.329)**；改前备份 `%TEMP%\PTP_CTR_Face_VTS.beforeBittermid.controller`）。工具三处同步：生成器 `$mouthCoreOver['0,1']`、检查器 `$exactPos['嘴苦半张']` ＋ 它的 `MouthCore` 允许值列。
+⚠️ **顺手补了一笔欠账**：Unity 端构建器 `HoFaceControllerSkeletonBuilder.MouthCoreOverride` 还停在 **2026-09-27 那 8 个点**（`0 / 0.482 / 0.907`…）—— 与真正生效的生成器 / 检查器不是同一组值（类注释里早就写着"它落后于生成器"）。这次**按权威 11 点整表对齐**（含苦列三格）⇒ 三处从此同源。
+**⑨ 验证（控制点）**：`check-controller-integrity.py` 结构不变；`check-controller.ps1` 生产件 **0 缺/错**（逐格坐标 ＋ "变体必须与主版逐点一致"两条都过）；`DIAG_L2_MouthGroup` 重新生成后隔离模式 **0 缺/错**。
+**⑩ 状态**：rig 那份 profile 里用户填的 `enterSeconds = 1000` **原样没动**（那是他的诊断值，现在会真的生效 = 永不点亮，正好当验证）；repo 那份是 **1.7**（他明确要的 ×2）—— 落哪份等他说一声。

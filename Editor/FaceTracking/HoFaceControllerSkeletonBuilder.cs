@@ -291,34 +291,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly Vector2Int[] MouthCoreSkip = { new Vector2Int(2, 2) };
 
         /// <summary>
-        /// **`MouthCore` 的 8 个点：手工拉的自由点集**（2026-09-27 用户第二次改，从资产读回来的真值）。
-        /// 他改的是 X1 / X2 那两列（笑那侧），X0 那列没动：
+        /// **`MouthCore` 的 11 个点：手工拉的自由点集**（2026-09-27 起用户反复手调，**权威 = 下面这组值**）。
+        /// ⚠️ **2026-09-29 与生成器 / 检查器对齐过**：之前这里还停在 09-27 那 8 个点（`0 / 0.482 / 0.907`…），
+        ///    而真正生效的是 `Tools~/FaceTracking/make-vts-controller.ps1` 的 `$mouthCoreOver` 与
+        ///    `check-controller.ps1` 的 `$exactPos`（三者必须是同一组值 —— 这份构建器只走"菜单里重新生成骨架"那条路）。
         /// <code>
-        ///   A3X0Y0 (0,0)          A3X1Y0 (0.482,-0.017)   A3X2Y0 (0.907,-0.024)
-        ///   A3X0Y1 (0,0.4)        A3X1Y1 (0.47,0.336)     A3X2Y1 (0.968,0.267)
-        ///   A3X0Y2 (0,0.75)       （A3X1Y2 挖掉）          A3X2Y2 (0.926,0.596)
+        ///   苦列   A4X0Y0 (-0.5, 0)        A4X0Y1 (-0.571, 0.329)   A4X0Y2 (-0.345, 0.926)
+        ///   平列   A4X1Y0 (-0.012, 0)      A4X1Y1 (-0.03, 0.4065)   A4X1Y2 (-0.048, 0.813)
+        ///   笑列   A4X2Y0 (0.382, -0.0035) A4X2Y1 (0.3905, 0.32825) （A4X2Y2 挖掉）
+        ///   大笑列 A4X3Y0 (0.776, -0.007)  A4X3Y1 (0.811, 0.25)     A4X3Y2 (0.846, 0.507)
         /// </code>
         /// ⇒ `FormSmile` / `OpenMeasured` 降级成**索引骨架**（槽位名里只带 X 的档数）。
         /// ⚠️ **变体表 `MouthCoreRoll` 用的是同一份 Override** ⇒ 两个生成器天然同步；
-        ///    但**资产是用户手动改的**，所以每次同步完都要把主版那 8 个坐标**镜像到猫嘴版**
+        ///    但**资产是用户手动改的**，所以每次同步完都要把主版那 11 个坐标**镜像到猫嘴版**
         ///    （检查器有一条"变体 / 副本必须与主版逐点一致"的硬检查）。
-        /// ⚠️ 他以后再拉点：**先读资产、再改这里**，不要反过来。
+        /// ⚠️ 他以后再拉点：**先读资产（`tree-dump.py`）→ 再改生成器 `$mouthCoreOver` → 最后改检查器 `$exactPos`**，
+        ///    这份构建器的表跟着一起改（顺序不能反）。
         /// </summary>
         private static readonly CellPos[] MouthCoreOverride =
         {
-            // 苦那一列（Form −1）：2026-09-28 傍晚新增，坐标与 X0 列对称（作者可再拉）
+            // 苦那一列（Form −1）：
             new CellPos { I = 0, J = 0, X = -0.5f, Y = 0f },
-            new CellPos { I = 0, J = 1, X = -0.5f, Y = 0.4f },
-            new CellPos { I = 0, J = 2, X = -0.5f, Y = 0.75f },
-            // 原来那 8 个（用户手拉的真值；索引整体 +1，因为左边多了一列苦）
-            new CellPos { I = 1, J = 0, X = 0f, Y = 0f },
-            new CellPos { I = 2, J = 0, X = 0.482f, Y = -0.017f },
-            new CellPos { I = 3, J = 0, X = 0.907f, Y = -0.024f },
-            new CellPos { I = 1, J = 1, X = 0f, Y = 0.4f },
-            new CellPos { I = 2, J = 1, X = 0.47f, Y = 0.336f },
-            new CellPos { I = 3, J = 1, X = 0.968f, Y = 0.267f },
-            new CellPos { I = 1, J = 2, X = 0f, Y = 0.75f },
-            new CellPos { I = 3, J = 2, X = 0.926f, Y = 0.596f }
+            new CellPos { I = 0, J = 1, X = -0.571f, Y = 0.329f },     // 2026-09-29 用户挪点
+            new CellPos { I = 0, J = 2, X = -0.345f, Y = 0.926f },
+            // 平 / 笑 / 大笑三列：
+            new CellPos { I = 1, J = 0, X = -0.012f, Y = 0f },
+            new CellPos { I = 1, J = 1, X = -0.03f, Y = 0.4065f },
+            new CellPos { I = 1, J = 2, X = -0.048f, Y = 0.813f },
+            new CellPos { I = 2, J = 0, X = 0.382f, Y = -0.0035f },
+            new CellPos { I = 2, J = 1, X = 0.3905f, Y = 0.32825f },
+            new CellPos { I = 3, J = 0, X = 0.776f, Y = -0.007f },
+            new CellPos { I = 3, J = 1, X = 0.811f, Y = 0.25f },
+            new CellPos { I = 3, J = 2, X = 0.846f, Y = 0.507f }
         };
 
         // ⚠️ **`MouthJaw` 的"6 个手拉自由点"已退役**（2026-09-28 深夜用户判定：「左右两个点完全没必要」）。

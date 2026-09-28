@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.Constraints;
@@ -702,16 +702,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     float release = steps[current].trigger - Mathf.Abs(steps[current].threshold);
                     if (value >= release && next < current) next = current;      // 迟滞：没掉够就不退
                 }
+            }
 
-                if (next != current)                                            // 进入 / 退出维持
+            // 进入 / 退出维持。⚠️ **必须在上面那个 guard 之外**：`current == -1` 是"还没进任何档"的
+            // **隐含档**（输出 0）—— 单档配置（倒V 就是）**每一次点亮都是 −1 → 0**，放在 guard 里
+            // 等于去抖只在"档与档之间"生效、单档配置永远不生效（2026-09-29 查实：用户把进维持填到
+            // 1000 也毫无变化，就是这一条 + mod 那份求值器漏字段两条一起造成的）。
+            if (next != current)
+            {
+                double held = now - stepSince[slot];
+                if (next > current)
                 {
-                    double held = now - stepSince[slot];
-                    if (next > current)
-                    {
-                        if (steps[next] != null && steps[next].enterSeconds > 0f && held < steps[next].enterSeconds) next = current;
-                    }
-                    else if (steps[current].exitSeconds > 0f && held < steps[current].exitSeconds) next = current;
+                    if (steps[next] != null && steps[next].enterSeconds > 0f && held < steps[next].enterSeconds) next = current;
                 }
+                else if (current >= 0 && steps[current] != null
+                         && steps[current].exitSeconds > 0f && held < steps[current].exitSeconds) next = current;
             }
 
             if (next != current)
