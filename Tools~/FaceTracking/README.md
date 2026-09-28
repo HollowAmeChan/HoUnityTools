@@ -43,3 +43,26 @@
 * `Tests~/`：Unity 批处理验证用例（拷进一次性工程跑）；
 * `.research/`：一次性探针（`eye-probe` / `chain-probe` / `profile-verify` …）、面捕语料、资产 surgery 脚本；
 * `docs/VTS_HQ_CONTROLLER.md`：控制器的当前状态与每一节决策记录（改结构请顺手加一节）。
+
+## 录样（`Logs/HoFaceTraces/*.jsonl`）的速查 / 速统 / 速对（2026-09-29 加）
+
+录样格式：**第 1 行头部**（`label` / `intervalSeconds` / `profileJson` / `settingsJson` …）、
+**中间一行一个 sample**（`inputs[]` = 配置输入行、`outputs[]` = 输出行、`wires[]` = 原始线）、
+**最后 1 行页脚**（`kind=end` / `reason` / `samples`）。
+通道命名空间：inputs 用**裸名**（`jawOpen`）、outputs 加 `out:`（`out:Ho/Drive/Mouth/Jaw`）、wires 加 `w:`。
+take 可以用**序号 / 文件名子串 / 组名**指定。
+
+| 脚本 | 干什么 | 例子 |
+| --- | --- | --- |
+| `ho-traces.py` | **速查 / 速统 / 速对**一把抓：`ls` `info` `keys` `rows` `stat` `series` `check` `diff` `csv` | `python Tools~/FaceTracking/ho-traces.py ls`<br>`… stat --group 静置 --channels jawOpen mouthClose`<br>`… diff 4 7 --moved`<br>`… check` |
+| `census-table.py` | 解析**面板导出的统计文本**（`=== 组名` + 每次 `min avg max 波动`）按组打表 —— 翻老语料用 | `python Tools~/FaceTracking/census-table.py .research/takes-side.txt` |
+| `jaw-side-fit.py` | 「平移下巴」那批：各组横向振幅 / `(JawSide, Jaw)` **落点锚点** / 伪影对照 / 离现有格子的距离 | `python Tools~/FaceTracking/jaw-side-fit.py` |
+| `jaw-take-census.py` | 下巴那批：通道定名、**阶梯归因**（输入没解释的跳变）、表达式 A/B、锁存门模拟 | `python Tools~/FaceTracking/jaw-take-census.py` |
+| `tree-dump.py` | 从 `.controller` 打一棵 BlendTree（子节点 / 名字 / 坐标 / 阈值 / 权重参数）—— 查「格子摆在哪」 | `python Tools~/FaceTracking/tree-dump.py <x.controller> MouthJaw` |
+| `profile-row-diff.py` | 若干份 profile 的同一批行并排打（表达式 / 修饰符 / 曲线 / notes 尾 + 括号平衡） | `python Tools~/FaceTracking/profile-row-diff.py "Mouth/Jaw" a.json b.json` |
+| `trace-row-dump.py` | 一次录样里某几行的取值与元数据（含「运行时用的是哪份表达式」的对账） | `python Tools~/FaceTracking/trace-row-dump.py <x.jsonl> Mouth/Y` |
+| `controller-block-diff.py` | 两份 `.controller` 的**语义**对照（fileID 归一化后按块比多重集；文本 diff 会被块顺序淹没） | `python Tools~/FaceTracking/controller-block-diff.py a.controller b.controller` |
+| `profile-verify/`（C#） | 用**真读取器**解析 profile 并报 `problems` —— **改完 profile 必跑**（括号少一个它就会说 `expression does not parse`） | `…/profile-verify.exe <x.hoface.json>` |
+
+⚠️ 踩过的坑：`check` 的「越界」与 `--moved` **只查形变类通道**（注视是角度、`Rotation/Position/Angle` 是位姿、还有帧号/时间戳/热键）—— 不排除就满屏假警报（第一版就是这么错的）；要看全部加 `--include-pose`。
+⚠️ 录样的标签是**事后按时间顺序**打的（见 `.research/*/label-*.py`：头部 `label` 为空 ⇒ 按序号分组 ⇒ 重写头部 + 改名 + 写 `recording-labels-*.json` 清单，原文件先备份）。
