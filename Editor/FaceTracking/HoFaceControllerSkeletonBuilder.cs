@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -268,12 +268,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ShiftYMeasured = { 0f, 1f };
 
         /// <summary>
-        /// **`Cheek` 的刻度（2026-09-29 用户定）**：`0 / 0.3 / 1` ——
-        /// 0 = 颊不动（小月牙**藏在脸里**）· 0.3 = 小月牙**挪出来** · 1 = 月牙被**移动**（0.3 以上连续）。
-        /// ⚠️ 中间层那两根轴的曲线负责压成台状（0.40 以下严格 0、0.40 处瞬跳到 0.3），
-        ///    否则轴落在 0 与 0.3 之间就会把「半出来的月牙」画出来 ⇒ 穿模。
+        /// **`Cheek` 的刻度（2026-09-29 用户定）**：`0 / 0.39 / 1` ——
+        /// 0 = 颊不动（小月牙**藏在脸里**）· 0.39 = 小月牙**挪出来** · 1 = 月牙被**移动**（0.39 以上连续）。
+        /// ⚠️ 0.39 比曲线的台阶**触发点 0.40 内收 0.01**（用户定）：输入贴着膝时轴还稳稳在 0，
+        ///    再往上一格就精确落在控制点上 ⇒「移动」一定从「出来」那个姿势起步。
+        /// ⚠️ 中间层那两根轴的曲线负责压成台状（0.40 以下严格 0、0.40 处瞬跳到 0.39），
+        ///    否则轴落在 0 与 0.39 之间就会把「半出来的月牙」画出来 ⇒ 穿模。
         /// </summary>
-        private static readonly float[] CheekPuffTicks = { 0f, 0.3f, 1f };
+        private static readonly float[] CheekPuffTicks = { 0f, 0.39f, 1f };
 
         /// <summary>3×3 里先不建的两格：一侧「移动」、另一侧「才出来」的组合（落到那里会被凸包投影成邻居的混合）。</summary>
         private static readonly Vector2Int[] CheekSkip = { new Vector2Int(1, 2), new Vector2Int(2, 1) };
@@ -808,7 +810,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return new Vector2(spec.XValues[i], spec.YValues[j]);
         }
 
-        /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>        private static string SlotName1D(string tree, string token, int count, int i)
+        /// <summary>1D 槽位名 = `<树名>__<轴段词>__A<刻度数>X<i>`（见命名权威 §5 的一维写法）。</summary>
+        private static string SlotName1D(string tree, string token, int count, int i)
         {
             return tree + "__" + token + "__A" + count + "X" + i;
         }

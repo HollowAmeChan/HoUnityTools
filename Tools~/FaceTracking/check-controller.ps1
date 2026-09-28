@@ -344,8 +344,8 @@ $slotSpec = [ordered]@{
     'MouthJaw'    = @{ x = 'JawSide'; y = 'Jaw'; a = 3; ys = @(0, 1); skip = @('0,0', '2,0') }
     'LidL'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
     'LidR'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
-    # 颊轴（2026-09-27 加）：两根轴各 **3 档 {0, 0.3, 1}**（2026-09-29 用户定）⇒ 3×3 里摆 7 格。
-    # 0.3 = 小月牙从脸里挪出来那一档，1 = 月牙被移动；`(1,2)`/`(2,1)` 先不建。
+    # 颊轴（2026-09-27 加）：两根轴各 **3 档 {0, 0.39, 1}**（2026-09-29 用户定）⇒ 3×3 里摆 7 格。
+    # 0.39 = 小月牙从脸里挪出来那一档（比台阶触发点 0.40 内收 0.01），1 = 月牙被移动；`(1,2)`/`(2,1)` 先不建。
     'Cheek'       = @{ x = 'PuffL';    y = 'PuffR';     a = 3; ys = @(0, 1, 2); skip = @('1,2', '2,1') }
 }
 # 副本表的槽位规则与主版一致（槽位名前缀换成 `<主版>Expr`）。⚠️ 嘴 2026-09-27 起没有副本
@@ -395,8 +395,8 @@ $scaleOf = [ordered]@{
     # 舌头（2026-09-28 深夜）：**不在 2D 刻度清单里** —— 1D 5 格的阈值在 `$simple1DSlot` / `$scaleOf1D`。
     'LidL'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
     'LidR'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
-    # 颊轴：0 / 0.3 / 1 三档（0.3 = 月牙挪出来那一档；轴曲线负责把 0 与 0.3 之间压掉）
-    'Cheek'       = @{ x = @(0.0, 0.3, 1.0);  y = @(0.0, 0.3, 1.0) }
+    # 颊轴：0 / 0.39 / 1 三档（0.39 = 月牙挪出来那一档；轴曲线负责把 0 与 0.39 之间压掉）
+    'Cheek'       = @{ x = @(0.0, 0.39, 1.0); y = @(0.0, 0.39, 1.0) }
     # 下巴：JawSide 实测单侧只到 0.52（±0.65 老刻度够不着）· Jaw 0 / 0.75
     'MouthJaw'    = @{ x = @(-0.52, 0.0, 0.52); y = @(0.0, 0.75) }
 }
@@ -567,16 +567,16 @@ foreach ($sw in $switchSpec.Keys) {
 # 台状曲线的**落点必须精确等于表里的刻度**：落在刻度之间 ⇒ 混合出半个状态（月牙半出来 ⇒ 穿模；
 # 或者"移动"从半路开始而不是从"出来"那个姿势开始）。这里把"哪一个落点该等于哪个刻度"钉死。
 $curveAlign = @(
-    # 颊的两根轴：落点只允许 {0, 0.3, 1}，而且必须**有一个精确的 0.3**（= 「月牙挪出来」那一档）
-    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.3, 1.0); riser = 0.3 }
-    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.3, 1.0); riser = 0.3 }
+    # 颊的两根轴：落点只允许 {0, 0.39, 1}，而且必须**有一个精确的 0.39**（= 「月牙挪出来」那一档）
+    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.39, 1.0); riser = 0.39 }
+    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.39, 1.0); riser = 0.39 }
 )
 foreach ($spec in $curveAlign) {
     $row = @($prof.outputs | Where-Object { $_.parameter -eq $spec.row })
     if ($row.Count -eq 0) { continue }
     $keys = $row[0].curve.keys
     if ($null -eq $keys -or @($keys).Count -lt 2) {
-        $problems.Add("$($spec.row) 没有可用曲线 —— 表里有 0.3 这一档就必须配台状曲线（否则轴会落在刻度之间）")
+        $problems.Add("$($spec.row) 没有可用曲线 —— 表里有 0.39 这一档就必须配台状曲线（否则轴会落在刻度之间）")
         continue
     }
     $vals = @($keys | ForEach-Object { [double]$_.v })

@@ -56,7 +56,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 │   ├─ MouthWidth               Simple1D             3 格（窄 / 中 / 宽）          ← 挂形态门
 │   ├─ MouthTongue              Simple1D             4 格                          ← 恒 1
 │   ├─ InvertedV                Simple1D  blendParameter = Ho/Drive/Style/InvertedV（阈值 0 / 1）  ← 恒 1
-│   └─ Cheek                    FreeformCartesian2D  **7 格**（X = Cheek/Left/Puff、Y = Cheek/Right/Puff，刻度各 {0, 0.3, 1}）  ← 恒 1
+│   └─ Cheek                    FreeformCartesian2D  **7 格**（X = Cheek/Left/Puff、Y = Cheek/Right/Puff，刻度各 {0, 0.39, 1}）  ← 恒 1
 ├─ EyeRegion                    Direct   → LidL / LidR（各自是 **Direct 张量积表**，11 个门/眼 —— 见 §1.1）
 ├─ BrowRegion                   Direct   → BrowCoreL / BrowCoreR        ← 2026-09-28 深夜已删（眉眼合一）
 └─ NoseRegion                   Direct   → NoseUp（Simple1D 2 格：不顶 / 鼻子上顶）
