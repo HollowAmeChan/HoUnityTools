@@ -475,7 +475,7 @@
   Ho/Style/InvertedV/NoseGate = 1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1) ← 鼻门
   Ho/Style/InvertedV/OpenGate = 1 - clamp((out("Ho/Drive/Mouth/Open") - 0.03) / 0.05, 0, 1)        ← 张口门（膝 0.03 用户定）
   Ho/Style/InvertedV          = out("…/PuckerGate") * out("…/NoseGate") * out("…/OpenGate")        ← 判定
-                                [平滑 0.236s] → [维持 trigger 0.88 / target 1 / threshold 0.05 / hold 0.1]  ← 去抖：物理上约 0.50s 才点亮
+                                [平滑 0.236s] → [维持 trigger 0.88 / target 1 / threshold 0.2 / hold 0.1]  ← 0.50s 才点亮；迟滞 0.2 ⇒ 退出线低一截（见下）
   Ho/Style/InvertedV          = out("Ho/Style/InvertedV") * HoAutoInvertedV + HoExternalInvertedV  ← 开关
                                 [平滑 0.08s]                                                       ← 手动通路保持瞬时
   Ho/Drive/Style/InvertedV    = out("Ho/Style/InvertedV")                                          ← 发布（控制器吃它）
@@ -506,6 +506,9 @@
      一段长 d 的尖峰最多把平滑值推到 `1 − e^(−d/T)` ⇒ 短于"持续"的尖峰**根本点不着**，持续动作照旧点亮。
   3. **去抖挂在判定行，不挂开关行** —— 开关行里还有手动常开（`HoExternal*`），那条通路必须瞬时。
   4. `维持` 只管两件事：把值**硬切成 0/1**（下游 `if()` 与宽度归中要的就是这个）+ 迟滞；它的 `hold` 是"点亮**之后**至少保持"（min-on），**不是**"先维持才亮"（那个用第 2 条做）。
+  5. **"容易退出"要动迟滞（`threshold`），不要动 `trigger`** —— 退出线 = `trigger − threshold`：**降 trigger 会让退出线降得更低、反而更容易退出** ✗。
+     倒V 现在的三条线（膝 0.7 / 宽 0.26，都换算到 `mouthPucker` 上）：**点亮 0.929**（读数 0.88）/ **退出 0.877**（读数 0.68 = 0.88 − 0.2）/ 真噘地板 0.9634 ⇒ 迟滞带宽 **0.052**（原来是 0.05 ⇒ 只差 0.013，一松就掉）。
+     想要"点着了就不容易灭"就加 `threshold`（0.2 → 0.3 还能再宽）；想要"入口更松"才动 `trigger`，但记住它同时抬高退出线。
 
   | 想要"持续 N 秒才点亮" | 平滑 T | 0.3 秒尖峰的峰值 |
   | --- | --- | --- |
