@@ -178,7 +178,7 @@ $rollTicks = @(0.15, 0.30)
 $simple1D = [ordered]@{
     # 鼻子上顶（2026-09-27 用户定：颊不要、鼻只留这一个状态）—— 只要"不顶 / 顶"两格；
     # 它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 本来就会一起动）。
-    'NoseUp'       = @{ p = 'Ho/Drive/Nose/Up';       v = @(0.0, 0.7);       t = 'Up' }   # 0.7 = 实测（挤眼+鼻上抬 5 秒：avg 0.70 / max 0.75）
+    'NoseUp'       = @{ p = 'Ho/Drive/Nose/Up';       v = @(0.0, 1.0);       t = 'Up' }   # 0.7 = 实测（挤眼+鼻上抬 5 秒：avg 0.70 / max 0.75）
     # 嘴宽（2026-09-28 傍晚：`MouthWidth` 以 **1D 3 格**回来）—— 轴是**既有的** `Ho/Drive/Mouth/Pucker`。
     'MouthWidth'   = @{ p = 'Ho/Drive/Mouth/Pucker';  v = $mouthWidthMeasured; t = 'Pucker' }
     # 倒V（2026-09-27 加）：**一个固定姿势** —— 形态门在中间层是"维持"出来的 0/1 ⇒ 两档阈值就是 0 / 1。

@@ -354,7 +354,7 @@ foreach ($c in $slotCopyOf.Keys) { $slotSpec[$c] = $slotSpec[$slotCopyOf[$c]] }
 # 留着这个清单是因为一维形状还多（命名权威的例子 `MouthShrugBase__Shrug__A3X1`），回来时不用重写。
 # ⚠️ 1D 表的阈值必须显式写死；鼻子上顶 / 倒V / 嘴宽（2026-09-28 傍晚加）都是这张表的用户。
 $simple1DSlot = [ordered]@{
-    'NoseUp'       = @{ t = 'Up';       a = 2; thr = @(0.0, 0.7) }
+    'NoseUp'       = @{ t = 'Up';       a = 2; thr = @(0.0, 1.0) }
     # 倒V（2026-09-27 加）：形态门是**迟滞出来的 0/1** ⇒ 两档阈值就是 0 / 1。⚠️ 姿势还没画。
     'InvertedV'    = @{ t = 'InvertedV'; a = 2; thr = @(0.0, 1.0) }
     # 嘴宽（2026-09-28 傍晚）：**1D 3 格**，刻度就是实测的三档（窄 / 中 / 宽），轴 = 既有的 `Mouth/Pucker`

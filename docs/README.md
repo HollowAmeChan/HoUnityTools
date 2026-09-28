@@ -68,6 +68,10 @@ Warudo 打包、从蓝图里取证、文档编码、仓库与提交。
 | `docs/FACE_TRACKING_MIDDLE_LAYER.md` | `docs/PIPELINE.md`（§3 中间层） |
 | `docs/EDITOR_UI_SYSTEM.md` · `docs/LOOKAT_CONSTRAINT.md` · `docs/PENDULUM_CONSTRAINT.md` | `docs/完善的功能/` 下同名文件 |
 
+另外 `HoFaceControllerSkeletonBuilder.cs` 里还有两处旧值要一起改：① 类注释写着「43 个参数 + 27 棵树 + 89 个空槽位」；② `NoseUpTicks = { 0f, 0.7f }` 要改成 `{ 0f, 1f }`（2026-09-29 用户把鼻子顶刻度定成 1，生成器与检查器都已对齐）。
+
+原来那句（下面这行仍成立）：
+
 另外 `HoFaceControllerSkeletonBuilder.cs` 的类注释还写着「43 个参数 + 27 棵树 + 89 个空槽位」——
 按口径**不该在文档/注释里写死数量**，那句删掉或改成「跑 `check-controller.ps1` 看当前值」。
 
