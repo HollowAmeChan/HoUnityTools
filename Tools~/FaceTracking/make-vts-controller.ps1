@@ -9,6 +9,11 @@
 #   * 混合树里每一格都显示**语义名字**（不再是 None），整张表一眼可读；
 #   * 「槽位名 = 片段名」这条约定从第一天就成立 —— 姿势烘焙直接往这些文件里写；
 #   * 空片段不写任何曲线 ⇒ 运行期行为与"空 Motion"完全相同（权重只由坐标决定）。
+# ⚠️ **生成前先把 Animator 窗口（和面捕调试面板里的资源预览）切到别的资产**：本脚本是
+#    **纯文本写盘**、不走 Unity 的 AssetDatabase 导入流程 ⇒ Unity 发现文件变了会重新导入，
+#    旧子资产（AnimatorStateMachine / BlendTree）被销毁，而窗口里还攥着旧引用 ⇒
+#    刷屏 `MissingReferenceException: The object of type 'AnimatorStateMachine' has been destroyed`。
+#    症状无害（资产是好的）：切走窗口 → 右键资产 Reimport → 再打开即可。
 param(
     # 模板 = 一份 Unity 亲手写出来的 .controller（只借它的序列化形状，字段顺序/字段集照抄最不容易被导入器挑刺）。
     # ⚠️ 2026-09-28 用户定：**不给默认值**（必填）。备份在

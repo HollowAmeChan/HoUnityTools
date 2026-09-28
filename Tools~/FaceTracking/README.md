@@ -11,6 +11,13 @@
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 .ps1 按 ANSI 读，中文全糊 | `powershell -File Tools~/FaceTracking/fix-bom.ps1` |
 
+## ⚠️ 生成前先切走 Animator 窗口
+
+生成器是**纯文本写盘**（不走 AssetDatabase 导入）⇒ Unity 重新导入时旧子资产被销毁，
+而正开着那份 `.controller` 的 Animator 窗口还攥着旧引用 ⇒ 刷屏
+`MissingReferenceException: … AnimatorStateMachine … has been destroyed`。
+**症状无害**（资产是好的）：切走窗口 → 右键资产 **Reimport** → 再打开即可。
+
 ## ⚠️ 三处同步（这坑真栽过两次）
 
 同一份控制器结构现在有**三份实现**，改结构必须一起改：
