@@ -102,9 +102,22 @@ foreach ($c in $chunks) {
     if ($c -notmatch '^(-?\d+) &(-?\d+)') { continue }
     $docs[$Matches[2]] = [pscustomobject]@{ Class = $Matches[1]; Text = $c }
 }
+function Unquote([string]$v) {
+    # Unity 把非 ASCII 的名字写成 **YAML 双引号标量 + \uXXXX 转义**（`m_Name: "\u5634\u5DE6\u79FB"`）——
+    # 那是合法 YAML，Unity 自己会解成「嘴左移」⇒ 检查器不解就会把每个中文槽位名都判成
+    # 「不在清单里」。2026-09-29 修：之前那 28 条假抱怨（槽位名 + 逐格移位找不到）全出在这里。
+    if ($null -eq $v) { return $v }
+    $s = $v.Trim()
+    if ($s.Length -ge 2 -and $s.StartsWith('"') -and $s.EndsWith('"')) {
+        $s = $s.Substring(1, $s.Length - 2)
+        $s = [regex]::Replace($s, '\\u([0-9A-Fa-f]{4})', { param($m) [string][char][Convert]::ToInt32($m.Groups[1].Value, 16) })
+        $s = $s.Replace('\"', '"').Replace('\n', "`n").Replace('\\', '\')
+    }
+    return $s
+}
 function Field([string]$t, [string]$name) {
     $m = [regex]::Match($t, "(?m)^\s*${name}:\s*(.*)$")
-    if ($m.Success) { $m.Groups[1].Value.Trim() } else { $null }
+    if ($m.Success) { Unquote $m.Groups[1].Value } else { $null }
 }
 $blendNames = @{ '0' = 'Simple1D'; '1' = 'SimpleDirectional2D'; '2' = 'FreeformDirectional2D'; '3' = 'FreeformCartesian2D'; '4' = 'Direct' }
 
