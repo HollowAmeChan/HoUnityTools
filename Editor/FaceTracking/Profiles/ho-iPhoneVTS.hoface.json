@@ -4000,8 +4000,8 @@
 
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
-                        "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
+                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.05}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
+                        "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。\n维持 trigger 0.88 / threshold 0.05 ⇒ 释放 0.83：取误触天花板 0.7769（挤眼皱鼻）与真噘地板 0.9634 之间那条空带的中点。"
                     },
                     {
                         "parameter":  "Ho/Drive/Style/InvertedV",
