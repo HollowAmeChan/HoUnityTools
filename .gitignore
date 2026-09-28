@@ -25,3 +25,8 @@
 /.research.meta
 /.warudo-mod-research
 /.lab
+# 构建产物与缓存（Tools~ 下那些 C# 探针工程也会生成；2026-09-29 清过一次）
+Tools~/**/bin/
+Tools~/**/obj/
+**/__pycache__/
+*.pyc
