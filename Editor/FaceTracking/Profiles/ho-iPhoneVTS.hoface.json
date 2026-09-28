@@ -3991,8 +3991,8 @@
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.4, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.05}]}],
-                        "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n先平滑 0.4 秒再维持（trigger 0.88）⇒ **判据要持续约 0.85 秒才点亮**；短于 ~0.85 秒的尖峰最多把平滑值推到 0.88，够不着触发线。\n⚠️ 去抖放在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路要保持瞬时。"
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.236, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.05}]}],
+                        "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n先平滑 0.236 秒再维持（trigger 0.88）⇒ **判据要持续约 0.50 秒才点亮**；短于 ~0.50 秒的尖峰最多把平滑值推到 0.88，够不着触发线。\n⚠️ 去抖放在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路要保持瞬时。"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
