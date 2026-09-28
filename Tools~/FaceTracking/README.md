@@ -53,6 +53,7 @@
 | `check-controller.ps1` | 对着 profile 核控制器：参数名/默认值/树型/轴接线/槽位名/槽位总数/从根可达性/每格坐标 | `powershell -File Tools~/FaceTracking/check-controller.ps1 -Path <x.controller>` |
 | ↑ **隔离模式** `-Isolation` | 只查这份控制器**有**的东西（`DIAG_*` 单区控制器天然缺树/缺参数）：「缺」降级成注，树型/轴接线/**刻度与逐格坐标**/槽位名/变体镜像/WD/Normalize 照旧严格。**验收基准就是这些隔离控制器** | `… -Path <DIAG_xxx.controller> -Isolation` |
 | `check-controller-integrity.py` | 不依赖 profile 的**完整性**检查：块结构、悬空引用、状态机接线（"文件坏没坏一跑就知道"） | `python Tools~/FaceTracking/check-controller-integrity.py <x.controller>` |
+| `isolate-trees.py` | **按树剪出隔离版控制器**（联合测试用）：区域 Direct 的孩子按名字留/砍，非破坏性、新 GUID；联合示例见 rig 的 `FT/Diagnostics_20260929/README.md` | `python Tools~/FaceTracking/isolate-trees.py <源.controller> <输出.controller> --root-children MouthRegion,NoseRegion --children "MouthRegion=…" ` |
 | `make-checker-fixture.ps1` | 造一份"形状正确"的夹具，验检查器的**通过路径**（检查器自己坏了也要能发现） | `powershell -File Tools~/FaceTracking/make-checker-fixture.ps1` |
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 `.ps1` 按 ANSI 读，中文全糊 | `powershell -File Tools~/FaceTracking/fix-bom.ps1` |

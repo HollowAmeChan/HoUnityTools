@@ -270,7 +270,8 @@ if ($trees.ContainsKey('Ho/00 Drive Tree')) {
             $queue.Enqueue($kid.Name)
         }
     }
-    $orphans = @($expectedTrees.Keys | Where-Object { -not $reachable.ContainsKey($_) })
+    # ⚠️ 只报**文件里存在、但从根走不到**的；缺席的树「缺树」那条已经报过（别重复）
+    $orphans = @($expectedTrees.Keys | Where-Object { $trees.ContainsKey($_) -and -not $reachable.ContainsKey($_) })
     if ($orphans.Count -gt 0) {
         $problems.Add('这些树从根走不到（孤儿树 ⇒ 姿势整块丢）：' + ($orphans -join ', '))
     }
@@ -309,7 +310,11 @@ foreach ($tree in $regionChildWeight.Keys) {
     $wanted = $regionChildWeight[$tree]
     foreach ($kidName in $wanted.Keys) {
         $kid = @($trees[$tree].Kids | Where-Object { $_.Name -eq $kidName })
-        if ($kid.Count -ne 1) { $problems.Add("区域 $tree 里找不到子节点 $kidName（或不止一个）"); continue }
+        if ($kid.Count -ne 1) {
+            $msg = "区域 $tree 里找不到子节点 $kidName（或不止一个）"
+            if ($Isolation) { $notes.Add($msg) } else { $problems.Add($msg) }
+            continue
+        }
         if ($kid[0].Direct -ne $wanted[$kidName]) {
             $problems.Add("区域 $tree 的子节点 $kidName 的权重参数应为 $($wanted[$kidName])，实际 $($kid[0].Direct)")
         }
