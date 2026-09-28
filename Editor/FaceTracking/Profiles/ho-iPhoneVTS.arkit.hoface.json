@@ -1,0 +1,2247 @@
+﻿{
+    "format": "ho-face-middleware",
+    "version": 2,
+    "displayName": "ho-iPhoneVTS (ARKit 直通)",
+    "notes": "Formal middleware profile -- APPLE / iPhone VTS input.\n\nUnlike the two ho-debug-* profiles (which are pure pass-through references: zero renaming, no\ncurves, parameter = expression = the raw wire name), THIS file is a real middle layer: it takes\nthe device's ARKit shape values and SYNTHESISES the official VTubeStudio tracking parameters\nfrom them, the way VBridger does for its VTS relay.\n\nINPUT SIDE -- long-lived, per-device\n  One row per iPhone VTS wire. The 52 shape rows RENAME the device's PascalCase wire\n  (`JawOpen`) to the canonical camelCase name (`jawOpen`); the other 15 rows (head/eye pose,\n  FaceFound, Hotkey, Timestamp) are not channel names, so there `parameter == expression`.\n  THIS RENAME IS NOT OPTIONAL and is not a naming preference: the canonical vocabulary belongs to\n  the upstream channel table (`HoFaceTrackingChannels.Names`), and the session resolves channels\n  by walking the INPUT rows' `parameter`. A profile whose input parameter is `JawOpen` matches no\n  channel at all, so the middle layer silently emits nothing.\n  67 wires, measured (docs/PARAMETER_DEVICE_VERIFICATION.md, section 2). Do not derive wire\n  names from a spelling rule -- doing that once produced 12 rows pointing at keys the phone\n  never sends, and that failure mode is silent.\n\nOUTPUT SIDE -- the controller contract\n  Writes the official VTS tracking parameters we can derive (20 art axes), plus FaceFound.\n  VTS's tracking list is a fixed built-in set of 98 names (33 face/mouse/audio, 26 hand,\n  39 controller); the ones here are the face ones our input can actually feed.\n  Explicitly NOT written: MousePositionX/Y (no mouse), Voice* and VoiceA..O (no microphone on\n  this link), FaceAngry (experimental, iOS only, and no ARKit shape maps onto it).\n  Also NOT written: VBridger's own custom outputs (MouthFunnel, MouthPucker, MouthShrug,\n  Eye_Squint_L/R, MouthPressLipOpen, BrowInnerUp). Those are VB-private names that need a\n  ParameterCreationRequest on the receiving end -- they are not VTS standard.\n  Full per-parameter definitions, ranges and formula sources: docs/PARAMETER_HO.md.\n\nWHERE THE FORMULAS CAME FROM\n  Extracted mechanically from the local VBridger install, never hand-transcribed -- see\n  .research/vbridger/extract_vts_formulas.ps1. Each row's notes name the preset it came from.\n  Formulas are picked by PRESET, not by output name: VB's V3.0 EyeRightX is built from\n  eyeLookIn_L / eyeLookOut_L and its EyeRightY adds browOuterUp_L, so the name does not\n  describe the source.\n  Exception: EyeLeftX/Y and EyeRightX/Y come straight from the device's own raw eye scalars,\n  because the iPhone sends them and VB's synthesis reads a different axis than its name claims.\n\nWHAT IS NOT CALIBRATED\n  Shaping, not calibration. VBridger's own input-curve store is 68 rows of identity\n  (0->0 / 1->1), so there is no calibration to copy from it, and its preset numbers describe\n  its own channel set, not this one.\n  The FaceAngle* / FacePosition* sign flips are VBridger's, transcribed structurally: the\n  device axes they consume (Rotation_*, Position_*) have NOT been verified against them on\n  hardware. Head position units are also uncalibrated (raw phone values pass through).\n  Fix both on YOUR copy -- this file is the starting point, not the answer.\n\nCURVES\n  Every row carries an explicit curve. The vertical axis is the PARAMETER VALUE, not a\n  percentage: writing 0..100 on an output row multiplies the blend-tree weight by 100.\n  A row whose expression is a synthesis formula (Brows, MouthOpen, MouthSmile) has a 0.5-ish\n  neutral and can leave 0..1, so its curve is deliberately wider than the nominal range.\n  The device scalars are given +/-180 on BOTH layers -- a 0..1 default curve would silently\n  clamp head rotation to 0/1 and look like \"head pose was never wired up\".",
+    "inputs": [
+        {
+            "parameter": "browDownLeft",
+            "expression": "BrowDownLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "browDownRight",
+            "expression": "BrowDownRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "browInnerUp",
+            "expression": "BrowInnerUp",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "browOuterUpLeft",
+            "expression": "BrowOuterUpLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "browOuterUpRight",
+            "expression": "BrowOuterUpRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "cheekPuff",
+            "expression": "CheekPuff",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "cheekSquintLeft",
+            "expression": "CheekSquintLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "cheekSquintRight",
+            "expression": "CheekSquintRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeBlinkLeft",
+            "expression": "EyeBlinkLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeBlinkRight",
+            "expression": "EyeBlinkRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookDownLeft",
+            "expression": "EyeLookDownLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookDownRight",
+            "expression": "EyeLookDownRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookInLeft",
+            "expression": "EyeLookInLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookInRight",
+            "expression": "EyeLookInRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookOutLeft",
+            "expression": "EyeLookOutLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookOutRight",
+            "expression": "EyeLookOutRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookUpLeft",
+            "expression": "EyeLookUpLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeLookUpRight",
+            "expression": "EyeLookUpRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeSquintLeft",
+            "expression": "EyeSquintLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeSquintRight",
+            "expression": "EyeSquintRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeWideLeft",
+            "expression": "EyeWideLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "eyeWideRight",
+            "expression": "EyeWideRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "jawForward",
+            "expression": "JawForward",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "jawLeft",
+            "expression": "JawLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "jawOpen",
+            "expression": "JawOpen",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "jawRight",
+            "expression": "JawRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthClose",
+            "expression": "MouthClose",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthDimpleLeft",
+            "expression": "MouthDimpleLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthDimpleRight",
+            "expression": "MouthDimpleRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthFrownLeft",
+            "expression": "MouthFrownLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthFrownRight",
+            "expression": "MouthFrownRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthFunnel",
+            "expression": "MouthFunnel",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthLeft",
+            "expression": "MouthLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthLowerDownLeft",
+            "expression": "MouthLowerDownLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthLowerDownRight",
+            "expression": "MouthLowerDownRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthPressLeft",
+            "expression": "MouthPressLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthPressRight",
+            "expression": "MouthPressRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthPucker",
+            "expression": "MouthPucker",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthRight",
+            "expression": "MouthRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthRollLower",
+            "expression": "MouthRollLower",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthRollUpper",
+            "expression": "MouthRollUpper",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthShrugLower",
+            "expression": "MouthShrugLower",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthShrugUpper",
+            "expression": "MouthShrugUpper",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthSmileLeft",
+            "expression": "MouthSmileLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthSmileRight",
+            "expression": "MouthSmileRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthStretchLeft",
+            "expression": "MouthStretchLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthStretchRight",
+            "expression": "MouthStretchRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthUpperUpLeft",
+            "expression": "MouthUpperUpLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "mouthUpperUpRight",
+            "expression": "MouthUpperUpRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "noseSneerLeft",
+            "expression": "NoseSneerLeft",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "noseSneerRight",
+            "expression": "NoseSneerRight",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "tongueOut",
+            "expression": "TongueOut",
+            "notes": "device wire -> canonical name (camelCase)\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）"
+        },
+        {
+            "parameter": "Rotation_x",
+            "expression": "Rotation_x",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Rotation_y",
+            "expression": "Rotation_y",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Rotation_z",
+            "expression": "Rotation_z",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Position_x",
+            "expression": "Position_x",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Position_y",
+            "expression": "Position_y",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Position_z",
+            "expression": "Position_z",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeLeft_x",
+            "expression": "EyeLeft_x",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeLeft_y",
+            "expression": "EyeLeft_y",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeLeft_z",
+            "expression": "EyeLeft_z",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeRight_x",
+            "expression": "EyeRight_x",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeRight_y",
+            "expression": "EyeRight_y",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "EyeRight_z",
+            "expression": "EyeRight_z",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -180,
+                        "v": -180,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 180,
+                        "v": 180,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "FaceFound",
+            "expression": "FaceFound",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -1,
+                        "v": -1,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Hotkey",
+            "expression": "Hotkey",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -1,
+                        "v": -1,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "Timestamp",
+            "expression": "Timestamp",
+            "notes": "device wire; not a channel name, so no rename\n【经验参】无（线名 → 规范名的直通；没有手工可调的数）",
+            "curve": {
+                "keys": [
+                    {
+                        "t": -1,
+                        "v": -1,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            }
+        },
+        {
+            "parameter": "HoAutoInvertedV",
+            "expression": "HoAutoInvertedV",
+            "defaultValue": 1,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**外部开关①：是否允许自动触发**（2026-09-27 用户定）。它是我们自己的一根线：Warudo 在 VTS 接收器之后 append 这个名字就能关掉倒V 的自动触发。⚠️ 没人 append 时取 defaultValue = **1**（默认允许自动触发）。⚠️ 名字必须是**标识符形状**（不能带 `/`，表达式里的变量名写不出来）；每个风格化形态各一根，别用一根全局的（那会让倒V 的开关顺带把鼓嘴也管了）。\n【经验参】无（外部开关①；唯一的可调项是 defaultValue = 1 —— 没人 append 这条线时**允许自动触发**，写 0 它就永远不亮）"
+        },
+        {
+            "parameter": "HoExternalInvertedV",
+            "expression": "HoExternalInvertedV",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**外部开关②：常开**（2026-09-27 用户定；原稿写成「手动」，用户更正为「外部」）。Warudo 在 VTS 接收器之后 append 这个名字 —— 它就是那个**增量的入口**；中间层按名字读它、加在判定**之前**（写 1 就必亮，与自动同时开也不会翻倍）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。每个风格化形态各一根。\n【经验参】无（外部开关②；defaultValue = 0 —— 没人 append 时**不常开**；Warudo 写 1 就常开）"
+        },
+        {
+            "parameter": "HoAutoCheek",
+            "expression": "HoAutoCheek",
+            "defaultValue": 1,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**鼓嘴的自动触发开关**（跟倒V 那对同形，2026-09-27）：Warudo 在 VTS 接收器之后 append 同名线就能关掉鼓嘴的自动触发。⚠️ 没人 append 时取 defaultValue = **1**（默认允许自动触发）。⚠️ 每个形态各一根 —— 用一根全局的会让倒V 的开关顺带把鼓嘴也管了。\n【经验参】无（鼓嘴的自动触发开关；唯一的可调项是 defaultValue = 1 —— 没人 append 时允许自动触发）"
+        },
+        {
+            "parameter": "HoExternalCheek",
+            "expression": "HoExternalCheek",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**鼓嘴的外部开关（常开）**：与 `HoExternalInvertedV` 同形 —— Warudo 在 VTS 接收器之后 append 这个名字就是「增量的入口」，中间层按名字读它、加在判定**之前**（写 1 就必亮，与自动同时开也不翻倍）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。\n【经验参】无（鼓嘴的外部开关；defaultValue = 0 —— 没人 append 时不常开；Warudo 写 1 就常开）"
+        },
+        {
+            "parameter": "HoAutoCatMouth",
+            "expression": "HoAutoCatMouth",
+            "defaultValue": 1,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**猫嘴的自动触发开关**（与倒V 的 `HoAutoInvertedV`、鼓嘴的 `HoAutoCheek` 同形，2026-09-28）：Warudo 在 VTS 接收器之后 append 同名线就能**关掉猫嘴的自动触发**。⚠️ 没人 append 时取 defaultValue = **1**（默认允许自动触发）。⚠️ 每个风格化形态各一根 —— 用一根全局的会让猫嘴的开关顺带把倒V / 鼓嘴也管了。\n【经验参】无（外部开关①；唯一的可调项是 defaultValue = 1 —— 没人 append 这条线时**允许自动触发**，写 0 它就永远不亮）"
+        },
+        {
+            "parameter": "HoExternalCatMouth",
+            "expression": "HoExternalCatMouth",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "**猫嘴的外部开关（常开）**（与 `HoExternalInvertedV` / `HoExternalCheek` 同形，2026-09-28）：Warudo 在 VTS 接收器之后 append 这个名字就是「增量的入口」，中间层按名字读它、**加在判定之前**（写 1 就必亮；与自动同时开也只是把读数顶到 2 —— 开关只看 ≥0.30，饱和，不会多切一份）。\n⭐ **这就是「全量猫嘴」的入口**：自动路径只覆盖「嘴角往后拉（`Form > 0`）× `Open ≈ 0…0.4`」（含住 / 微张 / 大张）；常开之后**8 格全部可达**（中性形张嘴、大笑张嘴那几格只有这时才活）。⚠️ 没人 append 时取 defaultValue = **0**（没按就不常开）。\n【经验参】无（外部开关②；defaultValue = 0 —— 没人 append 时不常开；写 1 就常开）"
+        },
+        {
+            "parameter": "HoExternalEyeSync",
+            "expression": "HoExternalEyeSync",
+            "defaultValue": 0,
+            "notes": "**同眨开关**（2026-09-28 深夜用户定）：1 = 两眼用同一个共享值 `(max(blinkL,blinkR) − min(wideL,wideR))`（闭就闭到位）；0 = 各自直通（wink 照旧）。⚠️ **没有 auto 版** —— 用户判定不需要自动判定（那种拿表达不了的语义根本不会出现），一个开关就够。⚠️ 开着时 wink 会变成两眼一起闭。Warudo 在 VTS 接收器之后 append（不 append 取默认 0）"
+        }
+    ],
+    "outputs": [
+        {
+            "parameter": "browDownLeft",
+            "expression": "BrowDownLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "browDownRight",
+            "expression": "BrowDownRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "browInnerUp",
+            "expression": "BrowInnerUp",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "browOuterUpLeft",
+            "expression": "BrowOuterUpLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "browOuterUpRight",
+            "expression": "BrowOuterUpRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "cheekPuff",
+            "expression": "CheekPuff",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "cheekSquintLeft",
+            "expression": "CheekSquintLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "cheekSquintRight",
+            "expression": "CheekSquintRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeBlinkLeft",
+            "expression": "EyeBlinkLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeBlinkRight",
+            "expression": "EyeBlinkRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookDownLeft",
+            "expression": "EyeLookDownLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookDownRight",
+            "expression": "EyeLookDownRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookInLeft",
+            "expression": "EyeLookInLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookInRight",
+            "expression": "EyeLookInRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookOutLeft",
+            "expression": "EyeLookOutLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookOutRight",
+            "expression": "EyeLookOutRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookUpLeft",
+            "expression": "EyeLookUpLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeLookUpRight",
+            "expression": "EyeLookUpRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeSquintLeft",
+            "expression": "EyeSquintLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeSquintRight",
+            "expression": "EyeSquintRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeWideLeft",
+            "expression": "EyeWideLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "eyeWideRight",
+            "expression": "EyeWideRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "jawForward",
+            "expression": "JawForward",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "jawLeft",
+            "expression": "JawLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "jawOpen",
+            "expression": "JawOpen",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "jawRight",
+            "expression": "JawRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthClose",
+            "expression": "MouthClose",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthDimpleLeft",
+            "expression": "MouthDimpleLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthDimpleRight",
+            "expression": "MouthDimpleRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthFrownLeft",
+            "expression": "MouthFrownLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthFrownRight",
+            "expression": "MouthFrownRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthFunnel",
+            "expression": "MouthFunnel",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthLeft",
+            "expression": "MouthLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthLowerDownLeft",
+            "expression": "MouthLowerDownLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthLowerDownRight",
+            "expression": "MouthLowerDownRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthPressLeft",
+            "expression": "MouthPressLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthPressRight",
+            "expression": "MouthPressRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthPucker",
+            "expression": "MouthPucker",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthRight",
+            "expression": "MouthRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthRollLower",
+            "expression": "MouthRollLower",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthRollUpper",
+            "expression": "MouthRollUpper",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthShrugLower",
+            "expression": "MouthShrugLower",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthShrugUpper",
+            "expression": "MouthShrugUpper",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthSmileLeft",
+            "expression": "MouthSmileLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthSmileRight",
+            "expression": "MouthSmileRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthStretchLeft",
+            "expression": "MouthStretchLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthStretchRight",
+            "expression": "MouthStretchRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthUpperUpLeft",
+            "expression": "MouthUpperUpLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "mouthUpperUpRight",
+            "expression": "MouthUpperUpRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "noseSneerLeft",
+            "expression": "NoseSneerLeft",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "noseSneerRight",
+            "expression": "NoseSneerRight",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "tongueOut",
+            "expression": "TongueOut",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Rotation_x",
+            "expression": "Rotation_x",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Rotation_y",
+            "expression": "Rotation_y",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Rotation_z",
+            "expression": "Rotation_z",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Position_x",
+            "expression": "Position_x",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Position_y",
+            "expression": "Position_y",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Position_z",
+            "expression": "Position_z",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeLeft_x",
+            "expression": "EyeLeft_x",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeLeft_y",
+            "expression": "EyeLeft_y",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeLeft_z",
+            "expression": "EyeLeft_z",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeRight_x",
+            "expression": "EyeRight_x",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeRight_y",
+            "expression": "EyeRight_y",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "EyeRight_z",
+            "expression": "EyeRight_z",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "FaceFound",
+            "expression": "FaceFound",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        },
+        {
+            "parameter": "Timestamp",
+            "expression": "Timestamp",
+            "defaultValue": 0,
+            "curve": {
+                "keys": [
+                    {
+                        "t": 0,
+                        "v": 0,
+                        "inT": 1,
+                        "outT": 1
+                    },
+                    {
+                        "t": 1,
+                        "v": 1,
+                        "inT": 1,
+                        "outT": 1
+                    }
+                ]
+            },
+            "modifiers": [],
+            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+        }
+    ]
+}
