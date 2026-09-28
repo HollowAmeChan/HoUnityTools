@@ -2733,53 +2733,187 @@
                         "notes":  "device (identity)\n【经验参】无（恒等直通；曲线也是恒等的）"
                     },
                     {
-                        "parameter":  "Ho/Style/Cheek",
-                        "expression":  "(max(cheekPuff, max(mouthLeft, mouthRight)) * clamp((cheekPuff - 0.05) / 0.05, 0, 1) * clamp((max(cheekPuff, max(mouthLeft, mouthRight)) - 0.40) / 0.05, 0, 1) * HoAutoCheek) + HoExternalCheek",
+                        "parameter":  "Ho/Drive/Mouth/Form",
+                        "expression":  "((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2",
                         "defaultValue":  0,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.5, "target": 1, "hold": 0.1, "threshold": 0.05 } ] }, { "kind": "smooth", "seconds": 0.08, "steps": [] } ],
-                        "notes":  "**写自己**（规则一）：鼓嘴一条行管完 —— 读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」。\n⚠️ **时域这几项是手感参**（不来自实测）：2026-09-27 实机反馈「太粘滞、不干脆，**就是平滑太厉害了**」⇒ 只动**平滑**：`0.2s → 0.08s`（迟滞那两项没动 —— 它管的是「什么时候开始切」，不管过渡有多长）。过渡是**对称**的（进出同一条曲线）⇒ 「平滑」是唯一的过渡时长旋钮：**还嫌粘就继续降（0.05），开始抖/跳就退回 0.12**。\n⭐ **读数**（2026-09-27 第二批 12 段 + 第一批 = **27 段** 5 秒实测）：`max(cheekPuff, max(mouthLeft, mouthRight)) × 颊门 × 死区` ——\n  ① **颊门** `clamp((cheekPuff − 0.05) / 0.05, 0, 1)`：⚠️ **`mouthLeft/Right` 也是「撇嘴」那一路的信号**（还没量过）⇒ 光看侧向会把「撇嘴」也当成鼓嘴；加上这道「颊确实在动」的门之后，纯撇嘴算出来是 0。单边鼓最弱那次的稳态 cheekPuff 是 0.2298 ⇒ 开得动。\n  ② **死区** `clamp((max − 0.40) / 0.05, 0, 1)`：静息 `cheekPuff` ≤**0.0181**，而**噘嘴能到 0.1769** ⇒ 膝盖取空带 [0.1769, 0.6205] 的中点 0.40（与眉 0.24 / 鼻 0.18 同一个做法）。\n⭐ **左右这一维真的有信号**（2026-09-27 实测改判）：单边鼓嘴时嘴唇被推过去 ⇒ `mouthLeft` **0.69~0.86**（左鼓）/ `mouthRight` **0.67~0.87**（右鼓），而**双鼓时它们只有 ≈0.03** ⇒ 左右靠这两个通道分（不是颊那一路），两条颊轴就是这么写的。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `max(...) > 0.5`（0/1 进去迟滞会退化成跟随）。\n⚠️ 实测缝：目标稳态下界 **0.6205**、非目标（静息 / 噘嘴 / 挤眼 / 笑）**全 0**；对倒V 无影响（鼓嘴那 9 段的 `mouthPucker` ≤0.7453 < 倒V 的 0.80）。\n【经验参】颊门 0.05 / 0.05；死区膝 0.40、过渡 0.05；维持 trigger 0.50 / threshold 0.05 / hold 0.1（**没动**）；平滑 0.08s（⚠️ **手感参**：2026-09-27 用户实机反馈「太粘滞、不干脆」并指明「**就是平滑太厉害了**」⇒ 0.2s → 0.08s；还嫌粘就降 0.05，抖了就回 0.12）—— 颊门 / 死区膝来自 2026-09-27 二十七段 5 秒实测，**换人 / 换设备要重标**；⚠️「撇嘴」还没量过（它是 `mouthLeft/Right` 的主要来源）\n⭐⭐ **2026-09-28 深夜：风格优先级链 = 鼓嘴 > 猫嘴 > 倒V**（用户定）—— 抑制因子只乘在 **auto 项**上（`HoExternal*` 手动常开不被压），且写在「维持」**之前** ⇒ 被压的那档从头就不亮；门（`MouthGate`）与契约行用的是**同一个已仲裁的值**。"
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归倒V 形态 —— ⚠️ `MouthWidth` 2026-09-28 已整棵删掉，噘现在只走倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。\n⭐ **2026-09-29：咀嚼被读成苦 —— 量到了，但按「一次一个轴」先不落（用户定）** —— 同一批 15 段隔离录样实测：G4（强咀嚼）本行发布值最低 **−0.415**（经本行曲线负侧那两档压平）。逐帧归因（Tools~/FaceTracking/jaw-take-census.py）：**不是** stretch 残差那条（咀嚼里 T p90 只有 0.012），而是 **frown** —— 咬下去那一刻嘴角下压 0.18~0.40。\n  修法**已经验证过、先不落**：负侧证据乘一道「咀嚼中」的门（证据 = clamp((min(jawOpen, mouthClose) − 0.16)/0.2, 0, 1) 加 维持 trigger 0.5 / threshold 0.45 / hold 0.5s）⇒ 实测 **Form < 0 的帧 164 → 39、最低 −0.380 → −0.105**，G1/G2/G3/G5 一字不变。\n  ⚠️ 为什么先不落：① 它要**新增一行树外证据 + 控制器多一个参数**（换机制，不是纯修复）；② **代价未实测** —— 这道门分不开「咀嚼」和「说话里的闭唇音」（物理上同形），本批 5 组里**没有说话的录样**。下次开这一轮照 §5.7.39 的 ⑤ 抄。\n  ⚠️ 另记一笔：G2（真张到 0.95）本行最低 **−0.219**，是 **stretch 残差**那条（实测 stretch 0.66~0.70 vs 基线 0.42×jawOpen+0.05 = 0.45）⇒ 中性大张嘴被判成苦。要修得先补一批「中性大张嘴」，别拿这一次的尾巴改。"
                     },
                                         {
-                        "parameter":  "Ho/Style/CatMouth",
-                        "expression":  "clamp(mouthRollLower * clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1) * (1 + 3 * jawOpen * jawOpen), 0, 1) * HoAutoCatMouth + HoExternalCatMouth",
+                        "parameter":  "Ho/Drive/Mouth/Open",
+                        "expression":  "(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)",
                         "defaultValue":  0,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26 } ] }, { "kind": "smooth", "seconds": 0.08, "steps": [] } ],
-                        "notes":  "controller axis Mouth/Roll -- input of MouthCoreRollSwitch (plain mouth <-> cat mouth). 2026-09-28 REWRITTEN after 24+12 five-second takes: the old reading (geometric mean of BOTH lips x dead zone x jaw gain x pucker gate) was not this action's physical quantity at all.\n⭐ what the user's cat mouth actually is: lower lip rolled in (mouthRollLower 0.434~0.460) while the UPPER lip barely moves (mouthRollUpper only 0.026~0.032) and the mouth CORNERS are pulled BACK (dimple 0.78~0.84 vs frown 0.34~0.45).\n⭐ what it must not fire on (measured segment averages, worst case per group):\n  抿嘴（双唇压紧）rollLower 0.362~0.396（跟猫嘴只差 1.1 倍！）but 苦 and 酒窝 both rise (0.59~0.62 / 0.66) so 嘴角方向 only 0.042~0.075;\n  抿嘴（嘴角下扬）rollLower 0.136~0.226, 嘴角方向 **−0.50 ~ −0.54** (苦 0.69~0.75);\n  用力说话 rollLower **0.151~0.211** but 嘴角方向 only 0.013~0.096;\n  笑常态 嘴角方向 0.316~0.374 (smile raises dimple) but rollLower only 0.068~0.075;\n  笑大笑 嘴角方向 0.188~0.244, rollLower 0.059~0.060;\n  说话 / 张嘴咀嚼 / 张满 / 噘嘴 / 挤眼 / 闭唇咀嚼: 嘴角方向 <=0.096 and rollLower <=0.119.\n⭐ so the two conditions must BOTH hold, and the discriminator is 嘴角方向 = (酒窝左+右)/2 − (苦左+右)/2:\n  cat mouth 0.358~0.503 vs every confounder <=0.096 (avg) -- 5~7x. 门 knee 0.20 (走路带 0.10):\n  cat mouth 0.434~0.460 (all three takes fully open the gate); worst confounder = 笑常态 0.075 (its gate is open but its lower-lip roll is tiny); 用力说话 0.211 x gate 0 = 0.\n⚠️ 去掉的东西与原因：① √(上×下)（要求两根唇一起卷）-- 用户的猫嘴几乎不卷上唇；② 噘嘴门 -- 嘴角门已经把它挡在 0（嘴角方向 0.035~0.062）。\n⭐ **下颌增益又加回来了（2026-09-28，k=3）**：用户实机反馈「咬唇下张大嘴他又会回弹到没猫嘴 …… 很难维持表演这个猫嘴」。设备在**张嘴时会把这两根唇线压低**（2026-09-27 就量到过），读数随下颌开度掉，而这一版原来是 `下唇卷 × 嘴角门`，掉下去就释放 ⇒ 表演中途弹回。⇒ 乘回 `1 + 3·jawOpen²`（张嘴 0.7 ⇒ ×2.47）。\n⚠️ **为什么现在敢加、而换判据时必须去掉**：旧口径里它乘在**死区外面**、前面没有别的东西挡，于是把说话/张满一起放大（实测把说话顶到 0.35）；现在**嘴角门先筛一遍** —— 36 段里所有「下颌动得大」的动作门都是 0（张满 jawOpen 0.74~0.79、用力说话 0.26~0.31、说话 0.23、张嘴咀嚼 0.11~0.20 ⇒ 乘积仍是 0），而**唯一能过门的非目标（笑）下颌只有 0.014~0.022 ⇒ 增益 ≈1.00，等于没加**。所以这个增益只对「猫嘴 + 张嘴」起作用 —— 正是要修的那件事。\n⚠️ 代价：万一出现「**张大嘴的笑**」（jawOpen ≥0.58 且嘴角方向 ≥0.30），增益会把它顶过触发线（目前实测的笑：下唇卷 0.068~0.075、下颌 0.014~0.022 ⇒ 余量很大）。真出现：k 降到 1，或 trigger 抬到 0.20。\n⚠️ **时域（2026-09-28 两次实机反馈）**：① 「上下卷嘴唇张口时会一直闪」⇒ 挂「维持」+「平滑」，输出只有 0/1；② 「很难维持表演」⇒ **把释放线压到几乎贴地**：`threshold 0.10 → 0.13`（释放 0.15−0.13 = **0.02**）、`hold 0.1 → 0.2`。触发线仍是 0.15（不放松对非目标的约束），但**一旦点亮，只有读数掉到 0.02 以下才松**（静息实测是精确 0）⇒ 表演全程挂得住、松手立刻关。⚠️ 喂进「维持」的必须是**连续读数**（就是本行的表达式）。\n⚠️ **已知没解决的一条（用户已接受）**：上下唇**紧闭着**咬时读数够不到 0.15（「如果闭合下真的不好识别到那就只能这样了」）。\n【经验参】嘴角门膝 0.20、过渡 0.10（实测：猫嘴 0.358~0.503 vs 非目标 <=0.096）；下颌增益 k=3（设备在张嘴时压低唇线 —— 旧口径实测过；现在被嘴角门保护，只有过了门的读数才吃它）；开关 MouthCoreRollSwitch 两档阈值 0.15 / 0.30（实测：目标 0.434~0.460、最坏非目标 0.075）；维持 trigger 0.15 / threshold 0.13（释放 0.02）/ hold 0.2；平滑 0.08s（⚠️ 后两项是**手感参**：用户实机反馈「会闪」「很难维持」之后按倒V / 鼓嘴同一套加的；还闪就再加大 threshold，笑起来误切就把 trigger 抬到 0.20）；判据那几项来自 2026-09-27/28 三十六段 5 秒实测（A 批 24 + B 批 12），**换人 / 换设备要重标**；⚠️「笑到卷唇」「张着嘴做猫嘴」这两组还没量过\n⭐ **2026-09-28 实机复查（用户报数）→ 膝 0.20 调成 0.12**：做住 rollLower **0.40** / 酒窝 **0.50** / 苦 **0**；张嘴 0.10 / 0.25 / 0；大张 0.05 / 0.17 / 0 ⇒ 嘴角方向 0.50 / 0.25 / 0.17。膝 0.20 时张嘴那档只拿到门 0.5、大张那档门 0（读数 0.05 / 0），任何一瞬间掉到释放线 0.02 以下就弹回 ⇒ 就是用户说的「张嘴立刻就掉回去，直接 0」。膝降到 **0.12**（宽度仍 0.10）后三档读数 0.40 / 0.10 / 0.044 = 释放线的 20 / 5 / 2.2 倍 ⇒ 张嘴、大张都不会脱手；而 36 段里最坏的非目标「用力说话 0.096」「抿嘴 0.075」「说话 0.069」仍在膝下 ⇒ 门 = 0，一个干扰项都没放进来。\n⚠️ 面板上看到这根轴（旧名 `Ho/Drive/Mouth/Roll`，现在叫 `Ho/Drive/Style/CatMouth`）是**纯 0 / 1 是正常的**：这行挂了「维持」修饰符，输出恒等于 target。\n它显示的是**状态亮没亮**，不是原始读数，不要照它去调门。\n⭐ **2026-09-28 改名 + 增量开关（跟倒V / 鼓嘴对齐）**：这根轴原来叫 `Ho/Drive/Mouth/Roll` —— 名字还停在「卷唇量」上，但它早就是**「整张嘴换成猫嘴版」的风格权重**了（用户：「我总觉得 roll 这个轴值可以改名了，改成风格化的轴值这样用户看得懂了」）⇒ 改成 `Ho/Drive/Style/CatMouth`；**判据搬到本行**（中间层的风格行），另发一条契约行给控制器。现在**三个风格轴一个机制**：`Ho/Style/<形态>` = 判定（含增量开关），`Ho/Drive/Style/<形态>` = 契约行。\n⭐ **增量开关与倒V / 鼓嘴同形**：本行 = `判定 × HoAutoCatMouth + HoExternalCatMouth` ⇒ ① `HoAutoCatMouth = 0` 关掉自动触发（写 0 就永远不自动亮）；② `HoExternalCatMouth = 1` = **常开**（增量的入口，按名字读、加在判定之前）。没人 append 时取 defaultValue（1 / 0）⇒ **默认行为与本轮之前完全一样**。\n⚠️ **为什么猫嘴需要常开**：轴驱动能自动采到的只有「嘴角往后拉（`Form > 0`）× `Open ≈ 0…0.4`」这一条路径（含住 / 微张 / 大张）；**中性形张嘴**（`Form 0`）与**大笑张嘴**（`Form ≈ 0.93`）那几格**自动到不了** ⇒ 只有常开（`HoExternalCatMouth = 1`）时它们才活。⚠️ 变体表是**替换**不是叠加（WD 开）⇒ 少一格就是「那几根键回默认、嘴塌」，所以猫嘴版**必须保持 8 格**（2026-09-28 试砍 3 格当场撤回）。\n⚠️ **面板上看到这一行是纯 0 / 1 是正常的**（挂了「维持」，输出恒等于 target）：它显示的是「状态亮没亮」，不是原始读数，别照它去调门。\n⚠️ **改名只动了轴**：树名 / 开关名 / 槽位名仍是 `MouthCoreRoll*`（`MouthCoreRoll` / `MouthCoreRollSwitch` / 8 个槽位）—— 改它们要连带动 8 个片段名与槽位 GUID 约定，用户没要。\n【经验参】判定那几项见上面的实测（36 段 + 12 段）；开关：`HoAutoCatMouth` 默认 1、`HoExternalCatMouth` 默认 0、维持 trigger 0.15 / threshold 0.13（释放 0.02）/ hold 0.2、平滑 0.08s、`MouthCoreRollSwitch` 两档 0.15 / 0.30\n⭐⭐ **2026-09-28 深夜：风格优先级链 = 鼓嘴 > 猫嘴 > 倒V**（用户定）—— 抑制因子只乘在 **auto 项**上（`HoExternal*` 手动常开不被压），且写在「维持」**之前** ⇒ 被压的那档从头就不亮；门（`MouthGate`）与契约行用的是**同一个已仲裁的值**。"
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.05, "v": -0.05, "inT": 1, "outT": 1.667 },
+                                                   { "t": -0.02, "v": 0, "inT": 1.667, "outT": 0 },
+                                                   { "t": 0.02, "v": 0, "inT": 0, "outT": 1.667 },
+                                                   { "t": 0.05, "v": 0.05, "inT": 1.667, "outT": 1 },
+                                                   { "t": 0.4, "v": 0.4, "inT": 1, "outT": 1 },
+                                                   { "t": 0.75, "v": 0.75, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                      ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.02..0.05 是斜坡（斜率 1.667）；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。\n【经验参】曲线死区：−0.02..0.02 → 0、±0.05 归恒等（实测下颌抖动的口径）；曲线上的 0.4 / 0.75 / 2 是量程刻度；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
                     },
-                    {
-                        "parameter":  "Ho/Style/InvertedV",
-                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * HoAutoInvertedV) + HoExternalInvertedV",
-
+                                        {
+                        "parameter":  "Ho/Drive/Mouth/Funnel",
+                        "expression":  "mouthFunnel - (jawOpen * .2)",
                         "defaultValue":  0,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05 } ] }, { "kind": "smooth", "seconds": 0.08, "steps": [] } ],
-                        "notes":  "**写自己**（规则一，2026-09-27 用户定）：倒V 一条行管完 —— 读数 × 自动开关 + 外部开关，然后「维持」（迟滞 ⇒ 输出恒是 0 或 1）再「平滑」（形态切换的过渡）。\n⚠️ **时域这几项是手感参**（不来自实测）：2026-09-27 实机反馈「太粘滞、不干脆，**就是平滑太厉害了**」⇒ 只动**平滑**：`0.2s → 0.08s`（迟滞那两项没动 —— 它管的是「什么时候开始切」，不管过渡有多长）。过渡是**对称**的（进出同一条曲线）⇒ 「平滑」是唯一的过渡时长旋钮：**还嫌粘就继续降（0.05），开始抖/跳就退回 0.12**。\n⭐ **读数不是裸 mouthPucker**（2026-09-27 十五段 5 秒实测定）：`mouthPucker × 死区 × 鼻门` ——\n  ① **死区** `clamp((mouthPucker − 0.41) / 0.02, 0, 1)`：静息三次的 max 是 **0.3797**（0.3458 / 0.3403 / 0.3797），膝盖压在天花板 +0.03（与 browDown 0.24 vs 0.2083、noseSneer 0.18 vs 0.1514 同一个做法）；\n  ② **鼻门** `1 − clamp((max(noseSneerLeft, noseSneerRight) − 0.54) / 0.05, 0, 1)`：真噘嘴那侧 noseSneer ≤**0.2942**，而这台设备的**挤眼**（用力型）≥**0.7821** ⇒ 中间 0.49 宽的空带，膝盖取中点 0.54。\n⚠️ 为什么非要鼻门：**裸 mouthPucker 在挤眼里实测能到 0.7769**（0.6389 / 0.7769 / 0.7222），旧的 0.8 触发线离误触发只剩 0.023 —— 单线缝只有 +0.1865，加上这两项之后缝 **+0.9634**（目标最弱 0.9634、非目标全 0）。\n⚠️ **压唇（mouthPress）不能拿来当门**：用户「噘嘴拉满」那一组自己就压到 0.32~0.49，与挤眼的重叠（那样会把真噘嘴判掉）。\n⚠️ 两个开关都在迟滞**之前**（加在读数上）：外面写 1 时读数 ≥ trigger、直接点亮；而「维持」的输出恒等于 target ⇒ **两个都开也不会翻倍**，不需要 clamp。\n⚠️ 喂进「维持」的必须是**连续读数** —— 不能先写成 `mouthPucker > 0.8`（0/1 进去迟滞会退化成跟随）。\n⚠️ 代价（用户已认）：开关关着的时候这一行**照样吃时域修饰**（维持/平滑的状态一直在跑），无害。\n⚠️ `trigger 0.80` 现在是**实测**的：它落在空带 [0, 0.9634] 里偏上 —— 既兜住「没量到的、不皱鼻的挤眼」（pucker 0.78 也不亮），又比最弱那次真噘嘴低 0.16。\n【经验参】死区膝 0.41（三次静置 mouthPucker max 0.3797 + 0.03）、过渡宽 0.02；鼻门膝 0.54（真噘嘴 noseSneer ≤0.2942 与挤眼 ≥0.7821 的中点）、过渡宽 0.05；维持 trigger 0.80 / threshold 0.05 / hold 0.1（**没动**）；平滑 0.08s（⚠️ **手感参**：2026-09-27 用户实机反馈「太粘滞、不干脆」并指明「**就是平滑太厉害了**」⇒ 0.2s → 0.08s；还嫌粘就降 0.05，抖了就回 0.12）—— 判据那几项（死区 / 鼻门）来自 2026-09-27 十五段 5 秒实测，**换人 / 换设备要重标**\n⭐⭐ **2026-09-28 深夜：风格优先级链 = 鼓嘴 > 猫嘴 > 倒V**（用户定）—— 抑制因子只乘在 **auto 项**上（`HoExternal*` 手动常开不被压），且写在「维持」**之前** ⇒ 被压的那档从头就不亮；门（`MouthGate`）与契约行用的是**同一个已仲裁的值**。"
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)\n【经验参】无（表达式是机械换算；平滑：0.007）"
                     },
                     {
-                        "parameter":  "Ho/Style/MouthGate",
-                        "expression":  "",
-                        "defaultValue":  1,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "⭐⭐ **2026-09-29 用户定：本阶段不做风格形态之间的互相覆盖** —— 「**先不要做风格表现的互相覆盖，只做他们自己要强制覆盖的东西，避免测试中立刻开始耦合**」。⇒ 两条链行（`out(同名) × (1 − 形态)`）**已删**，本行现在就是常量 1 ⇒ 门恒开、形态之间互不干扰。\n⚠️ 删掉的两条原文（要恢复照抄）：\n　`out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1)) * (1 - clamp(out(\"Ho/Style/CatMouth\"), 0, 1))`\n　`out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))`\n⚠️ 同时从 `Ho/Style/CatMouth` 去掉 `× (1 − Cheek)`、从 `Ho/Style/InvertedV` 去掉 `× (1 − Cheek) × (1 − CatMouth)`；**各形态自己的门（颊门 / 嘴角门 / 死区 / 鼻门）与 auto/external 开关照旧保留**。\n⚠️ 代价：形态现在可以同时亮（测试期要的就是这个）；`Ho/Drive/Gate/MouthStyle` 因此恒为 1。\n**关其他的基准行**（规则二的第一条，2026-09-27 用户定）：常量 1 = 门开着。\n⭐ 为什么要有它：每条形态会再压**一条同名行**，读 `out(\"Ho/Style/MouthGate\")`（= 上一条同名行）再乘 `1 - 自己的形态` —— 于是**加形态不用动任何已有行**，这就是「无限拓展」。\n⚠️ 它是常量行（表达式留空 ⇒ 输出 defaultValue），所以**不过曲线**；想让门开场时爬上去就给它加「平滑」，现在不需要。\n⚠️ 两条同名行都在**驱动器块最上面**（引用只能朝上）：控制器那侧的契约行 `Ho/Drive/Gate/MouthStyle = out(\"Ho/Style/MouthGate\")` 排在下面任何位置都能读到**最后写的那一份**。\n【经验参】无（关其他的基准行：常量 1 = 门开着；1/0 是约定值，链上第二条同名行会覆盖它）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Gate/MouthStyle",
-                        "expression":  "out(\"Ho/Style/MouthGate\")",
-                        "defaultValue":  1,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**三个孩子**：`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突）。\n⭐ 当天走了三版：上午删掉 2D 的 `MouthWidth`（§5.7.22）⇒ 下午建 `MouthShift`（整嘴平移）+ 把它换成 `MouthCorner`（嘴角 3×3，§5.7.23）⇒ 傍晚用户判定「收缩舒张不必拆左右，一根轴 3 状态就够，左右交给整嘴平移」⇒ `MouthCorner` 删掉、`MouthWidth` 以 **1D 3 格**回来（§5.7.24）。\n\n\n⭐ `out(\"…\")` 读的是**上面最近写过这个名字**的那一行 ⇒ 这里读到的是**最后一条**同名行（= 全部形态合起来的门）✓，以后再加形态也不用改这一行。\n【经验参】无（只是转发 out(同名)；门的值由形态行决定）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Style/InvertedV",
-                        "expression":  "out(\"Ho/Style/InvertedV\")",
+                        "parameter":  "Ho/Drive/Mouth/Press",
+                        "expression":  "((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)",
                         "defaultValue":  0,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "**契约行**：倒V 形态的权重（0/1），喂控制器里那棵 `InvertedV`（Simple1D，2 格：中性 / 倒V 姿势）。\n⚠️ **为什么倒V 需要它而鼓嘴不需要**：鼓嘴的两条颊轴 `Ho/Drive/Cheek/Left|Right/Puff` 本来就是控制器参数（树直接吃它们），而倒V 的判据是**内部行** `Ho/Style/InvertedV` —— 控制器看不见内部行 ⇒ 拿这一行把它的值发布出去。\n（以后若某个形态也是\"一个固定姿势\"，照这个形状再发布一行 `Ho/Drive/Style/<形态>` 即可。）\n【经验参】无（只是转发 out(同名)；0/1 由形态行决定）"
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Jaw",
+                        "expression":  "clamp(jawOpen - clamp(mouthClose - jawOpen, 0, 1), -1, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
+                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
+                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
+                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells. 2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667). The +/-1 end keys change nothing (the expression already clamps to +/-1). ⚠️ WARNING: chewing is a MOTION on this very axis -- if the jawOpen/mouthClose oscillation amplitude is <= 0.05 this dead zone erases it (that amplitude is still unmeasured, see docs/VTS_HQ_CONTROLLER.md 5.4.2 item 3).\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区\n⭐ **2026-09-28 修正（18 段实测，用户同意只改表达式、不动手拉的点）**：用户报「闭嘴时下颌下拉、只表现下巴下移的动画**完全无法触发**」。实测（`.research/takes-kubite.txt`，同场校准）：\n  **闭嘴下颌下拉**：`jawOpen` **0.274~0.293** / `mouthClose` **0.279~0.296** ⇒ 差值 **−0.005~−0.003**；\n  对照：挤嘴角 `jawOpen` 0.017、苦闭嘴 0.016~0.019（差值 +0.003~+0.007）。\n⭐ **根因：信号很大（0.28，跟「半张」一个量级），但 `mouthClose` 把它整份抵消了** —— 闭嘴做下颌下拉时设备**同时**报 `mouthClose ≈0.28`，差值 ≈0 ⇒ 死区 ⇒ 轴恒 0 ⇒ `MouthJaw` 永远停在「闭嘴」那一行。\n⭐ **改法**：**正侧改用 `jawOpen` 本身**（下颌自己张了多少，不再被「嘴唇压紧」抵消），**负侧保留原来的差值**（「嘴唇比下颌更用力压」才为负）⇒ `if((jawOpen - mouthClose) < 0, jawOpen - mouthClose, jawOpen)`。闭嘴下颌下拉 **0 → 0.28**（过死区、进树：左右两列≈75%、中列≈31%）；张嘴类只是**略微抬高**（「中性半张」 0.367 → **0.434**，更符合「下颌真的张了 0.43」）。\n⚠️ **`mouthClose` 原本是为了检出「闭着嘴唇时的下颌运动（咀嚼）」，但那条实测也没做成**：闭唇咀嚼 `jawOpen` 0.021~0.027 / `mouthClose` 0.021~0.026 ⇒ 差值 ≈0.0004 ⇒ **无论改不改都进不了死区**（0.05）⇒ 咀嚼仍然丢（「已知代价」，振幅已测）。\n⚠️ 台架里那句「挤嘴角伪影 0.1」说的是 **`jawLeft/Right`（`JawSide` 轴）**（§5.4.2 咬紧+只挤嘴角 0.05~0.2），**与本行无关**（挤嘴角的 `jawOpen` 只有 0.017）。\n⚠️ **树里 6 个点没动**：用户手拉的「只上下」中列下移格仍在 **Y = 0.902**（「张满」）⇒ 闭嘴下颌下拉只落到那一格 31%；要「下移就到位」得挪那个点或加第三行（另议）。\n⭐⭐ **2026-09-29：if 分叉拆掉（15 段隔离录样，20 Hz；语料 .research/mouth-isolation-2026-09-29/，算账脚本 Tools~/FaceTracking/jaw-take-census.py）** —— 用户报「闭嘴咀嚼的下巴下移触发很阶梯」。五条实测：\n  ① **旧式的病就是分叉本身**：`if(d < 0, d, jawOpen)`（`d = jawOpen − mouthClose`）两个分叉在 `d` 穿 0 时差着**整份 `mouthClose`** ⇒ 输入只动 0.08、轴能跳 0.6。强咀嚼那组（G4）实测 **19 帧「输入没解释的大跳」、最大 0.635**；换成连续式后 **0 帧 / 0.014**。\n  ② **顺带查实：2026-09-28 那次修正根本没生效**（就是上面那条「正侧改用 `jawOpen` 本身」）：闭嘴下颌下拉实测 `jawOpen` **0.274~0.293** / `mouthClose` **0.279~0.296** ⇒ `d ≈ −0.004 < 0` ⇒ 走的是**负分叉**（≈0 ⇒ 进 ±0.05 死区 ⇒ 轴恒 0）—— 正是用户报的「完全无法触发」。新式给 **0.279**，就是当初想要的那个 0.28。\n  ③ **新式 = `jawOpen − clamp(mouthClose − jawOpen, 0, 1)`**：只在「嘴唇压得比下颌更紧」时扣掉**超出的那一部分**，`d ≥ 0` 时与旧式**逐字相同**（负侧照旧被曲线死区钳到 0，树里没有负格）。连续、无分叉、不新增参数。\n  ④ **幅度保持 1:1、不发明缩放**：强咀嚼 `jawOpen` p90 **0.617** / max 0.676，而真张满那次 max 0.956 ⇒ 咀嚼确实开到「真张满」的 ~70%，树上落到「张」那格 ~80%。嫌大就在这条表达式外面乘个系数（那是手感参，不是测量）。\n  ⑤ 各组的「无理由跳变」都被压平：G1 0.085→**0.035**、G2 0.082→**0.039**、G3 0.154→**0.012**、G4 0.635→**0.014**、G5 0.013→**0.000** —— 旧式 G4 那 19 帧就是阶梯的唯一来源。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/JawSide",
+                        "expression":  "jawRight - jawLeft",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
+                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
+                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
+                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667); the axis is within +/-1 by construction (difference of two 0..1 wires) so the end keys change nothing. 实测（同一批，见 docs/VTS_HQ_CONTROLLER.md 5.4.2）：静息 -0.013（进死区 -> 0）、咬紧时真动下颌只有 0.02..0.04（也在死区里 -> 0）、挤嘴角的伪影 0.05..0.2（**只被掐掉最低那一小段，0.08 以上原样通过**）、微张真动 0.52（原样通过）。\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Forward",
+                        "expression":  "jawForward",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.01, "steps": [] }
+                                      ],
+                        "notes":  "⚠️ 2026-09-27 起这根轴**不做树**了（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）—— 它从此只是**辅助变量 / 出口**：表达式就是裸线 jawForward，照旧每帧发布（面板 / Warudo / 将来的公式都能取），但没有树消费它（跟 Cheek/*、Gaze/* 一个待遇）。那棵 2 格的 MouthForward 1D 表连同两个片段已删（控制器 26 => 25 棵树、88 => 86 槽位）。为什么不做，见 docs/VTS_HQ_CONTROLLER.md 5.4.1：这条线要张嘴才有值、张嘴本身又给值、噘嘴单独给 0.05、满档要噘嘴+前顶一起（0.14，裸线满量程只有 0.13）、安卓不发 —— VBridger 七份预设里 jawForward 出现 0 次（连直通都不给）。留存的实测记录：裸线静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.01）"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/TongueL",
+                        "expression":  "tongueOut",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): **the tongue table's only axis = how far the tongue is out**（2026-09-28 深夜起；名字里的 L 是历史遗留 —— 这根通道本来就是给「分侧」留的，现在先当**伸出量**用，做歪舌头时量轴会换成新的 `TongueOut`）。\\n⭐ 舌头那条表 `MouthTongue` = **1D 4 格**（§5.7.29）：**默认（不出舌）+ 沿对角线 3 步** —— 沿 (伸出量, 张开量) 的对角线走（舌出来多少、嘴就张多少 = 不穿模）⇒ 一根轴上的 4 个状态，**张嘴量烘在每段片段里**（所以没有 Y 轴；嘴形 / 下颌仍归 `MouthCore` / `MouthJaw`）。刻度 0 / 0.3333 / 0.6667 / 1（占位、等分）。\\n⚠️ `tongueOut` **从来没实测过**（126 段那批里没有舌头动作）⇒ 树上的刻度 0 / 0.3333 / 0.6667 / 1 是**占位**（等分），第一轮录完再收圈。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/TongueR",
+                        "expression":  "tongueOut",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/TongueR (HQTongueRight): **现在没有树消费**（2026-09-28 深夜起）—— 照旧发布当出口，留给「歪舌头」的侧向开关（`TongueL`/`TongueR` 两根就是为此留的）。\\n⚠️ ARKit 52 项里**只有 `tongueOut` 一个**舌头通道 ⇒ 左右只能靠代理（同侧唇/颊/下颌的不对称）或手动/外部；先量 3+3 段（舌中/舌左/舌右）再定。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/X",
+                        "expression":  "clamp((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight), -1, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": -0.3, "v": -0.133, "inT": 1, "outT": 1 },
+                                                   { "t": -0.2, "v": 0, "inT": 1, "outT": 0 },
+                                                   { "t": 0.2, "v": 0, "inT": 0, "outT": 1 },
+                                                   { "t": 0.3, "v": 0.133, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/X = **整嘴左右平移**\n（2026-09-28 重建，41 段实测）。\n⭐ 判据 = `(mouthLeft − mouthRight) + (smileL − smileR)`：ARKit 的 `mouthLeft/Right` 本来就是「嘴整体左/右移」的语义，实测干净得离谱 —— 整嘴右移 `mouthLeft` **0.963~0.967**、整嘴左移 `mouthRight` **0.967~0.976**，而同一个人「嘴角往左/右撇」只有 **0.047~0.136** ⇒ 差 **7~9 倍**（缝 +0.594）。\n⭐ **曲线 = 死区 ±0.20（0.20~0.30 斜坡、0.30 之上近恒等）**：把「撇嘴」那点位移压成 0，只有真的整嘴平移才推得动。\n⚠️ 旧版里借来的 `3 × (dimpleL − dimpleR)` **已拿掉** —— dimple 归嘴角层，两层不许吃同一个信号（否则一个动作被推两遍）。\n⚠️ 刻度摆 **±0.95**（实测满档 0.96）；这棵树挂形态门（倒V / 鼓嘴亮起来时让位）。\n【经验参】死区膝 0.20、过渡 0.10（整嘴平移 0.96 vs 嘴角撇 ≤0.14）；0.95 = 刻度；平滑 0.009s"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Y",
+                        "expression":  "clamp(mouthPucker * clamp((mouthPucker - 0.45) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) - clamp((min(jawOpen, mouthClose) - 0.35) / 0.1, 0, 1), -1, 1)",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
+                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.1, "steps": [] }
+                                      ],
+                        "notes":  "controller axis Mouth/Y = **整嘴上下平移**（2026-09-28 新建；用户定「上复用噘嘴那边的算法、下用闭唇张开下颌」）。\n⛔ **2026-09-28 深夜：funnel 门也撤了**（用户实机：「嘴上移现在完全没有了」）—— 我拿 9 段补录里「特意做的真撅」（funnel 0.178~0.210）当正样本，但**用户日常的噘嘴与「收紧嘴不撅」在设备上读数相同**（`pucker` 0.97、funnel 都低）⇒ 门一加两者一起挡死。**同一个坑当天踩了三次**（倒V 一次、`Mouth/Y` 一次、还有记在案的那次）。\n⇒ 正侧回到 **`pucker` 判据**（膝 **0.45** + 鼻门 0.54/0.05）：**只要噘就抬**（含「收紧嘴不撅」）。⚠️ 想让两者分开，必须先补录找到**能分开它们的信号**（候选：`mouthFunnel` 更低膝 / `mouthUpperUp` / `mouthLowerDown` / `cheekPuff` —— 现有 6 段里都只有 1.2~2 倍差距，不可靠）。\n⭐ （历史记录，供以后参考）**曾经的正侧说明**：\n—— ⚠️ **2026-09-28 晚加的 funnel 门只加在这根轴上，倒V 那边不加**：用户报「收紧嘴不撅总是被识别为嘴向上移动」，而「收嘴不撅」（pucker 0.97 / funnel 0.081~0.096）与「真撅」（funnel 0.178~0.210）只有 funnel 能分 ⇒ 让**只有真撅才抬嘴**、收嘴不撅不抬（它的上移量交给倒V 形态自己的美术）；倒V 的触发仍按 pucker（一噘就亮，否则它会永远不触发）。：`mouthPucker × clamp((mouthPucker − 0.45)/0.02, 0, 1) × 鼻门(0.54/0.05)`。114 段老语料实测：单通道缝 **+0.171**、加鼻门后全局最坏 **+0.951**；⚠️ 膝不能低于 0.41（静息 max 0.3797 / 挤眼 max 0.7769 会顶满）。\n⭐ **负侧 = 闭唇张开下颌**：`clamp((jawOpen × clamp((mouthClose − jawOpen + 0.10)/0.10, 0, 1) − 0.18)/0.10, 0, 1)`。\n  ⚠️ 门是「**嘴唇相对下颌是闭的**」而不是固定地板：说话那个瞬态是 `jawOpen` 0.65 而 `mouthClose` 只有 0.28 ⇒ 相对门压成 **0**。\n⭐ **膝 2026-09-28 晚 0.18 → 0.35**（用户实机报数：「不张嘴咀嚼时 `jawOpen` 一上来就到 **0.2** 左右」，而真做那个动作「要张得比较大、几乎接近张开下颌的极限」才出数值）⇒ 咀嚼的峰值（0.2）落在旧膝 0.18 之上、会被推着走；抬到 0.35 之后咀嚼 ⇒ 0，而真做（张到接近极限）⇒ 满档。\n⚠️ 想再狠一点就抬到 0.5；阈值是**手感参、按面板「配置输出行」的读数调**。\n  ⚠️ **与「咀嚼」只能靠幅度分**：咀嚼就是「闭唇 + 下颌动」，帧级同形（段内均值 jawOpen 0.084~0.090 ⇒ 0；**峰值 0.2~0.37**）⇒ 两手一起上：**膝抬到 0.35**（吃掉 0.2 那一档，2026-09-28 晚按用户实机报数改的）+ **smooth 0.10s** 钝掉更高的峰；两个都是**手感参，按面板读数调**。\n⚠️ 上下互不误触（实测）：噘嘴 `jawOpen` 0.075~0.087 ⇒ 下侧 0；闭嘴下颌下拉 `mouthPucker` 0.257~0.315 ⇒ 上侧 0。\n⚠️ 与 `MouthJaw` 的分工：`MouthJaw` = 下巴自己的形变，这棵树 = 唇线整体位移的残差（§5.7.23）。刻度 ±1，也挂形态门。\n【经验参】上膝 0.45/0.02 + 鼻门 0.54/0.05 + **funnel 门 0.12/0.04**（114 段：噘嘴下界 0.9511 / 非目标上界 0.7800；funnel 门取 9 段补录的分界：收嘴不撅 0.081~0.096 / 真撅 0.178~0.210）；\n下膝 0.35/0.10 + 相对唇门 0.10\n（41 段：闭嘴下颌下拉 0.217~0.277 满档、咀嚼均值 0.085 归零）；平滑 0.10s（手感参）\n⭐ **2026-09-29：下侧换成连续证据、上侧补咀嚼门（同一批 15 段隔离录样，20 Hz）** —— 旧下侧 `jawOpen × clamp((mouthClose − jawOpen + 0.1)/0.1)` 里那道相对门只有 **0.1 宽**：咀嚼时两根线互相穿来穿去，门在 0/1 之间翻 ⇒ 实测 G4 **单帧跳 1.000**（发布的 Mouth/Y 一路打到 −0.939 —— 用户看到的「阶梯」）。\n  ⇒ 下侧换成 `clamp((min(jawOpen, mouthClose) − 0.35)/0.1, 0, 1)`（**同一个膝 0.35、同一个量纲**，只是把「相对门 × jawOpen」换成两者的 min）——实测不误伤：真张嘴 min ≤ **0.112**（G1 0.099 / G2 0.112 / 静置 0.016）⇒ 下侧恒 0 ✓；闭嘴下颌下拉 min **0.279** ⇒ 0（与旧式同结论，本文档前面那条「0.217~0.277 归零」照旧）；强咀嚼 min p90 **0.616** ⇒ 满档 ✓。\n  ⚠️ 上侧在咀嚼时也有假值（嘴唇压紧把 mouthPucker 抬起来 ⇒ G4 上侧 max **0.472** / p99 0.440，「嘴自己往上跑」）—— **没动**：那要借「咀嚼中」的门，而门按「一次一个轴」先不落（见 Mouth/Form 那一行的记录）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Lid/Left/BlinkWide",
@@ -2812,21 +2946,6 @@
                         "notes":  "controller axis Lid/Right/BlinkWide\n【经验参】无（表达式是机械换算；平滑：0.007）\n⭐ **同眨**（2026-09-28 深夜用户定）：`HoExternalEyeSync = 1` ⇒ 两眼用**同一个共享值** `(max(blinkL,blinkR) − min(wideL,wideR))`（取\"更狠的那只\" ⇒ 闭就闭到位）；`HoExternalEyeSync = 0` ⇒ 各自的 `eyeBlink{侧} − eyeWide{侧}` 直通（wink 照旧能用）。⚠️ 用户判定**不做自动判定**：那种\"拿表达不了的语义\"根本不会出现，一个开关就够。⚠️ 开关开着时 wink 会变成两眼一起闭（要 wink 就把开关关掉）。\n⭐ **2026-09-28 深夜实测：`eyeBlink` 里混着 `3.9 × eyeSquint` 的下眼睑泄漏**（静止/眯眼/眯眼笑 各 3 次 × 2 轮：`eyeSquint` 0.021 → 0.078 → 0.102，`eyeBlink` 0.146 → 0.35 → 0.47；最小二乘拟合 `blink ≈ 0.063 + 3.88·squint`，减完残差 0.064/0.05/0.07 近似恒定）⇒ 这行改成 `eyeBlink − 3.9·eyeSquint − 0.06`（0.06 = 静止偏置，即拟合截距）。不改的话：静止 X = 0.146 不在中性点（轴刻度是 −1/0/+1）、眯眼笑 X = 0.47 会让眼睛在笑的时候闭掉一半。⚠️ **待实测**：真正闭眼时 `eyeSquint` 会抬多少（**闭眼那一次还没录**）⇒ 若闭眼时 X 到不了 1，就补一次「闭眼」录样，把泄漏系数改成随闭合量衰减。"
                     },
                     {
-                        "parameter":  "Ho/Drive/Mouth/Form",
-                        "expression":  "((mouthSmileRight + mouthSmileLeft + ((mouthDimpleLeft + mouthDimpleRight) / 2)) - 2 * max((mouthFrownLeft + mouthFrownRight) / 2, clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1))) / 2",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Form = 2*VTS MouthSmile - 1 (0 = neutral); inlined so it does not depend on the VTS-named row\n【经验参】无（表达式是机械换算；平滑：0.009）\n⭐ **2026-09-28 负半轴改成 sad（用户定）**：负侧原来的驱动是 `(mouthFrownL + mouthFrownR + mouthPucker)` —— 它把「苦」和「噘」混在一起，而且**一张嘴 `frown` 就归零**（实测：苦半张/苦大张 `frown` ≈0，苦跑到 `mouthStretch` 上）。现在负侧 = **`2 × sad`**，`sad` 是两段式判据（见 §5.7.21 / `.research/结论-2026-09-28-sad怎么出.md`）：\n  `sad = max( (mouthFrownLeft + mouthFrownRight) / 2 , clamp(((mouthStretchLeft + mouthStretchRight) / 2 - (0.42 * jawOpen + 0.05)) * 1.5, 0, 1) )`\n  ⇒ **闭嘴苦走 `frown`、张嘴苦走 `stretch` 残差**（同开度基线上 +0.25~+0.4）。\n  ⚠️ **「噘」从此不在这根轴里**（归倒V 形态 —— ⚠️ `MouthWidth` 2026-09-28 已整棵删掉，噘现在只走倒V 形态）；正侧（笑 + 酒窝/2）**逐字未动** ⇒ 已验收的「张嘴 × 笑」不受影响。\n  ⚠️ **用户拍板：抿嘴 / 抿嘴下 = sad**（设备上「嘴角向下压」与「压紧嘴唇」本来就是同一个姿势：抿嘴下 `frown` 0.69~0.75、真苦嘴 0.48~0.69，13 个候选全扫过，分开是不可能的）⇒ sad 的缝 ≈ **+0.28**（目标下界 0.42 / 非目标上界 0.14，抿嘴系列按语义归 sad）。\n  ⚠️ 负侧**今天还没有任何树消费**（`MouthCore` 的 X 只有 0 / 0.75 / 1 三档，负侧钳到 0）⇒ 这次改的是「把信号准备好」；等作者画了「苦 × 闭/半张/张满」那几格，再把 −1 那一列摆上（§5.7.21 的清单）。\n⭐ **2026-09-29：咀嚼被读成苦 —— 量到了，但按「一次一个轴」先不落（用户定）** —— 同一批 15 段隔离录样实测：G4（强咀嚼）本行发布值最低 **−0.415**（经本行曲线负侧那两档压平）。逐帧归因（Tools~/FaceTracking/jaw-take-census.py）：**不是** stretch 残差那条（咀嚼里 T p90 只有 0.012），而是 **frown** —— 咬下去那一刻嘴角下压 0.18~0.40。\n  修法**已经验证过、先不落**：负侧证据乘一道「咀嚼中」的门（证据 = clamp((min(jawOpen, mouthClose) − 0.16)/0.2, 0, 1) 加 维持 trigger 0.5 / threshold 0.45 / hold 0.5s）⇒ 实测 **Form < 0 的帧 164 → 39、最低 −0.380 → −0.105**，G1/G2/G3/G5 一字不变。\n  ⚠️ 为什么先不落：① 它要**新增一行树外证据 + 控制器多一个参数**（换机制，不是纯修复）；② **代价未实测** —— 这道门分不开「咀嚼」和「说话里的闭唇音」（物理上同形），本批 5 组里**没有说话的录样**。下次开这一轮照 §5.7.39 的 ⑤ 抄。\n  ⚠️ 另记一笔：G2（真张到 0.95）本行最低 **−0.219**，是 **stretch 残差**那条（实测 stretch 0.66~0.70 vs 基线 0.42×jawOpen+0.05 = 0.45）⇒ 中性大张嘴被判成苦。要修得先补一批「中性大张嘴」，别拿这一次的尾巴改。"
-                    },
-                        {
                         "parameter":  "Ho/Drive/Lid/Left/Evidence/Happy",
                         "expression":  "clamp((eyeSquintLeft - 0.05) / 0.05, 0, 1) * clamp((0.50 - out(\"Ho/Drive/Lid/Left/BlinkWide\")) / 0.25, 0, 1) * clamp((out(\"Ho/Drive/Lid/Left/BlinkWide\") + 0.25) / 0.25, 0, 1)",
                         "defaultValue":  0,
@@ -2841,7 +2960,7 @@
                                       ],
                         "notes":  "目的：喜的**证据**（未归一化）。第一项 = 物理眯眼膝 0.05（实测静止 0.021 / 眯眼 0.078 / 眯眼笑 0.103）；第二项 = **不许闭**的门（X ≥ 0.50 ⇒ 0，即闭眼不来假笑）；第三项 = **不许睁大**的门（X ≤ −0.25 ⇒ 0）—— 这一项就是「睁大×喜 不建状态点」的前提：它使 `w喜 × w睁大` **恒为 0** ⇒ 门里不需要任何合并特判，剩下的状态点 Σ = 1 仍然精确成立。"
                     },
-                        {
+                    {
                         "parameter":  "Ho/Drive/Lid/Left/Evidence/Anger",
                         "expression":  "clamp((browDownLeft - 0.45) / 0.15, 0, 1)",
                         "defaultValue":  0,
@@ -3486,7 +3605,7 @@
                                       ],
                         "notes":  "Direct 表的子节点权重 = `w情绪 × w闭合`（Sad × Wide）。因为两边各自归一化 ⇒ 11 个门相加**恒 = 1**（“睁大×喜”不建点，而它那项恒为 0）⇒ 输出就是这 11 张姿势的凸组合，default 不会漏进来。⚠️ 只能读上面的行（`out()` 规则）。"
                     },
-                    {
+                        {
                         "parameter":  "Ho/Drive/Lid/Left/Form",
                         "expression":  "clamp(out(\"Ho/Drive/Lid/Left/Evidence/Happy\") - out(\"Ho/Drive/Lid/Left/Evidence/Sad\"), -1, 1)",
                         "defaultValue":  0,
@@ -3496,7 +3615,7 @@
                                       ],
                         "notes":  "controller axis Lid/Left/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007\n⭐ **2026-09-28 深夜实测标定**：膝 0.05 / 宽 0.05 **被实测确认**（静止 `eyeSquint` 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.102 ⇒ 1.0）。⚠️ **门改成门在 `out(BlinkWide)` 上**：原来门 `eyeBlink` 0.10~0.20，而**眯眼实测 blink = 0.35 ⇒ 原门恒为 0，眯眼根本生不出笑眼**（bug）。去污后：静止/眯眼/眯眼笑 X ≈ 0 ⇒ 门 1 ⇒ 正侧 0 / 0.56 / 1.0 ✓；闭眼 X ≈ 1 ⇒ 门 0 ⇒ 不来假笑 ✓。门 = `clamp((0.50 − out(BlinkWide)) / 0.25, 0, 1)`：**死区 0.25 + 宽 0.25**（X ≤ 0.25 ⇒ 1，X ≥ 0.50 ⇒ 0；**占位**，等闭眼录样校正）—— 实测同一「眯眼笑」两轮 X = 0 / 0.063 ⇒ 死区保证两者都给 1.0（若门宽贴 0.20 会让第二轮掉到 0.69）。"
                     },
-                    {
+                        {
                         "parameter":  "Ho/Drive/Lid/Right/Form",
                         "expression":  "clamp(out(\"Ho/Drive/Lid/Right/Evidence/Happy\") - out(\"Ho/Drive/Lid/Right/Evidence/Sad\"), -1, 1)",
                         "defaultValue":  0,
@@ -3505,202 +3624,6 @@
                                           { "kind": "smooth", "seconds": 0.007, "steps": [] }
                                       ],
                         "notes":  "controller axis Lid/Right/Form (VTS EyeSmile) —— **双极：−1 sad / 0 / +1 smile**。\n2026-09-28 深夜用户定：眼睑第二轴从 `Squint` 改名成 `Form`（与嘴 `Mouth/Form` 同名同义），并把 **sad 侧接上嘴那根已经标定过的苦**：`clamp(clamp((eyeSquint − 0.05) / 0.05, 0, 1) − clamp(−out(Ho/Drive/Mouth/Form), 0, 1), −1, 1)`。\n⚠️ 正侧 = **物理眯眼**（真笑才眯 ⇒ 假笑只动嘴不动眼，正好是我们要的）；⚠️ **2026-09-28 深夜用户实测补的门**：闭眼时 `eyeSquint` 也会抬（下眼睑上抬，眯与闭是同一块形变、设备分不开）⇒ 正侧乘一道**睁眼门** `clamp(1 − (eyeBlink − 0.10) / 0.10, 0, 1)`（blink ≤0.10 ⇒ 1；≥0.20 ⇒ 0）—— 闭眼时形状交给 X 轴（BlinkWide）那一行，不要来这里假笑；⚠️ 负侧复用嘴的判据（闭嘴走 `frown`、张嘴走 `stretch` 残差）；⚠️ 两侧相消：苦笑同现 ≈ 0（期望行为；要「苦优先」就改成 `if`）。\n⚠️ 刻度 **−1 / 0 / +1** ⇒ 每眼 3×3 = 9 格；**横向收缩不做独立轴** ⇒ 画在格的形状里。\n⚠️ 顺序：读 `out(\"Ho/Drive/Mouth/Form\")` ⇒ 必须排在 `Mouth/Form` **之后**（台架顺序检查盯着）。\n【经验参】smile 膝 0.05 / 0.05（占位，待实测：静息 `eyeSquint` ≈ 0.02~0.04）；smooth 0.007\n⭐ **2026-09-28 深夜实测标定**：膝 0.05 / 宽 0.05 **被实测确认**（静止 `eyeSquint` 0.021 ⇒ 正好 0；眯眼 0.078 ⇒ 0.56；眯眼笑 0.102 ⇒ 1.0）。⚠️ **门改成门在 `out(BlinkWide)` 上**：原来门 `eyeBlink` 0.10~0.20，而**眯眼实测 blink = 0.35 ⇒ 原门恒为 0，眯眼根本生不出笑眼**（bug）。去污后：静止/眯眼/眯眼笑 X ≈ 0 ⇒ 门 1 ⇒ 正侧 0 / 0.56 / 1.0 ✓；闭眼 X ≈ 1 ⇒ 门 0 ⇒ 不来假笑 ✓。门 = `clamp((0.50 − out(BlinkWide)) / 0.25, 0, 1)`：**死区 0.25 + 宽 0.25**（X ≤ 0.25 ⇒ 1，X ≥ 0.50 ⇒ 0；**占位**，等闭眼录样校正）—— 实测同一「眯眼笑」两轮 X = 0 / 0.063 ⇒ 死区保证两者都给 1.0（若门宽贴 0.20 会让第二轮掉到 0.69）。"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Open",
-                        "expression":  "(jawOpen - mouthClose) - ((mouthRollUpper + mouthRollLower) * .2) + (mouthFunnel * .2)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": -0.05, "v": -0.05, "inT": 1, "outT": 1.667 },
-                                                   { "t": -0.02, "v": 0, "inT": 1.667, "outT": 0 },
-                                                   { "t": 0.02, "v": 0, "inT": 0, "outT": 1.667 },
-                                                   { "t": 0.05, "v": 0.05, "inT": 1.667, "outT": 1 },
-                                                   { "t": 0.4, "v": 0.4, "inT": 1, "outT": 1 },
-                                                   { "t": 0.75, "v": 0.75, "inT": 1, "outT": 1 },
-                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
-                                      ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Open (VTS MouthOpen); the tree wants 0 = closed. 响应曲线 = 死区（2026-09-27 实测）：|值| <= 0.02 归 0 —— 手机在\"不张也不抿\"时就抖在这个区间；0.02..0.05 是斜坡（斜率 1.667）；再外面恒等。量程归一（张满 = 实测 0.75、半张 0.4）不在这条曲线上，是控制器里把 MouthCore 的 Y 刻度挪成 0 / 0.4 / 0.75 做的。\n【经验参】曲线死区：−0.02..0.02 → 0、±0.05 归恒等（实测下颌抖动的口径）；曲线上的 0.4 / 0.75 / 2 是量程刻度；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Funnel",
-                        "expression":  "mouthFunnel - (jawOpen * .2)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Funnel (VTS MouthFunnel)\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Press",
-                        "expression":  "((mouthUpperUpRight + mouthUpperUpLeft + mouthLowerDownRight + mouthLowerDownLeft) / 1.8) - (mouthRollLower + mouthRollUpper)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
-                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Press (VTS MouthPressLipOpen, two-sided: +1 lip spread, -1 press/roll)\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Jaw",
-                        "expression":  "clamp(jawOpen - clamp(mouthClose - jawOpen, 0, 1), -1, 1)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
-                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
-                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
-                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Jaw -- the jaw's VERTICAL axis (up/down), bipolar: 0 = rest, + = open, - = bite/press (jaw up, teeth together). 2026-09-27: mouthClose folded in (user: arkit has mouthClose and it participates in the composite while android does not -- that is how you detect the jaw moving while the lips are CLOSED, i.e. chewing; chewing is therefore a MOTION on this axis, no second layer needed). MouthJaw = JawSide x Jaw, 6 cells. 2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667). The +/-1 end keys change nothing (the expression already clamps to +/-1). ⚠️ WARNING: chewing is a MOTION on this very axis -- if the jawOpen/mouthClose oscillation amplitude is <= 0.05 this dead zone erases it (that amplitude is still unmeasured, see docs/VTS_HQ_CONTROLLER.md 5.4.2 item 3).\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区\n⭐ **2026-09-28 修正（18 段实测，用户同意只改表达式、不动手拉的点）**：用户报「闭嘴时下颌下拉、只表现下巴下移的动画**完全无法触发**」。实测（`.research/takes-kubite.txt`，同场校准）：\n  **闭嘴下颌下拉**：`jawOpen` **0.274~0.293** / `mouthClose` **0.279~0.296** ⇒ 差值 **−0.005~−0.003**；\n  对照：挤嘴角 `jawOpen` 0.017、苦闭嘴 0.016~0.019（差值 +0.003~+0.007）。\n⭐ **根因：信号很大（0.28，跟「半张」一个量级），但 `mouthClose` 把它整份抵消了** —— 闭嘴做下颌下拉时设备**同时**报 `mouthClose ≈0.28`，差值 ≈0 ⇒ 死区 ⇒ 轴恒 0 ⇒ `MouthJaw` 永远停在「闭嘴」那一行。\n⭐ **改法**：**正侧改用 `jawOpen` 本身**（下颌自己张了多少，不再被「嘴唇压紧」抵消），**负侧保留原来的差值**（「嘴唇比下颌更用力压」才为负）⇒ `if((jawOpen - mouthClose) < 0, jawOpen - mouthClose, jawOpen)`。闭嘴下颌下拉 **0 → 0.28**（过死区、进树：左右两列≈75%、中列≈31%）；张嘴类只是**略微抬高**（「中性半张」 0.367 → **0.434**，更符合「下颌真的张了 0.43」）。\n⚠️ **`mouthClose` 原本是为了检出「闭着嘴唇时的下颌运动（咀嚼）」，但那条实测也没做成**：闭唇咀嚼 `jawOpen` 0.021~0.027 / `mouthClose` 0.021~0.026 ⇒ 差值 ≈0.0004 ⇒ **无论改不改都进不了死区**（0.05）⇒ 咀嚼仍然丢（「已知代价」，振幅已测）。\n⚠️ 台架里那句「挤嘴角伪影 0.1」说的是 **`jawLeft/Right`（`JawSide` 轴）**（§5.4.2 咬紧+只挤嘴角 0.05~0.2），**与本行无关**（挤嘴角的 `jawOpen` 只有 0.017）。\n⚠️ **树里 6 个点没动**：用户手拉的「只上下」中列下移格仍在 **Y = 0.902**（「张满」）⇒ 闭嘴下颌下拉只落到那一格 31%；要「下移就到位」得挪那个点或加第三行（另议）。\n⭐⭐ **2026-09-29：if 分叉拆掉（15 段隔离录样，20 Hz；语料 .research/mouth-isolation-2026-09-29/，算账脚本 Tools~/FaceTracking/jaw-take-census.py）** —— 用户报「闭嘴咀嚼的下巴下移触发很阶梯」。五条实测：\n  ① **旧式的病就是分叉本身**：`if(d < 0, d, jawOpen)`（`d = jawOpen − mouthClose`）两个分叉在 `d` 穿 0 时差着**整份 `mouthClose`** ⇒ 输入只动 0.08、轴能跳 0.6。强咀嚼那组（G4）实测 **19 帧「输入没解释的大跳」、最大 0.635**；换成连续式后 **0 帧 / 0.014**。\n  ② **顺带查实：2026-09-28 那次修正根本没生效**（就是上面那条「正侧改用 `jawOpen` 本身」）：闭嘴下颌下拉实测 `jawOpen` **0.274~0.293** / `mouthClose` **0.279~0.296** ⇒ `d ≈ −0.004 < 0` ⇒ 走的是**负分叉**（≈0 ⇒ 进 ±0.05 死区 ⇒ 轴恒 0）—— 正是用户报的「完全无法触发」。新式给 **0.279**，就是当初想要的那个 0.28。\n  ③ **新式 = `jawOpen − clamp(mouthClose − jawOpen, 0, 1)`**：只在「嘴唇压得比下颌更紧」时扣掉**超出的那一部分**，`d ≥ 0` 时与旧式**逐字相同**（负侧照旧被曲线死区钳到 0，树里没有负格）。连续、无分叉、不新增参数。\n  ④ **幅度保持 1:1、不发明缩放**：强咀嚼 `jawOpen` p90 **0.617** / max 0.676，而真张满那次 max 0.956 ⇒ 咀嚼确实开到「真张满」的 ~70%，树上落到「张」那格 ~80%。嫌大就在这条表达式外面乘个系数（那是手感参，不是测量）。\n  ⑤ 各组的「无理由跳变」都被压平：G1 0.085→**0.035**、G2 0.082→**0.039**、G3 0.154→**0.012**、G4 0.635→**0.014**、G5 0.013→**0.000** —— 旧式 G4 那 19 帧就是阶梯的唯一来源。"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/JawSide",
-                        "expression":  "jawRight - jawLeft",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 2.667 },
-                                                   { "t": -0.05, "v": 0, "inT": 2.667, "outT": 0 },
-                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 2.667 },
-                                                   { "t": 0.08, "v": 0.08, "inT": 2.667, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/JawSide -- the jaw's HORIZONTAL axis (left/right), bipolar: 0 = centered, - = jaw to the left, + = jaw to the right (contract family MouthJawSide). 2026-09-27 用户要“下巴左右移动”，线本来就有（jawLeft/jawRight）。2026-09-27 DEAD ZONE in the curve (user: 两个轴的曲线都加一点去噪，+-0.05都钳到0): |v| <= 0.05 -> 0, ramp 0.05..0.08, identity above (same shape as Mouth/Open's curve; ramp width kept at 0.03 => slope 2.667); the axis is within +/-1 by construction (difference of two 0..1 wires) so the end keys change nothing. 实测（同一批，见 docs/VTS_HQ_CONTROLLER.md 5.4.2）：静息 -0.013（进死区 -> 0）、咬紧时真动下颌只有 0.02..0.04（也在死区里 -> 0）、挤嘴角的伪影 0.05..0.2（**只被掐掉最低那一小段，0.08 以上原样通过**）、微张真动 0.52（原样通过）。\n【经验参】曲线死区：±0.05 → 0、±0.08 归恒等（实测：咬合 0.02~0.04 / 微张 0.52 / 嘴角挤 0.05~0.2）；平滑 0.009s（VB 同族）—— 换人 / 换设备重标死区"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Forward",
-                        "expression":  "jawForward",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.01, "steps": [] }
-                                      ],
-                        "notes":  "⚠️ 2026-09-27 起这根轴**不做树**了（用户定：「把这个 arkit 输入贬成只用来辅助的变量，他还是参与 arkit 直通就行，我们直接不做这个轴了，中心放到 jaw 的下左右上」）—— 它从此只是**辅助变量 / 出口**：表达式就是裸线 jawForward，照旧每帧发布（面板 / Warudo / 将来的公式都能取），但没有树消费它（跟 Cheek/*、Gaze/* 一个待遇）。那棵 2 格的 MouthForward 1D 表连同两个片段已删（控制器 26 => 25 棵树、88 => 86 槽位）。为什么不做，见 docs/VTS_HQ_CONTROLLER.md 5.4.1：这条线要张嘴才有值、张嘴本身又给值、噘嘴单独给 0.05、满档要噘嘴+前顶一起（0.14，裸线满量程只有 0.13）、安卓不发 —— VBridger 七份预设里 jawForward 出现 0 次（连直通都不给）。留存的实测记录：裸线静息 ≈0 / 噘嘴单独 ≈0.05 / 噘嘴+前顶 = 0.14\n【经验参】无（常数取自 VBridger —— 表达式与曲线里的数都是它的，改这些等于放弃 VB 对齐；平滑：0.01）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Pucker",
-                        "expression":  "(((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker) * (1 - clamp((out(\"Ho/Style/CatMouth\") - 0.25) / 0.15, 0, 1))",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
-                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 1.667 },
-                                                   { "t": -0.05, "v": 0, "inT": 1.667, "outT": 0 },
-                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 1.667 },
-                                                   { "t": 0.08, "v": 0.08, "inT": 1.667, "outT": 1 },
-                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Pucker (VTS MouthPucker, two-sided) —— **2026-09-28 傍晚起是「嘴宽」那根 1D 表的轴**（`MouthWidth` 以 1D 3 格回来，见 §5.7.24）。\n⭐ **2026-09-28 晚：再乘 `(1 − 猫嘴门的膝化值)`**（`1 − clamp((out(\"Ho/Style/CatMouth\") − 0.15) / 0.15, 0, 1)` —— **膝 **2026-09-28 深夜由 0.15/0.15 抬到 0.25/0.15**（当时是为了和变体开关那两档 0.15 / 0.30 对齐，但它把「抿嘴嘴宽」也误伤了）**，不是直接乘权重：猫嘴权重是连续的（实测 0.46 就足以让开关满档切到猫嘴版），直接乘 `(1 − 0.46)` 只掐掉一半、轴还剩 1.73、照样接近满档 ✗）\n—— 用户报「猫嘴现在会永远触发嘴宽最大值」：猫嘴就是 `dimple` 高 + `pucker` 低（实测 dimple 0.78~0.84 ⇒ 这根轴算到 ≈3.1，远超 +2.0 满档），而**形态门只挡倒V/鼓嘴、不挡猫嘴**（猫嘴是块内变体、不关其他）⇒「猫嘴态下只有收缩、没有扩宽」这件事必须在这里自己挡。\n⭐ **2026-09-28 深夜抬膝的原因**（用户报「不知为何 width 到 2 后立刻就归零了」）：那根轴的**满档 ≈2.0 正是「抿嘴嘴宽」的读数**（`4×0.525 − 0.104 = 1.996`），而抿嘴嘴宽与猫嘴**共用同一批信号**（dimple 高、pucker 低），只差 `mouthRollLower`（抿嘴嘴宽 **0.14** / 真猫嘴 **0.43~0.46**）⇒ 膝放 0.15 时用户的宽嘴正压在膝上、稍微做狠一点就越门 ⇒ 轴瞬间归零 ✗（而猫嘴那边的「维持 + 平滑」还没反应，所以只看到**轴归零、嘴没换**）。抬到 0.25 后：抿嘴嘴宽 0.145 ⇒ 门 = 0（**余量 1.7 倍**）、真猫嘴 0.434~0.460 ⇒ 门 = 1（**全掐**）✓ —— 台架里两个方向都有契约测试（`contractCat` / `contractWide`）。\n⚠️ 它读的是内部风格行 `Ho/Style/CatMouth`\n⇒ 那一行必须排在它**之前**（台架的输出行引用顺序检查盯着这条）。\n⭐ 为什么用它：9 段补录的三态实测 —— `2×(dimpleL + dimpleR) − pucker` = **−0.93 收嘴不撅（窄）/ −0.09 静态（中）/ +2.0 抿嘴嘴宽（宽）**（⚠️ 是 **2×和**，所以宽端量纲是 2）；而另一根候选 `(press + shrug) / 2` 把「收嘴不撅」排在静态**之下**（0.09 < 0.17）⇒ 是反的、弃用。\n（其余组读数：笑 +0.36、撇嘴 +0.33 落在中偏宽；苦 −0.02、说话 −0.03、咀嚼 −0.11；噘嘴 / 抿紧 −0.96。）\n【经验参】无（表达式是机械换算；平滑：0.007）；树的三个刻度 −0.93 / −0.09 / +2.0 来自 9 段补录实测\n"
-
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/TongueL",
-                        "expression":  "tongueOut",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/TongueL (HQTongueLeft): **the tongue table's only axis = how far the tongue is out**（2026-09-28 深夜起；名字里的 L 是历史遗留 —— 这根通道本来就是给「分侧」留的，现在先当**伸出量**用，做歪舌头时量轴会换成新的 `TongueOut`）。\\n⭐ 舌头那条表 `MouthTongue` = **1D 4 格**（§5.7.29）：**默认（不出舌）+ 沿对角线 3 步** —— 沿 (伸出量, 张开量) 的对角线走（舌出来多少、嘴就张多少 = 不穿模）⇒ 一根轴上的 4 个状态，**张嘴量烘在每段片段里**（所以没有 Y 轴；嘴形 / 下颌仍归 `MouthCore` / `MouthJaw`）。刻度 0 / 0.3333 / 0.6667 / 1（占位、等分）。\\n⚠️ `tongueOut` **从来没实测过**（126 段那批里没有舌头动作）⇒ 树上的刻度 0 / 0.3333 / 0.6667 / 1 是**占位**（等分），第一轮录完再收圈。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/TongueR",
-                        "expression":  "tongueOut",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": 0, "v": 0, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/TongueR (HQTongueRight): **现在没有树消费**（2026-09-28 深夜起）—— 照旧发布当出口，留给「歪舌头」的侧向开关（`TongueL`/`TongueR` 两根就是为此留的）。\\n⚠️ ARKit 52 项里**只有 `tongueOut` 一个**舌头通道 ⇒ 左右只能靠代理（同侧唇/颊/下颌的不对称）或手动/外部；先量 3+3 段（舌中/舌左/舌右）再定。\\n【经验参】无（表达式是机械换算；平滑：0.007）"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/X",
-                        "expression":  "clamp((mouthLeft - mouthRight) + (mouthSmileLeft - mouthSmileRight), -1, 1)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": -0.3, "v": -0.133, "inT": 1, "outT": 1 },
-                                                   { "t": -0.2, "v": 0, "inT": 1, "outT": 0 },
-                                                   { "t": 0.2, "v": 0, "inT": 0, "outT": 1 },
-                                                   { "t": 0.3, "v": 0.133, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.009, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/X = **整嘴左右平移**\n（2026-09-28 重建，41 段实测）。\n⭐ 判据 = `(mouthLeft − mouthRight) + (smileL − smileR)`：ARKit 的 `mouthLeft/Right` 本来就是「嘴整体左/右移」的语义，实测干净得离谱 —— 整嘴右移 `mouthLeft` **0.963~0.967**、整嘴左移 `mouthRight` **0.967~0.976**，而同一个人「嘴角往左/右撇」只有 **0.047~0.136** ⇒ 差 **7~9 倍**（缝 +0.594）。\n⭐ **曲线 = 死区 ±0.20（0.20~0.30 斜坡、0.30 之上近恒等）**：把「撇嘴」那点位移压成 0，只有真的整嘴平移才推得动。\n⚠️ 旧版里借来的 `3 × (dimpleL − dimpleR)` **已拿掉** —— dimple 归嘴角层，两层不许吃同一个信号（否则一个动作被推两遍）。\n⚠️ 刻度摆 **±0.95**（实测满档 0.96）；这棵树挂形态门（倒V / 鼓嘴亮起来时让位）。\n【经验参】死区膝 0.20、过渡 0.10（整嘴平移 0.96 vs 嘴角撇 ≤0.14）；0.95 = 刻度；平滑 0.009s"
-                    },
-                    {
-                        "parameter":  "Ho/Drive/Mouth/Y",
-                        "expression":  "clamp(mouthPucker * clamp((mouthPucker - 0.45) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) - clamp((min(jawOpen, mouthClose) - 0.35) / 0.1, 0, 1), -1, 1)",
-                        "defaultValue":  0,
-                        "curve":  {
-                                      "keys":  [
-                                                   { "t": -1, "v": -1, "inT": 1, "outT": 1 },
-                                                   { "t": 1, "v": 1, "inT": 1, "outT": 1 }
-                                               ]
-                                  },
-                        "modifiers":  [
-                                          { "kind": "smooth", "seconds": 0.1, "steps": [] }
-                                      ],
-                        "notes":  "controller axis Mouth/Y = **整嘴上下平移**（2026-09-28 新建；用户定「上复用噘嘴那边的算法、下用闭唇张开下颌」）。\n⛔ **2026-09-28 深夜：funnel 门也撤了**（用户实机：「嘴上移现在完全没有了」）—— 我拿 9 段补录里「特意做的真撅」（funnel 0.178~0.210）当正样本，但**用户日常的噘嘴与「收紧嘴不撅」在设备上读数相同**（`pucker` 0.97、funnel 都低）⇒ 门一加两者一起挡死。**同一个坑当天踩了三次**（倒V 一次、`Mouth/Y` 一次、还有记在案的那次）。\n⇒ 正侧回到 **`pucker` 判据**（膝 **0.45** + 鼻门 0.54/0.05）：**只要噘就抬**（含「收紧嘴不撅」）。⚠️ 想让两者分开，必须先补录找到**能分开它们的信号**（候选：`mouthFunnel` 更低膝 / `mouthUpperUp` / `mouthLowerDown` / `cheekPuff` —— 现有 6 段里都只有 1.2~2 倍差距，不可靠）。\n⭐ （历史记录，供以后参考）**曾经的正侧说明**：\n—— ⚠️ **2026-09-28 晚加的 funnel 门只加在这根轴上，倒V 那边不加**：用户报「收紧嘴不撅总是被识别为嘴向上移动」，而「收嘴不撅」（pucker 0.97 / funnel 0.081~0.096）与「真撅」（funnel 0.178~0.210）只有 funnel 能分 ⇒ 让**只有真撅才抬嘴**、收嘴不撅不抬（它的上移量交给倒V 形态自己的美术）；倒V 的触发仍按 pucker（一噘就亮，否则它会永远不触发）。：`mouthPucker × clamp((mouthPucker − 0.45)/0.02, 0, 1) × 鼻门(0.54/0.05)`。114 段老语料实测：单通道缝 **+0.171**、加鼻门后全局最坏 **+0.951**；⚠️ 膝不能低于 0.41（静息 max 0.3797 / 挤眼 max 0.7769 会顶满）。\n⭐ **负侧 = 闭唇张开下颌**：`clamp((jawOpen × clamp((mouthClose − jawOpen + 0.10)/0.10, 0, 1) − 0.18)/0.10, 0, 1)`。\n  ⚠️ 门是「**嘴唇相对下颌是闭的**」而不是固定地板：说话那个瞬态是 `jawOpen` 0.65 而 `mouthClose` 只有 0.28 ⇒ 相对门压成 **0**。\n⭐ **膝 2026-09-28 晚 0.18 → 0.35**（用户实机报数：「不张嘴咀嚼时 `jawOpen` 一上来就到 **0.2** 左右」，而真做那个动作「要张得比较大、几乎接近张开下颌的极限」才出数值）⇒ 咀嚼的峰值（0.2）落在旧膝 0.18 之上、会被推着走；抬到 0.35 之后咀嚼 ⇒ 0，而真做（张到接近极限）⇒ 满档。\n⚠️ 想再狠一点就抬到 0.5；阈值是**手感参、按面板「配置输出行」的读数调**。\n  ⚠️ **与「咀嚼」只能靠幅度分**：咀嚼就是「闭唇 + 下颌动」，帧级同形（段内均值 jawOpen 0.084~0.090 ⇒ 0；**峰值 0.2~0.37**）⇒ 两手一起上：**膝抬到 0.35**（吃掉 0.2 那一档，2026-09-28 晚按用户实机报数改的）+ **smooth 0.10s** 钝掉更高的峰；两个都是**手感参，按面板读数调**。\n⚠️ 上下互不误触（实测）：噘嘴 `jawOpen` 0.075~0.087 ⇒ 下侧 0；闭嘴下颌下拉 `mouthPucker` 0.257~0.315 ⇒ 上侧 0。\n⚠️ 与 `MouthJaw` 的分工：`MouthJaw` = 下巴自己的形变，这棵树 = 唇线整体位移的残差（§5.7.23）。刻度 ±1，也挂形态门。\n【经验参】上膝 0.45/0.02 + 鼻门 0.54/0.05 + **funnel 门 0.12/0.04**（114 段：噘嘴下界 0.9511 / 非目标上界 0.7800；funnel 门取 9 段补录的分界：收嘴不撅 0.081~0.096 / 真撅 0.178~0.210）；\n下膝 0.35/0.10 + 相对唇门 0.10\n（41 段：闭嘴下颌下拉 0.217~0.277 满档、咀嚼均值 0.085 归零）；平滑 0.10s（手感参）\n⭐ **2026-09-29：下侧换成连续证据、上侧补咀嚼门（同一批 15 段隔离录样，20 Hz）** —— 旧下侧 `jawOpen × clamp((mouthClose − jawOpen + 0.1)/0.1)` 里那道相对门只有 **0.1 宽**：咀嚼时两根线互相穿来穿去，门在 0/1 之间翻 ⇒ 实测 G4 **单帧跳 1.000**（发布的 Mouth/Y 一路打到 −0.939 —— 用户看到的「阶梯」）。\n  ⇒ 下侧换成 `clamp((min(jawOpen, mouthClose) − 0.35)/0.1, 0, 1)`（**同一个膝 0.35、同一个量纲**，只是把「相对门 × jawOpen」换成两者的 min）——实测不误伤：真张嘴 min ≤ **0.112**（G1 0.099 / G2 0.112 / 静置 0.016）⇒ 下侧恒 0 ✓；闭嘴下颌下拉 min **0.279** ⇒ 0（与旧式同结论，本文档前面那条「0.217~0.277 归零」照旧）；强咀嚼 min p90 **0.616** ⇒ 满档 ✓。\n  ⚠️ 上侧在咀嚼时也有假值（嘴唇压紧把 mouthPucker 抬起来 ⇒ G4 上侧 max **0.472** / p99 0.440，「嘴自己往上跑」）—— **没动**：那要借「咀嚼中」的门，而门按「一次一个轴」先不落（见 Mouth/Form 那一行的记录）。"
-                    },
-                                        {
-                        "parameter":  "Ho/Drive/Style/CatMouth",
-                        "expression":  "out(\"Ho/Style/CatMouth\")",
-                        "defaultValue":  0,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "**契约行**：猫嘴风格权重（0/1）—— 喂控制器里那个**变体开关** `MouthCoreRollSwitch`（`blendParameter` = 这根线，两档阈值 0.15 / 0.30），它在**静息嘴 / 猫嘴版整嘴表**之间交叉淡入。\n⭐ **2026-09-28 从 `Ho/Drive/Mouth/Roll` 改名过来**（用户：「改成风格化的轴值这样用户看得懂了」）：判据与增量开关搬到中间层的 `Ho/Style/CatMouth`，本行只做发布 —— 与倒V 的 `Ho/Drive/Style/InvertedV` **完全同形**（现在三个风格轴一个机制）。\n⭐ **常开 = 全量猫嘴**：`HoExternalCatMouth = 1`（Warudo append / 面板「配置输入行」覆盖 / VTS 自定义参数）⇒ 本行 = 1 ⇒ 开关满档、**8 格全部可达**（自动路径只覆盖「嘴角往后拉 × `Open ≈ 0…0.4`」那一段）。\n⚠️ 树名 / 开关名 / 槽位名仍是 `MouthCoreRoll*`（只改了轴名）。\n【经验参】控制器里的两档 0.15 / 0.30 来自 36 段实测（猫嘴 0.434~0.460、最坏非目标 0.075）；改判据要重标\n⭐⭐ **2026-09-28 深夜：触发线 0.15 → 0.28、释放带 threshold 0.13 → 0.26 ⇒ **释放点仍是 0.02**（锁存是有意的：§5.7.14/5.7.15 用户「很难维持表演这个猫嘴」⇒ 点亮后要挂得住；所以**防误报只能靠触发线**，不能靠释放线）** —— 用户报「width 到 2 后立刻就归零」并确认「这时候确实切到猫嘴去了」。\n⭐ **机制（重要，之前理解错了）**：`维持` 的输出是**二值**（`HoFaceAnimationSession.Step` 返回 `steps[next].target`，只在 0 与 target 之间跳），所以**这一行实际是「0/1 + 迟滞」**，真正决定「切不切」的是 **trigger**；控制器里那两档 0.15 / 0.30 作用在 0/1 上等于恒等（0 ⇒ 静息嘴、1 ⇒ 满档猫嘴）。\n⚠️ 旧参数 `trigger 0.15 / threshold 0.13` ⇒ **释放点 = 0.15 − 0.13 = 0.02**，也就是「只要碰过 0.15 就一直粘住，直到判据掉回 0.02」⇒ 一旦误触发就**整段动作都粘在猫嘴上**（这次用户看到的正是这个：抿嘴嘴宽碰过 0.15 之后，猫嘴版整段挂着 ⇒ 嘴宽轴被门掐成 0）\n（用户看到的「切到猫嘴」与「嘴宽轴被门掐成 0」是**同一个事件** —— 门读的就是这根 0/1 线）。\n⭐ **新触发线 0.28 怎么来的（同一批 126 段 + 9 段补录，取缝的中点）**：判据值 J = `rollLower × 嘴角门 × (1+3·jawOpen²)` —— 正例 **猫嘴 J ≈ 0.447**（rollLower 0.447 / 嘴角方向 0.417）vs 误报最坏 **抿嘴嘴宽 J ≈ 0.146**（rollLower 0.146 / 嘴角方向 0.525）与 **强咬紧 ≈ 0.139** ⇒ 缝 [0.146, 0.447]、取中点 **0.28** ⇒ 误报留 **1.9 倍**余量、正例留 **1.6 倍**。\n⚠️ **代价（照数据说清）**：`猫嘴微张`（J≈0.150）、`猫嘴紧`（嘴角门本来就是 0）在新触发线下**不再自动点亮** —— 但它们在旧参数下也只有 0~4% 的淡入（开关第一档 0.15）⇒ 观感上等于没有；要那两种形态请用外部开关（`HoExternalCatMouth = 1` 或面板「配置输入行」覆盖）。\n⚠️ 这条**不是**「把判据改严」：判据表达式一个字没动（它的缝只有 [0.146, 0.447]，再动就要伤人），动的是**决策线**。\n"
                     },
                     {
                         "parameter":  "Ho/Drive/Gaze/Left/X",
@@ -3897,7 +3820,7 @@
                         "modifiers":  [
                                           { "kind": "smooth", "seconds": 0.009, "steps": [] }
                                       ],
-                        "notes":  "controller axis Nose/Up ⭐ **2026-09-29 用户定：输出规则补 0.05 去噪台阶**（曲线 `0→0 · 0.05→0 · 0.08→0.08 · 1→1`，与下巴那族同形状）：轴现在跟随 `Mouth/Y`，小动不该带动鼻子 ⇒ 低端掐掉。⚠️ 控制器里 `NoseUp` 1D 表第二档刻度用户要 **1.0**（原 0.7）：工具侧已按 1.0 对齐；**资产那三份 .controller 目前仍是 0.7**（play 模式改的没落盘）。 ⭐⭐ **2026-09-29 用户定：这一条不再裸通、改成「嘴上移的跟随量」** —— 原式是 `noseSneer 平均 × 膝(0.18)`，**机械换算没错**，但用户实测「**抬头会把鼻子上顶顶起来**」：静息 `noseSneer` 就在 0.10~0.17、膝 0.18 ⇒ **余量只有 ~0.03**，姿态耦合一抬就越过膝（同族的还有 `eyeBlink ≈ 0.063 + 3.88×eyeSquint`、`noseSneer` 在眯眼时抬到 0.33）。\n⇒ 决定：**完全不考虑真实鼻子的移动**，把它降成 **`out(\"Ho/Drive/Mouth/Y\")` 的正侧跟随**（`clamp(..., 0, 1)`）：噘嘴 / 嘴上移时鼻子跟着上顶 —— 用户原话「**这样更适合二次元角色**」。\n⚠️ 代价：真鼻子动（皱鼻/嗅）不再单独驱动这根轴（要回来就得重新量，并先解决俯仰耦合）。\n⚠️ 名字仍是 `Ho/Drive/Nose/Up`（契约 + 控制器参数 + `NoseUp` 1D 2 格表不动）；**语义变了**。\n⚠️ `noseSneer` 仍然被两处当**门**用（`Mouth/Y` 的正侧鼻门 0.54/0.05、倒V 的鼻门）：那两处没动。\n⚠️ 顺序：本行读 `out(Mouth/Y)` ⇒ 必须排在 `Mouth/Y` **之后**（台架的顺序检查盯着）。 -- ONE state only (0 = rest, 1 = nose pushed up / sneer). 2026-09-27 DEAD ZONE (x * clamp((x - 0.18) / 0.02, 0, 1)): the same three calibrated 5 s rest takes gave noseSneer 0.089..0.1514, which put the neutral face 13..21 percent into the nose-up cell of the NoseUp 1D table; the real action (squint + nose push) measured 0.70 avg / 0.75 max, far above the knee, so the 0.7 tick stays valid. 2026-09-27 用户定：脸颊在二次元角色上表现不了（CheekSquint/CheekPuff 两棵树删掉），鼻只留“鼻子上顶”这一个状态；它连带的内眼睑上抬 / 眯眼 / 眉毛内下移由物理共动带出（eyeSquint / browDown 那几根线本来就会一起动），所以不为它们各做检测。它喂 NoseUp（1D，2 格）。\n【经验参】死区膝 0.18、过渡 0.02（三次静置 noseSneer 0.089..0.1514 实测）；平滑 0.009s（VB 同族）；/2 那个平均是机械的"
+                        "notes":  "鼻子上顶 = 嘴上移的跟随量：clamp(out(\"Ho/Drive/Mouth/Y\"), 0, 1)。\n曲线给 0.05 去噪台阶（0→0、0.05→0、0.08→0.08、1→1）；NoseUp 的 1D 刻度是 0 / 1。"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/Mouth",
@@ -3994,6 +3917,162 @@
                                                ]
                                   },
                         "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
+                    },
+                    {
+                        "parameter":  "Ho/Style/Cheek",
+                        "expression":  "(max(cheekPuff, max(mouthLeft, mouthRight)) * clamp((cheekPuff - 0.05) / 0.05, 0, 1) * clamp((max(cheekPuff, max(mouthLeft, mouthRight)) - 0.40) / 0.05, 0, 1))",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "鼓嘴判定：颊读数 × 颊门 × 死区。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/Cheek",
+                        "expression":  "out(\"Ho/Style/Cheek\") * HoAutoCheek + HoExternalCheek",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.5, "target": 1, "hold": 0.1, "threshold": 0.05}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
+                        "notes":  "开关合成：out(同名) × HoAutoCheek + HoExternalCheek。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/CatMouth",
+                        "expression":  "clamp(mouthRollLower * clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1) * (1 + 3 * jawOpen * jawOpen), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "猫嘴判定：下唇卷 × 嘴角门 × 下颌增益，再 clamp 到 0..1。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/CatMouth",
+                        "expression":  "out(\"Ho/Style/CatMouth\") * HoAutoCatMouth + HoExternalCatMouth",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
+                        "notes":  "开关合成：out(同名) × HoAutoCatMouth + HoExternalCatMouth。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Style/CatMouth",
+                        "expression":  "out(\"Ho/Style/CatMouth\")",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "**契约行**：猫嘴风格权重（0/1）—— 喂控制器里那个**变体开关** `MouthCoreRollSwitch`（`blendParameter` = 这根线，两档阈值 0.15 / 0.30），它在**静息嘴 / 猫嘴版整嘴表**之间交叉淡入。\n⭐ **2026-09-28 从 `Ho/Drive/Mouth/Roll` 改名过来**（用户：「改成风格化的轴值这样用户看得懂了」）：判据与增量开关搬到中间层的 `Ho/Style/CatMouth`，本行只做发布 —— 与倒V 的 `Ho/Drive/Style/InvertedV` **完全同形**（现在三个风格轴一个机制）。\n⭐ **常开 = 全量猫嘴**：`HoExternalCatMouth = 1`（Warudo append / 面板「配置输入行」覆盖 / VTS 自定义参数）⇒ 本行 = 1 ⇒ 开关满档、**8 格全部可达**（自动路径只覆盖「嘴角往后拉 × `Open ≈ 0…0.4`」那一段）。\n⚠️ 树名 / 开关名 / 槽位名仍是 `MouthCoreRoll*`（只改了轴名）。\n【经验参】控制器里的两档 0.15 / 0.30 来自 36 段实测（猫嘴 0.434~0.460、最坏非目标 0.075）；改判据要重标\n⭐⭐ **2026-09-28 深夜：触发线 0.15 → 0.28、释放带 threshold 0.13 → 0.26 ⇒ **释放点仍是 0.02**（锁存是有意的：§5.7.14/5.7.15 用户「很难维持表演这个猫嘴」⇒ 点亮后要挂得住；所以**防误报只能靠触发线**，不能靠释放线）** —— 用户报「width 到 2 后立刻就归零」并确认「这时候确实切到猫嘴去了」。\n⭐ **机制（重要，之前理解错了）**：`维持` 的输出是**二值**（`HoFaceAnimationSession.Step` 返回 `steps[next].target`，只在 0 与 target 之间跳），所以**这一行实际是「0/1 + 迟滞」**，真正决定「切不切」的是 **trigger**；控制器里那两档 0.15 / 0.30 作用在 0/1 上等于恒等（0 ⇒ 静息嘴、1 ⇒ 满档猫嘴）。\n⚠️ 旧参数 `trigger 0.15 / threshold 0.13` ⇒ **释放点 = 0.15 − 0.13 = 0.02**，也就是「只要碰过 0.15 就一直粘住，直到判据掉回 0.02」⇒ 一旦误触发就**整段动作都粘在猫嘴上**（这次用户看到的正是这个：抿嘴嘴宽碰过 0.15 之后，猫嘴版整段挂着 ⇒ 嘴宽轴被门掐成 0）\n（用户看到的「切到猫嘴」与「嘴宽轴被门掐成 0」是**同一个事件** —— 门读的就是这根 0/1 线）。\n⭐ **新触发线 0.28 怎么来的（同一批 126 段 + 9 段补录，取缝的中点）**：判据值 J = `rollLower × 嘴角门 × (1+3·jawOpen²)` —— 正例 **猫嘴 J ≈ 0.447**（rollLower 0.447 / 嘴角方向 0.417）vs 误报最坏 **抿嘴嘴宽 J ≈ 0.146**（rollLower 0.146 / 嘴角方向 0.525）与 **强咬紧 ≈ 0.139** ⇒ 缝 [0.146, 0.447]、取中点 **0.28** ⇒ 误报留 **1.9 倍**余量、正例留 **1.6 倍**。\n⚠️ **代价（照数据说清）**：`猫嘴微张`（J≈0.150）、`猫嘴紧`（嘴角门本来就是 0）在新触发线下**不再自动点亮** —— 但它们在旧参数下也只有 0~4% 的淡入（开关第一档 0.15）⇒ 观感上等于没有；要那两种形态请用外部开关（`HoExternalCatMouth = 1` 或面板「配置输入行」覆盖）。\n⚠️ 这条**不是**「把判据改严」：判据表达式一个字没动（它的缝只有 [0.146, 0.447]，再动就要伤人），动的是**决策线**。\n"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/Read",
+                        "expression":  "mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1)",
+
+                        "defaultValue":  0,
+                        "curve":  { "keys": [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "噘嘴读数：mouthPucker × 死区(0.41/0.02)。死区写在式子里，曲线是恒等。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/NoseGate",
+                        "expression":  "1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)",
+
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "鼻门（1 = 放行）：皱鼻时设备会把 mouthPucker 一起抬上去，所以皱鼻不许点着倒V。\n膝 0.54 / 过渡 0.05（静息 0.10~0.17）。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV/OpenGate",
+                        "expression":  "1 - clamp((out(\"Ho/Drive/Mouth/Open\") - 0.2) / 0.05, 0, 1)",
+
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "张口门（1 = 放行）：张嘴到一定程度就不许噘嘴。\n膝 0.2（用户定）/ 过渡 0.05；吃中间层的 Open 轴，不吃 jawOpen 原值。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV",
+                        "expression":  "out(\"Ho/Style/InvertedV/Read\") * out(\"Ho/Style/InvertedV/NoseGate\") * out(\"Ho/Style/InvertedV/OpenGate\")",
+
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "倒V（噘嘴）判定：读数 × 鼻门 × 张口门。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/InvertedV",
+                        "expression":  "out(\"Ho/Style/InvertedV\") * HoAutoInvertedV + HoExternalInvertedV",
+
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.8, "target": 1, "hold": 0.1, "threshold": 0.05}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
+                        "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Style/InvertedV",
+                        "expression":  "out(\"Ho/Style/InvertedV\")",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "**契约行**：倒V 形态的权重（0/1），喂控制器里那棵 `InvertedV`（Simple1D，2 格：中性 / 倒V 姿势）。\n⚠️ **为什么倒V 需要它而鼓嘴不需要**：鼓嘴的两条颊轴 `Ho/Drive/Cheek/Left|Right/Puff` 本来就是控制器参数（树直接吃它们），而倒V 的判据是**内部行** `Ho/Style/InvertedV` —— 控制器看不见内部行 ⇒ 拿这一行把它的值发布出去。\n（以后若某个形态也是\"一个固定姿势\"，照这个形状再发布一行 `Ho/Drive/Style/<形态>` 即可。）\n【经验参】无（只是转发 out(同名)；0/1 由形态行决定）"
+                    },
+                    {
+                        "parameter":  "Ho/Style/MouthWidth/CatMouthGate",
+                        "expression":  "1 - clamp((out(\"Ho/Style/CatMouth\") - 0.25) / 0.15, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "猫嘴门（1 = 放行）：猫嘴的 dimple 高、pucker 低，会把宽度轴顶到满档。\n膝 0.25 / 过渡 0.15（抿嘴嘴宽 0.145 放行，真猫嘴 0.43~0.46 掐掉）。"
+
+                    },
+                    {
+                        "parameter":  "Ho/Style/MouthWidth/Read",
+                        "expression":  "(((mouthDimpleRight + mouthDimpleLeft) * 2) - mouthPucker) * out(\"Ho/Style/MouthWidth/CatMouthGate\")",
+                        "defaultValue":  0,
+                        "curve":  {
+                                      "keys":  [
+                                                   { "t": -2, "v": -2, "inT": 1, "outT": 1 },
+                                                   { "t": -0.08, "v": -0.08, "inT": 1, "outT": 1.667 },
+                                                   { "t": -0.05, "v": 0, "inT": 1.667, "outT": 0 },
+                                                   { "t": 0.05, "v": 0, "inT": 0, "outT": 1.667 },
+                                                   { "t": 0.08, "v": 0.08, "inT": 1.667, "outT": 1 },
+                                                   { "t": 2, "v": 2, "inT": 1, "outT": 1 }
+                                               ]
+                                  },
+                        "modifiers":  [
+                                          { "kind": "smooth", "seconds": 0.007, "steps": [] }
+                                      ],
+                        "notes":  "宽度读数（机械换算，2×和）：−0.93 窄 / −0.09 静态 / +2.0 宽。\n曲线（±0.08 死区）与平滑 0.007 在这一行：标定归读数。"
+
+                    },
+                    {
+                        "parameter":  "Ho/Style/MouthWidth",
+                        "expression":  "if(out(\"Ho/Style/InvertedV\"), -0.09, out(\"Ho/Style/MouthWidth/Read\"))",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "噘嘴时把宽度轴压到「嘴常」、强制归中，否则透传读数。\n-0.09 = MouthWidth 表的中刻度；倒V 过完维持恒是 0/1，所以用 if 就够。"
+
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Mouth/Pucker",
+                        "expression":  "out(\"Ho/Style/MouthWidth\")",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "转发 Ho/Style/MouthWidth。\n名字不变是有意的：控制器的 MouthWidth 表读的就是它 ⇒ 换算搬家也不用动资产。"
+
+                    },
+                    {
+                        "parameter":  "Ho/Style/MouthGate",
+                        "expression":  "",
+                        "defaultValue":  1,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "形态门基准：常量 1（本阶段不做形态之间的互相覆盖）。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/MouthStyle",
+                        "expression":  "out(\"Ho/Style/MouthGate\")",
+                        "defaultValue":  1,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "**契约行**（控制器那侧的口）：把内部行 `Ho/Style/MouthGate` 发布成控制器参数 —— 它就是「张嘴 × 笑」整块的权重。\n控制器里接它的是 `MouthRegion` 的**三个孩子**：`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`（`MouthJaw` / `MouthTongue` 保持 `W/One`，下巴/舌头跟风格化不冲突）。\n⭐ 当天走了三版：上午删掉 2D 的 `MouthWidth`（§5.7.22）⇒ 下午建 `MouthShift`（整嘴平移）+ 把它换成 `MouthCorner`（嘴角 3×3，§5.7.23）⇒ 傍晚用户判定「收缩舒张不必拆左右，一根轴 3 状态就够，左右交给整嘴平移」⇒ `MouthCorner` 删掉、`MouthWidth` 以 **1D 3 格**回来（§5.7.24）。\n\n\n⭐ `out(\"…\")` 读的是**上面最近写过这个名字**的那一行 ⇒ 这里读到的是**最后一条**同名行（= 全部形态合起来的门）✓，以后再加形态也不用改这一行。\n【经验参】无（只是转发 out(同名)；门的值由形态行决定）"
                     }
                 ]
 }

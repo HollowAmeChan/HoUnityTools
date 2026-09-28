@@ -41,17 +41,39 @@ internal static class Program
 
         var problems = new List<string>();
         var names = new HashSet<string>(StringComparer.Ordinal);
+        var styleChains = new List<string>();
         foreach (var row in middleware.outputs)
         {
             if (row == null) { problems.Add("(null output row)"); continue; }
-            if (!names.Add(row.parameter)) problems.Add("duplicate output name: " + row.parameter);
+
+            // 同名多行**是有意的**，但只在 style 命名空间里合法（`HoFaceNaming.StyleRoot`）：
+            // 运行时输出表缓存是"后写覆盖先写"，面板也据此把 `Ho/Style/` 下的同名声算「风格化同名链」。
+            if (!names.Add(row.parameter))
+            {
+                if (HoUnityTools.HoFaceNaming.IsStyleRow(row.parameter)) styleChains.Add(row.parameter);
+                else problems.Add("duplicate output name: " + row.parameter);
+            }
 
             HoUnityTools.HoFaceExpression expression;
             string parseError;
-            if (!HoUnityTools.HoFaceExpression.TryParse(row.expression, out expression, out parseError))
+            // 空表达式的**常量行**不是错：门控就靠它（面板 `IsConstantRow` 同一条口径）——
+            // 它这一格每帧写 `defaultValue`，没有表达式可解析。
+            bool isConstant = string.IsNullOrWhiteSpace(row.expression);
+            if (!isConstant && !HoUnityTools.HoFaceExpression.TryParse(row.expression, out expression, out parseError))
                 problems.Add("expression does not parse: " + row.parameter + " -> " + parseError);
 
-            if (row.curve == null || row.curve.length == 0)
+            // 曲线：**约束规则不需要**（用户 2026-09-29 定：「这种约束规则都直接不需要曲线，曲线由它本身的源定义」）。
+            // 三类豁免：同名链（表达式里读自己）、纯转发（整条就是一个 out("…")）、**门行**（名字以 Gate 结尾，
+            // 值是 0..1 的放行度）。运行时 `HoFaceCurve.Transfer` 里空曲线/没有曲线就是恒等。
+            // **其余行照旧必须有曲线**（那是读数自己的标定，别漏）。
+            string exprText = row.expression ?? "";
+            string rowName = row.parameter ?? "";
+            bool isChain = System.Text.RegularExpressions.Regex.IsMatch(
+                exprText, "out\\(\\s*\"" + System.Text.RegularExpressions.Regex.Escape(rowName) + "\"\\s*\\)");
+            bool isForward = System.Text.RegularExpressions.Regex.IsMatch(
+                exprText, "^\\s*out\\(\\s*\"[^\"]+\"\\s*\\)\\s*$");
+            bool isGate = rowName.EndsWith("Gate", StringComparison.Ordinal);
+            if (!isChain && !isForward && !isGate && (row.curve == null || row.curve.length == 0))
             {
                 problems.Add("row without a usable curve: " + row.parameter);
             }
@@ -77,7 +99,8 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("no problems: every output row parsed, curves present, no duplicate names");
+        Console.WriteLine("no problems: every output row parsed, curves present (constraint rows exempt), "
+            + styleChains.Count + " intentional style chain row(s): " + string.Join(", ", styleChains));
         return 0;
     }
 }

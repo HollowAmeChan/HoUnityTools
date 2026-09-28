@@ -57,6 +57,7 @@
 | ↑ **隔离模式** `-Isolation` | 只查这份控制器**有**的东西（`DIAG_*` 单区控制器天然缺树/缺参数）：「缺」降级成注，树型/轴接线/**刻度与逐格坐标**/槽位名/变体镜像/WD/Normalize 照旧严格。**验收基准就是这些隔离控制器** | `… -Path <DIAG_xxx.controller> -Isolation` |
 | `check-controller-integrity.py` | 不依赖 profile 的**完整性**检查：块结构、悬空引用、状态机接线（"文件坏没坏一跑就知道"） | `python Tools~/FaceTracking/check-controller-integrity.py <x.controller>` |
 | `isolate-trees.py` | **按树剪出隔离版控制器**，并能**拼**在权威件上：区域 Direct 的孩子按名字留 / 砍；`--base <权威隔离件>` 拿它当骨架（同 ID 冲突以它为准）、`--state-motion <根树>` 改状态机指向、`--guid` 沿用旧 GUID。非破坏性、只读源 | 剪：`python Tools~/FaceTracking/isolate-trees.py <源.controller> <输出.controller> --root-children MouthRegion,NoseRegion --children "MouthRegion=…"`<br>拼：`… <源> <输出> --base <权威隔离件> --state-motion "Ho/00 Drive Tree" --children …`<br>实例见 rig 的 `FT/Diagnostics/README.md` |
+| `reorder-output-rows.py` | **按归属分组重排 profile 的 `outputs` 行序** —— 行序就是依赖顺序（`out()` 只能朝上读），**手挪必断**：出口 90 行 → 各区域成块（嘴 / 眼睑 / 注视 / 眉 / 颊 / 鼻）→ 区域门 → 切片 → **style 整区靠下、区内按大类成块**。干跑打新排布并逐行验依赖，断了不写盘；只搬块，分隔符与 CRLF 原样 | `python Tools~/FaceTracking/reorder-output-rows.py <profile.json>`（干跑）<br>`… --write`（落盘）· `… --check`（自检：按原序重发应逐字节相同）<br>规矩见 `docs/AXES.md` §8「规则写法 / 行块布局」 |
 | `make-checker-fixture.ps1` | 造一份"形状正确"的夹具，验检查器的**通过路径**（检查器自己坏了也要能发现） | `powershell -File Tools~/FaceTracking/make-checker-fixture.ps1` |
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 `.ps1` 按 ANSI 读，中文全糊 | `powershell -File Tools~/FaceTracking/fix-bom.ps1` |
@@ -67,7 +68,7 @@
 
 | 工具 | 干什么 | 跑法 |
 | --- | --- | --- |
-| `profile-verify/`（C#） | 用**真读取器**解析 `.hoface.json` 并报 `problems`。⚠️ **改完 profile 必跑** —— 括号少一个它会直接说 `expression does not parse` | `dotnet run --project Tools~/FaceTracking/profile-verify -- <x.hoface.json>`（原来 `bin/` 里那份 exe 已不再跟踪） |
+| `profile-verify/`（C#） | 用**真读取器**解析 `.hoface.json` 并报 `problems`。⚠️ **改完 profile 必跑** —— 括号少一个它会直接说 `expression does not parse`。口径与面板一致：常量行（空表达式）不算错、`Ho/Style/` 下的同名链放行（算「有意的链」）、**链行 / 转发行 / 门行不需要曲线** | `dotnet run --project Tools~/FaceTracking/profile-verify -- <x.hoface.json>`（原来 `bin/` 里那份 exe 已不再跟踪） |
 
 ## C. 录样（`Logs/HoFaceTraces/*.jsonl`）的速查 / 速统 / 速对
 
