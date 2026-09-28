@@ -2,7 +2,7 @@
 
 日期：2026-09-25；**2026-09-26 ~ 27 按"组件值全部走 Hub"与"非 float 类不做"修订过**。
 本文是**"我们到底写哪些东西、凭什么这么定"的正本**；动态参数那条通道的形状见
-[动态参数（语义输出）](FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
+[动态参数（语义输出）](../FACE_TRACKING_DYNAMIC_PARAMETERS.md)。
 **本轮做的是独立 Unity 实验**：没有动另一工程正在定型的 Warudo 节点，**也没有实现 §6 ~ §9 那些扩展**
 （那几节是提案，各自标了 ⚠️）。
 
@@ -258,4 +258,4 @@ rig 需保持 active，并在 Warudo 内进一步验证。
 **先加入绑定清单与语义槽（Hub），打通形态键/骨骼 + Hub 写入；
 再加入受控的内部语义导出与物理输入；需要物理回流时再支持显式多阶段。**
 按顺序打通是为了每步都能在 Unity 和 Warudo 用相同夹具验收。
-（Hub 那一格已经落了，见[动态参数](FACE_TRACKING_DYNAMIC_PARAMETERS.md)；其余仍是提案。）
+（Hub 那一格已经落了，见[动态参数](../FACE_TRACKING_DYNAMIC_PARAMETERS.md)；其余仍是提案。）

@@ -5,7 +5,7 @@
 
 > 当前目标已经明确为“完整高质量模板、选择性填动画下放”，请以[全量参数与高级树契约](VTS_HIGH_QUALITY_FACE_CONTRACT.md)为设计入口；本篇预算演算只作历史例子。
 
-已有依据：[控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md)、[中间层](FACE_TRACKING_MIDDLE_LAYER.md)、[参数标准](PARAMETER_STANDARDS.md)、[VB 旧取证](archive/VBRIDGER_IO_VOCABULARY.md)。
+已有依据：[控制器结构](../FACE_TRACKING_CONTROLLER_STRUCTURE.md)、[中间层](../FACE_TRACKING_MIDDLE_LAYER.md)、[参数标准](../PARAMETER_STANDARDS.md)、[VB 旧取证](archive/VBRIDGER_IO_VOCABULARY.md)。
 本轮逐项重新读取 `.research/vbridger/decrypted/` 十份预设，并核对官方资料、2024 官方教程章节及模型师本人发布的制作记录。
 
 > **用户澄清后的阅读入口：** 当前要确定的是“哪些参数成二维矩阵、轴怎样产生”，采样格数由作者决定。
@@ -70,7 +70,7 @@ VTS API 先声明自定义参数（名字、范围、默认值），再用 `Inje
 因此“电脑 VTS 打开麦克风”不能被当成“我们的中间层已经拿到 VoiceA”。手机第三方原始流与桌面 WebSocket 参数 API 是不同接口。[官方 UDP 示例](https://github.com/DenchiSoft/VTubeStudioBlendshapeUDPReceiverTest)、[现行解析器](../Runtime/FaceTracking/HoVtsPacket.cs)
 
 以后做音频，需要实际接入一个音频数值来源，再合并到中间层输入：可评估读取桌面 VTS 的已计算参数、独立音频进程，或适合 Warudo 的音频模块。
-**这不是本轮已实现功能**；也不能把带 Burst/Job/依赖包的 uLipSync 不经验证直接塞进 Warudo mod。先保留接口，部署按 [Warudo 限制](FACE_TRACKING_WARUDO_ROUTE.md) 单独验证。
+**这不是本轮已实现功能**；也不能把带 Burst/Job/依赖包的 uLipSync 不经验证直接塞进 Warudo mod。先保留接口，部署按 [Warudo 限制](../FACE_TRACKING_WARUDO_ROUTE.md) 单独验证。
 
 对未来输入接口还应约定四件事：**来源/版本、值域与中性、逐源新鲜度、失效回退**。
 脸丢失和麦克风断流要分开：没有脸仍可采用音频口型；音频关闭/失效时应归零音频权重并交还面捕，不能把失效误当成“还在持续发上一个元音”。
@@ -255,7 +255,7 @@ Press：3档
 
 根部 Direct 汇总不同区域，保持现有影子台 + WD On 的约束；需要的常量权重/音频门控属于**作者自己的控制器参数与配置**，不恢复已经删掉的引擎区域门控。
 同一区域的姿势应相对明确的中性基准制作，且保证曲线绑定集合一致。
-**不能把多个完整绝对嘴姿势不归一化地相加，也不能让外嘴分支和 Jaw 分支无设计地重复拉同一个开口形态键。**[Unity Direct](https://docs.unity3d.com/Manual/BlendTree-DirectBlending.html)、[本仓库实测](BLEND_TREE_LIMITS.md)
+**不能把多个完整绝对嘴姿势不归一化地相加，也不能让外嘴分支和 Jaw 分支无设计地重复拉同一个开口形态键。**[Unity Direct](https://docs.unity3d.com/Manual/BlendTree-DirectBlending.html)、[本仓库实测](../BLEND_TREE_LIMITS.md)
 
 ### 6.4 什么时候不值得上54格
 

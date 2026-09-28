@@ -2,7 +2,7 @@
 
 日期：2026-09-25；**2026-09-27 修订**：树族不再用编号（`M01`…），改成**树名 = 部位 + 语义 + 侧别**（`MouthCore`…）；
 HQ 扩展加 4 根**分侧**轴（`HQCheekPuffLeft/Right`、`HQTongueLeft/Right`，鼓腮与吐舌在模型上本来就是左右两组键）⇒ 43 项。
-名字规则与全表见 [面捕命名权威](FACE_TRACKING_NAMING.md)。
+名字规则与全表见 [面捕命名权威](../FACE_TRACKING_NAMING.md)。
 **本表是当前设计入口。目标为完整的高质量模板，允许大量树；降配通过选择性填写动画完成，轴、条件和树族保持稳定。**
 不规定9格、25格或任何固定叶子数。矩阵可以非方阵、按条件切片、共享姿势、采用不同采样密度。
 
@@ -469,7 +469,7 @@ HQEyeSmile与HQEmotion是造型代理，其来源性质已标明；不伪装成�
 
 **树名即标识**（`部位 + 语义 + 侧别`，ASCII、CamelCase）：树名的前两段与**参数路径**用同一批词（`MouthCore` ↔ `Ho/Drive/Mouth/*`、
 `LidL` ↔ `Ho/Drive/Lid/Left/*`），所以"树名 → 参数 → 片段名"三段机械对得上，不需要另一张对照词典。
-完整规则与 42 个树名见 [面捕命名权威](FACE_TRACKING_NAMING.md)。
+完整规则与 42 个树名见 [面捕命名权威](../FACE_TRACKING_NAMING.md)。
 
 **高质量不等于重复叠加同一动作。** `MouthCore` 的 Form/Press 已经包含笑、唇抬起和roll等信息；
 `MouthCorner` … `MouthJawSide` 必须是相对现有基础的残差，或者在明确选择的分支中替代相应基础。
