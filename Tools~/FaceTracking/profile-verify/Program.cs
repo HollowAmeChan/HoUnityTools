@@ -92,6 +92,30 @@ internal static class Program
             Console.WriteLine("  " + row.parameter.PadRight(32) + " = " + row.expression + "   curve " + range);
         }
 
+        // 进/退维持（2026-09-29 加）：把真读取器看到的去抖设置列出来 ——
+        // "面板显示 0 / 文件里有值"这类对不上时，先跑这一行看谁错。
+        Console.WriteLine("");
+        Console.WriteLine("steps 去抖（进维持 / 退维持）:");
+        int dwellRows = 0;
+        foreach (var row in middleware.outputs)
+        {
+            if (row == null || row.modifiers == null) continue;
+            foreach (var mod in row.modifiers)
+            {
+                if (mod == null || mod.kind != HoUnityTools.HoFaceModifierKind.Steps || mod.steps == null) continue;
+                for (int s = 0; s < mod.steps.Count; s++)
+                {
+                    var step = mod.steps[s];
+                    if (step == null || (step.enterSeconds <= 0f && step.exitSeconds <= 0f)) continue;
+                    Console.WriteLine("  " + row.parameter.PadRight(34) + " 档" + s
+                        + "  trigger " + step.trigger + " · 迟滞 " + step.threshold
+                        + " · 进维持 " + step.enterSeconds + "s · 退维持 " + step.exitSeconds + "s");
+                    dwellRows++;
+                }
+            }
+        }
+        if (dwellRows == 0) Console.WriteLine("  （没有行设置进/退维持 —— 全是 0 = 老行为）");
+
         if (problems.Count > 0)
         {
             Console.WriteLine("problems (" + problems.Count + "):");
