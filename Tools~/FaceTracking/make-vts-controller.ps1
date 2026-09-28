@@ -141,8 +141,8 @@ $mouthWidthMeasured = @(-0.93, -0.09, 2.0)
 #      **但资产是他手动改的**，所以每次同步完都要把主版那 8 个坐标**镜像到猫嘴版**
 #      （检查器现在有一条"变体/副本必须与主版逐点一致"的硬检查，见 check-controller.ps1）。
 $mouthCoreOver = @{
-    # ⭐ **权威 = 隔离控制器**（2026-09-29 用户定：分块隔离的控制器才是真验收，生成器/检查器对齐过去）：
-    #    `Diagnostics_20260928/DIAG_MouthCore_Aligned11.controller` 里 MouthCore 那 11 格的坐标。
+    # ⭐ **权威 = 就是下面这组值**（2026-09-29 用户定：分块隔离的控制器才是真验收基准，生成器/检查器对齐过去；
+    #    那份 `DIAG_MouthCore_Aligned11.controller` 已按"验完即删"的规矩删掉，它的坐标落在这里与 check-controller.ps1 的 $exactPos）。
     #    （此前这里是 2026-09-27 用户手拉的旧值；隔离版逐格验收过之后以它为准。）
     #    ⚠️ 用户挪点之后：先读资产（`tree-dump.py <那份.controller> MouthCore`）→ 再改这里 + check-controller.ps1 的 $exactPos。
     '0,0' = @(-0.5, 0)

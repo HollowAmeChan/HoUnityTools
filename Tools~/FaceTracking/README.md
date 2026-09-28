@@ -9,14 +9,17 @@
 
 **一句话**：在**隔离**里调 → **录样** → **查 / 统 / 对** → **分析出落点** → **把工具对齐到资产** → **检查器打分** → **合并回去**。
 
-1. **隔离**（验收基准 = 隔离控制器）：要调的轴 / 区先剪成一份**单区控制器**
-   （rig 里 `Diagnostics_20260928/` 下那几份；2026-09-29 时的例子是 `DIAG_NoseRegion.controller`），配一份小 profile
-   （`DIAG_Mouth_Manual` / `DIAG_Mouth_Current` / `DIAG_Mouth_Minimal` / `DIAG_Mouth_VBFormula.hoface.json`）。
-   * 哪份能直接用、每份干什么 ⇒ rig 里那份说明：`Assets/Hollow/土豆/FT/Diagnostics_20260928/README.md`
+1. **隔离**（验收基准 = 隔离控制器）：要调的轴 / 区先剪成一份**单区控制器**，放 rig 的
+   `Assets/Hollow/土豆/FT/Diagnostics/`（2026-09-29 用户把两个诊断目录并成了一个；现在有哪几份、每份干什么 ⇒ 那个目录的 `README.md`）。
+   * **联合件要"拼"，不要"重剪"**（2026-09-29 栽过一次）：拿**已验过的那份隔离件当骨架**（`--base`），只把缺的树从源资产并进来
+     ⇒ 验过的那部分与权威件**逐字节相同**；同 ID 冲突按**权威件为准**并打警告（免得源资产里的旧值偷偷顶掉验过的值 —— 那次它把 `NoseUp` 的旧刻度 0.7 换回了 1）。
+     状态机原本指着单区树，拼完用 `--state-motion <根树>` 改指到根树；`--guid` 沿用旧值可以不丢 Unity 里的引用。
    * ⚠️ **验收过的分区（连同它的小 profile）用完就删**（2026-09-29 用户：`DIAG_MouthCore_Aligned6/9/11` 等已验证的那批已经删掉）
-     —— 隔离版本就是**临时工作台**，验收完的那一份不再留；要复现当时的环境就靠 `git` 里那几份资产的历史版本。
-   * 要排除输入影响：`DIAG_Mouth_Manual.hoface.json`，改两个常量输出行的 `defaultValue`
-     （先让 `Open=0` 扫 `Form`，再固定苦 / 中性 / 笑分别扫 `Open`）
+     —— 隔离版本就是**临时工作台**，验收完的那一份不再留。
+     ⚠️ **rig 那份不是 git 仓**（`D:\Unity_Project\BREAK_URP` 下没有版本控制）⇒ 删了就真没了：
+     所以「把工具对齐到资产」是**硬规矩** —— 验收出来的点位 / 刻度必须落进 `make-vts-controller.ps1` 与 `check-controller.ps1`，别只躺在隔离件里。
+   * 要排除输入影响：现配一份最小 profile，改常量输出行的 `defaultValue`
+     （先让 `Open=0` 扫 `Form`，再固定苦 / 中性 / 笑分别扫 `Open`）；同样用完就删。
 2. **调**：**状态点永远由用户在 Animator 里手调**；中间层（profile 的表达式 / 曲线）这一侧只回答「这根线现在是多少」。
 3. **录**：面捕调试面板 → 每组 **3 次**、每次约 **5 秒**、**间隔 0.05s**（快动作必须；静置那种慢的才用 0.2s）；
    窗口里**标签留空**，录完按时间顺序事后打标签（`.research/*/label-*.py`：重写头部 + 改名 + 写
@@ -53,7 +56,7 @@
 | `check-controller.ps1` | 对着 profile 核控制器：参数名/默认值/树型/轴接线/槽位名/槽位总数/从根可达性/每格坐标 | `powershell -File Tools~/FaceTracking/check-controller.ps1 -Path <x.controller>` |
 | ↑ **隔离模式** `-Isolation` | 只查这份控制器**有**的东西（`DIAG_*` 单区控制器天然缺树/缺参数）：「缺」降级成注，树型/轴接线/**刻度与逐格坐标**/槽位名/变体镜像/WD/Normalize 照旧严格。**验收基准就是这些隔离控制器** | `… -Path <DIAG_xxx.controller> -Isolation` |
 | `check-controller-integrity.py` | 不依赖 profile 的**完整性**检查：块结构、悬空引用、状态机接线（"文件坏没坏一跑就知道"） | `python Tools~/FaceTracking/check-controller-integrity.py <x.controller>` |
-| `isolate-trees.py` | **按树剪出隔离版控制器**（联合测试用）：区域 Direct 的孩子按名字留/砍，非破坏性、新 GUID；联合示例见 rig 的 `FT/Diagnostics_20260929/README.md` | `python Tools~/FaceTracking/isolate-trees.py <源.controller> <输出.controller> --root-children MouthRegion,NoseRegion --children "MouthRegion=…" ` |
+| `isolate-trees.py` | **按树剪出隔离版控制器**，并能**拼**在权威件上：区域 Direct 的孩子按名字留 / 砍；`--base <权威隔离件>` 拿它当骨架（同 ID 冲突以它为准）、`--state-motion <根树>` 改状态机指向、`--guid` 沿用旧 GUID。非破坏性、只读源 | 剪：`python Tools~/FaceTracking/isolate-trees.py <源.controller> <输出.controller> --root-children MouthRegion,NoseRegion --children "MouthRegion=…"`<br>拼：`… <源> <输出> --base <权威隔离件> --state-motion "Ho/00 Drive Tree" --children …`<br>实例见 rig 的 `FT/Diagnostics/README.md` |
 | `make-checker-fixture.ps1` | 造一份"形状正确"的夹具，验检查器的**通过路径**（检查器自己坏了也要能发现） | `powershell -File Tools~/FaceTracking/make-checker-fixture.ps1` |
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 `.ps1` 按 ANSI 读，中文全糊 | `powershell -File Tools~/FaceTracking/fix-bom.ps1` |
