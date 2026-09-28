@@ -216,6 +216,7 @@ foreach ($id in $docs.Keys) {
             Threshold = Field $ct 'm_Threshold'
             PosX      = $posX
             PosY      = $posY
+            Motion    = $(if ($motion) { ($motion -replace '\s', '') } else { $null })
         }
     }
     $trees[$name] = [pscustomobject]@{
@@ -333,10 +334,11 @@ $slotSpec = [ordered]@{
     'MouthCore'   = @{ x = 'Form';     y = 'Open';      a = 4; ys = @(0, 1, 2); skip = @('2,2') }
 
 
-    # 整嘴平移（2026-09-28 傍晚收成 **3×2 = 6 格**：X 三档 × Y 两档，负侧钳到 0）
-    # ⚠️ 2026-09-28 深夜：**挖掉"上移 × 侧移"两格**（用户「同理 shift 的两个角点是不是也能删了」）
-    #    —— 删的是 `(0,1)` 左上 / `(2,1)` 右上（噘嘴时嘴居中 ⇒ `Mouth/X` ≈ 0）。下面那排左/右是本体，不能删。
-    'MouthShift'  = @{ x = 'LeftRight'; y = 'UpDown';   a = 3; ys = @(0, 1); skip = @('0,1', '2,1') }
+    # 整嘴平移（2026-09-29 起 **3×2 = 6 格矩形**：X 三档 × Y 两档，负侧钳到 0）
+    # ⭐ 2026-09-29 用户定：**上排左右两格复用同侧下排的片段**（psd1 里两格同名）—— 见下面 `$slotReuse` 的硬检查。
+    #    历史：2026-09-28 深夜曾把这两个角挖掉（「同理 shift 的两个角点是不是也能删了」）⇒ 凸包成三角形、
+    #    上排两侧被投影成「左⊕上/右⊕上」的混合 ⇒ 用户「T 字不太够表达」。补回两角即修复。
+    'MouthShift'  = @{ x = 'LeftRight'; y = 'UpDown';   a = 3; ys = @(0, 1) }
     # 舌头（2026-09-28 深夜）：**不在 2D 清单里** —— 它是 1D 5 格，见下面 `$simple1DSlot` 的 `MouthTongue`。
     # 下巴（2026-09-28 深夜用户定）：2D **T 形 4 格** —— 左右只在「张开」那档有真信号，两个角不建
     'MouthJaw'    = @{ x = 'JawSide'; y = 'Jaw'; a = 3; ys = @(0, 1); skip = @('0,0', '2,0') }
@@ -560,7 +562,32 @@ foreach ($sw in $switchSpec.Keys) {
     foreach ($w in $want.kids) { if ($names -notcontains $w) { $problems.Add("1D 开关 $sw 少了子节点 $w（实际 $($names -join ', ')）") } }
 }
 
-# ⭐ **槽位总数 = 95**（43 参数 / 27 树这一版）。变动账：上午 92→83（删 `MouthWidth` 9 格）⇒
+# ── 复用检查（2026-09-29 加）：**两个格子指向同一个动作**是有意的设计（`MouthShift` 上排左右复用同侧下排），
+#    但必须**精确复用同侧那一个** —— 接错了（比如右上指到嘴左移）会静默变成一个很怪的姿势，别处都看不出来。
+#    ⚠️ 同名本身不是错：Unity 里混合树的孩子只是「动作 + 坐标 + 阈值」，两格指向同一个动作完全合法。
+$slotReuse = [ordered]@{
+    # 树 = @( @(复用方 i, j, 被复用方 i, j), … )
+    'MouthShift' = @( @(0, 1, 0, 0), @(2, 1, 2, 0) )
+}
+foreach ($tree in $slotReuse.Keys) {
+    if (-not $trees.ContainsKey($tree)) { continue }
+    foreach ($pair in $slotReuse[$tree]) {
+        $to = $pair[0]; $toJ = $pair[1]; $from = $pair[2]; $fromJ = $pair[3]
+        $src = @($trees[$tree].Kids | Where-Object {
+            (HasNearValue @($scaleOf[$tree].x[$from]) ([double]$_.PosX)) -and
+            (HasNearValue @($scaleOf[$tree].y[$fromJ]) ([double]$_.PosY)) })
+        $dst = @($trees[$tree].Kids | Where-Object {
+            (HasNearValue @($scaleOf[$tree].x[$to]) ([double]$_.PosX)) -and
+            (HasNearValue @($scaleOf[$tree].y[$toJ]) ([double]$_.PosY)) })
+        if ($src.Count -ne 1 -or $dst.Count -ne 1) { continue }   # 缺格已由上面那条报过
+        if ($src[0].Motion -ne $dst[0].Motion) {
+            $problems.Add("树 $tree 的格子 ($to,$toJ) 必须**复用** ($from,$fromJ) 的动作（$($src[0].Name)），实际指向 $($dst[0].Name)")
+        }
+        else { $notes.Add("复用 $tree ($to,$toJ) = ($from,$fromJ) 的动作（$($src[0].Name)）✓") }
+    }
+}
+
+# ⭐ **槽位总数**（= 混合树的孩子总数，**不是片段数**：两格可以复用同一片段）。变动账：上午 92→83（删 `MouthWidth` 9 格）⇒
 #    下午 `MouthShift` 3×2（6）+ `MouthCorner` 3×3（9）⇒ 92；傍晚 `MouthCorner` 换成 1D 的 `MouthWidth`（3）、
 #    `MouthShift` 9→6、`MouthCore`（+变体）各 8→11 ⇒ **89**；2026-09-28 深夜舌头重做
 #    （2D 4 格 → 试过 2D 5 格 → 定成 **1D 4 格**：默认 + 沿对角线 3 步）⇒ 仍是 89；
@@ -579,11 +606,11 @@ foreach ($name in $simple1DSlot.Keys) {
     $slotTotal += @($trees[$name].Kids | Where-Object { $_.Name -ne '<空 Motion>' -and $_.Name -ne '?' }).Count
 }
 if ($slotTotal -eq 0) { $notes.Add("叶子 Direct 树全部留空（新架构）：作者手填，槽位片段数不再核对") }
-else { $notes.Add("槽位片段 $slotTotal 个（作者手填的）") }
+else { $notes.Add("混合树孩子 $slotTotal 个（作者手填的；⚠️ 不等于片段数 —— 两格可复用同一片段）") }
 
 # ── 报告 ─────────────────────────────────────────────────────────────────────
 "=== $Path ==="
-"参数：声明 $($declared.Count) 个 · 期望 $($expected.Count) 个 · 树（BlendTree）：$($trees.Count) 棵 · 槽位：$($slotTotal) 个（期望 95）"
+"参数：声明 $($declared.Count) 个 · 期望 $($expected.Count) 个 · 树（BlendTree）：$($trees.Count) 棵 · 混合树孩子：$($slotTotal) 个（⚠️ 不是片段数：两格可复用同一片段）"
 
 
 

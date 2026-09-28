@@ -124,7 +124,11 @@ $shiftYMeasured = @(0.0, 1.0)
 #   反过来噘嘴时嘴是**居中**的（`dimple` 0.072 ⇒ `Mouth/X` ≈ 0）⇒「上移 × 侧移」设备上到不了 ✓
 #   ⇒ 剩 **4 格**（下排三点 + 上中一点 = T 形）；"上移+侧移"的输入投影到 T 的两条斜边 ⇒ 一半侧移 + 一半上移。
 #   ⚠️ **不能删下面那两个**：下排左/右就是「整嘴左右移动」本体（实测 `mouthLeft/Right` 0.963~0.976）。
-$mouthShiftSkip = @('0,1', '2,1')
+# ⚠️ **`MouthShift` 2026-09-29 起不再挖角**：用户「其实补俩同名的点就够了吧」——
+#    两个上角补回来、**复用同侧下排的片段**（psd1 里同名 ⇒ 生成器复用同一棵叶子树）。
+#    理由：挖掉那两个角 ⇒ 凸包是三角形 ⇒ 上排两侧只能得到「左⊕上 / 右⊕上」的混合、越往上横移越小；
+#    补成矩形之后左右两列在任意高度都是纯横移。⚠️ 想收成"金字塔"由用户在 Animator 里拉上排两点。
+$mouthShiftSkip = @()
 # **`MouthWidth`（1D 3 格）** 的刻度：轴 = 既有的 `Ho/Drive/Mouth/Pucker`（`2×dimple − pucker`）。
 # 9 段补录实测（静态 / 抿嘴嘴宽 / 收嘴不撅）= 原值 **−0.93 窄 / −0.09 中 / +2.0 宽**。
 # ⭐ **2026-09-29 归一化到 0…1**（用户定：轴不能为负、满端填 1 —— 原来那根轴的负端在控制器里够不着、+2 也到不了）：
@@ -282,6 +286,8 @@ $variantSwitches = [ordered]@{
 # ── id 分配（`$script:` 必须：函数里写 `$next++` 只会改局部副本）────────────────
 $script:nextTree = 206000000
 $script:treeIds = @{}
+# 已经写过的**叶子树**名字（同名 = 复用同一份片段 ⇒ 只准写一次块，见 `SlotKids`）
+$script:writtenLeaf = @{}
 function TreeId([string]$name) {
     if (-not $script:treeIds.ContainsKey($name)) { $script:treeIds[$name] = $script:nextTree; $script:nextTree++ }
     return $script:treeIds[$name]
@@ -498,7 +504,12 @@ function SlotKids([string]$tree, [array]$xv, [array]$yv, [string]$xt, [string]$y
             # 叶子 = 一棵**空**的 Direct 树（中文状态名来自 HoSlotNames.psd1），孩子由作者手填
             $display = SlotDisplay $tree $i $j
             if (-not $display) { continue }
-            WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
+            # ⚠️ **同一份叶子树只写一次**：psd1 里允许两个格子写同一个名字（= 复用同一份片段，
+            #    见 `MouthShift` 那条）⇒ 第二次走到这里时不能再写一个同名块（会出两个同名树）。
+            if (-not $script:writtenLeaf.ContainsKey($display)) {
+                WriteTree $display 4 'Blend' 'Blend' @(@{ motion = '{fileID: 0}'; x = 0; y = 0; direct = $wOne })
+                $script:writtenLeaf[$display] = $true
+            }
             $kids += @{
                 motion = "{fileID: $(TreeId $display)}"
                 x      = $x

@@ -52,7 +52,7 @@ Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth,
 │   │   ├─ MouthCore            FreeformCartesian2D  静息嘴：苦/静息/常态笑/大笑 × 闭/半开/张满（顶行中间挖掉、右上角 0.6）
 │   │   └─ MouthCoreRoll        FreeformCartesian2D  猫嘴版整嘴表（与主版同格、同逐点坐标）
 │   ├─ MouthJaw                 FreeformCartesian2D  4 格 T 形（X = JawSide ±0.52/0 · Y = Jaw 0/0.75；两个"合 × 左右"角挖掉）  ← 恒 1
-│   ├─ MouthShift               FreeformCartesian2D  整嘴平移残差表（X 左右 × Y 上下两档，T 形 4 格）  ← 挂形态门
+│   ├─ MouthShift               FreeformCartesian2D  整嘴平移残差表（X 左右 × Y 上下两档 = **6 格矩形**；上排左右**复用**同侧下排的片段）  ← 挂形态门
 │   ├─ MouthWidth               Simple1D             3 格（窄 / 中 / 宽）          ← 挂形态门
 │   ├─ MouthTongue              Simple1D             4 格                          ← 恒 1
 │   ├─ InvertedV                Simple1D  blendParameter = Ho/Drive/Style/InvertedV（阈值 0 / 1）  ← 恒 1

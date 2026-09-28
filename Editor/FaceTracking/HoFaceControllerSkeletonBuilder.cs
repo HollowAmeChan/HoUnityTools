@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -117,6 +117,18 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             public Vector2Int[] Skip;
             /// <summary>逐格坐标覆盖：这些 (i,j) 格**不摆在刻度值上**（实测定），坐标单独给。</summary>
             public CellPos[] Override;
+            /// <summary>
+            /// **复用**：这些格子**与另一格共用同一份叶子（同一个动作）**（2026-09-29 加）。
+            /// Unity 里两格指向同一个动作完全合法（一个混合树的孩子只是「动作 + 坐标 + 阈值」）——
+            /// `MouthShift` 上排左右就是这样复用下排的（补回被挖掉的两角，凸包从三角形变矩形）。
+            /// </summary>
+            public CellReuse[] Reuse;
+        }
+
+        /// <summary>一格的复用关系：`(I,J)` 用 `(FromI,FromJ)` 的叶子与动作。</summary>
+        private sealed class CellReuse
+        {
+            public int I, J, FromI, FromJ;
         }
 
         /// <summary>一格的独立坐标（槽位名仍按索引编 ⇒ 挪坐标不改名、不用重烘）。</summary>
@@ -256,17 +268,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ShiftYMeasured = { 0f, 1f };
 
         /// <summary>
-        /// **`MouthShift` 挖掉的 2 格**（2026-09-28 深夜，用户问「同理 shift 的两个角点是不是也能删了」⇒ 对）：
-        /// 删的是 **`(0,1) 左上` / `(2,1) 右上`**（"上移 × 侧移"），**不是**下面那两个。
-        /// 理由（跟 jaw 的「咬合 × 侧偏」同一类 —— 次要维的信号只存在于主要的某一档）：
-        /// `Mouth/Y` 的正侧是**噘嘴判据**（要 `mouthPucker ≥ 0.45`），而「整嘴平移」那几段实测
-        /// `mouthPucker` 只有 **0.22~0.37** ⇒ Y = 0；反过来噘嘴时嘴是**居中**的（`dimple` 0.072 ⇒ `Mouth/X` ≈ 0）
-        /// ⇒「上移 × 侧移」这个组合在设备上到不了 ✓
-        /// ⇒ 剩 **4 格** = 下排三点（左 / 中 / 右）+ 上中一点（T 形）；"上移+侧移"的输入会被投影到 T 的两条斜边
-        /// ⇒ 得到"一半侧移 + 一半上移"的插值（圈外点投影到圈边做凸组合，见 BLEND_TREE_LIMITS §9）。
-        /// ⚠️ **不能删下面那两个**：下排左/右就是「整嘴左右移动」本体（实测 `mouthLeft/Right` 0.963~0.976）。
+        /// **`MouthShift` 不再挖角**（2026-09-29 用户定：「其实补俩同名的点就够了吧」）——
+        /// 上排左右两格补回来、**复用同侧下排的片段**（见 `MouthShiftReuse`）。
+        /// 历史：2026-09-28 深夜曾挖掉 `(0,1)` 左上 / `(2,1)` 右上（"上移 × 侧移"在设备上到不了），
+        /// 代价是凸包变成**三角形** ⇒ 上排两侧的输入被投影到斜边上，只能得到"一半侧移 + 一半上移"的混合、
+        /// 而且**越往上横移的有效量越小** ⇒ 用户「T 字不太够表达」。
+        /// ⚠️ 下面那两个**本来就不能删**：下排左/右是「整嘴左右移动」本体（实测 `mouthLeft/Right` 0.963~0.976）。
         /// </summary>
-        private static readonly Vector2Int[] MouthShiftSkip = { new Vector2Int(0, 1), new Vector2Int(2, 1) };
+        private static readonly Vector2Int[] MouthShiftSkip = { };
+
+        /// <summary>
+        /// `MouthShift` 上排左右 = **复用同侧下排的叶子与片段**（左列两格都是 `嘴左移`、右列两格都是 `嘴右移`）。
+        /// Unity 里一个混合树的孩子只是「动作 + 坐标 + 阈值」，两格指向同一个动作完全合法 ⇒
+        /// **槽位片段数不变，树里多两个孩子**；收益是左右两列在任意高度都是纯横移（凸包变矩形）。
+        /// </summary>
+        private static readonly CellReuse[] MouthShiftReuse =
+        {
+            new CellReuse { I = 0, J = 1, FromI = 0, FromJ = 0 },
+            new CellReuse { I = 2, J = 1, FromI = 2, FromJ = 0 }
+        };
         /// <summary>
         /// **`MouthWidth`（1D 3 格，2026-09-28 傍晚重返）** 的刻度 —— 轴就是既有的 `Mouth/Pucker`
         /// （= `2×dimple − pucker`）。9 段补录实测的**原值**：`−0.93 收嘴不撅（窄）· −0.09 静态（中）· +2.0 抿嘴嘴宽（宽）`。
@@ -341,7 +361,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 整嘴平移（2026-09-28 下午新建，当晚从 3×2 收成 **4 格 T 形**）：X = 左右（±0.95）·
             // Y = 上下（0 / +1，负侧钳到 0）；**上移的左右两角挖掉**（`MouthShiftSkip`，见其注释）。
-            new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured, Skip = MouthShiftSkip },
+            new TableSpec { Name = "MouthShift", X = "Ho/Drive/Mouth/X", Y = "Ho/Drive/Mouth/Y", XToken = "LeftRight", YToken = "UpDown", XValues = ShiftXMeasured, YValues = ShiftYMeasured, Skip = MouthShiftSkip, Reuse = MouthShiftReuse },
             // ⭐ **舌头是 1D 4 格，不是 2D 表** —— 见下面的 `Simple1DTables`。
             //    用户 2026-09-28 深夜四句话定形：①「其实也只需要一个 1d 树分三段就行了吧」→
             //    ②「不行我感觉还是要五点」→ ③「5 点不是你想的那样，我想的是**默认态在左下角**，的四点」→
@@ -538,6 +558,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 AssetDatabase.CreateFolder(parent, Path.GetFileName(clipFolder));
             }
 
+            // 叶子缓存：**复用**的格子要拿到与被复用格**同一份**叶子对象（同一个动作），不是复制一份。
+            var leafCache = new Dictionary<string, Motion>(StringComparer.Ordinal);
+
             foreach (var spec in Tables)
             {
                 var tree = NewTree(controller, spec.Name, BlendTreeType.FreeformCartesian2D);
@@ -550,8 +573,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
                         if (Skipped(spec, i, j)) continue;
-                        string slot = SlotName(spec.Name, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
+                        tree.AddChild(CellLeaf(controller, spec, spec.Name, clipFolder, i, j, leafCache,
+                            ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
                         filled++;
                     }
                 }
@@ -570,8 +593,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
                         if (Skipped(spec, i, j)) continue;
-                        string slot = SlotName(copy.Value, spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
+                        tree.AddChild(CellLeaf(controller, spec, copy.Value, clipFolder, i, j, leafCache,
+                            ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
                     }
                 slotCounts[copy.Value] = CountCells(spec);
                 trees[copy.Value] = tree;
@@ -589,8 +612,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     for (int i = 0; i < spec.XValues.Length; i++)
                     {
                         if (Skipped(spec, i, j)) continue;
-                        string slot = SlotName(Variants[v, 0], spec.XToken, spec.YToken, spec.XValues.Length, i, j);
-                        tree.AddChild(LeafParts(controller, slot, SlotClip(clipFolder, slot, ref clipsCreated, ref clipsKept)), CellPosition(spec, i, j));
+                        tree.AddChild(CellLeaf(controller, spec, Variants[v, 0], clipFolder, i, j, leafCache,
+                            ref clipsCreated, ref clipsKept), CellPosition(spec, i, j));
                     }
                 slotCounts[Variants[v, 0]] = CountCells(spec);
                 trees[Variants[v, 0]] = tree;
@@ -715,6 +738,32 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (spec.Skip == null) return false;
             foreach (var cell in spec.Skip) if (cell.x == i && cell.y == j) return true;
             return false;
+        }
+
+        /// <summary>这一格的**复用源**（没有则 null）—— 见 <see cref="CellReuse"/>。</summary>
+        private static CellReuse ReuseOf(TableSpec spec, int i, int j)
+        {
+            if (spec.Reuse == null) return null;
+            foreach (var r in spec.Reuse) if (r.I == i && r.J == j) return r;
+            return null;
+        }
+
+        /// <summary>
+        /// 这一格用的叶子（Direct 树 + 片段）：有复用关系时取**被复用那一格**的
+        /// （同一份对象 ⇒ 树里两个孩子指向同一个动作；槽位片段数不变）。
+        /// </summary>
+        private static Motion CellLeaf(AnimatorController controller, TableSpec spec, string treeName, string clipFolder,
+            int i, int j, Dictionary<string, Motion> cache, ref int created, ref int kept)
+        {
+            CellReuse reuse = ReuseOf(spec, i, j);
+            int si = reuse != null ? reuse.FromI : i;
+            int sj = reuse != null ? reuse.FromJ : j;
+            string slot = SlotName(treeName, spec.XToken, spec.YToken, spec.XValues.Length, si, sj);
+            Motion leaf;
+            if (cache.TryGetValue(slot, out leaf)) return leaf;
+            leaf = LeafParts(controller, slot, SlotClip(clipFolder, slot, ref created, ref kept));
+            cache[slot] = leaf;
+            return leaf;
         }
 
         /// <summary>这张表实际有多少格。</summary>
