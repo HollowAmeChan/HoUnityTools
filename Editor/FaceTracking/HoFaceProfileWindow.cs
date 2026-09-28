@@ -890,6 +890,8 @@ ActiveRows().RemoveAt(index);
             int constants = 0;
             var duplicates = new HashSet<string>();
             var chains = new HashSet<string>();       // 有意的同名链（风格化门的「双重形态」）
+            int noNotes = 0;                          // 还没写注释的行（注释 = 这一行的说明书）
+            int numberNotes = 0;                      // 注释里带数字的行（数字必须写清含义/来源）
             if (rows != null)
             {
                 var seen = new HashSet<string>();
@@ -900,6 +902,8 @@ ActiveRows().RemoveAt(index);
                     // 常量行（空表达式 + 默认值）**不是错**：门控就靠它。只有"有表达式但解析不过"才报错。
                     if (IsConstantRow(output)) constants++;
                     else if (IsBrokenRow(output)) bad++;
+                    if (string.IsNullOrEmpty(output.notes)) noNotes++;
+                    else if (System.Text.RegularExpressions.Regex.IsMatch(output.notes, @"\d")) numberNotes++;
                     if (string.IsNullOrEmpty(output.parameter)) continue;
                     if (seen.Add(output.parameter)) continue;
                     // ⚠️ **同名多行在风格化链里是有意的**：内部行（`Ho/Style/*`）与控制器口
@@ -915,7 +919,11 @@ ActiveRows().RemoveAt(index);
                 string text = (editingInputs ? "输入行 " : "输出行 ") + count + " 行 · " + bad
                     + " 行表达式有错 · " + duplicates.Count + " 个重复参数名"
                     + (constants > 0 ? " · 常量行 " + constants : "")
-                    + (chains.Count > 0 ? " · 风格化同名链 " + chains.Count + " 条（有意）" : "");
+                    + (chains.Count > 0 ? " · 风格化同名链 " + chains.Count + " 条（有意）" : "")
+                    // 注释是这一行的**说明书**（干什么 / 关键数与来源 / 魔数是什么意思 / 一条坑）⇒
+                    // 把"没写"和"写了但带数字"都摊在状态栏上：重写注释时靠它推进度。
+                    + (noNotes > 0 ? " · " + noNotes + " 行**还没写注释**" : " · 注释齐")
+                    + (numberNotes > 0 ? " · " + numberNotes + " 行注释带数字（要写清含义与来源）" : "");
                 GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
                 if (bad > 0 || duplicates.Count > 0) style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
                 GUI.Label(HoConstraintEditorControls.NextAuto(text, style), text, style);
@@ -953,6 +961,49 @@ HoFaceOutput output = ActiveRows()[index];
             DrawRightScroll(output);
         }
 
+        /// <summary>
+        /// **注释预览**（2026-09-29 用户定：「面板上预览 note 的功能补上，因为这其实是注释」）。
+        /// 只读：注释是这一行的**说明书**（干什么 / 关键数与来源 / 魔数是什么意思 / 一条坑），
+        /// 平时收着，点开才摊开；空注释时明说「还没写」，不装成没事。
+        /// ⚠️ 与别的字段不同，注释**不参与求值** —— 改它不需要重新载入配置，也不会让这一行的值变化。
+        /// </summary>
+        private void DrawNotesPreview(HoFaceOutput output)
+        {
+            string notes = output.notes;
+            bool has = !string.IsNullOrEmpty(notes);
+            int digits = has ? System.Text.RegularExpressions.Regex.Matches(notes, @"\d").Count : 0;
+
+            using (HoConstraintEditorControls.Row())
+            {
+                notesOpen = EditorGUILayout.Foldout(notesOpen,
+                    has ? "注释" : "注释（这一行还没写）", true, HoConstraintEditorTheme.Foldout);
+                HoConstraintEditorControls.Flex();
+                if (has)
+                {
+                    HoConstraintEditorControls.CaptionTrim("（只读 · 不参与求值）", 150.0f,
+                        "注释只是这一行的说明书：改它不影响任何数值，也不需要重新载入配置。");
+                    HoConstraintEditorControls.CaptionTrim(digits > 0 ? "含 " + digits + " 个数字" : "无数字", 96.0f,
+                        digits > 0
+                            ? "注释里出现数字 —— 每个数字都该写清它是什么意思、从哪来（魔数尤其）。"
+                            : "注释里没有数字。");
+                }
+            }
+
+            if (!has || !notesOpen)
+            {
+                return;
+            }
+
+            using (HoConstraintEditorControls.Row())
+            {
+                HoConstraintEditorControls.Flex();
+                // 只读多行：用 Label 而不是 TextArea（TextArea 可编辑 ⇒ 会让人以为注释能在这里改）。
+                EditorGUILayout.LabelField(notes, EditorStyles.wordWrappedLabel);
+            }
+        }
+
+        private bool notesOpen = true;
+
         private Vector2 rightScroll;
 
         private void DrawRightScroll(HoFaceOutput output)
@@ -960,6 +1011,8 @@ HoFaceOutput output = ActiveRows()[index];
             // `alwaysShowHorizontal: false` —— 右列的内容宽度都由 `NextFlexible` 自己让开，
             // 没理由需要横向滚动。
             rightScroll = EditorGUILayout.BeginScrollView(rightScroll, false, true);
+
+            DrawNotesPreview(output);
 
             using (HoConstraintEditorControls.Row())
             {
