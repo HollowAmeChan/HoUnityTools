@@ -1,4 +1,4 @@
-# probe-arkit-keys.py -- 生成 ARKit 控制器前的数据核对（只读）
+﻿# probe-arkit-keys.py -- 生成 ARKit 控制器前的数据核对（只读）
 #   · 键 = ARKit 直通配置里的输出行，去掉 Head/*（头交给 LookAt/IK）
 #   · 每个键要有成对的 potato_build__BS__On|Off__<键> 片段，且都带 .meta（能取到 GUID）
 import io
@@ -20,11 +20,11 @@ for f in os.listdir(ANIM):
         continue
     m = re.match(r'^potato_build__BS__(On|Off)__(.+)\.anim$', f)
     if m:
-        clip.setdefault(m.group(2), {})[m.group(1)] = f
+        clip.setdefault(m.group(2).lower(), {})[m.group(1)] = m.group(2)
 
 paired, missing, head_key = [], [], []
 for k in keys:
-    d = clip.get(k)
+    d = clip.get(k.lower())
     if d and 'On' in d and 'Off' in d:
         paired.append(k)
     else:
