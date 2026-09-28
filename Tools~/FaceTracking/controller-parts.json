@@ -1,0 +1,55 @@
+{
+  "note": "控制器是分层合成的。这份表是「谁合谁」的唯一出处：compose-controller.py 照它重生成，rig 的 Diagnostics/README.md 照它写给人看的表。",
+  "levels": "名字是 `DIAG_L<n>_<名字>`，**L 越大越靠上（合成得越多）**：L1 = 从生产件直接剪 / 改出来的一块（单区、单棵树、或某个实验件）；L2 = 由两块以上合成；再往上同理。**没有「L0 总控制器」这个概念** —— 生产件（`PTP_CTR_Face_VTS.controller`）不是第 0 层，它是**最高的那一层**（也就是最终合成结果要手动复制进去的那一份）。层数不写死，需要几层就几层（当前用到 L2）。",
+  "rigDir": "D:\\Unity_Project\\BREAK_URP\\Assets\\Hollow\\土豆\\FT",
+  "source": "PTP_CTR_Face_VTS.controller",
+  "controllers": [
+    {
+      "file": "DIAG_L1_NoseRegion.controller",
+      "level": "1",
+      "from": "PTP_CTR_Face_VTS.controller",
+      "rootChildren": ["NoseRegion"],
+      "manual": true,
+      "notes": "鼻子区单区件。⚠️ 这份是**手工权威件**（NoseUp 刻度手改成 0/1）⇒ 不要用脚本覆盖它；脚本只登记来源。"
+    },
+    {
+      "file": "DIAG_L1_EyeRegion.controller",
+      "level": "1",
+      "from": "PTP_CTR_Face_VTS.controller",
+      "rootChildren": ["EyeRegion"],
+      "notes": "眼睛区单区件（22 个空槽，尚无动画）。"
+    },
+    {
+      "file": "DIAG_L2_PuckerNose.controller",
+      "level": "2",
+      "from": "PTP_CTR_Face_VTS.controller",
+      "base": "DIAG_L1_NoseRegion.controller",
+      "rootChildren": ["MouthRegion", "NoseRegion"],
+      "children": {
+        "MouthRegion": ["MouthShift", "MouthWidth", "InvertedV"],
+        "NoseRegion": ["NoseUp"]
+      },
+      "stateMotion": "Ho/00 Drive Tree",
+      "notes": "噘嘴 × 鼻子的窄联合件：骨架＝L1 鼻子权威件（同 ID 冲突以权威件为准），噘嘴三棵从生产件并进来。"
+    },
+    {
+      "file": "DIAG_L2_MouthGroup.controller",
+      "level": "2",
+      "from": "PTP_CTR_Face_VTS.controller",
+      "rootChildren": ["MouthRegion", "NoseRegion"],
+      "notes": "嘴组联合件：MouthRegion 全部 7 个孩子（core 开关→core/猫嘴版、下巴、平移、宽度、舌头、倒V、鼓嘴）＋ NoseRegion；EyeRegion 剪掉。"
+    },
+    {
+      "file": "DIAG_L1_MouthCore9_Jaw.controller",
+      "level": "1",
+      "manual": true,
+      "notes": "早期手做的隔离件（嘴 core 9 点 ＋ 下巴）。来源已随那轮隔离删掉 ⇒ 只登记，不重生成。"
+    },
+    {
+      "file": "DIAG_L1_RowsCandidate.controller",
+      "level": "1",
+      "manual": true,
+      "notes": "Rows 坐标模型的**实验对照**（从生产件直接派生的实验件，**不是主线**）⇒ 只登记。"
+    }
+  ]
+}

@@ -2772,3 +2772,15 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 **④ 顺带修的两个脚本 bug**（都拦住了，没写坏东西）：
   * `m_Name` 的两种写法：**ASCII 名不带引号、中文名带引号 + `\uXXXX` 转义** ⇒ 只认带引号的正则会把 `MouthCore` 整棵树跳过（第一版补丁「改了 0 格」就是这个原因）。判据：`v.startswith('"')` 再 `json.loads`。
   * rig 里那份说明同步加了「嘴组：怎么观察」一节。
+
+---
+
+## 2026-09-29 · 诊断件分层命名 + 「照配方重生成」：**没有 L0，最高层就是生产件**
+
+**① 用户要的**（原文）：「这个文件夹的控制器是一层一层合成的，有必要用名字做区分，用文档记录谁合谁，用脚本提供快速合并」⇒「其实就是 Ln 命名，不一定三层」⇒「**不要存在总控制器，最高层不要认为是 0，而是 L 最高级，弄完了我会手动复制的**」。
+**② 命名口径（最终）**：`DIAG_L<n>_<名字>`，**L 越大越靠上（合成得越多）**。L1 = 从生产件直接剪 / 改出来的一块（单区、单棵树、或某个坐标模型的实验件）；L2 = 由两块以上合成；再往上同理。
+⚠️ **没有「L0 / 总控制器」这个概念** —— 生产件 `PTP_CTR_Face_VTS.controller` 不是第 0 层，它**就是最高的那一层**（最终合成结果手动复制进去的那一份）；层数不写死，需要几层就几层（当前用到 L2）。
+**③ 落地**：`FT/Diagnostics/` 里 6 份重命名（`.meta` 与 GUID 一起搬 ⇒ Unity 里挂着的引用不断）：`NoseRegion` → `DIAG_L1_NoseRegion`（553bd241）、`EyeRegion` → `DIAG_L1_EyeRegion`（d2a099bb）、`MouthCore9_Jaw` → `DIAG_L1_MouthCore9_Jaw`（4b8d99f6）、`RowsCandidate` → `DIAG_L1_RowsCandidate`（f196cf3e）、`PuckerNose` → `DIAG_L2_PuckerNose`（dd999b8d）、`MouthGroup` → `DIAG_L2_MouthGroup`（e9741434）；`isolation-manifest.json` 里的旧名当历史留着。
+**④ 「快速合并」= 配方 + 一条命令**：新增 `Tools~/FaceTracking/controller-parts.json`（**「谁合谁」的唯一出处**：谁 = 谁 ＋ 哪些 `rootChildren` / 某棵树留哪几个孩子 / 骨架 `base` 用哪份 / 状态机 `--state-motion` 改指哪棵 / 是不是手工件）与 `compose-controller.py`（`--list` 只读配方、`<名字子串>` 或 `--all` 重生成、`--dry-run`）。它照配方调 `isolate-trees.py`：覆盖前备份到 `%TEMP%\ho-controller-backups\<时间戳>\`、**沿用旧 `.meta` 的 GUID**，跑完自动查完整性 ＋ `check-controller.ps1 -Isolation`。⇒ 联合件不再靠手敲命令行；rig 的 `Diagnostics/README.md` 那张表与配方**同源**（配方改了，那张表要跟着改）。
+**⑤ 脚本永远不碰生产件**：产物只写 `FT/Diagnostics/`；`manual: true` 的条目直接跳过（手工权威件：L1 鼻子刻度手改成 0/1 的、早期 core9 ＋下巴的、Rows 实验件 —— 重生成会盖掉手调值，正是栽过的那类坑）。**合成到最高层（生产件）由用户手动复制** ⇒ 脚本不需要、也不提供「写生产件」这条路。
+**⑥ 复现验证**：照配方重建 `DIAG_L2_MouthGroup` ⇒ 与手工剪的那份**合成结果一致**（58 棵树；唯一差异是控制器内部 `m_Name` 变成文件名），完整性通过、检查器 **0 缺/错**；带 `--base` 的 `DIAG_L2_PuckerNose` 同样 **0 缺/错**（权威骨架里 `NoseUp` 的 0/1 没被源资产的旧值顶掉 ⇒ `--base` 的"冲突以权威件为准"确实生效）。

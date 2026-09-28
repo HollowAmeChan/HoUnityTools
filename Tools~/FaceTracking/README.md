@@ -41,6 +41,8 @@
    （树型 / 轴接线 / 刻度与逐格坐标 / 槽位名 / 变体镜像 / WD / Normalize 照旧严格；缺树缺参数降级成「注」）。
 8. **合并**：验收过的表 / 轴并回大控制器。⚠️ 大控制器与那份大 profile 是**等待被剪枝**的东西 ——
    合并前检查器对着它报「槽位坐标应为…实际…」是**正常状态**。
+   控制器的合并（逐层合成到**最高的那一层** = 生产件）由**用户手动复制**完成：脚本只把中间层生成在
+   rig 的 `Diagnostics/` 里并打分，**不动生产件**（谁合谁见 §B 的 `compose-controller.py`）。
 
 **规矩**（口径见 `docs/README.md` 最上面）：旧数字 / 旧约定一律无效、以晚的为准、**数量不写死**、
 两层不吃同一个信号、长行不再加魔数。
@@ -58,6 +60,7 @@
 | `check-controller-integrity.py` | 不依赖 profile 的**完整性**检查：块结构、悬空引用、状态机接线（"文件坏没坏一跑就知道"） | `python Tools~/FaceTracking/check-controller-integrity.py <x.controller>` |
 | `isolate-trees.py` | **按树剪出隔离版控制器**，并能**拼**在权威件上：区域 Direct 的孩子按名字留 / 砍；`--base <权威隔离件>` 拿它当骨架（同 ID 冲突以它为准）、`--state-motion <根树>` 改状态机指向、`--guid` 沿用旧 GUID。非破坏性、只读源 | 剪：`python Tools~/FaceTracking/isolate-trees.py <源.controller> <输出.controller> --root-children MouthRegion,NoseRegion --children "MouthRegion=…"`<br>拼：`… <源> <输出> --base <权威隔离件> --state-motion "Ho/00 Drive Tree" --children …`<br>实例见 rig 的 `FT/Diagnostics/README.md` |
 | `reorder-output-rows.py` | **按归属分组重排 profile 的 `outputs` 行序** —— 行序就是依赖顺序（`out()` 只能朝上读），**手挪必断**：出口 90 行 → 各区域成块（嘴 / 眼睑 / 注视 / 眉 / 颊 / 鼻）→ 区域门 → 切片 → **style 整区靠下、区内按大类成块**。干跑打新排布并逐行验依赖，断了不写盘；只搬块，分隔符与 CRLF 原样 | `python Tools~/FaceTracking/reorder-output-rows.py <profile.json>`（干跑）<br>`… --write`（落盘）· `… --check`（自检：按原序重发应逐字节相同）<br>规矩见 `docs/AXES.md` §8「规则写法 / 行块布局」 |
+| `compose-controller.py` ＋ `controller-parts.json` | **照配方一条命令重生成分层控制器**。「谁合谁」只在 `controller-parts.json` 里写一次（谁 = 谁 ＋ 哪些区域 / 哪些孩子 / 骨架用哪份 / 状态机改指哪棵 / 是不是手工件），脚本照它调 `isolate-trees.py`。名字 = `DIAG_L<n>_<名字>`，**L 越大越靠上（合成得越多）**：L1 = 从生产件直接剪 / 改出来的一块，往上逐层合成。⚠️ **没有「L0 / 总控制器」** —— 生产件就是**最高的那一层**，脚本只写 rig 的 `Diagnostics/`、**永远不碰生产件**，最终结果由**人手动复制**进去；`manual: true` 的条目直接跳过（手工权威件不许覆盖）。覆盖前备份到 `%TEMP%\ho-controller-backups\<时间戳>\`、沿用旧 `.meta` 的 GUID，跑完自动查完整性 ＋ 检查器 `-Isolation` | `python Tools~/FaceTracking/compose-controller.py --list`<br>`… DIAG_L2_MouthGroup`（名字可写子串）<br>`… --all`（跳过手工件）· `… --dry-run`<br>给人看的同一张表在 rig 的 `FT/Diagnostics/README.md` |
 | `make-checker-fixture.ps1` | 造一份"形状正确"的夹具，验检查器的**通过路径**（检查器自己坏了也要能发现） | `powershell -File Tools~/FaceTracking/make-checker-fixture.ps1` |
 | `fix-slot-guids.ps1` | 把槽位片段按 `md5('ho-face-slot:<槽位名>')` 的 GUID 规则摆回去（生成器没有资产库，GUID 靠名字推） | 见脚本头部 |
 | `fix-bom.ps1` | 给本目录 `.ps1` 补 UTF-8 BOM —— PowerShell 5.1 对**没有 BOM** 的 `.ps1` 按 ANSI 读，中文全糊 | `powershell -File Tools~/FaceTracking/fix-bom.ps1` |
