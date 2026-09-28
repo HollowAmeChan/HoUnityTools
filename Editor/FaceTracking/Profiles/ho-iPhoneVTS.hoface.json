@@ -3955,8 +3955,8 @@
                         "expression":  "clamp(out(\"Ho/Style/CatMouth/Read\") * out(\"Ho/Style/CatMouth/CornerGate\"), 0, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26, "enterSeconds": 0.3, "exitSeconds": 0.1}]}],
-                        "notes":  "猫嘴判定 = 读数 × 嘴角门（2026-09-29 按倒V 的形状拆行：读数 / 门 / 判定各一行）。\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\n维持 trigger 0.28 / 迟滞 0.26 / 最短保持 0.2s / **进维持 0.3s、退维持 0.1s**（用户报「进出都不稳」⇒ 照倒V 的写法补上硬计时器；实际点亮 ≈ 0.3 + 0.17 ≈ 0.47s）。\n⚠️ 触发线 0.28 是实测缝 [0.146, 0.447] 的中点（猫嘴 J≈0.447 vs 抿嘴嘴宽 0.146）—— 改判据要重标，别只动这个数。\n⚠️ 释放点 = 0.28 − 0.26 = **0.02**（锁存是有意的：点亮后要挂得住）。"
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26, "enterSeconds": 0.2, "exitSeconds": 0.4}]}],
+                        "notes":  "猫嘴判定 = 读数 × 嘴角门（2026-09-29 按倒V 的形状拆行：读数 / 门 / 判定各一行）。\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\n维持 trigger 0.28 / 迟滞 0.26 / 最短保持 0.2s / **进维持 0.2s、退维持 0.4s**（用户 2026-09-29 实机定的：**退出比进入长**是有意的 —— 猫嘴点亮后要更难掉；实际点亮 ≈ 0.2 + 0.17 ≈ 0.37s）。\n⚠️ 触发线 0.28 是实测缝 [0.146, 0.447] 的中点（猫嘴 J≈0.447 vs 抿嘴嘴宽 0.146）—— 改判据要重标，别只动这个数。\n⚠️ 释放点 = 0.28 − 0.26 = **0.02**（锁存是有意的：点亮后要挂得住）。"
                     },
                     {
                         "parameter":  "Ho/Style/CatMouth",
