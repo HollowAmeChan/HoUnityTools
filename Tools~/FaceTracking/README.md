@@ -10,9 +10,11 @@
 **一句话**：在**隔离**里调 → **录样** → **查 / 统 / 对** → **分析出落点** → **把工具对齐到资产** → **检查器打分** → **合并回去**。
 
 1. **隔离**（验收基准 = 隔离控制器）：要调的轴 / 区先剪成一份**单区控制器**
-   （例：`Diagnostics_20260928/DIAG_MouthCore_Aligned11.controller`），配一份小 profile
+   （rig 里 `Diagnostics_20260928/` 下那几份；2026-09-29 时的例子是 `DIAG_NoseRegion.controller`），配一份小 profile
    （`DIAG_Mouth_Manual` / `DIAG_Mouth_Current` / `DIAG_Mouth_Minimal` / `DIAG_Mouth_VBFormula.hoface.json`）。
    * 哪份能直接用、每份干什么 ⇒ rig 里那份说明：`Assets/Hollow/土豆/FT/Diagnostics_20260928/README.md`
+   * ⚠️ **验收过的分区（连同它的小 profile）用完就删**（2026-09-29 用户：`DIAG_MouthCore_Aligned6/9/11` 等已验证的那批已经删掉）
+     —— 隔离版本就是**临时工作台**，验收完的那一份不再留；要复现当时的环境就靠 `git` 里那几份资产的历史版本。
    * 要排除输入影响：`DIAG_Mouth_Manual.hoface.json`，改两个常量输出行的 `defaultValue`
      （先让 `Open=0` 扫 `Form`，再固定苦 / 中性 / 笑分别扫 `Open`）
 2. **调**：**状态点永远由用户在 Animator 里手调**；中间层（profile 的表达式 / 曲线）这一侧只回答「这根线现在是多少」。
