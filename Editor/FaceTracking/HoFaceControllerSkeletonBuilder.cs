@@ -214,12 +214,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] FormSmile = { -1f, 0f, 0.75f, 1f };
 
         /// <summary>
-        /// 下巴**左右**轴（`JawSide`）自己的三档（2026-09-27 用户定「还是六个动画，只不过把最大值弄到
-        /// 0.65 左右」）。⚠️ 原来的 `Two`（±1）是**没实测就占位**的：实测「微张、解放咬颌」那个状态下
-        /// 单侧只到 **0.52**（咬紧时只有 0.02–0.04，而"只挤嘴角"的伪影反而有 0.05–0.2）⇒ 用 ±1 的话
-        /// 真动作只把 X 推到 52%，作者画的左右那两格永远吃不饱。改成 ±0.65：0.52 ⇒ 80%。
+        /// 下巴**左右**轴（`JawSide`）自己的三档刻度。原来的 `Two`（±1）是没实测就占位的：实测单侧到 **0.52**
+        /// ⇒ 用 ±1 的话真动作只把 X 推到 52%、左右两格永远吃不饱。
+        /// ⭐ **2026-09-29 与生成器对齐成 ±0.52**（这一份 builder 之前停在 2026-09-27 的 ±0.65，
+        /// 而生成器/资产早就是 ±0.52 —— 三处不同步，装配出来的树会和命令行生成的不一样）。
+        /// ⚠️ 刻度是**轴值**的天花板，和"格子摆在哪个坐标"是两件事：左右两格现在摆在 ±0.40（见 `MouthJawOverride`），
+        /// 因为同场实测里"张嘴第一段"那一档只到 0.31~0.45、而它才是真正常发生的状态。
         /// </summary>
-        private static readonly float[] JawSide = { -0.65f, 0f, 0.65f };
+        private static readonly float[] JawSide = { -0.52f, 0f, 0.52f };
 
         /// <summary>
         /// 下巴竖直轴（`Mouth/Jaw`）的两档：**0 = 闭 / 咬合**、**+0.75 = 张满**（待标定）。
@@ -323,13 +325,30 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         //      A3X0Y1 (-0.541, 0.374)   A3X1Y1 (0.006, 0.902)  A3X2Y1 (0.534, 0.354)
         //    为什么删得掉：① 下巴左右**只在"微张 / 解放咬颌"时才到 0.52**，咬紧时只有 0.02~0.04
         //    （"只挤嘴角"的伪影反而 0.05~0.2）⇒「咬合 × 侧偏」那两格物理上到不了；② 剩下的左右两点
-        //    意味着"张满·中"要靠左右 50/50 混，或者牺牲 Y 的分辨率 —— 用户判定不值 ⇒ **下巴只留上下两档**。
-        //    `Ho/Drive/Mouth/JawSide` 照旧发布（出口；以后想要回来再建一张 2D 表 + 手拉点）。
+        //    意味着"张满·中"要靠左右 50/50 混，或者牺牲 Y 的分辨率 —— 用户判定不值。
+        //    `Ho/Drive/Mouth/JawSide` 照旧发布（出口）。
+        // ⭐ **2026-09-29：退役掉的是"6 个手拉点"，不是"左右两格"** —— 生成器那边已经是 2D 4 格（T 形），
+        //    这一份（面板装配用的 builder）当时没跟上；现在一起补齐，并把左右两格**从 (±0.52, 0.75)
+        //    搬到实测落点 (±0.40, 0.42)**。实测依据（同场 15 段补录：5 个唇/颌状态 × 3 次反复平移下巴）：
+        //    唇闭三组横向读数 ≤0.033（进 ±0.05 死区 ⇒ 恒 0 —— **唇闭着时这根线就是死的**）、
+        //    张嘴第一段 0.312（`Mouth/Jaw` ≈0.38~0.45）、张嘴满 0.515。真正常发生的可读状态是**张嘴第一段**
+        //    ⇒ 落点 (±0.40, 0.42)；用户 2026-09-27 的原话就是「改成 −0.4,0.45 这样」，当时没落地。
+        //    代价（用户已认）：张嘴满 + 横移从"满"退到部分（那个状态判定为几乎不会触发）。
+        //    ⚠️ 坐标只决定"什么时候播"：两格的片段各自只驱动一个整姿势形变 ⇒ **挪位置不用重烘**。
+        //    另：这也顺手去掉"顶行三格共线"（共线在 FreeformCartesian2D 里是退化输入）。
+        private static readonly CellPos[] MouthJawOverride =
+        {
+            new CellPos { I = 0, J = 1, X = -0.40f, Y = 0.42f },   // 下巴右（X 负端）
+            new CellPos { I = 2, J = 1, X = 0.40f, Y = 0.42f }     // 下巴左（X 正端）
+        };
+        private static readonly Vector2Int[] MouthJawSkip = { new Vector2Int(0, 0), new Vector2Int(2, 0) };
 
         private static readonly TableSpec[] Tables =
         {
             new TableSpec { Name = "MouthCore", X = "Ho/Drive/Mouth/Form", Y = "Ho/Drive/Mouth/Open", XToken = "Form", YToken = "Open", XValues = FormSmile, YValues = OpenMeasured, Skip = MouthCoreSkip, Override = MouthCoreOverride },
-            // ⚠️ **下巴 2026-09-28 深夜从 2D 6 格降成 1D 2 格**（只留上下）—— 见下面的 `Simple1DTables`。
+            // 下巴（2026-09-29：2D **4 格 T 形**；左右两格搬到实测落点 (±0.40, 0.42) —— 见上面 `MouthJawOverride`）。
+            // X = 左右（轴值到底仍是 ±0.52）· Y = 上下（0 / 0.75）；两个"合 × 左右"的角挖掉（咬合态横向实测 ≤0.05）。
+            new TableSpec { Name = "MouthJaw", X = "Ho/Drive/Mouth/JawSide", Y = "Ho/Drive/Mouth/Jaw", XToken = "JawSide", YToken = "Jaw", XValues = JawSide, YValues = JawOpen, Skip = MouthJawSkip, Override = MouthJawOverride },
 
             // 整嘴平移（2026-09-28 下午新建，当晚从 3×2 收成 **4 格 T 形**）：X = 左右（±0.95）·
             // Y = 上下（0 / +1，负侧钳到 0）；**上移的左右两角挖掉**（`MouthShiftSkip`，见其注释）。
@@ -390,11 +409,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 轴借 `Ho/Drive/Mouth/TongueL`（两根 TongueL/R 本来就是 tongueOut 的占位；做「歪舌头」时
             // 量轴换新的 `TongueOut`，这 5 格的名字与位置都不用动）。
             new Simple1DSpec { Name = "MouthTongue", Parameter = "Ho/Drive/Mouth/TongueL", Token = "Tongue", Values = TongueTicks },
-            // 下巴（2026-09-28 深夜：**1D 2 格** —— 咬合/闭 ↔ 张开）。用户判定「左右两个点完全没必要」：
-            // 下巴左右只在"微张/解放咬颌"时才到 0.52、咬紧时 0.02~0.04 ⇒ 侧偏那两维不值得占格子；
-            // 咀嚼走"咬合"这一档（`Mouth/Jaw` 的 0 档）。`JawOpen` = {0, 0.75} 直接当两档刻度。
-            // ⚠️ `Ho/Drive/Mouth/JawSide` 照旧发布（出口，没有树消费）。
-            new Simple1DSpec { Name = "MouthJaw", Parameter = "Ho/Drive/Mouth/Jaw", Token = "Jaw", Values = JawOpen }
+            // ⚠️ `MouthJaw` **不在 1D 表里**（2026-09-29 起回到 2D 4 格 T 形，见上面的 `Tables` / `MouthJawOverride`）。
         };
 
         /// <summary>
