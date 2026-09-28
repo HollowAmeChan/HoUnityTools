@@ -2742,7 +2742,7 @@
                     },
                                         {
                         "parameter":  "Ho/Style/CatMouth",
-                        "expression":  "clamp(mouthRollLower * clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1) * (1 + 3 * jawOpen * jawOpen), 0, 1) * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1)) * HoAutoCatMouth + HoExternalCatMouth",
+                        "expression":  "clamp(mouthRollLower * clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1) * (1 + 3 * jawOpen * jawOpen), 0, 1) * HoAutoCatMouth + HoExternalCatMouth",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [ { "kind": "steps", "seconds": 0, "steps": [ { "trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26 } ] }, { "kind": "smooth", "seconds": 0.08, "steps": [] } ],
@@ -2750,7 +2750,7 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",
-                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1)) * (1 - clamp(out(\"Ho/Style/CatMouth\"), 0, 1)) * HoAutoInvertedV) + HoExternalInvertedV",
+                        "expression":  "(mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1) * (1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)) * HoAutoInvertedV) + HoExternalInvertedV",
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
@@ -2763,23 +2763,7 @@
                         "defaultValue":  1,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "**关其他的基准行**（规则二的第一条，2026-09-27 用户定）：常量 1 = 门开着。\n⭐ 为什么要有它：每条形态会再压**一条同名行**，读 `out(\"Ho/Style/MouthGate\")`（= 上一条同名行）再乘 `1 - 自己的形态` —— 于是**加形态不用动任何已有行**，这就是「无限拓展」。\n⚠️ 它是常量行（表达式留空 ⇒ 输出 defaultValue），所以**不过曲线**；想让门开场时爬上去就给它加「平滑」，现在不需要。\n⚠️ 两条同名行都在**驱动器块最上面**（引用只能朝上）：控制器那侧的契约行 `Ho/Drive/Gate/MouthStyle = out(\"Ho/Style/MouthGate\")` 排在下面任何位置都能读到**最后写的那一份**。\n【经验参】无（关其他的基准行：常量 1 = 门开着；1/0 是约定值，链上第二条同名行会覆盖它）"
-                    },
-                    {
-                        "parameter":  "Ho/Style/MouthGate",
-                        "expression":  "out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1)) * (1 - clamp(out(\"Ho/Style/CatMouth\"), 0, 1))",
-                        "defaultValue":  1,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关其他**（规则二，本形态那一条）：读**上一条同名行**、乘 `1 - 本形态`、再写回同一个名字 —— 输出表缓存按行序**后写覆盖先写**，所以最后一条同名行就是发布出去的门（0 = 关掉整块「张嘴 × 笑」）。\n⭐ **加形态时照抄这一条**（把形态名换掉），**不用改上面任何一行** —— 这就是「双重形态」：每个形态 = 一条「写自己」+ 一条「关其他」。\n⚠️ 平滑挂在形态自己那一行上（规则一），这里不挂（两处各平滑一次会把过渡拉长）。\n⚠️ `defaultValue` 也是 1：这一行万一无效（比如上面没有同名行）时门是**开着**的 —— 宁可什么都不关，也不要把整块张嘴笑误关掉。\n【经验参】无（关其他的链行：只用 out(同名) 与 clamp 的 0/1；defaultValue 1 = 万一无效时门开着，同样是约定值）"
-                    },
-                    {
-                        "parameter":  "Ho/Style/MouthGate",
-                        "expression":  "out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
-                        "defaultValue":  1,
-                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关其他**（规则二，鼓嘴那一条）：读**上一条同名行**（= 倒V 那条链的结果）、乘 `1 − 本形态（鼓嘴）`、再写回同一个名字 —— 输出表缓存按行序**后写覆盖先写**，所以**最后**一条同名行就是发布出去的门。\n⭐ **这就是「无限拓展」**：加鼓嘴只**追加**了这两条行（写自己 + 关其他），**上面三条一个字都没改**；再加苦嘴照抄这两条即可（⚠️ 但苦嘴后来被用户判为**不属于这一族** —— 见 §5.6，它是 `Mouth/Corner*` 负侧的加法轴）。\n⚠️ 平滑挂在形态自己那一行上（规则一），这里不挂（两处各平滑一次会把过渡拉长）。\n⚠️ `defaultValue` 也是 1：这一行万一无效时门是**开着**的 —— 宁可什么都不关，也不要把整块张嘴笑误关掉。\n【经验参】无（只用 out(同名) 与 clamp 的 0/1；defaultValue 1 是约定值）"
+                        "notes":  "⭐⭐ **2026-09-29 用户定：本阶段不做风格形态之间的互相覆盖** —— 「**先不要做风格表现的互相覆盖，只做他们自己要强制覆盖的东西，避免测试中立刻开始耦合**」。⇒ 两条链行（`out(同名) × (1 − 形态)`）**已删**，本行现在就是常量 1 ⇒ 门恒开、形态之间互不干扰。\n⚠️ 删掉的两条原文（要恢复照抄）：\n　`out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1)) * (1 - clamp(out(\"Ho/Style/CatMouth\"), 0, 1))`\n　`out(\"Ho/Style/MouthGate\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))`\n⚠️ 同时从 `Ho/Style/CatMouth` 去掉 `× (1 − Cheek)`、从 `Ho/Style/InvertedV` 去掉 `× (1 − Cheek) × (1 − CatMouth)`；**各形态自己的门（颊门 / 嘴角门 / 死区 / 鼻门）与 auto/external 开关照旧保留**。\n⚠️ 代价：形态现在可以同时亮（测试期要的就是这个）；`Ho/Drive/Gate/MouthStyle` 因此恒为 1。\n**关其他的基准行**（规则二的第一条，2026-09-27 用户定）：常量 1 = 门开着。\n⭐ 为什么要有它：每条形态会再压**一条同名行**，读 `out(\"Ho/Style/MouthGate\")`（= 上一条同名行）再乘 `1 - 自己的形态` —— 于是**加形态不用动任何已有行**，这就是「无限拓展」。\n⚠️ 它是常量行（表达式留空 ⇒ 输出 defaultValue），所以**不过曲线**；想让门开场时爬上去就给它加「平滑」，现在不需要。\n⚠️ 两条同名行都在**驱动器块最上面**（引用只能朝上）：控制器那侧的契约行 `Ho/Drive/Gate/MouthStyle = out(\"Ho/Style/MouthGate\")` 排在下面任何位置都能读到**最后写的那一份**。\n【经验参】无（关其他的基准行：常量 1 = 门开着；1/0 是约定值，链上第二条同名行会覆盖它）"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/MouthStyle",

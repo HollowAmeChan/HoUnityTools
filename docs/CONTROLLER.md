@@ -337,7 +337,7 @@ VTS 官方把 `MouthSmile` 推荐接进它 ⇒ 不是自造词；改叫 `Smile` 
   写 `HoExternalXxx` = 1 就是常开（判据那一半照样在跑，它加在判定**前面**）；`HoAutoXxx` = 0 则只留常开、关掉自动触发。
   ⚠️ 直接写轴（`Ho/Drive/Style/CatMouth` ≥ 0.30）也满档，但那是**绕过中间层**的旁路。
 - ⚠️ **`Ho/Style/*` 是中间层内部行**（只被别的输出行读，**不写控制器参数**）；`Ho/Drive/*` 才是**契约**。
-  控制器看不见内部行 ⇒ 由**契约行**转发：`Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`、
+  控制器看不见内部行 ⇒ 由**契约行**转发：`Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`（⚠️ 该门 **2026-09-29 起恒为 1**：风格形态之间不再互相覆盖，只留各形态自己的门）、
   `Ho/Drive/Style/InvertedV = out("Ho/Style/InvertedV")`（猫嘴那条即 `Ho/Drive/Style/CatMouth`）。
 - ⭐ **形态门压在哪些孩子上**：两个风格化形态（倒V / 鼓嘴）要顶掉的是 **"张嘴 × 笑"整块**
   （`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`）；下巴（`MouthJaw`）与舌头（`MouthTongue`）跟风格化不冲突 ⇒ 恒 1；
