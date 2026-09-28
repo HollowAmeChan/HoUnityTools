@@ -22,6 +22,8 @@
 | `mouth-audit.py` | 嘴系统的机械审计（规则 / 耦合 / 顺序 / 计数） | 检查器 + `docs/CONTROLLER.md` |
 | `param-usage.py` | 哪些控制器参数真的被树消费 | `check-controller.ps1` 的可达性检查 |
 | `clip-progress.py` | 每个槽位 `.anim` 到底有没有真曲线 | `clip-dump.py`（逐个看）+ `ho-traces.py` |
+| `trace-row-dump.py` | 一次录样里某几行的取值与元数据 | `ho-traces.py` 的 `info` / `keys` / `rows` / `series`（同一件事，已合并） |
+| `probe-arkit-keys.py` | 探 ARKit 那套键与片段的配对（大小写不敏感） | ARKit 直通那轮做完即弃；配对规则见 `docs/CONTROLLER.md` |
 | `check-payload-pairs.ps1` / `apply-doc-edits.ps1` | patch 载荷配对检查 / 文档批量替换 | 一次性，已完成 |
 
 ## 资产 surgery 类（嘴部隔离那一轮，已收尾）

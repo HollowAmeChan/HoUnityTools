@@ -31,6 +31,13 @@
 | **Warudo 那一边**（mod / 节点 / 硬约束 / 跨仓规矩） | [PIPELINE.md](PIPELINE.md) §7 |
 | **实测是怎么来的** | [measurements/README.md](measurements/README.md) |
 
+## 调试分析流程
+
+**在隔离里调 → 录样 → 查 / 统 / 对 → 分析出落点 → 把工具对齐到资产 → 检查器打分 → 合并回去。**
+
+每一步的命令与规矩写在 **[`Tools~/FaceTracking/README.md`](../Tools~/FaceTracking/README.md) A 节**（**唯一出处**，这里不重复）。
+口径（旧数字无效 / 以晚的为准 / 数量不写死）见本页最上面。
+
 ## 其它工具（与面捕无关）
 
 都在 [完善的功能/](完善的功能/)：Warudo FastBuild · 摆锤约束 · 跟随约束 · 约束面板设计系统 · 动画剪辑直通预览 · 眨眼约束（含果冻眼） · 注视约束。
