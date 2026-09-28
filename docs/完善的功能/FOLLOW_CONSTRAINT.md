@@ -36,7 +36,7 @@ Lowpass_frame(P⁻¹ · desired_world)      现在
 
 旋转同理：`UpdateRotation` 的 `t = 1 - exp(-response·dt)` 是一阶低通，父级匀速自转 `ω` 时的稳态相对角度误差 = `ω/response`（`ω = 90°/s`、`response = 4` → **22.5°**）。
 
-（坑另记：[踩过的坑 · Animator IK 与更新时机](pitfalls/UNITY_IK_AND_TIMING.md)：`maxVelocity` / `maxAngularVelocity` 旧版夹的是**世界速度**，父级速度一超上限跟点就永远追不上、偏移**无界增长**——不是滞后，是甩飞。夹取搬进坐标系里之后它才回到本意：限制软跟随的**修正**速度。）
+（坑另记：[踩过的坑 · Animator IK 与更新时机](../pitfalls/UNITY_IK_AND_TIMING.md)：`maxVelocity` / `maxAngularVelocity` 旧版夹的是**世界速度**，父级速度一超上限跟点就永远追不上、偏移**无界增长**——不是滞后，是甩飞。夹取搬进坐标系里之后它才回到本意：限制软跟随的**修正**速度。）
 
 ## 症状 → 原因
 
@@ -87,7 +87,7 @@ Lowpass_frame(P⁻¹ · desired_world)      现在
 
 规则：**会被同一帧下游消费的跟随物，用 `Update`，并排在消费者之前。** 组件默认就是 `Update`；老场景如果存的是 `LateUpdate`，按这条规则改过来。排序契约：`leader 的驱动 < 跟随约束 < 消费者`（如 `RigBuilder`）。
 
-（坑另记：[踩过的坑 · Animator IK 与更新时机](pitfalls/UNITY_IK_AND_TIMING.md)：`LateUpdate` 时尾巴"一阵一阵"抽搐，改成 `Update` 立刻消失；但只改 `Update` 是"碰巧排在前"、不是保证，应在 Script Execution Order 把求解器设成 `-100`；不要用 `FixedUpdate` 顶替、不要提前 MC2。）
+（坑另记：[踩过的坑 · Animator IK 与更新时机](../pitfalls/UNITY_IK_AND_TIMING.md)：`LateUpdate` 时尾巴"一阵一阵"抽搐，改成 `Update` 立刻消失；但只改 `Update` 是"碰巧排在前"、不是保证，应在 Script Execution Order 把求解器设成 `-100`；不要用 `FixedUpdate` 顶替、不要提前 MC2。）
 
 这个改动在**本地**坐标系下是零代价的：锚点、目标的相对位姿、轴锁定、旋转过滤、阻尼状态、写回全是本地量，父级的当帧世界位姿只在"世界→本地"那一次换算里出现，且两端在同一次 `Evaluate` 内同刻取用 —— 所以 `Update` 与 `LateUpdate` 算出来的本地值相同，差别只在下游什么时候能看到它。唯一例外是 `offsetMode = World`（要按父级当帧朝向换算）。
 
@@ -98,7 +98,7 @@ Lowpass_frame(P⁻¹ · desired_world)      现在
 - 多个 cloth 的骨头集合重叠**不一定**是问题：MC2 允许在上游 cloth 里把下游 cloth 会动的骨骼用粒子 type 刷成 **Fixed**（检查器里是红色，`FixedPointColor`）。所有约束都以 `attr.IsMove()` 过滤，Fixed 粒子不参与上游模拟，上游只把它们当蒙皮/传递用。
 - 同一个 Transform 被两个求解器同时以"会动"的方式写回时，**谁后写谁赢**，参数怎么调都只是压制——二选一时，主干给确定性的 IK、布料只做叶子。
 
-（坑另记：[踩过的坑 · Animator IK 与更新时机](pitfalls/UNITY_IK_AND_TIMING.md)：MC2 的 `移动速度制限 / 本地移动速度制限` 被填成 1 m/s 且勾选时会被反复"拽住/松开"；`相机剔除 = AnimatorLinkage` 会在角色被剔除时重置或暂停模拟。）
+（坑另记：[踩过的坑 · Animator IK 与更新时机](../pitfalls/UNITY_IK_AND_TIMING.md)：MC2 的 `移动速度制限 / 本地移动速度制限` 被填成 1 m/s 且勾选时会被反复"拽住/松开"；`相机剔除 = AnimatorLinkage` 会在角色被剔除时重置或暂停模拟。）
 
 ## 已知取舍
 

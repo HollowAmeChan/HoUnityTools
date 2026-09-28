@@ -14,7 +14,7 @@ git commit -F ".research\commit-msg-<主题>.txt"
 ## 2. 只 `git add -- <明确路径>`，永远不要 `-A`
 
 这个工作区里有**并行 worker 的未跟踪文件**（`Runtime/AnimationTools/`、
-`Tests~/AnimationClipPreviewValidation.cs`、`docs/ANIMATION_CLIP_PREVIEW.md` 之类）。
+`Tests~/AnimationClipPreviewValidation.cs`、`docs/完善的功能/ANIMATION_CLIP_PREVIEW.md` 之类）。
 `-A` 会把它们一起提交，甚至把别人没写完的东西带进历史。逐条列路径最省事也最安全。
 
 提交前先 `git status --porcelain` 看一眼：**不属于这次改动的行，一个都不要 add**。

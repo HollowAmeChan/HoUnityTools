@@ -7,7 +7,7 @@
 
 根因一条：`GUILayout` 按**剩余宽度百分比**分配空间，于是同一列在不同行宽度不同（label 默认吃掉面板 40%）、数字框被拉长、横条 / 滑杆天生铺满整行；再加上没有文字分级，标题 / 参数 / 读数 / 说明全是同一号灰字。所以面板里不再用自动布局排参数行，**每一行自己算矩形**。
 
-（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md)）
+（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](../pitfalls/EDITOR_UI_AND_API.md)）
 
 ## 令牌（`HoConstraintEditorTheme`）
 
@@ -33,7 +33,7 @@ NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / C
 
 贴图：运行时生成的 4×4（九宫格描边）与 64×1（分区头渐变）。
 
-（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md)：自绘贴图用 `HideFlags.HideAndDontSave`，不落盘、不进包；字段上加 `[Header(...)]` 会被 `PropertyField` 再画一遍，标题重复两遍。）
+（坑另记：[踩过的坑 · 编辑器 UI 与 Playable API](../pitfalls/EDITOR_UI_AND_API.md)：自绘贴图用 `HideFlags.HideAndDontSave`，不落盘、不进包；字段上加 `[Header(...)]` 会被 `PropertyField` 再画一遍，标题重复两遍。）
 
 ## 控件（`HoConstraintEditorControls`）
 

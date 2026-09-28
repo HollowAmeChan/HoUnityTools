@@ -60,7 +60,7 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
    而且 `BeginVertical` 返回的是内边距**之内**的矩形，拿它当背景会画错位置。用 `Inset` 手动收边距。
 3. **别把方法叫 `DrawHeader`**：会遮蔽 `Editor.DrawHeader()`（CS0108），标题栏被顶掉。这里叫 `DrawTitle()`。
 
-三条的现场（症状 / 为什么 / 怎么改）收在[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §1 / §12。
+三条的现场（症状 / 为什么 / 怎么改）收在[编辑器 UI 与 Playable API](../pitfalls/EDITOR_UI_AND_API.md) §1 / §12。
 
 面板上没写进 Inspector 的部分：`FrameCount` / `CurrentFrame` / `CurrentTime` / `NormalizedTime`
 是一套完整的时间和帧换算，`Play()` / `Pause()` / `TogglePlay()` / `SetFrame()` / `SetTime()` /
@@ -100,7 +100,7 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
 所以闸门是 **`clipPlayable.IsValid()`**（对 `default` 句柄返回 false），组件把 `IsPlayableReady` 铺在所有
 会推时间的入口上（`Play` / `SetTime` / `AdvanceBy` / `Update` / `EvaluateNow`），句柄失效时**收干净状态而不是抛异常**；
 失败原因写进 `LastError`，同一个错误只往 Console 写一次，并在面板上以红色提示框显示。
-现场见[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §4。
+现场见[编辑器 UI 与 Playable API](../pitfalls/EDITOR_UI_AND_API.md) §4。
 
 ## 实现上的四条硬规矩
 
@@ -113,7 +113,7 @@ AnimationClipPlayable ──► AnimationPlayableOutput ──► 目标物体�
 4. **批量验证前先关编辑器**：Unity 的授权客户端有全局互斥量，已开着编辑器时 `-batchmode` 起不来
    （`Failed to acquire global mutex Unity-LicenseClient-…`）。
 
-四条的症状与现场同样收在[编辑器 UI 与 Playable API](pitfalls/EDITOR_UI_AND_API.md) §8–§11。
+四条的症状与现场同样收在[编辑器 UI 与 Playable API](../pitfalls/EDITOR_UI_AND_API.md) §8–§11。
 
 ## 验证
 

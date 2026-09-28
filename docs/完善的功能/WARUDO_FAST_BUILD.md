@@ -67,13 +67,13 @@ FastBuild 现在有三道防线：
 `umod-compiled` 出现 0 次，`Assembly-CSharp, Version=` 出现 71 次，而正常产物里 `umod-compiled`
 记录正好也是 71 条 —— Prefab 序列化完全一致，只差程序集解析。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：缺 `.csproj` 时整条链"完全静默"、只看 `Assembly-CSharp` 分不出原因。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：缺 `.csproj` 时整条链"完全静默"、只看 `Assembly-CSharp` 分不出原因。）
 
 ### 相关：包目录名也曾影响脚本默认勾选
 
 依赖列表的默认勾选取决于"这段脚本是否属于本工具"。现已按包解析出来的实际根路径判断（`PackageInfo.FindForAssembly` 优先，失败则按 `Editor/HoUnityTools.Editor.asmdef` 反推包根），`file:`、git URL、手动解压三种安装方式结果一致。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：早期把包目录写死成 `Packages/com.hollow.hounitytools/`，把包下载成 GitHub ZIP 解压到 `Packages/HoUnityTools-master` 时该判断恒为 false，于是所有脚本默认不勾选、一个源码都不复制。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：早期把包目录写死成 `Packages/com.hollow.hounitytools/`，把包下载成 GitHub ZIP 解压到 `Packages/HoUnityTools-master` 时该判断恒为 false，于是所有脚本默认不勾选、一个源码都不复制。）
 
 ## Warudo 的打包模型
 
@@ -171,7 +171,7 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
 
 不要替换临时 Prefab 的 `m_Script` GUID。UMod Linker 会先读取原组件，再按脚本的完整类型名寻找编译后的类型；保留原引用才能让链接过程和 Unity 中的组件语义一致。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：替换 GUID 会破坏 UMod 按完整类型名链接的契约。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：替换 GUID 会破坏 UMod 按完整类型名链接的契约。）
 
 ## 脚本依赖和安全边界
 
@@ -189,7 +189,7 @@ Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab �
   Define，避免 Autodesk FBX 包的运行时测试程序集污染 Player 编译；构建结束或失败后恢复原值。
 - Warudo SDK 或其他包的脚本默认保留原引用，不主动复制；启用复制前必须确认源码和依赖可以由 UMod 编译。
 - 源码会短暂出现在 Unity 的运行时编译列表，构建完成后随临时目录一起清理。
-- FastBuild 会把临时 Prefab 上需要随 Mod 编译的组件重绑到临时脚本副本；不能保留包内 `MonoScript` 引用，否则 UMod 会记录原 asmdef 程序集名，运行时即使已编译同名类型也会显示 Missing Script（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)）。
+- FastBuild 会把临时 Prefab 上需要随 Mod 编译的组件重绑到临时脚本副本；不能保留包内 `MonoScript` 引用，否则 UMod 会记录原 asmdef 程序集名，运行时即使已编译同名类型也会显示 Missing Script（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)）。
 - 依赖面板会在构建前统计"既不随 Mod 编译、也不由宿主提供、也不会被移除"的组件，
   并用报错色的提示框列出数量；这些组件在产物里必然是 Missing Script，面板标题也会显示
   `N 个不编译`。
@@ -206,7 +206,7 @@ methodInfo.Invoke(target, args)
 
 当前版本不创建额外 asmdef；临时脚本必须位于普通、可被 Unity 导入的 `Assets` 路径。FastBuild 临时源码使用编辑器条件包装，避免 Unity 编辑器侧出现重复类型，而 UMod 构建在已验证的 SDK 版本中仍会生成运行时类型——这个行为属于 SDK 版本相关实现，**不能只以 `Build succeeded` 判断成功**，必须同时检查构建日志和产物中的程序集类型。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：额外 asmdef 可能让临时源码落到错误的 `.csproj`（`not in the .csproj file and will not be compiled`）；`Assets/...~` 等 Unity 忽略目录不能作为 Mod 工作区。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：额外 asmdef 可能让临时源码落到错误的 `.csproj`（`not in the .csproj file and will not be compiled`）；`Assets/...~` 等 Unity 忽略目录不能作为 Mod 工作区。）
 
 ## 产物检查
 
@@ -278,7 +278,7 @@ Compile successful!
 
 发现缺失时用 `Debug.LogError` 额外提示，存在 `待确认` 时用 `Debug.LogWarning`。完整报告同时写入 `Library/HoFastBuildWarudoMod/last-verification.txt`，窗口的"产物复核"面板可以展开查看，也可以在不重新构建的情况下按刷新按钮重新复核。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：早先用 `umod-compiled-` 前缀硬编码判断，换 UMod 版本就会误报；`sharedassets.bin` 读不出时的退化探测与"复核不完整"的判据。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：早先用 `umod-compiled-` 前缀硬编码判断，换 UMod 版本就会误报；`sharedassets.bin` 读不出时的退化探测与"复核不完整"的判据。）
 
 ## 已排除的尝试
 
@@ -286,7 +286,7 @@ Compile successful!
 - 让 FastBuild 调用 `Setup Character`：会改变骨骼和 Prefab 结构。
 - 把脚本复制闭包假设为自动完成：当前预览只保证直接挂载脚本，辅助源码必须人工审查。
 
-（坑另记：[踩过的坑 · Warudo 打包与工具链](pitfalls/BUILD_AND_TOOLING.md)：替换 `m_Script` GUID、依赖额外 asmdef 隔离临时脚本、用固定目录名判断脚本归属——三条都已排除。）
+（坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：替换 `m_Script` GUID、依赖额外 asmdef 隔离临时脚本、用固定目录名判断脚本归属——三条都已排除。）
 
 ## 构建前检查
 
