@@ -46,6 +46,13 @@ def guid_of(meta):
 
 def build(entry, rig, dry):
     target = os.path.join(rig, 'Diagnostics', entry['file'])
+    # 两道闸：产物只能落在 Diagnostics/ 里，生产件不许进配方（合成到最高层由人手动复制）
+    if entry['file'].upper().startswith('PTP_'):
+        print('      ✗ 拒绝：%s 看着像生产件 —— 生产件不进配方' % entry['file'])
+        return False
+    if os.path.basename(os.path.dirname(os.path.abspath(target))) != 'Diagnostics':
+        print('      ✗ 拒绝：产物必须落在 FT/Diagnostics/ 里')
+        return False
     src = os.path.join(rig, entry.get('from', read_recipe()['source']))
     cmd = [sys.executable, ISOLATE, src, target,
            '--root-children', ','.join(entry['rootChildren'])]
