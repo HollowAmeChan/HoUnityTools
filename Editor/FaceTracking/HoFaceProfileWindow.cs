@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.Editor.Constraints;
 using Hollow.HoUnityTools.Editor.FaceTracking;
@@ -902,10 +902,10 @@ ActiveRows().RemoveAt(index);
                     else if (IsBrokenRow(output)) bad++;
                     if (string.IsNullOrEmpty(output.parameter)) continue;
                     if (seen.Add(output.parameter)) continue;
-                    // ⚠️ **同名多行在风格化内部行里是有意的**：规则二的「双重形态」链就是
-                    //    "读自己、写自己"（输出表缓存：后写覆盖先写，见 VTS_HQ_CONTROLLER §5.6）
+                    // ⚠️ **同名多行在风格化链里是有意的**：内部行（`Ho/Style/*`）与控制器口
+                    //    （`Ho/Drive/Style/*`）的"读自己、写自己"都是链（输出表缓存与发布后写覆盖先写）
                     //    ⇒ 那是**链**，不是重名错误。别处重名照旧报红。
-                    if (HoFaceNaming.IsStyleRow(output.parameter)) chains.Add(output.parameter);
+                    if (HoFaceNaming.IsChainRow(output.parameter)) chains.Add(output.parameter);
                     else duplicates.Add(output.parameter);
                 }
             }

@@ -456,20 +456,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 参数名现在由**中间层配置**声明（控制器只是等着被喂）。这里只做实事的检查：
             // 同名参数被两行写 = 后写者覆盖前者（说出来，不拦）；类型不是 Float 时 SetFloat 会失败。
             //
-            // ⚠️ **唯一的例外是风格化门的「双重形态」链**（2026-09-27 用户）：`Ho/Style/*` 里
-            // **同名行读自己写自己**是**故意**的（输出表缓存：后写覆盖先写 ⇒ 加形态不用动已有行）——
-            // 见 docs/VTS_HQ_CONTROLLER.md §5.6。所以那里不报；
-            // 但"同名却**没有**读自己"的仍要报：那不是链、只是覆盖（前一行白算，而且那个形态关不掉嘴）。
+            // ⚠️ **唯一的例外是风格化门的「双重形态」链**（2026-09-27 用户）：`Ho/Style/*`（内部行）
+            // 与 `Ho/Drive/Style/*`（控制器口）里**同名行读自己写自己**是**故意**的
+            // （输出表缓存与发布都是后写覆盖先写 ⇒ 加形态不用动已有行）—— 见 docs/VTS_HQ_CONTROLLER.md §5.6。
+            // 所以那里不报；但"同名却**没有**读自己"的仍要报：那不是链、只是覆盖
+            // （前一行白算，而且那个形态关不掉嘴）。
             var written = new HashSet<string>(StringComparer.Ordinal);
             foreach (var output in settings.Outputs())
             {
                 if (output == null || string.IsNullOrWhiteSpace(output.parameter)) continue;
                 if (!written.Add(output.parameter))
                 {
-                    if (!HoFaceNaming.IsStyleRow(output.parameter))
+                    if (!HoFaceNaming.IsChainRow(output.parameter))
                         Debug.LogWarning("[Ho 面捕] 中间层里有两行写同一个参数：" + output.parameter + "（后一行会覆盖前一行）");
                     else if (!ReadsOwnName(output))
-                        Debug.LogWarning("[Ho 面捕] `Ho/Style/*` 里两行同名，但后一行没有读 out(\""
+                        Debug.LogWarning("[Ho 面捕] 风格化链里两行同名，但后一行没有读 out(\""
                             + output.parameter + "\") —— 这不是「双重形态」的链，而是覆盖："
                             + "前一行等于白算（那个形态关不掉嘴）");
                 }

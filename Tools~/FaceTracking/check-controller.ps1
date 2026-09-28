@@ -288,7 +288,8 @@ if ($trees.ContainsKey('Ho/00 Drive Tree')) {
 # ── 区域 Direct 的子节点权重（2026-09-27 加）：**风格化门真正落地的地方**。
 # 中间层只把值发出来，压权重这一步在控制器里 —— 接错一个孩子，形态亮起来时"
 # 不是整块张嘴笑被关掉，而是某半张脸被关掉"，而上面所有检查都不会响（孩子都在、参数也都存在）。
-# `MouthRegion` 里三个孩子（`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`）挂形态门
+# `MouthRegion` 里 `MouthCoreRollSwitch` 挂**块门** `Ho/Drive/Gate/MouthCore`（2026-09-29：V嘴 关掉
+#   core 块 —— 含猫嘴变体，变体在块内部）；`MouthShift` / `MouthWidth` 仍挂**形态门**
 #   （2026-09-28 当天反复：三→二→三→傍晚 `MouthCorner` 换成 1D 的 `MouthWidth`，仍是三个）
 # `Ho/Drive/Gate/MouthStyle`；`MouthJaw` / `MouthTongue` 与两条形态子树保持恒 1（`Ho/Drive/W/One`）。
 $regionChildWeight = [ordered]@{
@@ -297,7 +298,7 @@ $regionChildWeight = [ordered]@{
         'NoseRegion' = 'Ho/Drive/Gate/Nose'
     }
     'MouthRegion' = [ordered]@{
-        'MouthCoreRollSwitch' = 'Ho/Drive/Gate/MouthStyle'; 'MouthJaw'    = 'Ho/Drive/W/One'
+        'MouthCoreRollSwitch' = 'Ho/Drive/Gate/MouthCore';  'MouthJaw'    = 'Ho/Drive/W/One'
         'MouthShift'          = 'Ho/Drive/Gate/MouthStyle'; 'MouthWidth'  = 'Ho/Drive/Gate/MouthStyle'
         'MouthTongue'         = 'Ho/Drive/W/One';           'InvertedV'   = 'Ho/Drive/W/One'
         'Cheek'               = 'Ho/Drive/W/One'

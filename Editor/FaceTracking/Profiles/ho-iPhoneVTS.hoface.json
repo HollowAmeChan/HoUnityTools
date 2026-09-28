@@ -4012,6 +4012,22 @@
                         "notes":  "**契约行**：倒V 形态的权重（0/1），喂控制器里那棵 `InvertedV`（Simple1D，2 格：中性 / 倒V 姿势）。\n⚠️ **为什么倒V 需要它而鼓嘴不需要**：鼓嘴的两条颊轴 `Ho/Drive/Cheek/Left|Right/Puff` 本来就是控制器参数（树直接吃它们），而倒V 的判据是**内部行** `Ho/Style/InvertedV` —— 控制器看不见内部行 ⇒ 拿这一行把它的值发布出去。\n（以后若某个形态也是\"一个固定姿势\"，照这个形状再发布一行 `Ho/Drive/Style/<形态>` 即可。）\n【经验参】无（只是转发 out(同名)；0/1 由形态行决定）"
                     },
                     {
+                        "parameter":  "Ho/Style/MouthCoreGate",
+                        "expression":  "1 - out(\"Ho/Style/InvertedV\")",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**关断 core 块**（归属 = V嘴：V嘴 主动关它 ⇒ 规则写在 V嘴 这块里）。\n关的是控制器 `MouthRegion` 的孩子 `MouthCoreRollSwitch`（权重参数 `Ho/Drive/Gate/MouthCore`）—— 猫嘴变体在那个块**内部**（`MouthCoreRoll` 由 `Ho/Drive/Style/CatMouth` 选），所以一起被关；`MouthShift` / `MouthWidth` **不受影响**（它们仍挂形态门）。\n要再加一个形态关这块：把它的同名行写进**它自己的块**、排在本行**下面**，写成 `out(同名) * (1 - 自己)`（发布是后写覆盖先写）—— 想让任意先后都成立才需要再加一条常量 1 的基准行。\n不带曲线与修饰符（倒V 的 0/1 与 0.08s 平滑在上面那两行已经算好）。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Style/CatMouth",
+                        "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - out(\"Ho/Style/InvertedV\"))",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**V嘴 压掉猫嘴开关**（归属 = V嘴）：倒V 亮 ⇒ 这根线乘到 0 ⇒ 控制器里 `MouthCoreRollSwitch` 不会切到猫嘴版（上一行已经把整个 core 块关掉了，这条是第二道保险）。\n⚠️ 同名行**必须排在猫嘴那条契约行下面**（输出表与发布都是后写覆盖先写）。\n⭐ 这就是 style 区按**「谁主动产生这条规则」**归属排序的原因：规矩跟着归属走 ⇒ **想整块删掉某个功能时，它的规则是挨在一起的**。"
+                    },
+                    {
                         "parameter":  "Ho/Style/MouthWidth/CatMouthGate",
                         "expression":  "1 - clamp((out(\"Ho/Style/CatMouth\") - 0.25) / 0.15, 0, 1)",
                         "defaultValue":  0,
@@ -4056,6 +4072,14 @@
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "形态门基准：常量 1（本阶段不做形态之间的互相覆盖）。"
+                    },
+                    {
+                        "parameter":  "Ho/Drive/Gate/MouthCore",
+                        "expression":  "out(\"Ho/Style/MouthCoreGate\")",
+                        "defaultValue":  1,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**契约行**：把内部行 `Ho/Style/MouthCoreGate` 发布成控制器参数 `Ho/Drive/Gate/MouthCore` —— `MouthRegion` 里 `MouthCoreRollSwitch` 的权重就是它（默认 1 = 没人关时门开着）。\n不带曲线（门的值由形态行决定）。"
                     },
                     {
                         "parameter":  "Ho/Drive/Gate/MouthStyle",

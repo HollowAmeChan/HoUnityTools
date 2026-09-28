@@ -2784,3 +2784,27 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 **④ 「快速合并」= 配方 + 一条命令**：新增 `Tools~/FaceTracking/controller-parts.json`（**「谁合谁」的唯一出处**：谁 = 谁 ＋ 哪些 `rootChildren` / 某棵树留哪几个孩子 / 骨架 `base` 用哪份 / 状态机 `--state-motion` 改指哪棵 / 是不是手工件）与 `compose-controller.py`（`--list` 只读配方、`<名字子串>` 或 `--all` 重生成、`--dry-run`）。它照配方调 `isolate-trees.py`：覆盖前备份到 `%TEMP%\ho-controller-backups\<时间戳>\`、**沿用旧 `.meta` 的 GUID**，跑完自动查完整性 ＋ `check-controller.ps1 -Isolation`。⇒ 联合件不再靠手敲命令行；rig 的 `Diagnostics/README.md` 那张表与配方**同源**（配方改了，那张表要跟着改）。
 **⑤ 脚本永远不碰生产件**：产物只写 `FT/Diagnostics/`；`manual: true` 的条目直接跳过（手工权威件：L1 鼻子刻度手改成 0/1 的、早期 core9 ＋下巴的、Rows 实验件 —— 重生成会盖掉手调值，正是栽过的那类坑）。**合成到最高层（生产件）由用户手动复制** ⇒ 脚本不需要、也不提供「写生产件」这条路。
 **⑥ 复现验证**：照配方重建 `DIAG_L2_MouthGroup` ⇒ 与手工剪的那份**合成结果一致**（58 棵树；唯一差异是控制器内部 `m_Name` 变成文件名），完整性通过、检查器 **0 缺/错**；带 `--base` 的 `DIAG_L2_PuckerNose` 同样 **0 缺/错**（权威骨架里 `NoseUp` 的 0/1 没被源资产的旧值顶掉 ⇒ `--base` 的"冲突以权威件为准"确实生效）。
+
+---
+
+## 2026-09-29 · 规则三「关块」+ **块序 = 归属序**（V嘴 关掉 core 块，含猫嘴变体）
+
+**① 用户要的**（原话）：「**V嘴还需要关掉 mouthcore（包括猫嘴变体）**」⇒ 我摆出两个落点（只关 core 块 vs 复用形态门关整块）之后：「**只关 core，而且是使用一条新规则的模式**」；随后连补三条设计口径：「**排序是按照谁主动产生的这条规则归属的，最好在 note 中表达，所以关闭其实是写在 V嘴 下面**」「**这样排的好处是，想要整个移除某个功能，规则都是挨在一起的**」「**这些设计上的考量也得写进文档，免得以后风格出现混乱**」。
+**② 块序 = 归属序（新增的排序原则，写进 `AXES.md` §8）**：一条规则**由"谁主动产生它"拥有 ⇒ 它的行就写在那个形态的块里**；形态块之间也按这个顺序排（`Cheek` → `CatMouth` → 噘嘴）。
+好处 = **想整块删掉某个功能时，它的规则是挨在一起的**（删一个形态 = 删它那一段连续的行 ＋ Warudo 那个 append 开关，别处一行都不用动）。
+⚠️ 推论：**同名行可以落在不同组**（`Ho/Drive/Style/CatMouth` 在猫嘴块是纯转发、在 V嘴 块是"压成 0"的覆盖行）⇒ `reorder-output-rows.py` 的分组判据改成看**整行**（名字 ＋ 表达式），不能只看名字。
+**③ 规则三的形状（关块）**：
+  1. **契约行** `Ho/Drive/Gate/<块>`（Float，默认 **1** = 门开着）→ 控制器里那个块的**孩子**把权重参数指过去；
+  2. **关它的形态**在自己的块里压一条同名行 `Ho/Style/<块>Gate = 1 - out("Ho/Style/<自己>")`（不额外加曲线 / 修饰符 —— 形态的 0/1 与平滑在上面几行已经算好）；
+  3. **两个形态关同一块**时才需要常量 1 的**基准行**打底（现在只有 core 一条门 ⇒ 没加基准行）。
+  ⚠️ **为什么粒度是"控制器里那个孩子"而不是复用形态门**：噘嘴要关的是 core 块（两张整嘴表），但 `MouthShift`（嘴上移）与 `MouthWidth`（宽度归中）还得工作 —— 复用 `Gate/MouthStyle` 会把它们一起关掉 ✗。
+  猫嘴变体在 `MouthCoreRollSwitch` **块内部**（`MouthCoreRoll` 由 `Ho/Drive/Style/CatMouth` 选）⇒ **关一个孩子 = core 与猫嘴变体一起关** ✓ 正好是用户要的语义。
+**④ 第二道保险**：V嘴 亮时把 `Ho/Drive/Style/CatMouth` 也乘成 0（`out(同名) * (1 - out("Ho/Style/InvertedV"))`）。
+⚠️ 同名覆盖行**必须排在猫嘴那条契约行下面**（输出表缓存与发布都是**后写覆盖先写**）—— 这正是"V嘴 块本来就在猫嘴块下面"能成立的原因。
+⚠️ 内部行 `Ho/Style/CatMouth` **没动** ⇒ `Ho/Style/MouthWidth/CatMouthGate` 读到的仍是原值，宽度轴不受影响 ✓。
+**⑤ 命名口径要分清（这轮最容易写错的一处）**：`HoFaceNaming` 原来只有一个 `IsStyleRow`（`Ho/Style/*`），它同时被用在两个不同的问题上 —— 新增 **`IsChainRow`**（= `Ho/Style/*` **＋ `Ho/Drive/Style/*`**）回答"**允不允许同名多行**"，`IsStyleRow` 继续回答"**要不要写控制器参数**"。
+⚠️ **把 `Ho/Drive/Style/*` 也算成内部行 = 猫嘴开关再也发不出去**（发布那一步正是按 `IsStyleRow` 判的）⇒ 两个问题不能混。落点：`profile-verify`、`HoFaceAnimationAssets`（编译期重名警告）、`HoFaceProfileWindow`（面板"重复参数名"vs"同名链"）。
+**⑥ 改动面**：profile 加 3 行（`Ho/Style/MouthCoreGate` 关块行、`Ho/Drive/Style/CatMouth` 覆盖行、`Ho/Drive/Gate/MouthCore` 契约行 ⇒ 输出 190 行；行序经 `reorder-output-rows.py` 复跑**逐字节不变**）；生产控制器 `PTP_CTR_Face_VTS.controller` 加参数 ＋ 换 `MouthCoreRollSwitch` 的权重（改前备份 `%TEMP%\PTP_CTR_Face_VTS.beforeCoreGate.controller`）；三处工具同步（生成器 `$regionWeights`、检查器 `$regionChildWeight`、构建器新增 `CoreGate` ＋ `@Core` 后缀）；`reorder-output-rows.py` 分组表（⑧ 排除两条门契约行、⑪/⑫ 拆开同名的猫嘴行、⑬ 加 core 契约行）。
+**⑦ 验证**：`profile-verify`（真读取器）**0 problem**，同名链 4 条（`Ho/Drive/Style/CatMouth` 在内）；生产控制器检查器 **0 缺/错**（参数 86 = 期望 86，含新门）；两份诊断件重新生成后隔离模式 **0 缺/错**；`HoUnityTools.Editor.csproj` 编译 **0 错误**；`check-controller-integrity.py` 改前改后结构一致。
+**⑧ 用户侧动作**：Unity **重编译一次**（Runtime 多了 `IsChainRow`）＋ 面板**重新载入** profile（别先按保存）＋ 控制器 **Reimport**（文本改的，Unity 不会自己看见）。
+**⑨ 教训（坑）**：① **同一个孩子的权重与参数表是两处**，只改一处 = 静默不生效（这次靠 `tree-dump.py` 复核 ＋ 检查器 `$regionChildWeight` 兜住）；② 文本补丁里**先插参数、再按旧偏移改后面**必然错位 —— 插入会移动后面所有偏移，必须**重新定位**（这次断言当场拦下，没写坏文件）；③ `compose-controller.py` 调子进程比中文标记时踩到编码（子进程按 cp936 输出）⇒ 给子进程定 `PYTHONIOENCODING=utf-8`。

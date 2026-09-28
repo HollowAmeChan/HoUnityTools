@@ -250,10 +250,15 @@ $gateOfRegion = [ordered]@{ 'MouthRegion' = 'Mouth'; 'EyeRegion' = 'Eye'; 'NoseR
 # 倒V / 鼓嘴亮起来时把整块权重压到 0（中间层把内部行 `Ho/Style/MouthGate` 转发成这个参数）。
 # ⚠️ `MouthJaw` / `MouthTongue` 保持恒 1（下巴 / 舌头跟风格化不冲突），两条形态子树也恒 1
 #    （它们自己就是"被门放行的东西"，再挂门就套娃了）。
+# 2026-09-29：`MouthCoreRollSwitch` **单独一条门** `Ho/Drive/Gate/MouthCore` —— 用户
+#    「V嘴还需要关掉 mouthcore（包括猫嘴变体）」：噘嘴时整张嘴要只剩倒V 那棵树在塑形，
+#    但**整嘴平移 / 嘴宽不能被一起关**（宽度还要靠"归中到中刻度"配合）⇒ core 单开一条。
+#    猫嘴变体在 `MouthCoreRollSwitch` **内部**（`MouthCoreRoll` 由 `Ho/Drive/Style/CatMouth` 选），
+#    所以关这一个孩子 = core 与猫嘴变体一起关 ✓。中间层那侧的规则 = `Ho/Style/MouthCoreGate`。
 $wOne = 'Ho/Drive/W/One'
 $regionWeights = @{
     'MouthRegion' = @{
-        'MouthCoreRollSwitch' = 'Ho/Drive/Gate/MouthStyle'
+        'MouthCoreRollSwitch' = 'Ho/Drive/Gate/MouthCore'
 
         'MouthShift'          = 'Ho/Drive/Gate/MouthStyle'
         'MouthWidth'          = 'Ho/Drive/Gate/MouthStyle'

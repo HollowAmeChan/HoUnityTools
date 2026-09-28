@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -18,9 +18,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     /// 形状与"现在落到哪"记在 `docs/VTS_HQ_CONTROLLER.md`：**§2.1 结构、§2.2 每格叶子的语义**
     /// （根 Direct → 4 个区域 Direct → 2D 表 / 1D 副本树 / 变体 / 形态子树），槽位名按 `docs/FACE_TRACKING_NAMING.md` §5。
     ///
-    /// ⚠️ **中间层的两条「形态契约行」**（`Ho/Drive/Gate/MouthStyle` = 形态门、`Ho/Drive/Style/InvertedV`
-    /// = 倒V 权重）也在这里建：控制器看不见中间层的内部行 `Ho/Style/*`，中间层只能把值转发成控制器参数。
-    /// 形态门压在 `MouthRegion` 的三个"张嘴 × 笑"孩子上（`@Style` 后缀），倒V 权重喂 `InvertedV` 那棵 1D 表。
+    /// ⚠️ **中间层的「形态契约行」**（`Ho/Drive/Gate/MouthStyle` = 形态门、`Ho/Drive/Gate/MouthCore`
+    /// = core 块门、`Ho/Drive/Style/InvertedV` = 倒V 权重）也在这里建：控制器看不见中间层的内部行
+    /// `Ho/Style/*`，中间层只能把值转发成控制器参数。
+    /// 形态门压在 `MouthRegion` 的 `MouthShift` / `MouthWidth` 上（`@Style` 后缀），core 块门压在
+    /// `MouthCoreRollSwitch` 上（`@Core` 后缀，2026-09-29：倒V 亮时关掉 core 块 —— 含块内的猫嘴变体），
+    /// 倒V 权重喂 `InvertedV` 那棵 1D 表。
     ///
     /// **为什么有这个菜单项**：
     /// ① 手搭 27 棵树不现实、也不可复现；
@@ -42,6 +45,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private const string OneWeight = "Ho/Drive/W/One";
         /// <summary>形态门（中间层的契约行 `Ho/Drive/Gate/MouthStyle`，默认 1 = 门开着）。</summary>
         private const string StyleGate = "Ho/Drive/Gate/MouthStyle";
+        /// <summary>core 块门（中间层的契约行 `Ho/Drive/Gate/MouthCore`，默认 1 = 门开着）。</summary>
+        private const string CoreGate = "Ho/Drive/Gate/MouthCore";
         /// <summary>倒V 的形态权重（中间层的契约行 `Ho/Drive/Style/InvertedV`，默认 0 = 不是倒V）。</summary>
         private const string InvertedVWeight = "Ho/Drive/Style/InvertedV";
 
@@ -454,9 +459,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             // ⚠️ `@Style` 后缀 = 这个孩子挂**形态门** `Ho/Drive/Gate/MouthStyle`（默认恒 1 = `Ho/Drive/W/One`）：
             //    倒V / 鼓嘴亮起来时，中间层把门压到 0，于是**整块"张嘴 × 笑"**让位给形态。
+            //    `@Core` 后缀 = 挂 **core 块门** `Ho/Drive/Gate/MouthCore`（2026-09-29 用户：「V嘴还需要关掉
+            //    mouthcore（包括猫嘴变体）」）：只关 `MouthCoreRollSwitch` 那个孩子（两张整嘴表连猫嘴变体一起让位），
+            //    `MouthShift` / `MouthWidth` 不受影响 —— 噘嘴时嘴上移与"宽度归中"还要用。
             //    `MouthJaw` / `MouthTongue` 与两条形态子树保持恒 1（下巴/舌头跟风格化不冲突；
             //    形态子树本身就是"被门放行的东西"，再挂门就套娃了）。
-            { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Style,MouthJaw,MouthShift@Style,MouthWidth@Style,MouthTongue,InvertedV,Cheek" },
+            { "MouthRegion", "Mouth", "MouthCoreRollSwitch@Core,MouthJaw,MouthShift@Style,MouthWidth@Style,MouthTongue,InvertedV,Cheek" },
             // 2026-09-27：左右眼并成一个区域（注视两棵树没了，每边只剩眼睑开关）；颊 → 鼻（只剩"鼻子上顶"一个状态）
             { "EyeRegion", "Eye", "LidL,LidR" },
             { "NoseRegion", "Nose", "NoseUp" }
@@ -498,12 +506,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
 
-            // ── 参数（43 个 = 4 区域门 + 1 形态门 + W/One + 2 表情门 + 30 轴 + 4 切片 + 1 形态权重）──
+            // ── 参数（4 区域门 + 形态门 + core 块门 + W/One + 2 表情门 + 各轴 + 4 切片 + 倒V 权重）──
 
 
             var parameters = new List<AnimatorControllerParameter>();
             foreach (string gate in RegionGates) parameters.Add(Float("Ho/Drive/Gate/" + gate, 1f));
             parameters.Add(Float(StyleGate, 1f));                                  // 形态门（默认 1 = 门开着）
+            parameters.Add(Float(CoreGate, 1f));                                   // core 块门（默认 1 = 门开着）
             parameters.Add(Float(OneWeight, 1f));                                  // Direct 子节点都要挂权重
             foreach (string gate in ExpressionGates) parameters.Add(Float("Ho/Drive/Gate/Expr/" + gate, 0f));
             parameters.Add(Float(InvertedVWeight, 0f));                            // 倒V 权重（默认 0 = 不是倒V）
@@ -640,15 +649,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 var tree = NewTree(controller, Regions[r, 0], BlendTreeType.Direct);
                 foreach (string entry in Regions[r, 2].Split(','))
                 {
-                    // `名字` = 恒 1；`名字@Style` = 挂形态门（见 Regions 那段注释）
+                    // `名字` = 恒 1；`名字@Style` = 挂形态门；`名字@Core` = 挂 core 块门（见 Regions 那段注释）
                     string child = entry, weight = OneWeight;
                     int at = entry.IndexOf('@');
                     if (at >= 0)
                     {
                         child = entry.Substring(0, at);
                         string tag = entry.Substring(at + 1);
-                        if (tag != "Style") throw new InvalidOperationException("不认识的区域权重标记：" + tag);
-                        weight = StyleGate;
+                        if (tag == "Style") weight = StyleGate;
+                        else if (tag == "Core") weight = CoreGate;
+                        else throw new InvalidOperationException("不认识的区域权重标记：" + tag);
                     }
                     AttachDirect(tree, trees[child], weight);
                 }

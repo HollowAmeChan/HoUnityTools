@@ -7,6 +7,10 @@
 #   出口 90 行 → Ho/Drive 各区域成块（嘴 / 眼睑 / 注视 / 眉 / 颊 / 鼻）→ 区域门 → 切片
 #   → **style 整区靠下**，区内按大类成块（每条形态的判定行 + 开关行 + 发布行 + 该形态自己的处理行），
 #     最后是三类共享的仲裁行与形态门。
+#   ⭐ **块序 = 归属序**：「谁主动产生这条规则，规则就归谁、就写在谁的块里」—— 好处是
+#     **想整块删掉某个功能时，它的规则是挨在一起的**。所以 `Ho/Drive/Style/CatMouth` 有两行：
+#     猫嘴块的纯转发（⑪）与 V嘴 块里"把它压成 0"的覆盖行（⑫）—— **同名不同归属**，
+#     分组因此看整行（名字 + 表达式），不能只看名字。
 #
 # 用法：
 #   python reorder-output-rows.py <profile.json>            # 干跑：打新排布 + 验依赖
@@ -20,34 +24,50 @@ import sys
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 # ── 分组表：自上而下（先匹配到的赢；组内保持原相对顺序 —— 同名的链行天然保持"先判定后合成"）
-PUCKER = ('Ho/Style/InvertedV', 'Ho/Drive/Style/InvertedV', 'Ho/Style/MouthWidth', 'Ho/Drive/Mouth/Pucker')
+PUCKER = ('Ho/Style/InvertedV', 'Ho/Drive/Style/InvertedV', 'Ho/Style/MouthWidth', 'Ho/Drive/Mouth/Pucker',
+          # V嘴 的两条「关别人」规则（归属 V嘴 ⇒ 归到噘嘴块里）：
+          #   ① `Ho/Style/MouthCoreGate` = 关 core 块（含猫嘴变体）  ② 压猫嘴开关的同名覆盖行（见 ⑪/⑫）
+          'Ho/Style/MouthCoreGate')
 
 
 def is_pucker(n):
     return n in PUCKER or n.startswith('Ho/Style/InvertedV/') or n.startswith('Ho/Style/MouthWidth/')
 
 
+def is_forward(r):
+    """整条就是一个 `out("…")`（纯转发）⇒ 与"读自己再乘别的"的**同名覆盖行**区分开。"""
+    return re.match(r'^\s*out\(\s*"[^"]+"\s*\)\s*$', r['expr']) is not None
+
+
 GROUPS = [
-    ('① 出口（ARKit 52 / VTS 20 / VB 5 / 姿态 12 / 信号 1）', lambda n: not n.startswith('Ho/')),
-    ('② Ho/Drive/Mouth',        lambda n: n.startswith('Ho/Drive/Mouth/') and not is_pucker(n)),
-    ('③ Ho/Drive/Lid',          lambda n: n.startswith('Ho/Drive/Lid/')),
-    ('④ Ho/Drive/Gaze',         lambda n: n.startswith('Ho/Drive/Gaze/')),
-    ('⑤ Ho/Drive/Brow',         lambda n: n.startswith('Ho/Drive/Brow/')),
-    ('⑥ Ho/Drive/Cheek',        lambda n: n.startswith('Ho/Drive/Cheek/')),
-    ('⑦ Ho/Drive/Nose',         lambda n: n.startswith('Ho/Drive/Nose/')),
-    ('⑧ Ho/Drive/Gate（区域门）', lambda n: n.startswith('Ho/Drive/Gate/') and n != 'Ho/Drive/Gate/MouthStyle'),
-    ('⑨ Ho/Drive/Slice',        lambda n: n.startswith('Ho/Drive/Slice/')),
-    ('⑩ style · Cheek',         lambda n: n.startswith('Ho/Style/Cheek') or n == 'Ho/Drive/Style/Cheek'),
-    ('⑪ style · CatMouth',      lambda n: n.startswith('Ho/Style/CatMouth') or n == 'Ho/Drive/Style/CatMouth'),
-    ('⑫ style · 噘嘴（读数 / 门 / 判定 / 开关 / 发布 / 宽度换算 / 归中 / 转发）', is_pucker),
-    ('⑬ style · 共享（三类仲裁 + 形态门）', lambda n: n in ('Ho/Style/MouthGate', 'Ho/Drive/Gate/MouthStyle')),
+    ('① 出口（ARKit 52 / VTS 20 / VB 5 / 姿态 12 / 信号 1）', lambda r: not r['name'].startswith('Ho/')),
+    ('② Ho/Drive/Mouth',        lambda r: r['name'].startswith('Ho/Drive/Mouth/') and not is_pucker(r['name'])),
+    ('③ Ho/Drive/Lid',          lambda r: r['name'].startswith('Ho/Drive/Lid/')),
+    ('④ Ho/Drive/Gaze',         lambda r: r['name'].startswith('Ho/Drive/Gaze/')),
+    ('⑤ Ho/Drive/Brow',         lambda r: r['name'].startswith('Ho/Drive/Brow/')),
+    ('⑥ Ho/Drive/Cheek',        lambda r: r['name'].startswith('Ho/Drive/Cheek/')),
+    ('⑦ Ho/Drive/Nose',         lambda r: r['name'].startswith('Ho/Drive/Nose/')),
+    # ⚠️ 两条**契约行**（形态门 `MouthStyle`、core 块门 `MouthCore`）是 style 区的口，不算区域门 ⇒ 排到 ⑬
+    ('⑧ Ho/Drive/Gate（区域门）', lambda r: r['name'].startswith('Ho/Drive/Gate/')
+        and r['name'] not in ('Ho/Drive/Gate/MouthStyle', 'Ho/Drive/Gate/MouthCore')),
+    ('⑨ Ho/Drive/Slice',        lambda r: r['name'].startswith('Ho/Drive/Slice/')),
+    ('⑩ style · Cheek',         lambda r: r['name'].startswith('Ho/Style/Cheek') or r['name'] == 'Ho/Drive/Style/Cheek'),
+    # 猫嘴块：判定 / 开关 / 发布（发布 = 纯转发那一行；V嘴 压它的那条**同名覆盖行**归 ⑫）
+    ('⑪ style · CatMouth',      lambda r: r['name'].startswith('Ho/Style/CatMouth')
+        or (r['name'] == 'Ho/Drive/Style/CatMouth' and is_forward(r))),
+    ('⑫ style · 噘嘴（读数 / 门 / 判定 / 开关 / 发布 / 宽度换算 / 归中 / 转发 / 关 core / 压猫嘴）',
+     lambda r: is_pucker(r['name'])
+        or (r['name'] == 'Ho/Drive/Style/CatMouth' and not is_forward(r))),
+    ('⑬ style · 共享（块门契约行）',
+     lambda r: r['name'] in ('Ho/Style/MouthGate', 'Ho/Drive/Gate/MouthStyle',
+                             'Ho/Drive/Gate/MouthCore')),
 ]
 FALLBACK = '⓪ 其它（没归进任何组，请补规则）'
 
 
-def group_of(name):
+def group_of(row):
     for i, (label, pred) in enumerate(GROUPS):
-        if pred(name):
+        if pred(row):
             return i, label
     return len(GROUPS), FALLBACK
 
@@ -123,7 +143,7 @@ if check:
     print('  自检（按原序重发 == 原文件）: %s' % ('逐字节相同 ✓' if same else '✗ 不同 —— 别用这份工具'))
     sys.exit(0 if same else 1)
 
-order = sorted(range(len(rows)), key=lambda k: (group_of(rows[k]['name'])[0], k))
+order = sorted(range(len(rows)), key=lambda k: (group_of(rows[k])[0], k))
 
 table, bad = set(), []
 for k in order:
@@ -141,11 +161,11 @@ print('  依赖校验：%d 行的 out() 全部指向上面的行 ✓' % len(rows
 
 counts = {}
 for k in order:
-    label = group_of(rows[k]['name'])[1]
+    label = group_of(rows[k])[1]
     counts[label] = counts.get(label, 0) + 1
 cur, shown = None, 0
 for k in order:
-    label = group_of(rows[k]['name'])[1]
+    label = group_of(rows[k])[1]
     if label != cur:
         print('  %s（%d 行）' % (label, counts[label]))
         cur, shown = label, 0

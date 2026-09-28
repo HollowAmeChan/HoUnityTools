@@ -24,9 +24,24 @@
         /// </summary>
         public const string StyleRoot = "Ho/Style/";
 
+        /// <summary>
+        /// **风格化形态的控制器口**：`Ho/Drive/Style/*`。与内部行的区别是它**要写控制器参数**；
+        /// 相同点是**同名多行也是有意**的 —— 形态可以用"读自己、乘 (1 − 自己)"压掉另一个形态已经发布的值
+        /// （2026-09-29 用户：「V嘴 亮时把 `Ho/Drive/Style/CatMouth` 写成 0」；输出表缓存与发布都是后写覆盖先写）。
+        /// </summary>
+        public const string StyleContractRoot = "Ho/Drive/Style/";
+
         /// <summary>这一行的参数名是不是风格化内部行（见 <see cref="StyleRoot"/>）。</summary>
         public static bool IsStyleRow(string parameter) =>
             !string.IsNullOrEmpty(parameter) && parameter.StartsWith(StyleRoot, System.StringComparison.Ordinal);
+
+        /// <summary>
+        /// 这一行**允不允许同名多行**（链）：内部行与控制器口都允许。判重名的地方问这一句，
+        /// 判"要不要写控制器参数"的地方问 <see cref="IsStyleRow"/> —— 两个问题不一样，别混。
+        /// </summary>
+        public static bool IsChainRow(string parameter) =>
+            IsStyleRow(parameter) ||
+            (!string.IsNullOrEmpty(parameter) && parameter.StartsWith(StyleContractRoot, System.StringComparison.Ordinal));
 
         // ── 轴语义（正端在前）──────────────────────────────────────────────────
         /// <summary>眼睑开合：<c>+1</c> 闭 / <c>-1</c> 睁大 / <c>0</c> 中性。</summary>

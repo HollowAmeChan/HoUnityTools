@@ -45,9 +45,10 @@ Warudo 侧把它打成 **AssetBundle**、在隐藏影子上跑真控制器再把
 
 ```text
 Ho/00 Drive Tree                Direct   子节点权重 = Ho/Drive/Gate/{Mouth, Eye, Brow, Nose}
-├─ MouthRegion                  Direct   子节点权重 = **形态门 Ho/Drive/Gate/MouthStyle**（三个孩子：张嘴×笑 / 整嘴平移 / 嘴宽）
+├─ MouthRegion                  Direct   子节点权重 = **形态门 Ho/Drive/Gate/MouthStyle**（两个孩子：整嘴平移 / 嘴宽）
+│   │                                    + **core 块门 Ho/Drive/Gate/MouthCore**（一个孩子：张嘴×笑）
 │   │                                    + 恒 1（MouthJaw / MouthTongue / 两条形态子树）
-│   ├─ MouthCoreRollSwitch      Simple1D  blendParameter = Ho/Drive/Style/CatMouth（阈值 0.15 / 0.30，显式写死）  ← 挂形态门
+│   ├─ MouthCoreRollSwitch      Simple1D  blendParameter = Ho/Drive/Style/CatMouth（阈值 0.15 / 0.30，显式写死）  ← 挂 **core 块门**
 │   │   ├─ MouthCore            FreeformCartesian2D  静息嘴：苦/静息/常态笑/大笑 × 闭/半开/张满（顶行中间挖掉、右上角 0.6）
 │   │   └─ MouthCoreRoll        FreeformCartesian2D  猫嘴版整嘴表（与主版同格、同逐点坐标）
 │   ├─ MouthJaw                 FreeformCartesian2D  4 格 T 形（X = JawSide ±0.52/0 · Y = Jaw 0/0.75；两个"合 × 左右"角挖掉）  ← 恒 1
@@ -338,11 +339,16 @@ VTS 官方把 `MouthSmile` 推荐接进它 ⇒ 不是自造词；改叫 `Smile` 
   ⚠️ 直接写轴（`Ho/Drive/Style/CatMouth` ≥ 0.30）也满档，但那是**绕过中间层**的旁路。
 - ⚠️ **`Ho/Style/*` 是中间层内部行**（只被别的输出行读，**不写控制器参数**）；`Ho/Drive/*` 才是**契约**。
   控制器看不见内部行 ⇒ 由**契约行**转发：`Ho/Drive/Gate/MouthStyle = out("Ho/Style/MouthGate")`（⚠️ 该门 **2026-09-29 起恒为 1**：风格形态之间不再互相覆盖，只留各形态自己的门）、
+  `Ho/Drive/Gate/MouthCore = out("Ho/Style/MouthCoreGate")`（**core 块门**，2026-09-29 加，默认 1）、
   `Ho/Drive/Style/InvertedV = out("Ho/Style/InvertedV")`（猫嘴那条即 `Ho/Drive/Style/CatMouth`）。
-- ⭐ **形态门压在哪些孩子上**：两个风格化形态（倒V / 鼓嘴）要顶掉的是 **"张嘴 × 笑"整块**
-  （`MouthCoreRollSwitch` / `MouthShift` / `MouthWidth`）；下巴（`MouthJaw`）与舌头（`MouthTongue`）跟风格化不冲突 ⇒ 恒 1；
-  两条形态子树本身就是"被门放行的东西" ⇒ 恒 1（再挂门就套娃了）。
-- ⚠️ **猫嘴不关其他**：它不关整块"张嘴 × 笑"，它是变体开关在**块内部**换整张嘴 ⇒ 只发一条契约行。
+  ⚠️ **两个问题不要混**（`HoFaceNaming`）：**要不要写控制器参数** = `IsStyleRow`（只认 `Ho/Style/*`）；
+  **允不允许同名多行** = `IsChainRow`（`Ho/Style/*` **＋ `Ho/Drive/Style/*`** —— V嘴 要在猫嘴那条契约行下面压一条同名行把它乘成 0）。
+- ⭐ **形态门压在哪些孩子上**：`MouthShift` / `MouthWidth`（"整嘴平移 / 嘴宽"）挂形态门 `Ho/Drive/Gate/MouthStyle`；
+  下巴（`MouthJaw`）与舌头（`MouthTongue`）跟风格化不冲突 ⇒ 恒 1；两条形态子树本身就是"被门放行的东西" ⇒ 恒 1（再挂门就套娃了）。
+  ⭐ **`MouthCoreRollSwitch` 挂自己的块门 `Ho/Drive/Gate/MouthCore`**（2026-09-29 用户定：「V嘴还需要关掉 mouthcore（包括猫嘴变体）」）：
+  关这一个孩子 = **两张整嘴表连块内的猫嘴变体一起让位**；`MouthShift` / `MouthWidth` 不受影响（噘嘴时嘴上移与"宽度归中"还要用）。
+  为什么粒度是"那个孩子"而不是"整块张嘴 × 笑"：后者会把平移与宽度一起关掉 ✗（关块规则见 `AXES.md` §8 规则三）。
+- ⚠️ **猫嘴不关其他**：它不关整块"张嘴 × 笑"，它是变体开关在**块内部**换整张嘴 ⇒ 只发一条契约行（倒V 只是额外把这条线压成 0，见上）。
 - ⭐ **猫嘴判据现状**（2026-09-28 换）：`Roll = clamp(下唇卷 × clamp((嘴角方向 − 0.12)/0.10, 0, 1) × (1 + 3·jawOpen²), 0, 1)`，
   其中 `嘴角方向 = (酒窝左 + 酒窝右)/2 − (苦左 + 苦右)/2` —— **两个条件都得成立**。
   修饰符：**维持**（trigger **0.28** / threshold 0.26 / hold 0.2 ⇒ 释放 0.02）+ **平滑 0.08 s**。
@@ -646,8 +652,9 @@ Direct 树对**每一个属性**的结果是：
 | **Direct**（两个孩子写同一个属性，权重 0.6 / 0.8） | **加法**：`100×0.6 + 200×0.8 = 220`；两个都写 100 时 `= 140` | **归一化**：权重被除以它们的和 ⇒ `0.4286×100 + 0.5714×200 = **157.14**` |
 
 ⚠️ **这一条对我们是个陷阱**：我们的区域 Direct **权重和本来就是 N**（`MouthRegion` 下 7 个孩子 = `MouthCoreRollSwitch` /
-`MouthJaw` / `MouthShift` / `MouthWidth` / `MouthTongue` / `InvertedV` / `Cheek`；其中 3 个（"张嘴 × 笑" / 整嘴平移 / 嘴宽）
-挂**形态门** `Ho/Drive/Gate/MouthStyle`、其余恒 `W/One` ⇒ 权重和 = 4 + 3×门）。
+`MouthJaw` / `MouthShift` / `MouthWidth` / `MouthTongue` / `InvertedV` / `Cheek`；其中 `MouthCoreRollSwitch` 挂 **core 块门**
+`Ho/Drive/Gate/MouthCore`（"张嘴 × 笑"那一块）、`MouthShift` / `MouthWidth` 挂**形态门** `Ho/Drive/Gate/MouthStyle`、
+其余恒 `W/One` ⇒ 权重和 = 4 + 门 + 2×形态门）。
 **一旦有人在 Inspector 里把这个复选框勾上，孩子们会被按权重和除小 ⇒ 整个区域变淡/姿势被摊薄**（4 个恒 1 的孩子时就是各 `0.25`）。
 所以：**别勾它**（生成器写 `m_NormalizedBlendValues: 0`，那就是我们要的）。
 （Unity 的 IssueTracker 有一条标题是「Direct blend tree "Normalize Blend Values" does not normalize」，

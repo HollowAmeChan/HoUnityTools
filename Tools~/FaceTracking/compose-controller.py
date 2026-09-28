@@ -88,7 +88,9 @@ def build(entry, rig, dry):
     if r.returncode != 0:
         print('      ✗ isolate-trees.py 失败：%s' % (r.stderr or '').strip()[:300])
         return False
-    r2 = subprocess.run([sys.executable, INTEGRITY, target], capture_output=True, text=True, encoding='utf-8', errors='replace')
+    r2 = subprocess.run([sys.executable, INTEGRITY, target], capture_output=True, text=True,
+                        encoding='utf-8', errors='replace',
+                        env=dict(os.environ, PYTHONIOENCODING='utf-8'))   # 子进程输出强制 UTF-8，否则中文标记认不出来
     ok2 = r2.returncode == 0 and '悬空' in (r2.stdout or '')
     print('      完整性检查：%s' % ('通过' if ok2 else '见下'))
     if not ok2:
