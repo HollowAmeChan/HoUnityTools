@@ -2830,3 +2830,24 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 ⚠️ **顺手补了一笔欠账**：Unity 端构建器 `HoFaceControllerSkeletonBuilder.MouthCoreOverride` 还停在 **2026-09-27 那 8 个点**（`0 / 0.482 / 0.907`…）—— 与真正生效的生成器 / 检查器不是同一组值（类注释里早就写着"它落后于生成器"）。这次**按权威 11 点整表对齐**（含苦列三格）⇒ 三处从此同源。
 **⑨ 验证（控制点）**：`check-controller-integrity.py` 结构不变；`check-controller.ps1` 生产件 **0 缺/错**（逐格坐标 ＋ "变体必须与主版逐点一致"两条都过）；`DIAG_L2_MouthGroup` 重新生成后隔离模式 **0 缺/错**。
 **⑩ 状态**：rig 那份 profile 里用户填的 `enterSeconds = 1000` **原样没动**（那是他的诊断值，现在会真的生效 = 永不点亮，正好当验证）；repo 那份是 **1.7**（他明确要的 ×2）—— 落哪份等他说一声。
+
+---
+
+## 2026-09-29 · 猫嘴这套按倒V 的形状理顺（拆行 + 上修饰器）
+
+**① 用户要的**（原话）：「**开始改猫嘴门，这个门可以跟倒V那样改**」⇒ 摆出两个「猫嘴门」之后选定：**1）猫嘴这套触发 + 门的形状跟倒V 对齐**；紧接着补一句「**加修饰器 / 现在进出都不稳**」。
+**② 改动（profile 的猫嘴块，190 → 192 行）**：
+  1. **拆行**：旧的一行式判定 `clamp(rollLower × clamp((嘴角方向−0.12)/0.10, 0, 1) × (1+3·jawOpen²), 0, 1)` →
+     `Ho/Style/CatMouth/Read = mouthRollLower * (1 + 3 * jawOpen * jawOpen)`（读出行）＋
+     `Ho/Style/CatMouth/CornerGate = clamp((嘴角方向 − 0.12)/0.10, 0, 1)`（门行，空曲线）＋
+     判定 `Ho/Style/CatMouth = clamp(out("…/Read") * out("…/CornerGate"), 0, 1)`（恒等曲线）。
+  2. **去抖从开关行搬到判定行**（与倒V 同形）：判定行 `[平滑 0.08 → 维持]`，开关行只留 `[平滑 0.08]`（手动常开 `HoExternalCatMouth` 那条通路保持瞬时）✓ 规则 3。
+  3. **补上 进 0.3s / 退 0.1s**（与倒V 同一起步值）—— 用户「进出都不稳」正是缺这个硬计时器（这条上的 `维持` 以前只有 trigger/迟滞/hold）。
+**③ 为什么 `下颌增益` 归读出行而不是门**：它是**读数的修正**（设备张嘴会把唇线压低、读数随下颌掉 ⇒ 乘回来）。
+   放门外 = `clamp(rollLower×(1+3·jawOpen²), 0, 1) × 门`；放门内或先 clamp 会让"下颌张得大"那一段被门提早夹住 ⇒ **语义就变了**。
+   写成 `Read = rollLower × 增益`、判定再 clamp，与旧式**逐字等价**（旧 = clamp(rollLower × 门 × 增益, 0, 1) = clamp(Read × 门, 0, 1)）✓。
+**④ 没动的东西（有意）**：`trigger 0.28` / 迟滞 `0.26`（释放点仍是 0.02，锁存是有意的）、`hold 0.2`、控制器里 `MouthCoreRollSwitch` 的两档 0.15/0.30、
+   宽度那条 `Ho/Style/MouthWidth/CatMouthGate`（它读"最后写的那份" = 开关行 ⇒ 行为不变）。⚠️ 「容易退出」的规矩：**动迟滞或 `exitSeconds`，别动 trigger**。
+**⑤ 验证**：`profile-verify`（真读取器）**0 problem**，去抖清单里两条都在（`Ho/Style/CatMouth` 与 `Ho/Style/InvertedV` 各 进 0.3 / 退 0.1）；
+   行序 `reorder-output-rows.py --write` 复跑**逐字节不变**（⑪ 猫嘴块 5 行）；rig 与 repo 两份 profile 同 hash。
+**⑥ 待用户实机**：进 0.3 / 退 0.1 是先照倒V 起步的值（面板**重新载入**后生效）—— 觉得"还是不稳"就报方向（进不去 ⇒ 减 `enterSeconds` 或降触发线；掉太快 ⇒ 加迟滞 / `exitSeconds`）。**鼓嘴还没拆**（判定仍是一行），下次动它照同一形状抄。

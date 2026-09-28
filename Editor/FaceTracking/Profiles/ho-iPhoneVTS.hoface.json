@@ -3935,20 +3935,36 @@
                         "notes":  "开关合成：out(同名) × HoAutoCheek + HoExternalCheek。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
                     },
                     {
-                        "parameter":  "Ho/Style/CatMouth",
-                        "expression":  "clamp(mouthRollLower * clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1) * (1 + 3 * jawOpen * jawOpen), 0, 1)",
+                        "parameter":  "Ho/Style/CatMouth/Read",
+                        "expression":  "mouthRollLower * (1 + 3 * jawOpen * jawOpen)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
-                        "notes":  "猫嘴判定：下唇卷 × 嘴角门 × 下颌增益，再 clamp 到 0..1。"
+                        "notes":  "猫嘴读数：下唇卷 × 下颌增益。\n下颌增益 `1 + 3·jawOpen²` 是**读数的修正**（设备张嘴会把唇线压低、读数随下颌掉 ⇒ 乘回来），所以归读出行、不归门。\n曲线现在是恒等（还没标定）；平滑在判定行。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/CatMouth/CornerGate",
+                        "expression":  "clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "嘴角门（1 = 放行）：嘴角方向 = 酒窝均值 − 苦均值。膝 0.12 / 过渡 0.10。\n猫嘴 0.358~0.503 vs 非目标全部 ≤0.096（抿嘴 0.042~0.075、用力说话 0.013~0.096）⇒ 这道门负责把「抿嘴 / 说话」挡掉，下唇卷那一路自己挡不住（抿嘴的下唇卷 0.362~0.396 ≈ 猫嘴）。\n不带曲线（门行）。"
+                    },
+                    {
+                        "parameter":  "Ho/Style/CatMouth",
+                        "expression":  "clamp(out(\"Ho/Style/CatMouth/Read\") * out(\"Ho/Style/CatMouth/CornerGate\"), 0, 1)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26, "enterSeconds": 0.3, "exitSeconds": 0.1}]}],
+                        "notes":  "猫嘴判定 = 读数 × 嘴角门（2026-09-29 按倒V 的形状拆行：读数 / 门 / 判定各一行）。\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\n维持 trigger 0.28 / 迟滞 0.26 / 最短保持 0.2s / **进维持 0.3s、退维持 0.1s**（用户报「进出都不稳」⇒ 照倒V 的写法补上硬计时器；实际点亮 ≈ 0.3 + 0.17 ≈ 0.47s）。\n⚠️ 触发线 0.28 是实测缝 [0.146, 0.447] 的中点（猫嘴 J≈0.447 vs 抿嘴嘴宽 0.146）—— 改判据要重标，别只动这个数。\n⚠️ 释放点 = 0.28 − 0.26 = **0.02**（锁存是有意的：点亮后要挂得住）。"
                     },
                     {
                         "parameter":  "Ho/Style/CatMouth",
                         "expression":  "out(\"Ho/Style/CatMouth\") * HoAutoCatMouth + HoExternalCatMouth",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.28, "target": 1, "hold": 0.2, "threshold": 0.26}]}, {"kind": "smooth", "seconds": 0.08, "steps": []}],
-                        "notes":  "开关合成：out(同名) × HoAutoCatMouth + HoExternalCatMouth。\n维持 / 平滑在这一行（合成之后再迟滞与平滑）。不带曲线。"
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}],
+                        "notes":  "开关合成：out(同名) × HoAutoCatMouth + HoExternalCatMouth。\n平滑 0.08 秒（形态切换的过渡）。**维持与去抖在判定行**（手动 `HoExternalCatMouth` 因此保持瞬时）。不带曲线。"
                     },
                     {
                         "parameter":  "Ho/Drive/Style/CatMouth",

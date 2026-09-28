@@ -358,6 +358,12 @@
   ⚠️ **必须排在契约行下面**（输出表缓存与发布都是**后写覆盖先写**）；它只是**第二道保险** —— 倒V 同时用 `Ho/Drive/Gate/MouthCore` 把整个 core 块关掉了，那一步已经让变体选不选都无所谓。
   ⚠️ 内部行 `Ho/Style/CatMouth` **没有**被改（它照旧是 0/1 的判定 × 开关合成）⇒ `Ho/Style/MouthWidth/CatMouthGate`（宽度那条猫嘴门）读到的仍是原值，宽度轴不受这条影响 ✓。
 * ⚠️ **这一行是 0/1**（「维持」的输出恒等于 target），别再照「连续权重」去推算它（§5.7.27 ⑤）。
+* ⭐ **2026-09-29 按倒V 的形状理顺（用户：「开始改猫嘴门，这个门可以跟倒V那样改」+「加修饰器 / 现在进出都不稳」）**：
+  ① **拆行**：判定原来是长长一行（读数 × 嘴角门 × 下颌增益），现在拆成 `…/Read`（下唇卷 × 下颌增益）/ `…/CornerGate`（嘴角门）/ 判定（只做乘法，还带自己的 clamp）；
+  ② **去抖搬到判定行**（规则 3：开关行里还有手动常开 `HoExternalCatMouth`，那条通路必须瞬时），链条写成 `平滑 0.08 → 维持`；
+  ③ **补上 进 0.3s / 退 0.1s**（与倒V 同一起步值；`trigger 0.28` / 迟滞 `0.26` / `hold 0.2` 一个都没动 —— 「容易退出」要动的是迟滞或 `exitSeconds`，不是 trigger）。
+  ⚠️ **语义与旧式逐字相同**：旧 `clamp(rollLower × 嘴角门 × 下颌增益, 0, 1)` == 新 `clamp(Read × 门, 0, 1)`，因为 `Read` 就是 `rollLower × 下颌增益`（**下颌增益是读数的修正，不是门** —— 它要乘在门外，否则`下颌张开大`那一段会被门提早夹住）。
+  ⚠️ 宽度那条 `Ho/Style/MouthWidth/CatMouthGate` 读的还是**最后写的那份**（现在 = 开关行）⇒ 行为不变。
 
 ---
 
@@ -499,7 +505,7 @@
   · 读数行   <形态>/Read       吃原始输入 → 这根轴的读数；**标定曲线 + 平滑在它身上**
   · 门行     <形态>/…Gate      0..1 的放行度（1 = 放行）；**不带曲线**（约束规则：曲线由它本身的源定义）
   · 判定行   <形态>            把读数与门乘起来（短到一眼读懂）
-  · 开关行   <形态>（同名链）  固定写法 `out(同名) × HoAuto<形态> + HoExternal<形态>`；`维持 / 平滑` 留在这一行
+  · 开关行   <形态>（同名链）  固定写法 `out(同名) × HoAuto<形态> + HoExternal<形态>`；`平滑` 留在这一行（**去抖在判定行**）
   · 约束行   <名字>（同名链）  读别的行、写同名（例：噘嘴时把宽度压到「嘴常」）
   · 关块行   <块>Gate（同名链）某形态要关掉控制器里的一整块（规则三）；**写在主动关它的那个形态的块里**
   · 基准行   <块>Gate（常量 1） 关块链的底（常量 1 = 门开着）；**只有"多个形态关同一块"时才需要**
@@ -517,8 +523,11 @@
 
   Ho/Style/Cheek              = max(cheekPuff, max(mouthLeft, mouthRight)) × 颊门 × 死区            ← 判定（还没拆细；下次动它时按上面拆）
   Ho/Style/Cheek              = out(同名) * HoAutoCheek + HoExternalCheek                           ← 开关
-  Ho/Style/CatMouth           = clamp(下唇卷 × clamp((嘴角方向 − 0.12) / 0.10, 0, 1) × (1 + 3·jawOpen²), 0, 1) ← 判定（同上）
-  Ho/Style/CatMouth           = out(同名) * HoAutoCatMouth + HoExternalCatMouth                     ← 开关
+  Ho/Style/CatMouth/Read      = mouthRollLower × (1 + 3·jawOpen²)                                  ← 读数（下颌增益是**读数的修正** ⇒ 归这行，不归门）
+  Ho/Style/CatMouth/CornerGate= clamp((嘴角方向 − 0.12) / 0.10, 0, 1)                              ← 嘴角门（膝 0.12 / 过渡 0.10）
+  Ho/Style/CatMouth           = clamp(out("…/Read") × out("…/CornerGate"), 0, 1)                   ← 判定（2026-09-29 拆行，语义与旧的一行式**逐字相同**）
+                                [平滑 0.08s] → [维持 trigger 0.28 / 迟滞 0.26 / hold 0.2 / **进 0.3s / 退 0.1s**]
+  Ho/Style/CatMouth           = out(同名) * HoAutoCatMouth + HoExternalCatMouth                     ← 开关 [平滑 0.08s]
   Ho/Drive/Style/CatMouth     = out("Ho/Style/CatMouth")                                            ← 发布
 
 规则二 关其他（本阶段：**形态之间仍不互相覆盖**；但**同名链回来了** —— 只用于自己的开关与自己的强制覆盖）
