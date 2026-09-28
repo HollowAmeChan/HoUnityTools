@@ -492,7 +492,7 @@
 规则二 关其他（本阶段：**形态之间仍不互相覆盖**；但**同名链回来了** —— 只用于自己的开关与自己的强制覆盖）
   Ho/Style/MouthWidth/CatMouthGate = 1 - clamp((out("Ho/Style/CatMouth") - 0.25) / 0.15, 0, 1)     ← 猫嘴门
   Ho/Style/MouthWidth/Read    = ((dimpleR + dimpleL) * 2 - mouthPucker) * out("…/CatMouthGate")     ← 宽度读数
-  Ho/Style/MouthWidth         = if(out("Ho/Style/InvertedV"), -0.09, out("…/Read"))                 ← 噘嘴时归中（−0.09 = 表的中刻度）
+  Ho/Style/MouthWidth         = lerp(out("…/Read"), 0.5, out("Ho/Style/InvertedV"))                 ← 噘嘴时按形态权重归中到中刻度 0.5
   Ho/Drive/Mouth/Pucker       = out("Ho/Style/MouthWidth")                                          ← 转发（名字不变 ⇒ 资产不动）
   Ho/Style/MouthGate          = 1                                                                   ← 基准：常量 1（门恒开）
 ```
@@ -540,6 +540,9 @@
   ⚠️ 仍然保留的一处「形态影响别人」是**猫嘴压住宽度轴**（2026-09-29 起在独立门行 `Ho/Style/MouthWidth/CatMouthGate`：`1 − clamp((out(CatMouth) − 0.25)/0.15)`）—— 那是猫嘴**自己的强制覆盖**（不掐就会"永远触发嘴宽最大值"），不是形态互压。
   ⚠️ 代价（本阶段接受）：形态可以同时亮；`Ho/Drive/Gate/MouthStyle` 因此恒为 1。
   （历史：2026-09-28 深夜曾定「鼓嘴 > 猫嘴 > 倒V」优先级链；抑制因子只乘 auto 项、写在「维持」之前。原文见 `DECISIONS.md` §5.7.32。）
+  ⚠️ **"强制覆盖"这类行写的是控制器的刻度值 ⇒ 刻度一挪它必须跟着挪**（2026-09-29 栽过：宽度轴归一化到 0…1 之后，
+  `Ho/Style/MouthWidth` 还写着旧中位 `−0.09`，在新刻度里 < 0 ⇒ 被夹到**缩满**端 ⇒ 噘嘴时嘴不是归中而是缩到最窄 ✗）。
+  现在写成 `lerp(out("…/Read"), 0.5, out("Ho/Style/InvertedV"))` —— 顺带把"关"改成**按形态权重插值**：形态淡入淡出多少，宽度就跟着回来多少，两者同一个数。
 * ⭐ **同名链回来了，但只用于两件事（2026-09-29 用户定）**：① 每个形态的**开关行**（固定写法单行拆出来）；② 形态**自己的强制覆盖**（例：噘嘴时把宽度压到「嘴常」）。
   形态之间仍然互不覆盖 —— 链的语义是"读自己写自己"，不是"压别人"。
 * **行块布局（2026-09-29 用户定：style 整区靠下、区内按大类成块）**：出口 90 行 → `Ho/Drive/<区域>/*`（嘴 / 眼睑 / 注视 / 眉 / 颊 / 鼻）→ 区域门 → 切片 → **style 区（最下）**：`Cheek` 类 → `CatMouth` 类 → 噘嘴类（读数 / 门 / 判定 / 开关 / 发布 / 宽度 / 归中 / 转发）→ 共享仲裁与形态门。

@@ -4033,11 +4033,11 @@
                     },
                     {
                         "parameter":  "Ho/Style/MouthWidth",
-                        "expression":  "if(out(\"Ho/Style/InvertedV\"), -0.09, out(\"Ho/Style/MouthWidth/Read\"))",
+                        "expression":  "lerp(out(\"Ho/Style/MouthWidth/Read\"), 0.5, out(\"Ho/Style/InvertedV\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [  ],
-                        "notes":  "噘嘴时把宽度轴压到「嘴常」、强制归中，否则透传读数。\n-0.09 = MouthWidth 表的中刻度；倒V 过完维持恒是 0/1，所以用 if 就够。"
+                        "notes":  "噘嘴时把宽度轴按倒V权重拉到**中位 0.5**（= 归一化后的中刻度；旧写法写的是 -0.09，那是归一化前的中位，在新刻度里小于 0 ⇒ 会被夹到缩满端 ✗）。\n用 lerp 而不是 if：形态权重是 0.08s 平滑出来的连续值，宽度跟着它一起淡 ⇒ 与\"形状真正起了多少\"同一个数。\n⚠️ 0.5 就是控制器的中刻度 —— **刻度挪了这里要跟着改**。"
 
                     },
                     {
