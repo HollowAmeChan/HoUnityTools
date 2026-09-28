@@ -711,7 +711,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     case HoFaceModifierKind.Smooth: parts.Add("平滑 " + modifier.seconds.ToString("0.##") + "s"); break;
                     case HoFaceModifierKind.Delay: parts.Add("延迟 " + modifier.seconds.ToString("0.##") + "s"); break;
-                    case HoFaceModifierKind.Steps: parts.Add("维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"); break;
+                    case HoFaceModifierKind.Steps:
+                        {
+                            string text = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级";
+                            // 进/退维持（2026-09-29 加）：取第一档有值的那个，摘要里带一眼
+                            if (modifier.steps != null)
+                            {
+                                foreach (var step in modifier.steps)
+                                {
+                                    if (step == null || (step.enterSeconds <= 0f && step.exitSeconds <= 0f)) continue;
+                                    text += "（进" + step.enterSeconds.ToString("0.##") + "/退" + step.exitSeconds.ToString("0.##") + "s）";
+                                    break;
+                                }
+                            }
+                            parts.Add(text);
+                            break;
+                        }
                 }
             }
             return parts.Count == 0 ? "—" : string.Join(" → ", parts.ToArray());

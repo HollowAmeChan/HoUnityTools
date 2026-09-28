@@ -1327,7 +1327,9 @@ HoFaceOutput output = ActiveRows()[index];
         {
             using (HoConstraintEditorControls.Row(true))
             {
-                HoConstraintEditorControls.Label("维持", HoConstraintEditorTheme.LabelWidthSm, "参数过触发值就跳到目标值；掉回阈值以下再退回去。");
+                HoConstraintEditorControls.Label("维持", HoConstraintEditorTheme.LabelWidthSm,
+                    "参数过触发值就跳到目标值；掉回阈值以下再退回去。"
+                    + "\n进维持 / 退维持 = 要在新位置上**连续**待够这么久才真的翻（0 = 不看时间，等于老行为）。");
                 HoConstraintEditorControls.Caption("按触发值从小到大排列", "顺序乱了也能用，但按顺序读更好核对。");
             }
 
@@ -1426,7 +1428,21 @@ HoFaceOutput output = ActiveRows()[index];
                     {
                         case HoFaceModifierKind.Smooth: glyph = "滑"; what = "平滑 " + modifier.seconds.ToString("0.###") + " 秒"; break;
                         case HoFaceModifierKind.Delay: glyph = "延"; what = "延迟 " + modifier.seconds.ToString("0.###") + " 秒"; break;
-                        default: glyph = "维"; what = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级"; break;
+                        default:
+                            glyph = "维";
+                            what = "维持 " + (modifier.steps != null ? modifier.steps.Count : 0) + " 级";
+                            // 进/退维持（2026-09-29 加）：摘要里也带一眼，取第一档有值的那个
+                            if (modifier.steps != null)
+                            {
+                                for (int s = 0; s < modifier.steps.Count; s++)
+                                {
+                                    var st = modifier.steps[s];
+                                    if (st == null || (st.enterSeconds <= 0f && st.exitSeconds <= 0f)) continue;
+                                    what += " · 进" + st.enterSeconds.ToString("0.##") + "/退" + st.exitSeconds.ToString("0.##") + " 秒";
+                                    break;
+                                }
+                            }
+                            break;
                     }
 
                     Rect cell = new Rect(x, rect.y + 1.0f, badge, Mathf.Max(10.0f, rect.height - 2.0f));
