@@ -155,7 +155,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                     text.Append("{ \"trigger\": ").Append(Num(step.trigger))
                         .Append(", \"target\": ").Append(Num(step.target))
                         .Append(", \"hold\": ").Append(Num(step.hold))
-                        .Append(", \"threshold\": ").Append(Num(step.threshold)).Append(" }");
+                        .Append(", \"threshold\": ").Append(Num(step.threshold));
+                    // 进入 / 退出维持：0 就不写（老 profile 与老读取器都不受影响）
+                    if (step.enterSeconds > 0f) text.Append(", \"enterSeconds\": ").Append(Num(step.enterSeconds));
+                    if (step.exitSeconds > 0f) text.Append(", \"exitSeconds\": ").Append(Num(step.exitSeconds));
+                    text.Append(" }");
                 }
                 text.Append(i < steps.Count - 1 ? ",\n" : "\n");
             }
@@ -345,6 +349,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                                     case "target": parsed.target = f.ReadFloat(); break;
                                     case "hold": parsed.hold = f.ReadFloat(); break;
                                     case "threshold": parsed.threshold = f.ReadFloat(); break;
+                                    case "enterSeconds": parsed.enterSeconds = f.ReadFloat(); break;
+                                    case "exitSeconds": parsed.exitSeconds = f.ReadFloat(); break;
                                     default: f.SkipValue(); break;
                                 }
                             });

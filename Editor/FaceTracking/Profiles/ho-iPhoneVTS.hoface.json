@@ -3991,8 +3991,8 @@
 
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.236, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2}]}],
-                        "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n先平滑 0.236 秒再维持（trigger 0.88）⇒ **判据要持续约 0.50 秒才点亮**；短于 ~0.50 秒的尖峰最多把平滑值推到 0.88，够不着触发线。\n迟滞 threshold 0.2 ⇒ 退出线 = trigger − 0.2 = 0.68（等效 mouthPucker ≈ 0.877）：点亮 0.88 / 退出 0.68 之间留 0.200 宽的带 ⇒ 撅住之后可以松一截仍亮着，不会在线上抖进出。\n⚠️ 去抖放在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路要保持瞬时。"
+                        "modifiers":  [{"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.88, "target": 1, "hold": 0.1, "threshold": 0.2, "enterSeconds": 0.5, "exitSeconds": 0.25}]}],
+                        "notes":  "倒V（噘嘴）判定：噘嘴门 × 鼻门 × 张口门。\n维持 trigger 0.88 / 迟滞 0.2 / 最短保持 0.1s / **进维持 0.5s、退维持 0.25s**（硬计时器：在触发线之上连续待够 0.5s 才点亮；掉到释放线之下连续 0.25s 才熄灭）。\n三条线换算到 mouthPucker（膝 0.7 / 宽 0.26）：点亮 0.929 / 释放 0.877。\n⚠️ 去抖挂在**判定行**是有意的：开关行里还有手动常开 `HoExternalInvertedV`，那条通路必须瞬时。"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",

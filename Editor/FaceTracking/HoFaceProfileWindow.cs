@@ -1349,6 +1349,12 @@ HoFaceOutput output = ActiveRows()[index];
                     step.hold = HoConstraintEditorControls.NumberField(step.hold);
                     HoConstraintEditorControls.Label("回退", HoConstraintEditorTheme.LabelWidthSm, "要从触发点往下掉这么多才退回去（迟滞）。");
                     step.threshold = HoConstraintEditorControls.NumberField(step.threshold);
+                    HoConstraintEditorControls.Label("进维持", HoConstraintEditorTheme.LabelWidthSm,
+                        "进入维持（秒）：要在触发线之上**连续**待够这么久才点亮。0 = 不看时间。");
+                    step.enterSeconds = HoConstraintEditorControls.NumberField(step.enterSeconds);
+                    HoConstraintEditorControls.Label("退维持", HoConstraintEditorTheme.LabelWidthSm,
+                        "退出维持（秒）：要掉到释放点之下**连续**待够这么久才熄灭（一般取进维持的一半）。0 = 不看时间。");
+                    step.exitSeconds = HoConstraintEditorControls.NumberField(step.exitSeconds);
 
                     HoConstraintEditorControls.Flex();
                     if (HoConstraintEditorControls.IconButton("✕", "删掉这一档。"))

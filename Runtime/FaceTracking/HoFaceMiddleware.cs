@@ -42,6 +42,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float hold;
         [Tooltip("要从触发点往下掉这么多才退回去（迟滞，防止在阈值上抖）。")]
         public float threshold = 0.1f;
+        [Tooltip("**进入维持**（秒）：要在 trigger 之上**连续**待够这么久才真的跳过去。0 = 不看时间（老行为）。")]
+        public float enterSeconds;
+        [Tooltip("**退出维持**（秒）：要掉到释放点之下**连续**待够这么久才真的退回去（一般取 enterSeconds 的一半）。0 = 不看时间。")]
+        public float exitSeconds;
     }
 
     /// <summary>修饰符的种类。顺序由它在列表里的位置决定（**按列出顺序生效**）。</summary>

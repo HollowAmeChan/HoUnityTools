@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.Constraints;
@@ -62,8 +62,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private float[] inputSmooth = new float[0];
         private int[] inputStepIndex = new int[0];
         private double[] inputStepUntil = new double[0];
+        /// <summary>进入 / 退出维持的计时用：候选档位（<see cref="HoFaceStep.trigger"/> 选出来的那个）**最后一次变化**的时刻。</summary>
+        private double[] inputStepSince = new double[0];
+        private int[] inputStepRaw = new int[0];
+        /// <summary>每行第一个修饰符在状态数组里的下标（同一行可以叠多个同类修饰符而**互不打架**）。</summary>
+        private int[] inputModifierOffset = new int[0];
+        private int inputModifierSlots;
 
-        /// <summary>延迟用的 FIFO，每行一条。元素是 <c>(到期时刻, 值)</c>。</summary>
+        /// <summary>延迟用的 FIFO，**每个修饰符一条**。元素是 <c>(到期时刻, 值)</c>。</summary>
         private Queue<(double At, float Value)>[] inputDelay = new Queue<(double At, float Value)>[0];
         /// <summary>规范名 → 输入行号（同名多行时**最后一行**生效，方便用户覆盖）。</summary>
         private readonly Dictionary<string, int> inputIndex = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -80,8 +86,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private float[] outputSmooth = new float[0];
         private int[] stepIndex = new int[0];
         private double[] stepUntil = new double[0];
+        /// <summary>见 <see cref="inputStepSince"/>。</summary>
+        private double[] stepSince = new double[0];
+        private int[] stepRaw = new int[0];
+        /// <summary>见 <see cref="inputModifierOffset"/>。</summary>
+        private int[] modifierOffset = new int[0];
+        private int modifierSlots;
 
-        /// <summary>延迟用的 FIFO，每行一条。见 <see cref="inputDelay"/>。</summary>
+        /// <summary>延迟用的 FIFO，**每个修饰符一条**。见 <see cref="inputDelay"/>。</summary>
         private Queue<(double At, float Value)>[] outputDelay = new Queue<(double At, float Value)>[0];
         private readonly HoFaceInputMode[] lastModes = new HoFaceInputMode[52];
         private readonly bool[] selected = new bool[52];
@@ -534,8 +546,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (!present) { inputFresh[row] = false; continue; }
 
                 value = inputRows[row].Transform(value);
-                value = ApplyModifiers(row, inputRows[row], value, deltaTime, now,
-                    inputSmooth, inputStepIndex, inputStepUntil, inputDelay);
+                value = ApplyModifiers(inputModifierOffset[row], inputRows[row], value, deltaTime, now,
+                    inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay);
                 inputValues[row] = value;
                 inputFresh[row] = true;
             }
@@ -573,9 +585,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 有序修饰符。按列出顺序生效（照 VBridger 的输出修饰符）：
         /// 平滑 / 延迟 / 维持，按修饰符链的顺序依次作用。
         /// 输入行与输出行共用这一套实现，只是状态数组各带一份（<paramref name="smooth"/> 等）。
+        /// ⚠️ **状态按下标 = `slotBase + 第几个修饰符`**（2026-09-29 用户定：修饰符要能重复添加且互不冲突）
+        /// —— 同一行叠两个 `平滑` 时它们各自一份状态（以前共用 `smooth[row]`，两个平滑会串成一个怪滤波器）。
         /// </summary>
-        private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now,
-            float[] smooth, int[] stepRows, double[] stepUntil,
+        private float ApplyModifiers(int slotBase, HoFaceOutput output, float value, float deltaTime, double now,
+            float[] smooth, int[] stepRows, double[] stepUntil, double[] stepSince, int[] stepRaw,
             Queue<(double At, float Value)>[] delay)
         {
             if (output.modifiers == null || output.modifiers.Count == 0) return value;
@@ -583,20 +597,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 var modifier = output.modifiers[i];
                 if (modifier == null || !modifier.Active) continue;
+                int slot = slotBase + i;
                 switch (modifier.kind)
                 {
                     case HoFaceModifierKind.Smooth:
                         // 只有**会话第一帧**做一次性初始化，免得开场从 0 扫过来。
-                        smooth[row] = !primed
+                        smooth[slot] = !primed
                             ? value
-                            : Mathf.Lerp(smooth[row], value, 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / modifier.seconds));
-                        value = smooth[row];
+                            : Mathf.Lerp(smooth[slot], value, 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / modifier.seconds));
+                        value = smooth[slot];
                         break;
                     case HoFaceModifierKind.Steps:
-                        value = Step(row, modifier, value, now, stepRows, stepUntil);
+                        value = Step(slot, modifier, value, now, stepRows, stepUntil, stepSince, stepRaw);
                         break;
                     case HoFaceModifierKind.Delay:
-                        value = Delay(row, modifier, value, now, delay);
+                        value = Delay(slot, modifier, value, now, delay);
                         break;
                     default:
                         break;
@@ -607,7 +622,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now) =>
-            ApplyModifiers(row, output, value, deltaTime, now, outputSmooth, stepIndex, stepUntil, outputDelay);
+            ApplyModifiers(modifierOffset[row], output, value, deltaTime, now, outputSmooth, stepIndex, stepUntil, stepSince, stepRaw, outputDelay);
 
         /// <summary>
         /// 延迟：一个**每行一条的 FIFO**，进去的值等 <c>seconds</c> 秒之后再出来。
@@ -621,15 +636,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         ///   否则会话一开始会从 0 爬上来（跟平滑那边 `primed` 的道理一样）。
         /// * **队列超时上限**：读数时间戳有抖动时，防止一条永远取不出来的队列无限长大。
         /// </summary>
-        private float Delay(int row, HoFaceModifier modifier, float value, double now,
+        private float Delay(int slot, HoFaceModifier modifier, float value, double now,
             Queue<(double At, float Value)>[] delay)
         {
             float seconds = Mathf.Max(0.0001f, modifier.seconds);
-            Queue<(double At, float Value)> queue = delay[row];
+            Queue<(double At, float Value)> queue = delay[slot];
             if (queue == null)
             {
                 queue = new Queue<(double At, float Value)>();
-                delay[row] = queue;
+                delay[slot] = queue;
             }
 
             if (!float.IsNaN(value) && !float.IsInfinity(value))
@@ -650,30 +665,59 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// 维持：参数过 <c>trigger</c> 就跳到 <c>target</c>，往下掉超过 <c>threshold</c> 才退回去，
         /// 触发后至少保持 <c>hold</c> 秒。没触发任何档时输出 0（等于隐含的"最小档"）。
         /// </summary>
-        private float Step(int row, HoFaceModifier modifier, float value, double now, int[] stepRows, double[] stepUntil)
+        /// <summary>
+        /// 维持（`steps`）：按 <see cref="HoFaceStep.trigger"/> 从低到高选出**候选档**，再叠三道条件才真的翻：
+        /// ① **进入 / 退出维持**（`enterSeconds` / `exitSeconds`，2026-09-29 加）：候选要在新位置上**连续**待够这么久 ——
+        ///    这就是"维持一段时间以后才点亮"（原先得靠「平滑的爬升时间」硬凑，现在有硬计时器）；
+        /// ② **最短保持**（`hold`）：翻过去之后至少待这么久；
+        /// ③ **迟滞**（`threshold`）：没掉到 `trigger − |threshold|` 之下就不退。
+        /// ⚠️ 计时用 <paramref name="stepSince"/>（候选**最后一次变化**的时刻）⇒ 候选抖回去，计时自动清零。
+        /// ⚠️ **血统**：VBridger 的 `stepDetails` 每档 = `[阈值, 输出值, 迟滞偏移, 时间(毫秒)]`，它的 `ProcessStep()`
+        /// 里那个时间是**切换之后的保持**（先计时、期间返回 `stepLock`），**没有"进入前先维持"** ⇒ 我们的 `hold` / `threshold`
+        /// 与它的 `[3]` / `[2]` 对应（单位从"帧"改成秒），而 ① 是**我们加的扩展**（填 0 ⇒ 与 VB 行为一致）。
+        /// </summary>
+        private float Step(int slot, HoFaceModifier modifier, float value, double now, int[] stepRows, double[] stepUntil,
+            double[] stepSince, int[] stepRaw)
         {
             var steps = modifier.steps;
             if (steps == null || steps.Count == 0) return value;
 
-            int next = -1;
+            // 候选（只看 trigger 的电平判决）；候选一变就重新计时
+            int raw = -1;
             for (int i = 0; i < steps.Count; i++)
-                if (steps[i] != null && value >= steps[i].trigger) next = i;
+                if (steps[i] != null && value >= steps[i].trigger) raw = i;
+            if (raw != stepRaw[slot])
+            {
+                stepRaw[slot] = raw;
+                stepSince[slot] = now;
+            }
 
-            int current = stepRows[row];
+            int next = raw;
+            int current = stepRows[slot];
             if (current >= 0 && current < steps.Count && steps[current] != null)
             {
-                if (now < stepUntil[row]) next = current;                       // 最短保持
+                if (now < stepUntil[slot]) next = current;                      // 最短保持
                 else
                 {
                     float release = steps[current].trigger - Mathf.Abs(steps[current].threshold);
                     if (value >= release && next < current) next = current;      // 迟滞：没掉够就不退
                 }
+
+                if (next != current)                                            // 进入 / 退出维持
+                {
+                    double held = now - stepSince[slot];
+                    if (next > current)
+                    {
+                        if (steps[next] != null && steps[next].enterSeconds > 0f && held < steps[next].enterSeconds) next = current;
+                    }
+                    else if (steps[current].exitSeconds > 0f && held < steps[current].exitSeconds) next = current;
+                }
             }
 
             if (next != current)
             {
-                stepRows[row] = next;
-                stepUntil[row] = next >= 0 && steps[next] != null ? now + Mathf.Max(0f, steps[next].hold) : 0.0;
+                stepRows[slot] = next;
+                stepUntil[slot] = next >= 0 && steps[next] != null ? now + Mathf.Max(0f, steps[next].hold) : 0.0;
             }
 
             return next >= 0 && steps[next] != null ? steps[next].target : 0f;
@@ -732,12 +776,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             inputExpressions = new HoFaceExpression[inputList.Count];
             inputValues = new float[inputList.Count];
             inputFresh = new bool[inputList.Count];
-            inputSmooth = new float[inputList.Count];
-            inputStepIndex = new int[inputList.Count];
-            inputStepUntil = new double[inputList.Count];
-            inputDelay = new Queue<(double At, float Value)>[inputList.Count];
+            // 修饰符状态按「行 × 第几个修饰符」分开 ⇒ 同一行叠多个同类修饰符（两个平滑、两个维持…）互不打架
+            inputModifierOffset = new int[inputList.Count];
+            inputModifierSlots = 0;
+            for (int i = 0; i < inputList.Count; i++)
+            {
+                inputModifierOffset[i] = inputModifierSlots;
+                inputModifierSlots += inputList[i] != null && inputList[i].modifiers != null ? inputList[i].modifiers.Count : 0;
+            }
+            inputSmooth = new float[inputModifierSlots];
+            inputStepIndex = new int[inputModifierSlots];
+            inputStepUntil = new double[inputModifierSlots];
+            inputStepSince = new double[inputModifierSlots];
+            inputStepRaw = new int[inputModifierSlots];
+            inputDelay = new Queue<(double At, float Value)>[inputModifierSlots];
             inputIndex.Clear();
             for (int i = 0; i < inputStepIndex.Length; i++) inputStepIndex[i] = -1;
+            for (int i = 0; i < inputStepRaw.Length; i++) inputStepRaw[i] = -1;
             for (int i = 0; i < inputList.Count; i++)
             {
                 inputRows[i] = inputList[i];
@@ -772,12 +827,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             traceExpressions = new float[rows.Count];
             traceCurves = new float[rows.Count];
             TraceRevision++;
-            outputSmooth = new float[rows.Count];
-            stepIndex = new int[rows.Count];
-            stepUntil = new double[rows.Count];
-            outputDelay = new Queue<(double At, float Value)>[rows.Count];
+            // 同上：修饰符状态按「行 × 第几个修饰符」分开
+            modifierOffset = new int[rows.Count];
+            modifierSlots = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                modifierOffset[i] = modifierSlots;
+                modifierSlots += rows[i] != null && rows[i].modifiers != null ? rows[i].modifiers.Count : 0;
+            }
+            outputSmooth = new float[modifierSlots];
+            stepIndex = new int[modifierSlots];
+            stepUntil = new double[modifierSlots];
+            stepSince = new double[modifierSlots];
+            stepRaw = new int[modifierSlots];
+            outputDelay = new Queue<(double At, float Value)>[modifierSlots];
             outputIndex.Clear();
             for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档
+            for (int i = 0; i < stepRaw.Length; i++) stepRaw[i] = -1;
             for (int i = 0; i < rows.Count; i++)
             {
                 outputs[i] = rows[i];
