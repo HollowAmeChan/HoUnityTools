@@ -5,7 +5,7 @@
 
 > 当前目标已经明确为“完整高质量模板、选择性填动画下放”，请以[全量参数与高级树契约](VTS_HIGH_QUALITY_FACE_CONTRACT.md)为设计入口；本篇预算演算只作历史例子。
 
-已有依据：[控制器结构](../FACE_TRACKING_CONTROLLER_STRUCTURE.md)、[中间层](../FACE_TRACKING_MIDDLE_LAYER.md)、[参数标准](../PARAMETER_STANDARDS.md)、[VB 旧取证](archive/VBRIDGER_IO_VOCABULARY.md)。
+已有依据：[控制器结构](../FACE_TRACKING_CONTROLLER_STRUCTURE.md)、[中间层](../FACE_TRACKING_MIDDLE_LAYER.md)、[参数标准](../PARAMETER_STANDARDS.md)、[VB 旧取证](VBRIDGER_IO_VOCABULARY.md)。
 本轮逐项重新读取 `.research/vbridger/decrypted/` 十份预设，并核对官方资料、2024 官方教程章节及模型师本人发布的制作记录。
 
 > **用户澄清后的阅读入口：** 当前要确定的是“哪些参数成二维矩阵、轴怎样产生”，采样格数由作者决定。

@@ -1,54 +1,48 @@
-﻿# Tools~/FaceTracking/archive —— 2026-09-29 之前的一次性探针
+﻿# Tools~/FaceTracking/archive —— 已删除的旧工具（墓碑索引）
 
-这些**不再是流程的一部分**，但都还能跑、也有当年的结论。要复用先读它自己的头部注释。
-（为什么收在这里：`docs/REORG_PLAN_2026-09-29.md`。现在在跑的脚本在上层 `../README.md`。）
+2026-09-29 重组时，这里的一次性探针与旧工具**已按用户的话删掉**（不是"挪走"）。本文件留档：**曾经有什么、它是干什么的、结论现在在哪、要恢复怎么捞**。
 
-## 语料 / 录样（被 `../ho-traces.py` 那一套取代）
+> 恢复任意一份：`git log --diff-filter=D --name-only -- Tools~/FaceTracking/archive/` 找到删除提交，
+> 再 `git show <提交>^:Tools~/FaceTracking/archive/<文件名> > <某处>` 取回。
+> 现在在跑的脚本在上层 [`../README.md`](../README.md)；为什么删、删了哪些，见 `docs/REORG_PLAN_2026-09-29.md`。
 
-| 文件 | 干什么 |
-| --- | --- |
-| `extract-takes-from-log.ps1` | 从 Unity `Editor.log` 里把 `[Ho 面捕统计]` 的段子捞出来（面板统计文本的来源） |
-| `label-takes.ps1` | 给「录 5 秒」的原始 dump 插 `=== <标签>` 行（一段一个标签） |
-| `list-take-labels.ps1` | 列出各语料里的段标签 |
-| `filter-takes.ps1` | 合并若干语料并按标签子串剔除（例如把"鼓嘴"那几组剔掉） |
-| `residual-channel-census.ps1` | 逐动作组统计"嘴部哪些通道在动" |
-| `census-matrix.py` | 把上面那份 markdown 统计压成通道矩阵 |
-| `eye-census.py` | 眼睛那批的通道普查（静止 / 眯眼 / 眯眼笑 各 3 段） |
-| `eye-scenarios.py` | 把眼族实测均值写成 `chain-probe` 的 wire dump |
+## 语料 / 录样类（功能被 `../ho-traces.py` + `../census-table.py` 取代）
 
-## 中间层 / 控制器（被 `../check-controller.ps1` / `../profile-row-diff.py` 取代）
+| 曾有的文件 | 当年干什么 | 结论现在在哪 |
+| --- | --- | --- |
+| `extract-takes-from-log.ps1` | 从 Unity `Editor.log` 里把 `[Ho 面捕统计]` 段子捞出来 | `ho-traces.py`（直接读 `Logs/HoFaceTraces/*.jsonl`） |
+| `label-takes.ps1` / `list-take-labels.ps1` / `filter-takes.ps1` | 给原始 dump 插标签 / 列标签 / 合并并剔除某些段 | 打标签脚本改放 `.research/*/label-*.py`（录样后按时间顺序打，写 `recording-labels-*.json`） |
+| `residual-channel-census.ps1` / `census-matrix.py` | 逐动作组统计"哪些嘴部通道在动" | `census-table.py`（解析面板统计文本）+ `ho-traces.py stat --group` |
+| `eye-census.py` / `eye-scenarios.py` | 眼族三态普查 / 写成 `chain-probe` 的 wire dump | 眼族结论见 `docs/AXES.md` §4、`docs/PARAMETERS.md` §2 |
 
-| 文件 | 干什么 |
-| --- | --- |
-| `mouth-audit.py` | 嘴系统的机械审计（只读）：规则 / 耦合 / 顺序 / 计数 |
-| `param-usage.py` | 哪些控制器参数**真的被树消费**了（决定性清单） |
-| `clip-progress.py` | 槽位片段进度探针：每个 `.anim` 到底有没有真曲线 |
-| `check-payload-pairs.ps1` | 检查 patch 载荷里的 `#PAIR` 两侧是否都到位 |
-| `apply-doc-edits.ps1` | 对一份 UTF-8 文本批量做「旧串 → 新串」替换（当年的文档批量编辑） |
+## 中间层 / 控制器类（功能被 `../check-controller.ps1` / `../profile-row-diff.py` / `../tree-dump.py` 取代）
 
-## 资产 surgery（嘴部隔离那一轮）
+| 曾有的文件 | 当年干什么 | 结论现在在哪 |
+| --- | --- | --- |
+| `mouth-audit.py` | 嘴系统的机械审计（规则 / 耦合 / 顺序 / 计数） | 检查器 + `docs/CONTROLLER.md` |
+| `param-usage.py` | 哪些控制器参数真的被树消费 | `check-controller.ps1` 的可达性检查 |
+| `clip-progress.py` | 每个槽位 `.anim` 到底有没有真曲线 | `clip-dump.py`（逐个看）+ `ho-traces.py` |
+| `check-payload-pairs.ps1` / `apply-doc-edits.ps1` | patch 载荷配对检查 / 文档批量替换 | 一次性，已完成 |
 
-| 文件 | 干什么 |
-| --- | --- |
-| `isolate-regions.py` | 生成单区域隔离的控制器剪枝副本（保留原动画引用；配 `docs/MOUTH_ISOLATION_DIAGNOSIS_2026_09_28.md`，已归档） |
-| `sync-mouth-points.py` | 把用户手调的六点锚点同步到 9/11 点细分版（其余中间点插值当待测初值） |
+## 资产 surgery 类（嘴部隔离那一轮，已收尾）
 
-## 杂项
+| 曾有的文件 | 当年干什么 | 结论现在在哪 |
+| --- | --- | --- |
+| `isolate-regions.py` | 生成单区域隔离的控制器剪枝副本 | `docs/archive/MOUTH_ISOLATION_DIAGNOSIS_2026_09_28.md` |
+| `sync-mouth-points.py` | 六点锚点同步到 9/11 点细分版 | `docs/DECISIONS.md` §5.7.33 一带 + `AXES.md` §10 存疑 1 |
 
-| 文件 | 干什么 |
-| --- | --- |
-| `fix-doc-encoding.ps1` | 编辑工具跑完后把文档恢复成「UTF-8 带 BOM + CRLF」 |
-| `fix-raw-newlines.py` | 修 JSON 字符串里**裸换行**（转义掉） |
-| `sync-pkgcopy.ps1` | 把包镜像到 `.research/pkgcopy`，给一次性验证工程用 |
+## C# 探针工程（`dotnet run --project <目录>`，已删除）
 
-## C# 探针工程（`dotnet run --project <目录>`）
+| 曾有的目录 | 当年干什么 | 结论现在在哪 |
+| --- | --- | --- |
+| `chain-probe/` | 脱离 Unity 跑真参数层链 | 已有检查器 + `profile-verify` + 台架 |
+| `eye-probe/` | 用运行期求值器按 profile 行序算整条链（含 `out()` 回调） | 同上 |
+| `expression-coverage/` | VBridger 隐式输入层 × 我们表达式的覆盖验证 | `docs/DECISIONS.md`（VB 对齐那几节）+ `docs/archive/VBRIDGER_*` |
+| `profile-json-test/` | profile JSON 编解码离线往返测试 | `Tools~/FaceTracking/profile-verify/`（真读取器） |
+| `take-analysis/` | 面板统计 → "哪个特征最能分开动作" | `Tools~/FaceTracking/census-table.py` + `docs/AXES.md` 的实测定论 |
 
-| 目录 | 干什么 |
-| --- | --- |
-| `chain-probe/` | 脱离 Unity 跑**真参数层链**（`HoFaceChain` / `HoFaceMiddleware` …，由 `sync.ps1` 从 Runtime 同步） |
-| `eye-probe/` | 用**运行期那版**求值器（含 `out()` 回调）按 profile 行序把整条链算一遍 |
-| `expression-coverage/` | VBridger 隐式输入层 × 我们中间层表达式的**覆盖验证**（VB 对齐那轮的取证） |
-| `profile-json-test/` | profile JSON 编解码的离线往返测试 |
-| `take-analysis/` | 把面板统计变成"哪个特征最能分开动作"（左右/上下那些目标文件的来源） |
+## 杂项（一次性，已完成）
 
-⚠️ 这些工程的 `bin/` `obj/` 已不再跟踪（见仓库根 `.gitignore`）；要跑就 `dotnet run --project` 现编。
+`fix-doc-encoding.ps1`（文档恢复 BOM+CRLF）· `fix-raw-newlines.py`（修 JSON 里裸换行）· `sync-pkgcopy.ps1`（镜像到 `.research/pkgcopy`）。
+
+⚠️ 规矩没变：**要恢复的是"方法"，不是"结论"** —— 结论都进了 `docs/` 那几份权威文档；恢复脚本前先看它头部注释与当年的结论。

@@ -523,7 +523,7 @@ VTS自身对Voice*的权重约束不自动适用于我们重新合成的数值�
 
 ## H. 可核对的交付与证据
 
-- [配套机器可读全表](VTS_HIGH_QUALITY_FACE_CATALOG.json)：98个VTS固定名字、52个原始ARKit、34个VB V3输出及曲线/平滑、43个HQ扩展、42个树族；所有`sample`均未指定。
+- [配套机器可读全表](../VTS_HIGH_QUALITY_FACE_CATALOG.json)：98个VTS固定名字、52个原始ARKit、34个VB V3输出及曲线/平滑、43个HQ扩展、42个树族；所有`sample`均未指定。
 - `.research/vts-creator-workflow/build_hq_catalog.py`：从当日官方页面快照和本机预设生成表；检查去重、分类计数、52输入无遗漏、扩展命名及树族引用。
 - [旧官方样例映射审计](../../.research/vts-creator-workflow/official-sample-audit.json)：同一模型的VB/普通VTS两套映射，证明供值能力变化与模型资产可分离；为2022样例，不冒充V3当前模板。
 - [原装预设逐字段审计](../../.research/vts-creator-workflow/preset-audit.json)：本机十份预设的完整字段与差异。

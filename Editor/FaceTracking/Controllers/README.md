@@ -1,4 +1,4 @@
-# 预置控制器（Controllers）
+﻿# 预置控制器（Controllers）
 
 这里放**我们做好的控制器**（`*.controller`），当成一个仓库用。
 
@@ -29,4 +29,4 @@
 装配好的控制器要给 Warudo 用，得打成 **AssetBundle**（运行时读不了 `.controller`，而且包里必须带
 它绑定的那套 rig）。那一步在 **`HoUnityTools / FastBuildWarudoMod` 的 `HoFT` 页**：
 选控制器 → 选**它驱动的那个预制体** → 选输出目录（通常是 Warudo 的插件沙箱）→ 打包。
-详见 [Warudo FastBuild 设计与验证](../../docs/WARUDO_FAST_BUILD.md) 的 `HoFT 页` 一节。
+详见 [Warudo FastBuild 设计与验证](../../docs/完善的功能/WARUDO_FAST_BUILD.md) 的 `HoFT 页` 一节。

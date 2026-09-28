@@ -32,14 +32,14 @@
 | `VTS_HIGH_QUALITY_FACE_CONTRACT.md` (51 KB) | 09-26 | 0 | **待读**：与目录 JSON 是否重复，重复就归档 |
 | `FACE_TRACKING_WARUDO_ROUTE.md` (80 KB) | 09-27 | 0 | **待读**：总览里"已完成/已推翻"的部分要摘掉，只留现在这条路 |
 | `FACE_TRACKING_DESIGN.md` | 09-27 | 0 | **合并**（机制层已验证结论）→ `PIPELINE.md`，然后归档 |
-| `FACE_TRACKING_WORKFLOW.md` | 09-27 | 0 | **合并** → `TOOLS.md` / `README.md` |
+| `FACE_TRACKING_WORKFLOW.md` | 09-27 | 0 | **合并** → `PIPELINE.md` §5/§6 与 `../Tools~/FaceTracking/README.md` |
 | `ANIMATOR_OUTPUT_PIPELINE_DESIGN.md` | 09-26 | 0 | **待读**（输出范围/物理阶段）→ 多半并进 `CONTROLLER.md` |
 | `VTS_FACE_PARAMETER_SPACES.md` | 09-27 | 0 | **归档**（研究） |
 | `VTS_CREATOR_WORKFLOW_RESEARCH.md` | 09-25 | 0 | **归档**（研究） |
 | `FACE_PIPELINE_STATUS_2026_09_26.md` | 09-26 | 0 | **归档**（带日期的状态快照） |
 | `MOUTH_ISOLATION_DIAGNOSIS_2026_09_28.md` | 09-29 | 0 | **归档**（带日期的诊断） |
 | `MOUTH_REVIEW_2026-09-28.md` | 09-29 | 0 | **归档**（带日期的 review） |
-| `PENDULUM_CONSTRAINT.md` | 09-24 | 1 | **移到** `完善的功能/`（它是功能文档，不是面捕） |
+| `完善的功能/PENDULUM_CONSTRAINT.md` | 09-24 | 1 | **移到** `完善的功能/`（它是功能文档，不是面捕） |
 | `README.md` | — | — | **重写**：唯一入口（现在在跑什么 + 去哪看） |
 
 ### 1.2 Tools~/（git 跟踪 93 个文件；`Tools~/FaceTracking` 下 37 个脚本 + 8 个子目录）
@@ -65,7 +65,7 @@ docs/
   AXES.md            ← 每根轴的口：表达式 / 曲线 / 刻度 / 实测定论（从 VTS_HQ_CONTROLLER.md 抽"现状"）
   CONTROLLER.md      ← 控制器结构 + 槽位命名 + 装配与检查流程（合并 structure / naming / blend-tree-limits）
   PARAMETERS.md      ← 参数规范与设备实测（合并 PARAMETER_HO / PARAMETER_DEVICE_VERIFICATION / PARAMETER_STANDARDS）
-  TOOLS.md           ← Tools 区在用的脚本（与 Tools~/FaceTracking/README.md 互为镜像）
+  （不单独建 `Tools~/FaceTracking/README.md` —— Tools 区的说明就是 `Tools~/FaceTracking/README.md`，只有一份，避免两处同步）
   DECISIONS.md       ← 决策日志（原 VTS_HQ_CONTROLLER.md 的历史部分，倒序；只增不改）
   pitfalls/          ← 踩坑（保留，去重）
   archive/           ← 历史与被推翻的（含带日期的快照 / 研究 / 旧诊断）
@@ -99,9 +99,9 @@ Tools~/FaceTracking/
 | 2 Tools 区归档（23 项）+ README 重写 | ✅ 完成 | `1b7dfed` |
 | 3 docs 历史/研究类进 `archive/`、`measurements` 补说明、`PENDULUM` 归到功能目录 | ✅ 完成 | `469e36f` |
 | 4 子目录里的悬空 markdown 链接（archive / pitfalls / 完善的功能 共 6 个文件） | ✅ 完成 | 本轮 |
-| 5 权威文档合并：`PIPELINE.md` / `CONTROLLER.md` / `AXES.md` / `DECISIONS.md` / `PARAMETERS.md` | ⏳ 子代理在写 | — |
-| 6 顶层悬空链接修复 + `docs/README.md` 重写为唯一入口 | ⏳ | — |
-| 7 `.cs` 注释里的旧路径（3 处） | ⏸ **等用户不在调 Unity 时**（改 `.cs` 会触发重编译） | — |
+| 5 权威文档合并：`PIPELINE.md`(88K) / `CONTROLLER.md`(74K) / `AXES.md`(46K) / `DECISIONS.md`(2722 行) / `PARAMETERS.md`(56K) | ✅ 完成 | 本轮 |
+| 6 顶层悬空链接修复 + `docs/README.md` 重写为唯一入口 + 全量 BOM | ✅ 完成（悬空 134 → 0 条真问题） | 本轮 |
+| 7 `.cs` 里的旧描述（3 处文档路径 + 1 处旧计数） | ⏸ **等用户不在调 Unity 时** | — |
 
 ### 7 的三处（先列好，到时照做）
 

@@ -191,7 +191,7 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 * VBridger 自己的输入曲线仓（`.research/vbridger/decrypted/InputCurvesBck...`）是 **68 条全直通**
   （0→0 / 1→1，min/max 0..1），里面没有可搬的校准；
 * VBridger 预设里那些增益/曲线是给它**自己的通道集**调的，不是给 ARKit 直通用的；
-* 按 [参数空间文档](../../docs/VTS_FACE_PARAMETER_SPACES.md)：表达式值、存档默认值、模型最终中性
+* 按 [参数空间文档](../../docs/archive/VTS_FACE_PARAMETER_SPACES.md)：表达式值、存档默认值、模型最终中性
   **不必相等**，所以校准是**每演员/每设备**的活，属于你自己那份副本。
 * 起点（VBridger AdvancedARKit V3 的实测滤波时间，秒）写在各文件的 `notes` 里。
 
