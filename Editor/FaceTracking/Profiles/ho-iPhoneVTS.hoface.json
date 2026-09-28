@@ -3978,12 +3978,12 @@
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV/OpenGate",
-                        "expression":  "1 - clamp((out(\"Ho/Drive/Mouth/Open\") - 0.2) / 0.05, 0, 1)",
+                        "expression":  "1 - clamp((out(\"Ho/Drive/Mouth/Open\") - 0.03) / 0.05, 0, 1)",
 
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [  ],
-                        "notes":  "张口门（1 = 放行）：张嘴到一定程度就不许噘嘴。\n膝 0.2（用户定）/ 过渡 0.05；吃中间层的 Open 轴，不吃 jawOpen 原值。"
+                        "notes":  "张口门（1 = 放行）：嘴一张开就不许噘嘴。\n膝 0.03（用户定；从 0.2 收紧）/ 过渡 0.05 ⇒ 0.03 起关、0.08 关完；吃中间层的 Open 轴，不吃 jawOpen 原值。"
                     },
                     {
                         "parameter":  "Ho/Style/InvertedV",

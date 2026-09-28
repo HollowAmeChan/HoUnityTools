@@ -473,7 +473,7 @@
 规则一 写自己（一个形态一族行，按上面那套角色排）
   Ho/Style/InvertedV/Read     = mouthPucker * clamp((mouthPucker - 0.41) / 0.02, 0, 1)             ← 读数（死区写在式子里）
   Ho/Style/InvertedV/NoseGate = 1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1) ← 鼻门
-  Ho/Style/InvertedV/OpenGate = 1 - clamp((out("Ho/Drive/Mouth/Open") - 0.2) / 0.05, 0, 1)         ← 张口门（2026-09-29 用户定膝 0.2）
+  Ho/Style/InvertedV/OpenGate = 1 - clamp((out("Ho/Drive/Mouth/Open") - 0.03) / 0.05, 0, 1)        ← 张口门（膝 0.03 用户定）
   Ho/Style/InvertedV          = out("…/Read") * out("…/NoseGate") * out("…/OpenGate")              ← 判定
   Ho/Style/InvertedV          = out("Ho/Style/InvertedV") * HoAutoInvertedV + HoExternalInvertedV  ← 开关
                                 [维持 trigger 0.80 / target 1 / threshold 0.05 / hold 0.1] → [平滑 0.08s]
