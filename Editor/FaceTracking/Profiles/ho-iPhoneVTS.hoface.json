@@ -3936,7 +3936,7 @@
                         "parameter":  "Ho/Style/CatMouth/CornerGate",
                         "expression":  "clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1)",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "嘴角门（1 = 放行）：嘴角方向 = 酒窝均值 − 苦均值。膝 0.12 / 过渡 0.10。\n猫嘴 0.358~0.503 vs 非目标全部 ≤0.096（抿嘴 0.042~0.075、用力说话 0.013~0.096）⇒ 这道门负责把「抿嘴 / 说话」挡掉，下唇卷那一路自己挡不住（抿嘴的下唇卷 0.362~0.396 ≈ 猫嘴）。\n不带曲线（门行）。"
                     },
@@ -3952,7 +3952,7 @@
                         "parameter":  "Ho/Style/CatMouth",
                         "expression":  "out(\"Ho/Style/CatMouth\") * HoAutoCatMouth + HoExternalCatMouth",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}],
                         "notes":  "开关合成：out(同名) × HoAutoCatMouth + HoExternalCatMouth。\n平滑 0.08 秒（形态切换的过渡）。**维持与去抖在判定行**（手动 `HoExternalCatMouth` 因此保持瞬时）。不带曲线。"
                     },
@@ -3976,7 +3976,7 @@
                         "parameter":  "Ho/Style/Cheek/PuffGate",
                         "expression":  "clamp((cheekPuff - 0.05) / 0.05, 0, 1)",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "颊门（1 = 放行）：`mouthLeft/Right` 也是「撇嘴」的主要信号 ⇒ 加这道门，纯撇嘴算出来是 0。膝 0.05 / 过渡 0.05。\\n不带曲线（门行）。"
                     },
@@ -3984,7 +3984,7 @@
                         "parameter":  "Ho/Style/Cheek/DeadZoneGate",
                         "expression":  "clamp((out(\"Ho/Style/Cheek/Read\") - 0.40) / 0.05, 0, 1)",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "死区门（1 = 放行）：静息 `cheekPuff` ≤0.0181、噘嘴能到 0.1769 ⇒ 膝取空带 [0.1769, 0.6205] 的中点 **0.40**。\\n⚠️ 这个 0.40 同时是**两根颊轴台状曲线的台阶触发点**（见 `Ho/Drive/Cheek/*/Puff` 那两行）。\\n不带曲线（门行）。"
                     },
@@ -4000,7 +4000,7 @@
                         "parameter":  "Ho/Style/Cheek",
                         "expression":  "out(\"Ho/Style/Cheek\") * HoAutoCheek + HoExternalCheek",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}],
                         "notes":  "开关合成：out(同名) × HoAutoCheek + HoExternalCheek。\\n平滑 0.08 秒。**维持与去抖在判定行**（手动 `HoExternalCheek` 因此保持瞬时）。不带曲线。"
                     },
@@ -4009,7 +4009,7 @@
                         "expression":  "clamp((mouthPucker - 0.7) / 0.26, 0, 1)",
 
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "倒V 噘嘴门（1 = 放行）：把 `mouthPucker` 映成 0..1。\n关键数：膝 **0.7** / 宽 **0.26**（斜坡，读数到 1 在 0.96）。\n魔数：`0.7` = 膝 —— 2026-09-29 从 0.41 一路抬上来，取「误触天花板 0.7769 / 真噘地板 0.9634」之间那条空带；`0.26` = 宽，按「0.96 处刚好到 1」配。起亮点 = 膝 + 维持 trigger 0.88 × 宽 ≈ **0.929**。\n坑：**必须是斜坡** —— 门形（`x × clamp((x−膝)/0.02)`）过膝就恒等，抬膝对读数毫无影响（栽过）。"
                     },
@@ -4018,7 +4018,7 @@
                         "expression":  "1 - clamp((max(noseSneerLeft, noseSneerRight) - 0.54) / 0.05, 0, 1)",
 
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "鼻门（1 = 放行）：皱鼻时设备会把 mouthPucker 一起抬上去，所以皱鼻不许点着倒V。\n膝 0.54 / 过渡 0.05（静息 0.10~0.17）。"
                     },
@@ -4027,7 +4027,7 @@
                         "expression":  "1 - clamp((out(\"Ho/Drive/Mouth/Open\") - 0.03) / 0.05, 0, 1)",
 
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "张口门（1 = 放行）：嘴一张开就不许噘嘴。\n膝 0.03（用户定；从 0.2 收紧）/ 过渡 0.05 ⇒ 0.03 起关、0.08 关完；吃中间层的 Open 轴，不吃 jawOpen 原值。"
                     },
@@ -4045,7 +4045,7 @@
                         "expression":  "out(\"Ho/Style/InvertedV\") * HoAutoInvertedV + HoExternalInvertedV",
 
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}],
                         "notes":  "开关合成：out(同名) × HoAutoInvertedV + HoExternalInvertedV。\n平滑 0.08 秒（形态切换的过渡）。**维持与去抖在判定行**（手动 `HoExternalInvertedV` 因此保持瞬时）。不带曲线。"
                     },
@@ -4061,7 +4061,7 @@
                         "parameter":  "Ho/Drive/Style/CatMouth",
                         "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "**V嘴 压掉猫嘴开关**（归属 = V嘴）：倒V 亮 ⇒ 这根线乘到 0 ⇒ 控制器里 `MouthCoreRollSwitch` 不会切到猫嘴版（上一行已经把整个 core 块关掉了，这条是第二道保险）。\n⚠️ 同名行**必须排在猫嘴那条契约行下面**（输出表与发布都是后写覆盖先写）。\n⭐ 这就是 style 区按**「谁主动产生这条规则」**归属排序的原因：规矩跟着归属走 ⇒ **想整块删掉某个功能时，它的规则是挨在一起的**。"
                     },
@@ -4069,7 +4069,7 @@
                         "parameter":  "Ho/Style/Cheek",
                         "expression":  "out(\"Ho/Style/Cheek\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
                         "notes":  "**关鼓嘴**（归属 = V嘴）：V嘴 亮时把鼓嘴权重乘成 0 —— 2026-09-29 用户定「V嘴关掉鼓嘴，鼓嘴不关V嘴」。\n干什么：`out(同名) × (1 − out(\"Ho/Style/InvertedV\"))`，同名链 = 读自己、写自己，**后写覆盖先写**。\n关键数：无（判据就是 V嘴 权重）。\n魔数：`0.08 秒` = 平滑时间常数（与形态权重那几条同一个数：V嘴 是维持出来的 0/1，翻档会跳）。\n坑：**本行为什么住在噘嘴块最末** —— 它要在鼓嘴那两行（判定 / 开关）**下面**才压得住（后写覆盖先写），而\"鼓嘴压 V嘴\"那条已经删掉了（主从反过来：V嘴 是更霸道的那个）。\n⭐ 连带效果（这就是要它的原因）：鼓嘴那几条「关别人」（关猫嘴、关嘴平移 X / Y、嘴形归 0、宽度归中）都读 `out(\"Ho/Style/Cheek\")` ⇒ V嘴 一亮，它们**全部自动失效** —— 噘嘴的嘴形 / 平移 / 宽度都回来了。"
                     },
@@ -4077,7 +4077,7 @@
                         "parameter":  "Ho/Style/MouthCoreGate",
                         "expression":  "1 - max(out(\"Ho/Style/InvertedV\"), out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "**关断 core 块**（归属 = V嘴：V嘴 主动关它 ⇒ 规则写在 V嘴 这块里）。\n关的是控制器 `MouthRegion` 的孩子 `MouthCoreRollSwitch`（权重参数 `Ho/Drive/Gate/MouthCore`）—— 猫嘴变体在那个块**内部**（`MouthCoreRoll` 由 `Ho/Drive/Style/CatMouth` 选），所以一起被关；`MouthShift` / `MouthWidth` **不受影响**（它们仍挂形态门）。\n要再加一个形态关这块：把它的同名行写进**它自己的块**、排在本行**下面**，写成 `out(同名) * (1 - 自己)`（发布是后写覆盖先写）—— 想让任意先后都成立才需要再加一条常量 1 的基准行。\n不带曲线与修饰符（倒V 的 0/1 与 0.08s 平滑在上面那两行已经算好）。\n⭐⭐ **2026-09-29 挪进「作用区」并改读最终权重**：`1 − max(倒V, 鼓嘴)`。本行**源自 `Ho/Style/InvertedV`（V嘴）**（V嘴 主动关 core 块）。⚠️ 2026-09-29 **主从翻转**之后：V嘴 亮时会把鼓嘴权重压成 0 ⇒ `max` 取到 V嘴 ⇒ 这里照旧关死；**鼓嘴单独亮时仍然关 core**（两个形态共用这一道门，用户确认保留）。"
                     },
@@ -4085,7 +4085,7 @@
                         "parameter":  "Ho/Style/MouthWidth/CatMouthGate",
                         "expression":  "1 - clamp((out(\"Ho/Style/CatMouth\") - 0.25) / 0.15, 0, 1)",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "猫嘴门（1 = 放行）：猫嘴的 dimple 高、pucker 低，会把宽度轴顶到满档。\n膝 0.25 / 过渡 0.15（抿嘴嘴宽 0.145 放行，真猫嘴 0.43~0.46 掐掉）。\n⭐⭐ **2026-09-29 挪进「作用区」**：本行**源自 `Ho/Style/CatMouth`（猫嘴）** —— 猫嘴的 dimple 高、pucker 低，会把宽度轴顶到满档，所以猫嘴亮时要把它掐掉。读的是**最终的**猫嘴权重。"
 
@@ -4105,7 +4105,7 @@
                         "parameter":  "Ho/Style/MouthWidth",
                         "expression":  "lerp(out(\"Ho/Style/MouthWidth/Read\"), 0.5, clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "宽度归中：按**倒V权重**把宽度轴拉到控制器的**中刻度 0.5**（V嘴 亮时宽度不收窄也不加宽）。\n关键数：`0.5` = 控制器的中刻度。\n魔数：`0.5` 是魔数 —— **刻度挪了这里必须跟着改**（旧写法写 −0.09，归一化后它 < 0 会被夹到缩满端 ✗，栽过）。\n坑：用 `lerp` 而不是 `if` —— 形态权重是 0.08s 平滑出来的连续值，宽度跟着一起淡，跟「形状真正起了多少」是同一个数；本行在**作用区**，鼓嘴 的关宽度行紧跟在它下面（同名链：后写覆盖先写）。"
 
@@ -4114,7 +4114,7 @@
                         "parameter":  "Ho/Style/MouthWidth",
                         "expression":  "lerp(out(\"Ho/Style/MouthWidth\"), 0.5, clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
                         "notes":  "**关嘴宽 / 嘴窄**（归属 = 鼓嘴）：按鼓嘴权重把宽度轴拉到**中刻度 0.5**，链在**契约行**上（转发 `Ho/Drive/Mouth/Pucker` 在宽度段里、排在鼓嘴块**之前** ⇒ 写内部行走不到控制器）（= 表里「嘴常」那一格 100%）⇒ 宽 / 窄那两格权重归零，不会跟鼓起来的脸抢嘴角。\\n与 V嘴 那条同形（`lerp(读, 0.5, 形态权重)`）；⚠️ 0.5 就是控制器的中刻度，**刻度挪了这里要跟着改**。\\n⚠️ 转发 `Ho/Drive/Mouth/Pucker` 在共享块里（在这一行下面）⇒ 读到的是压过之后的这一份。\n平滑 0.08 秒（2026-09-29 加）：鼓腮 翻档时会跳，这里抹一道。"
                     },
@@ -4122,7 +4122,7 @@
                         "parameter":  "Ho/Drive/Style/CatMouth",
                         "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
                         "notes":  "**关猫嘴**（归属 = 鼓嘴）：关的也是契约行（`MouthCoreRollSwitch` 那根）⇒ 鼓嘴亮时不会切到猫嘴版整嘴表。\\n⚠️ V嘴 也有一条同名的关断行（在**它自己那块**里，2026-09-29 主从翻转后排在**本行上面**）⇒ 两条同名行按行序叠加，各管各的。⭐ 本行同日搬进**作用区**：它读的 `out(\"Ho/Style/Cheek\")` 是**被 V嘴 压过之后**的那一份 ⇒ V嘴 亮时本行自动失效。\n平滑 0.08 秒（2026-09-29 加）：同上（鼓腮 翻档时会跳）。"
                     },
@@ -4154,7 +4154,7 @@
                         "parameter":  "Ho/Drive/Mouth/Pucker",
                         "expression":  "out(\"Ho/Style/MouthWidth\")",
                         "defaultValue":  0,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "转发 Ho/Style/MouthWidth。\n名字不变是有意的：控制器的 MouthWidth 表读的就是它 ⇒ 换算搬家也不用动资产。"
 
@@ -4171,7 +4171,7 @@
                         "parameter":  "Ho/Drive/Gate/MouthCore",
                         "expression":  "out(\"Ho/Style/MouthCoreGate\")",
                         "defaultValue":  1,
-                        "curve":  { "keys": [  ] },
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
                         "modifiers":  [  ],
                         "notes":  "**契约行**：把内部行 `Ho/Style/MouthCoreGate` 发布成控制器参数 `Ho/Drive/Gate/MouthCore` —— `MouthRegion` 里 `MouthCoreRollSwitch` 的权重就是它（默认 1 = 没人关时门开着）。\n不带曲线（门的值由形态行决定）。"
                     },

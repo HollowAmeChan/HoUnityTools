@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,6 +12,17 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// </remarks>
     public static class HoFaceCurve
     {
+        /// <summary>
+        /// 过曲线：**按曲线的 x 范围夹住、再按端点算**（见上面的 remarks）。
+        ///
+        /// ⚠️⚠️ **没有曲线 = 直通（不夹取）**，这一条是**兜底**，不是"顺手"：
+        /// 行的 `curve` 为 null / 没有关键点时原样返回 `x`。为什么必须这样 ——
+        /// 2026-09-29「sad 永远正」的案子：`keys: []` 的行**曾经**因为 `HoFaceOutput.curve` 的字段默认值
+        /// （`Linear(0,0,1,1)`）而**继承了 0..1 夹取** ⇒ 覆盖在带符号轴（`Ho/Drive/Mouth/Form`）上的行
+        /// 把 −0.6 夹成 0 ⇒ 嘴永远停在"平"那一列。现在读取器显式把空 `keys` 置成 null（见
+        /// `HoFaceProfileJson.ReadCurve`）⇒ 空曲线真的直通；**要值域就自己写曲线**（`Identity()` /
+        /// `SignedIdentity()` 两个形状是现成的）。
+        /// </summary>
         public static float Transfer(AnimationCurve curve, float x)
         {
             if (curve == null || curve.length == 0) return x;
@@ -23,7 +34,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             return float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
         }
 
-        /// <summary>恒等曲线（0..1 → 0..1）。</summary>
+        /// <summary>恒等曲线（0..1 → 0..1）。门 / 权重行用它。</summary>
         public static AnimationCurve Identity() => AnimationCurve.Linear(0f, 0f, 1f, 1f);
 
         /// <summary>恒等曲线（−1..1 → −1..1，双向轴用）。</summary>
@@ -101,8 +112,9 @@ namespace Hollow.HoUnityTools.FaceTracking
             + "语法照 VBridger（含 if('条件', 真, 假) 与 clamp/lerp/min/max 等函数）。")]
         public string expression = "jawOpen";
         [Tooltip("响应曲线：横轴是表达式的值，纵轴是写出去的值。范围之外按端点算（不外推）。\n"
-            + "死区 = 开头压平；增益 = 斜率；软饱和 = 尾部压平。")]
-        public AnimationCurve curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+            + "死区 = 开头压平；增益 = 斜率；软饱和 = 尾部压平。\n"
+            + "⚠️ 没有曲线 = **直通**（不夹取）—— 别指望它替你限幅，要值域就自己写曲线。")]
+        public AnimationCurve curve;
         [Tooltip("按列出顺序生效的修饰符（平滑 / 维持 / 延迟）。")]
         public List<HoFaceModifier> modifiers = new List<HoFaceModifier>();
         [Tooltip("备注：面板显示用，不参与求值（比如标注这一行属于哪个协议/哪台设备）。")]

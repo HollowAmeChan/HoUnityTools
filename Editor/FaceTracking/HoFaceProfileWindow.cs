@@ -1266,7 +1266,18 @@ HoFaceOutput output = ActiveRows()[index];
             {
                 HoConstraintEditorControls.Label("曲线", HoConstraintEditorTheme.LabelWidth, "横轴 = 表达式值，纵轴 = 写出去的值。");
                 Rect rect = GUILayoutUtility.GetRect(120.0f, 4000.0f, CurveHeight, CurveHeight, GUILayout.ExpandWidth(true));
-                output.curve = EditorGUI.CurveField(rect, output.curve);
+                // ⚠️ **空曲线 = 直通（不夹取）**，而 `EditorGUI.CurveField` 要一条能编辑的实体 ⇒
+                //    给它一条**临时的** 0..1 恒等曲线**只用于显示**，作者真拖了才写回。
+                //    绝不能"顺手"赋给 `output.curve` —— 那等于给这一行偷偷加上 0..1 夹取，
+                //    正是 2026-09-29「sad 永远正」那个坑的编辑端版本（运行时那份兜底在 `ReadCurve`）。
+                AnimationCurve shown = output.curve != null ? output.curve : HoFaceCurve.Identity();
+                EditorGUI.BeginChangeCheck();
+                AnimationCurve edited = EditorGUI.CurveField(rect, shown);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    output.curve = edited;
+                    dirty = true;
+                }
             }
 
             using (HoConstraintEditorControls.Row(true))
@@ -1300,7 +1311,7 @@ HoFaceOutput output = ActiveRows()[index];
         {
             if (curve == null || curve.length == 0)
             {
-                return "（空曲线：输出 0）";
+                return "（空曲线 = 直通：不夹取、原值写出）";
             }
 
             Keyframe first = curve.keys[0];
@@ -1576,7 +1587,14 @@ HoFaceOutput output = ActiveRows()[index];
         private void AddOutput()
         {
             EnsureMiddleware();
-ActiveRows().Add(new HoFaceOutput { parameter = "", expression = "" });
+            // ⚠️ 新行**给一条显式曲线**（0..1 恒等）：空曲线 = 直通 = 不限幅，而新行的默认值/范围
+            //    还没人想过 ⇒ 给一条看得见的起点，作者照着拖。检查器也要求非常量行必须有曲线。
+            ActiveRows().Add(new HoFaceOutput
+            {
+                parameter = "",
+                expression = "",
+                curve = HoFaceCurve.Identity()
+            });
 selected = ActiveRows().Count - 1;
             dirty = true;
         }

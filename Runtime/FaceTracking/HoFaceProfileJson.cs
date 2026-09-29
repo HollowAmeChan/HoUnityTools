@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -319,7 +319,13 @@ namespace Hollow.HoUnityTools.FaceTracking
                 });
             });
 
-            if (keys.Count > 0) row.curve = new AnimationCurve(keys.ToArray());
+            // ⚠️⚠️ **空 `keys` = 没有曲线 = 直通**，必须**显式**置 null：
+            // 原来这里只在 `keys.Count > 0` 时赋值 ⇒ `keys: []` 的行**留着 `HoFaceOutput.curve` 的字段初值**
+            // （过去是 `Linear(0,0,1,1)`）⇒ 它其实在被 **0..1 夹取**，而不是文档说的"恒等"。
+            // 2026-09-29「sad 永远正」就是这么来的：覆盖在 `Ho/Drive/Mouth/Form` 上的行写的正是 `keys: []`，
+            // −0.6 被夹成 0 ⇒ 嘴永远停在"平"那一列。用户定的规矩（同日）：
+            // **运行时空曲线自动当直通，另外凡是需要值域的行都得自己写曲线**（检查器也这么要求）。
+            row.curve = keys.Count > 0 ? new AnimationCurve(keys.ToArray()) : null;
         }
 
         private static void ReadModifiers(HoJsonReader reader, HoFaceOutput row, List<string> warnings)

@@ -166,24 +166,17 @@ internal static class Program
             if (!isConstant && !HoUnityTools.HoFaceExpression.TryParse(row.expression, out expression, out parseError))
                 problems.Add("expression does not parse: " + row.parameter + " -> " + parseError);
 
-            // 曲线：**约束规则不需要自己标定**（用户 2026-09-29 定：「这种约束规则都直接不需要曲线，
-            // 曲线由它本身的源定义」）。三类豁免：同名链（表达式里读自己）、纯转发（整条就是一个 out("…")）、
-            // **门行**（名字以 Gate 结尾，值是 0..1 的放行度）。
-            // ⚠️⚠️ **但"不写曲线"≠"恒等"**：`HoFaceProfileJson.ReadCurve` 只在 `keys.Count > 0` 时才赋值，
-            // 所以 `keys: []` 的行**留着 `HoFaceOutput.curve` 的默认值 `Linear(0,0,1,1)`** ⇒
-            // `HoFaceCurve.Transfer` 会把值**夹到 [0,1]**。0..1 的权重无所谓，**带符号的轴会被吃掉负半边**
-            // —— 2026-09-29 用户报的「sad 永远正」就是这么来的（下面那段"同名多行值域一致性"就是它的检查）。
-            // **其余行照旧必须有曲线**（那是读数自己的标定，别漏）。
-            string exprText = row.expression ?? "";
-            string rowName = row.parameter ?? "";
-            bool isChain = System.Text.RegularExpressions.Regex.IsMatch(
-                exprText, "out\\(\\s*\"" + System.Text.RegularExpressions.Regex.Escape(rowName) + "\"\\s*\\)");
-            bool isForward = System.Text.RegularExpressions.Regex.IsMatch(
-                exprText, "^\\s*out\\(\\s*\"[^\"]+\"\\s*\\)\\s*$");
-            bool isGate = rowName.EndsWith("Gate", StringComparison.Ordinal);
-            if (!isChain && !isForward && !isGate && (row.curve == null || row.curve.length == 0))
+            // 曲线：**非常量行一律必须有显式曲线**（用户 2026-09-29 定：「其实没有曲线的都得加上吧」
+            // ＋「运行时空曲线自动搞成直通曲线」）。
+            // ⚠️ 为什么不能再豁免"约束行 / 转发 / 门"：**没有曲线 = 直通 = 不限幅**（`HoFaceCurve.Transfer`
+            // 的兜底，读取器在 `keys: []` 时显式给 null —— 见 `HoFaceProfileJson.ReadCurve`），
+            // 所以**值域必须写在曲线上**：门写 0..1、带符号的轴写 ±1。
+            // 曾经靠 `HoFaceOutput.curve` 的字段默认值 `Linear(0,0,1,1)` 隐式限幅，那条路把
+            // `Ho/Drive/Mouth/Form` 的负半边吃掉过一次（「sad 永远正」）。
+            // 常量行（空表达式 + 默认值，门控那种）不走曲线 ⇒ 豁免。
+            if (!string.IsNullOrWhiteSpace(row.expression) && (row.curve == null || row.curve.length == 0))
             {
-                problems.Add("row without a usable curve: " + row.parameter);
+                problems.Add("row without a curve (空曲线 = 直通不限幅；要么写一条，要么把它做成常量行): " + row.parameter);
             }
         }
 
@@ -264,7 +257,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("no problems: every output row parsed, curves present (constraint rows exempt), "
+        Console.WriteLine("no problems: every output row parsed, every non-constant row has an explicit curve, "
             + styleChains.Count + " intentional style chain row(s): " + string.Join(", ", styleChains));
         return 0;
     }
