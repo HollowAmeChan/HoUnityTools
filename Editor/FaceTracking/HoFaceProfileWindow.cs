@@ -906,10 +906,11 @@ ActiveRows().RemoveAt(index);
                     else if (System.Text.RegularExpressions.Regex.IsMatch(output.notes, @"\d")) numberNotes++;
                     if (string.IsNullOrEmpty(output.parameter)) continue;
                     if (seen.Add(output.parameter)) continue;
-                    // ⚠️ **同名多行在风格化链里是有意的**：内部行（`Ho/Style/*`）与控制器口
-                    //    （`Ho/Drive/Style/*`）的"读自己、写自己"都是链（输出表缓存与发布后写覆盖先写）
-                    //    ⇒ 那是**链**，不是重名错误。别处重名照旧报红。
-                    if (HoFaceNaming.IsChainRow(output.parameter)) chains.Add(output.parameter);
+                    // ⚠️ **同名多行是有意的，当且仅当"后写的那一行读自己"**（`out(同名)`，判据在
+                    //    `HoFaceNaming.IsChainRow`）：输出表缓存与发布都是后写覆盖先写 ⇒ 那是**链**，
+                    //    不是重名错误。形态区（`Ho/Style/*`、`Ho/Drive/Style/*`）与**被形态压的嘴巴轴**
+                    //    （鼓腮 关嘴平移 / 关嘴形）都是这种链；同名却**没读自己**的照旧报红（那是覆盖）。
+                    if (HoFaceNaming.IsChainRow(output.parameter, output.expression)) chains.Add(output.parameter);
                     else duplicates.Add(output.parameter);
                 }
             }

@@ -46,12 +46,12 @@ internal static class Program
         {
             if (row == null) { problems.Add("(null output row)"); continue; }
 
-            // 同名多行**是有意的**，但只在 style 命名空间里合法（`HoFaceNaming.IsChainRow` =
-            // `Ho/Style/*` 内部行 + `Ho/Drive/Style/*` 控制器口）：
-            // 运行时输出表缓存与发布都是"后写覆盖先写"，面板也据此把这两处的同名声算「风格化同名链」。
+            // 同名多行**是有意的，当且仅当"后写的那一行读自己"**（`out(同名)`）—— 判据在
+            // `HoFaceNaming.IsChainRow`：运行时的输出表缓存与发布都是"后写覆盖先写"，所以那就是**链**；
+            // 同名却**没读自己**的才是覆盖（前一行白算），照旧算 problem。
             if (!names.Add(row.parameter))
             {
-                if (HoUnityTools.HoFaceNaming.IsChainRow(row.parameter)) styleChains.Add(row.parameter);
+                if (HoUnityTools.HoFaceNaming.IsChainRow(row.parameter, row.expression)) styleChains.Add(row.parameter);
                 else problems.Add("duplicate output name: " + row.parameter);
             }
 

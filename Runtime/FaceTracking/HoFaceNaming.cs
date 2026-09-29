@@ -1,4 +1,6 @@
-﻿namespace Hollow.HoUnityTools.FaceTracking
+﻿using System.Collections.Generic;
+
+namespace Hollow.HoUnityTools.FaceTracking
 {
     /// <summary>
     /// 面捕参数的**命名规则 —— 唯一出处**。会话、面板、用例、文档都从这里取词，不许各自拼字符串。
@@ -31,17 +33,47 @@
         /// </summary>
         public const string StyleContractRoot = "Ho/Drive/Style/";
 
-        /// <summary>这一行的参数名是不是风格化内部行（见 <see cref="StyleRoot"/>）。</summary>
+        /// <summary>
+        /// 这一行的参数名是不是风格化内部行（见 <see cref="StyleRoot"/>）。
+        /// ⚠️ 它回答的是**要不要写控制器参数**，不是"允不允许同名多行" —— 两个问题别混（见 <see cref="IsChainRow"/>）。
+        /// </summary>
         public static bool IsStyleRow(string parameter) =>
             !string.IsNullOrEmpty(parameter) && parameter.StartsWith(StyleRoot, System.StringComparison.Ordinal);
 
         /// <summary>
-        /// 这一行**允不允许同名多行**（链）：内部行与控制器口都允许。判重名的地方问这一句，
-        /// 判"要不要写控制器参数"的地方问 <see cref="IsStyleRow"/> —— 两个问题不一样，别混。
+        /// 这一行**允不允许同名多行**（链）—— 判据是"**后写的那一行读自己**"：
+        /// 表达式的 `out("…")` 里点名了**本行自己的参数名**（`out(同名)`）。
+        ///
+        /// 为什么判据是它而不是命名空间白名单（2026-09-27 起是白名单，2026-09-29 改）：
+        /// 链的机制本来就是"读自己、写自己"（输出表缓存与发布都是后写覆盖先写），
+        /// 而"同名却不读自己"的两个写法**一定是覆盖**（前一行白算）⇒ 那才是要报的错。
+        /// 白名单当年够用，是因为只有形态区在用同名链；现在**嘴巴那几根轴也要被形态压**
+        /// （鼓腮 关嘴平移 `Mouth/X` `Mouth/Y`、嘴形强制归 0 `Mouth/Form`），
+        /// 而它们的名字是**控制器契约**（控制器就按这几个名字读数）⇒ 搬不进 `Ho/Style/*`，
+        /// 白名单挡住的恰恰是合法的那种链。
+        ///
+        /// 判重名的地方问这一句；判"要不要写控制器参数"的地方问 <see cref="IsStyleRow"/>。
         /// </summary>
-        public static bool IsChainRow(string parameter) =>
-            IsStyleRow(parameter) ||
-            (!string.IsNullOrEmpty(parameter) && parameter.StartsWith(StyleContractRoot, System.StringComparison.Ordinal));
+        /// <param name="parameter">这一行的参数名（= 它写出去的名字）。</param>
+        /// <param name="expression">这一行的表达式原文（面板/配置里那一串）。</param>
+        public static bool IsChainRow(string parameter, string expression)
+        {
+            if (string.IsNullOrEmpty(parameter) || string.IsNullOrEmpty(expression)) return false;
+
+            // 用**表达式解析器**问，不自己扫字符串：`out( "x" )` 这种空白、以及别的地方的引号
+            // 都交给解析器，判据只此一处（`HoFaceExpression.CollectOutputRefs`）。
+            HoFaceExpression parsed;
+            if (!HoFaceExpression.TryParse(expression, out parsed, out _)) return false;
+
+            var references = new List<string>();
+            parsed.CollectOutputRefs(references);
+            for (int i = 0; i < references.Count; i++)
+            {
+                if (string.Equals(references[i], parameter, System.StringComparison.Ordinal)) return true;
+            }
+
+            return false;
+        }
 
         // ── 轴语义（正端在前）──────────────────────────────────────────────────
         /// <summary>眼睑开合：<c>+1</c> 闭 / <c>-1</c> 睁大 / <c>0</c> 中性。</summary>

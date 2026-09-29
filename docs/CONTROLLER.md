@@ -342,7 +342,9 @@ VTS 官方把 `MouthSmile` 推荐接进它 ⇒ 不是自造词；改叫 `Smile` 
   `Ho/Drive/Gate/MouthCore = out("Ho/Style/MouthCoreGate")`（**core 块门**，2026-09-29 加，默认 1）、
   `Ho/Drive/Style/InvertedV = out("Ho/Style/InvertedV")`（猫嘴那条即 `Ho/Drive/Style/CatMouth`）。
   ⚠️ **两个问题不要混**（`HoFaceNaming`）：**要不要写控制器参数** = `IsStyleRow`（只认 `Ho/Style/*`）；
-  **允不允许同名多行** = `IsChainRow`（`Ho/Style/*` **＋ `Ho/Drive/Style/*`** —— V嘴 要在猫嘴那条契约行下面压一条同名行把它乘成 0）。
+  **允不允许同名多行** = `IsChainRow(名字, 表达式)` —— **后写的那一行读自己**（`out("同名")`）就是链
+  （V嘴 在猫嘴那条契约行下面压一条同名行把它乘成 0；鼓腮 同理压 `Ho/Drive/Mouth/X` `…/Y` `…/Form`，2026-09-29）；
+  同名却**没读自己** = 覆盖（前一行白算），面板 / 编译期 / `profile-verify` 三处照样报。
 - ⭐ **形态门压在哪些孩子上**：`MouthShift` / `MouthWidth`（"整嘴平移 / 嘴宽"）挂形态门 `Ho/Drive/Gate/MouthStyle`；
   下巴（`MouthJaw`）与舌头（`MouthTongue`）跟风格化不冲突 ⇒ 恒 1；两条形态子树本身就是"被门放行的东西" ⇒ 恒 1（再挂门就套娃了）。
   ⭐ **`MouthCoreRollSwitch` 挂自己的块门 `Ho/Drive/Gate/MouthCore`**（2026-09-29 用户定：「V嘴还需要关掉 mouthcore（包括猫嘴变体）」）：

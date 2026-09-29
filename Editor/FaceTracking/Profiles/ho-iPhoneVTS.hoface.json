@@ -4079,6 +4079,30 @@
                         "modifiers":  [  ],
                         "notes":  "**关猫嘴**（归属 = 鼓嘴）：关的也是契约行（`MouthCoreRollSwitch` 那根）⇒ 鼓嘴亮时不会切到猫嘴版整嘴表。\\n⚠️ V嘴 也有一条同名的关断行（在它自己的块里、更靠上）⇒ 三条同名行按行序叠加，各管各的。"
                     },
+                                        {
+                        "parameter":  "Ho/Drive/Mouth/X",
+                        "expression":  "out(\"Ho/Drive/Mouth/X\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**关嘴平移 · 横向**（归属 = 鼓腮）：鼓腮 亮时把整嘴左右平移压回 **0 = 静息**（控制器 MouthShift 落回「嘴中位」那一格）。\n关键数：无（判据就是鼓腮权重，0 / 1 语义）。\n魔数：无。\n坑：**本行为什么住在 style 区最下** —— 判据是**最终的**鼓腮权重，而 `out()` 只能朝上读 ⇒ 本行必须排在 `Ho/Style/Cheek` 那两行**下面**；名字仍是控制器契约名（位置与名字无关）。\n坑：门乘在**表达式**上（曲线与修饰符在本行之后才作用）—— 本行曲线 0→0 ⇒ 满档时输出正好 0；过渡段先被曲线的 ±0.20 死区吃掉。"
+                    },
+                                        {
+                        "parameter":  "Ho/Drive/Mouth/Y",
+                        "expression":  "out(\"Ho/Drive/Mouth/Y\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**关嘴平移 · 纵向**（归属 = 鼓腮）：鼓腮 亮时把上下轴压回 **0 = 不顶也不拉**（表里 y = 0 那一档；负侧本来就被投影到下排）。\n关键数：无。\n魔数：无。\n坑：与横向那条同形 —— 同一个判据、同一个位置理由（排在 `Ho/Style/Cheek` 下面）。"
+                    },
+                                        {
+                        "parameter":  "Ho/Drive/Mouth/Form",
+                        "expression":  "out(\"Ho/Drive/Mouth/Form\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "defaultValue":  0,
+                        "curve":  { "keys": [  ] },
+                        "modifiers":  [  ],
+                        "notes":  "**嘴形强制归 0**（归属 = 鼓腮）：鼓腮 亮时嘴形轴（控制器 `MouthCore` 的 X）被压到 **0 = 中性** —— 鼓起来的脸不该还带着笑 / 苦的形状。\n关键数：无（判据 = 鼓腮权重）。\n魔数：无。\n坑：门乘在表达式上；本行曲线是恒等（−1→−1、1→1），0 映 0 ⇒ 满档时输出正好 0。\n⚠️ **顺序**：`Ho/Drive/Lid/Left/Form` 与 `…/Right/Form`（笑眼 / 苦眼）也读 `out(\"Ho/Drive/Mouth/Form\")`，但它们排在**本行上面** ⇒ 读到的是**没被压过**的嘴形（鼓腮 时眼睛照样能笑 / 苦）。要让眼睛一起被压，把这两行挪到本行下面即可。"
+                    },
                     {
                         "parameter":  "Ho/Style/MouthCoreGate",
                         "expression":  "1 - max(out(\"Ho/Style/InvertedV\"), out(\"Ho/Style/Cheek\"))",

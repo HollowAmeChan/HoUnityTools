@@ -38,7 +38,11 @@ def is_cheek(r):
     """归属鼓嘴的行：它自己那几行 + 它**关别人**的链行（表达式里读 `Ho/Style/Cheek`）。"""
     return r['name'].startswith('Ho/Style/Cheek') or r['name'] == 'Ho/Drive/Style/Cheek' \
         or ('Ho/Style/Cheek' in r['expr'] and r['name'] in (
-            'Ho/Drive/Style/InvertedV', 'Ho/Drive/Style/CatMouth'))
+            'Ho/Drive/Style/InvertedV', 'Ho/Drive/Style/CatMouth',
+            # 2026-09-29：鼓腮 还要关**嘴的三根轴**（关嘴平移 X / Y、嘴形归 0）。这三根轴的名字是
+            # 控制器契约（控制器就按 `Ho/Drive/Mouth/*` 读数）⇒ 搬不进 `Ho/Style/*`，
+            # 只能在原地再写一条"读自己"的同名链行，而它必须排在**最终形态权重**下面 ⇒ 归到鼓嘴块尾。
+            'Ho/Drive/Mouth/X', 'Ho/Drive/Mouth/Y', 'Ho/Drive/Mouth/Form'))
 
 
 def is_effect(r):
@@ -55,7 +59,10 @@ def is_forward(r):
 
 GROUPS = [
     ('① 出口（ARKit 52 / VTS 20 / VB 5 / 姿态 12 / 信号 1）', lambda r: not r['name'].startswith('Ho/')),
-    ('② Ho/Drive/Mouth',        lambda r: r['name'].startswith('Ho/Drive/Mouth/') and not is_pucker(r['name'])),
+    # ⚠️ ② 是"先匹配到的赢"，所以必须把**鼓腮 关这几根轴的同名链行**排掉（它们归 ⑬）：
+    #    留在 ② 就会被排到 style 区**上面** ⇒ 那条 `out("Ho/Style/Cheek")` 变成前向引用。
+    ('② Ho/Drive/Mouth',        lambda r: r['name'].startswith('Ho/Drive/Mouth/')
+        and not is_pucker(r['name']) and not is_cheek(r)),
     ('③ Ho/Drive/Lid',          lambda r: r['name'].startswith('Ho/Drive/Lid/')),
     ('④ Ho/Drive/Gaze',         lambda r: r['name'].startswith('Ho/Drive/Gaze/')),
     ('⑤ Ho/Drive/Brow',         lambda r: r['name'].startswith('Ho/Drive/Brow/')),
