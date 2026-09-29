@@ -2931,3 +2931,23 @@ Direct 的每个子节点**必须挂一个权重参数** ⇒ 11 个状态点 = *
 **⑦ 还没做的（下一步）**：生成器 `make-vts-controller.ps1` 与构建器 `HoFaceControllerSkeletonBuilder.cs` 里的 `Cheek` **还写着 2D 表** ⇒ **这两处没同步之前不要重生成控制器**（否则会把结构冲回 2D）。
 **⑧ 用户侧动作**：Unity **Reimport** 那份控制器（文本改的，Unity 不会自己看见）＋ 面板重新载入 profile（曲线平台那一段）。
    ⚠️ 还要你验一件事（美术前提）：双开退役之后，「双开」= `HO-鼓嘴左开` + `HO-鼓嘴右开` 的**并集** —— 请在 Inspector 里把这两个单边键都拉 100，跟你画的 `HO-鼓嘴双开` 对一眼；不一致就把两个单边键调成"并集即双开"。
+
+---
+
+## 2026-09-29 · 主从翻转：噘嘴搬到鼓嘴下面，由噘嘴关鼓嘴（鼓嘴不再关 V嘴）
+
+**① 用户要的**（原话）：「有个不好弄的东西，V嘴可能得挪到鼓嘴下面，V嘴关掉鼓嘴，鼓嘴不关V嘴」⇒ 确认「动」。
+**② 机制（行序 = 依赖顺序）**：`out()` 只能朝上读，"关 ×(1−权重)" 是**后写覆盖先写** ⇒ 谁要关谁，就必须排在谁**后面**。
+   所以：噘嘴整块搬到鼓嘴**下面**；鼓嘴块里那条「关 V嘴」**删掉**；噘嘴块末**新增**一条同名链 `Ho/Style/Cheek = out(同名) × (1 − out("Ho/Style/InvertedV"))`（名字是 `Ho/Style/*` ⇒ 同名链合法，与 `Ho/Drive/Style/*` 那套同形）。
+**③ 连带的搬家（这一步才是"不好弄"的地方）**：鼓嘴自己的「关别人」—— 关猫嘴 `Ho/Drive/Style/CatMouth`、关嘴平移 `Ho/Drive/Mouth/X` / `Y`、嘴形归 0 `Ho/Drive/Mouth/Form` —— **全部搬进作用区（⑭）**。
+   为什么：它们读的都是 `out("Ho/Style/Cheek")`，只有排在**噘嘴那条「关鼓嘴」下面**，读到的才是"被压过之后的鼓嘴" ⇒ 噘嘴一亮，它们**自动全部失效**（噘嘴的嘴形 / 平移 / 宽度都回来了 —— 这正是要翻转的原因）。
+   宽度那条归中不用动（它本来就在作用区 ✓ 自动吃到被压后的权重 ✓）。
+**④ 新规范序**（`⑪` 猫嘴 5 行 → **`⑫` Cheek 自己的行 5 行** → **`⑬` 噘嘴 8 行**（自己的行 ＋ 压猫嘴 ＋ **关鼓嘴**）→ **`⑭` 作用区 10 行**（core 门 / 宽度链 / **鼓嘴的关别人 4 行** / 转发）→ `⑮` 共享 3 行）：`reorder-output-rows.py --write` 复跑**逐字节不变** ⇒ 已是规范序。
+**⑤ 判据跟着改（最容易翻车的一处）**：`Ho/Drive/Style/CatMouth`、`Ho/Drive/Style/InvertedV`、`Ho/Style/Cheek` 这几个名字**各有两条语义相反的链行** ⇒ 分组判据不能只按名字，必须按**表达式**认：
+   `is_cheek` 只认鼓嘴自己的行（名字以 `Ho/Style/Cheek` 开头 **且不读** `Ho/Style/InvertedV`）；新增 `is_pucker_closes_cheek`（读 InvertedV 的那条归噘嘴）与 `is_cheek_closes`（读 Cheek 的那 4 条归作用区）；`is_effect` 把 `is_cheek_closes` 收进来；`② Ho/Drive/Mouth` 改成同时排掉 `is_effect`（否则那三条同名链行会被排回嘴区、跑到 style 区上面去 ⇒ 前向引用）。
+**⑥ 模板与断言**：profile 的行搬移用一次性脚本做（改前备份 `%TEMP%\profile-before-flip.json`），脚本按**表达式**给 26 行分类（噘嘴 7 / 鼓嘴 5 / 关V嘴 1 删 / 关别人 4 / 作用区 6 / 共享 3）并逐条断言；`out()` 依赖在写盘前自检一遍。
+**⑦ 文档同步**：`AXES.md` §8 的两条规矩重写（"最霸道的是噘嘴"＋新块序）；profile 里 4 条**说反了的 notes** 改掉（鼓嘴判定那条「最霸道」、core 门那条「鼓嘴把 V嘴 压成 0 ⇒ 自动放行」、关猫嘴那条「更靠上」、三条关轴那条「那两行」）。
+**⑧ 验证**：`reorder --check` 逐字节自检 ✓ ＋「201 行的 out() 全部指向上面的行」✓ ＋ `--write` 哈希不变 ✓；`profile-verify` **no problems**（10 条同名链，`Ho/Style/Cheek` 出现两次 = 判定侧链 ＋ 关鼓嘴 ✓）；**控制器一行都不用改**（这轮只动 profile 与分组表）；rig 与 repo 两份 profile 同 hash。
+**⑨ 顺带**：诊断件 `DIAG_L2_MouthGroup` 按配方**重生成**（`compose-controller.py MouthGroup`）—— 保留 61 棵树里有 `Cheek, CheekL, CheekR` ✓，孤儿 `鼓嘴双开` / `颊双鼓` 被自动清掉 ✓，完整性通过 ＋ 隔离模式检查器 **0 缺/错** ✓；旧件备份 `%TEMP%\ho-controller-backups\20260929-095947`。
+   ⚠️ `DIAG_L1_RowsCandidate.controller`（Rows 坐标模型的**实验对照件**，配方里标 `manual`）里还是旧的 2D 颊表 —— 脚本按规矩不覆盖手工件；要它跟上就手动重生或删掉。
+**⑩ 用户侧动作**：Unity **Reimport** 生产件与 `DIAG_L2_MouthGroup` ＋ 面板**重新载入** profile（别先按保存）。

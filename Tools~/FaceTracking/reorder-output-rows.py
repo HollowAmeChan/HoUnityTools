@@ -35,21 +35,35 @@ def is_pucker(n):
 
 
 def is_cheek(r):
-    """归属鼓嘴的行：它自己那几行 + 它**关别人**的链行（表达式里读 `Ho/Style/Cheek`）。"""
-    return r['name'].startswith('Ho/Style/Cheek') or r['name'] == 'Ho/Drive/Style/Cheek' \
-        or ('Ho/Style/Cheek' in r['expr'] and r['name'] in (
-            'Ho/Drive/Style/InvertedV', 'Ho/Drive/Style/CatMouth',
-            # 2026-09-29：鼓腮 还要关**嘴的三根轴**（关嘴平移 X / Y、嘴形归 0）。这三根轴的名字是
-            # 控制器契约（控制器就按 `Ho/Drive/Mouth/*` 读数）⇒ 搬不进 `Ho/Style/*`，
-            # 只能在原地再写一条"读自己"的同名链行，而它必须排在**最终形态权重**下面 ⇒ 归到鼓嘴块尾。
-            'Ho/Drive/Mouth/X', 'Ho/Drive/Mouth/Y', 'Ho/Drive/Mouth/Form'))
+    """归属鼓嘴的**它自己那几行**（读数 / 门 / 判定 / 开关）。
+    ⚠️ 2026-09-29 主从翻转之后它不再是"最霸道"的那块：
+      · 它的「关别人」（关猫嘴 / 关嘴平移 X Y / 嘴形归 0）读的是**最终**权重 ⇒ 归 ⑭ 作用区；
+      · 「关鼓嘴」那条是**噘嘴**的规则（归 ⑬）—— 它名字也叫 `Ho/Style/Cheek`，所以这里要按
+        表达式把它排掉：**读 `Ho/Style/InvertedV` 的那条不是鼓嘴自己的行**。"""
+    return (r['name'].startswith('Ho/Style/Cheek') and 'Ho/Style/InvertedV' not in r['expr']) \
+        or r['name'] == 'Ho/Drive/Style/Cheek'
+
+
+def is_cheek_closes(r):
+    """鼓嘴的「关别人」：读 `Ho/Style/Cheek`（= 被噘嘴压过之后的鼓嘴权重）⇒ 住 ⑭ 作用区。"""
+    return 'Ho/Style/Cheek' in r['expr'] and r['name'] in (
+        'Ho/Drive/Style/CatMouth', 'Ho/Drive/Mouth/X', 'Ho/Drive/Mouth/Y', 'Ho/Drive/Mouth/Form')
+
+
+def is_pucker_closes_cheek(r):
+    """噘嘴的「关鼓嘴」：名字也是 `Ho/Style/Cheek`（同名链合法），但表达式读 `Ho/Style/InvertedV`。"""
+    return r['name'] == 'Ho/Style/Cheek' and 'Ho/Style/InvertedV' in r['expr']
 
 
 def is_effect(r):
-    """**作用区**：被形态权重影响的行（V嘴 关 core、猫嘴的宽度门、宽度读数与归中）+ 宽度转发。
-    ⚠️ 必须排在所有形态块**之后** —— 它们读的是**最终的**形态权重。"""
-    return r['name'] in ('Ho/Style/MouthCoreGate', 'Ho/Style/MouthWidth/CatMouthGate',
-                         'Ho/Style/MouthWidth/Read', 'Ho/Style/MouthWidth', 'Ho/Drive/Mouth/Pucker')
+    """**作用区**：读的是**最终的**形态权重 ⇒ 必须排在所有形态块**之后**（谁被压成 0，这里自动跟着灭）。
+      · 固定那几个：core 块门、猫嘴宽度门、宽度读数与两行归中、宽度转发；
+      · 2026-09-29 **主从翻转**（噘嘴搬到鼓嘴下面）之后又多一组：**鼓嘴的「关别人」** ——
+        它们必须排在**噘嘴那条「关鼓嘴」下面**，才吃得到「被 V嘴 压过的鼓嘴」。"""
+    if r['name'] in ('Ho/Style/MouthCoreGate', 'Ho/Style/MouthWidth/CatMouthGate',
+                     'Ho/Style/MouthWidth/Read', 'Ho/Style/MouthWidth', 'Ho/Drive/Mouth/Pucker'):
+        return True
+    return is_cheek_closes(r)
 
 
 def is_forward(r):
@@ -59,10 +73,10 @@ def is_forward(r):
 
 GROUPS = [
     ('① 出口（ARKit 52 / VTS 20 / VB 5 / 姿态 12 / 信号 1）', lambda r: not r['name'].startswith('Ho/')),
-    # ⚠️ ② 是"先匹配到的赢"，所以必须把**鼓腮 关这几根轴的同名链行**排掉（它们归 ⑬）：
-    #    留在 ② 就会被排到 style 区**上面** ⇒ 那条 `out("Ho/Style/Cheek")` 变成前向引用。
+    # ⚠️ ② 是"先匹配到的赢"，所以必须把**已经归到 style 区那几组**的同名链行排掉
+    #    （鼓嘴关的那三根轴 / 宽度转发 …）：留在 ② 就会被排到 style 区**上面** ⇒ 前向引用。
     ('② Ho/Drive/Mouth',        lambda r: r['name'].startswith('Ho/Drive/Mouth/')
-        and not is_pucker(r['name']) and not is_cheek(r)),
+        and not is_pucker(r['name']) and not is_cheek(r) and not is_effect(r)),
     ('③ Ho/Drive/Lid',          lambda r: r['name'].startswith('Ho/Drive/Lid/')),
     ('④ Ho/Drive/Gaze',         lambda r: r['name'].startswith('Ho/Drive/Gaze/')),
     ('⑤ Ho/Drive/Brow',         lambda r: r['name'].startswith('Ho/Drive/Brow/')),
@@ -72,16 +86,19 @@ GROUPS = [
     ('⑧ Ho/Drive/Gate（区域门）', lambda r: r['name'].startswith('Ho/Drive/Gate/')
         and r['name'] not in ('Ho/Drive/Gate/MouthStyle', 'Ho/Drive/Gate/MouthCore')),
     ('⑨ Ho/Drive/Slice',        lambda r: r['name'].startswith('Ho/Drive/Slice/')),
-    # 猫嘴块：判定 / 开关 / 发布（发布 = 纯转发那一行；V嘴 压它的那条**同名覆盖行**归 ⑫）
+    # 猫嘴块：判定 / 开关 / 发布（发布 = 纯转发那一行；V嘴 压它的那条**同名覆盖行**归 ⑬）
     ('⑪ style · CatMouth',      lambda r: r['name'].startswith('Ho/Style/CatMouth')
         or (r['name'] == 'Ho/Drive/Style/CatMouth' and is_forward(r))),
-    ('⑫ style · 噘嘴（读数 / 门 / 判定 / 开关 / 发布 / 宽度换算 / 归中 / 转发 / 关 core / 压猫嘴）',
+    # ⭐ **2026-09-29 主从翻转**：噘嘴搬到鼓嘴**下面**（用户定：「V嘴关掉鼓嘴，鼓嘴不关V嘴」）——
+    #    鼓嘴自己的行在前、噘嘴在后，「关鼓嘴」那条同名链住在噘嘴块末（后写覆盖先写才压得住）。
+    ('⑫ style · Cheek（鼓嘴自己的行：读数 / 门 / 判定 / 开关）', is_cheek),
+    ('⑬ style · 噘嘴（最霸道：自己的行 + 压猫嘴 + 关鼓嘴）',
      lambda r: (is_pucker(r['name']) and not is_effect(r) and not is_cheek(r))
-        or (r['name'] == 'Ho/Drive/Style/CatMouth' and not is_forward(r) and not is_cheek(r))),
-    # ⭐ 鼓嘴整块在**最下**（它要关 V嘴 / 猫嘴 / 嘴宽 ⇒ 必须排在被关的那些行之后）
-    ('⑬ style · Cheek（鼓嘴最霸道：关别人）', is_cheek),
+        or (r['name'] == 'Ho/Drive/Style/CatMouth' and not is_forward(r) and not is_cheek(r)
+            and not is_effect(r))
+        or is_pucker_closes_cheek(r)),
     # ⭐ **作用区**：读的是**最终的**形态权重 ⇒ 排在所有形态块之后（谁被压成 0，这里自动跟着灭）
-    ('⑭ style · 作用区（被形态影响的行 + 宽度转发）', is_effect),
+    ('⑭ style · 作用区（被形态权重驱动的行 + 宽度转发）', is_effect),
     ('⑮ style · 共享（块门契约行）',
      lambda r: r['name'] in ('Ho/Style/MouthGate', 'Ho/Drive/Gate/MouthStyle',
                              'Ho/Drive/Gate/MouthCore')),
