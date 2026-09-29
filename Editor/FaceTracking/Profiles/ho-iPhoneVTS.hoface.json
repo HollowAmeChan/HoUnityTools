@@ -3923,6 +3923,14 @@
                         "notes":  "MouthCore slice weight (Funnel x Press, bilinear, sums to 1 with its three siblings)\n【经验参】无（表达式是机械换算；平滑：无）"
                     },
                     {
+                        "parameter":  "Ho/Style/CatMouth/Read",
+                        "expression":  "mouthRollLower * (1 + 3 * jawOpen * jawOpen)",
+                        "defaultValue":  0,
+                        "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
+                        "modifiers":  [  ],
+                        "notes":  "猫嘴读数：下唇卷 × 下颌增益。\n关键数：`3`（下颌增益 = `1 + 3·jawOpen²`）—— **魔数**：设备张嘴会把唇线压低、读数随下颌掉，这个 3 是 2026-09-28 实机「咬唇下张大嘴回弹到没猫嘴」测出来的补偿系数（只乘在**过了嘴角门**的读数上）。\n坑：本行 2026-09-29 整块重排时被连带删过一次（判定行读不到它 ⇒ **猫嘴永远不亮**，且不报错）；它是判定行唯一的读数来源。"
+                    },
+                    {
                         "parameter":  "Ho/Style/CatMouth/CornerGate",
                         "expression":  "clamp((((mouthDimpleLeft + mouthDimpleRight) / 2) - ((mouthFrownLeft + mouthFrownRight) / 2) - 0.12) / 0.10, 0, 1)",
                         "defaultValue":  0,
