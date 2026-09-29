@@ -4052,8 +4052,8 @@
                         "expression":  "clamp(out(\"Ho/Style/Cheek/Read\") * out(\"Ho/Style/Cheek/PuffGate\") * out(\"Ho/Style/Cheek/DeadZoneGate\"), 0, 1)",
                         "defaultValue":  0,
                         "curve":  { "keys":  [ { "t": 0, "v": 0, "inT": 1, "outT": 1 }, { "t": 1, "v": 1, "inT": 1, "outT": 1 } ] },
-                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.5, "target": 1, "hold": 0.1, "threshold": 0.05}]}],
-                        "notes":  "鼓嘴判定 = 读数 × 颊门 × 死区门（2026-09-29 按规则拆行：读数 / 门 / 判定各一行；语义与旧的一行式相同）。\\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\\n维持 trigger 0.5 / 迟滞 0.05 / 最短保持 0.1s（进 / 退维持留 0 = 老行为，等实机再定）。\\n⭐ **鼓嘴是最霸道的形态**：它亮起来时把 V嘴、猫嘴、嘴宽全部压掉（见本块下面那三行）。"
+                        "modifiers":  [{"kind": "smooth", "seconds": 0.08, "steps": []}, {"kind": "steps", "seconds": 0, "steps": [{"trigger": 0.5, "target": 1, "hold": 0.1, "threshold": 0.05, "enterSeconds": 0.3, "exitSeconds": 0.2}]}],
+                        "notes":  "鼓嘴判定 = 读数 × 颊门 × 死区门（2026-09-29 按规则拆行：读数 / 门 / 判定各一行；语义与旧的一行式相同）。\\n修饰符链 = **平滑 0.08s → 维持**（平滑在前：防单帧抖动把下面的连续计时清零）。\\n维持 trigger 0.5 / 迟滞 0.05 / 最短保持 0.1s；**进维持 0.3 秒 / 退维持 0.2 秒**（2026-09-29 用户定）。\\n⭐ **鼓嘴是最霸道的形态**：它亮起来时把 V嘴、猫嘴、嘴宽全部压掉（见本块下面那三行）。"
                     },
                     {
                         "parameter":  "Ho/Style/Cheek",
@@ -4068,40 +4068,40 @@
                         "expression":  "out(\"Ho/Drive/Style/InvertedV\") * (1 - out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关 V嘴**（归属 = 鼓嘴：鼓嘴主动关它 ⇒ 行写在鼓嘴块里）。\\n关的是**契约行**（喂控制器那棵 `InvertedV` 的那根线）—— 同名链后写覆盖先写，所以这一行必须排在 V嘴 那条发布行**下面**（这也是鼓嘴整块放最下的原因）。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**关 V嘴**（归属 = 鼓嘴：鼓嘴主动关它 ⇒ 行写在鼓嘴块里）。\\n关的是**契约行**（喂控制器那棵 `InvertedV` 的那根线）—— 同名链后写覆盖先写，所以这一行必须排在 V嘴 那条发布行**下面**（这也是鼓嘴整块放最下的原因）。\n平滑 0.08 秒（2026-09-29 加）：鼓腮 权重是「维持」出来的 0 / 1，翻档时会跳 —— 这条关断跟着抹一道。"
                     },
                     {
                         "parameter":  "Ho/Drive/Style/CatMouth",
                         "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关猫嘴**（归属 = 鼓嘴）：关的也是契约行（`MouthCoreRollSwitch` 那根）⇒ 鼓嘴亮时不会切到猫嘴版整嘴表。\\n⚠️ V嘴 也有一条同名的关断行（在它自己的块里、更靠上）⇒ 三条同名行按行序叠加，各管各的。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**关猫嘴**（归属 = 鼓嘴）：关的也是契约行（`MouthCoreRollSwitch` 那根）⇒ 鼓嘴亮时不会切到猫嘴版整嘴表。\\n⚠️ V嘴 也有一条同名的关断行（在它自己的块里、更靠上）⇒ 三条同名行按行序叠加，各管各的。\n平滑 0.08 秒（2026-09-29 加）：同上（鼓腮 翻档时会跳）。"
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/X",
                         "expression":  "out(\"Ho/Drive/Mouth/X\") * (1 - out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关嘴平移 · 横向**（归属 = 鼓腮）：鼓腮 亮时把整嘴左右平移压回 **0 = 静息**（控制器 MouthShift 落回「嘴中位」那一格）。\n关键数：无（判据就是鼓腮权重，0 / 1 语义）。\n魔数：无。\n坑：**本行为什么住在 style 区最下** —— 判据是**最终的**鼓腮权重，而 `out()` 只能朝上读 ⇒ 本行必须排在 `Ho/Style/Cheek` 那两行**下面**；名字仍是控制器契约名（位置与名字无关）。\n坑：门乘在**表达式**上（曲线与修饰符在本行之后才作用）—— 本行曲线 0→0 ⇒ 满档时输出正好 0；过渡段先被曲线的 ±0.20 死区吃掉。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**关嘴平移 · 横向**（归属 = 鼓腮）：鼓腮 亮时把整嘴左右平移压回 **0 = 静息**（控制器 MouthShift 落回「嘴中位」那一格）。\n关键数：无（判据就是鼓腮权重，0 / 1 语义）。\n魔数：`0.08` = 平滑时间常数（与鼓腮判定那条同一个数）。\n坑：**本行为什么住在 style 区最下** —— 判据是**最终的**鼓腮权重，而 `out()` 只能朝上读 ⇒ 本行必须排在 `Ho/Style/Cheek` 那两行**下面**；名字仍是控制器契约名（位置与名字无关）。\n坑：门乘在**表达式**上（曲线与修饰符在本行之后才作用）—— 本行曲线 0→0 ⇒ 满档时输出正好 0；过渡段先被曲线的 ±0.20 死区吃掉。"
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/Y",
                         "expression":  "out(\"Ho/Drive/Mouth/Y\") * (1 - out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关嘴平移 · 纵向**（归属 = 鼓腮）：鼓腮 亮时把上下轴压回 **0 = 不顶也不拉**（表里 y = 0 那一档；负侧本来就被投影到下排）。\n关键数：无。\n魔数：无。\n坑：与横向那条同形 —— 同一个判据、同一个位置理由（排在 `Ho/Style/Cheek` 下面）。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**关嘴平移 · 纵向**（归属 = 鼓腮）：鼓腮 亮时把上下轴压回 **0 = 不顶也不拉**（表里 y = 0 那一档；负侧本来就被投影到下排）。\n关键数：无。\n魔数：`0.08` = 平滑时间常数（与鼓腮判定那条同一个数）。\n坑：与横向那条同形 —— 同一个判据、同一个位置理由（排在 `Ho/Style/Cheek` 下面）。"
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/Form",
                         "expression":  "out(\"Ho/Drive/Mouth/Form\") * (1 - out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**嘴形强制归 0**（归属 = 鼓腮）：鼓腮 亮时嘴形轴（控制器 `MouthCore` 的 X）被压到 **0 = 中性** —— 鼓起来的脸不该还带着笑 / 苦的形状。\n关键数：无（判据 = 鼓腮权重）。\n魔数：无。\n坑：门乘在表达式上；本行曲线是恒等（−1→−1、1→1），0 映 0 ⇒ 满档时输出正好 0。\n⚠️ **顺序**：`Ho/Drive/Lid/Left/Form` 与 `…/Right/Form`（笑眼 / 苦眼）也读 `out(\"Ho/Drive/Mouth/Form\")`，但它们排在**本行上面** ⇒ 读到的是**没被压过**的嘴形（鼓腮 时眼睛照样能笑 / 苦）。要让眼睛一起被压，把这两行挪到本行下面即可。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**嘴形强制归 0**（归属 = 鼓腮）：鼓腮 亮时嘴形轴（控制器 `MouthCore` 的 X）被压到 **0 = 中性** —— 鼓起来的脸不该还带着笑 / 苦的形状。\n关键数：无（判据 = 鼓腮权重）。\n魔数：`0.08` = 平滑时间常数（与鼓腮判定那条同一个数）。\n坑：门乘在表达式上；本行曲线是恒等（−1→−1、1→1），0 映 0 ⇒ 满档时输出正好 0。\n⚠️ **顺序**：`Ho/Drive/Lid/Left/Form` 与 `…/Right/Form`（笑眼 / 苦眼）也读 `out(\"Ho/Drive/Mouth/Form\")`，但它们排在**本行上面** ⇒ 读到的是**没被压过**的嘴形（鼓腮 时眼睛照样能笑 / 苦）。要让眼睛一起被压，把这两行挪到本行下面即可。"
                     },
                     {
                         "parameter":  "Ho/Style/MouthCoreGate",
@@ -4145,8 +4145,8 @@
                         "expression":  "lerp(out(\"Ho/Style/MouthWidth\"), 0.5, out(\"Ho/Style/Cheek\"))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
-                        "modifiers":  [  ],
-                        "notes":  "**关嘴宽 / 嘴窄**（归属 = 鼓嘴）：按鼓嘴权重把宽度轴拉到**中刻度 0.5**，链在**契约行**上（转发 `Ho/Drive/Mouth/Pucker` 在宽度段里、排在鼓嘴块**之前** ⇒ 写内部行走不到控制器）（= 表里「嘴常」那一格 100%）⇒ 宽 / 窄那两格权重归零，不会跟鼓起来的脸抢嘴角。\\n与 V嘴 那条同形（`lerp(读, 0.5, 形态权重)`）；⚠️ 0.5 就是控制器的中刻度，**刻度挪了这里要跟着改**。\\n⚠️ 转发 `Ho/Drive/Mouth/Pucker` 在共享块里（在这一行下面）⇒ 读到的是压过之后的这一份。"
+                        "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
+                        "notes":  "**关嘴宽 / 嘴窄**（归属 = 鼓嘴）：按鼓嘴权重把宽度轴拉到**中刻度 0.5**，链在**契约行**上（转发 `Ho/Drive/Mouth/Pucker` 在宽度段里、排在鼓嘴块**之前** ⇒ 写内部行走不到控制器）（= 表里「嘴常」那一格 100%）⇒ 宽 / 窄那两格权重归零，不会跟鼓起来的脸抢嘴角。\\n与 V嘴 那条同形（`lerp(读, 0.5, 形态权重)`）；⚠️ 0.5 就是控制器的中刻度，**刻度挪了这里要跟着改**。\\n⚠️ 转发 `Ho/Drive/Mouth/Pucker` 在共享块里（在这一行下面）⇒ 读到的是压过之后的这一份。\n平滑 0.08 秒（2026-09-29 加）：鼓腮 翻档时会跳，这里抹一道。"
                     },
                     {
                         "parameter":  "Ho/Drive/Mouth/Pucker",

@@ -268,17 +268,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly float[] ShiftYMeasured = { 0f, 1f };
 
         /// <summary>
-        /// **`Cheek` 的刻度（2026-09-29 用户定）**：`0 / 0.39 / 1` ——
-        /// 0 = 颊不动（小月牙**藏在脸里**）· 0.39 = 小月牙**挪出来** · 1 = 月牙被**移动**（0.39 以上连续）。
+        /// **`Cheek` 的刻度（2026-09-29 用户手调定稿）**：`0 / 0.39 / 0.65` ——
+        /// 0 = 颊不动（小月牙**藏在脸里**）· 0.39 = 小月牙**挪出来** · 0.65 = 月牙被**移动**满档（0.39 以上连续）。
         /// ⚠️ 0.39 比曲线的台阶**触发点 0.40 内收 0.01**（用户定）：输入贴着膝时轴还稳稳在 0，
         ///    再往上一格就精确落在控制点上 ⇒「移动」一定从「出来」那个姿势起步。
         /// ⚠️ 中间层那两根轴的曲线负责压成台状（0.40 以下严格 0、0.40 处瞬跳到 0.39），
         ///    否则轴落在 0 与 0.39 之间就会把「半出来的月牙」画出来 ⇒ 穿模。
+        /// ⭐ 满档从 **1.0 收到 0.65**（2026-09-29 用户在 Inspector 里手调）：轴的曲线末点仍是 1.0
+        ///    ⇒ 0.65 之后是**饱和**（凸包把超出的部分吸收成「移动」100%）⇒「移动」来得更早。
         /// </summary>
-        private static readonly float[] CheekPuffTicks = { 0f, 0.39f, 1f };
+        private static readonly float[] CheekPuffTicks = { 0f, 0.39f, 0.65f };
 
         /// <summary>3×3 里先不建的两格：一侧「移动」、另一侧「才出来」的组合（落到那里会被凸包投影成邻居的混合）。</summary>
         private static readonly Vector2Int[] CheekSkip = { new Vector2Int(1, 2), new Vector2Int(2, 1) };
+
+        /// <summary>
+        /// `Cheek` 的**双鼓那一格是手调的 `(0.6, 0.6)`**（2026-09-29 用户）——它**不在刻度值上**
+        /// （单侧满档是 `0.65`），所以走逐格覆盖：只改这一格，**不动刻度**。
+        /// 为什么不干脆把刻度写成 0.6：刻度是槽位名 `A3X&lt;i&gt;Y&lt;j&gt;` 的一部分，改刻度等于改槽位名
+        /// （要重烘叶子）；而这一格的实际坐标只影响凸包那个角，跟其余六格无关。
+        /// ⚠️ 同一组值在生成器 `over` 与检查器 `$exactPos['颊双鼓']` 里各有一份，三处必须一起改。
+        /// </summary>
+        private static readonly CellPos[] CheekPuffOverride =
+        {
+            new CellPos { I = 2, J = 2, X = 0.6f, Y = 0.6f }
+        };
 
         /// <summary>
         /// **`MouthShift` 不再挖角**（2026-09-29 用户定：「其实补俩同名的点就够了吧」）——
@@ -393,7 +407,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // ⭐ **2026-09-29 用户定：刻度 {0,1} → {0, 0.3, 1}**：0 = 月牙藏在脸里 · 0.3 = 月牙挪出来 · 1 = 月牙被移动；
             //    3×3 里只摆 7 格（`(1,2)` / `(2,1)` 先不建）。⚠️ 配套：中间层那两根轴要压成台状（0.40 以下严格 0、
             //    0.40 瞬跳到 0.3），否则轴落在 0 与 0.3 之间会把「半出来的月牙」画出来 ⇒ 穿模。
-            new TableSpec { Name = "Cheek", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = CheekPuffTicks, YValues = CheekPuffTicks, Skip = CheekSkip },
+            new TableSpec { Name = "Cheek", X = "Ho/Drive/Cheek/Left/Puff", Y = "Ho/Drive/Cheek/Right/Puff", XToken = "PuffL", YToken = "PuffR", XValues = CheekPuffTicks, YValues = CheekPuffTicks, Skip = CheekSkip, Override = CheekPuffOverride },
         };
 
         /// <summary>

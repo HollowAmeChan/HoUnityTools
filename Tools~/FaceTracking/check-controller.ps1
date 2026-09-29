@@ -395,8 +395,10 @@ $scaleOf = [ordered]@{
     # 舌头（2026-09-28 深夜）：**不在 2D 刻度清单里** —— 1D 5 格的阈值在 `$simple1DSlot` / `$scaleOf1D`。
     'LidL'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
     'LidR'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
-    # 颊轴：0 / 0.39 / 1 三档（0.39 = 月牙挪出来那一档；轴曲线负责把 0 与 0.39 之间压掉）
-    'Cheek'       = @{ x = @(0.0, 0.39, 1.0); y = @(0.0, 0.39, 1.0) }
+    # 颊轴（2026-09-29 用户手调状态点）：**刻度 0 / 0.39 / 0.65**（0.39 = 月牙挪出来那一档、
+    # 0.65 = 移动满档；轴曲线负责把 0 与 0.39 之间压掉），**外加手调的 0.6**（双鼓那一格不在刻度上）。
+    # 与 MouthCore 同一路数：这里列的是"用到的全部坐标值"，真正的规格在下面 $exactPos 逐格钉死。
+    'Cheek'       = @{ x = @(0.0, 0.39, 0.6, 0.65); y = @(0.0, 0.39, 0.6, 0.65) }
     # 下巴：JawSide 实测单侧只到 0.52（±0.65 老刻度够不着）· Jaw 0 / 0.75
     'MouthJaw'    = @{ x = @(-0.52, 0.0, 0.52); y = @(0.0, 0.75) }
 }
@@ -461,6 +463,11 @@ $exactPos = [ordered]@{
     # ⭐ **权威 = 就是下面这组值**（2026-09-29 用户定：分块隔离的控制器才是真验收基准；那份
     #    `DIAG_MouthCore_Aligned11.controller` 已按"验完即删"的规矩删掉，`tree-dump.py` 读出的坐标落在这里）。
     #    ⚠️ 用户挪点之后：**先读资产 → 再改生成器的 `$mouthCoreOver` → 最后改这里**（顺序不能反）。
+    # 颊三格（2026-09-29 用户手调）：0.65 =「移动」满档；双鼓那格是手调的 0.6（不在刻度值上）。
+    # ⚠️ 这三格**必须逐格钉**：只核"坐标值集合"的话，颊左鼓与颊右鼓对调了也看不出来。
+    '颊左鼓'          = @(0.65, 0)
+    '颊右鼓'          = @(0, 0.65)
+    '颊双鼓'          = @(0.6, 0.6)
     '嘴苦闭'          = @(-0.5, 0)
     '嘴苦半张'         = @(-0.571, 0.329)
     '嘴苦满'          = @(-0.345, 0.926)
@@ -564,12 +571,15 @@ foreach ($sw in $switchSpec.Keys) {
 }
 
 # ── 曲线 ↔ 刻度 对齐（2026-09-29 加，用户：「台阶跟我们动画最好精准对上，不然鼓嘴移动不会从初始位置开始」）──
-# 台状曲线的**落点必须精确等于表里的刻度**：落在刻度之间 ⇒ 混合出半个状态（月牙半出来 ⇒ 穿模；
-# 或者"移动"从半路开始而不是从"出来"那个姿势开始）。这里把"哪一个落点该等于哪个刻度"钉死。
+# 台状曲线的**落点要么精确等于表里的刻度、要么 ≥ 最大刻度**：
+#   · 落在刻度**之间** ⇒ 混合出半个状态（月牙半出来 ⇒ 穿模；或"移动"从半路开始而不是从"出来"那个姿势开始）✗
+#   · 推到**最大刻度之外**是允许的 —— 凸包会把超出去的部分吸收成「极端那一格 100%」（饱和）。
+#     2026-09-29 用户把「移动」满档从 1.0 收到 **0.65**，而轴曲线末点仍在 1.0 ⇒ 正是这种饱和。
+# 另外必须**有一个精确的 riser 落点**（= 表里「出来」那一档），否则"移动"不是从"出来"的姿势起步。
 $curveAlign = @(
-    # 颊的两根轴：落点只允许 {0, 0.39, 1}，而且必须**有一个精确的 0.39**（= 「月牙挪出来」那一档）
-    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.39, 1.0); riser = 0.39 }
-    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.39, 1.0); riser = 0.39 }
+    # 颊的两根轴：落点 {0, 0.39, 1}，其中 0.39 必须精确存在；1.0 > 最大刻度 0.65 ⇒ 按饱和放行
+    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.39, 0.6, 0.65); riser = 0.39 }
+    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.39, 0.6, 0.65); riser = 0.39 }
 )
 foreach ($spec in $curveAlign) {
     $row = @($prof.outputs | Where-Object { $_.parameter -eq $spec.row })
@@ -580,14 +590,18 @@ foreach ($spec in $curveAlign) {
         continue
     }
     $vals = @($keys | ForEach-Object { [double]$_.v })
-    $outside = @($vals | Where-Object { -not (HasNearValue $spec.ticks $_) })
+    $maxTick = ($spec.ticks | Measure-Object -Maximum).Maximum
+    $outside = @($vals | Where-Object { -not (HasNearValue $spec.ticks $_) -and ($_ -lt ($maxTick - 0.0001)) })
     if ($outside.Count -gt 0) {
-        $problems.Add("$($spec.row) 的曲线落点不在表 $($spec.tree) 的刻度里：" + (($outside | Sort-Object -Unique) -join ', ') + "（轴会停在刻度之间 ⇒ 混合出半个状态）")
+        $problems.Add("$($spec.row) 的曲线落点既不在表 $($spec.tree) 的刻度里、也没到最大刻度 $maxTick ：" + (($outside | Sort-Object -Unique) -join ', ') + "（轴会停在刻度之间 ⇒ 混合出半个状态）")
+    }
+    if (@($vals | Where-Object { $_ -ge ($maxTick - 0.0001) }).Count -eq 0) {
+        $problems.Add("$($spec.row) 的曲线最高只到 " + (($vals | Measure-Object -Maximum).Maximum) + "，够不到表 $($spec.tree) 的最大刻度 $maxTick ⇒ 那一档永远到不了 100%")
     }
     if (-not (HasNearValue $vals ([double]$spec.riser))) {
         $problems.Add("$($spec.row) 的曲线里没有精确的 $($spec.riser) 落点（= 表里「出来」那一档；没有它，移动就不是从出来的姿势开始）")
     }
-    else { $notes.Add("曲线对齐 $($spec.row)：落点 " + (($vals | Sort-Object -Unique) -join ' / ') + " ⊆ 刻度 " + ($spec.ticks -join ' / ') + " ✓") }
+    else { $notes.Add("曲线对齐 $($spec.row)：落点 " + (($vals | Sort-Object -Unique) -join ' / ') + " ⊆ 刻度 " + ($spec.ticks -join ' / ') + " 或 ≥ " + $maxTick + " ✓") }
 }
 
 # ── 复用检查（2026-09-29 加）：**两个格子指向同一个动作**是有意的设计（`MouthShift` 上排左右复用同侧下排），
