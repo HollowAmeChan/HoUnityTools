@@ -8,6 +8,7 @@
 | 功能 | 入口 |
 | --- | --- |
 | 动画工具（折叠栏：**形态键动画** + **轨道处理**） | `HoUnityTools/动画工具` |
+| 快速渲染（拍一张游戏视图 / 离线录 MP4） | `HoUnityTools/快速渲染` |
 | FBX 导入处理中控 | `HoUnityTools/HoFBX导入处理` |
 | Warudo Prefab 快速构建 | `HoUnityTools/FastBuildWarudoMod` |
 | 面捕：调试面板 | `HoUnityTools/面捕/调试面板` |
@@ -52,6 +53,7 @@ FBX 导入处理中控可以根据配置自动添加骨骼绘制器和 Unity 标
 
 其他
 
+- [快速渲染面板（拍一张 / 离线录一段）](docs/完善的功能/QUICK_CAPTURE_PANEL.md)
 - [Warudo FastBuild 设计与验证](docs/WARUDO_FAST_BUILD.md)
 - [摆锤约束设计与验证](docs/PENDULUM_CONSTRAINT.md)
 - [跟随约束坐标系规则](docs/FOLLOW_CONSTRAINT.md)
