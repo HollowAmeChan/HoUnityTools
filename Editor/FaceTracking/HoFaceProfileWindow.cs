@@ -46,6 +46,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>左边目录的宽度；**可以拖中线改**，存在 EditorPrefs 里跨窗口记住。</summary>
         private float leftWidth = 300.0f;
         private bool draggingSplitter;
+        private Rect splitterRect;
+        private int splitterControl;
+        private float splitterStartX, splitterStartWidth;
+        private const int SplitterHint = 0x484F5350;
 
         /// <summary>
         /// 正在编辑**哪一类行**。左列一次只列一类（输入行或输出行），右面板编辑它。
@@ -224,6 +228,15 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (middleware == null && profile != null) ReloadProfile(true);
         }
 
+        private void OnLostFocus() => ReleaseSplitter();
+        private void OnDisable() => ReleaseSplitter();
+
+        private void ReleaseSplitter()
+        {
+            if (draggingSplitter && splitterControl != 0 && GUIUtility.hotControl == splitterControl) GUIUtility.hotControl = 0;
+            draggingSplitter = false;
+        }
+
         // ══════════════════════════════════════════════════════════════
         // 骨架
         // ══════════════════════════════════════════════════════════════
@@ -261,6 +274,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             // 目录列最多占窗口的一半 —— 拖到头也不该把详情列挤没（那边还要放曲线编辑器）。
             float limit = Mathf.Max(LeftWidthMin, position.width * 0.5f);
+            // Claim the divider before the list's custom hit tests can consume its mouse event.
+            // Allocate its ID before the variable-length list as well.
+            HandleSplitterInput(LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
             float width = Mathf.Clamp(leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
 
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
@@ -270,7 +286,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     DrawLeftColumn();
                 }
 
-                DrawSplitter(ref leftWidth, LeftWidthMin, Mathf.Min(LeftWidthMax, limit));
+                DrawSplitter();
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
                 {
@@ -294,64 +310,64 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// **可拖的中线**：左键按住左右拖，改 <paramref name="width"/>。
+        /// **可拖的中线**：左键按住左右拖，改左列宽度。
         /// 双击回到默认宽度。松手时记住（<see cref="EditorPrefs"/>）。
         ///
         /// 为什么要有它：右边那一列在窄窗口下会装不下，原来只能靠**横向滚动条**看全；
         /// 让用户自己把左边收窄，比让他左右滚要顺手得多。
         /// </summary>
-        private void DrawSplitter(ref float width, float min, float max)
+        private void DrawSplitter()
         {
             Rect rect = GUILayoutUtility.GetRect(SplitterWidth, SplitterWidth, 0.0f, 4000.0f, GUILayout.ExpandHeight(true));
-            int control = GUIUtility.GetControlID(FocusType.Passive);
+            if (Event.current.type != EventType.Repaint) return;
+            splitterRect = rect;
+            EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal, splitterControl);
+            Color line = HoConstraintEditorTheme.SeparatorColor;
+            if (draggingSplitter) line = new Color(line.r, line.g, line.b, 1.0f);
+            EditorGUI.DrawRect(new Rect(rect.x + (rect.width - 1.0f) * 0.5f, rect.y, 1.0f, rect.height), line);
+        }
 
-            switch (Event.current.type)
+        private void HandleSplitterInput(float min, float max)
+        {
+            splitterControl = GUIUtility.GetControlID(SplitterHint, FocusType.Passive);
+            Event evt = Event.current;
+            switch (evt.GetTypeForControl(splitterControl))
             {
-                case EventType.Repaint:
-                    EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
-                    Color line = HoConstraintEditorTheme.SeparatorColor;
-                    if (draggingSplitter) line = new Color(line.r, line.g, line.b, 1.0f);
-                    EditorGUI.DrawRect(new Rect(rect.x + (rect.width - 1.0f) * 0.5f, rect.y, 1.0f, rect.height), line);
-                    break;
-
                 case EventType.MouseDown:
-                    if (rect.Contains(Event.current.mousePosition))
+                    if (evt.button == 0 && GUIUtility.hotControl == 0 && splitterRect.Contains(evt.mousePosition))
                     {
-                        if (Event.current.clickCount == 2)
+                        if (evt.clickCount == 2)
                         {
-                            // 双击复位
-                            width = 300.0f;
-                            EditorPrefs.SetFloat(LeftWidthPref, width);
-                            Event.current.Use();
-                            Repaint();
+                            leftWidth = Mathf.Clamp(300.0f, min, max);
+                            EditorPrefs.SetFloat(LeftWidthPref, leftWidth);
                         }
                         else
                         {
                             draggingSplitter = true;
-                            GUIUtility.hotControl = control;
-                            Event.current.Use();
+                            splitterStartX = evt.mousePosition.x;
+                            splitterStartWidth = Mathf.Clamp(leftWidth, min, max);
+                            GUIUtility.hotControl = splitterControl;
                         }
+                        evt.Use();
+                        Repaint();
                     }
                     break;
 
                 case EventType.MouseDrag:
-                    if (draggingSplitter)
+                    if (draggingSplitter && GUIUtility.hotControl == splitterControl)
                     {
-                        // 往右拖 = 列表列变宽（列表在**左**，中线跟着鼠标走）。
-                        // ⚠️ 这个符号与"列表在哪一列"绑定：哪天再把两列换边，这里要取反。
-                        width = Mathf.Clamp(width + Event.current.delta.x, min, max);
-                        Event.current.Use();
+                        leftWidth = Mathf.Clamp(splitterStartWidth + evt.mousePosition.x - splitterStartX, min, max);
+                        evt.Use();
                         Repaint();
                     }
                     break;
 
                 case EventType.MouseUp:
-                    if (draggingSplitter)
+                    if (evt.button == 0 && draggingSplitter && GUIUtility.hotControl == splitterControl)
                     {
-                        draggingSplitter = false;
-                        GUIUtility.hotControl = 0;
-                        EditorPrefs.SetFloat(LeftWidthPref, width);
-                        Event.current.Use();
+                        ReleaseSplitter();
+                        EditorPrefs.SetFloat(LeftWidthPref, leftWidth);
+                        evt.Use();
                     }
                     break;
             }
@@ -474,6 +490,10 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void DrawLeftColumn()
         {
+            float columnWidth = Mathf.Clamp(leftWidth, LeftWidthMin,
+                Mathf.Min(LeftWidthMax, Mathf.Max(LeftWidthMin, position.width * 0.5f)));
+            float actionWidth = (columnWidth - 8.0f) / 3.0f;
+            bool compactActions = columnWidth < 300.0f;
             using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
             {
                 // 「输入行 / 输出行」的切换在**左边那一排**（见 DrawTopBar），这里不重复放。
@@ -492,19 +512,19 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 using (HoConstraintEditorControls.Row())
                 {
-                    if (HoConstraintEditorControls.Button("+ 新增", "在列表末尾加一行。", false, 64.0f))
+                    if (HoConstraintEditorControls.Button("+ 新增", "在列表末尾加一行。", false, actionWidth))
                     {
                         AddOutput();
                     }
 
                     HoConstraintEditorControls.Gap(4.0f);
-                    if (HoConstraintEditorControls.Button("批量改名…", "对参数名做查找替换 / 加前后缀。先出预览，确认了才应用。"))
+                    if (HoConstraintEditorControls.Button(compactActions ? "改名…" : "批量改名…", "对参数名做查找替换 / 加前后缀。先出预览，确认了才应用。", false, actionWidth))
                     {
                         HoFaceBatchRenameWindow.Open(ActiveRows(), () => dirty = true, selected);
                     }
 
                     HoConstraintEditorControls.Gap(4.0f);
-                    if (HoConstraintEditorControls.Button("需要的输入…", "扫全部规则（输入行 + 输出行）的表达式，列出用到的所有键，可一键复制。"))
+                    if (HoConstraintEditorControls.Button(compactActions ? "输入…" : "需要的输入…", "扫全部规则（输入行 + 输出行）的表达式，列出用到的所有键，可一键复制。", false, actionWidth))
                     {
                         HoFaceInputsWindow.Open(this);
                     }
@@ -925,9 +945,9 @@ ActiveRows().RemoveAt(index);
                     // 把"没写"和"写了但带数字"都摊在状态栏上：重写注释时靠它推进度。
                     + (noNotes > 0 ? " · " + noNotes + " 行**还没写注释**" : " · 注释齐")
                     + (numberNotes > 0 ? " · " + numberNotes + " 行注释带数字（要写清含义与来源）" : "");
-                GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption);
+                GUIStyle style = new GUIStyle(HoConstraintEditorTheme.Caption) { clipping = TextClipping.Clip };
                 if (bad > 0 || duplicates.Count > 0) style.normal.textColor = HoConstraintEditorTheme.ErrorColor;
-                GUI.Label(HoConstraintEditorControls.NextAuto(text, style), text, style);
+                GUI.Label(HoConstraintEditorControls.NextFlexible(40.0f), new GUIContent(text, text), style);
 
                 HoConstraintEditorControls.Flex();
                 if (!string.IsNullOrEmpty(message))
