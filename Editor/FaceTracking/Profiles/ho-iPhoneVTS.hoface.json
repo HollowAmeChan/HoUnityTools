@@ -4059,7 +4059,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Style/CatMouth",
-                        "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - out(\"Ho/Style/InvertedV\"))",
+                        "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [  ],
@@ -4067,7 +4067,7 @@
                     },
                                         {
                         "parameter":  "Ho/Style/Cheek",
-                        "expression":  "out(\"Ho/Style/Cheek\") * (1 - out(\"Ho/Style/InvertedV\"))",
+                        "expression":  "out(\"Ho/Style/Cheek\") * (1 - clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
@@ -4103,7 +4103,7 @@
                     },
                     {
                         "parameter":  "Ho/Style/MouthWidth",
-                        "expression":  "lerp(out(\"Ho/Style/MouthWidth/Read\"), 0.5, out(\"Ho/Style/InvertedV\"))",
+                        "expression":  "lerp(out(\"Ho/Style/MouthWidth/Read\"), 0.5, clamp(out(\"Ho/Style/InvertedV\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [  ],
@@ -4112,7 +4112,7 @@
                     },
                     {
                         "parameter":  "Ho/Style/MouthWidth",
-                        "expression":  "lerp(out(\"Ho/Style/MouthWidth\"), 0.5, out(\"Ho/Style/Cheek\"))",
+                        "expression":  "lerp(out(\"Ho/Style/MouthWidth\"), 0.5, clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
@@ -4120,7 +4120,7 @@
                     },
                     {
                         "parameter":  "Ho/Drive/Style/CatMouth",
-                        "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "expression":  "out(\"Ho/Drive/Style/CatMouth\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
@@ -4128,7 +4128,7 @@
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/X",
-                        "expression":  "out(\"Ho/Drive/Mouth/X\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "expression":  "out(\"Ho/Drive/Mouth/X\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
@@ -4136,7 +4136,7 @@
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/Y",
-                        "expression":  "out(\"Ho/Drive/Mouth/Y\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "expression":  "out(\"Ho/Drive/Mouth/Y\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
@@ -4144,7 +4144,7 @@
                     },
                                         {
                         "parameter":  "Ho/Drive/Mouth/Form",
-                        "expression":  "out(\"Ho/Drive/Mouth/Form\") * (1 - out(\"Ho/Style/Cheek\"))",
+                        "expression":  "out(\"Ho/Drive/Mouth/Form\") * (1 - clamp(out(\"Ho/Style/Cheek\"), 0, 1))",
                         "defaultValue":  0,
                         "curve":  { "keys": [  ] },
                         "modifiers":  [{ "kind": "smooth", "seconds": 0.08, "steps": [] }],
