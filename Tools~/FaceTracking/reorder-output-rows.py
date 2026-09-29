@@ -34,6 +34,20 @@ def is_pucker(n):
     return n in PUCKER or n.startswith('Ho/Style/InvertedV/') or n.startswith('Ho/Style/MouthWidth/')
 
 
+def is_cheek(r):
+    """归属鼓嘴的行：它自己那几行 + 它**关别人**的链行（表达式里读 `Ho/Style/Cheek`）。"""
+    return r['name'].startswith('Ho/Style/Cheek') or r['name'] == 'Ho/Drive/Style/Cheek' \
+        or ('Ho/Style/Cheek' in r['expr'] and r['name'] in (
+            'Ho/Drive/Style/InvertedV', 'Ho/Drive/Style/CatMouth'))
+
+
+def is_effect(r):
+    """**作用区**：被形态权重影响的行（V嘴 关 core、猫嘴的宽度门、宽度读数与归中）+ 宽度转发。
+    ⚠️ 必须排在所有形态块**之后** —— 它们读的是**最终的**形态权重。"""
+    return r['name'] in ('Ho/Style/MouthCoreGate', 'Ho/Style/MouthWidth/CatMouthGate',
+                         'Ho/Style/MouthWidth/Read', 'Ho/Style/MouthWidth', 'Ho/Drive/Mouth/Pucker')
+
+
 def is_forward(r):
     """整条就是一个 `out("…")`（纯转发）⇒ 与"读自己再乘别的"的**同名覆盖行**区分开。"""
     return re.match(r'^\s*out\(\s*"[^"]+"\s*\)\s*$', r['expr']) is not None
@@ -51,14 +65,17 @@ GROUPS = [
     ('⑧ Ho/Drive/Gate（区域门）', lambda r: r['name'].startswith('Ho/Drive/Gate/')
         and r['name'] not in ('Ho/Drive/Gate/MouthStyle', 'Ho/Drive/Gate/MouthCore')),
     ('⑨ Ho/Drive/Slice',        lambda r: r['name'].startswith('Ho/Drive/Slice/')),
-    ('⑩ style · Cheek',         lambda r: r['name'].startswith('Ho/Style/Cheek') or r['name'] == 'Ho/Drive/Style/Cheek'),
     # 猫嘴块：判定 / 开关 / 发布（发布 = 纯转发那一行；V嘴 压它的那条**同名覆盖行**归 ⑫）
     ('⑪ style · CatMouth',      lambda r: r['name'].startswith('Ho/Style/CatMouth')
         or (r['name'] == 'Ho/Drive/Style/CatMouth' and is_forward(r))),
     ('⑫ style · 噘嘴（读数 / 门 / 判定 / 开关 / 发布 / 宽度换算 / 归中 / 转发 / 关 core / 压猫嘴）',
-     lambda r: is_pucker(r['name'])
-        or (r['name'] == 'Ho/Drive/Style/CatMouth' and not is_forward(r))),
-    ('⑬ style · 共享（块门契约行）',
+     lambda r: (is_pucker(r['name']) and not is_effect(r) and not is_cheek(r))
+        or (r['name'] == 'Ho/Drive/Style/CatMouth' and not is_forward(r) and not is_cheek(r))),
+    # ⭐ 鼓嘴整块在**最下**（它要关 V嘴 / 猫嘴 / 嘴宽 ⇒ 必须排在被关的那些行之后）
+    ('⑬ style · Cheek（鼓嘴最霸道：关别人）', is_cheek),
+    # ⭐ **作用区**：读的是**最终的**形态权重 ⇒ 排在所有形态块之后（谁被压成 0，这里自动跟着灭）
+    ('⑭ style · 作用区（被形态影响的行 + 宽度转发）', is_effect),
+    ('⑮ style · 共享（块门契约行）',
      lambda r: r['name'] in ('Ho/Style/MouthGate', 'Ho/Drive/Gate/MouthStyle',
                              'Ho/Drive/Gate/MouthCore')),
 ]
