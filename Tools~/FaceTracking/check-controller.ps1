@@ -89,11 +89,14 @@ $expectedTrees = [ordered]@{
     # （2026-09-27 删掉 `MouthCoreExpr` 与 `MouthCoreSwitch`：夸张的笑嘴 = `Form` 更大，轴上够得到）
     # 风格化形态（2026-09-27 加）：两条都是"一个固定姿势"，权重来自中间层的契约行 ——
     #   · `InvertedV`：1D，阈值 0 / 1（形态门是迟滞出来的 0/1），两格 = 中性 / 倒V 姿势
-    #   · `Cheek`：2D 颊轴（左 × 右），4 格 = 都不鼓 / 只左 / 只右 / 双边
     'InvertedV'         = @{ type = 'Simple1D'; blend = 'Ho/Drive/Style/InvertedV' }
     # 嘴宽（2026-09-28 傍晚：`MouthWidth` 以 1D 3 格回来）—— 轴是**既有的** `Ho/Drive/Mouth/Pucker`
     'MouthWidth'        = @{ type = 'Simple1D'; blend = 'Ho/Drive/Mouth/Pucker' }
-    'Cheek'             = @{ type = 'FreeformCartesian2D'; x = 'Ho/Drive/Cheek/Left/Puff'; y = 'Ho/Drive/Cheek/Right/Puff' }
+    # 颊（2026-09-29 用户定：**拆成左右各一棵 1D**）：父节点 Direct（两个孩子 = 下面两棵，各挂恒 1 的 W/One），
+    # 两棵各自吃一根颊轴。原来的 2D 表退役 —— 轴独立之后「双开/双鼓」靠**相加**自然得到（Direct 是加法）。
+    'Cheek'             = @{ type = 'Direct' }
+    'CheekL'            = @{ type = 'Simple1D'; blend = 'Ho/Drive/Cheek/Left/Puff' }
+    'CheekR'            = @{ type = 'Simple1D'; blend = 'Ho/Drive/Cheek/Right/Puff' }
 }
 
 # ── 解析 .controller（YAML 文本；只需要参数表、层状态与混合树）──────────────────
@@ -344,9 +347,10 @@ $slotSpec = [ordered]@{
     'MouthJaw'    = @{ x = 'JawSide'; y = 'Jaw'; a = 3; ys = @(0, 1); skip = @('0,0', '2,0') }
     'LidL'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
     'LidR'        = @{ direct = @('NeutralClosed', 'NeutralOpen', 'NeutralWide', 'HappyClosed', 'HappyOpen', 'AngerClosed', 'AngerOpen', 'AngerWide', 'SadClosed', 'SadOpen', 'SadWide') }
-    # 颊轴（2026-09-27 加）：两根轴各 **3 档 {0, 0.39, 1}**（2026-09-29 用户定）⇒ 3×3 里摆 7 格。
-    # 0.39 = 小月牙从脸里挪出来那一档（比台阶触发点 0.40 内收 0.01），1 = 月牙被移动；`(1,2)`/`(2,1)` 先不建。
-    'Cheek'       = @{ x = 'PuffL';    y = 'PuffR';     a = 3; ys = @(0, 1, 2); skip = @('1,2', '2,1') }
+    # 颊（2026-09-29 用户定：**拆成左右各一棵 1D**）—— 2D 表退役：轴独立之后「双开 / 双鼓」是两侧
+    # **相加**自然得到的（Direct 是加法、不归一化，见 docs/CONTROLLER.md §8.0），不再需要那些格子，
+    # "双开跟半边开混"那类凸包投影问题从根上没有了。父节点是 Direct，两个孩子见 `$simple1DSlot`。
+    'Cheek'       = @{ direct = @('CheekL', 'CheekR') }
 }
 # 副本表的槽位规则与主版一致（槽位名前缀换成 `<主版>Expr`）。⚠️ 嘴 2026-09-27 起没有副本
 $slotCopyOf = [ordered]@{ }
@@ -373,6 +377,10 @@ $simple1DSlot = [ordered]@{
     # ⚠️ 4 个刻度是**占位**（等分；`tongueOut` 还没实测过）。
     'MouthTongue'  = @{ t = 'Tongue';    a = 4; thr = @(0.0, 0.3333, 0.6667, 1.0) }
     # 下巴（2026-09-28 深夜）：**1D 2 格**（咬合/闭 ↔ 张开），轴 = `Mouth/Jaw`；刻度就是原 2D 表的 Y 两档。
+    # 颊（2026-09-29 用户定：**拆成左右各一棵 1D**）：一格一侧月牙的一档 —— 0 = 藏 / 0.39 = 出来 / 0.65 = 移动。
+    # ⚠️ 0.39 是**轴曲线的落点**（台阶触发点是输入 0.40，落点内收 0.01）；三档必须与曲线对齐（见 `$curveAlign`）。
+    'CheekL'       = @{ t = 'PuffL';     a = 3; thr = @(0.0, 0.39, 0.65) }
+    'CheekR'       = @{ t = 'PuffR';     a = 3; thr = @(0.0, 0.39, 0.65) }
 }
 
 # 刻度核对（2026-09-27 加）：坐标是**语义**（轴值 → 姿势），所以它必须等于生成器里那套刻度。
@@ -395,10 +403,7 @@ $scaleOf = [ordered]@{
     # 舌头（2026-09-28 深夜）：**不在 2D 刻度清单里** —— 1D 5 格的阈值在 `$simple1DSlot` / `$scaleOf1D`。
     'LidL'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
     'LidR'        = @{ x = @(-1.0, 0.0, 1.0); y = @(-1.0, 0.0, 1.0) }
-    # 颊轴（2026-09-29 用户手调状态点）：**刻度 0 / 0.39 / 0.65**（0.39 = 月牙挪出来那一档、
-    # 0.65 = 移动满档；轴曲线负责把 0 与 0.39 之间压掉），**外加手调的 0.6**（双鼓那一格不在刻度上）。
-    # 与 MouthCore 同一路数：这里列的是"用到的全部坐标值"，真正的规格在下面 $exactPos 逐格钉死。
-    'Cheek'       = @{ x = @(0.0, 0.39, 0.6, 0.65); y = @(0.0, 0.39, 0.6, 0.65) }
+    # 颊（2026-09-29 拆成左右各一棵 **1D**）⇒ 不在 2D 刻度表里：阈值在 `$simple1DSlot` 的 CheekL / CheekR。
     # 下巴：JawSide 实测单侧只到 0.52（±0.65 老刻度够不着）· Jaw 0 / 0.75
     'MouthJaw'    = @{ x = @(-0.52, 0.0, 0.52); y = @(0.0, 0.75) }
 }
@@ -463,11 +468,7 @@ $exactPos = [ordered]@{
     # ⭐ **权威 = 就是下面这组值**（2026-09-29 用户定：分块隔离的控制器才是真验收基准；那份
     #    `DIAG_MouthCore_Aligned11.controller` 已按"验完即删"的规矩删掉，`tree-dump.py` 读出的坐标落在这里）。
     #    ⚠️ 用户挪点之后：**先读资产 → 再改生成器的 `$mouthCoreOver` → 最后改这里**（顺序不能反）。
-    # 颊三格（2026-09-29 用户手调）：0.65 =「移动」满档；双鼓那格是手调的 0.6（不在刻度值上）。
-    # ⚠️ 这三格**必须逐格钉**：只核"坐标值集合"的话，颊左鼓与颊右鼓对调了也看不出来。
-    '颊左鼓'          = @(0.65, 0)
-    '颊右鼓'          = @(0, 0.65)
-    '颊双鼓'          = @(0.6, 0.6)
+    # 颊那三格（逐格移位）已随 2D 表退役 —— 现在是两棵 1D，名字与阈值由 `$simple1DSlot` + 下面的顺序检查核。
     '嘴苦闭'          = @(-0.5, 0)
     '嘴苦半张'         = @(-0.571, 0.329)
     '嘴苦满'          = @(-0.345, 0.926)
@@ -551,6 +552,19 @@ foreach ($name in $simple1DSlot.Keys) {
     }
 }
 
+# 1D 的名字只按**集合**核 ⇒ 把同一棵里的左右两格对调了看不出来。颊那两棵逐格按**顺序**钉
+# （名字仍以 psd1 为唯一出处；这里只是换个更严的比法）。
+foreach ($name in @('CheekL', 'CheekR')) {
+    if (-not $trees.ContainsKey($name)) { continue }
+    $got = @($trees[$name].Kids | ForEach-Object { $_.Name })
+    $wantOrder = @($script:slotNames[$name])
+    for ($i = 0; $i -lt $wantOrder.Count -and $i -lt $got.Count; $i++) {
+        if ($got[$i] -ne $wantOrder[$i]) {
+            $problems.Add("1D 表 $name 第 $i 格应为 $($wantOrder[$i])，实际 $($got[$i])（左右对调？）")
+        }
+    }
+}
+
 # 1D 开关：两个子节点必须是**两个具体的表**，阈值按类型核 ——
 #   · 按键表情副本：阈值 0 / 1（门）
 #   · 轴驱动的变体：阈值 = 该轴上的**实测档位**（卷唇 0.02 / 0.18），必须显式写死
@@ -577,9 +591,10 @@ foreach ($sw in $switchSpec.Keys) {
 #     2026-09-29 用户把「移动」满档从 1.0 收到 **0.65**，而轴曲线末点仍在 1.0 ⇒ 正是这种饱和。
 # 另外必须**有一个精确的 riser 落点**（= 表里「出来」那一档），否则"移动"不是从"出来"的姿势起步。
 $curveAlign = @(
-    # 颊的两根轴：落点 {0, 0.39, 1}，其中 0.39 必须精确存在；1.0 > 最大刻度 0.65 ⇒ 按饱和放行
-    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'Cheek'; ticks = @(0.0, 0.39, 0.6, 0.65); riser = 0.39 }
-    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'Cheek'; ticks = @(0.0, 0.39, 0.6, 0.65); riser = 0.39 }
+    # 颊的两根轴（2026-09-29 起各自喂一棵 **1D**）：落点必须正好是那棵 1D 的三个阈值，
+    # 而且必须**有一个精确的 0.39**（=「月牙挪出来」那一档）。0.65 = 表的满档 ⇒ 轴的行程全部落在表内。
+    @{ row = 'Ho/Drive/Cheek/Left/Puff';  tree = 'CheekL'; ticks = @(0.0, 0.39, 0.65); riser = 0.39 }
+    @{ row = 'Ho/Drive/Cheek/Right/Puff'; tree = 'CheekR'; ticks = @(0.0, 0.39, 0.65); riser = 0.39 }
 )
 foreach ($spec in $curveAlign) {
     $row = @($prof.outputs | Where-Object { $_.parameter -eq $spec.row })
