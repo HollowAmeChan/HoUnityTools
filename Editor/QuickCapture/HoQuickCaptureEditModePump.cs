@@ -21,6 +21,7 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Hollow.HoUnityTools.Runtime.QuickCapture;
 
 namespace Hollow.HoUnityTools.Editor.QuickCapture
@@ -46,6 +47,24 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         private bool started;
         private bool finished;
         private string lastFailure;
+
+        /// <summary>
+        /// 游戏视图抓屏必须**在渲染回调里**做，不能在 `EditorApplication.update` 里做。
+        ///
+        /// 原因（用户报的"截到错误的编辑器区域的绘制"就是它）：
+        /// `ScreenCapture.CaptureScreenshotIntoRenderTexture` 读的是**当前后台缓冲**。
+        /// 而 `EditorApplication.update` 这个 tick 的时序是：
+        ///     ① 我们 QueuePlayerLoopUpdate() 让播放循环跑一次（游戏视图在这时渲进后台缓冲）
+        ///     ② 编辑器各视图**重画**（IMGUI 把编辑器界面画到同一块后台缓冲上）
+        ///     ③ 才轮到我们的 update 回调
+        /// 于是第 ③ 步抓到的已经是**编辑器界面**了 —— 不是游戏视图。
+        ///
+        /// 所以改成挂渲染回调：管线一渲完就抓，那会儿后台缓冲里还是游戏视图。
+        /// SRP（URP/HDRP）走 `endFrameRendering`，内建管线走 `Camera.onPostRender`，两条都挂。
+        /// 这个回调**同步**执行、就在渲完之后，不用再等一个 tick。
+        /// </summary>
+        private bool renderHookSubscribed;
+        private bool capturedInRenderHook;
 
         private HoQuickCaptureEditModePump(
             HoQuickCapturePlan capturePlan,
@@ -74,6 +93,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
 
             pump.finished = true;
+            pump.UnsubscribeRenderHook();
             EditorApplication.update -= pump.OnEditorUpdate;
             pump.Dispose();
             active = null;
@@ -102,6 +122,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             active = pump;
             pump.started = true;
+            pump.SubscribeRenderHook();
             EditorApplication.update += pump.OnEditorUpdate;
             pump.BeginWaitForFrame();
             return true;
@@ -138,6 +159,113 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             EditorApplication.QueuePlayerLoopUpdate();
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // 渲染回调：游戏视图抓屏的唯一正确时机
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// 挂上渲染回调。SRP 与内建管线各走一条，两条都挂 —— 我们不知道用户用的是哪条。
+        ///
+        /// ⚠️ `endFrameRendering` 的委托签名**跨版本不一样**（2021.3 是
+        /// `Action<ScriptableRenderContext, Camera[]>`，Unity 6 是
+        /// `Action<ScriptableRenderContext, List<Camera>>`）。
+        /// 所以这里**把 lambda 存进一个实例字段**再挂：既能靠编译器推断出当前版本的签名，
+        /// 又能在注销时用**同一个实例** `-=` 掉。
+        ///（踩过的坑：直接 `+= (a,b) => ...` 是没法反注册的，每次都是新实例，
+        /// 结果是每抓一次就永久多一个订阅 —— 泄漏。）
+        /// </summary>
+        private Action<ScriptableRenderContext, Camera[]> endFrameHandler;
+
+        private void SubscribeRenderHook()
+        {
+            if (renderHookSubscribed)
+            {
+                return;
+            }
+
+            endFrameHandler = (context, cameras) => TryCaptureInRenderHook();
+            RenderPipelineManager.endFrameRendering += endFrameHandler;
+            Camera.onPostRender += OnCameraPostRender;
+            renderHookSubscribed = true;
+        }
+
+        private void UnsubscribeRenderHook()
+        {
+            if (!renderHookSubscribed)
+            {
+                return;
+            }
+
+            if (endFrameHandler != null)
+            {
+                RenderPipelineManager.endFrameRendering -= endFrameHandler;
+                endFrameHandler = null;
+            }
+
+            Camera.onPostRender -= OnCameraPostRender;
+            renderHookSubscribed = false;
+        }
+
+        /// <summary>内建管线：相机渲完就走这里。</summary>
+        private void OnCameraPostRender(Camera camera)
+        {
+            TryCaptureInRenderHook();
+        }
+
+        /// <summary>
+        /// 在渲染回调里抓一帧。**必须同步抓完**：这个回调一返回，编辑器马上就要把界面
+        /// 画到同一块后台缓冲上，再晚一步拿到的就是编辑器而不是游戏视图。
+        /// </summary>
+        private void TryCaptureInRenderHook()
+        {
+            if (finished || capturedInRenderHook || !started)
+            {
+                return;
+            }
+
+            // 只有"游戏视图"这条路需要这个时机；相机那条自己渲 RT，跟后台缓冲无关。
+            if (plan.RenderSource == HoQuickCaptureRenderSource.Camera)
+            {
+                return;
+            }
+
+            if (target == null)
+            {
+                return;
+            }
+
+            try
+            {
+                ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
+            }
+            catch (Exception)
+            {
+                // 这次没成不算失败，等下一次渲染回调。
+                return;
+            }
+
+            capturedInRenderHook = true;
+
+            // 抓完立刻收摊：把帧交出去，后面的回调不再动作。
+            HoQuickCapturedFrame frame;
+            string failure;
+            if (!HoQuickCaptureDriver.TryBuildFrameFrom(target, false, out frame, out failure))
+            {
+                Finish(failure);
+                return;
+            }
+
+            frame.Index = 0;
+            frame.FileName = HoQuickCaptureDriver.BuildFrameFileName(plan, 0);
+
+            if (onFrame != null)
+            {
+                onFrame(frame);
+            }
+
+            Finish(null);
         }
 
         private void OnEditorUpdate()
@@ -180,21 +308,20 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             else
             {
                 // ── 游戏视图合成结果 ──
-                // ① 先试和播放模式同一条路：直接把游戏视图的合成结果拍进 RenderTexture。
-                captured = false;
-                fromCameraRender = false;
-                try
+                // 这条路**不在这个 tick 里抓**：游戏视图的合成结果只在渲染回调那一瞬间
+                // 还在后台缓冲里，等到 update tick 就已被编辑器界面盖掉了。
+                // 所以真正抓的动作在 FrameRendered 回调里，这里只是等它。
+                if (capturedInRenderHook)
                 {
-                    ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
-                    captured = !HoQuickCaptureCameraRenderer.IsBlank(target);
-                }
-                catch (Exception)
-                {
-                    captured = false;
+                    return;
                 }
 
-                // ② 不行就退到"渲一台相机"（那条也是相机渲出来的 ⇒ 要额外翻）。
-                if (!captured)
+                captured = false;
+                fromCameraRender = false;
+
+                // 回调一直没来（比如游戏视图没开着、或这条管线不上报渲染回调）——
+                // 退到"渲一台相机"，并且**明确告诉用户这张不是游戏视图合成结果**。
+                if (attempts >= MaxPumpAttempts)
                 {
                     captured = TryRenderFallbackCamera(out note);
                     fromCameraRender = captured;
@@ -364,6 +491,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
 
             finished = true;
+            UnsubscribeRenderHook();
             EditorApplication.update -= OnEditorUpdate;
             if (active == this)
             {

@@ -281,17 +281,52 @@
 ### 编辑模式是怎么"催帧"的
 
 编辑模式下**游戏视图平时根本不重画** —— 它只在你动它或场景变化时才画一次。
-所以想拍就得主动催，三步缺一不可（`HoQuickCaptureEditModePump`）：
+所以想拍就得主动催（`HoQuickCaptureEditModePump`）：
 
 1. `InternalEditorUtility.RepaintAllViews()` —— 让游戏视图排队重画；
 2. `EditorApplication.QueuePlayerLoopUpdate()` —— 让播放循环（含摄像机渲染）真的跑一次；
-3. 等**下一个** `EditorApplication.update` tick —— 那时这一帧才画完，再抓。
+3. 等**下一个** `EditorApplication.update` tick 再确认到底有没有画上去。
 
 不催就没画面；催完当场抓会抓到上一帧。头几次扑空是正常的，所以会重试（上限 12 次），
 并且用一个"整幅是不是单色/全黑"的稀疏采样判断这次到底有没有画上去。
 
+#### ⚠️ 但「抓」这一步**不能**在第 3 步做（踩过的坑）
+
+用户报过：「直接截游戏视图不播放时会直接截到**错误的编辑器区域的绘制**」。
+根因是时序。`EditorApplication.update` 这个 tick 的完整顺序是：
+
+    ① 我们 QueuePlayerLoopUpdate() → 播放循环跑一次，游戏视图渲进**后台缓冲**
+    ② 编辑器各视图**重画** → IMGUI 把编辑器界面画到**同一块后台缓冲**上
+    ③ 才轮到我们的 update 回调
+
+而 `ScreenCapture.CaptureScreenshotIntoRenderTexture` 读的就是**当前后台缓冲**。
+所以在第 ③ 步抓，抓到的是**编辑器界面**，不是游戏视图 —— 症状就是"截到了旁边那块编辑器区域"。
+
+**修法：把"抓"挪进渲染回调**，管线一渲完立刻抓，那会儿后台缓冲里还是游戏视图。
+两条管线各挂一个（不知道用户用哪条）：
+
+| 管线 | 回调 |
+| --- | --- |
+| SRP（URP / HDRP） | `RenderPipelineManager.endFrameRendering` |
+| 内建 | `Camera.onPostRender` |
+
+这个回调是**同步**的、就在渲完之后，所以 `TryCaptureInRenderHook` 里必须**当场抓完**
+——回调一返回，编辑器马上就会把界面画上去。
+
+> ⚠️ `endFrameRendering` 的委托签名**跨版本不一样**：2021.3 是
+> `Action<ScriptableRenderContext, Camera[]>`，Unity 6 是
+> `Action<ScriptableRenderContext, List<Camera>>`。
+> 所以 lambda 要**存进一个字段再挂**，这样既能让编译器推断出当前版本的签名，
+> 又能在注销时用同一个实例 `-=` 掉。
+> **别写成 `+= (a, b) => ...`** —— 那样每次都是新委托实例，`-=` 摘不掉，
+> 每抓一次就永久多一个订阅（泄漏）。
+
+编辑模式下"催帧"仍然要（第 1、2 步），只是第 3 步从"抓"变成了"等回调"；
+如果回调一直不来（游戏视图没开着、或管线不上报），重试到上限后
+退到"渲一台相机"，并明确告诉用户这张不是游戏视图合成结果。
+
 抓画面本身仍然优先用 `ScreenCapture.CaptureScreenshotIntoRenderTexture` —— 和播放模式**同一个调用**，
-两条路拍出来的东西才一致。只有它拿不到画面时才退到 `Camera.Render()`。
+两条路拍出来的东西才一致。只有它拿不到画面时才退到相机渲 RT。
 
 > ⚠️ 编辑模式是"尽力而为"：游戏视图最小化 / 被完全挡住时可能催不出画面，
 > 那时会重试到上限然后报错说明，不会静默卡住。
