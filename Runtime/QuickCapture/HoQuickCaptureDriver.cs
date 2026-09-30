@@ -438,7 +438,8 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
             ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
 
             // ② 从 RenderTexture 造出一帧（行序、翻转、纹理都在那一个方法里）。
-            if (!TryBuildFrameFrom(target, out frame, out failure))
+            //    这条是**游戏视图抓屏**，实测原始数据是顶边在前，所以不做额外翻转。
+            if (!TryBuildFrameFrom(target, sourceIsFlipped: false, out frame, out failure))
             {
                 return false;
             }
@@ -453,12 +454,23 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
         /// <summary>
         /// 把一个 RenderTexture 的内容做成一帧（读回 CPU、摆好行序、建纹理）。
         ///
-        /// 抽出来是因为**编辑模式那条路也要用同一套**（见 HoQuickCaptureEditModePump）：
-        /// 两条路的区别只在"怎么把画面弄进 RenderTexture"，之后的处理必须完全一致，
-        /// 否则又会变成"一个正一个反"那种事。
+        /// 抽出来是因为**两条路都要用同一套**（播放模式的帧泵 / 编辑模式帧泵 / 相机直渲）：
+        /// 区别只在"怎么把画面弄进 RenderTexture"，之后的处理必须完全一致。
         /// </summary>
+        /// <param name="source">已经画好的 RenderTexture。</param>
+        /// <param name="sourceIsFlipped">
+        /// 这个 source 的行序**与游戏视图那条路相反**吗？
+        ///
+        /// 游戏视图那条（`ScreenCapture.CaptureScreenshotIntoRenderTexture`）实测原始数据是
+        /// **顶边在前**（见下面的长注释）。而**相机渲进 RT 那条是反过来的（底边在前）** ——
+        /// 这是用户实拍报回来的：同一套翻转逻辑，游戏视图出来是正的，相机那条上下颠倒。
+        ///
+        /// 所以这里用**异或**来决定到底翻不翻：`sourceIsFlipped` 与下面那条"原始是顶边在前"
+        /// 的结论一异或，两条路各自都对，而且**每条路仍然只翻一次**。
+        /// </param>
         internal static bool TryBuildFrameFrom(
             RenderTexture source,
+            bool sourceIsFlipped,
             out HoQuickCapturedFrame frame,
             out string failure)
         {
@@ -482,17 +494,34 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
             // 两个原点不同，所以光看文档推不出结论。当时按"底边在前"实现，出图整个上下颠倒；
             // 翻过来就正了。
             //
+            // ⚠️ **这条结论只对"游戏视图抓屏"那个 RT 成立。相机自己渲出来的 RT 是反的**
+            //   （同样实测：相机那条路上下颠倒）。由 sourceIsFlipped 传进来区分。
+            //
             // ⚠️ 换机器 / 换图形后端（D3D12 / Vulkan / OpenGL）时如果发现出图又倒了，
             //    那说明这一格因后端而异 —— 到时候在这里加回一个开关，
-            //    别再一次次靠猜改代码（这个坑连踩过两次）。
+            //    别再一次次靠猜改代码（这个坑连踩过三次了）。
             //
             // 于是两份各造一份，**只翻一次**：
-            //   · topDown  —— 原始数组本身就是（图片编码要的：编码器按数组顺序当扫描行往下写）；
-            //   · bottomUp —— 复制 + 翻转出来（纹理 / 视频要的：Unity 的纹理行序）。
-            Color32[] topDown = raw;
-            Color32[] bottomUp = new Color32[raw.Length];
-            Array.Copy(raw, bottomUp, raw.Length);
-            FlipRowsInPlace(bottomUp, source.width, source.height);
+            //   · topDown  —— 图片编码要的（编码器按数组顺序当扫描行往下写）；
+            //   · bottomUp —— 纹理 / 视频要的（Unity 的纹理行序）。
+            bool rawIsTopDown = !sourceIsFlipped;
+
+            Color32[] topDown;
+            Color32[] bottomUp;
+            if (rawIsTopDown)
+            {
+                topDown = raw;
+                bottomUp = new Color32[raw.Length];
+                Array.Copy(raw, bottomUp, raw.Length);
+                FlipRowsInPlace(bottomUp, source.width, source.height);
+            }
+            else
+            {
+                bottomUp = raw;
+                topDown = new Color32[raw.Length];
+                Array.Copy(raw, topDown, raw.Length);
+                FlipRowsInPlace(topDown, source.width, source.height);
+            }
 
             var texture = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false)
             {

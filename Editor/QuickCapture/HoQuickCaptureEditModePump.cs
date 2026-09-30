@@ -165,17 +165,23 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             string note = null;
             bool captured;
 
+            // 这个 target 的内容是不是"**相机渲出来的**"？决定读回时要不要额外翻一次。
+            // 三条路里只有"游戏视图抓屏"那个 RT 是顶边在前；相机渲出来的都是底边在前。
+            bool fromCameraRender;
+
             if (plan.RenderSource == HoQuickCaptureRenderSource.Camera)
             {
                 // ── 指定相机渲进 RT（要透明背景就走这条）──
                 // 这条路是**确定性**的：渲一次就有，不需要催帧，也不受"游戏视图有没有在重画"影响。
                 captured = TryRenderSourceCamera(out note);
+                fromCameraRender = true;
             }
             else
             {
                 // ── 游戏视图合成结果 ──
                 // ① 先试和播放模式同一条路：直接把游戏视图的合成结果拍进 RenderTexture。
                 captured = false;
+                fromCameraRender = false;
                 try
                 {
                     ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
@@ -186,10 +192,11 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     captured = false;
                 }
 
-                // ② 不行就退到"渲一台相机"。
+                // ② 不行就退到"渲一台相机"（那条也是相机渲出来的 ⇒ 要额外翻）。
                 if (!captured)
                 {
                     captured = TryRenderFallbackCamera(out note);
+                    fromCameraRender = captured;
                 }
             }
 
@@ -207,7 +214,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             HoQuickCapturedFrame frame;
             string failure;
-            if (!HoQuickCaptureDriver.TryBuildFrameFrom(target, out frame, out failure))
+            if (!HoQuickCaptureDriver.TryBuildFrameFrom(target, fromCameraRender, out frame, out failure))
             {
                 Finish(failure);
                 return;
