@@ -14,6 +14,25 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Runtime.QuickCapture
 {
+    /// <summary>
+    /// 画面从哪来。
+    /// </summary>
+    public enum HoQuickCaptureRenderSource
+    {
+        /// <summary>
+        /// 游戏视图的最终合成结果（默认）。多相机、后处理、UI 都在里面 ——
+        /// 但它是画到屏幕上的，**拿不到透明背景**。
+        /// </summary>
+        GameView,
+
+        /// <summary>
+        /// 指定的相机渲进一张带 alpha 的 RenderTexture。
+        /// **要透明背景就用这个**：透明不来自抓屏，来自相机自己渲进 RT。
+        /// 代价：只有这一台相机的画面（没有别的相机叠加、没有 Screen Space-Overlay 的 UI）。
+        /// </summary>
+        Camera,
+    }
+
     /// <summary>单张截图存成什么格式。</summary>
     public enum HoQuickCaptureImageFormat
     {

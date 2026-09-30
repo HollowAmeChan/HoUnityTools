@@ -162,29 +162,46 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
         private void TryCapture()
         {
-            // ① 先试和播放模式同一条路：直接把游戏视图的合成结果拍进 RenderTexture。
-            bool captured = false;
-            try
+            string note = null;
+            bool captured;
+
+            if (plan.RenderSource == HoQuickCaptureRenderSource.Camera)
             {
-                ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
-                captured = !IsBlank(target);
+                // ── 指定相机渲进 RT（要透明背景就走这条）──
+                // 这条路是**确定性**的：渲一次就有，不需要催帧，也不受"游戏视图有没有在重画"影响。
+                captured = TryRenderSourceCamera(out note);
             }
-            catch (Exception)
+            else
             {
+                // ── 游戏视图合成结果 ──
+                // ① 先试和播放模式同一条路：直接把游戏视图的合成结果拍进 RenderTexture。
                 captured = false;
+                try
+                {
+                    ScreenCapture.CaptureScreenshotIntoRenderTexture(target);
+                    captured = !HoQuickCaptureCameraRenderer.IsBlank(target);
+                }
+                catch (Exception)
+                {
+                    captured = false;
+                }
+
+                // ② 不行就退到"渲一台相机"。
+                if (!captured)
+                {
+                    captured = TryRenderFallbackCamera(out note);
+                }
             }
 
-            // ② 不行就退到"渲主摄像机"。
-            string fallbackNote = null;
             if (!captured)
             {
-                fallbackNote = TryRenderMainCamera();
-                captured = fallbackNote != null;
-            }
+                // 这一次没成不算失败，下一个 tick 还会再试
+                //（编辑模式下催帧头几次扑空是正常的；相机那条路失败则会带 note 直接收摊）。
+                if (note != null)
+                {
+                    Finish(note);
+                }
 
-            if (!captured)
-            {
-                // 这一次没成不算失败，下一个 tick 还会再试（编辑模式下头几次扑空是正常的）。
                 return;
             }
 
@@ -207,19 +224,86 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             // 退路提示走 onFinished 传出去（引擎据此在面板上写一句警告）——
             // 不能只留在本地字段里，那个对象马上就要被丢掉了。
-            Finish(fallbackNote);
+            Finish(note);
         }
 
         /// <summary>
-        /// 退路：把主摄像机渲进目标。<b>没有 UI、没有多相机合成</b>，所以会带回一句说明。
-        /// 返回 null 表示这一步也没成。
+        /// 用户选的「指定相机」那条路：渲进 RT（可透明）。
+        /// 失败时把原因写进 <paramref name="note"/> 并返回 false。
         /// </summary>
-        private string TryRenderMainCamera()
+        private bool TryRenderSourceCamera(out string note)
         {
+            note = null;
+
+            RenderTexture rendered = HoQuickCaptureCameraRenderer.Render(
+                plan.SourceCamera,
+                plan.Width,
+                plan.Height,
+                plan.ForceTransparentBackground,
+                out bool usedFallbackCamera,
+                out string renderNote,
+                out string error);
+
+            if (rendered == null)
+            {
+                note = error ?? "渲指定相机失败。";
+                return false;
+            }
+
+            // 把结果换到我们复用的 target 上（后面统一从 target 取像素）。
+            // 这一张是新建的，用完就销毁，别留着。
+            try
+            {
+                Graphics.Blit(rendered, target);
+            }
+            finally
+            {
+                rendered.Release();
+                UnityEngine.Object.DestroyImmediate(rendered);
+            }
+
+            if (HoQuickCaptureCameraRenderer.IsBlank(target))
+            {
+                note = "指定相机渲出来是空的：确认它启用中、Culling Mask 里有东西、并且不在别的 targetTexture 上。";
+                return false;
+            }
+
+            // 攒提示：相机的选择 + 管线退路 + 透明的前提条件。
+            List<string> notes = new List<string>();
+            if (usedFallbackCamera)
+            {
+                notes.Add("没指定相机，自动用了 `Camera.main`。");
+            }
+
+            if (!string.IsNullOrEmpty(renderNote))
+            {
+                notes.Add(renderNote);
+            }
+
+            if (plan.ForceTransparentBackground)
+            {
+                notes.Add(HoQuickCaptureCameraRenderer.DescribeAlphaPitfall());
+            }
+
+            if (notes.Count > 0)
+            {
+                note = string.Join(" ", notes.ToArray());
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 退路：把一台相机渲进目标。<b>没有 UI、没有多相机合成</b>，所以会带回一句说明。
+        /// 返回 false 表示这一步也没成（原因在 <paramref name="note"/>）。
+        /// </summary>
+        private bool TryRenderFallbackCamera(out string note)
+        {
+            note = null;
             Camera camera = ResolveGameCamera();
             if (camera == null)
             {
-                return null;
+                return false;
             }
 
             try
@@ -228,12 +312,14 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 camera.targetTexture = target;
                 camera.Render();
                 camera.targetTexture = previous;
-                return "这张是**主摄像机直渲**的（编辑模式下拿不到游戏视图的合成结果）："
+                note = "这张是**相机直渲**的（编辑模式下拿不到游戏视图的合成结果）："
                     + "没有 Screen Space-Overlay 的 UI，也没有多相机叠加。";
+                return true;
             }
             catch (Exception exception)
             {
-                return "主摄像机直渲也失败了：" + exception.Message;
+                note = "相机直渲也失败了：" + exception.Message;
+                return false;
             }
         }
 
@@ -307,52 +393,13 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         }
 
         /// <summary>
-        /// 全是同一个颜色 = 基本可以断定没画上去（编辑模式下头一两次催帧经常是这样）。
-        /// 用稀疏采样，别整帧扫 —— 1080p 一帧 200 万个像素，扫一遍不值当。
+        /// 整幅是不是单色（= 基本可以断定没画上去）。
+        /// 实现放在渲染器那边（<see cref="HoQuickCaptureCameraRenderer.IsBlank"/>），
+        /// 因为"游戏视图抓屏"与"相机直渲"两条路都要靠它判断，别各写一份。
         /// </summary>
         private static bool IsBlank(RenderTexture source)
         {
-            RenderTexture previous = RenderTexture.active;
-            Texture2D probe = null;
-            try
-            {
-                RenderTexture.active = source;
-                probe = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
-                probe.ReadPixels(new Rect(0f, 0f, source.width, source.height), 0, 0, false);
-                probe.Apply(false, false);
-
-                Color32[] pixels = probe.GetPixels32();
-                if (pixels.Length == 0)
-                {
-                    return true;
-                }
-
-                int step = Mathf.Max(1, pixels.Length / 512);
-                Color32 first = pixels[0];
-                for (int i = 0; i < pixels.Length; i += step)
-                {
-                    Color32 c = pixels[i];
-                    if (c.r != first.r || c.g != first.g || c.b != first.b)
-                    {
-                        return false;
-                    }
-                }
-
-                // 全黑也算"没画"（编辑模式下最常见的扑空结果）。
-                return first.r == 0 && first.g == 0 && first.b == 0;
-            }
-            catch (Exception)
-            {
-                return true;
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                if (probe != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(probe);
-                }
-            }
+            return HoQuickCaptureCameraRenderer.IsBlank(source);
         }
 
         private void Finish(string note)

@@ -67,6 +67,25 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>单张截图存成什么格式。</summary>
         public HoQuickCaptureImageFormat imageFormat = HoQuickCaptureImageFormat.Png;
 
+        /// <summary>画面从哪来：游戏视图合成结果（默认）/ 指定相机渲进 RT（可透明背景）。</summary>
+        public HoQuickCaptureRenderSource renderSource = HoQuickCaptureRenderSource.GameView;
+
+        /// <summary>
+        /// <see cref="HoQuickCaptureRenderSource.Camera"/> 时要渲的相机。
+        ///
+        /// **故意不存 EditorPrefs**（所以是 `[NonSerialized]`）：它是**场景引用**，不是每台机器的偏好。
+        /// 存进去只会指向别的场景里一个不存在的对象（Unity 的假 null），比不存更糟。
+        /// 窗口关掉 / 域重载后要重新指定。
+        /// </summary>
+        [NonSerialized]
+        public Camera sourceCamera;
+
+        /// <summary>
+        /// 渲相机时是否临时把背景改成透明（Clear Flags = Solid Color + 背景 alpha = 0），拍完还原。
+        /// 只在 <see cref="renderSource"/> = Camera 时有意义。
+        /// </summary>
+        public bool transparentBackground;
+
         /// <summary>录制成什么格式。</summary>
         public HoQuickCaptureVideoFormat videoFormat = HoQuickCaptureVideoFormat.Mp4;
 

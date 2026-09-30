@@ -59,6 +59,24 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
 
         /// <summary>落盘用的图片格式（<see cref="WritesImageFiles"/> 为 false 时不看）。</summary>
         public HoQuickCaptureImageFormat ImageFormat = HoQuickCaptureImageFormat.Png;
+
+        /// <summary>画面从哪来：游戏视图合成结果（默认）/ 指定相机渲进 RT（可透明）。</summary>
+        public HoQuickCaptureRenderSource RenderSource = HoQuickCaptureRenderSource.GameView;
+
+        /// <summary>
+        /// <see cref="HoQuickCaptureRenderSource.Camera"/> 时要渲的那台相机。
+        /// 为空时会退回"自动挑一台"（主摄像机），并给出说明。
+        /// </summary>
+        public Camera SourceCamera;
+
+        /// <summary>
+        /// 渲进 RT 时是否临时把相机改成"透明背景"（Clear Flags = Solid Color + 背景 alpha = 0）。
+        /// 只对 <see cref="HoQuickCaptureRenderSource.Camera"/> 有意义，拍完会**还原**。
+        ///
+        /// 透明能不能真的出得来还取决于渲染管线：URP 要勾上 URP Asset 里的
+        /// `Allow Post Process Alpha Output`（否则后处理会把 alpha 写回 1）。
+        /// </summary>
+        public bool ForceTransparentBackground;
     }
     /// <summary>
     /// 帧泵。挂在隐藏的运行时物体上，驱动整段抓取。

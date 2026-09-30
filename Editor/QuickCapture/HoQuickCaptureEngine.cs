@@ -321,6 +321,17 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 return false;
             }
 
+            // 要透明却选了 jpg：jpg 根本没有 alpha 通道，选了也是白搭。当场说清楚，
+            // 别让用户拿到一张"看着正常但背景是黑/白"的图去猜。
+            if (data.renderSource == HoQuickCaptureRenderSource.Camera
+                && data.transparentBackground
+                && data.imageFormat == HoQuickCaptureImageFormat.Jpg)
+            {
+                SetError("要透明背景就不能存 jpg —— jpg 没有 alpha 通道。"
+                    + "把格式换成 png（或 exr）再拍。");
+                return false;
+            }
+
             var newPlan = new HoQuickCapturePlan
             {
                 Width = width,
@@ -333,6 +344,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 IsSingleShot = true,
                 WritesImageFiles = true,
                 ImageFormat = data.imageFormat,
+                RenderSource = data.renderSource,
+                SourceCamera = data.sourceCamera,
+                ForceTransparentBackground = data.transparentBackground,
             };
 
             BeginSession(newPlan, HoQuickCaptureState.Screenshot, false);
@@ -408,6 +422,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 IsSingleShot = false,
                 WritesImageFiles = !toVideo,
                 ImageFormat = HoQuickCaptureImageFormat.Png,
+                RenderSource = data.renderSource,
+                SourceCamera = data.sourceCamera,
+                ForceTransparentBackground = data.transparentBackground,
             };
 
             // ── 要视频就先开编码器 ──
@@ -587,9 +604,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // "Can't add script behaviour ... because it is an editor script"。
             try
             {
-                if (!Application.isPlaying)
+                // 「指定相机渲进 RT」这条路**两条模式都走编辑模式帧泵**：
+                // 它自己是确定性的（渲一次就有，不依赖"游戏视图有没有在重画"），
+                // 也不需要等 WaitForEndOfFrame —— 让播放模式的协程泵去抓它反而绕远。
+                bool useEditPump = !Application.isPlaying
+                    || plan.RenderSource == HoQuickCaptureRenderSource.Camera;
+
+                if (useEditPump)
                 {
-                    // ── 编辑模式 ──
+                    // ── 编辑模式（或"渲指定相机"）──
                     // 没有帧循环可等，所以用编辑器侧的帧泵：催一帧（RepaintAllViews +
                     // QueuePlayerLoopUpdate）再抓。见 HoQuickCaptureEditModePump 的说明。
                     editModePump = true;
@@ -1000,10 +1023,12 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>
         /// 把一帧编成图片字节。格式看 <see cref="HoQuickCapturePlan.ImageFormat"/>。
         ///
-        /// PNG/JPG 都会先把 alpha 写成 255（不透明）：游戏视图抓下来的东西本来就该是不透明的
-        /// （Unity Recorder 那边还专门做了个 MakeOpaque 着色器来保证这一点），
-        /// 而且带 alpha 的 PNG 文件更大、丢进剪辑软件还可能被当成带透明通道的素材。
-        /// **EXR 不碰**：它的用途就是拿去做合成，alpha 是有效数据，改了反而是错的。
+        /// **什么时候强制不透明**（把 alpha 写成 255）：
+        ///   · 游戏视图抓下来的东西本来就该是不透明的（Unity Recorder 那边还专门做了个
+        ///     MakeOpaque 着色器保证这一点），而且带 alpha 的 PNG 更大、丢进剪辑软件还可能
+        ///     被当成带透明通道的素材；
+        ///   · 但**「指定相机 + 透明背景」那条路必须原样保留 alpha** —— 那正是它的用途。
+        /// **EXR 永远不碰**：它的用途就是拿去做合成，alpha 是有效数据，改了反而是错的。
         /// </summary>
         private static byte[] EncodePng(HoQuickCapturedFrame frame, int quality)
         {
@@ -1012,11 +1037,17 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 return null;
             }
 
-            // 纹理在抓帧时就摆正了（底边在前 = Unity 的纹理行序），
-            // 而三个编码调用都是"从纹理里读"的，所以直接用即可。
-            // PNG / JPG 强制不透明（EXR 不碰：它的 alpha 是有效数据）。
-            if (plan == null || plan.ImageFormat != HoQuickCaptureImageFormat.Exr)
+            bool wantsTransparency = plan != null
+                && plan.RenderSource == HoQuickCaptureRenderSource.Camera
+                && plan.ForceTransparentBackground;
+
+            bool keepAlpha = wantsTransparency
+                || (plan != null && plan.ImageFormat == HoQuickCaptureImageFormat.Exr);
+
+            if (!keepAlpha)
             {
+                // 纹理在抓帧时就摆正了（底边在前 = Unity 的纹理行序），
+                // 而三个编码调用都是"从纹理里读"的，所以这里改完像素还要写回纹理。
                 Color32[] bottomUp = frame.GetBottomUpPixels();
                 if (bottomUp != null)
                 {

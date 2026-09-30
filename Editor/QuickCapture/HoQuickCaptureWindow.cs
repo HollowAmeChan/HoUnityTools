@@ -57,6 +57,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         private static readonly string[] ImageFormatOptions = { "png", "jpg", "exr" };
         private static readonly string[] VideoFormatOptions = { "mp4", "PNG 序列" };
         private static readonly string[] ProfileOptions = { "Baseline", "Main", "High" };
+        private static readonly string[] SourceOptions = { "游戏视图", "指定相机" };
 
         private static readonly GUIContent ShotContent = new GUIContent(
             "截帧",
@@ -468,6 +469,83 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         // 高级（默认收起）
         // ══════════════════════════════════════════════════════════════
 
+        /// <summary>画面来源：游戏视图 / 指定相机（可透明背景）。</summary>
+        private void DrawSourceRow(HoQuickCaptureSettingsData data)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(
+                    new GUIContent("来源", "画面从哪来。\n\n"
+                        + "游戏视图 —— 抓游戏视图的最终合成结果：多相机、后处理、UI 都在里面，"
+                        + "但它是画到屏幕上的，**拿不到透明背景**。\n\n"
+                        + "指定相机 —— 把那台相机渲进一张带 alpha 的 RT。**要透明背景就用这个。**\n"
+                        + "代价：只有这一台相机的画面（没有别的相机叠加、没有 Screen Space-Overlay 的 UI）。"),
+                    EditorStyles.miniLabel,
+                    GUILayout.Width(52f));
+
+                Rect sourceRect = GUILayoutUtility.GetRect(
+                    HoConstraintEditorControls.SegmentedWidth(SourceOptions),
+                    HoConstraintEditorControls.SegmentedWidth(SourceOptions),
+                    ControlHeight,
+                    ControlHeight);
+                int source = HoConstraintEditorControls.Segmented(
+                    sourceRect,
+                    (int)data.renderSource,
+                    SourceOptions,
+                    "游戏视图 = 合成结果（不透明）；指定相机 = 渲进 RT（可透明背景）");
+                if (source != (int)data.renderSource)
+                {
+                    data.renderSource = (HoQuickCaptureRenderSource)source;
+                    HoQuickCaptureSettings.NotifyChanged();
+                }
+
+                if (data.renderSource == HoQuickCaptureRenderSource.Camera)
+                {
+                    GUILayout.Space(Gap);
+
+                    var camRect = (Rect)GUILayoutUtility.GetRect(140f, 260f, ControlHeight, ControlHeight);
+                    var edited = (Camera)EditorGUI.ObjectField(
+                        camRect,
+                        data.sourceCamera,
+                        typeof(Camera),
+                        true);
+                    if (edited != data.sourceCamera)
+                    {
+                        data.sourceCamera = edited;
+                        // 相机是场景引用，不进 EditorPrefs，所以不用 NotifyChanged（它只管存盘）。
+                    }
+
+                    if (data.sourceCamera == null)
+                    {
+                        GUILayout.Label(
+                            new GUIContent("(空)", "留空 = 自动用 Camera.main，面板会在结果里说明。"),
+                            EditorStyles.miniLabel,
+                            GUILayout.Width(34f));
+                    }
+
+                    GUILayout.Space(Gap);
+                    bool transparent = GUILayout.Toggle(
+                        data.transparentBackground,
+                        new GUIContent(
+                            "透明背景",
+                            "拍之前临时把相机改成 Clear Flags = Solid Color、背景 alpha = 0，拍完**还原**。\n\n"
+                            + "只有这个开关还不够，另外两条也要满足，否则症状是「图是对的、alpha 全是 1」：\n"
+                            + "· 存成 png 或 exr（**jpg 没有 alpha 通道**）；\n"
+                            + "· URP 工程要在 URP Asset 上勾 `Allow Post Process Alpha Output`（后处理会把 alpha 写回 1）。\n\n"
+                            + "相机的 Culling Mask 也要只留你要的东西，否则背景物件会把 alpha 填满。"),
+                        EditorStyles.miniButton,
+                        GUILayout.Width(84f));
+                    if (transparent != data.transparentBackground)
+                    {
+                        data.transparentBackground = transparent;
+                        HoQuickCaptureSettings.NotifyChanged();
+                    }
+                }
+
+                GUILayout.FlexibleSpace();
+            }
+        }
+
         /// <summary>MP4 参数：码率、档次、关键帧间隔。</summary>
         private void DrawVideoRow(HoQuickCaptureSettingsData data)
         {
@@ -537,6 +615,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 DrawVideoRow(data);
+                DrawSourceRow(data);
 
                 // 分辨率
                 using (new EditorGUILayout.HorizontalScope())
