@@ -90,8 +90,14 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             {
                 if (disposed || camera == null)
                     throw new InvalidOperationException("截帧相机已被销毁或会话已结束。");
-                if (EditorApplication.timeSinceStartup - startedAt > 8.0)
-                    throw new InvalidOperationException("TAA 预热未完成：需要编辑器持续推进帧。请恢复播放/刷新后重试，或使用 SMAA 截取静止画面。");
+                if (EditorApplication.timeSinceStartup - startedAt > 30.0)
+                    throw new InvalidOperationException(
+                        "TAA 预热没能在 30 秒内凑够 " + TemporalSamples + " 个新帧"
+                        + "（已经拿到 " + samples + " 帧）。"
+                        + "这是 Anti-aliasing = TAA 的固有限制：TAA 靠**连续多帧**累积抖动才收敛，"
+                        + "单帧出不来。可以：① 确认编辑器窗口没被最小化、播放正常推进；"
+                        + "② 把相机的 Anti-aliasing 换成 SMAA（单帧就有）；"
+                        + "③ 或者干脆关掉抗锯齿。");
                 if (wantsTaa && samples > 0 && Time.frameCount == lastFrame)
                     return false;
                 RenderTexture previousActive = RenderTexture.active;

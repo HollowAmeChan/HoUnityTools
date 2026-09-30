@@ -148,8 +148,20 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 return;
             }
 
-            // 每次 tick 都先催下一帧：不催的话播放循环不推进，TAA 预热就永远等不到下一帧。
-            if (attempts <= MaxPumpAttempts)
+            // ⚠️ 这里以前是「attempts <= MaxPumpAttempts 就 TryCapture()」。
+            // 那个上限（12）是对着**已删掉的「编辑模式抓游戏视图」**那条路定的：
+            // 催 12 次还催不出画面就认输。
+            //
+            // 但「渲指定相机」这条路现在要**跨帧预热 TAA**（`Session.TemporalSamples` = 16），
+            // 也就是至少要喂 16 个**不同的引擎帧**。12 次的上限一到，TryCapture() 直接不跑了、
+            // BeginWaitForFrame() 也不再催帧 —— 帧泵就这么僵在那儿，
+            // 最后报出来的是 Session 那边的 8 秒超时：
+            //   「TAA 预热未完成：需要编辑器持续推进帧…」
+            // 看起来像 TAA 的问题，其实是**帧泵自己先停了**。
+            //
+            // 现在按路分：相机这条**不设条数上限**，交给 Session 自己的超时兜底
+            //（它才是知道「还差几帧」的那一方）；游戏视图那条已经不存在了。
+            if (plan.RenderSource == HoQuickCaptureRenderSource.Camera || attempts <= MaxPumpAttempts)
             {
                 try { TryCapture(); }
                 catch (Exception exception) { Finish("截帧失败：" + exception.GetBaseException().Message); }
