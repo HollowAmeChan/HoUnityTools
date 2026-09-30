@@ -268,21 +268,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 return false;
             }
 
-            // 攒提示：相机的选择 + 管线退路 + 透明的前提条件。
+            // 正常拍完**不吭声**（用户要求少提示）。只有下面两种"你可能想立刻知道"的才说：
+            //   · 相机是自动挑的（你以为是 A，结果渲的是 B）；
+            //   · 渲染退了路（画面跟预期不一样）。
             List<string> notes = new List<string>();
             if (usedFallbackCamera)
             {
-                notes.Add("没指定相机，自动用了 `Camera.main`。");
+                notes.Add("没指定相机，用了 Camera.main。");
             }
 
             if (!string.IsNullOrEmpty(renderNote))
             {
                 notes.Add(renderNote);
-            }
-
-            if (plan.ForceTransparentBackground)
-            {
-                notes.Add(HoQuickCaptureCameraRenderer.DescribeAlphaPitfall());
             }
 
             if (notes.Count > 0)

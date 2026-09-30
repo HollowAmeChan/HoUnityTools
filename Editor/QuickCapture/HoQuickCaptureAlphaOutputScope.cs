@@ -93,7 +93,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             if (previousValue)
             {
                 // 本来就是开的：什么都不用做，也就没有任何副作用。
-                note = "管线的「后处理保留 alpha」本来就是开的。";
+                // 本来就是开的：什么都不用做，也没什么好说的（用户要求少提示）。
                 return;
             }
 
@@ -103,8 +103,8 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 changed = true;
 
-                // 说明：这是**内存里**的改动，没写盘 —— 渲染会用到新值，磁盘上的资产保持原样。
-                note = "已临时打开管线资产上的「后处理保留 alpha」（只在内存里，没写盘）；拍完会改回去。";
+                // 这是**内存里**的改动，没写盘 —— 渲染会用到新值，磁盘上的资产保持原样。
+                // 正常情况不吭声（用户要求少提示）；只有失败了才说话。
             }
             catch (Exception exception)
             {

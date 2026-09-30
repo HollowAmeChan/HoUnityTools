@@ -85,6 +85,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             RenderTexture previousTarget = target.targetTexture;
             CameraClearFlags previousClearFlags = target.clearFlags;
             Color previousBackground = target.backgroundColor;
+            int previousDisplay = target.targetDisplay;
 
             // 天空盒不在相机上，是**场景级**的，所以单独一层作用域管它的存与还原。
             // 只在"要透明"时才关 —— 不透明的话天空盒照画，跟平时一样。
@@ -94,12 +95,24 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // 同样只在"要透明"时临时打开，拍完改回去。
             HoQuickCaptureAlphaOutputScope alphaScope = null;
 
-            // 说明是攒出来的：临时改了什么 + 渲染退没退路。最后一次性交给 out 参数。
+            // 只在**出事**时才往窗口写话（退路、失败）。正常拍完一声不响 ——
+            // 用户明确要求"不要加黄字提示，或者简单一点"。
             string accumulated = null;
 
             try
             {
                 target.targetTexture = rt;
+
+                // 相机的 targetDisplay：渲进 RT 本来跟它无关，但**编辑器里只有 Display 0 是活的**，
+                // 相机要是挂在 Display 1 上，某些管线下会渲出一张空的。
+                // 所以先临时挪到主显示上渲，渲完还原（这也是"读相机输出的那个 display"的落地方式：
+                // 我们渲的就是这台相机，只是借主显示这一条活着的通道把它渲出来）。
+                if (previousDisplay != 0)
+                {
+                    target.targetDisplay = 0;
+                    accumulated = Append(accumulated,
+                        "相机挂在 Display " + previousDisplay + " 上，渲染时临时用了主显示。");
+                }
 
                 if (transparent)
                 {
@@ -123,13 +136,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 string renderNote;
                 RenderWithPipeline(target, rt, out renderNote);
                 accumulated = Append(accumulated, renderNote);
-
-                if (skyboxOff != null && skyboxOff.ChangedAnything)
-                {
-                    accumulated = Append(accumulated,
-                        "天空盒已临时关掉（那块直接算全透明）—— 这一张的间接光与反射跟平时不完全一样，"
-                        + "拍完已还原。");
-                }
 
                 note = accumulated;
                 LastRenderNote = accumulated;
@@ -159,6 +165,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 target.targetTexture = previousTarget;
                 target.clearFlags = previousClearFlags;
                 target.backgroundColor = previousBackground;
+                target.targetDisplay = previousDisplay;
             }
         }
 
@@ -193,8 +200,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 }
 
                 // URP 那条路没成（调用失败，或画出来是空的）—— 退回内建。
-                note = "URP 的单相机渲染没画出东西，已退回 `camera.Render()`："
-                    + "这张图**不含 URP 的后处理**。";
+                note = "URP 没渲出东西，已退回 camera.Render()（这张不含后处理）。";
             }
 #endif
 
@@ -351,17 +357,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             UnityEngine.SceneManagement.Scene scene = component.gameObject.scene;
             return scene.IsValid() && scene.isLoaded;
-        }
-
-        /// <summary>
-        /// 提醒用户 URP 那个"后处理保留 alpha"的开关。
-        /// 这是**包外**的设置（在用户的 URP Asset 上），我们改不了，只能提前说一声，
-        /// 否则症状是"图看着对、alpha 全是 1"，很难联想到是它。
-        /// </summary>
-        public static string DescribeAlphaPitfall()
-        {
-            return "透明背景还取决于渲染管线：用 URP 的话要在 URP Asset 上勾 `Allow Post Process Alpha Output`，"
-                + "否则后处理会把 alpha 写回 1。";
         }
     }
 }
