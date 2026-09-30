@@ -90,12 +90,21 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             CameraClearFlags previousClearFlags = target.clearFlags;
             Color previousBackground = target.backgroundColor;
 
+            // 天空盒不在相机上，是**场景级**的，所以单独一层作用域管它的存与还原。
+            // 只在"要透明"时才关 —— 不透明的话天空盒照画，跟平时一样。
+            HoQuickCaptureSkyboxOff skyboxOff = null;
+
             try
             {
                 target.targetTexture = rt;
 
                 if (transparent)
                 {
+                    // ⚠️ 顺序要紧：先关天空盒，再设透明清屏色。
+                    // 只设清屏色是**不够**的 —— 天空盒是画在背景之上的一层几何，
+                    // 不关掉的话天空那块仍然会被它填满（用户报的正是这个）。
+                    skyboxOff = HoQuickCaptureSkyboxOff.Apply();
+
                     target.clearFlags = CameraClearFlags.SolidColor;
                     target.backgroundColor = new Color(
                         previousBackground.r,
@@ -105,6 +114,13 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 }
 
                 RenderWithPipeline(target, rt, out note);
+
+                if (skyboxOff != null && skyboxOff.ChangedAnything)
+                {
+                    note = Append(note,
+                        "天空盒已临时关掉（那块直接算全透明）—— 这一张的间接光与反射跟平时不完全一样，"
+                        + "拍完已还原。");
+                }
 
                 return rt;
             }
@@ -117,10 +133,22 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
             finally
             {
+                // 场景级设置先还（哪怕上面抛了也要还）。
+                if (skyboxOff != null)
+                {
+                    skyboxOff.Dispose();
+                }
+
                 target.targetTexture = previousTarget;
                 target.clearFlags = previousClearFlags;
                 target.backgroundColor = previousBackground;
             }
+        }
+
+        /// <summary>把一句话拼到 note 后面（note 可能是 null）。</summary>
+        private static string Append(string note, string addition)
+        {
+            return string.IsNullOrEmpty(note) ? addition : note + " " + addition;
         }
 
         /// <summary>

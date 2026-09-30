@@ -528,8 +528,11 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                         data.transparentBackground,
                         new GUIContent(
                             "透明背景",
-                            "拍之前临时把相机改成 Clear Flags = Solid Color、背景 alpha = 0，拍完**还原**。\n\n"
-                            + "只有这个开关还不够，另外两条也要满足，否则症状是「图是对的、alpha 全是 1」：\n"
+                            "拍之前临时把**天空盒关掉**、相机改成 Clear Flags = Solid Color、背景 alpha = 0；拍完全部还原。\n\n"
+                            + "关天空盒是关键那一步：天空盒是画在背景**之上**的一层几何，只设透明清屏色挡不住它，\n"
+                            + "天空那块仍然会被它填满。关掉之后天空直接算全透明。\n"
+                            + "（副作用：这一张的间接光与反射跟平时不完全一样，因为天空盒同时是环境光的来源。）\n\n"
+                            + "另外两条也要满足，否则症状是「图是对的、alpha 全是 1」：\n"
                             + "· 存成 png 或 exr（**jpg 没有 alpha 通道**）；\n"
                             + "· URP 工程要在 URP Asset 上勾 `Allow Post Process Alpha Output`（后处理会把 alpha 写回 1）。\n\n"
                             + "相机的 Culling Mask 也要只留你要的东西，否则背景物件会把 alpha 填满。"),
