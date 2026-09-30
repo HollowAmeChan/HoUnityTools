@@ -52,8 +52,15 @@
 3. **存成 `png` 或 `exr`** —— `jpg` 没有 alpha 通道（选了会被当场挡住并提示）；`exr` 的 alpha **永不改写**
    （它的用途就是拿去做合成）；
 4. **URP 工程要勾 URP Asset 上的 `Allow Post Process Alpha Output`** ——
-   后处理会把 alpha 写回 1。这一步在**包外**（你自己的 RP Asset），面板只能提示、改不了。
+   后处理会把 alpha 写回 1。这一步在**包外**（你自己的 RP Asset），**要自己勾**：
    本工程 `Assets/Settings/PC_RPAsset.asset` 的 `m_AllowPostProcessAlphaOutput` 目前是 **0**。
+
+   > ⚠️ **这一条我们曾经"自动临时打开"，后来删掉了**（用户：「其实你不需要做多余的隐式设置，
+   > 除非是必要的，我 aa 直接靠摄像机上面的设置」）。教训写在这儿：
+   > 那是个 `SerializedObject` 改内存值的隐式副作用 —— 不写盘、用完还原，看着"很干净"，
+   > 但它**替你改了工程的渲染设置**，而且从面板上完全看不出来。
+   > 这类"顺手帮你把工程设置改了"的行为一律不做，哪怕它能让功能"看起来更work"。
+   > 同理，**MSAA 采样数也不再往 RT 上写**（见下面「抗锯齿」那节）。
 
 ### 渲染管线：直接调 URP，但**不强制依赖**
 
@@ -66,32 +73,66 @@
 
 | 位置 | 内容 |
 | --- | --- |
-| Editor/HoUnityTools.Editor.asmdef → `references | 加上 Unity.RenderPipelines.Universal.Runtime |
-| 同一个 asmdef → `versionDefines | com.unity.render-pipelines.universal → 定义 HO_URP_AVAILABLE |
-| 代码 | URP 那几行包在 #if HO_URP_AVAILABLE 里 |
+| `Editor/HoUnityTools.Editor.asmdef` → `references` | 加上 `Unity.RenderPipelines.Universal.Runtime` |
+| 同一个 asmdef → `versionDefines` | `com.unity.render-pipelines.universal` → 定义 `HO_URP_AVAILABLE` |
+| 代码 | URP 那几行包在 `#if HO_URP_AVAILABLE` 里 |
 
 于是：**装了 URP 的工程**编到 URP 分支（直接调用，类型安全、能被编译器查到）；
 **没装的工程**那段代码根本不参与编译，而 asmdef 里那条引用在 Unity 里只是一个"Missing Reference"提示，
-不影响编译 —— 已实测：BreakWarudo（2021.3、内建管线、HO_URP_AVAILABLE 未定义）整体 **0 error**。
+不影响编译 —— 已实测：BreakWarudo（2021.3、内建管线、`HO_URP_AVAILABLE` 未定义）整体 **0 error**。
 
-⚠️ HO_URP_AVAILABLE 只保证"装了 URP 包"，**不保证"这个工程在用 URP"**（可以装了却用内建管线），
-所以运行时还要看 GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset。
+⚠️ `HO_URP_AVAILABLE` 只保证"装了 URP 包"，**不保证"这个工程在用 URP"**（可以装了却用内建管线），
+所以运行时还要看 `GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset`。
 
-⚠️ URP 那个重载需要一个**由引擎初始化**的 ScriptableRenderContext，而引擎内部那个拿不到，
-只能自己 
-ew 一个 —— 这在部分 URP 版本上会**静默什么都不画**。所以渲完会**验一下**
-（稀疏采样判断整幅是不是单色），空的就退回 camera.Render()，并在面板上写明"这张不含 URP 后处理"。
-这个不确定性没法在这里消除，所以选择**明确降级 + 说明**，而不是假装成功。
+#### URP 单相机入口：两个版本两条路
+
+这是**后处理与相机级抗锯齿能不能出来的关键**。入口按版本分：
+
+| 版本 | 入口 | 说明 |
+| --- | --- | --- |
+| **Unity 6 / 2023.1+** | `RenderPipeline.SubmitRenderRequest(camera, SingleCameraRequest)` | 现代入口，完整走 URP 管线 |
+| **2021.3** | `UniversalRenderPipeline.RenderSingleCamera(context, camera)` | 那时 `SubmitRenderRequest` 还不存在 |
+
+- Unity 6 这条是**首选**：`SingleCameraRequest` 的 `destination` 直接指我们的 RT，
+  由引擎自己把渲染塞进正常的管线流程，不再需要我们自己拼一个 `ScriptableRenderContext`。
+- ⚠️ URP 自己的过期提示里写的是 `UniversalRenderer.SingleCameraRequest`，**那个是写错的**，
+  实际类型嵌在 `UniversalRenderPipeline.SingleCameraRequest` 下。
+- ⚠️ 2021.3 的 `RenderSingleCamera` 需要一个**由引擎初始化**的 `ScriptableRenderContext`，
+  而引擎内部那个拿不到，只能自己 `new` 一个 —— 这在部分 URP 版本上会**静默什么都不画**。
+  这个不确定性没法在 2021.3 上消除，所以两条路都一律"渲完验一下"：
+  稀疏采样判断整幅是不是单色，空的就退回 `camera.Render()`，并在面板上写明"这张不含 URP 后处理"。
+  选择**明确降级 + 说明**，而不是假装成功。
+
+⚠️ **改完 asmdef 后 Unity 必须重新生成 csproj**，否则 `HO_URP_AVAILABLE` 不会出现在
+`DefineConstants` 里，URP 分支就是**死代码**，症状是"画面没有后处理"（见「验证」那节）。
+
+### 抗锯齿：不归面板管，跟着相机的设置走
+
+用户明确说过：「**关 MSAA 是有预谋的，我主要依赖 TAA 跟 SMAA**」。
+所以这里有一条容易踩反的坑，记下来：
+
+- **不要**往 RT 上写 `RenderTexture.antiAliasing`。URP 取采样数的逻辑是
+  （`UniversalRenderPipeline.cs:1446`）：
+  ```
+  allowMSAA && asset.msaaSampleCount > 1 ? asset.msaaSampleCount : camera.targetTexture.antiAliasing
+  ```
+  工程把 `m_MSAA` 设成 1 时上半句不成立，于是**落到 RT 上** ——
+  我们给 4 就等于把 MSAA 强行开回 4x，**正好盖掉用户特意关掉的东西**。RT 不带采样数，跟随工程设置。
+- **TAA / SMAA 不需要我们做任何事**：它们在 URP 里是**相机级**设置
+  （`UniversalAdditionalCameraData.antialiasing`，和 `renderPostProcessing` 同一条路），
+  只要渲染真的走了 URP 管线，它自己就会应用。
+- 所以"没有抗锯齿"和"没有后处理"是**同一个病根**：以前走的是 `camera.Render()`，根本没进 URP。
+  修好渲染入口，两个一起好。
+- 顺带一条：URP 在**选了基于后处理的抗锯齿模式时会强制关掉 MSAA**
+  （`UniversalRenderPipeline.cs:1438-1442` 附近有注释写明），所以 TAA/SMAA 和 MSAA 本来也不该同时开。
 
 ### 相机的 targetDisplay
 
-相机渲进 RT 本来跟 	argetDisplay 无关，但**编辑器里只有 Display.main（index 0）是活的** ——
-Display.displays 其余项是 
-ull，而 Display 既不能 
-ew 也不能从脚本手动 Activate。
+相机渲进 RT 本来跟 `targetDisplay` 无关，但**编辑器里只有 Display.main（index 0）是活的** ——
+`Display.displays` 其余项是 `null`，而 `Display` 既不能 `new` 也不能从脚本手动 `Activate`。
 所以相机要是挂在 Display 1 上，某些管线下会渲出一张空的。
 
-处理：	argetDisplay != 0 时**临时挪到主显示**渲，渲完还原。
+处理：`targetDisplay != 0` 时**临时挪到主显示**渲，渲完还原。
 面板上会留一句"相机挂在 Display N 上，渲染时临时用了主显示"（这条保留 ——
 "渲出来和实际那条 display 不完全一样"是用户该知道的）。
 
@@ -107,19 +148,20 @@ ew 也不能从脚本手动 Activate。
 
 **不留**的（都改成了静默）：
 · "天空盒已临时关掉" —— 勾了透明本来就是这个预期，不用每次说；
-· "已临时打开后处理保留 alpha" / "本来就是开的" —— 同上，正常路径不吭声；
+· "已临时打开后处理保留 alpha" —— **这条连同那个功能一起删了**，见上面第 4 条；
 · 透明那四条前提的科普 —— 那些在**工具提示**里，不该每次拍完往面板上贴。
-（只有**失败**才说话：找不到那个开关、或临时打开失败。）
+（只有**失败**才说话。）
 
-### 后处理保留 alpha（自动临时打开）
+### 「后处理保留 alpha」为什么改成手动
 
-- 内建管线：`camera.Render()`。
-- URP：`camera.Render()` **不走 URP**，要用 `UniversalRenderPipeline.RenderSingleCamera`。
-  本包**不硬依赖 URP**（`package.json` 里没有它），所以走反射调；没装 URP 就是 no-op。
-  ⚠️ URP 那个重载需要一个**由引擎初始化**的 `ScriptableRenderContext`，而我们只能自己 `new` 一个 ——
-  这在部分 URP 版本上会**静默什么都不画**。所以渲完会**验一下**（稀疏采样判断整幅是不是单色），
-  空的就退回 `camera.Render()`，并在面板上写明"这张不含 URP 后处理"。
-  这个不确定性没法在这里消除，所以选择**明确降级 + 说明**，而不是假装成功。
+原本的实现是：拍透明图时用 `SerializedObject` 把 URP Asset 的
+`m_AllowPostProcessAlphaOutput` 在**内存里**改成 1，拍完再改回去。
+技术上没问题（不写盘、用完还原、`finally` 里兜底），但它是**多余的隐式设置**：
+用户在面板上点一下"透明背景"，工程里一个渲染设置在背后被改了，而且看不出来。
+
+现在的做法：**不动它**。要透明就自己勾，勾一次就一直是好的。
+代价是"第一次拍发现 alpha 全是 1"要自己查一下 —— 这个代价用工具提示和第 4 条说明来补，
+比偷偷改工程设置划算。
 
 ## 输出格式
 
@@ -471,6 +513,15 @@ lower left corner while the origin of a Texture2D is in the upper left corner"*�
   超过 8K 请自己掂量。
 - **配置在 EditorPrefs**，换机器 / 换 Unity 账号就是另一套；想清干净就删掉那个键。
 - **`.meta` 由 Unity 自己生成**（GUID 以它给的为准），不要手写。
+- **TAA 是"时间上"的抗锯齿，单帧/快速移动会有残影**。它的做法是把**连续多帧**抖动过的
+  画面累积起来，所以：
+  - **机位静止**时最干净（这也是拍静帧的常见用法）；
+  - 相机或物体**动得快**时，那一帧可能带着上一帧的残留（鬼影/拖影），
+    这是 TAA 的固有行为，不是本面板的 bug；
+  - 我们**不重置** TAA 的历史（`TAA` 的 history 在 URP 内部），因为重置反而会让它"没来得及收敛"
+    就出图，比现在更糊。录制时是离线逐帧推进的，帧与帧之间是连续的，所以序列整体是自洽的。
+- **抗锯齿与 MSAA 无关**（本工程靠 TAA / SMAA）：面板**不提供** MSAA 设置，也不该提供 ——
+  见上面「抗锯齿：不归面板管」那节，往 RT 上写采样数会盖掉工程特意关掉的 MSAA。
 
 ## 验证
 
@@ -522,10 +573,16 @@ lower left corner while the origin of a Texture2D is in the upper left corner"*�
   12. 连点两次「录制」（隔一秒以内）：应得到两个不同名的 `take_*` 子目录，不是同一个。
   13. 把「高级」展开着关掉窗口再打开：应该记着展开状态（存 EditorPrefs）。
   16. **URP 分支真的被编到了**（改了 asmdef 之后要确认）：让 Unity 重新生成 csproj，
-      然后查 HoUnityTools.Editor.csproj 的 <DefineConstants> 里应该有 HO_URP_AVAILABLE、
-      并且引用了 Unity.RenderPipelines.Universal.Runtime。
+      然后查 HoUnityTools.Editor.csproj：
+      - `<DefineConstants>` 里应该有 `HO_URP_AVAILABLE`；
+      - 并且引用了 URP —— 形式是 `<ProjectReference Include="Unity.RenderPipelines.Universal.Runtime.csproj" />`。
+        ⚠️ 它**不是** `<HintPath>` 形式（URP 是本地 `file:` 包，走的是工程引用），
+        所以别拿"HintPath 里搜不到 Universal"当作没引用的判据。
+      - 已实测（BREAK_URP，Unity 6000.3.15f1）：两项都成立，
+        且 `UNITY_2023_1_OR_NEWER` 也在 defines 里 —— 也就是说编的是
+        `SubmitRenderRequest` 那条新路，不是 2021.3 的 `RenderSingleCamera`。
       没有的话说明 versionDefines 没生效，URP 那条路会一直走内建分支（症状：画面不含后处理）。
-  14. **透明背景**（四条逐个验）：
+  16. **透明背景**（四条逐个验）：
       - 「高级 → 来源」切「指定相机」，拖一台相机进去，勾「透明背景」，格式保持 png，拍一张。
       - 用看图工具确认**天空那一块也是棋盘格**（不只是物件周围的背景）—— 天空盒应已被关掉。
       - 顺带确认场景的 Lighting 设置（Skybox / Ambient / Reflection）**拍完还原了**。
@@ -535,4 +592,19 @@ lower left corner while the origin of a Texture2D is in the upper left corner"*�
       - 相机的 Clear Flags / Background **拍完要还原**（拍之前在 Inspector 里记下，拍完对照）。
       - 相机留空再拍：应自动用 Camera.main，并在面板上写明"没指定相机"。
   15. 透明那条路在**播放模式**下也试一次（它同样走编辑模式帧泵，不依赖 WaitForEndOfFrame）。
+  17. **后处理真的在**（这是"URP 分支被编到"的**下游验收**，最直观）：
+      挑一个**后处理效果明显**的场景（Bloom / 暗角 / 色调映射最看得出来），
+      用「指定相机」拍一张，跟**游戏视图里同一台相机的画面**对比：
+      - 有 Bloom 的场景里，高光应该有辉光；关掉后处理再拍一张，两张应**明显不同**。
+      - 如果两张一模一样、且都不含后处理 → 说明还是走了 `camera.Render()` 那条退路。
+        先看面板有没有"URP 没渲出东西，已退回 camera.Render()"这句提示，
+        再按第 16 条查 `HO_URP_AVAILABLE`。
+      - 相机的 `Rendering → Post Processing` **必须自己勾上** —— 这是相机自己的开关，
+        面板不动它（不勾的话后处理本来就不该有，这是预期行为，不是 bug）。
+  18. **抗锯齿跟着相机设置走**（TAA / SMAA，**不是** MSAA）：
+      - 前提：机位**静止**（TAA 需要连续多帧对齐才收敛，一边动一边拍会糊，见「已知边界」）。
+      - 拍一张，放大看斜边/细高光：应与游戏视图里的锯齿程度**一致**。
+      - ⚠️ **不该**出现"MSAA 被打开"的迹象：本工程 `PC_RPAsset` 的 `m_MSAA` 是 **1（关）**，
+        我们**不再往 RT 上写采样数**（曾经写过 4，那等于把 MSAA 强行开回 4x，盖掉用户的设置）。
+      - 想确认路径没走错：相机上 TAA 的效果与游戏视图一致即说明进了 URP 管线。
 

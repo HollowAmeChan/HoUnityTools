@@ -73,8 +73,8 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
         /// 渲进 RT 时是否临时把相机改成"透明背景"（Clear Flags = Solid Color + 背景 alpha = 0）。
         /// 只对 <see cref="HoQuickCaptureRenderSource.Camera"/> 有意义，拍完会**还原**。
         ///
-        /// 透明能不能真的出得来还取决于渲染管线：URP 要勾上 URP Asset 里的
-        /// `Allow Post Process Alpha Output`（否则后处理会把 alpha 写回 1）。
+        /// 透明能不能真的出得来还取决于渲染管线：URP 的那个"后处理保留 alpha"开关会被
+        /// **临时打开**（内存里改，不写盘），拍完改回去。
         /// </summary>
         public bool ForceTransparentBackground;
     }

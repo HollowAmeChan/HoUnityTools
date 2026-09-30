@@ -14,10 +14,12 @@
 //
 // 两条渲染路径：
 //   · 内建管线：`camera.Render()`。
-//   · URP：`camera.Render()` **不走 URP**（后处理与 URP 的透明处理都会丢），
-//     得用 `UniversalRenderPipeline.RenderSingleCamera(context, camera)`。
-//     那是 URP 程序集里的公开 API，但本包**不硬依赖 URP**（package.json 里没有它），
-//     所以走反射调 —— 没装 URP 就是 no-op，装了才生效。
+//   · URP：`camera.Render()` **不走 URP** —— 后处理、TAA/SMAA 这些相机级抗锯齿、
+//     URP 的透明处理，全都不会参与。得走 URP 自己的单相机入口（见 RenderWithPipeline）。
+//
+// URP 是**可选依赖**：asmdef 里引用 URP 并声明 `HO_URP_AVAILABLE`（versionDefines），
+// 所以装了就编 URP 那条路、没装就整段编掉（内建管线工程如 BreakWarudo 走这条路）。
+// 这跟"不硬依赖"并不冲突：用户不被强制用我们的 URP 变体，但用 URP 时我们直接调它的 API。
 using System;
 using UnityEditor;
 using UnityEngine;
@@ -73,6 +75,12 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
 
             // ARGB32：**必须有 alpha 通道**才能出透明。别用 Default（不保证带 alpha）。
+            // MSAA 这里**故意留默认（antiAliasing = 1 = 关）**：本工程是靠 TAA / SMAA 抗锯齿的，
+            // MSAA 关掉是有意的（"有预谋的"）。以前这里跟着设置写 sample 数是个**倒忙** ——
+            // URP 的取法（UniversalRenderPipeline.cs:1446）是
+            //     allowMSAA && asset.msaaSampleCount > 1 ? asset.msaaSampleCount : camera.targetTexture.antiAliasing
+            // 工程把 m_MSAA 设成 1 时上半句不成立，于是**落到 RT 上**：我们给 4 就等于把
+            // MSAA 强行开回 4x，正好盖掉用户特意关掉的东西。所以 RT 不带采样数，跟随工程设置。
             var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
                 name = "HoQuickCaptureCameraTarget",
@@ -90,10 +98,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // 天空盒不在相机上，是**场景级**的，所以单独一层作用域管它的存与还原。
             // 只在"要透明"时才关 —— 不透明的话天空盒照画，跟平时一样。
             HoQuickCaptureSkyboxOff skyboxOff = null;
-
-            // URP 的后处理会把 alpha 清掉，那个开关也在包外（URP Asset 上）。
-            // 同样只在"要透明"时临时打开，拍完改回去。
-            HoQuickCaptureAlphaOutputScope alphaScope = null;
 
             // 只在**出事**时才往窗口写话（退路、失败）。正常拍完一声不响 ——
             // 用户明确要求"不要加黄字提示，或者简单一点"。
@@ -120,10 +124,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     // 只设清屏色是**不够**的 —— 天空盒是画在背景之上的一层几何，
                     // 不关掉的话天空那块仍然会被它填满（用户报的正是这个）。
                     skyboxOff = HoQuickCaptureSkyboxOff.Apply();
-
-                    string alphaNote;
-                    alphaScope = HoQuickCaptureAlphaOutputScope.Apply(out alphaNote);
-                    accumulated = Append(accumulated, alphaNote);
 
                     target.clearFlags = CameraClearFlags.SolidColor;
                     target.backgroundColor = new Color(
@@ -152,11 +152,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             finally
             {
                 // 包外的东西先还（哪怕上面抛了也要还）。
-                if (alphaScope != null)
-                {
-                    alphaScope.Dispose();
-                }
-
                 if (skyboxOff != null)
                 {
                     skyboxOff.Dispose();
@@ -193,7 +188,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 #if HO_URP_AVAILABLE
             if (IsUrpActive())
             {
-                if (TryRenderWithUrp(camera) && !IsBlank(rt))
+                if (TryRenderWithUrp(camera, rt) && !IsBlank(rt))
                 {
                     // URP 接了，而且真画出东西了。
                     return;
@@ -229,20 +224,54 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         }
 
         /// <summary>
-        /// 让 URP 渲这一台相机。
+        /// 让 URP 渲这一台相机。**这是让后处理与相机级抗锯齿生效的唯一办法** ——
+        /// `camera.Render()` 会走内建路径，URP 那条链根本不参与
+        ///（后处理没有、TAA/SMAA 没有、URP 的透明处理也没有）。
         ///
-        /// ⚠️ URP 下**必须**用这个，`camera.Render()` 会走内建路径 ——
-        /// URP 的后处理与透明处理都不参与，结果既不是 URP 的画面、也不带 alpha。
+        /// ⚠️ 顺带一条实测结论：**抗锯齿不需要我们单独做什么**。
+        /// 工程是靠 TAA / SMAA 的（URP 里这是相机级设置 `renderPostProcessing` 那一路），
+        /// 只要走的是 URP 管线，它自己就会应用；反过来，往 RT 上写 `antiAliasing` 反而会把
+        /// 特意关掉的 MSAA 强行开回来（见上面建 RT 处的注释）。
         ///
-        /// ⚠️ 它要一个 `ScriptableRenderContext`，而引擎内部那个拿不到，只能自己 new。
-        /// 这在部分 URP 版本上会静默不画 —— 所以调用方一定会再验一次 `IsBlank`。
-        /// 用户明确同意"可以调 URP 函数"，所以这里是**直接调用**（不再反射）；
-        /// 用 `#if HO_URP_AVAILABLE` 保证没装 URP 的工程照样编得过。
+        /// 入口按版本分：
+        ///   · **Unity 6 / 2023.1+**：`RenderPipeline.SubmitRenderRequest(camera, SingleCameraRequest)`
+        ///     —— 这是 URP 自己测试在用的现代入口，完整走 URP 管线（后处理 + MSAA 都在这条里）。
+        ///     ⚠️ URP 自己的过期提示里写的是 `UniversalRenderer.SingleCameraRequest`，**那个是写错的**，
+        ///     实际类型是嵌套在 `UniversalRenderPipeline.SingleCameraRequest`。
+        ///   · **2021.3**：那个 API 还不存在（实测 `RenderPipeline.StandardRequest` / `SubmitRenderRequest`
+        ///     都是 0 命中），只能用 `UniversalRenderPipeline.RenderSingleCamera(context, camera)` ——
+        ///     它在 2023.1 起标了 obsolete，但在 2021.3 上是唯一的路。
+        ///
+        /// 两条都不代表"一定画成功了"，所以调用方一律再验一次 `IsBlank`，空了就退回 `camera.Render()`。
         /// </summary>
-        private static bool TryRenderWithUrp(Camera camera)
+        private static bool TryRenderWithUrp(Camera camera, RenderTexture destination)
         {
+#if UNITY_2023_1_OR_NEWER
             try
             {
+                var request = new UnityEngine.Rendering.Universal.UniversalRenderPipeline.SingleCameraRequest
+                {
+                    destination = destination,
+                    mipLevel = 0,
+                    slice = 0,
+                    face = CubemapFaceUnknown,
+                };
+
+                RenderPipeline.SubmitRenderRequest(camera, request);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "[快速渲染] URP 单相机渲染（SubmitRenderRequest）失败，退回 camera.Render()："
+                    + exception.Message);
+                return false;
+            }
+#else
+            try
+            {
+                // 2021.3：引擎内部那个 ScriptableRenderContext 拿不到，只能自己 new 一个。
+                // 这条在部分 URP 版本上会静默不画 —— 所以调用方会验 IsBlank。
                 var context = new ScriptableRenderContext();
                 UnityEngine.Rendering.Universal.UniversalRenderPipeline.RenderSingleCamera(context, camera);
                 return true;
@@ -250,11 +279,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             catch (Exception exception)
             {
                 Debug.LogWarning(
-                    "[快速渲染] URP 单相机渲染调用失败，退回 camera.Render()（画面可能不含 URP 后处理）："
+                    "[快速渲染] URP 单相机渲染（RenderSingleCamera）失败，退回 camera.Render()："
                     + exception.Message);
                 return false;
             }
+#endif
         }
+
+        /// <summary>`CubemapFace.Unknown` 在这个命名空间下没有直接别名，取一次缓存着。</summary>
+        private static readonly CubemapFace CubemapFaceUnknown = CubemapFace.Unknown;
 #endif
 
         /// <summary>
