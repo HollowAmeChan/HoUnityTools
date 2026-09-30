@@ -435,12 +435,28 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
         private void Dispose()
         {
-            if (target != null)
+            if (target == null)
             {
-                target.Release();
-                UnityEngine.Object.DestroyImmediate(target);
-                target = null;
+                return;
             }
+
+            // ⚠️ `RenderTexture.active` 是**全局状态**，Release 之前必须先把它摘下来，
+            // 否则 Unity 会吼：
+            //   "Releasing render texture that is set to be RenderTexture.active!"
+            // 谁把它留成 active 的：`HoQuickCaptureCameraRenderer.IsBlank()` 会临时代我们
+            // 设成 `RenderTexture.active = source`，正常情况下它的 `finally` 会还原 ——
+            // 但**它还原的是"它进来时的那个值"**。如果那时 active 已经是这张 target
+            //（比如读像素那一步留下的），它就还原成 target 自己，于是这里一 Release 就中招。
+            //
+            // 所以这里再兜一次：**这张图要销毁了，就不该再有任何东西指着它**。
+            if (RenderTexture.active == target)
+            {
+                RenderTexture.active = null;
+            }
+
+            target.Release();
+            UnityEngine.Object.DestroyImmediate(target);
+            target = null;
         }
     }
 }

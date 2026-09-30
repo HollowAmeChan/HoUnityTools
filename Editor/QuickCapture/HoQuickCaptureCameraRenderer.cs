@@ -42,6 +42,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// </summary>
         public static string LastRenderDiagnostics { get; private set; }
 
+        /// <summary>诊断用：这次渲染 URP 到底有没有接手（`beginCameraRendering` 有没有触发）。</summary>
+        public static bool LastRenderUsedUrp { get; private set; }
+
+        /// <summary>诊断用：URP 渲完之后那一张是不是被判成"空白"（判成空白就会退回 camera.Render()）。</summary>
+        public static string LastRenderBlankCheck { get; private set; }
+
+        /// <summary>诊断用：这次渲染最后走的是哪条路 + 面板会显示的那句话。</summary>
+        public static string LastRenderRoute { get; private set; }
+
         /// <summary>在渲染期间记录相机数据。反射取字段，取不到就说明原因，绝不抛。</summary>
         private sealed class CameraDataProbe : IDisposable
         {
@@ -290,10 +299,19 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
                 string renderNote;
                 LastRenderDiagnostics = null;
+                LastRenderUsedUrp = false;
+                LastRenderBlankCheck = null;
+                LastRenderRoute = null;
                 using (new CameraDataProbe())
                 {
                     RenderWithPipeline(target, rt, out renderNote);
                 }
+
+                // 把"最后走的哪条路"直接打到 Console。
+                // 为什么不只在面板上显示：这些值以前只存静态字段，结果屡次出现
+                // "字段是 null、分不清是没渲染还是没存上"的情况，白绕了几轮。
+                // 日志是没法被后续操作抹掉的，所以这里一律直接说话。
+                Debug.Log("[快速渲染/渲染路径] " + (LastRenderRoute ?? "(没记录到路线)"));
 
                 accumulated = Append(accumulated, renderNote);
 
@@ -353,15 +371,33 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 #if HO_URP_AVAILABLE
             if (IsUrpActive())
             {
-                if (TryRenderWithUrp(camera, rt) && !IsBlank(rt))
+                bool urpCalled = TryRenderWithUrp(camera, rt);
+                bool blank = IsBlank(rt);
+
+                LastRenderUsedUrp = urpCalled;
+                LastRenderBlankCheck = "URP 调用" + (urpCalled ? "成功" : "**失败/抛异常**")
+                    + "；渲完 IsBlank = " + (blank ? "**true（判成空白）**" : "false（有画面）");
+
+                if (urpCalled && !blank)
                 {
                     // URP 接了，而且真画出东西了。
+                    LastRenderRoute = "走的是 **URP 单相机渲染**（后处理 / AA 应该生效）。"
+                        + " " + LastRenderBlankCheck;
                     return;
                 }
 
                 // URP 那条路没成（调用失败，或画出来是空的）—— 退回内建。
                 note = "URP 没渲出东西，已退回 camera.Render()（这张不含后处理）。";
+                LastRenderRoute = "**退回了 camera.Render()** —— 这张不含后处理与 AA。原因："
+                    + LastRenderBlankCheck
+                    + "。这就是「没有后处理也没有 AA」的直接原因。";
             }
+            else
+            {
+                LastRenderRoute = "当前管线不是 URP（走的是内建 camera.Render()）。";
+            }
+#else
+            LastRenderRoute = "本包编译时没有 URP（HO_URP_AVAILABLE 未定义），只能走 camera.Render()。";
 #endif
 
             camera.Render();
@@ -500,7 +536,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
             finally
             {
-                RenderTexture.active = previous;
+                // 同上：`previous` 可能是马上要销毁的那张，别把 active 留给一个将死之物。
+                RenderTexture.active = previous != null && previous.IsCreated() ? previous : null;
+
                 if (probe != null)
                 {
                     Object.DestroyImmediate(probe);

@@ -594,7 +594,14 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
             finally
             {
                 // RenderTexture.active 是全局状态，不还原的话后面所有 Graphics.Blit / 相机渲染都会写错地方。
-                RenderTexture.active = previous;
+                //
+                // ⚠️ 还原成 `previous` 有个坑：**如果 `previous` 就是马上要被销毁的那张 RT**，
+                // 等于把 active 又留给了它 —— 调用方 Release 时 Unity 就会吼
+                //   "Releasing render texture that is set to be RenderTexture.active!"
+                // 所以这里只还原"仍然活着"的；否则一律清成 null。判定用 `IsCreated()`：
+                // 已 Release 过的 RT 它会返回 false。
+                RenderTexture.active = previous != null && previous.IsCreated() ? previous : null;
+
                 if (staging != null)
                 {
                     Destroy(staging);

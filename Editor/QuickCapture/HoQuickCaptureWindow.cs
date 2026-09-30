@@ -922,11 +922,26 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
 
             report.AppendLine();
-            report.AppendLine("  ── 最近一次**真的渲染过**时 URP 自己算出的值 ──");
+            report.AppendLine("  ── 最近一次拍照走的**哪条渲染路**（这是「没后处理 / 没 AA」的关键） ──");
+            string route = HoQuickCaptureCameraRenderer.LastRenderRoute;
+            if (string.IsNullOrEmpty(route))
+            {
+                report.AppendLine("    (本窗口打开后还没拍过 —— 按一次「截帧」再点这个按钮)");
+            }
+            else
+            {
+                report.AppendLine("  " + route);
+                report.AppendLine("    IsBlank 判定: " + HoQuickCaptureCameraRenderer.LastRenderBlankCheck);
+            }
+
+            report.AppendLine();
+            report.AppendLine("  ── 渲染时 URP 自己算出的每相机数据 ──");
             string lastRender = HoQuickCaptureCameraRenderer.LastRenderDiagnostics;
             if (string.IsNullOrEmpty(lastRender))
             {
-                report.AppendLine("    (还没有渲染记录 —— 先按一次「截帧」，再点这个按钮)");
+                report.AppendLine("    (没取到 —— `beginCameraRendering` 没触发。"
+                    + "如果上面那行写的是「退回了 camera.Render()」，那这里为空是**正常的**，不是 bug。"
+                    + "如果上面写的是走了 URP，却还是空，那才是探测本身失效。)");
             }
             else
             {
