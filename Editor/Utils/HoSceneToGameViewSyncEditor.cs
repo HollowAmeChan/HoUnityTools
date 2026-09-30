@@ -112,6 +112,11 @@ namespace Hollow.HoUnityTools.Editor
                 if (!string.IsNullOrEmpty(_lastSyncMessage))
                     EditorGUILayout.HelpBox(_lastSyncMessage, _lastSyncMessageType);
 
+                // 播放模式下吸附照样生效（只写运行时 Transform），但改不到场景资产：
+                // 退出播放模式后位置会被还原，想留下结果要在编辑模式再吸附一次。
+                if (EditorApplication.isPlaying)
+                    EditorGUILayout.HelpBox("播放模式：吸附立即生效，但离屏即还原，不会写进场景。要留结果请在编辑模式吸附。", MessageType.Info);
+
                 EditorGUILayout.Space(6f);
 
                 if (GUILayout.Button(new GUIContent("Scene 视图看向此 Camera", "按下方选项把此 Camera 的位置、旋转、视野和裁切平面应用到最近活动的 Scene 视图。视野通道会同时切换 Scene 视图的透视/正交模式；同步裁切平面会关闭 Scene 视图的动态裁切。"), SecondaryButtonStyle))
@@ -161,39 +166,63 @@ namespace Hollow.HoUnityTools.Editor
             int syncedCount = 0;
             HoSceneToGameViewSyncDriver.SyncResult firstFailure = HoSceneToGameViewSyncDriver.SyncResult.Synced;
 
-            foreach (Object selectedTarget in targets)
+            // 一条 try/finally 保住"点了要有回音"这件事：以前这条循环里只要抛一次异常
+            // （播放模式下 MarkCameraDirty 抛过），_lastSyncMessage 就永远停在上一句话，
+            // 表现就是「按钮点了没反应」。
+            try
             {
-                if (!(selectedTarget is HoSceneToGameViewSync sync))
-                    continue;
-
-                HoSceneToGameViewSyncDriver.SyncResult result = HoSceneToGameViewSyncDriver.SyncNow(sync);
-                if (result == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+                foreach (Object selectedTarget in targets)
                 {
-                    syncedCount++;
+                    if (!(selectedTarget is HoSceneToGameViewSync sync))
+                        continue;
+
+                    // SyncNow 返回 MissingComponent 时不会说明原因，这里先替它答，
+                    // 免得多选时把"没勾任何吸附内容"报成"没找到同步组件"。
+                    if (!HoSceneToGameViewSyncDriver.HasAnySyncChannel(sync))
+                    {
+                        if (firstFailure == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+                            firstFailure = HoSceneToGameViewSyncDriver.SyncResult.NoChannelsSelected;
+
+                        continue;
+                    }
+
+                    HoSceneToGameViewSyncDriver.SyncResult result = HoSceneToGameViewSyncDriver.SyncNow(sync);
+                    if (result == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+                    {
+                        syncedCount++;
+                    }
+                    else if (firstFailure == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+                    {
+                        firstFailure = result;
+                    }
                 }
-                else if (firstFailure == HoSceneToGameViewSyncDriver.SyncResult.Synced)
+
+                if (syncedCount == targets.Length)
                 {
-                    firstFailure = result;
+                    _lastSyncMessage = syncedCount == 1 ? "已吸附到当前 Scene 视图。" : $"已吸附 {syncedCount} 个 Camera。";
+                    _lastSyncMessageType = MessageType.Info;
+                }
+                else if (syncedCount > 0)
+                {
+                    _lastSyncMessage = $"已吸附 {syncedCount}/{targets.Length} 个 Camera。未完成原因：{GetResultText(firstFailure)}";
+                    _lastSyncMessageType = MessageType.Warning;
+                }
+                else
+                {
+                    _lastSyncMessage = GetResultText(firstFailure);
+                    _lastSyncMessageType = MessageType.Warning;
                 }
             }
-
-            if (syncedCount == targets.Length)
+            catch (System.Exception exception)
             {
-                _lastSyncMessage = syncedCount == 1 ? "已吸附到当前 Scene 视图。" : $"已吸附 {syncedCount} 个 Camera。";
-                _lastSyncMessageType = MessageType.Info;
+                _lastSyncMessage = "吸附时出错：" + exception.Message;
+                _lastSyncMessageType = MessageType.Error;
+                Debug.LogException(exception);
             }
-            else if (syncedCount > 0)
+            finally
             {
-                _lastSyncMessage = $"已吸附 {syncedCount}/{targets.Length} 个 Camera。未完成原因：{GetResultText(firstFailure)}";
-                _lastSyncMessageType = MessageType.Warning;
+                Repaint();
             }
-            else
-            {
-                _lastSyncMessage = GetResultText(firstFailure);
-                _lastSyncMessageType = MessageType.Warning;
-            }
-
-            Repaint();
         }
 
         private void SnapSceneViewToTargets()

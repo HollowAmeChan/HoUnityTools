@@ -50,7 +50,13 @@ namespace Hollow.HoUnityTools.Editor
             Undo.RecordObject(targetCamera, "Snap Scene View To Camera");
 
             ApplySceneCamera(sync, targetCamera, sceneView.camera, true);
-            MarkCameraDirty(targetCamera);
+
+            // 播放模式下不能标脏：EditorSceneManager.MarkSceneDirty 会抛
+            // InvalidOperationException("This cannot be used during play mode.")。
+            // 手动吸附在播放模式里只改运行时的 Transform，退出播放模式后本来也会被还原。
+            if (!EditorApplication.isPlaying)
+                MarkCameraDirty(targetCamera);
+
             return SyncResult.Synced;
         }
 
@@ -239,7 +245,8 @@ namespace Hollow.HoUnityTools.Editor
                 MarkCameraDirty(targetCamera);
         }
 
-        private static bool HasAnySyncChannel(HoSceneToGameViewSync sync)
+        /// <summary>面板也要用它来回答"这个组件到底有没有可吸附的内容"。</summary>
+        internal static bool HasAnySyncChannel(HoSceneToGameViewSync sync)
         {
             return sync.syncPosition || sync.syncRotation || sync.syncFOV || sync.syncClippingPlanes;
         }
@@ -295,8 +302,17 @@ namespace Hollow.HoUnityTools.Editor
             return changed;
         }
 
+        /// <summary>
+        /// 把改动登记成"场景脏了"。只能编辑模式调用：MarkSceneDirty 在播放模式里会抛
+        /// InvalidOperationException，而它是在 OnInspectorGUI 里同步跑的，抛出去会中断这一帧的
+        /// IMGUI（按钮点下去像没反应，也没有任何结果提示）。所以这里自己再挡一道，
+        /// 免得以后又多一个调用点把面板打瘸。
+        /// </summary>
         private static void MarkCameraDirty(Camera camera)
         {
+            if (EditorApplication.isPlaying)
+                return;
+
             EditorUtility.SetDirty(camera.transform);
             EditorUtility.SetDirty(camera);
             EditorUtility.SetDirty(camera.gameObject);
