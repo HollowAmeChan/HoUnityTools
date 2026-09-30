@@ -161,5 +161,45 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     + exception.Message);
             }
         }
+
+        /// <summary>
+        /// 只看一眼当前状态，**不改任何东西**。给「诊断」按钮用：
+        /// 用于回答"那个隐式覆写到底有没有生效" —— 也就是"背景是纯色 / 没有后处理"时
+        /// 最先要排除的那一条。
+        /// </summary>
+        /// <param name="assetName">当前管线资产的名字（没在用 SRP 时为空）。</param>
+        /// <param name="fieldFound">有没有在资产上找到那个序列化字段。</param>
+        /// <param name="value">字段当前的值（没找到时为 false）。</param>
+        public static void Inspect(out string assetName, out bool fieldFound, out bool value)
+        {
+            assetName = null;
+            fieldFound = false;
+            value = false;
+
+            RenderPipelineAsset asset = GraphicsSettings.currentRenderPipeline;
+            if (asset == null)
+            {
+                return;
+            }
+
+            assetName = asset.name;
+
+            try
+            {
+                var serialized = new SerializedObject(asset);
+                SerializedProperty property = serialized.FindProperty(AlphaOutputField);
+                if (property == null || property.propertyType != SerializedPropertyType.Boolean)
+                {
+                    return;
+                }
+
+                fieldFound = true;
+                value = property.boolValue;
+            }
+            catch (Exception)
+            {
+                fieldFound = false;
+            }
+        }
     }
 }
