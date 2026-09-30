@@ -99,6 +99,13 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // 只在"要透明"时才关 —— 不透明的话天空盒照画，跟平时一样。
             HoQuickCaptureSkyboxOff skyboxOff = null;
 
+            // URP 的后处理会把 alpha 清掉（`UniversalRenderPipeline.cs:1768`），那个开关在
+            // **包外**（URP Asset 上），默认是关的。不留神的话症状是"图是对的、alpha 全是 1"，
+            // 也就是**背景变纯色**。所以只在"要透明"时临时打开，拍完改回去。
+            //
+            // ⚠️ 它不是可有可无的装饰：删掉它 = 透明直接坏掉。详见那个文件顶部的说明。
+            HoQuickCaptureAlphaOutputScope alphaScope = null;
+
             // 只在**出事**时才往窗口写话（退路、失败）。正常拍完一声不响 ——
             // 用户明确要求"不要加黄字提示，或者简单一点"。
             string accumulated = null;
@@ -124,6 +131,10 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     // 只设清屏色是**不够**的 —— 天空盒是画在背景之上的一层几何，
                     // 不关掉的话天空那块仍然会被它填满（用户报的正是这个）。
                     skyboxOff = HoQuickCaptureSkyboxOff.Apply();
+
+                    string alphaNote;
+                    alphaScope = HoQuickCaptureAlphaOutputScope.Apply(out alphaNote);
+                    accumulated = Append(accumulated, alphaNote);
 
                     target.clearFlags = CameraClearFlags.SolidColor;
                     target.backgroundColor = new Color(
@@ -152,6 +163,11 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             finally
             {
                 // 包外的东西先还（哪怕上面抛了也要还）。
+                if (alphaScope != null)
+                {
+                    alphaScope.Dispose();
+                }
+
                 if (skyboxOff != null)
                 {
                     skyboxOff.Dispose();

@@ -534,8 +534,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                             + "（副作用：这一张的间接光与反射跟平时不完全一样，因为天空盒同时是环境光的来源。）\n\n"
                             + "另外两条也要满足，否则症状是「图是对的、alpha 全是 1」：\n"
                             + "· 存成 png 或 exr（**jpg 没有 alpha 通道**）；\n"
-                            + "· URP 工程要在 URP Asset 上自己勾 `Allow Post Process Alpha Output`（后处理会把 alpha 写回 1）。\n"
-                            + "  这一条面板**不会替你改** —— 工程的渲染设置不偷偷动。\n\n"
+                            + "· URP 工程要 `Allow Post Process Alpha Output`（后处理会把 alpha 写回 1）。\n"
+                            + "  这一条**面板会自动临时打开**（只改内存、不写盘，拍完还原），通常不用管；\n"
+                            + "  只有找不到那个开关时面板才会提示。\n\n"
                             + "相机的 Culling Mask 也要只留你要的东西，否则背景物件会把 alpha 填满。"),
                         EditorStyles.miniButton,
                         GUILayout.Width(84f));
