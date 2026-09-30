@@ -62,15 +62,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         private static readonly GUIContent ShotContent = new GUIContent(
             "截帧",
             "把当前游戏视图存成一张图。分辨率 = 游戏视图当前的渲染分辨率。\n\n"
-            + "播放模式与编辑模式都能拍：\n"
-            + "· 播放中：等这一帧画完再拍，拿到的是完整的合成结果；\n"
-            + "· 编辑模式：面板会自己催一帧再拍。若抓不到游戏视图的合成结果，\n"
-            + "  会退回渲主摄像机（那种情况下没有 UI、没有多相机叠加，面板会说明）。");
+            + "**只在播放模式下可用**：编辑模式里没有正在推进的游戏帧，\n"
+            + "抓到的画面不可靠（会抓到编辑器界面，或者只是「某一时刻碰巧画完」的那一帧）。\n"
+            + "先按 Play。\n\n"
+            + "播放中会等这一帧画完再拍，拿到的是完整的合成结果。");
 
         private static readonly GUIContent RecordContent = new GUIContent(
             "录制",
             "离线录一段到输出目录。录制不走真实时间：游戏时间按帧率一步一步走，机器慢也不会丢帧。\n\n"
-            + "要在播放模式下录 —— 编辑模式里时间不前进，录不出会动的画面。");
+            + "同样只在播放模式下可用 —— 编辑模式里时间不前进，录不出会动的画面。");
 
         private static readonly GUIContent PauseContent = new GUIContent(
             "暂停",

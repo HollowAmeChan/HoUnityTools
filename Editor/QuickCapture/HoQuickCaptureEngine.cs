@@ -204,9 +204,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>
         /// 截帧的准入检查。返回 null 表示可以。**界面靠它决定按钮灰不灰，所以不能有副作用。**
         ///
-        /// 播放模式与**编辑模式都允许**：
-        ///   · 播放模式走 `MonoBehaviour` + `WaitForEndOfFrame`（那一帧是画好的）；
-        ///   · 编辑模式走 <see cref="HoQuickCaptureEditModePump"/>（自己催一帧再抓）。
+        /// ⚠️ **只在播放模式下允许** —— 这一条是用户明确要求的，别再放开：
+        /// 「你还是别允许非 play 模式抓帧吧，bg 太多了」。
+        ///
+        /// 编辑模式曾经做过（走 <see cref="HoQuickCaptureEditModePump"/> 自己催帧再抓），
+        /// 但那条路为了对齐"游戏视图到底哪一刻画完"要处理一堆时序分支：
+        /// `RepaintAllViews` + `QueuePlayerLoopUpdate` + 等 tick / 等渲染回调、
+        /// 游戏视图最小化或被挡住时催不出来、抓到的到底是游戏视图还是编辑器界面……
+        /// **每一个分支都是一个 bug**，而收益只是"不用按 Play"。
+        /// 砍掉之后，截帧和录制走**同一条**帧泵（`WaitForEndOfFrame`），时序只有一个真相。
+        ///
+        /// 相机直渲（要透明背景时走的那条）在播放模式下同样走编辑模式帧泵 ——
+        /// 那是引擎内的确定性路径，与"编辑模式抓游戏视图"无关，不受这条限制影响。
         /// </summary>
         public static string CheckCanStart()
         {
@@ -216,13 +225,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 return blocked;
             }
 
+            if (!Application.isPlaying)
+            {
+                return "截帧和录制都要在播放模式下：编辑模式里没有正在推进的游戏帧，"
+                    + "抓到的画面不可靠。先按 Play。";
+            }
+
             // 播放模式独有的一条：`Time.captureDeltaTime` 是**被 `Time.timeScale` 缩放**的
             // （Unity 文档："Time.time advances at an interval of captureDeltaTime,
             // **scaled by Time.timeScale**"）。所以进录制时 timeScale 必须是 1，
             // 否则"离线步进"的步长就不等于 1/帧率：
             //   · timeScale = 0（游戏自己的暂停菜单）→ 游戏时间根本不动，一帧都拍不出来；
             //   · timeScale = 0.5（慢动作）→ 每帧只前进半个步长，步长校验会把它当成"时钟被抢"。
-            // 编辑模式下时间不走，这条不适用。
             if (Application.isPlaying && !Mathf.Approximately(Time.timeScale, 1f))
             {
                 return Time.timeScale <= 0f
@@ -231,37 +245,17 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                       + "（不是 1）：离线步进按 timeScale 缩放，步长会对不上。先把它设回 1。";
             }
 
-            // 编辑模式还要读得到游戏视图尺寸（出图分辨率就是按它来的）。
-            if (!Application.isPlaying && !HoQuickCaptureGameView.GetRenderSize(out _, out _))
-            {
-                return "读不到游戏视图的分辨率（Game 视图窗口没开着？）。把 Game 视图打开再拍，"
-                    + "或者在「高级」里把分辨率切成「自定义」。";
-            }
-
             return null;
         }
 
         /// <summary>
         /// 录制的准入检查。返回 null 表示可以。
         ///
-        /// **录制只能在播放模式下**：编辑模式里时间不前进，催帧也只是把同一张画面重画一遍，
-        /// 根本录不出"在动的东西"。与其录出一段时长对但画面定格的怪东西，不如直接不让录，
-        /// 把原因写在按钮的提示里。
+        /// 以前这里还要单独拦一次"不在播放模式"，现在 <see cref="CheckCanStart"/> 已经
+        /// 把播放模式作为共同前置条件了（截帧也一样只能在播放模式），所以这里不用再判一遍。
         /// </summary>
         public static string CheckCanRecord()
         {
-            string blocked = CheckCommon();
-            if (blocked != null)
-            {
-                return blocked;
-            }
-
-            if (!Application.isPlaying)
-            {
-                return "录制要在播放模式下：编辑模式里时间不前进，录不出会动的画面。先按 Play。"
-                    + "（只想拍一张的话，「截帧」在编辑模式下可以直接用。）";
-            }
-
             return CheckCanStart();
         }
 
@@ -604,16 +598,16 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // "Can't add script behaviour ... because it is an editor script"。
             try
             {
-                // 「指定相机渲进 RT」这条路**两条模式都走编辑模式帧泵**：
-                // 帧泵保留相机目标，在需要时跨帧预热 TAA，再读回最终结果。
-                bool useEditPump = !Application.isPlaying
-                    || plan.RenderSource == HoQuickCaptureRenderSource.Camera;
+                // 两条路的分工（注意：**都只在播放模式下**，见 CheckCanStart）：
+                //   · 来源 = 指定相机 → 走编辑模式帧泵。它自己渲 RT，与"游戏视图有没有在画"
+                //     无关，还能跨帧预热 TAA；这是确定性的路径，播放模式下也一样用它。
+                //   · 来源 = 游戏视图 → 走 MonoBehaviour + WaitForEndOfFrame，那一帧是画好的。
+                bool useEditPump = plan.RenderSource == HoQuickCaptureRenderSource.Camera;
 
                 if (useEditPump)
                 {
-                    // ── 编辑模式（或"渲指定相机"）──
-                    // 没有帧循环可等，所以用编辑器侧的帧泵：催一帧（RepaintAllViews +
-                    // QueuePlayerLoopUpdate）再抓。见 HoQuickCaptureEditModePump 的说明。
+                    // ── 渲指定相机 ──
+                    // 这条不依赖编辑器重画，只借编辑器的 update tick 推进 TAA 预热。
                     editModePump = true;
                     string pumpError;
                     if (!HoQuickCaptureEditModePump.Start(
