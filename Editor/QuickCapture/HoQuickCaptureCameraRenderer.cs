@@ -16,8 +16,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             private readonly Camera camera;
             private readonly bool transparent;
             private readonly RenderTexture previousTarget;
-            private readonly bool previousEnabled;
-            private readonly int previousDisplay;
             private readonly double startedAt;
             private HoQuickCaptureSkyboxOff backgroundScope;
             private bool disposed;
@@ -38,8 +36,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     throw new InvalidOperationException("找不到可用相机，请指定一台场景相机。");
                 transparent = forceTransparent;
                 previousTarget = camera.targetTexture;
-                previousEnabled = camera.enabled;
-                previousDisplay = camera.targetDisplay;
                 startedAt = EditorApplication.timeSinceStartup;
                 try
                 {
@@ -65,10 +61,20 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     if (!Target.Create())
                         throw new InvalidOperationException("无法创建截帧 RenderTexture。");
                     capturedState = true;
-                    // Normal Game View rendering between samples must not overwrite capture history.
-                    camera.enabled = false;
+                    // ⚠️ 这里**故意不动** `camera.enabled`、也**不动** `camera.targetDisplay`。
+                    //
+                    // 用户报过：「我挂上摄像机 3，输出到 display 3 上，但是截帧后会显示
+                    // display 3 没东西在输出」。原因就是这两行曾经存在：
+                    //   · `targetDisplay = 0` 把相机从 display N 挪到主显示；
+                    //   · `enabled = false` 干脆把它关了。
+                    // 而这个会话要活到 TAA 预热结束（16 帧），于是**整段时间里 display N
+                    // 名下没有任何启用中的相机**，Unity 就会报"这个 display 没有东西在输出"。
+                    //
+                    // 关键是：**这两行本来就没必要**。
+                    // 只要 `targetTexture` 被设上，这台相机就不往它的 display 上画了
+                    //（这正是我们要的效果），`enabled` 与 `targetDisplay` 都不会影响
+                    // "渲染到 RT 然后读回"这件事。既然不必要，就别去动用户的多显示器配置。
                     camera.targetTexture = Target;
-                    camera.targetDisplay = 0;
                     if (transparent)
                         backgroundScope = HoQuickCaptureSkyboxOff.Apply(camera);
 #if HO_URP_AVAILABLE && UNITY_2023_1_OR_NEWER
@@ -109,8 +115,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 if (capturedState && camera != null)
                 {
                     camera.targetTexture = previousTarget;
-                    camera.targetDisplay = previousDisplay;
-                    camera.enabled = previousEnabled;
 #if HO_URP_AVAILABLE && UNITY_2023_1_OR_NEWER
                     // Capture history must not leak into the next normal Game View frame.
                     var extra = camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
