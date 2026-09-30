@@ -33,6 +33,150 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
     {
 
         /// <summary>
+        /// 诊断用：最近一次**真正渲染时** URP 自己算出来的相机数据（不是相机组件上的值）。
+        ///
+        /// 为什么要专门抓这个：相机组件上写着"后处理开、AA = SMAA"**不代表 URP 渲染时也这么认**，
+        /// 中间还要过 `InitializeStackedCameraData` / `InitializeAdditionalCameraData`、
+        /// 自定义渲染器特性、以及本工程是 Deferred（`m_RenderingMode: 2`）+ 17 个自定义 Feature。
+        /// 只有这一层才是"后处理到底跑没跑"的真值。
+        /// </summary>
+        public static string LastRenderDiagnostics { get; private set; }
+
+        /// <summary>在渲染期间记录相机数据。反射取字段，取不到就说明原因，绝不抛。</summary>
+        private sealed class CameraDataProbe : IDisposable
+        {
+            private bool subscribed;
+
+            public void Subscribe()
+            {
+                RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+                subscribed = true;
+            }
+
+            public void Dispose()
+            {
+                if (!subscribed)
+                {
+                    return;
+                }
+
+                RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+                subscribed = false;
+            }
+
+            private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
+            {
+                try
+                {
+                    RenderPipeline pipeline = RenderPipelineManager.currentPipeline;
+                    if (pipeline == null)
+                    {
+                        LastRenderDiagnostics = "渲染时: 没有活动管线（走的是内建 camera.Render()）。";
+                        return;
+                    }
+
+                    // URP 把每相机数据放在 frameData 里，类型是 internal 的 UniversalCameraData。
+                    System.Reflection.PropertyInfo frameDataProperty =
+                        pipeline.GetType().GetProperty("frameData");
+                    object frameData = frameDataProperty?.GetValue(pipeline);
+                    if (frameData == null)
+                    {
+                        LastRenderDiagnostics = "渲染时: 拿不到 URP 的 frameData（管线类型 "
+                            + pipeline.GetType().Name + "）。";
+                        return;
+                    }
+
+                    System.Reflection.MethodInfo getGeneric = null;
+                    foreach (System.Reflection.MethodInfo method in frameData.GetType().GetMethods())
+                    {
+                        if (method.Name == "Get" && method.IsGenericMethodDefinition
+                            && method.GetParameters().Length == 0)
+                        {
+                            getGeneric = method;
+                            break;
+                        }
+                    }
+
+                    if (getGeneric == null)
+                    {
+                        LastRenderDiagnostics = "渲染时: frameData 上没有无参泛型 Get<>()。";
+                        return;
+                    }
+
+                    object cameraData = null;
+                    foreach (Type candidate in pipeline.GetType().Assembly.GetTypes())
+                    {
+                        if (candidate.Name != "UniversalCameraData")
+                        {
+                            continue;
+                        }
+
+                        cameraData = getGeneric.MakeGenericMethod(candidate).Invoke(frameData, null);
+                        break;
+                    }
+
+                    if (cameraData == null)
+                    {
+                        LastRenderDiagnostics = "渲染时: 没找到 UniversalCameraData 类型。";
+                        return;
+                    }
+
+                    Type type = cameraData.GetType();
+                    LastRenderDiagnostics =
+                        "渲染时（URP 实际用的值，不是相机组件上的）:"
+                        + "\n    postProcessEnabled = " + ReadField(type, cameraData, "postProcessEnabled")
+                        + "\n    stackAnyPostProcessingEnabled = " + ReadField(type, cameraData, "stackAnyPostProcessingEnabled")
+                        + "\n    antialiasing = " + ReadField(type, cameraData, "antialiasing")
+                        + "\n    antialiasingQuality = " + ReadField(type, cameraData, "antialiasingQuality")
+                        + "\n    isAlphaOutputEnabled = " + ReadField(type, cameraData, "isAlphaOutputEnabled")
+                        + "\n    resolveFinalTarget = " + ReadField(type, cameraData, "resolveFinalTarget")
+                        + "\n    renderType = " + ReadField(type, cameraData, "renderType")
+                        + "\n    isSceneViewCamera = " + ReadField(type, cameraData, "isSceneViewCamera")
+                        + "\n    msaaSamples = " + ReadField(type, cameraData, "cameraTargetDescriptor");
+                }
+                catch (Exception exception)
+                {
+                    LastRenderDiagnostics = "渲染时取相机数据失败（不影响渲染）：" + exception.Message;
+                }
+            }
+
+            /// <summary>读一个字段或属性；没有就返回 "?"（不抛）。</summary>
+            private static string ReadField(Type type, object instance, string name)
+            {
+                try
+                {
+                    System.Reflection.FieldInfo field = type.GetField(
+                        name,
+                        System.Reflection.BindingFlags.Instance
+                            | System.Reflection.BindingFlags.Public
+                            | System.Reflection.BindingFlags.NonPublic);
+
+                    object value = field != null
+                        ? field.GetValue(instance)
+                        : type.GetProperty(name)?.GetValue(instance);
+
+                    if (value == null)
+                    {
+                        return "?";
+                    }
+
+                    // RenderTextureDescriptor 直接 ToString 太啰嗦，只要采样数。
+                    if (name == "cameraTargetDescriptor")
+                    {
+                        System.Reflection.FieldInfo msaa = value.GetType().GetField("msaaSamples");
+                        return "msaaSamples=" + (msaa != null ? msaa.GetValue(value)?.ToString() : "?");
+                    }
+
+                    return value.ToString();
+                }
+                catch (Exception)
+                {
+                    return "?";
+                }
+            }
+        }
+
+        /// <summary>
         /// 渲一帧到一张新的 RenderTexture。调用方负责 <see cref="Object.DestroyImmediate(Object)"/> 它。
         /// 失败时返回 null，原因在 <paramref name="error"/>。
         /// </summary>
@@ -145,7 +289,12 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 }
 
                 string renderNote;
-                RenderWithPipeline(target, rt, out renderNote);
+                LastRenderDiagnostics = null;
+                using (new CameraDataProbe())
+                {
+                    RenderWithPipeline(target, rt, out renderNote);
+                }
+
                 accumulated = Append(accumulated, renderNote);
 
                 note = accumulated;

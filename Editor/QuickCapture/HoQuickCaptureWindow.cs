@@ -921,6 +921,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 report.AppendLine("    · 编辑器里正在播放: " + Application.isPlaying);
             }
 
+            report.AppendLine();
+            report.AppendLine("  ── 最近一次**真的渲染过**时 URP 自己算出的值 ──");
+            string lastRender = HoQuickCaptureCameraRenderer.LastRenderDiagnostics;
+            if (string.IsNullOrEmpty(lastRender))
+            {
+                report.AppendLine("    (还没有渲染记录 —— 先按一次「截帧」，再点这个按钮)");
+            }
+            else
+            {
+                report.AppendLine("  " + lastRender);
+            }
+
             Debug.Log(report.ToString());
         }
 
