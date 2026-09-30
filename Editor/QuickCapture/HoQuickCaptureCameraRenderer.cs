@@ -378,26 +378,12 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 #if HO_URP_AVAILABLE
             if (IsUrpActive())
             {
-                bool urpCalled = TryRenderWithUrp(camera, rt);
-                bool blank = IsBlank(rt);
-
-                LastRenderUsedUrp = urpCalled;
-                LastRenderBlankCheck = "URP 调用" + (urpCalled ? "成功" : "**失败/抛异常**")
-                    + "；渲完 IsBlank = " + (blank ? "**true（判成空白）**" : "false（有画面）");
-
-                if (urpCalled && !blank)
+                RenderWithUrp(camera, rt, ref note);
+                if (LastRenderRoute != null && LastRenderRoute.StartsWith("走的是", StringComparison.Ordinal))
                 {
                     // URP 接了，而且真画出东西了。
-                    LastRenderRoute = "走的是 **URP 单相机渲染**（后处理 / AA 应该生效）。"
-                        + " " + LastRenderBlankCheck;
                     return;
                 }
-
-                // URP 那条路没成（调用失败，或画出来是空的）—— 退回内建。
-                note = "URP 没渲出东西，已退回 camera.Render()（这张不含后处理）。";
-                LastRenderRoute = "**退回了 camera.Render()** —— 这张不含后处理与 AA。原因："
-                    + LastRenderBlankCheck
-                    + "。这就是「没有后处理也没有 AA」的直接原因。";
             }
             else
             {
@@ -409,6 +395,100 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             camera.Render();
         }
+
+#if HO_URP_AVAILABLE
+        /// <summary>
+        /// 两条 URP 入口都试一遍。
+        ///
+        /// 为什么是 A/B：用户的对比实验已经证明「游戏视图抓屏那条路后处理与 AA 都在」，
+        /// 所以问题只出在"相机渲进 RT"这一条。URP 有两个入口：
+        ///   A. `RenderPipeline.SubmitRenderRequest(camera, SingleCameraRequest)`（现代）
+        ///   B. `UniversalRenderPipeline.RenderSingleCamera(context, camera)`（旧）
+        /// `SubmitRenderRequest` 最终也走 B 的内部重载，但它会**自己接管
+        /// `camera.targetTexture`**（`ProcessRenderRequests` 里存、设、再还原）。
+        /// 我们本来就已经设过 targetTexture 了，这个来回很可疑，所以两条都量一次。
+        ///
+        /// ⚠️ B 必须先渲进**另一张临时 RT**，否则它会把 A 的结果覆盖掉，
+        /// 存下来的图就变成 B 的了 —— 那样这组 A/B 就等于没做。
+        /// </summary>
+        private static void RenderWithUrp(Camera camera, RenderTexture rt, ref string note)
+        {
+            bool urpCalled = TryRenderWithUrp(camera, rt);
+            bool blank = IsBlank(rt);
+
+            bool directWorked = false;
+            bool directBlank = true;
+            if (!blank)
+            {
+                RenderTexture probe = RenderTexture.GetTemporary(
+                    rt.width,
+                    rt.height,
+                    24,
+                    RenderTextureFormat.ARGB32);
+                try
+                {
+                    RenderTexture previousTarget = camera.targetTexture;
+                    camera.targetTexture = probe;
+                    try
+                    {
+                        directWorked = TryRenderWithUrpDirect(camera, probe);
+                        directBlank = directWorked && IsBlank(probe);
+                    }
+                    finally
+                    {
+                        camera.targetTexture = previousTarget;
+                    }
+                }
+                finally
+                {
+                    RenderTexture.ReleaseTemporary(probe);
+                }
+            }
+
+            LastRenderUsedUrp = urpCalled;
+            LastRenderBlankCheck = "A(SubmitRenderRequest) 调用" + (urpCalled ? "成功" : "**失败**")
+                + "，IsBlank = " + (blank ? "**true**" : "false")
+                + "；B(RenderSingleCamera 渲进临时 RT) 调用" + (directWorked ? "成功" : "失败")
+                + "，IsBlank = " + (directBlank ? "true" : "false");
+
+            if (urpCalled && !blank)
+            {
+                LastRenderRoute = "走的是 **URP 单相机渲染**（后处理 / AA 应该生效）。"
+                    + " " + LastRenderBlankCheck;
+                return;
+            }
+
+            // URP 那条路没成（调用失败，或画出来是空的）—— 退回内建。
+            note = "URP 没渲出东西，已退回 camera.Render()（这张不含后处理）。";
+            LastRenderRoute = "**退回了 camera.Render()** —— 这张不含后处理与 AA。原因："
+                + LastRenderBlankCheck
+                + "。这就是「没有后处理也没有 AA」的直接原因。";
+        }
+
+        /// <summary>
+        /// 旧入口：`UniversalRenderPipeline.RenderSingleCamera(context, camera)`。
+        /// 2023.1 起标了 obsolete，但**它是 `SubmitRenderRequest` 最终也会走到的那条**，
+        /// 只是省掉了 `ProcessRenderRequests` 对 `camera.targetTexture` 的接管与还原。
+        /// 留在这里当 A/B 里的 B，用来定位"到底哪一步把后处理链弄丢了"。
+        /// </summary>
+        private static bool TryRenderWithUrpDirect(Camera camera, RenderTexture destination)
+        {
+            try
+            {
+                // 2021.3：引擎内部那个 ScriptableRenderContext 拿不到，只能自己 new 一个。
+                // 这条在部分 URP 版本上会静默不画 —— 所以调用方会验 IsBlank。
+                var context = new ScriptableRenderContext();
+                UnityEngine.Rendering.Universal.UniversalRenderPipeline.RenderSingleCamera(context, camera);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[快速渲染] URP 直连渲染（RenderSingleCamera）失败："
+                    + exception.Message);
+                return false;
+            }
+        }
+#endif
 
 #if HO_URP_AVAILABLE
         /// <summary>
