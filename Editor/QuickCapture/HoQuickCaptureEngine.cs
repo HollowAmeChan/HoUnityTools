@@ -605,8 +605,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             try
             {
                 // 「指定相机渲进 RT」这条路**两条模式都走编辑模式帧泵**：
-                // 它自己是确定性的（渲一次就有，不依赖"游戏视图有没有在重画"），
-                // 也不需要等 WaitForEndOfFrame —— 让播放模式的协程泵去抓它反而绕远。
+                // 帧泵保留相机目标，在需要时跨帧预热 TAA，再读回最终结果。
                 bool useEditPump = !Application.isPlaying
                     || plan.RenderSource == HoQuickCaptureRenderSource.Camera;
 
@@ -1132,7 +1131,8 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>把最新一帧降采样成缩略图（最近邻抽点，够看构图，不吃 CPU）。</summary>
         private static void UpdatePreview(HoQuickCapturedFrame frame)
         {
-            if (frame.PixelData == null || frame.Width < 1 || frame.Height < 1)
+            Color32[] sourcePixels = frame.GetBottomUpPixels();
+            if (sourcePixels == null || frame.Width < 1 || frame.Height < 1)
             {
                 return;
             }
@@ -1172,7 +1172,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 for (int x = 0; x < width; x++)
                 {
                     int sourceX = Mathf.Clamp((int)((x + 0.5f) * frame.Width / width), 0, frame.Width - 1);
-                    previewPixels[targetRow + x] = frame.PixelData[sourceRow + sourceX];
+                    previewPixels[targetRow + x] = sourcePixels[sourceRow + sourceX];
                 }
             }
 

@@ -604,7 +604,10 @@ namespace Hollow.HoUnityTools.Runtime.QuickCapture
 
                 if (staging != null)
                 {
-                    Destroy(staging);
+                    if (Application.isPlaying)
+                        Destroy(staging);
+                    else
+                        DestroyImmediate(staging);
                 }
             }
         }

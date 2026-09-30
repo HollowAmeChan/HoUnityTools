@@ -32,7 +32,6 @@ using Hollow.HoUnityTools.Editor.Constraints;
 using Hollow.HoUnityTools.Runtime.QuickCapture;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace Hollow.HoUnityTools.Editor.QuickCapture
 {
@@ -480,7 +479,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                         + "游戏视图 —— 抓游戏视图的最终合成结果：多相机、后处理、UI 都在里面，"
                         + "但它是画到屏幕上的，**拿不到透明背景**。\n\n"
                         + "指定相机 —— 把那台相机渲进一张带 alpha 的 RT。**要透明背景就用这个。**\n"
-                        + "代价：只有这一台相机的画面（没有别的相机叠加、没有 Screen Space-Overlay 的 UI）。"),
+                        + "包含指定 Base 相机的 URP 相机栈，不包含独立相机和 Screen Space-Overlay UI。"),
                     EditorStyles.miniLabel,
                     GUILayout.Width(52f));
 
@@ -529,16 +528,10 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                         data.transparentBackground,
                         new GUIContent(
                             "透明背景",
-                            "拍之前临时把**天空盒关掉**、相机改成 Clear Flags = Solid Color、背景 alpha = 0；拍完全部还原。\n\n"
-                            + "关天空盒是关键那一步：天空盒是画在背景**之上**的一层几何，只设透明清屏色挡不住它，\n"
-                            + "天空那块仍然会被它填满。关掉之后天空直接算全透明。\n"
-                            + "（副作用：这一张的间接光与反射跟平时不完全一样，因为天空盒同时是环境光的来源。）\n\n"
-                            + "另外两条也要满足，否则症状是「图是对的、alpha 全是 1」：\n"
-                            + "· 存成 png 或 exr（**jpg 没有 alpha 通道**）；\n"
-                            + "· URP 工程要 `Allow Post Process Alpha Output`（后处理会把 alpha 写回 1）。\n"
-                            + "  这一条**面板会自动临时打开**（只改内存、不写盘，拍完还原），通常不用管；\n"
-                            + "  只有找不到那个开关时面板才会提示。\n\n"
-                            + "相机的 Culling Mask 也要只留你要的东西，否则背景物件会把 alpha 填满。"),
+                            "临时让相机以透明黑清屏并跳过天空盒绘制，保留场景环境光与反射；截帧后还原。\n\n"
+                            + "URP 后处理的 alpha 输出会自动临时开启。请使用 PNG 或 EXR，JPG 不支持透明。\n"
+                            + "TAA 会先积累 16 帧再保存；预热期间相机暂时用于截帧。\n"
+                            + "场景中的背景物体仍会被渲染，可通过相机 Culling Mask 排除。"),
                         EditorStyles.miniButton,
                         GUILayout.Width(84f));
                     if (transparent != data.transparentBackground)
@@ -815,18 +808,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     }
 
                     GUILayout.FlexibleSpace();
-                    if (GUILayout.Button(
-                            new GUIContent(
-                                "诊断渲染",
-                                "把当前渲染管线的关键状态打到 Console：\n"
-                                + "用的是不是 URP、那个「后处理保留 alpha」开关在哪、值是多少、\n"
-                                + "以及相机的「后处理」与「抗锯齿」设置。\n\n"
-                                + "出图没有后处理 / 没有抗锯齿 / 背景是纯色时，先点这个。"),
-                            EditorStyles.miniButton))
-                    {
-                        LogRenderDiagnostics();
-                    }
-
                     if (GUILayout.Button(new GUIContent("恢复默认", "截图/录制的全部设置回到出厂值（会先问你一次）。"), EditorStyles.miniButton))
                     {
                         if (EditorUtility.DisplayDialog(
@@ -856,121 +837,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             data.frameRate = rate;
             HoQuickCaptureSettings.NotifyChanged();
         }
-
-        /// <summary>
-        /// 把"渲染这条路"的关键状态打一遍。存在的理由：
-        /// "透明但没后处理/没抗锯齿"这类症状从面板上看不出是哪一环断的，
-        /// 而它牵扯三处（管线资产开关、相机后处理、相机抗锯齿），
-        /// 逐个用 Inspector 翻很费事，所以一次全打出来。
-        /// </summary>
-        private static void LogRenderDiagnostics()
-        {
-            var report = new System.Text.StringBuilder();
-            report.AppendLine("[快速渲染] 渲染诊断：");
-
-            RenderPipelineAsset pipeline = GraphicsSettings.currentRenderPipeline;
-            report.AppendLine("  · 渲染管线: "
-                + (pipeline == null ? "内建管线（不是 URP）" : pipeline.GetType().FullName));
-
-            if (pipeline == null)
-            {
-                report.AppendLine("    内建管线没有「后处理保留 alpha」这个开关，也不需要它。");
-                report.AppendLine("    内建下没有后处理/抗锯齿时，问题在相机自己的设置上。");
-            }
-
-            HoQuickCaptureAlphaOutputScope.Inspect(
-                out string assetName,
-                out bool fieldFound,
-                out bool alphaOutput);
-
-            report.AppendLine("  · 管线资产: " + (assetName ?? "(无)"));
-            report.AppendLine("  · 后处理保留 alpha 字段: "
-                + (fieldFound
-                    ? "找到了，当前值 = " + (alphaOutput ? "1（开）" : "0（关）")
-                    : "**没找到**（可能不是 URP，或 URP 改了字段名）"));
-
-            if (fieldFound && !alphaOutput)
-            {
-                report.AppendLine("    ⚠️ 现在是 0。手动拍照时面板会临时改成 1（只改内存）。"
-                    + "如果出图背景是**纯色**，说明这个临时覆写没生效。");
-            }
-
-            HoQuickCaptureSettings.Load();
-            Camera camera = HoQuickCaptureSettings.Data.sourceCamera;
-            if (camera == null)
-            {
-                camera = Camera.main;
-                report.AppendLine("  · 相机: 面板没指定，按 Camera.main 找 → "
-                    + (camera == null ? "**没有**" : camera.name));
-            }
-            else
-            {
-                report.AppendLine("  · 相机（面板指定）: " + camera.name);
-            }
-
-            if (camera != null)
-            {
-#if HO_URP_AVAILABLE
-                LogCameraDiagnosticsUrp(report, camera);
-#else
-                report.AppendLine("    （本工程没装 URP 包，跳过相机级后处理/抗锯齿检查）");
-#endif
-
-                report.AppendLine("    · 该相机是 Camera.main 吗: " + (Camera.main == camera ? "是" : "**不是**"));
-                report.AppendLine("    · 启用中: " + camera.isActiveAndEnabled);
-                report.AppendLine("    · 编辑器里正在播放: " + Application.isPlaying);
-            }
-
-            report.AppendLine();
-            report.AppendLine("  ── 最近一次拍照走的**哪条渲染路**（这是「没后处理 / 没 AA」的关键） ──");
-            string route = HoQuickCaptureCameraRenderer.LastRenderRoute;
-            if (string.IsNullOrEmpty(route))
-            {
-                report.AppendLine("    (本窗口打开后还没拍过 —— 按一次「截帧」再点这个按钮)");
-            }
-            else
-            {
-                report.AppendLine("  " + route);
-                report.AppendLine("    IsBlank 判定: " + HoQuickCaptureCameraRenderer.LastRenderBlankCheck);
-            }
-
-            report.AppendLine();
-            report.AppendLine("  ── 渲染时 URP 自己算出的每相机数据 ──");
-            string lastRender = HoQuickCaptureCameraRenderer.LastRenderDiagnostics;
-            if (string.IsNullOrEmpty(lastRender))
-            {
-                report.AppendLine("    (没取到 —— `beginCameraRendering` 没触发。"
-                    + "如果上面那行写的是「退回了 camera.Render()」，那这里为空是**正常的**，不是 bug。"
-                    + "如果上面写的是走了 URP，却还是空，那才是探测本身失效。)");
-            }
-            else
-            {
-                report.AppendLine("  " + lastRender);
-            }
-
-            Debug.Log(report.ToString());
-        }
-
-#if HO_URP_AVAILABLE
-        /// <summary>相机上跟 URP 后处理 / 抗锯齿有关的那几项。</summary>
-        private static void LogCameraDiagnosticsUrp(System.Text.StringBuilder report, Camera camera)
-        {
-            var extra = camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
-            if (extra == null)
-            {
-                report.AppendLine("    **没有 UniversalAdditionalCameraData** —— 这台相机不归 URP 管。");
-                return;
-            }
-
-            report.AppendLine("    · 后处理 (Post Processing): "
-                + (extra.renderPostProcessing ? "1（开）" : "0（**关**）")
-                + "   ← 关了就没有后处理、也没有 TAA/SMAA");
-            report.AppendLine("    · 抗锯齿 (Anti-aliasing): " + extra.antialiasing);
-            report.AppendLine("    · 相机类型: " + extra.renderType
-                + "   相机栈: " + (extra.cameraStack.Count == 0 ? "空" : extra.cameraStack.Count + " 个")
-                + "   ← 栈非空或 Overlay 会让 TAA 不生效");
-        }
-#endif
 
         /// <summary>「高级」里那个"产物长这样"的预览：跟着当前格式走。</summary>
         private static string FileNamePreview(HoQuickCaptureSettingsData data)
