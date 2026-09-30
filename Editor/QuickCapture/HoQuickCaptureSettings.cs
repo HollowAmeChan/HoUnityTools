@@ -73,9 +73,14 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>
         /// <see cref="HoQuickCaptureRenderSource.Camera"/> 时要渲的相机。
         ///
-        /// **故意不存 EditorPrefs**（所以是 `[NonSerialized]`）：它是**场景引用**，不是每台机器的偏好。
-        /// 存进去只会指向别的场景里一个不存在的对象（Unity 的假 null），比不存更糟。
-        /// 窗口关掉 / 域重载后要重新指定。
+        /// ⚠️ 这个字段本身**不参与 JSON 序列化**（`[NonSerialized]`）：它是个**场景对象引用**，
+        /// 直接塞进 EditorPrefs 只会存下一个在本场景里没有意义的本地 fileID。
+        ///
+        /// 但"不存"曾经被写成了"不持久化"，于是**每次域重载 / 关窗再开，这个槽就被清空**
+        ///（用户报的正是这个：「指定相机这个槽老是被清空」）。正确的做法是
+        /// **存一个跨会话稳定的身份**，而不是存引用本身 —— 见下面的
+        /// <see cref="CameraPrefsKey"/> 与 <c>SaveCameraRef</c> / <c>LoadCameraRef</c>：
+        /// 用 `GlobalObjectId`（GUID + 本地 fileID）把它存成字符串，载入时再解析回对象。
         /// </summary>
         [NonSerialized]
         public Camera sourceCamera;
@@ -235,6 +240,8 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             {
                 Debug.LogWarning("[快速渲染] 配置存不进 EditorPrefs：" + exception.Message);
             }
+
+            SaveCameraRef();
         }
 
         public static void Load()
@@ -258,6 +265,92 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             }
 
             Sanitize(data);
+            LoadCameraRef();
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // 指定相机的持久化（单独一个键，不进上面那份 JSON）
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// 存"指定相机"用的键。**必须和 <see cref="PrefsKey"/> 分开** ——
+        /// 上面那份 JSON 是靠 `JsonUtility` 走的，`GlobalObjectId` 那种字符串塞进去
+        /// 只会变成一个普通字符串字段，而我们这里要的是"能解析回对象"的身份串。
+        /// </summary>
+        private const string CameraPrefsKey = "com.hollow.hounitytools.quickcapture.camera";
+
+        /// <summary>
+        /// 把当前指定的相机存成 `GlobalObjectId` 字符串。
+        ///
+        /// 为什么要绕这一圈：`Camera` 是**场景对象引用**，直接序列化只会得到一个本地 fileID ——
+        /// 换个场景、或者场景重新导入，那个数字就可能指向别的对象（Unity 的"假 null"）。
+        /// 而 `GlobalObjectId` 是 **GUID（资产/场景）+ 本地 fileID** 的组合，跨会话、跨域重载都稳定，
+        /// 这正是 Inspector 自己记住拖进去的场景对象的方式。
+        ///
+        /// 存不上（比如对象还没进场景、或版本没有这个 API）就**清掉这个键**，
+        /// 免得留下一个指向旧对象的串，下次载入时解析出一个莫名其妙的东西。
+        /// </summary>
+        private static void SaveCameraRef()
+        {
+            try
+            {
+                if (data == null || data.sourceCamera == null)
+                {
+                    EditorPrefs.DeleteKey(CameraPrefsKey);
+                    return;
+                }
+
+                GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(data.sourceCamera);
+                if (id.identifierType == 0)
+                {
+                    // 0 = Null：拿不到稳定身份，宁可不存。
+                    EditorPrefs.DeleteKey(CameraPrefsKey);
+                    return;
+                }
+
+                EditorPrefs.SetString(CameraPrefsKey, id.ToString());
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[快速渲染] 指定相机存不进 EditorPrefs：" + exception.Message);
+            }
+        }
+
+        /// <summary>
+        /// 载入"指定相机"。解析不回来就留空（**不报错**）——
+        /// 场景没开、对象被删了，都是正常情况，报错只会打扰人。
+        /// </summary>
+        private static void LoadCameraRef()
+        {
+            if (data == null)
+            {
+                return;
+            }
+
+            data.sourceCamera = null;
+
+            try
+            {
+                if (!EditorPrefs.HasKey(CameraPrefsKey))
+                {
+                    return;
+                }
+
+                string stored = EditorPrefs.GetString(CameraPrefsKey);
+                if (string.IsNullOrEmpty(stored)
+                    || !GlobalObjectId.TryParse(stored, out GlobalObjectId id))
+                {
+                    return;
+                }
+
+                UnityEngine.Object resolved = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(id);
+                data.sourceCamera = resolved as Camera;
+            }
+            catch (Exception)
+            {
+                // 解析失败就当没存过。用户重新拖一次即可，不值得打扰。
+                data.sourceCamera = null;
+            }
         }
 
         /// <summary>恢复全部默认。</summary>

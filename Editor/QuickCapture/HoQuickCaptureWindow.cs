@@ -45,12 +45,11 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         private const float Gap = 6f;
 
         private const float ActionButtonWidth = 54f;
-        private const float IconButtonWidth = 20f;
         private const float FoldFieldWidth = 52f;
         private const float PctWidth = 34f;
 
-        /// <summary>窗口最小宽度：第一行要装下 截帧 + 格式 + 分辨率 + 目录框 + 两颗图标。</summary>
-        private const float MinWindowWidth = 430f;
+        /// <summary>窗口最小宽度：第一行要装下 截帧 + 格式 + 分辨率 + 目录框。</summary>
+        private const float MinWindowWidth = 400f;
 
         private static readonly string[] UnitOptions = { "s", "帧" };
         private static readonly string[] ResolutionOptions = { "跟随视图", "自定义" };
@@ -83,14 +82,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         private static readonly GUIContent StopContent = new GUIContent(
             "停止",
             "停下并收好已经录到的帧（不删文件）。");
-
-        private static readonly GUIContent FolderContent = new GUIContent(
-            "…",
-            "选一个输出目录。");
-
-        private static readonly GUIContent RevealContent = new GUIContent(
-            "↗",
-            "在文件管理器里打开输出目录。");
 
         private static readonly GUIContent AdvancedContent = new GUIContent(
             "高级",
@@ -238,13 +229,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             GUILayout.Space(Gap);
 
-            // 输出目录：编辑框直接放在外面（"要输入一个输出文件夹路径"这件事一眼可见），
-            // 后面跟「选目录」与「打开」两颗图标。给 120px 下限，免得窗口一窄就只剩几个字。
+            // 输出目录：编辑框直接放在外面（"要输入一个输出文件夹路径"这件事一眼可见）。
+            //
+            // ⚠️ 这里以前右边还跟两颗按钮（「选目录」…、「打开」↗）。
+            // 用户问「界面上乱七八糟按钮好多能不能简化」，那两颗是**每行都占位、但一天用不到一次**的
+            // 典型，所以撤掉了 —— 功能挪到**右键菜单**里（见下面 `HandleFolderContextMenu`）。
+            // 面板上少两颗常驻按钮，功能一个没少。
             Rect fieldRect = GUILayoutUtility.GetRect(120f, 10000f, ControlHeight, ControlHeight, GUILayout.ExpandWidth(true));
             string edited = EditorGUI.TextField(fieldRect, data.outputFolder ?? string.Empty);
             // 提示要画在输入框**之后**：`GUI.Label` 是后画的盖在上面，画在前面会被输入框盖掉。
             GUI.Label(fieldRect, new GUIContent(string.Empty, "输出目录。\n留空 = 工程根目录下的 "
                 + HoQuickCaptureSettings.DefaultFolderName + "。\n相对路径按工程根目录解析。\n\n"
+                + "**右键**：选目录 / 在文件管理器里打开。\n\n"
                 + "解析后：" + HoQuickCaptureSettings.PreviewOutputFolder()));
             if (edited != data.outputFolder)
             {
@@ -252,7 +248,30 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 HoQuickCaptureSettings.NotifyChanged();
             }
 
-            if (GUILayout.Button(FolderContent, EditorStyles.miniButton, GUILayout.Width(IconButtonWidth), GUILayout.Height(ControlHeight)))
+            HandleFolderContextMenu(fieldRect, data);
+        }
+
+        /// <summary>
+        /// 输出目录那格的右键菜单。原来的两颗图标按钮（选目录、打开）搬到了这里。
+        /// </summary>
+        private static void HandleFolderContextMenu(Rect fieldRect, HoQuickCaptureSettingsData data)
+        {
+            Event current = Event.current;
+            if (current == null
+                || current.type != EventType.ContextClick
+                || !fieldRect.Contains(current.mousePosition))
+            {
+                return;
+            }
+
+            current.Use();
+
+            var menu = new GenericMenu();
+
+            string folderError;
+            string resolved = HoQuickCaptureSettings.ResolveOutputFolder(out folderError);
+
+            menu.AddItem(new GUIContent("选目录…"), false, () =>
             {
                 string picked = EditorUtility.OpenFolderPanel(
                     "选择快速渲染的输出目录",
@@ -263,27 +282,48 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     data.outputFolder = picked;
                     HoQuickCaptureSettings.NotifyChanged();
                 }
+            });
+
+            if (resolved == null)
+            {
+                menu.AddDisabledItem(new GUIContent("在文件管理器里打开"));
+            }
+            else
+            {
+                menu.AddItem(new GUIContent("在文件管理器里打开"), false,
+                    () => EditorUtility.RevealInFinder(resolved));
             }
 
-            if (GUILayout.Button(RevealContent, EditorStyles.miniButton, GUILayout.Width(IconButtonWidth), GUILayout.Height(ControlHeight)))
+            menu.AddSeparator(string.Empty);
+
+            if (string.IsNullOrEmpty(data.outputFolder))
             {
-                string folderError;
-                string folder = HoQuickCaptureSettings.ResolveOutputFolder(out folderError);
-                if (folder == null)
-                {
-                    Debug.LogWarning("[快速渲染] " + folderError);
-                }
-                else
-                {
-                    EditorUtility.RevealInFinder(folder);
-                }
+                menu.AddDisabledItem(new GUIContent("清空（已经是默认目录）"));
             }
+            else
+            {
+                menu.AddItem(new GUIContent("清空（回到默认目录）"), false, () =>
+                {
+                    data.outputFolder = string.Empty;
+                    HoQuickCaptureSettings.NotifyChanged();
+                });
+            }
+
+            menu.DropDown(fieldRect);
         }
 
         // ── 第二行：录制 · 时长（录制中换成 暂停/停止 + 进度）─────────
 
         private void DrawRecordRow(HoQuickCaptureSettingsData data, HoQuickCaptureStatus status)
         {
+            // TAA 预热优先占这一行 —— 它发生在"截帧"按下之后、真正出图之前，
+            // 一等等 16 帧。不给进度的话从面板上看和卡死没区别（用户报过）。
+            if (status.WarmupActive)
+            {
+                DrawWarmupRow(status);
+                return;
+            }
+
             if (status.IsBusy)
             {
                 DrawActiveSession(status);
@@ -375,6 +415,42 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     "按当前帧率与时长换算出来的实际帧数。\n当前帧率："
                     + FormatFrameRate(data.frameRate) + " fps（在「高级」里改）。"),
                 EditorStyles.miniLabel);
+        }
+
+        /// <summary>
+        /// TAA 预热：占第二行的位置，画一条进度。
+        ///
+        /// 为什么非要画：TAA 靠**连续多帧**累积抖动才收敛，所以要真的喂够 16 个引擎帧。
+        /// 这段时间里面板之前是**完全静止**的 —— 用户描述得很准：「搞得我以为卡了」。
+        /// 有进度条 + "N / 16 帧"这个读数，等待就变成可解释的了。
+        /// </summary>
+        private void DrawWarmupRow(HoQuickCaptureStatus status)
+        {
+            GUILayout.Label(
+                new GUIContent("TAA 预热", "抗锯齿是 TAA 时必须先攒够若干连续帧才能出图。\n"
+                    + "这段时间画面不会变，是正常的，不是在卡。\n"
+                    + "想避免等待可以把相机的 Anti-aliasing 换成 SMAA（单帧就有）。"),
+                EditorStyles.miniLabel,
+                GUILayout.Width(56f));
+
+            Rect bar = GUILayoutUtility.GetRect(40f, 10000f, 10f, 10f, GUILayout.ExpandWidth(true));
+            int total = Mathf.Max(1, status.WarmupTotal);
+            HoConstraintEditorControls.Meter(
+                new Rect(bar.x, bar.y + 4f, bar.width, 10f),
+                status.WarmupDone,
+                0f,
+                total,
+                HoConstraintEditorTheme.AccentOutput,
+                float.NaN,
+                "TAA 预热进度");
+
+            GUILayout.Space(Gap);
+
+            int percent = Mathf.Clamp(Mathf.RoundToInt(status.WarmupDone * 100f / total), 0, 100);
+            GUILayout.Label(
+                new GUIContent(percent + "%", status.WarmupDone + " / " + total + " 帧"),
+                EditorStyles.miniLabel,
+                GUILayout.Width(PctWidth));
         }
 
         /// <summary>录制中：暂停/继续 + 停止 + 进度 + 已录时长。占第二行的位置。</summary>
@@ -512,7 +588,10 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     if (edited != data.sourceCamera)
                     {
                         data.sourceCamera = edited;
-                        // 相机是场景引用，不进 EditorPrefs，所以不用 NotifyChanged（它只管存盘）。
+                        // 要存：`NotifyChanged()` 会走到 `HoQuickCaptureSettings.SaveCameraRef()`，
+                        // 那边把相机存成 `GlobalObjectId` 字符串，所以换个场景 / 域重载之后
+                        // 这个槽能自己还原回来（用户报过「指定相机这个槽老是被清空」）。
+                        HoQuickCaptureSettings.NotifyChanged();
                     }
 
                     if (data.sourceCamera == null)
@@ -790,23 +869,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     }
                 }
 
+                // 最近产物的路径以前是"定位最近产物"「复制路径」两颗按钮。
+                // 现在只留一行文字（路径本身有信息量，但不需要两个常驻按钮），
+                // 想打开就在「输出目录」那格上右键 →「在文件管理器里打开」。
+                if (!string.IsNullOrEmpty(status.LastFile))
+                {
+                    GUILayout.Label(
+                        new GUIContent("最近产物：" + status.LastFile, status.LastFile),
+                        EditorStyles.miniLabel);
+                }
+
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (!string.IsNullOrEmpty(status.LastFile))
-                    {
-                        if (GUILayout.Button(new GUIContent("定位最近产物", status.LastFile), EditorStyles.miniButton))
-                        {
-                            EditorUtility.RevealInFinder(status.LastFile);
-                        }
-
-                        if (GUILayout.Button(new GUIContent("复制路径", "把绝对路径复制到剪贴板"), EditorStyles.miniButton))
-                        {
-                            EditorGUIUtility.systemCopyBuffer = status.LastFile;
-                        }
-
-                        GUILayout.Space(Gap);
-                    }
-
                     GUILayout.FlexibleSpace();
                     if (GUILayout.Button(new GUIContent("恢复默认", "截图/录制的全部设置回到出厂值（会先问你一次）。"), EditorStyles.miniButton))
                     {

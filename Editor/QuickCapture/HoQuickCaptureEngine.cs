@@ -80,6 +80,18 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         /// <summary>警告信息（没失败，但用户该知道）。</summary>
         public string Warning;
 
+        /// <summary>
+        /// TAA 预热进行中。为 true 时面板要替掉录制那一行画一条进度，
+        /// 否则 16 帧静默地等看起来就是卡死（用户报过：「预热没进度条显示搞得我以为卡了」）。
+        /// </summary>
+        public bool WarmupActive;
+
+        /// <summary>预热已经喂了多少帧。</summary>
+        public int WarmupDone;
+
+        /// <summary>预热一共要多少帧。</summary>
+        public int WarmupTotal;
+
         public bool IsBusy => State != HoQuickCaptureState.Idle;
 
         public bool CanPause => State == HoQuickCaptureState.Recording || State == HoQuickCaptureState.Paused;
@@ -198,6 +210,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 TotalDuration = plan == null ? 0f : plan.TargetFrameCount / Mathf.Max(1f, plan.FrameRate),
                 Error = error,
                 Warning = warning,
+                WarmupActive = HoQuickCaptureCameraRenderer.WarmupActive,
+                WarmupDone = HoQuickCaptureCameraRenderer.WarmupDone,
+                WarmupTotal = HoQuickCaptureCameraRenderer.WarmupTotal,
             };
         }
 
@@ -1252,6 +1267,17 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             if (!IsBusy)
             {
                 return;
+            }
+
+            // TAA 预热期间要让面板重画，否则那 16 帧里进度条是**冻住的**
+            //（用户要进度条本来就是为了别看起来像卡死，条不动就等于没做）。
+            if (HoQuickCaptureCameraRenderer.WarmupActive)
+            {
+                Action repaint = Changed;
+                if (repaint != null)
+                {
+                    repaint();
+                }
             }
 
             // 编辑模式那条路有自己的重试与超时（帧泵里 MaxPumpAttempts），

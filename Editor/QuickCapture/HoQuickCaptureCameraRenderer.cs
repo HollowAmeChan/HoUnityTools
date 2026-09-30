@@ -8,6 +8,28 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 {
     internal static class HoQuickCaptureCameraRenderer
     {
+        /// <summary>
+        /// TAA 预热的进度，给面板画进度条用。
+        ///
+        /// 用户报过：「预热没进度条显示搞得我以为卡了」——
+        /// 16 帧静默地等，从面板上看和"卡死"完全一样。所以预热期间必须看得见进度。
+        /// 放在静态字段上是因为它要跨"帧泵 → 引擎 → 面板"三层传递，而这三层各有各的生命周期；
+        /// 会话一开始预热就置位，`Dispose()` 里清掉。
+        /// </summary>
+        public static bool WarmupActive { get; private set; }
+
+        public static int WarmupDone { get; private set; }
+
+        public static int WarmupTotal { get; private set; }
+
+        /// <summary>会话结束时把预热进度收掉（幂等）。</summary>
+        internal static void ClearWarmup()
+        {
+            WarmupActive = false;
+            WarmupDone = 0;
+            WarmupTotal = 0;
+        }
+
         // The pump owns this session until readback/cancellation. Keep one target throughout TAA
         // warmup, and only sample distinct engine frames: same-frame rerenders do not update history.
         internal sealed class Session : IDisposable
@@ -100,6 +122,14 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                         + "③ 或者干脆关掉抗锯齿。");
                 if (wantsTaa && samples > 0 && Time.frameCount == lastFrame)
                     return false;
+
+                // 把预热进度挂到全局，面板据此画进度条。
+                // 用户报过：「预热没进度条显示搞得我以为卡了」—— 16 帧静默地等，
+                // 从面板上看和"卡死"完全一样，所以这段必须有可见的进度。
+                WarmupDone = samples;
+                WarmupTotal = wantsTaa ? TemporalSamples : 1;
+                WarmupActive = true;
+
                 RenderTexture previousActive = RenderTexture.active;
                 try
                 {
@@ -117,6 +147,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             {
                 if (disposed) return;
                 disposed = true;
+                ClearWarmup();
                 backgroundScope?.Dispose();
                 if (capturedState && camera != null)
                 {
