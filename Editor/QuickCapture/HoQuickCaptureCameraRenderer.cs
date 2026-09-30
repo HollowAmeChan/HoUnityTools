@@ -58,6 +58,10 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
             public void Subscribe()
             {
+                // ⚠️ 订阅前后各吭一声。之前这里"没记录"的歧义（是没渲染？还是没存上？）
+                // 已经白绕过两轮，所以现在从订阅这一秒起就说话：
+                // 只要点过截帧就该看到"已订阅"，看不到就说明这条路根本没被走到。
+                Debug.Log("[快速渲染/渲染路径] 已挂上 beginCameraRendering 探针。");
                 RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
                 subscribed = true;
             }
@@ -71,12 +75,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
 
                 RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
                 subscribed = false;
+                Debug.Log("[快速渲染/渲染路径] 探针记录到的 URP 每相机数据：\n"
+                    + (LastRenderDiagnostics ?? "**(回调一次都没触发)**"));
             }
 
             private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
             {
                 try
                 {
+                    Debug.Log("[快速渲染/渲染路径] beginCameraRendering 触发了，相机 = " + camera.name);
                     RenderPipeline pipeline = RenderPipelineManager.currentPipeline;
                     if (pipeline == null)
                     {
