@@ -19,7 +19,6 @@
 //     那是 URP 程序集里的公开 API，但本包**不硬依赖 URP**（package.json 里没有它），
 //     所以走反射调 —— 没装 URP 就是 no-op，装了才生效。
 using System;
-using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -30,9 +29,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
     /// <summary>把指定相机渲进 RT。用完即还原相机的全部临时改动。</summary>
     internal static class HoQuickCaptureCameraRenderer
     {
-        private static bool s_UrpProbed;
-        private static MethodInfo s_RenderSingleCamera;
-        private static bool s_LoggedUrp;
 
         /// <summary>
         /// 渲一帧到一张新的 RenderTexture。调用方负责 <see cref="Object.DestroyImmediate(Object)"/> 它。
@@ -94,6 +90,13 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
             // 只在"要透明"时才关 —— 不透明的话天空盒照画，跟平时一样。
             HoQuickCaptureSkyboxOff skyboxOff = null;
 
+            // URP 的后处理会把 alpha 清掉，那个开关也在包外（URP Asset 上）。
+            // 同样只在"要透明"时临时打开，拍完改回去。
+            HoQuickCaptureAlphaOutputScope alphaScope = null;
+
+            // 说明是攒出来的：临时改了什么 + 渲染退没退路。最后一次性交给 out 参数。
+            string accumulated = null;
+
             try
             {
                 target.targetTexture = rt;
@@ -105,6 +108,10 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     // 不关掉的话天空那块仍然会被它填满（用户报的正是这个）。
                     skyboxOff = HoQuickCaptureSkyboxOff.Apply();
 
+                    string alphaNote;
+                    alphaScope = HoQuickCaptureAlphaOutputScope.Apply(out alphaNote);
+                    accumulated = Append(accumulated, alphaNote);
+
                     target.clearFlags = CameraClearFlags.SolidColor;
                     target.backgroundColor = new Color(
                         previousBackground.r,
@@ -113,27 +120,37 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                         0f);
                 }
 
-                RenderWithPipeline(target, rt, out note);
+                string renderNote;
+                RenderWithPipeline(target, rt, out renderNote);
+                accumulated = Append(accumulated, renderNote);
 
                 if (skyboxOff != null && skyboxOff.ChangedAnything)
                 {
-                    note = Append(note,
+                    accumulated = Append(accumulated,
                         "天空盒已临时关掉（那块直接算全透明）—— 这一张的间接光与反射跟平时不完全一样，"
                         + "拍完已还原。");
                 }
 
+                note = accumulated;
+                LastRenderNote = accumulated;
                 return rt;
             }
             catch (Exception exception)
             {
                 error = "渲相机失败：" + exception.Message;
+                LastRenderNote = null;
                 rt.Release();
                 Object.DestroyImmediate(rt);
                 return null;
             }
             finally
             {
-                // 场景级设置先还（哪怕上面抛了也要还）。
+                // 包外的东西先还（哪怕上面抛了也要还）。
+                if (alphaScope != null)
+                {
+                    alphaScope.Dispose();
+                }
+
                 if (skyboxOff != null)
                 {
                     skyboxOff.Dispose();
@@ -144,6 +161,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 target.backgroundColor = previousBackground;
             }
         }
+
+        /// <summary>最近一次渲染留下的说明（退路提示 / 临时改过什么）。</summary>
+        public static string LastRenderNote { get; private set; }
 
         /// <summary>把一句话拼到 note 后面（note 可能是 null）。</summary>
         private static string Append(string note, string addition)
@@ -156,16 +176,15 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         ///   · URP 的 `RenderSingleCamera` 需要一个由引擎初始化的 `ScriptableRenderContext`，
         ///     而我们只能自己 new 一个 —— 这在部分 URP 版本上会静默什么都不画；
         ///   · 内建 `camera.Render()` 本身是可靠的，但它在 URP 工程里不走 URP（后处理与透明处理都不参与）。
-        /// 所以顺序是"先试 URP → 验 → 空了就退回 camera.Render() → 再验"，
+        /// 所以顺序是"先试 URP → 验 → 空了就退回 camera.Render()"，
         /// 并把最后用的哪条路通过 <paramref name="note"/> 告诉用户（如果退过路）。
         /// </summary>
         private static void RenderWithPipeline(Camera camera, RenderTexture rt, out string note)
         {
             note = null;
 
-            bool urpAvailable = IsUrpAvailable();
-
-            if (urpAvailable)
+#if HO_URP_AVAILABLE
+            if (IsUrpActive())
             {
                 if (TryRenderWithUrp(camera) && !IsBlank(rt))
                 {
@@ -177,28 +196,60 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 note = "URP 的单相机渲染没画出东西，已退回 `camera.Render()`："
                     + "这张图**不含 URP 的后处理**。";
             }
+#endif
 
             camera.Render();
         }
 
-        /// <summary>当前工程是不是 URP（装了 URP 且管线资产是 URP 的）。</summary>
-        private static bool IsUrpAvailable()
+#if HO_URP_AVAILABLE
+        /// <summary>
+        /// 当前工程是不是在用 URP。
+        ///
+        /// `HO_URP_AVAILABLE` 只保证"装了 URP 包"，不保证"这个工程在用 URP"
+        ///（可以装了却用内建管线）。所以还要看当前管线资产的类型。
+        /// </summary>
+        private static bool IsUrpActive()
         {
-            ProbeUrp();
-            if (s_RenderSingleCamera == null)
-            {
-                return false;
-            }
-
             RenderPipelineAsset pipeline = GraphicsSettings.currentRenderPipeline;
             if (pipeline == null)
             {
                 return false;
             }
 
-            string name = pipeline.GetType().FullName;
-            return name != null && name.IndexOf("Universal", StringComparison.Ordinal) >= 0;
+            // 直接类型判断：Unity 6 里 `UniversalRenderPipelineAsset` 就在这个命名空间下，
+            // 2021.3 也在。至于 `renderPipeline` 是不是 `UniversalRenderPipeline`，
+            // `RenderSingleCamera` 自己会处理。
+            return pipeline is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
         }
+
+        /// <summary>
+        /// 让 URP 渲这一台相机。
+        ///
+        /// ⚠️ URP 下**必须**用这个，`camera.Render()` 会走内建路径 ——
+        /// URP 的后处理与透明处理都不参与，结果既不是 URP 的画面、也不带 alpha。
+        ///
+        /// ⚠️ 它要一个 `ScriptableRenderContext`，而引擎内部那个拿不到，只能自己 new。
+        /// 这在部分 URP 版本上会静默不画 —— 所以调用方一定会再验一次 `IsBlank`。
+        /// 用户明确同意"可以调 URP 函数"，所以这里是**直接调用**（不再反射）；
+        /// 用 `#if HO_URP_AVAILABLE` 保证没装 URP 的工程照样编得过。
+        /// </summary>
+        private static bool TryRenderWithUrp(Camera camera)
+        {
+            try
+            {
+                var context = new ScriptableRenderContext();
+                UnityEngine.Rendering.Universal.UniversalRenderPipeline.RenderSingleCamera(context, camera);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "[快速渲染] URP 单相机渲染调用失败，退回 camera.Render()（画面可能不含 URP 后处理）："
+                    + exception.Message);
+                return false;
+            }
+        }
+#endif
 
         /// <summary>
         /// 整幅是不是单色（= 基本可以断定没画上）。
@@ -250,75 +301,6 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 {
                     Object.DestroyImmediate(probe);
                 }
-            }
-        }
-
-        /// <summary>
-        /// 反射找 URP 的 `RenderSingleCamera`（只找一次）。
-        ///
-        /// 反射调而不是直接引用：本包不依赖 URP（`package.json` 里没有它），
-        /// 直接写 `UniversalRenderPipeline` 会让没装 URP 的工程编译不过。
-        /// </summary>
-        private static void ProbeUrp()
-        {
-            if (s_UrpProbed)
-            {
-                return;
-            }
-
-            s_UrpProbed = true;
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                Type type = assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderPipeline", false);
-                if (type == null)
-                {
-                    continue;
-                }
-
-                s_RenderSingleCamera = type.GetMethod(
-                    "RenderSingleCamera",
-                    BindingFlags.Public | BindingFlags.Static,
-                    null,
-                    new[] { typeof(ScriptableRenderContext), typeof(Camera) },
-                    null);
-                if (s_RenderSingleCamera != null)
-                {
-                    return;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 试着让 URP 接管这次渲染。返回 true 表示**调用成功**（不代表真画出了东西 ——
-        /// 那要靠调用方用 <see cref="IsBlank"/> 验）。
-        /// </summary>
-        private static bool TryRenderWithUrp(Camera camera)
-        {
-            if (s_RenderSingleCamera == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                // URP 的 `RenderSingleCamera(context, camera)` 要一个 ScriptableRenderContext。
-                // 引擎内部的那个拿不到，只能自己 new 一个 —— 这在部分 URP 版本上会静默不画，
-                // 所以调用方一定会再验一次 IsBlank，不行就退回 camera.Render()。
-                var context = new ScriptableRenderContext();
-                s_RenderSingleCamera.Invoke(null, new object[] { context, camera });
-                return true;
-            }
-            catch (Exception exception)
-            {
-                if (!s_LoggedUrp)
-                {
-                    s_LoggedUrp = true;
-                    Debug.LogWarning(
-                        "[快速渲染] URP 单相机渲染调用失败，退回 camera.Render()（画面可能不含 URP 后处理）："
-                        + exception.Message);
-                }
-
-                return false;
             }
         }
 
