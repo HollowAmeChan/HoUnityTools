@@ -25,6 +25,9 @@
 /.research.meta
 /.warudo-mod-research
 /.lab
+# 临时工作区（反编译产物、核查报告、编译校验工程等，都是可再生的）
+/Temp~/
+/Temp~.meta
 # 构建产物与缓存（Tools~ 下那些 C# 探针工程也会生成；2026-09-29 清过一次）
 Tools~/**/bin/
 Tools~/**/obj/
