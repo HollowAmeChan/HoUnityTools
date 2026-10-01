@@ -74,6 +74,69 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             Unknown,
         }
 
+        /// <summary>
+        /// 约束导入的落盘形态。三种形态的"可管理性"差别很大，UI 上必须说清楚：
+        /// 内置约束散在被驱动的每根骨上，另两种各自集中在一处。
+        /// </summary>
+        private enum ConstraintMode
+        {
+            /// <summary>Unity 内置约束，挂在被驱动的骨骼上（会散在各处）。</summary>
+            Standard,
+
+            /// <summary>单一 HoAuxRig 中控组件，挂在约束根物体上。</summary>
+            HoAux,
+
+            /// <summary>每条约束一个独立空物体（挂点），全部摊在约束根物体底下。</summary>
+            Vrc,
+        }
+
+        private const string ConstraintRootFieldTooltip =
+            "可选。VRC 与 HoAux 两种模式共用的根物体：\n" +
+            "· HoAux：HoAuxRig 中控组件直接挂到这个物体上。\n" +
+            "· VRC：每条约束在这个物体底下占一个独立空物体，约束挂在那个空物体上\n" +
+            "  （空物体只是挂点，真正被驱动的是 TargetTransform 指向的那根骨骼）。\n" +
+            "留空 = 直接用目标骨架自己（也就是预制件底下），不额外建容器。\n" +
+            "建议填一个预制件底下的空物体：根物体在哪儿，约束就跟着在哪儿，便于整体搬运与排查。\n" +
+            "Unity 内置模式不使用这个字段。";
+
+        private const string ConstraintModeTooltip =
+            "决定约束最终以什么形态落盘：\n" +
+            "· Unity 内置约束 —— 约束组件挂在被驱动的每根骨骼上，会散在整个骨架里。\n" +
+            "· HoAux Rig —— Parent / Twist / Fan 收进一个 HoAuxRig 中控组件，挂在约束根物体上。\n" +
+            "· VRC 约束 —— 每条约束一个独立空物体、全部摊在约束根物体底下；空物体只是挂点，\n" +
+            "  约束的 TargetTransform 指回被驱动的那根骨骼。需要工程里装了 VRChat SDK。\n" +
+            "换形态会清掉上一次由本工具导入的其它形态，手工创建的约束不受影响。\n" +
+            "\n" +
+            "求值时机：HoAuxRig 只在播放模式求值；VRC 约束默认编辑模式也会求值，\n" +
+            "可在 VRChat SDK 控制面板关掉「Execute VRChat Constraints in Edit Mode」。";
+
+        private const string ClearScopeTooltip =
+            "「安全清除导入约束」只删本工具导入的东西：内置约束 + 逐骨导入标记\n" +
+            "+ 导入过的 HoAuxRig + VRC 空物体。\n" +
+            "作用范围 = 目标骨架，外加约束根物体（及其所在预制件）那一侧；\n" +
+            "若目标骨架上的标记都属于同一份导出，则只清那一份。\n" +
+            "「清除全部标准约束」只扫目标骨架层级，只认 Unity 内置约束（含你手工加的）；\n" +
+            "HoAux 与 VRC 不受影响。\n" +
+            "这两个按钮是为「内置约束」准备的 —— 那种形态散在被驱动的每根骨上；\n" +
+            "HoAux 是一整个组件、VRC 是一整批空物体，各自集中在一处，选中直接删更省事。";
+
+        private const string SafeClearTooltip =
+            "只删本工具导入的东西：内置约束 + 逐骨的导入标记 + 导入过的 HoAuxRig + VRC 空物体。\n" +
+            "专门为「Unity 内置约束」准备 —— 那种形态每条约束都散在被驱动的骨骼上，\n" +
+            "没有标记就分不清哪条是导入的、哪条是你手搓的。\n" +
+            "HoAux 是一整个组件、VRC 是一整批空物体，都在同一处，直接选中删掉即可，不需要这个按钮。";
+
+        private const string ClearStandardTooltip =
+            "只认 Unity 内置约束（Rotation / Position / Scale / Parent），\n" +
+            "包括你自己手工加的那些，会一并删除。\n" +
+            "HoAux 组件与 VRC 空物体不受影响 —— 那两种各自集中在一处，直接选中删掉就行。";
+
+        private const string ResetPoseTooltip =
+            "把骨架还原成 Prefab 里的姿态。\n" +
+            "删掉 VRC 约束之后骨骼不会自己还原（VRC 约束停用/删除只是停止求值），\n" +
+            "必要时用这个按钮收尾。\n" +
+            "HoAuxRig 不需要它：播放模式下禁用或删除组件本身就会把骨骼还原到绑定姿态。";
+
         private sealed class ConstraintPlanEntry
         {
             public ConstraintPlanKind kind;
@@ -99,7 +162,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         [SerializeField] private bool applyHumanoid = true;
         [SerializeField] private bool applyConstraints;
         [SerializeField] private bool applyCollections;
-        [SerializeField] private bool useHoAuxRig;
+
+        [SerializeField] private ConstraintMode constraintMode = ConstraintMode.Standard;
+
+        /// <summary>
+        /// 旧字段（`使用 HoAux Rig` 复选）。只在迁移时读一次，之后恒为 false。
+        /// 保留它是为了让老会话里选过 HoAux 的用户不被静默降级成 Standard。
+        /// </summary>
+        [SerializeField] private bool legacyUseHoAuxRig;
+
+        [SerializeField] private bool constraintModeMigrated;
+
+        /// <summary>约束根物体：HoAux 挂组件的地方，VRC 摊空物体的地方。留空 = 目标骨架自己。</summary>
+        [SerializeField] private Transform constraintRoot;
+
         [SerializeField] private Vector2 scrollPosition;
         [SerializeField] private bool mappingPreviewExpanded;
         [SerializeField] private bool constraintPreviewExpanded = true;
@@ -175,8 +251,25 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private void OnEnable()
         {
+            MigrateLegacyConstraintMode();
             if (fbxAsset == null && IsFbx(fbxAssetPath))
                 fbxAsset = AssetDatabase.LoadAssetAtPath<GameObject>(fbxAssetPath);
+        }
+
+        /// <summary>
+        /// 一次性把旧的「使用 HoAux Rig」勾选迁移到三形态枚举。
+        /// 不做迁移的话，老会话里选了 HoAux 的用户重开窗口会静默变回 Standard。
+        /// </summary>
+        private void MigrateLegacyConstraintMode()
+        {
+            if (constraintModeMigrated)
+                return;
+            constraintModeMigrated = true;
+
+            if (legacyUseHoAuxRig && constraintMode == ConstraintMode.Standard)
+                constraintMode = ConstraintMode.HoAux;
+
+            legacyUseHoAuxRig = false;
         }
 
         private void OnGUI()
@@ -383,7 +476,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
             }
 
-            string mode = useHoAuxRig ? "HoAux Rig" : "标准 Constraint";
+            string mode = ConstraintModeLabel(constraintMode);
             constraintPreviewExpanded = EditorGUILayout.Foldout(
                 constraintPreviewExpanded,
                 $"约束导入预览  {plan.Count} 项 / {mode}",
@@ -417,9 +510,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             for (int rowIndex = 0; rowIndex < plan.Count; rowIndex++)
             {
                 ConstraintPlanEntry entry = plan[rowIndex];
-                string description = DescribeConstraintImport(entry, useHoAuxRig);
+                string description = DescribeConstraintImport(entry, constraintMode);
                 if (entry.kind != ConstraintPlanKind.Unknown &&
-                    !(useHoAuxRig && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason)) &&
+                    !(constraintMode == ConstraintMode.HoAux &&
+                      !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason)) &&
                     previewTransforms != null)
                 {
                     if (!TryResolveTransform(previewTransforms, entry.ownerBone, out Transform owner) ||
@@ -427,7 +521,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     {
                         description = "跳过：目标骨架缺少或无法唯一定位 Owner/Target";
                     }
-                    else if (!useHoAuxRig && HasUnmanagedStandardConstraint(owner, entry.kind))
+                    else if (constraintMode == ConstraintMode.Standard &&
+                             HasUnmanagedStandardConstraint(owner, entry.kind))
                     {
                         description = "跳过：Owner 已有用户创建的同类型标准约束";
                     }
@@ -494,7 +589,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             GUI.Label(resultRect, new GUIContent(result, result), EditorStyles.miniLabel);
         }
 
-        private static string DescribeConstraintImport(ConstraintPlanEntry entry, bool useHoAux)
+        private static string DescribeConstraintImport(ConstraintPlanEntry entry, ConstraintMode mode)
         {
             if (entry.kind == ConstraintPlanKind.Unknown)
             {
@@ -504,7 +599,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return $"未知约束 / 跳过  {type}  {entry.reason}";
             }
 
-            if (useHoAux)
+            if (mode == ConstraintMode.HoAux)
             {
                 if (!string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
                     return "HoAuxRig / 跳过  " + entry.hoAuxUnsupportedReason;
@@ -518,6 +613,17 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
                 if (entry.kind == ConstraintPlanKind.Fan)
                     return $"HoAuxRig / Fan  R:{ConstraintSpacePair(entry.copyRotation)}";
+            }
+            else if (mode == ConstraintMode.Vrc)
+            {
+                // VRC 约束与内置约束一样没有中间语义，只有退化后的标准行为。
+                // 每条约束一个独立空物体当挂点，TargetTransform 指回被驱动的骨骼。
+                if (entry.kind == ConstraintPlanKind.Parent)
+                    return "VRCParentConstraint / 独立空物体挂点";
+                if (entry.kind == ConstraintPlanKind.Twist)
+                    return $"VRCRotationConstraint（仅 Y）/ 独立空物体挂点  原始:{ConstraintSpacePair(entry.copyRotation)}";
+                if (entry.kind == ConstraintPlanKind.Fan)
+                    return $"VRCRotationConstraint（XYZ）/ 独立空物体挂点  原始:{ConstraintSpacePair(entry.copyRotation)}";
             }
             else
             {
@@ -1027,7 +1133,119 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 GUILayout.Space(5f);
                 targetRig = (GameObject)EditorGUILayout.ObjectField(
                     "场景 Rig", targetRig, typeof(GameObject), true);
+                // FBX 页：只有勾了「导入约束」才需要这个字段。
+                DrawConstraintRootField(applyConstraints);
                 GUILayout.Space(2f);
+            }
+        }
+
+        /// <summary>
+        /// 「约束根物体」字段。
+        ///
+        /// <paramref name="available"/> 由调用页面给：FBX 页要看「导入约束」勾没勾，
+        /// 约束工具页的「导入约束」按钮根本不看那个勾选，所以必须让它始终可填。
+        /// 用它自己的状态去猜"该不该灰"，就会在两个页面上得出相反的结论。
+        /// </summary>
+        private void DrawConstraintRootField(bool available)
+        {
+            bool standard = constraintMode == ConstraintMode.Standard;
+            using (new EditorGUI.DisabledScope(!available))
+            {
+                EditorGUILayout.BeginHorizontal();
+                var label = new GUIContent(
+                    "约束根物体",
+                    standard ? "当前形态是 Unity 内置约束，用不到这个字段。" : ConstraintRootFieldTooltip);
+                using (new EditorGUI.DisabledScope(standard))
+                {
+                    constraintRoot = (Transform)EditorGUILayout.ObjectField(
+                        label,
+                        constraintRoot,
+                        typeof(Transform),
+                        true);
+                    using (new EditorGUI.DisabledScope(constraintRoot == null))
+                    {
+                        if (GUILayout.Button(
+                                new GUIContent("用骨架", "把根物体清空，回到「目标骨架自己」的默认行为。"),
+                                GUILayout.Width(56f)))
+                        {
+                            constraintRoot = null;
+                        }
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (!available || standard)
+                return;
+
+            string effective = constraintMode == ConstraintMode.HoAux
+                ? "留空 = HoAuxRig 组件挂到目标骨架根上"
+                : "留空 = VRC 约束空物体直接摊在目标骨架底下";
+            EditorGUILayout.LabelField(
+                new GUIContent(
+                    "  生效根物体：" +
+                    (constraintRoot != null
+                        ? GetTransformPath(constraintRoot)
+                        : (targetRig != null ? targetRig.name + "（目标骨架）" : "目标骨架（未指定）")),
+                    effective),
+                EditorStyles.miniLabel);
+        }
+
+        private static string GetTransformPath(Transform value)
+        {
+            if (value == null)
+                return "<空>";
+            var names = new List<string>();
+            Transform current = value;
+            while (current != null)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+            names.Reverse();
+            return string.Join("/", names.ToArray());
+        }
+
+        private static string ConstraintModeLabel(ConstraintMode mode)
+        {
+            switch (mode)
+            {
+                case ConstraintMode.HoAux: return "HoAux Rig";
+                case ConstraintMode.Vrc: return "VRC 约束";
+                default: return "Unity 内置约束";
+            }
+        }
+
+        private void DrawConstraintModeField()
+        {
+            EditorGUILayout.LabelField(new GUIContent("约束形态", ConstraintModeTooltip));
+            using (new EditorGUI.IndentLevelScope())
+            {
+                ConstraintMode[] modes =
+                {
+                    ConstraintMode.Standard,
+                    ConstraintMode.HoAux,
+                    ConstraintMode.Vrc,
+                };
+                var labels = new GUIContent[]
+                {
+                    new GUIContent("Unity 内置", "约束组件挂在被驱动的骨骼上，会散在整个骨架里。"),
+                    new GUIContent("HoAux Rig", "Parent / Twist / Fan 收进一个 HoAuxRig 组件，挂在约束根物体上。"),
+                    new GUIContent("VRC 约束", "每条约束一个独立空物体当挂点，全部摊在约束根物体底下。需要 VRChat SDK。"),
+                };
+
+                int current = Array.IndexOf(modes, constraintMode);
+                int selected = EditorGUILayout.Popup(Mathf.Max(0, current), labels);
+                if (selected >= 0 && selected < modes.Length)
+                    constraintMode = modes[selected];
+            }
+
+            if (constraintMode == ConstraintMode.Vrc && !HoVrcConstraintBridge.IsSdkAvailable)
+            {
+                EditorGUILayout.HelpBox(
+                    "没有在本工程里找到 VRChat 约束类型（VRC.SDK3.Dynamics.Constraint）。\n" +
+                    "装好 VRChat SDK 后本窗口会自动重新识别；当前请改用另外两种形态。",
+                    MessageType.Error);
             }
         }
 
@@ -1043,11 +1261,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 {
                     using (new EditorGUI.IndentLevelScope())
                     {
-                        useHoAuxRig = EditorGUILayout.ToggleLeft(
-                            new GUIContent(
-                                "使用 HoAux Rig 解析中间语义",
-                                "关闭：导入标准 Unity Constraint，Twist 默认只取 Y 轴。打开：Parent/Twist/Fan 进入单一 HoAuxRig 中控组件。"),
-                            useHoAuxRig);
+                        DrawConstraintModeField();
                         DrawConstraintImportPreview();
                     }
                 }
@@ -1068,11 +1282,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 constraintJson = (TextAsset)EditorGUILayout.ObjectField(
                     "约束 JSON", constraintJson, typeof(TextAsset), false);
                 DrawConstraintCandidatePopup();
-                useHoAuxRig = EditorGUILayout.ToggleLeft(
-                    new GUIContent(
-                        "使用 HoAux Rig 解析中间语义",
-                        "默认关闭并使用 VRC 兼容的标准约束；打开后 Parent/Twist/Fan 由单一 HoAuxRig 组件执行。"),
-                    useHoAuxRig);
+                DrawConstraintModeField();
+                // 约束工具页：本页的「导入约束」按钮不看 applyConstraints，所以永远可填。
+                DrawConstraintRootField(true);
                 DrawConstraintImportPreview();
                 GUILayout.Space(2f);
             }
@@ -1093,9 +1305,19 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 DrawPanelHeader("清理", "谨慎操作", new Color(0.88f, 0.42f, 0.28f));
                 GUILayout.Space(6f);
-                if (GUILayout.Button("安全清除导入约束", GUILayout.Height(28f)))
+                EditorGUILayout.LabelField(
+                    new GUIContent(
+                        "下面两个按钮只服务于「Unity 内置约束」；\n" +
+                        "HoAux 与 VRC 两种形态各自集中在一处，选中直接删更省事。",
+                        ClearScopeTooltip),
+                    EditorStyles.miniLabel);
+                if (GUILayout.Button(
+                        new GUIContent("安全清除导入约束", SafeClearTooltip),
+                        GUILayout.Height(28f)))
                     SafeClearImportedConstraints();
-                if (GUILayout.Button("清除全部标准约束", GUILayout.Height(28f)))
+                if (GUILayout.Button(
+                        new GUIContent("清除全部标准约束", ClearStandardTooltip),
+                        GUILayout.Height(28f)))
                     ClearAllStandardConstraints();
                 GUILayout.Space(2f);
             }
@@ -1105,7 +1327,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 DrawPanelHeader("骨架姿态", "Prefab", new Color(0.91f, 0.65f, 0.25f));
                 GUILayout.Space(6f);
-                if (GUILayout.Button("还原骨架到 Prefab 姿态", GUILayout.Height(28f)))
+                EditorGUILayout.LabelField(
+                    new GUIContent("删掉 VRC 约束之后骨骼不会自己还原，必要时用下面这个按钮收尾。", ResetPoseTooltip),
+                    EditorStyles.miniLabel);
+                if (GUILayout.Button(
+                        new GUIContent("还原骨架到 Prefab 姿态", "把骨骼的位置 / 旋转 / 缩放还原成 Prefab 里的值。"),
+                        GUILayout.Height(28f)))
                     ResetRigToPrefabPose();
                 GUILayout.Space(2f);
             }
@@ -1115,18 +1342,36 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             if (!ValidateConstraintUtilityInputs(true))
                 return;
+            if (constraintMode == ConstraintMode.Vrc && !HoVrcConstraintBridge.IsSdkAvailable)
+            {
+                EditorUtility.DisplayDialog(
+                    "HoFBX导入处理",
+                    "本工程没有 VRChat 约束类型（VRC.SDK3.Dynamics.Constraint）。\n" +
+                    "请先装好 VRChat SDK，或改用 Unity 内置约束 / HoAux Rig。",
+                    "确定");
+                return;
+            }
+
             if (!EditorUtility.DisplayDialog(
                     "导入约束",
-                    "将按上方预览把中立约束 IR 应用到目标骨架。\n当前模式：" +
-                    (useHoAuxRig ? "HoAux Rig" : "标准 Unity Constraint（Twist 仅 Y）") +
-                    "\n用户手工创建的同类型通用约束不会被覆盖。",
+                    "将按上方预览把中立约束 IR 应用到目标骨架。\n当前形态：" +
+                    ConstraintModeLabel(constraintMode) +
+                    "\n落盘位置：" +
+                    (constraintMode == ConstraintMode.Standard
+                        ? "被驱动的骨骼上（散在整个骨架里）"
+                        : ConstraintRootLabel() + "（集中管理）") +
+                    "\n用户手工创建的同类型约束不会被覆盖。",
                     "导入",
                     "取消"))
                 return;
 
             try
             {
-                int importedCount = ApplyConstraints(constraintJson, targetRig, useHoAuxRig);
+                int importedCount = ApplyConstraints(
+                    constraintJson,
+                    targetRig,
+                    constraintMode,
+                    constraintRoot);
                 EditorUtility.DisplayDialog(
                     "HoFBX导入处理",
                     $"约束导入完成。导入：{importedCount}",
@@ -1147,6 +1392,29 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return false;
             }
 
+            // 目标必须是场景对象。允许指向 FBX / 预制件资产的话，
+            // VRC 形态会在资产内部新建 GameObject 层级、HoAux 形态会往资产挂组件，
+            // 容易出现"场景里看着改了、其实改在资产上"的状态不一致。
+            if (!IsSceneObject(targetRig))
+            {
+                EditorUtility.DisplayDialog(
+                    "HoFBX导入处理",
+                    $"目标骨架「{targetRig.name}」不是场景对象（看着像 FBX / 预制件资产）。\n" +
+                    "请把预制件拖进场景后再指定。",
+                    "确定");
+                return false;
+            }
+
+            if (constraintRoot != null && !IsSceneObject(constraintRoot.gameObject))
+            {
+                EditorUtility.DisplayDialog(
+                    "HoFBX导入处理",
+                    $"约束根物体「{constraintRoot.name}」不是场景对象（看着像资产）。\n" +
+                    "请指定场景里的物体。",
+                    "确定");
+                return false;
+            }
+
             if (requireJson && constraintJson == null)
             {
                 EditorUtility.DisplayDialog("HoFBX导入处理", "请先指定约束 JSON。", "确定");
@@ -1156,30 +1424,98 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return true;
         }
 
+        private static bool IsSceneObject(GameObject value)
+        {
+            return value != null && value.scene.IsValid();
+        }
+
         private void SafeClearImportedConstraints()
         {
             if (!ValidateConstraintUtilityInputs(false))
                 return;
 
-            HoImportedConstraintMarker[] markers =
-                targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true);
-            HoAuxRig hoAux = ResolveSingleHoAuxRig(targetRig);
-            if (hoAux != null && string.IsNullOrEmpty(hoAux.SourceArmature))
-                hoAux = null;
-            if (markers.Length == 0 && hoAux == null)
+            // 目标骨架自己的标记单独取一份：来源骨架名只能从这一份推断，
+            // 否则"目标骨架从没导入过、同预制件里另一个骨架导入过"时，
+            // 会把另一个骨架的导入当成这次的清理目标。
+            var rigMarkers = new List<HoImportedConstraintMarker>();
+            foreach (HoImportedConstraintMarker marker in
+                     targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+            {
+                if (marker != null)
+                    rigMarkers.Add(marker);
+            }
+
+            List<HoImportedConstraintMarker> markers =
+                CollectImportedMarkers(targetRig, constraintRoot);
+            HoAuxRig hoAux = FindImportedHoAuxRig(targetRig, constraintRoot, null);
+
+            string expectedArmature = FindExpectedArmature(rigMarkers);
+            if (!string.IsNullOrEmpty(expectedArmature))
+            {
+                markers = FilterMarkersByArmature(markers, expectedArmature);
+                if (hoAux != null &&
+                    !string.IsNullOrEmpty(hoAux.SourceArmature) &&
+                    !string.Equals(hoAux.SourceArmature, expectedArmature, StringComparison.Ordinal))
+                {
+                    hoAux = null;
+                }
+            }
+            else if (constraintRoot != null && rigMarkers.Count == 0)
+            {
+                // 目标骨架自己没有任何导入痕迹，却要按"根物体那一侧"的范围清 ——
+                // 那多半会牵连别的骨架，至少让用户先看到这个事实。
+                Debug.LogWarning(
+                    "HoFBX: 目标骨架「" + targetRig.name +
+                    "」上没有任何导入标记，但约束根物体在别处；" +
+                    "本次清理范围按约束根物体那一侧计算。");
+            }
+
+            if (markers.Count == 0 && hoAux == null)
             {
                 EditorUtility.DisplayDialog("HoFBX导入处理", "没有找到工具导入的约束。", "确定");
                 return;
             }
 
+            // 挂点物体只在该收的时候收：用户把它当普通空物体用过（塞了子物体或别的组件）
+            // 就不能整块删，否则一次点击连带删掉用户的东西。
+            var emptyHosts = new List<GameObject>();
+            var keptHosts = new List<GameObject>();
+            var seenHosts = new HashSet<int>();
+            foreach (HoImportedConstraintMarker marker in markers)
+            {
+                if (marker.hostRole != ConstraintHostRole.VrcConstraintObject)
+                    continue;
+                GameObject host = marker.gameObject;
+                if (host == null || !seenHosts.Add(host.GetInstanceID()))
+                    continue;
+                if (IsPureVrcHost(host))
+                    emptyHosts.Add(host);
+                else
+                    keptHosts.Add(host);
+            }
+
+            int constraintCount = 0;
+            foreach (HoImportedConstraintMarker marker in markers)
+                foreach (Component constraint in marker.GetLiveConstraints())
+                    constraintCount++;
+            int hoAuxOperationCount = hoAux == null ? 0 : CountHoAuxOperations(hoAux);
+
             if (!EditorUtility.DisplayDialog(
                     "安全清除导入约束",
-                    $"将清除 {markers.Length} 个骨骼上的工具约束" +
-                    (hoAux == null ? "。" : "以及根骨架上的 HoAuxRig。") +
-                    "用户手工创建的通用约束不受影响。",
+                    $"将删除：\n" +
+                    $"· 工具导入的约束 {constraintCount} 条\n" +
+                    (emptyHosts.Count == 0 ? string.Empty : $"· VRC 挂点空物体 {emptyHosts.Count} 个（连物体一起）\n") +
+                    (keptHosts.Count == 0 ? string.Empty : $"· VRC 挂点 {keptHosts.Count} 个上还有别的东西，只删约束、保留物体\n") +
+                    (hoAux == null ? string.Empty : $"· 1 个导入的 HoAuxRig（含 {hoAuxOperationCount} 条操作）\n") +
+                    (string.IsNullOrEmpty(expectedArmature)
+                        ? "\n清理范围：目标骨架与约束根物体那一侧的全部工具导入。"
+                        : $"\n清理范围：限定为「{expectedArmature}」这一份导出。") +
+                    "\n用户手工创建的约束不受影响。",
                     "清除",
                     "取消"))
+            {
                 return;
+            }
 
             int clearedCount = 0;
             foreach (HoImportedConstraintMarker marker in markers)
@@ -1189,19 +1525,152 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     Undo.DestroyObjectImmediate(constraint);
                     clearedCount++;
                 }
+                if (marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                    continue;
                 Undo.DestroyObjectImmediate(marker);
+            }
+
+            // VRC 模式下"每条约束一个独立空物体当挂点"：约束组件已经被上面的循环删掉了，
+            // 纯挂点的空物体连同它的导入标记一起收掉，别在根物体底下留一堆空壳。
+            foreach (GameObject host in emptyHosts)
+            {
+                if (host == null)
+                    continue;
+                foreach (Component leftover in HoVrcConstraintBridge.GetConstraintComponents(host))
+                {
+                    Undo.DestroyObjectImmediate(leftover);
+                    clearedCount++;
+                }
+                var marker = host.GetComponent<HoImportedConstraintMarker>();
+                if (marker != null)
+                    Undo.DestroyObjectImmediate(marker);
+                Undo.DestroyObjectImmediate(host);
             }
 
             if (hoAux != null)
             {
-                clearedCount += CountHoAuxOperations(hoAux);
+                clearedCount += hoAuxOperationCount;
                 Undo.DestroyObjectImmediate(hoAux);
             }
 
             EditorUtility.DisplayDialog(
                 "HoFBX导入处理",
-                $"已安全清除 {clearedCount} 个导入约束。",
+                $"已安全清除 {clearedCount} 个导入约束" +
+                (emptyHosts.Count == 0 ? "。" : $"，并回收 {emptyHosts.Count} 个 VRC 挂点空物体。") +
+                (keptHosts.Count == 0
+                    ? string.Empty
+                    : $"\n{keptHosts.Count} 个挂点上还有别的内容，只删了约束、物体保留。") +
+                "\n用户手工创建的约束不受影响。",
                 "确定");
+        }
+
+        /// <summary>
+        /// 这个 VRC 挂点是不是"纯挂点"：没有子物体，也没有除 Transform /
+        /// 导入标记 / VRChat 约束以外的组件。只有纯挂点才能连物体一起删。
+        /// </summary>
+        private static bool IsPureVrcHost(GameObject host)
+        {
+            if (host == null || host.transform.childCount > 0)
+                return false;
+
+            List<Component> vrcConstraints = HoVrcConstraintBridge.GetConstraintComponents(host);
+            Component[] components = host.GetComponents<Component>();
+            for (int index = 0; index < components.Length; index++)
+            {
+                Component component = components[index];
+                if (component == null || component is Transform)
+                    continue;
+                if (component is HoImportedConstraintMarker)
+                    continue;
+                if (vrcConstraints.Contains(component))
+                    continue;
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// 目标骨架 + 约束根物体（可能挂在骨架外面）两处的导入标记。
+        /// 外部根物体上的 VRC 空物体不在骨架层级里，只查骨架会漏掉它们。
+        /// </summary>
+        private static List<HoImportedConstraintMarker> CollectImportedMarkers(
+            GameObject rig,
+            Transform explicitRoot)
+        {
+            var result = new List<HoImportedConstraintMarker>();
+            var seen = new HashSet<int>();
+
+            if (rig != null)
+            {
+                foreach (HoImportedConstraintMarker marker in
+                         rig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+                {
+                    if (marker != null && seen.Add(marker.GetInstanceID()))
+                        result.Add(marker);
+                }
+            }
+
+            if (explicitRoot != null)
+            {
+                GameObject boundary = PrefabUtility.GetOutermostPrefabInstanceRoot(explicitRoot);
+                foreach (HoImportedConstraintMarker marker in
+                         explicitRoot.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+                {
+                    if (marker != null && seen.Add(marker.GetInstanceID()))
+                        result.Add(marker);
+                }
+
+                if (boundary != null)
+                {
+                    foreach (HoImportedConstraintMarker marker in
+                             boundary.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+                    {
+                        if (marker != null && seen.Add(marker.GetInstanceID()))
+                            result.Add(marker);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 目标骨架自己那批标记里登记的来源骨架名。用于把清理范围限定在同一份导出上。
+        /// 返回第一个非空值；目标骨架自身一个标记都没有时返回 null（表示不限定）。
+        /// </summary>
+        private static string FindExpectedArmature(List<HoImportedConstraintMarker> markers)
+        {
+            if (markers == null)
+                return null;
+            for (int index = 0; index < markers.Count; index++)
+            {
+                HoImportedConstraintMarker marker = markers[index];
+                if (marker == null || marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                    continue;
+                if (!string.IsNullOrEmpty(marker.sourceArmature))
+                    return marker.sourceArmature;
+            }
+            return null;
+        }
+
+        private static List<HoImportedConstraintMarker> FilterMarkersByArmature(
+            List<HoImportedConstraintMarker> markers,
+            string armature)
+        {
+            var result = new List<HoImportedConstraintMarker>();
+            for (int index = 0; index < markers.Count; index++)
+            {
+                HoImportedConstraintMarker marker = markers[index];
+                if (marker == null)
+                    continue;
+                // 来源为空的旧数据一律保留，不然会被永远清不掉。
+                if (string.IsNullOrEmpty(marker.sourceArmature) ||
+                    string.Equals(marker.sourceArmature, armature, StringComparison.Ordinal))
+                {
+                    result.Add(marker);
+                }
+            }
+            return result;
         }
 
         private static int CountHoAuxOperations(HoAuxRig rig)
@@ -1236,9 +1705,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             foreach (Component constraint in constraints)
                 Undo.DestroyObjectImmediate(constraint);
+
+            // 只收掉"挂在骨骼上"的导入标记：VRC 空物体上的标记属于 VRC 形态，
+            // 这个按钮不碰它（否则会把 VRC 空物体变成没有标签的孤儿）。
             foreach (HoImportedConstraintMarker marker in
                      targetRig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
+            {
+                if (marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                    continue;
                 Undo.DestroyObjectImmediate(marker);
+            }
 
             EditorUtility.DisplayDialog(
                 "HoFBX导入处理",
@@ -1573,6 +2049,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             }
 
+            // 与约束工具页共用同一套"目标必须是场景对象"校验：
+            // 资产上落 VRC 挂点 / HoAuxRig 会在资产内部建物体，状态容易不一致。
+            if (applyConstraints && !ValidateConstraintUtilityInputs(false))
+                return;
+
             if (applyHumanoid && humanoidJson == null)
             {
                 EditorUtility.DisplayDialog(
@@ -1648,7 +2129,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 if (applyConstraints)
                 {
                     if (targetRig != null)
-                        constraintCount = ApplyConstraints(constraintJson, targetRig, useHoAuxRig);
+                        constraintCount = ApplyConstraints(
+                            constraintJson,
+                            targetRig,
+                            constraintMode,
+                            constraintRoot);
                 }
 
                 if (applyCollections && collectionJson != null && targetRig != null)
@@ -1680,13 +2165,31 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             return "将执行以下显式操作：\n" +
                    humanoidOperation +
-                   (applyConstraints
-                       ? useHoAuxRig
-                           ? "- 以 HoAux Rig 解析 Parent / Twist / Fan 中间语义\n"
-                           : "- 以标准 Unity Constraint 导入（Twist 仅 Y 轴）\n"
-                       : string.Empty) +
+                   (applyConstraints ? ConstraintConfirmationLine() : string.Empty) +
                    (applyCollections ? "- 更新 Bone Renderer 集合\n" : string.Empty) +
                    "\n用户已有的手动配置不会被 AssetPostprocessor 自动覆盖。";
+        }
+
+        private string ConstraintConfirmationLine()
+        {
+            switch (constraintMode)
+            {
+                case ConstraintMode.HoAux:
+                    return "- 以 HoAux Rig 解析 Parent / Twist / Fan（组件挂在" +
+                        ConstraintRootLabel() + "）\n";
+                case ConstraintMode.Vrc:
+                    return "- 以 VRChat 约束导入（每条约束一个独立空物体当挂点，摊在" +
+                        ConstraintRootLabel() + "底下，TargetTransform 指回被驱动的骨骼）\n";
+                default:
+                    return "- 以标准 Unity Constraint 导入（Twist 仅 Y 轴，挂在被驱动的骨骼上）\n";
+            }
+        }
+
+        private string ConstraintRootLabel()
+        {
+            if (constraintRoot != null)
+                return "「" + GetTransformPath(constraintRoot) + "」";
+            return targetRig == null ? "目标骨架" : "目标骨架「" + targetRig.name + "」";
         }
 
         private int ApplyHumanoidMapping()
@@ -1848,89 +2351,442 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
         }
 
-        private static int ApplyConstraints(TextAsset configAsset, GameObject rig, bool useHoAuxRig)
+        private static int ApplyConstraints(
+            TextAsset configAsset,
+            GameObject rig,
+            ConstraintMode mode,
+            Transform explicitRoot)
         {
             ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(configAsset.text);
             if (!TryValidateConstraintConfig(config, out string validationError))
                 throw new InvalidDataException(validationError);
 
+            if (mode == ConstraintMode.Vrc && !HoVrcConstraintBridge.IsSdkAvailable)
+            {
+                throw new InvalidOperationException(
+                    "本工程没有 VRChat 约束类型（VRC.SDK3.Dynamics.Constraint）。\n" +
+                    "请先装好 VRChat SDK，或改用 Unity 内置约束 / HoAux Rig。");
+            }
+
             List<ConstraintPlanEntry> plan = BuildConstraintImportPlan(config);
             Dictionary<string, Transform> transformMap = BuildTransformMap(rig.transform);
 
-            HoAuxRig hoAux = ResolveSingleHoAuxRig(rig);
-            if (useHoAuxRig && ContainsHoAuxOperations(plan))
+            // 先把"能不能落盘"判完，再动任何东西。
+            // 否则一旦后面抛错/全跳过，用户上一次的导入已经被清掉了，只留下半截状态。
+            ValidateBeforeClearing(config, rig, mode, plan, transformMap, explicitRoot);
+
+            // 三种形态互斥：清掉上一次由本工具导入的三种形态，再落新的。
+            // HoAuxRig 按"约束根物体/骨架"这个范围回收，不按骨架名 ——
+            // 在"约束骨架"下拉里换了候选（armatureName 变了）时旧组件也必须回收，
+            // 否则两种形态会同时驱动同一批骨骼。
+            ClearImportedStandardConstraints(rig);
+            int removedHoAux = RemoveImportedHoAuxRigs(rig, explicitRoot);
+            int removedVrcObjects = RemoveImportedVrcConstraintObjects(rig, explicitRoot);
+
+            int count = 0;
+            switch (mode)
             {
-                if (hoAux == null)
-                    hoAux = Undo.AddComponent<HoAuxRig>(rig);
-                else
-                {
-                    if (string.IsNullOrEmpty(hoAux.SourceArmature) && CountHoAuxOperations(hoAux) > 0)
-                    {
-                        throw new InvalidOperationException(
-                            "目标已有手动配置的 HoAuxRig。请先清空或移除该组件，导入器不会覆盖手动操作。");
-                    }
-                    if (!string.IsNullOrEmpty(hoAux.SourceArmature) &&
-                        !string.Equals(hoAux.SourceArmature, config.armatureName, StringComparison.Ordinal))
-                    {
-                        throw new InvalidOperationException(
-                            $"目标 HoAuxRig 属于另一骨架：{hoAux.SourceArmature}。");
-                    }
-                    Undo.RecordObject(hoAux, "重新导入 HoAux Rig");
-                }
-                ClearImportedStandardConstraints(rig);
-                hoAux.RigRoot = rig.transform;
-                string schemaVersion = config.schemaVersion.ToString();
-                hoAux.RemoveOperationsFromSource(config.armatureName, config.exportTime, schemaVersion);
-                hoAux.SourceArmature = config.armatureName;
-                hoAux.ExportTime = config.exportTime;
-                hoAux.ExporterVersion = schemaVersion;
-            }
-            else if (useHoAuxRig)
-            {
-                ClearImportedStandardConstraints(rig);
-                RemoveImportedHoAuxRig(rig, config.armatureName);
-            }
-            else
-            {
-                ClearImportedStandardConstraints(rig);
-                RemoveImportedHoAuxRig(rig, config.armatureName);
+                case ConstraintMode.HoAux:
+                    count = ApplyHoAuxConstraints(config, rig, plan, transformMap, explicitRoot);
+                    break;
+                case ConstraintMode.Vrc:
+                    count = ApplyVrcConstraints(config, rig, plan, transformMap, explicitRoot);
+                    break;
+                default:
+                    count = ApplyStandardConstraints(plan, transformMap, config);
+                    break;
             }
 
+            if (removedHoAux > 0)
+                Debug.Log($"HoFBX: 已回收上一次导入的 {removedHoAux} 个 HoAuxRig。");
+            if (removedVrcObjects > 0)
+                Debug.Log($"HoFBX: 已回收上一次导入的 {removedVrcObjects} 个 VRC 约束空物体。");
+            return count;
+        }
+
+        /// <summary>
+        /// 清场之前能做的判定全部做掉：VRC 类型是否可用、HoAux 根物体上有没有
+        /// 用户手工配置的组件、计划里的 owner/target 能不能解析。
+        /// </summary>
+        private static void ValidateBeforeClearing(
+            ConstraintConfig config,
+            GameObject rig,
+            ConstraintMode mode,
+            List<ConstraintPlanEntry> plan,
+            Dictionary<string, Transform> transformMap,
+            Transform explicitRoot)
+        {
+            foreach (ConstraintPlanEntry entry in plan)
+            {
+                if (entry.kind == ConstraintPlanKind.Unknown)
+                    continue;
+                if (mode == ConstraintMode.HoAux && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
+                    continue;
+                TryResolvePlanTransforms(transformMap, entry, out Transform _, out Transform _);
+            }
+
+            if (mode != ConstraintMode.HoAux)
+                return;
+
+            Transform root = ResolveConstraintRoot(rig, explicitRoot);
+            if (root == null)
+                return;
+
+            HoAuxRig existing = ResolveSingleHoAuxRig(root.gameObject);
+            if (existing == null)
+                return;
+            if (string.IsNullOrEmpty(existing.SourceArmature) && CountHoAuxOperations(existing) > 0)
+            {
+                throw new InvalidOperationException(
+                    $"约束根物体「{root.name}」上已有手动配置的 HoAuxRig。" +
+                    "请先清空或移除该组件，导入器不会覆盖手动操作。");
+            }
+        }
+
+        /// <summary>Unity 内置约束：挂在被驱动的骨骼上。</summary>
+        private static int ApplyStandardConstraints(
+            List<ConstraintPlanEntry> plan,
+            Dictionary<string, Transform> transformMap,
+            ConstraintConfig config)
+        {
             int count = 0;
             foreach (ConstraintPlanEntry entry in plan)
             {
                 if (entry.kind == ConstraintPlanKind.Unknown)
                     continue;
-                if (useHoAuxRig && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
+                if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
                     continue;
-                if (!TryResolveTransform(transformMap, entry.ownerBone, out Transform bone) ||
-                    !TryResolveTransform(transformMap, entry.targetBone, out Transform target))
-                {
-                    Debug.LogWarning(
-                        $"HoFBX: 无法解析约束骨骼 {entry.ownerBone} -> {entry.targetBone}，已跳过。");
-                    continue;
-                }
-
-                bool isHoAuxSemantic = entry.kind == ConstraintPlanKind.Parent ||
-                    entry.kind == ConstraintPlanKind.Twist || entry.kind == ConstraintPlanKind.Fan;
-                if (useHoAuxRig && isHoAuxSemantic)
-                {
-                    if (hoAux != null && ConfigureHoAuxOperation(hoAux, bone, target, entry))
-                        count++;
-                    continue;
-                }
 
                 count += ConfigureStandardOperation(bone, target, entry, config) ? 1 : 0;
             }
+            return count;
+        }
 
-            if (hoAux != null)
+        /// <summary>
+        /// HoAux：整套语义收进一个 HoAuxRig 组件，组件挂在约束根物体上
+        /// （根物体留空时就是目标骨架自己）。
+        /// </summary>
+        private static int ApplyHoAuxConstraints(
+            ConstraintConfig config,
+            GameObject rig,
+            List<ConstraintPlanEntry> plan,
+            Dictionary<string, Transform> transformMap,
+            Transform explicitRoot)
+        {
+            if (!ContainsHoAuxOperations(plan))
+                return 0;
+
+            Transform root = ResolveConstraintRoot(rig, explicitRoot);
+            if (root == null)
+                return 0;
+
+            // 约束根物体可能不在骨架层级里，所以先按"根物体"找一遍，
+            // 再退回骨架层级 —— 老数据把组件挂在骨架根上、RigRoot 为空。
+            HoAuxRig hoAux = ResolveSingleHoAuxRig(root.gameObject);
+            if (hoAux == null && rig != null && root != rig.transform)
+                hoAux = ResolveSingleHoAuxRig(rig);
+            if (hoAux == null)
             {
-                hoAux.CaptureBindPose();
-                EditorUtility.SetDirty(hoAux);
-                if (PrefabUtility.IsPartOfPrefabInstance(hoAux))
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(hoAux);
+                hoAux = Undo.AddComponent<HoAuxRig>(root.gameObject);
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(hoAux.SourceArmature) && CountHoAuxOperations(hoAux) > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"约束根物体「{root.name}」上已有手动配置的 HoAuxRig。" +
+                        "请先清空或移除该组件，导入器不会覆盖手动操作。");
+                }
+                if (!string.IsNullOrEmpty(hoAux.SourceArmature) &&
+                    !string.Equals(hoAux.SourceArmature, config.armatureName, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"约束根物体上的 HoAuxRig 属于另一骨架：{hoAux.SourceArmature}。");
+                }
+                Undo.RecordObject(hoAux, "重新导入 HoAux Rig");
+            }
+
+            string schemaVersion = config.schemaVersion.ToString();
+            hoAux.RigRoot = root;
+            hoAux.RemoveOperationsFromSource(config.armatureName, config.exportTime, schemaVersion);
+            hoAux.SourceArmature = config.armatureName;
+            hoAux.ExportTime = config.exportTime;
+            hoAux.ExporterVersion = schemaVersion;
+
+            int count = 0;
+            foreach (ConstraintPlanEntry entry in plan)
+            {
+                if (entry.kind != ConstraintPlanKind.Parent &&
+                    entry.kind != ConstraintPlanKind.Twist &&
+                    entry.kind != ConstraintPlanKind.Fan)
+                    continue;
+                if (!string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
+                    continue;
+                if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
+                    continue;
+
+                if (ConfigureHoAuxOperation(hoAux, bone, target, entry))
+                    count++;
+            }
+
+            hoAux.CaptureBindPose();
+            EditorUtility.SetDirty(hoAux);
+            if (PrefabUtility.IsPartOfPrefabInstance(hoAux))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(hoAux);
+            return count;
+        }
+
+        /// <summary>
+        /// VRC 约束：每条约束独占一个独立空物体，全部摊在约束根物体底下。
+        ///
+        /// 空物体只是"挂点"：约束的 TargetTransform 指回被驱动的那根骨骼，
+        /// 所以真正被驱动的是骨骼，而不是这个空物体。这样约束组件集中在一处
+        /// （挂在根物体下面便于整体搬运排查），骨骼该被驱动的照样被驱动。
+        ///
+        /// 一条约束一个物体是必需的：同一类型的两条约束放在同一个 GameObject 上，
+        /// 引擎无法可靠处理对它们的动画（SDK 自动转换时会为此专门发警告）。
+        /// </summary>
+        private static int ApplyVrcConstraints(
+            ConstraintConfig config,
+            GameObject rig,
+            List<ConstraintPlanEntry> plan,
+            Dictionary<string, Transform> transformMap,
+            Transform explicitRoot)
+        {
+            Transform root = ResolveConstraintRoot(rig, explicitRoot);
+            if (root == null)
+                return 0;
+
+            // 只认"上一次 VRC 挂点"留下的同名子物体。带标记但角色不是 VrcConstraintObject
+            // （例如某根骨上的标记被挪到了这里）不能复用：复用会把它的角色改写成挂点，
+            // 之后清理时就会连它整棵子树一起删掉。
+            var existingHosts = new Dictionary<string, GameObject>(StringComparer.Ordinal);
+            foreach (Transform child in root)
+            {
+                if (child == null || existingHosts.ContainsKey(child.name))
+                    continue;
+                HoImportedConstraintMarker marker = child.GetComponent<HoImportedConstraintMarker>();
+                if (marker != null && marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                    existingHosts[child.name] = child.gameObject;
+            }
+
+            int count = 0;
+            var usedNames = new HashSet<string>(StringComparer.Ordinal);
+            for (int index = 0; index < plan.Count; index++)
+            {
+                ConstraintPlanEntry entry = plan[index];
+                if (entry.kind == ConstraintPlanKind.Unknown)
+                    continue;
+                if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
+                    continue;
+
+                bool parent = entry.kind == ConstraintPlanKind.Parent;
+                Axis axes = entry.kind == ConstraintPlanKind.Twist
+                    ? Axis.Y
+                    : Axis.X | Axis.Y | Axis.Z;
+                Type constraintType = HoVrcConstraintBridge.ResolveConstraintType(parent);
+                if (constraintType == null)
+                {
+                    Debug.LogWarning(
+                        $"HoFBX: 本工程缺少 {entry.kind} 对应的 VRChat 约束类型，已跳过 " +
+                        $"{entry.ownerBone} -> {entry.targetBone}。");
+                    continue;
+                }
+
+                string hostName = UniqueVrcHostName(
+                    root,
+                    VrcHostName(entry, parent ? "Parent" : axes == Axis.Y ? "RotationY" : "RotationXYZ"),
+                    usedNames);
+                GameObject host = ResolveVrcHost(root, hostName, existingHosts, out bool createdHost);
+
+                // 复用来的挂点上若已经有约束（上次导入没清干净、或用户手工加的），
+                // 再加一条就变成"同物体同类型两条"—— SDK 明确不支持这种被动画的情况。
+                if (!createdHost && HoVrcConstraintBridge.GetConstraintComponents(host).Count > 0)
+                {
+                    Debug.LogWarning(
+                        $"HoFBX: 挂点「{host.name}」上已有 VRChat 约束，本次会在同一物体上追加一条。" +
+                        "同一物体上同类型的多条约束，引擎无法可靠处理对它们的动画；" +
+                        "建议先清掉该挂点上的旧约束。");
+                }
+
+                Component constraint = HoVrcConstraintBridge.AddConstraint(
+                    host,
+                    constraintType,
+                    bone,
+                    new List<Transform> { target },
+                    entry.weight,
+                    out string error);
+                if (constraint == null)
+                {
+                    Debug.LogWarning(
+                        $"HoFBX: 在「{root.name}/{hostName}」上创建 VRChat 约束失败：{error}；" +
+                        $"已跳过 {entry.ownerBone} -> {entry.targetBone}。");
+                    // 只回收本次新建的挂点；复用来的物体在导入前就存在，不能连它一起删。
+                    if (createdHost)
+                        Undo.DestroyObjectImmediate(host);
+                    continue;
+                }
+
+                // 轴掩码必须在最后设：改完属性要再同步一次，否则可能同步不回约束。
+                if (!parent && !ConfigureVrcRotationAxes(constraint, axes))
+                {
+                    Debug.LogWarning(
+                        $"HoFBX: 无法写入 {constraintType.Name} 的 AffectsRotationX/Y/Z，已跳过 " +
+                        $"{entry.ownerBone} -> {entry.targetBone}。");
+                    Undo.DestroyObjectImmediate(constraint);
+                    if (createdHost)
+                        Undo.DestroyObjectImmediate(host);
+                    continue;
+                }
+
+                HoImportedConstraintMarker marker = host.GetComponent<HoImportedConstraintMarker>();
+                if (marker == null)
+                    marker = Undo.AddComponent<HoImportedConstraintMarker>(host);
+                else
+                    marker.ClearManaged();
+                marker.SetMetadata(
+                    config.armatureName,
+                    config.exportTime,
+                    config.schemaVersion.ToString());
+                marker.Register(constraint);
+                marker.SetHost(
+                    ConstraintHostRole.VrcConstraintObject,
+                    HoAuxRig.GetRelativePath(root, host.transform));
+
+                EditorUtility.SetDirty(marker);
+                EditorUtility.SetDirty(constraint);
+                HoVrcConstraintBridge.RecordPrefabOverrides(constraint);
+                count++;
             }
             return count;
+        }
+
+        private static string UniqueVrcHostName(
+            Transform root,
+            string baseName,
+            HashSet<string> used)
+        {
+            if (used.Add(baseName) && IsNameFree(root, baseName))
+                return baseName;
+            for (int suffix = 2; ; suffix++)
+            {
+                string candidate = baseName + " (" + suffix + ")";
+                if (used.Add(candidate) && IsNameFree(root, candidate))
+                    return candidate;
+            }
+        }
+
+        /// <summary>根物体下没有同名子物体时才算名字可用，避免和手工物体撞名。</summary>
+        private static bool IsNameFree(Transform root, string name)
+        {
+            if (root == null)
+                return true;
+            for (int index = 0; index < root.childCount; index++)
+            {
+                Transform child = root.GetChild(index);
+                if (child != null && string.Equals(child.name, name, StringComparison.Ordinal))
+                    return false;
+            }
+            return true;
+        }
+
+        private static string VrcHostName(ConstraintPlanEntry entry, string kind)
+        {
+            string owner = string.IsNullOrEmpty(entry.ownerBone) ? "Owner" : entry.ownerBone;
+            return "[VRC] " + kind + " " + owner;
+        }
+
+        private static GameObject ResolveVrcHost(
+            Transform root,
+            string hostName,
+            Dictionary<string, GameObject> existingHosts,
+            out bool created)
+        {
+            if (existingHosts.TryGetValue(hostName, out GameObject existing) && existing != null)
+            {
+                created = false;
+                return existing;
+            }
+
+            var host = new GameObject(hostName);
+            Undo.RegisterCreatedObjectUndo(host, "创建 VRChat 约束空物体");
+            host.transform.SetParent(root, false);
+            host.transform.localPosition = Vector3.zero;
+            host.transform.localRotation = Quaternion.identity;
+            host.transform.localScale = Vector3.one;
+            existingHosts[hostName] = host;
+            created = true;
+            return host;
+        }
+
+        /// <summary>
+        /// 把轴掩码写进 VRC 约束的 Affects* 字段。这些字段在 6 个具体类型上同名，
+        /// 所以按名字反射即可，不需要引用 SDK 程序集。
+        /// 三个字段全部写入成功才返回 true —— 半写会用错轴。
+        /// </summary>
+        private static bool ConfigureVrcRotationAxes(Component constraint, Axis axes)
+        {
+            if (!SetMember(constraint, "AffectsRotationX", (axes & Axis.X) != 0) ||
+                !SetMember(constraint, "AffectsRotationY", (axes & Axis.Y) != 0) ||
+                !SetMember(constraint, "AffectsRotationZ", (axes & Axis.Z) != 0))
+            {
+                return false;
+            }
+
+            HoVrcConstraintBridge.ApplyConfigurationChanges(constraint);
+            HoVrcConstraintBridge.RecordPrefabOverrides(constraint);
+            return true;
+        }
+
+        private static bool SetMember(Component target, string name, object value)
+        {
+            Type type = target.GetType();
+            var field = type.GetField(
+                name,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (field != null)
+            {
+                field.SetValue(target, value);
+                return true;
+            }
+
+            var property = type.GetProperty(
+                name,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(target, value, null);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryResolvePlanTransforms(
+            Dictionary<string, Transform> transformMap,
+            ConstraintPlanEntry entry,
+            out Transform bone,
+            out Transform target)
+        {
+            if (TryResolveTransform(transformMap, entry.ownerBone, out bone) &&
+                TryResolveTransform(transformMap, entry.targetBone, out target))
+            {
+                return true;
+            }
+
+            Debug.LogWarning(
+                $"HoFBX: 无法解析约束骨骼 {entry.ownerBone} -> {entry.targetBone}，已跳过。");
+            bone = null;
+            target = null;
+            return false;
+        }
+
+        /// <summary>约束根物体：显式指定优先，留空回落到目标骨架自己。</summary>
+        private static Transform ResolveConstraintRoot(GameObject rig, Transform explicitRoot)
+        {
+            if (explicitRoot != null)
+                return explicitRoot;
+            return rig == null ? null : rig.transform;
         }
 
         private static bool ContainsHoAuxOperations(List<ConstraintPlanEntry> plan)
@@ -2108,6 +2964,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             foreach (HoImportedConstraintMarker marker in
                      rig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
             {
+                if (marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                    continue;
+
                 foreach (Component constraint in new List<Component>(marker.GetLiveConstraints()))
                 {
                     Undo.DestroyObjectImmediate(constraint);
@@ -2119,38 +2978,152 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return count;
         }
 
-        private static void RemoveImportedHoAuxRig(GameObject rig, string armatureName)
+        /// <summary>
+        /// 回收上一次 VRC 模式留下的空物体（连标记一起）。
+        /// 返回回收的物体数；用户手工放在那里的物体不会被碰。
+        /// </summary>
+        private static int RemoveImportedVrcConstraintObjects(GameObject rig, Transform explicitRoot)
         {
-            HoAuxRig component = ResolveSingleHoAuxRig(rig);
-            if (component == null || string.IsNullOrEmpty(component.SourceArmature))
-                return;
-            if (!string.IsNullOrEmpty(armatureName) &&
-                !string.Equals(component.SourceArmature, armatureName, StringComparison.Ordinal))
-                return;
-            Undo.DestroyObjectImmediate(component);
+            var hosts = new List<GameObject>();
+            var seen = new HashSet<int>();
+            foreach (HoImportedConstraintMarker marker in CollectImportedMarkers(rig, explicitRoot))
+            {
+                if (marker.hostRole != ConstraintHostRole.VrcConstraintObject)
+                    continue;
+                if (rig != null && marker.gameObject == rig)
+                    continue;
+                if (explicitRoot != null && marker.gameObject == explicitRoot.gameObject)
+                    continue;
+                if (seen.Add(marker.gameObject.GetInstanceID()))
+                    hosts.Add(marker.gameObject);
+            }
+
+            foreach (GameObject host in hosts)
+            {
+                if (host == null)
+                    continue;
+                foreach (Component constraint in HoVrcConstraintBridge.GetConstraintComponents(host))
+                    Undo.DestroyObjectImmediate(constraint);
+                Undo.DestroyObjectImmediate(host);
+            }
+            return hosts.Count;
         }
 
-        private static HoAuxRig ResolveSingleHoAuxRig(GameObject rig)
+        /// <summary>
+        /// 找出"以 host 为宿主或根"的唯一 HoAuxRig。
+        ///
+        /// 两种情况都算命中：组件就挂在 host 上；或者组件挂在别处但绑定到了 host。
+        /// 后者是老数据的形态——组件在骨架根上，RigRoot 为空即"根就是我自己"。
+        /// </summary>
+        private static HoAuxRig ResolveSingleHoAuxRig(GameObject host)
         {
-            if (rig == null)
+            if (host == null)
                 return null;
 
-            HoAuxRig[] components = rig.GetComponentsInChildren<HoAuxRig>(true);
-            if (components.Length == 0)
+            var candidates = new List<HoAuxRig>();
+            foreach (HoAuxRig candidate in host.GetComponentsInChildren<HoAuxRig>(true))
+            {
+                if (candidate == null || candidates.Contains(candidate))
+                    continue;
+                if (candidate.transform == host.transform ||
+                    candidate.ExplicitRigRoot == host.transform)
+                {
+                    candidates.Add(candidate);
+                }
+            }
+
+            if (candidates.Count == 0)
                 return null;
-            if (components.Length > 1)
+            if (candidates.Count > 1)
             {
                 throw new InvalidOperationException(
-                    "目标骨架层级中存在多个 HoAuxRig；请只保留根节点上的一个组件。\n" +
-                    "导入中控会让这一个组件统一控制骨架内的全部 Rig 约束。");
+                    "约束根物体「" + host.name + "」的层级里存在多个 HoAuxRig；" +
+                    "请只保留一个组件。\n导入中控会让这一个组件统一控制骨架内的全部 Rig 约束。");
             }
-            if (components[0].transform != rig.transform)
+            return candidates[0];
+        }
+
+        /// <summary>
+        /// 回收"约束根物体/骨架"这个范围内由导入器写进去的全部 HoAuxRig。
+        ///
+        /// 刻意不按 armatureName 过滤：在"约束骨架"下拉里换了候选、或 Blender 里改了骨架名
+        /// 再重导时，旧组件必须照样回收，否则它会和新落下的形态同时驱动同一批骨骼。
+        /// 手工配置（SourceArmature 为空）的组件一律不动。
+        /// </summary>
+        private static int RemoveImportedHoAuxRigs(GameObject rig, Transform explicitRoot)
+        {
+            List<HoAuxRig> components = CollectImportedHoAuxRigs(rig, explicitRoot);
+            for (int index = 0; index < components.Count; index++)
             {
-                throw new InvalidOperationException(
-                    "HoAuxRig 必须挂在目标骨架根节点，不能挂在子骨上。\n" +
-                    "请删除子骨上的组件后重新执行导入中控。");
+                if (components[index] != null)
+                    Undo.DestroyObjectImmediate(components[index]);
             }
-            return components[0];
+            return components.Count;
+        }
+
+        /// <summary>
+        /// 范围内全部"由导入器写入"的 HoAuxRig（SourceArmature 非空）。
+        /// 范围 = 骨架子树 + 约束根物体子树 + 从根物体上溯到预制件根的那条链。
+        /// </summary>
+        private static List<HoAuxRig> CollectImportedHoAuxRigs(GameObject rig, Transform explicitRoot)
+        {
+            var candidates = new List<HoAuxRig>();
+            var seen = new HashSet<int>();
+
+            if (rig != null)
+            {
+                foreach (HoAuxRig hoAux in rig.GetComponentsInChildren<HoAuxRig>(true))
+                {
+                    if (hoAux != null && seen.Add(hoAux.GetInstanceID()))
+                        candidates.Add(hoAux);
+                }
+            }
+
+            if (explicitRoot != null)
+            {
+                foreach (HoAuxRig hoAux in explicitRoot.GetComponentsInChildren<HoAuxRig>(true))
+                {
+                    if (hoAux != null && seen.Add(hoAux.GetInstanceID()))
+                        candidates.Add(hoAux);
+                }
+
+                GameObject boundary = PrefabUtility.GetOutermostPrefabInstanceRoot(explicitRoot);
+                Transform cursor = explicitRoot;
+                while (cursor != null)
+                {
+                    HoAuxRig hoAux = cursor.GetComponent<HoAuxRig>();
+                    if (hoAux != null && seen.Add(hoAux.GetInstanceID()))
+                        candidates.Add(hoAux);
+                    if (boundary != null && cursor.gameObject == boundary)
+                        break;
+                    cursor = cursor.parent;
+                }
+            }
+
+            var imported = new List<HoAuxRig>();
+            for (int index = 0; index < candidates.Count; index++)
+            {
+                if (candidates[index] != null && !string.IsNullOrEmpty(candidates[index].SourceArmature))
+                    imported.Add(candidates[index]);
+            }
+            return imported;
+        }
+
+        private static HoAuxRig FindImportedHoAuxRig(
+            GameObject rig,
+            Transform explicitRoot,
+            string armatureName)
+        {
+            List<HoAuxRig> candidates = CollectImportedHoAuxRigs(rig, explicitRoot);
+            for (int index = 0; index < candidates.Count; index++)
+            {
+                HoAuxRig candidate = candidates[index];
+                if (!string.IsNullOrEmpty(armatureName) &&
+                    !string.Equals(candidate.SourceArmature, armatureName, StringComparison.Ordinal))
+                    continue;
+                return candidate;
+            }
+            return null;
         }
 
         private static T GetManaged<T>(Transform bone, ConstraintConfig config) where T : Component, IConstraint

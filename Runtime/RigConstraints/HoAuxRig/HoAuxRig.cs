@@ -10,6 +10,12 @@ namespace Hollow.HoUnityTools.RigConstraints
     /// 这是一个完整的运行时组件：层、操作、绑定姿态和执行顺序都保存在
     /// 同一个组件中，不创建 Animation Rigging 的 Rig/Proxy 空物体，也不依赖
     /// 现有的通用约束组件。
+    ///
+    /// 组件挂在哪儿就把谁当成根：挂骨架根就是骨架根，挂预制件底下的一个
+    /// 空物体就以那个空物体为根。owner/target 都相对根物体记录路径，
+    /// 因此外部空物体当根时绑定数据依然可序列化、可重新解析。
+    ///
+    /// 只在播放模式改写 Transform；编辑模式（含预制件阶段）不做任何写入。
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32000)]
@@ -104,14 +110,26 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private bool needsBinding = true;
 
+        /// <summary>
+        /// 绑定的根物体。为空（老数据、或从未赋值）时就是组件自己挂着的物体。
+        /// 显式赋值一个外部空物体时，路径与姿态都以那个物体为基准。
+        /// </summary>
         public Transform RigRoot
         {
-            get { return transform; }
+            get { return rigRoot != null ? rigRoot : transform; }
             set
             {
-                rigRoot = transform;
+                rigRoot = value;
                 needsBinding = true;
             }
+        }
+
+        /// <summary>
+        /// 显式指定的根物体；null 表示"就是组件自身"。序列化用，不要直接读来判断。
+        /// </summary>
+        public Transform ExplicitRigRoot
+        {
+            get { return rigRoot; }
         }
 
         public UpdateMode Mode
@@ -145,7 +163,6 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void OnEnable()
         {
-            rigRoot = transform;
             ResolveReferences();
             needsBinding = !HasCompleteBindPose();
         }
@@ -156,9 +173,16 @@ namespace Hollow.HoUnityTools.RigConstraints
                 RestoreOwnersToBindPose();
         }
 
+        private void OnDestroy()
+        {
+            // 播放模式中途销毁组件时 OnDisable 已经恢复过一次；这里再兜一次，
+            // 保证"任何时候删掉都很安全"，不会把骨架留在最后一帧的姿态上。
+            if (Application.isPlaying)
+                RestoreOwnersToBindPose();
+        }
+
         private void OnValidate()
         {
-            rigRoot = transform;
             for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
             {
                 Layer layer = layers[layerIndex];
@@ -180,6 +204,10 @@ namespace Hollow.HoUnityTools.RigConstraints
         public void EvaluateNow()
         {
             if (!enabled || !Application.isPlaying)
+                return;
+
+            // 根物体被删掉时直接停手：不能拿一个悬空的根去放行操作。
+            if (RigRoot == null)
                 return;
 
             ResolveReferences();
@@ -293,8 +321,10 @@ namespace Hollow.HoUnityTools.RigConstraints
                 type = type,
                 owner = owner,
                 target = target,
-                ownerPath = GetRelativePath(RigRoot, owner),
-                targetPath = GetRelativePath(RigRoot, target),
+                // 根物体自己用 "." 表示，而不是空串：空串是"没有路径记录"，
+                // 两者必须能区分，否则"以根物体为 owner/target"的操作重新序列化后会解不回来。
+                ownerPath = GetOperationPath(RigRoot, owner),
+                targetPath = GetOperationPath(RigRoot, target),
                 weight = Mathf.Clamp01(weight),
             };
             if (type == OperationType.Fan)
@@ -337,6 +367,22 @@ namespace Hollow.HoUnityTools.RigConstraints
             return removed;
         }
 
+        /// <summary>
+        /// 操作路径。根物体自己写 "."（显式哨兵），而不是空串 ——
+        /// 空串留给"没有路径记录"，这样老数据不会被误解析成"根物体自己"。
+        /// </summary>
+        public static string GetOperationPath(Transform root, Transform value)
+        {
+            if (root != null && value == root)
+                return ".";
+            return GetRelativePath(root, value);
+        }
+
+        /// <summary>
+        /// 相对路径。value 在 root 底下时是普通相对路径；
+        /// 不在 root 底下时退回"锚点相对"路径（"@" 开头，锚点是 root 与 value 的公共祖先），
+        /// 这样即便 owner/target 后来被挪到根物体外面，也还能重新解析回来。
+        /// </summary>
         public static string GetRelativePath(Transform root, Transform value)
         {
             if (root == null || value == null)
@@ -351,10 +397,30 @@ namespace Hollow.HoUnityTools.RigConstraints
                 names.Add(current.name);
                 current = current.parent;
             }
-            if (current != root)
+            if (current == root)
+            {
+                names.Reverse();
+                return string.Join("/", names.ToArray());
+            }
+
+            // 不在根底下：退到"锚点相对"路径，锚点是 root 与 value 的最低公共祖先。
+            // 编辑期与运行期算出的锚点是同一个，所以这条路径两边都能解回来。
+            Transform anchor = FindPathAnchor(root, value);
+            if (anchor == null)
                 return value.name;
+
+            names.Clear();
+            current = value;
+            while (current != null && current != anchor)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+            if (current != anchor)
+                return value.name;
+
             names.Reverse();
-            return string.Join("/", names.ToArray());
+            return "@" + string.Join("/", names.ToArray());
         }
 
         private void EvaluateOperation(Operation operation)
@@ -494,10 +560,28 @@ namespace Hollow.HoUnityTools.RigConstraints
                     Operation operation = layer.operations[operationIndex];
                     if (operation == null)
                         continue;
+                    // 空串 = 没有路径记录，保持引用不动；
+                    // "." = 根物体自己，必须解析（老数据里根物体当 owner 时只有引用，没路径）。
                     if (operation.owner == null && !string.IsNullOrEmpty(operation.ownerPath))
+                    {
                         operation.owner = FindRelativeTransform(operation.ownerPath);
+                        if (operation.owner == null)
+                        {
+                            Debug.LogWarning(
+                                "HoAuxRig(" + name + "): 解析不到 owner「" + operation.ownerPath +
+                                "」，该操作会被跳过。根物体：" + RigRootDescription() + "。");
+                        }
+                    }
                     if (operation.target == null && !string.IsNullOrEmpty(operation.targetPath))
+                    {
                         operation.target = FindRelativeTransform(operation.targetPath);
+                        if (operation.target == null)
+                        {
+                            Debug.LogWarning(
+                                "HoAuxRig(" + name + "): 解析不到 target「" + operation.targetPath +
+                                "」，该操作会被跳过。根物体：" + RigRootDescription() + "。");
+                        }
+                    }
                 }
             }
         }
@@ -522,6 +606,19 @@ namespace Hollow.HoUnityTools.RigConstraints
             return true;
         }
 
+        /// <summary>
+        /// 根物体的可读描述，用在诊断日志里。RigRoot 有 transform 回落，所以永远非空。
+        /// </summary>
+        private string RigRootDescription()
+        {
+            Transform root = RigRoot;
+            if (root == null)
+                return "<组件所在物体已销毁>";
+            return root == transform
+                ? root.name + "（组件自身）"
+                : root.name + "（外部根）";
+        }
+
         private Transform FindRelativeTransform(string path)
         {
             Transform root = RigRoot;
@@ -529,7 +626,58 @@ namespace Hollow.HoUnityTools.RigConstraints
                 return null;
             if (string.IsNullOrEmpty(path) || path == ".")
                 return root;
+
+            // 以 "@" 开头的是"从公共祖先算起"的路径。
+            // 用于 owner/target 不在绑定根底下时（例如根物体是预制件里的一个空物体，
+            // 骨骼挂在它的兄弟分支上）：单靠 root.Find 走不到，得从公共祖先往下走。
+            if (path[0] == '@')
+            {
+                string inner = path.Substring(1);
+                if (inner.Length == 0)
+                    return null;
+                Transform probe = root;
+                Transform found = null;
+                while (probe != null)
+                {
+                    Transform resolved = probe.Find(inner);
+                    if (resolved != null)
+                    {
+                        if (found != null && found != resolved)
+                            return null;
+                        found = resolved;
+                    }
+                    probe = probe.parent;
+                }
+                return found;
+            }
+
             return root.Find(path);
+        }
+
+        /// <summary>
+        /// 找"锚点相对"路径的落脚点：root 与 value 的最低公共祖先。
+        ///
+        /// 刻意不用"最近的预制件实例根"：那个只在编辑器里存在，
+        /// 运行时同一条路径会算出不同结果（脚本里读 = 锚点不同 → 静默解不出来）。
+        /// 公共祖先在编辑期与运行期是同一段层级关系，写与读必然一致。
+        /// </summary>
+        private static Transform FindPathAnchor(Transform root, Transform value)
+        {
+            if (root == null)
+                return null;
+            if (value == null)
+                return root;
+
+            var ancestors = new HashSet<Transform>();
+            for (Transform cursor = root; cursor != null; cursor = cursor.parent)
+                ancestors.Add(cursor);
+
+            for (Transform cursor = value; cursor != null; cursor = cursor.parent)
+            {
+                if (ancestors.Contains(cursor))
+                    return cursor;
+            }
+            return null;
         }
 
         private static void CaptureBindPose(Operation operation)
