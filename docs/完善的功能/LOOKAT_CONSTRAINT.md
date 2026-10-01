@@ -1,4 +1,4 @@
-﻿# 注视约束（眼睛 + 头部看向目标）设计
+# 注视约束（眼睛 + 头部看向目标）设计
 
 `HoUnityTools/Constraints/Ho Look At Constraint`。让角色的**眼睛形态键**和**头部骨骼**尽量朝向一个目标，两种目标模式：
 
@@ -20,7 +20,7 @@
 - **眨眼不影响注视**：闭眼期间眼睛仍然照着目标算（形态键/骨骼照写），眨眼约束只管眼睑键，两者不互相打断。
 - **一键装配预设**：`GetBoneTransform` 拿 head/eye + 在各网格上挑实际存在的凝视键 + 判断左右族/内外族，点一下就能用（你确认过预设保持这个形态即可）。
 - **为"以后被状态机/图驱动"预留接口**：公开 `Weight` / 三块权重乘子 / `SetTarget` / `SetTargetPoint` / `SetMode`（见「以后的事」一节）。本版不接状态机、不做烘焙，但设计上保持可烘焙（输出只依赖目标与参数、只写可动画属性、姿势只在固定时机改）。
-- **输入系统**：本项目 `activeInputHandler = 1`（**只启用 Input System 包**），旧的 `UnityEngine.Input` 会直接抛异常。鼠标模式走 `Mouse.current`，并用 `#if ENABLE_INPUT_SYSTEM / ENABLE_LEGACY_INPUT_MANAGER` 兼容 Warudo 等运行时；「输入来源」枚举保留但固定用 `Auto`，面板不再给这个选项。
+- **输入系统**：本项目 `activeInputHandler = 1`（**只启用 Input System 包**），旧的 `UnityEngine.Input` 会直接抛异常。鼠标模式走 `Pointer.current`，并用 `#if HO_INPUT_SYSTEM / ENABLE_LEGACY_INPUT_MANAGER` 兼容 Warudo 等运行时；「输入来源」枚举保留但固定用 `Auto`，面板不再给这个选项。`HO_INPUT_SYSTEM` **不是**引擎的 `ENABLE_INPUT_SYSTEM`，而是本包 asmdef 的 `versionDefines` 按 `com.unity.inputsystem` 包在不在定义出来的（见 [踩过的坑 · 输入与鼠标](../pitfalls/INPUT_AND_MOUSE.md) 第 8 条）—— 用引擎全局宏会把"包装了"和"本程序集引用得到"混为一谈，宿主工程里就是 CS0234。
 
 ## 适用范围与非目标
 
@@ -373,7 +373,7 @@ PostLateUpdate
 
 **参考系（`reference`）**：空时默认取 **Animator 所在物体**（角色根）的朝向 —— 那才是角色的面向。退回到组件自己的 transform 往往是骨骼/空物体，轴向随机，会让"总角度"读数与限位全部失准（看起来像"平转 150° 以上"）。
 
-- **输入读取**：`#if ENABLE_INPUT_SYSTEM` 用 `Mouse.current.position.ReadValue()` / `Pointer.current`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。面板上的「输入来源」选择已删除，但枚举保留、采样固定走 `Auto`（有 Input System 就用它，否则退回旧 Input）。
+- **输入读取**：`#if HO_INPUT_SYSTEM` 用 `Pointer.current.position.ReadValue()`；`#if ENABLE_LEGACY_INPUT_MANAGER` 用 `Input.mousePosition`。本项目只开了 Input System，所以旧分支只是兼容 Warudo 之类的宿主。面板上的「输入来源」选择已删除，但枚举保留、采样固定走 `Auto`（按编译期实际有哪套输入决定：有 Input System 就用它、采不到再退回旧 Input）。
 - **相机必须手动指定**（`mouseCamera`）：运行时**不自动猜相机**（`Camera.main` 依赖 MainCamera 标签，很多测试场景没有；按"像素面积最大"猜也会挑错 —— 坑记在 [踩过的坑 · 输入与鼠标](../pitfalls/INPUT_AND_MOUSE.md)）。空的时候只警告一次，角度映射退回角色相对坐标系。面板上没填时会显示一个「填入场景里的相机」按钮（编辑器里挑第一个渲染到屏幕的启用相机填进去，仍然是你显式点的那一下）；「一键装配」也会顺手填。
 - 鼠标屏幕坐标换算用 `mouseCamera`，支持 `Screen.width/height` 与相机的 `pixelRect`（多相机/画中画时不至于错位）。
 

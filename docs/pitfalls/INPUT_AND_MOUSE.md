@@ -1,4 +1,4 @@
-﻿# 鼠标与指针输入（注视约束）
+# 鼠标与指针输入（注视约束）
 
 正本：[注视约束](../完善的功能/LOOKAT_CONSTRAINT.md)。
 
@@ -44,3 +44,40 @@ Input System 在**窗口失焦 / 无数据**时会把鼠标位置报成 **(0,0)*
 
 采样结果里有 `HoPointerSample.camera`，准星 / 射线 / 角度摇杆三种取法都跟着同一个相机走 ——
 否则会出现"方向按 A 相机算、鼠标位置按 B 相机读"的错位。
+
+## 8. 别用引擎的 `ENABLE_INPUT_SYSTEM` 门控 `using UnityEngine.InputSystem`
+
+症状（宿主工程里必现）：
+
+```
+Runtime/Constraints/HoMousePointer.cs(4,19): error CS0234:
+The type or namespace name 'InputSystem' does not exist in the namespace 'UnityEngine'
+(are you missing an assembly reference?)
+```
+
+原因不是"没装 Input System 包"，而是**两个宏说的不是一回事**：
+
+- `ENABLE_INPUT_SYSTEM` 是**引擎全局**宏，跟着项目的 active input handling / 包安装走，
+  它跟"`HoUnityTools.Runtime` 这个程序集能不能引用到 `Unity.InputSystem` 程序集"毫无关系；
+- 于是"包在项目里 → 宏亮 → `using UnityEngine.InputSystem;` 被编进来 → 但 asmdef 那条引用没落地"
+  就成了 CS0234。反过来也踩得到：`.research/UnityFaceValidation` 那次真实编译里
+  `HoUnityTools.Runtime.rsp` 只定义了 `ENABLE_LEGACY_INPUT_MANAGER`、**没有** `ENABLE_INPUT_SYSTEM`，
+  而同一个编译命令行里 `Unity.InputSystem.ref.dll` 是实打实引用进来的 —— 可见两者互不决定。
+
+正解：**用 `versionDefines` 让"包真在"才定义自己的宏**，`using` 和用法都挂它。
+`Editor/HoUnityTools.Editor.asmdef` 对 URP 用的就是这一套（`HO_URP_AVAILABLE`），Runtime 这边补上：
+
+```json
+"versionDefines": [
+  { "name": "com.unity.inputsystem", "expression": "1.0.0", "define": "HO_INPUT_SYSTEM" }
+]
+```
+
+（`expression` 用 `1.0.0` 这种"单版本=不低于它"的写法，语法确定有效；别用空串。）
+
+实测含义（Unity 2021.3 / 2022.3 / 6000.3 一致）：包没装 → 宏不定义，`#if` 整段不编，`using` 不会出现，**编译永远过**；
+包在（≥1.0.0）→ 宏定义，走 `Pointer.current`。旧 Input 那半边继续用引擎宏 `ENABLE_LEGACY_INPUT_MANAGER` 门控
+（新输入独占模式下读 `Input.mousePosition` 会直接抛异常，所以"没开旧 Input 就整段不编"本来就是对的）。
+
+两条路都没有时（没包 + 没旧 Input Manager）本类退化成"永远采不到指针"，
+只留一条 `#warning` 在编译时提示一次 —— 不再让宿主工程的编译直接挂掉。

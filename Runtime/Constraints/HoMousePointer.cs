@@ -1,6 +1,13 @@
 using UnityEngine;
 
-#if ENABLE_INPUT_SYSTEM
+// 这里刻意用本程序集自己的版本定义（asmdef 的 versionDefines → `HO_INPUT_SYSTEM`），
+// **不用**引擎全局的 `ENABLE_INPUT_SYSTEM`：
+// 全局宏只表示"这个项目装了 Input System 包 / 启用了新输入"，它跟"本程序集能不能引用到
+// Unity.InputSystem 这个程序集"是两回事。只要包在项目里、宏就亮，而 asmdef 里那条引用
+// 一旦没落地（包的程序集没解析出来、包被停用/移除但宏还在、只把本包拷进了别的工程），
+// `using UnityEngine.InputSystem;` 就会变成 CS0234。
+// versionDefines 是"包真在"才定义，因此这里的 using 与下面的用法永远配对。
+#if HO_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
@@ -10,6 +17,9 @@ namespace Hollow.HoUnityTools.Constraints
     /// 鼠标/指针采样。项目里只启用 Input System 包时（activeInputHandler = 1）旧的
     /// UnityEngine.Input 会直接抛异常，所以默认走 Input System，并保留旧 Input 分支给
     /// Warudo 之类宿主；两者都不可用时返回 invalid，组件会保持上一次的目标。
+    /// 走哪条路由 `HO_INPUT_SYSTEM`（Input System 包的 versionDefine）与
+    /// `ENABLE_LEGACY_INPUT_MANAGER`（引擎宏）在编译期决定；两个都没有时本类退化为
+    /// "永远采不到指针"，但**照样能编译**，不再把宿主工程卡在 CS0234 上。
     /// </summary>
     public static class HoMousePointer
     {
@@ -88,22 +98,27 @@ namespace Hollow.HoUnityTools.Constraints
         {
             screenPosition = Vector2.zero;
 
-            bool useInputSystem = source == HoLookAtInputSource.InputSystem;
-            bool useLegacy = source == HoLookAtInputSource.LegacyInput;
-            if (source == HoLookAtInputSource.Auto)
-            {
-#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-                useInputSystem = true;
-#elif ENABLE_LEGACY_INPUT_MANAGER && !ENABLE_INPUT_SYSTEM
-                useLegacy = true;
+#if HO_INPUT_SYSTEM && ENABLE_LEGACY_INPUT_MANAGER
+            // 两条路都在：Auto 默认先试 Input System（面板就是这么装的），采不到再回落到旧 Input
+            //（宿主里旧设备反而更靠谱时靠这条兜底）。
+            bool readInputSystem = source != HoLookAtInputSource.LegacyInput;
+            bool readLegacy = source != HoLookAtInputSource.InputSystem;
+#elif HO_INPUT_SYSTEM
+            // 只有 Input System：activeInputHandler = 1，旧 Input 连读都不能读（会抛异常）。
+            bool readInputSystem = true;
+            bool readLegacy = false;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            // 只有旧 Input：包不在，Input System 那条路根本没编进来。
+            bool readInputSystem = false;
+            bool readLegacy = true;
 #else
-                useInputSystem = true;
-                useLegacy = true;
+            // 两套输入都没有：编译期就知道采不到，不生成任何读取代码。
+            bool readInputSystem = false;
+            bool readLegacy = false;
 #endif
-            }
 
-#if ENABLE_INPUT_SYSTEM
-            if (useInputSystem)
+#if HO_INPUT_SYSTEM
+            if (readInputSystem)
             {
                 Pointer pointer = Pointer.current;
                 if (pointer != null && pointer.enabled)
@@ -117,12 +132,12 @@ namespace Hollow.HoUnityTools.Constraints
 
                     // 位置是 (0,0) 时当作"没有指针数据"：Input System 在窗口失焦 / 设备没数据时就是这么报的，
                     // 以前直接采信，表现是"丢失跟踪后视线突然跳到画面角落"，而且丢失判定永远不触发。
-                    if (!useLegacy)
+                    if (!readLegacy)
                     {
                         return false;
                     }
                 }
-                else if (!useLegacy)
+                else if (!readLegacy)
                 {
                     return false;
                 }
@@ -130,7 +145,7 @@ namespace Hollow.HoUnityTools.Constraints
 #endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-            if (useLegacy)
+            if (readLegacy)
             {
                 Vector2 position = Input.mousePosition;
                 if (IsUsablePointerPosition(position))
@@ -139,6 +154,13 @@ namespace Hollow.HoUnityTools.Constraints
                     return true;
                 }
             }
+#endif
+
+#if !HO_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            // 走到这里说明工程既没有 Input System 包、也没开旧 Input Manager：
+            // "跟随鼠标"永远采不到指针（表现为一直按 lostBehavior 处理）。
+            // 只在编译时提示一次，运行时不再每帧刷日志。
+#warning HoUnityTools: 既没有 com.unity.inputsystem 包，也没有启用旧 Input Manager，鼠标跟随不可用。
 #endif
 
             return false;
