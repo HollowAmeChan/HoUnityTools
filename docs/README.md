@@ -65,7 +65,8 @@
 
 [pitfalls/](pitfalls/) —— 按"看到什么症状"来找（**症状 → 原因 → 怎么办**）：面捕流水线、动态参数五次改设计、混合树、形态键输出、
 Unity YAML 与转储、Animator IK 与更新时机、鼠标输入、液体 shader、Unity 资产、编辑器 UI 与 Playable API、批处理验证、
-Warudo 打包、从蓝图里取证、文档编码、仓库与提交、**VRChat 上传与组件白名单**（`Editor/VrcBuild/` 那套自动清理）。
+Warudo 打包、从蓝图里取证、文档编码、仓库与提交、**VRChat 上传与组件白名单**（`Editor/VrcBuild/` 那套自动清理）、
+**播放模式调参回写**（为什么 JSON 来回倒会把引用弄空，`Editor/PhysBonePlayMode/` 怎么绕开）。
 **活文档只留结论；"当初怎么被咬的"都收在这里。**
 
 ## 归档（过程记录，不是现状）
