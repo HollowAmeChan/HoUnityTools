@@ -1,0 +1,27 @@
+{
+  "name": "HoUnityTools.VrcBuild.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.Editor.VrcBuild",
+  "references": [
+    "HoUnityTools.Runtime",
+    "nadena.dev.ndmf"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "HO_NDMF"
+  ],
+  "versionDefines": [
+    {
+      "name": "nadena.dev.ndmf",
+      "expression": "",
+      "define": "HO_NDMF"
+    }
+  ],
+  "noEngineReferences": false
+}
