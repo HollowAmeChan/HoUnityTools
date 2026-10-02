@@ -1,4 +1,4 @@
-﻿# HoUnityTools 文档
+# HoUnityTools 文档
 
 **唯一入口。** 现在在跑的那套方案只有四份权威文档 + 命名权威；其余都在 `pitfalls/`（踩坑）与 `archive/`（过程记录）。
 （2026-09-29 重组：原 20 篇顶层文档 → 4 篇权威 + 归档；审查与判定见 [REORG_PLAN_2026-09-29.md](archive/REORG_PLAN_2026-09-29.md)。）
@@ -65,7 +65,7 @@
 
 [pitfalls/](pitfalls/) —— 按"看到什么症状"来找（**症状 → 原因 → 怎么办**）：面捕流水线、动态参数五次改设计、混合树、形态键输出、
 Unity YAML 与转储、Animator IK 与更新时机、鼠标输入、液体 shader、Unity 资产、编辑器 UI 与 Playable API、批处理验证、
-Warudo 打包、从蓝图里取证、文档编码、仓库与提交。
+Warudo 打包、从蓝图里取证、文档编码、仓库与提交、**VRChat 上传与组件白名单**（`Editor/VrcBuild/` 那套自动清理）。
 **活文档只留结论；"当初怎么被咬的"都收在这里。**
 
 ## 归档（过程记录，不是现状）
