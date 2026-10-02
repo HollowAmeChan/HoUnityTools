@@ -26,10 +26,14 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
     /// 这样"安全清除"就能只删除导入器生成的约束，而不误删用户手工添加的约束。
     ///
     /// 该组件由导入器自动挂载，不应手动添加（已从添加组件菜单隐藏）。
+    ///
+    /// 实现 <see cref="IHoEditorOnly"/>：VRChat 的 avatar 校验不认这个组件类型，
+    /// 标记成 EditorOnly 后既不会被 SDK 面板标红，也会在构建时被 VRCSDK 自动摘掉
+    /// （只删组件，不动物体 —— 物体上可能还挂着要上传的 VRC 约束）。
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("")]
-    public class HoImportedConstraintMarker : MonoBehaviour
+    public class HoImportedConstraintMarker : MonoBehaviour, IHoEditorOnly
     {
         /// <summary>
         /// 源骨架名称（来自导出 JSON 的 armatureName）。

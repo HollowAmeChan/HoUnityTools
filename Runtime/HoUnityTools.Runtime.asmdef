@@ -16,6 +16,11 @@
       "name": "com.unity.inputsystem",
       "expression": "1.0.0",
       "define": "HO_INPUT_SYSTEM"
+    },
+    {
+      "name": "com.vrchat.base",
+      "expression": "",
+      "define": "HO_VRCSDK"
     }
   ],
   "noEngineReferences": false

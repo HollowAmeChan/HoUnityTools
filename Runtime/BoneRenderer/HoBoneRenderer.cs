@@ -6,11 +6,14 @@ namespace Hollow.HoUnityTools.BoneRendering
     /// <summary>
     /// 骨骼渲染组件 — 把骨架根拖进来即可在 Scene 视图显示全部骨骼,支持分组文件逐组开关显示。
     /// 参考 Unity Animation Rigging 的 BoneRenderer 实现,仅在编辑器场景视图工作,运行时不做任何事。
+    ///
+    /// 实现 <see cref="IHoEditorOnly"/>：VRChat 的 avatar 校验不认这个组件类型，
+    /// 标记成 EditorOnly 后既不会被 SDK 面板标红，也会在构建时被 VRCSDK 自动摘掉。
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/Ho Bone Renderer")]
-    public sealed class HoBoneRenderer : MonoBehaviour
+    public sealed class HoBoneRenderer : MonoBehaviour, IHoEditorOnly
     {
         /// <summary>骨骼形状。</summary>
         public enum BoneShape
