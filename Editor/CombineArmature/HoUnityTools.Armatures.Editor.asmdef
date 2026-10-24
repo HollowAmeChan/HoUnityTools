@@ -1,0 +1,7 @@
+{
+  "name": "HoUnityTools.Armatures.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.Editor.Armatures",
+  "references": ["HoUnityTools.Armatures.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

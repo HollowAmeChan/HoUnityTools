@@ -3,6 +3,8 @@
   "rootNamespace": "Hollow.HoUnityTools.Editor",
   "references": [
     "HoUnityTools.Runtime",
+    "HoUnityTools.Armatures.Runtime",
+    "HoUnityTools.Armatures.Editor",
     "Unity.RenderPipelines.Universal.Runtime"
   ],
   "includePlatforms": [

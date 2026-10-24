@@ -1,0 +1,6 @@
+{
+  "name": "HoUnityTools.Armatures.Runtime",
+  "rootNamespace": "Hollow.HoUnityTools.Armatures",
+  "references": [],
+  "autoReferenced": true
+}

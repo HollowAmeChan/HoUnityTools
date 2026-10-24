@@ -1,5 +1,7 @@
 # HoUnityTools 文档
 
+骨架装配工具：[CombineArmature 使用说明](完善的功能/COMBINE_ARMATURE.md) · [MA 与行业方案调查](COMBINE_ARMATURE_RESEARCH.md)。
+
 **唯一入口。** 现在在跑的那套方案只有四份权威文档 + 命名权威；其余都在 `pitfalls/`（踩坑）与 `archive/`（过程记录）。
 （2026-09-29 重组：原 20 篇顶层文档 → 4 篇权威 + 归档；审查与判定见 [REORG_PLAN_2026-09-29.md](archive/REORG_PLAN_2026-09-29.md)。）
 

@@ -140,9 +140,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 AssetDatabase.DeleteAsset(tempPath);
 
                 var instance = UnityEngine.Object.Instantiate(rigSource);
-                instance.name = rigSource.name;
-                PrefabUtility.SaveAsPrefabAsset(instance, tempPath);
-                UnityEngine.Object.DestroyImmediate(instance);
+                try
+                {
+                    instance.name = rigSource.name;
+                    Hollow.HoUnityTools.Editor.Armatures.CombineArmatureProcessor.ProcessHierarchy(instance);
+                    PrefabUtility.SaveAsPrefabAsset(instance, tempPath);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(instance);
+                }
                 AssetDatabase.SaveAssets();
 
                 result.rigPath = tempPath;
