@@ -12,7 +12,7 @@
 | [面捕流水线](FACE_TRACKING_PIPELINE.md) | 包到了但脸不动、实时输入整体不动、换配置后失效、JsonUtility 丢字段 |
 | [形态（style）乱触发 / 想给状态加"维持一段时间才点亮"](../AXES.md) | 说话、舔舌、挤眼把 style 形态顶亮 —— 权威写法在 `AXES.md` §8「风格状态的触发逻辑」（斜坡 + 平滑去抖 + 维持，含换算表） |
 | [进维持 / 退维持**填多少都没变化**](../AXES.md) | 两个原因都真发生过（2026-09-29）：① 去抖只写在 `current ≥ 0` 分支里 ⇒ **单档配置**（倒V）每次点亮都从隐含档 `−1` 进来 ⇒ 永远不生效（用户填到 1000 才发现）；② 同一语义的**另一份实现**（Warudo 侧 `HoFaceChain`）连字段都没有。回归：`Tests~/FaceTraceValidation.cs` 的 `enter/exit dwell` 段 |
-| [动态参数（Hub）的五次改设计](../FACE_TRACKING_DYNAMIC_PARAMETERS.md) | 想把"控制器里的写手 / 槽表 / 曲线写下标"捡回来，或想把显隐、材质也塞进 Hub 时 |
+| [动态参数（Hub）的五次改设计](FACE_TRACKING_DYNAMIC_PARAMETERS.md) | 想把"控制器里的写手 / 槽表 / 曲线写下标"捡回来，或想把显隐、材质也塞进 Hub 时；当前方案见 [动态参数说明](../FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
 | [形态键输出](SHAPE_KEY_OUTPUT.md) | 键怎么都是 100、关掉规则不回 0、左右族/内外族混用 |
 | [Animator IK 与更新时机](UNITY_IK_AND_TIMING.md) | 头不动、IK 收不到、尾巴一阵一阵抽搐、和布料抢骨头 |
 | [鼠标与指针输入](INPUT_AND_MOUSE.md) | 注视约束的鼠标目标：失焦、基准方向、射线交点、参考系 |
@@ -21,6 +21,8 @@
 | [编辑器 UI 与 Playable API](EDITOR_UI_AND_API.md) | 面板排版不对齐、`[Header]` 画两遍、`PlayableGraph.IsValid()`、`OnValidate` 里重建刷屏、两个预览器抢骨架 |
 | [批处理验证](VALIDATION_LOOP.md) | 跑 `Tests~/` 那套用例，或结果不对劲时 |
 | [Warudo 打包、工具链与系统脚本](BUILD_AND_TOOLING.md) | Mod 产物 Missing Script、`.csproj`、UMod 安全审查、提权脚本 |
+| [VRChat 构建组件白名单](VRC_BUILD_COMPONENT_WHITELIST.md) | 作者工具组件导致上传校验失败，或需要了解可选构建清理 |
+| [播放模式调参回写](PLAYMODE_VALUE_ROUNDTRIP.md) | PhysBone / Collider 调参带不回，或回写后引用变空 |
 | [从蓝图里取证](WARUDO_INSPECTION.md) | 反射/场景文件/`Player.log` 读官方节点：端口表、节点归属、开关方向、资产清单 |
 | [文档与编码](DOCS_ENCODING.md) | 改带中文的 `.md` / `.cs`，或看到乱码 |
 | [仓库与提交](REPO_AND_GIT.md) | 提交、并行改动、`.research/` 这些东西怎么处理 |
@@ -31,3 +33,5 @@
 **一条挑假设的方法**：复核一份外部资产或别人的实现时，别通读一遍结构；
 挑**"我们的模型依赖、但没直接量过"**的那个假设去打（例如"引擎会不会替我钳制"），一击即中。
 通读只会重新确认已经知道的东西。
+
+返回 [文档总入口](../README.md)。

@@ -5,7 +5,7 @@
 > **这份文档只讲 Warudo 侧的落地**：产物怎么划分（几个 mod / 几个节点）、Tracking 层怎么用、节点之间怎么连线。
 > Unity 侧的机制 → [面捕设计：已验证的机制层](FACE_TRACKING_DESIGN.md)；怎么用 → [面捕工作流](FACE_TRACKING_WORKFLOW.md)；
 > 值怎么加工 → [面捕中间层处理](FACE_TRACKING_MIDDLE_LAYER.md)；控制器长什么样 → [面捕控制器结构](FACE_TRACKING_CONTROLLER_STRUCTURE.md)；
-> 历史调查（只作证据、不是现状）→ [`archive/`](archive/)；被咬过的现场 → [`pitfalls/`](pitfalls/)。
+> 历史调查（只作证据、不是现状）→ [历史索引](README.md)；被咬过的现场 → [排错索引](../pitfalls/README.md)。
 > 参数标准见 [参数标准表](PARAMETER_STANDARDS.md)。
 >
 > **标记约定**：✅ = 本机实测（有日志 / 文件 / 反射作依据，尽量给到 `文件:行`）；📖 = 官方文档或官方产物所述；

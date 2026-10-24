@@ -7,7 +7,7 @@
 > （`eyeBlinkLeft`、`jawOpen`…）只是为了在形态键做完之前能拿现成模型把整条链跑通。
 > 等动画做完，**输出行换成"规范名 → 作者参数名"**，
 > 两层之间的接口不变（还是一份 `Dictionary<string,float>`）。详见
-> [面捕工作流 §2.1](../../docs/FACE_TRACKING_WORKFLOW.md)。
+> [面捕工作流 §2.1](../../../docs/archive/FACE_TRACKING_WORKFLOW.md)。
 >
 > **输入侧（线名 → 规范名）是长期资产**，不会随这个变化作废。
 
@@ -117,7 +117,7 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 
 **平滑（23 / 90 行）**：时间是**秒**（时间常数），不是 VB 那种"每帧比例"。VB 是每帧
 `Lerp(prev, 输入, 1 − smooth)`、没有时间单位，所以它的值不能直接搬；换算是 `τ = −dt / ln(smooth)`，
-按 60fps 列（最保守的一档），对照表在 [HO 参数规范 §4.5](../../../docs/PARAMETER_HO.md)。
+按 60fps 列（最保守的一档），对照表在 [HO 参数规范 §4.5](../../../docs/archive/PARAMETER_HO.md)。
 ⚠️ `0.007` **不是笔误**——VB 的 `0.10` 是"每帧 90%"，本身就是个很轻的滤波；真正黏的只有
 `FaceAngle`（0.042s）与眉那一对（0.018s）。**G1（原始 52）刻意不带任何修饰符**：得留一个没滤波的源。
 
@@ -126,7 +126,7 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 以及 `Eye_Squint_L/R`、`BrowL/R`、`EyeOpen`、`EyeX/Y` ——
 它们是**已有参数换拼写或换聚合**（同一个值写两个名字），信息在 G1/G2 里都有。
 
-逐参数的公式、值域、来源见 [HO 参数规范](../../../docs/PARAMETER_HO.md)。
+逐参数的公式、值域、来源见 [HO 参数规范](../../../docs/PARAMETERS.md)。
 
 ⚠️ **VBridger 自己的那批自定义出口一个都不抄**：`MouthFunnel`、`MouthPucker`、`MouthShrug`、
 `Eye_Squint_L/R`、`MouthPressLipOpen`、`BrowInnerUp` 都是 VB 私有名（要靠
@@ -191,7 +191,7 @@ VB 不这么干，而且**加了前缀就谁都读不到**（控制器只写自�
 * VBridger 自己的输入曲线仓（`.research/vbridger/decrypted/InputCurvesBck...`）是 **68 条全直通**
   （0→0 / 1→1，min/max 0..1），里面没有可搬的校准；
 * VBridger 预设里那些增益/曲线是给它**自己的通道集**调的，不是给 ARKit 直通用的；
-* 按 [参数空间文档](../../docs/archive/VTS_FACE_PARAMETER_SPACES.md)：表达式值、存档默认值、模型最终中性
+* 按 [参数空间文档](../../../docs/archive/VTS_FACE_PARAMETER_SPACES.md)：表达式值、存档默认值、模型最终中性
   **不必相等**，所以校准是**每演员/每设备**的活，属于你自己那份副本。
 * 起点（VBridger AdvancedARKit V3 的实测滤波时间，秒）写在各文件的 `notes` 里。
 

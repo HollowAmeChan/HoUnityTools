@@ -1,4 +1,4 @@
-# CombineArmature
+﻿# CombineArmature
 
 在独立的衣服 FBX 与本体骨架之间装配骨骼。组件与处理器分别位于独立的 Runtime / Editor 程序集，只依赖 Unity；不依赖 VRC SDK、MA、NDMF、URP 或 Input System。
 
@@ -93,4 +93,4 @@ GameObject baked = CombineArmatureProcessor.BakeCopy(sourceCharacter);
 
 2026-10-24 验证：Unity 6000.3.15f1（批处理）和 2021.3.45f2（普通编辑器自动执行）各通过 47 项检查；两版均实际进入/退出 Play，后一个约束测试关闭 Domain Reload、保持 Scene Reload。整包 Runtime / Editor 另通过离线编译。Warudo FastBuild 的处理入口已接入，并验证 LoadPrefabContents → 处理 → 保存/重载这段公共路径；尚未对用户角色执行完整 UMod 打包与 Warudo 运行验收。
 
-设计来源与行业比较：[调查记录](../COMBINE_ARMATURE_RESEARCH.md)。
+设计来源与行业比较：[调查记录](../research/COMBINE_ARMATURE.md)。

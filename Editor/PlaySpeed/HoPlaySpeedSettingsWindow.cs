@@ -5,7 +5,7 @@
 //
 // 排版一律走约束面板那套设计令牌与控件（`HoConstraintEditorTheme` / `HoConstraintEditorControls`）：
 // 本仓的规矩是"新增面板不许各写各的颜色和宽度"。别在这个文件里出现 `EditorGUILayout.FloatField` 那种
-// 按剩余宽度百分比分配的控件 —— 后果就是同一列在不同行宽度不同（见 docs/完善的功能/EDITOR_UI_SYSTEM.md）。
+// 按剩余宽度百分比分配的控件 —— 后果就是同一列在不同行宽度不同（见 docs/guides/EDITOR_UI_SYSTEM.md）。
 //
 // ⚠️ 枚举控件只能用 `EnumControl(..., segmented: true)` 或 `Segmented`：`Dropdown` 走的是异步菜单，
 // **拿不到用户的选择**（它永远返回入参）。这条踩过，见 HoConstraintEditorControls.Dropdown 的注释。
