@@ -1,4 +1,4 @@
-# Rig Constraint IR v3 导入
+﻿# Rig Constraint IR v3 导入
 
 HoTools 的正式字段定义见其 `Exporter/IR_V3.md`。HoFBX 导入处理现在接受 IR v2/v3；旧 v2 的 unknown 不自动升级。
 
@@ -37,9 +37,11 @@ v3 的 Copy Location、Copy Rotation、Armature 进入 DIRECT_CONSTRAINT。参�
 
 HoAuxRig 继续保留旧层与更新模式，v3 通用栈另存于同一组件；引用及绑定矩阵可序列化，丢失引用时按保存路径恢复。没有新增面向 VRC 的自定义运行时脚本。
 
+HoAuxRig Inspector 的总数同时包含分层与通用操作，并单独展示 Copy Location、Copy Rotation、Armature、Aim 的类型分布。展开“查看通用约束绑定”可查看 Owner、Target、每个 Armature 来源及权重、Aim Up 与轴；运行时通用栈错误也在该区域显示。分层数量不包含通用栈，例如 99 条分层 + 11 条通用的总数为 110，仍可只有 3 个旧层。
+
 ## 验证
 
-`Tests~/ConstraintIRV3/Run.ps1` 新建隔离 Unity 工程。覆盖 v2/v3 验证、Aim 标记、Prefab 引用恢复、顺序复制、动态父级、稀疏骨架、重复导入、VRC 多源／overflow 序列化、手工内容保护和装配异常回滚。
+`Tests~/ConstraintIRV3/Run.ps1` 新建隔离 Unity 工程。可同时传入 `-FullConfig` 和 `-FullModel`，从配置及 FBX 的副本验证完整 WTD 导入的 99 + 11 = 110 及 Prefab 序列化；源资产不写入。覆盖 v2/v3 验证、Aim 标记、Prefab 引用恢复、顺序复制、动态父级、稀疏骨架、重复导入、VRC 多源／overflow 序列化、手工内容保护和装配异常回滚。
 
 真实 WTD fixture 由 HoTools 的 `tests/export_wtd_ir_v3_fixture.py` 在后台提取 C1 闭包及实际蝴蝶结网格，不保存原工程。数值检查包括首次／稳定求值；非均匀父缩放压力样本单列，不算等价通过。
 

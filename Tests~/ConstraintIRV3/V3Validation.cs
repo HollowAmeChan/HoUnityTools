@@ -41,6 +41,7 @@ public static class V3Validation
             var importer=(ModelImporter)AssetImporter.GetAtPath("Assets/Fixture/ChestAddon.fbx");
             importer.animationType=ModelImporterAnimationType.Generic;importer.optimizeGameObjects=false;importer.importAnimation=false;importer.isReadable=true;importer.SaveAndReimport();
             StructuralChecks(configAsset,config,window);
+            CheckHoInspector(window);
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var go=new GameObject("IR v3 production pipeline parity");var runner=go.AddComponent<V3RuntimeProbe>();
             runner.model=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Fixture/ChestAddon.fbx");
@@ -56,6 +57,44 @@ public static class V3Validation
     {
         var mode=window.GetNestedType("ConstraintMode",BindingFlags.NonPublic);
         return window.GetMethod("ApplyConstraints",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{asset,rig,Enum.Parse(mode,backend),root});
+    }
+
+    private static void CheckHoInspector(Type window)
+    {
+        var full=AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Fixture/full_ir.json");
+        GameObject container=new GameObject("HoAux Inspector regression");
+        HoAuxRig ho;
+        if(full!=null)
+        {
+            var importer=(ModelImporter)AssetImporter.GetAtPath("Assets/Fixture/FullModel.fbx");
+            importer.animationType=ModelImporterAnimationType.Generic;importer.optimizeGameObjects=false;importer.importAnimation=false;importer.SaveAndReimport();
+            var model=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Fixture/FullModel.fbx");
+            var rig=(GameObject)PrefabUtility.InstantiatePrefab(model);rig.transform.SetParent(container.transform,false);
+            var host=new GameObject("External Constraints").transform;host.SetParent(container.transform,false);
+            int imported=(int)Apply(window,full,rig,"HoAux",host);
+            ho=host.GetComponent<HoAuxRig>();
+            if(ho==null||imported!=110||ho.LayerOperationCount!=99||ho.DirectOperationCount!=11||ho.OperationCount!=110)
+                throw new Exception("Full WTD import expected 99 layered + 11 direct = 110; got "+imported+" / "+(ho==null?"missing rig":ho.OperationCount.ToString()));
+            Debug.Log("HOAUX_FULL_WTD_110_OK: layered=99 direct=11 total=110");
+        }
+        else
+        {
+            ho=container.AddComponent<HoAuxRig>();
+            var layer=new HoAuxRig.Layer();ho.Layers.Add(layer);
+            for(int i=0;i<99;i++)layer.operations.Add(new HoAuxRig.Operation());
+            for(int i=0;i<11;i++)ho.DirectOperations.Add(new HoAuxRig.DirectOperation{type=i<4?"ARMATURE":i<6?"AIM":"COPY_ROTATION"});
+        }
+        var inspectorType=typeof(HoDirectConstraintImporter).Assembly.GetType("Hollow.HoUnityTools.Editor.RigConstraints.HoAuxRigEditor");
+        var count=inspectorType.GetMethod("CountOperations",BindingFlags.NonPublic|BindingFlags.Static);
+        if((int)count.Invoke(null,new object[]{ho})!=110)throw new Exception("Inspector hides direct operation count");
+        var typeCounts=(System.Collections.Generic.Dictionary<string,int>)inspectorType.GetMethod("DirectTypeCounts",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{ho});
+        if(typeCounts.Values.Sum()!=11||!typeCounts.ContainsKey("ARMATURE")||!typeCounts.ContainsKey("AIM")||!typeCounts.ContainsKey("COPY_ROTATION"))
+            throw new Exception("Inspector type summary hides IR v3 types");
+        var editor=UnityEditor.Editor.CreateEditor(ho);if(editor.GetType()!=inspectorType)throw new Exception("HoAux Inspector not selected");UnityEngine.Object.DestroyImmediate(editor);
+        PrefabUtility.SaveAsPrefabAsset(container,"Assets/Fixture/HoInspector.prefab");
+        var saved=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Fixture/HoInspector.prefab").GetComponentInChildren<HoAuxRig>();
+        if(saved.OperationCount!=110||saved.DirectOperationCount!=11)throw new Exception("Inspector operations lost after serialization");
+        UnityEngine.Object.DestroyImmediate(container);Debug.Log("HOAUX_INSPECTOR_110_OK");
     }
     private static void StructuralChecks(TextAsset asset,ConstraintConfig config,Type window)
     {

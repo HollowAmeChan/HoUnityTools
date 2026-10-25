@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory=$true)][string]$Fixture,
     [string]$Unity='C:\Program Files\Unity\Hub\Editor\6000.3.15f1\Editor\Unity.exe',
     [string]$Project='',
-    [switch]$TestVrcApiShim
+    [switch]$TestVrcApiShim,
+    [string]$FullConfig='',
+    [string]$FullModel=''
 )
 $ErrorActionPreference='Stop'
 $taskRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -12,10 +14,15 @@ if(Test-Path -LiteralPath $Project){throw 'Use a new isolated validation project
 New-Item -ItemType Directory -Force -Path "$Project\Assets\Runtime","$Project\Assets\Editor","$Project\Assets\Fixture","$Project\Packages","$Project\ProjectSettings"|Out-Null
 Copy-Item -LiteralPath "$taskRepo\Runtime\RigConstraints","$taskRepo\Runtime\BoneRenderer" -Destination "$Project\Assets\Runtime" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Runtime\HoEditorOnly.cs" -Destination "$Project\Assets\Runtime"
-Copy-Item -LiteralPath "$taskRepo\Editor\HoFbxImport" -Destination "$Project\Assets\Editor" -Recurse
+Copy-Item -LiteralPath "$taskRepo\Editor\HoFbxImport","$taskRepo\Editor\HoAuxRig" -Destination "$Project\Assets\Editor" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Editor\Utils\HoEditorStyles.cs","$PSScriptRoot\V3Validation.cs" -Destination "$Project\Assets\Editor"
 Copy-Item -LiteralPath "$PSScriptRoot\V3RuntimeProbe.cs" -Destination "$Project\Assets"
 foreach($taskName in @('ChestAddon.fbx','samples.json','original_constraint_ir.json')){Copy-Item -LiteralPath (Join-Path $Fixture $taskName) -Destination "$Project\Assets\Fixture"}
+if($FullConfig -or $FullModel){
+    if(-not $FullConfig -or -not $FullModel){throw 'FullConfig and FullModel must be provided together.'}
+    Copy-Item -LiteralPath $FullConfig -Destination "$Project\Assets\Fixture\full_ir.json"
+    Copy-Item -LiteralPath $FullModel -Destination "$Project\Assets\Fixture\FullModel.fbx"
+}
 if($TestVrcApiShim){
     New-Item -ItemType Directory -Force -Path "$Project\Assets\VrcApiShim"|Out-Null
     Copy-Item -LiteralPath "$PSScriptRoot\VrcApiShim.cs" -Destination "$Project\Assets\VrcApiShim"

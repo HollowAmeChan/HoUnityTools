@@ -161,6 +161,33 @@ namespace Hollow.HoUnityTools.RigConstraints
             get { return layers; }
         }
 
+        /// <summary>Serialized operations, including disabled rules, excluding empty rows.</summary>
+        public int LayerOperationCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (Layer layer in layers)
+                    if (layer != null && layer.operations != null)
+                        foreach (Operation operation in layer.operations)
+                            if (operation != null) count++;
+                return count;
+            }
+        }
+
+        public int DirectOperationCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (DirectOperation operation in directOperations)
+                    if (operation != null) count++;
+                return count;
+            }
+        }
+
+        public int OperationCount { get { return LayerOperationCount + DirectOperationCount; } }
+
         private void OnEnable()
         {
             ResolveReferences();

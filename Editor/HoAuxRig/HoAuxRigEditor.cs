@@ -14,6 +14,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
     internal sealed class HoAuxRigEditor : UnityEditor.Editor
     {
         private bool showOperationDetails;
+        private bool showDirectDetails;
 
         public override void OnInspectorGUI()
         {
@@ -24,6 +25,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             DrawSourcePanel(rig);
             GUILayout.Space(7f);
             DrawLayersPanel(rig);
+            GUILayout.Space(7f);
+            DrawDirectPanel(rig);
 
             GUILayout.Space(7f);
             EditorGUILayout.HelpBox(
@@ -70,7 +73,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     rig.Mode == HoAuxRig.UpdateMode.Manual
                         ? "运行时手动调用 EvaluateNow"
                         : "运行时 LateUpdate（不在编辑态求值）");
-                EditorGUILayout.LabelField("当前操作", $"{CountOperations(rig)} 条 / {rig.Layers.Count} 层");
+                EditorGUILayout.LabelField("当前操作", $"{CountOperations(rig)} 条（分层 {rig.LayerOperationCount} + 通用 {rig.DirectOperationCount}）");
             }
         }
 
@@ -107,7 +110,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
                 if (layers.Count == 0)
                 {
-                    EditorGUILayout.LabelField("暂无导入操作", EditorStyles.centeredGreyMiniLabel);
+                    EditorGUILayout.LabelField("暂无分层操作", EditorStyles.centeredGreyMiniLabel);
                     return;
                 }
 
@@ -165,13 +168,91 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static int CountOperations(HoAuxRig rig)
         {
-            int count = 0;
-            foreach (HoAuxRig.Layer layer in rig.Layers)
+            return rig.OperationCount;
+        }
+
+        private static Dictionary<string, int> DirectTypeCounts(HoAuxRig rig)
+        {
+            var counts = new Dictionary<string, int>();
+            foreach (HoAuxRig.DirectOperation operation in rig.DirectOperations)
             {
-                if (layer != null && layer.operations != null)
-                    count += layer.operations.Count;
+                if (operation == null) continue;
+                string type = string.IsNullOrEmpty(operation.type) ? "（未记录类型）" : operation.type;
+                counts.TryGetValue(type, out int count);
+                counts[type] = count + 1;
             }
-            return count;
+            return counts;
+        }
+
+        private static string DirectTypeLabel(string type)
+        {
+            switch (type)
+            {
+                case "COPY_LOCATION": return "Copy Location · 复制位置";
+                case "COPY_ROTATION": return "Copy Rotation · 复制旋转";
+                case "ARMATURE": return "Armature · 多源仿射混合";
+                case "AIM": return "Aim · 朝向";
+                default: return type;
+            }
+        }
+
+        private void DrawDirectPanel(HoAuxRig rig)
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                DrawPanelHeader("IR v3 通用约束", $"{rig.DirectOperationCount} 条", new Color(0.24f, 0.54f, 0.88f));
+                GUILayout.Space(5f);
+                foreach (var pair in DirectTypeCounts(rig))
+                    EditorGUILayout.LabelField(DirectTypeLabel(pair.Key), $"{pair.Value} 条");
+                if (rig.DirectOperationCount == 0)
+                    EditorGUILayout.LabelField("暂无通用操作", EditorStyles.centeredGreyMiniLabel);
+                else
+                {
+                    showDirectDetails = EditorGUILayout.Foldout(showDirectDetails, "查看通用约束绑定", true, EditorStyles.foldoutHeader);
+                    if (showDirectDetails)
+                        foreach (HoAuxRig.DirectOperation operation in rig.DirectOperations)
+                            if (operation != null) DrawDirectOperation(operation);
+                }
+                if (!string.IsNullOrEmpty(rig.LastDirectError))
+                    EditorGUILayout.HelpBox(rig.LastDirectError, MessageType.Warning);
+            }
+        }
+
+        private static void DrawDirectOperation(HoAuxRig.DirectOperation operation)
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.LabelField(DirectTypeLabel(operation.type), EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("原始栈序 / 影响度", $"{operation.stackIndex} / {operation.weight:0.###}");
+                DrawReference("Owner · 被驱动", operation.owner, operation.ownerPath);
+                if (operation.type == "ARMATURE")
+                {
+                    EditorGUILayout.LabelField("输出", operation.positionOnly ? "仅位置" : "仿射混合（非 TRS 写回有诊断）");
+                    foreach (HoAuxRig.DirectSource source in operation.sources)
+                    {
+                        if (source == null) continue;
+                        DrawReference($"来源 · {source.weight:P1}", source.bone, source.path);
+                    }
+                }
+                else
+                {
+                    DrawReference("Target · 来源", operation.target, operation.targetPath);
+                    if (operation.type == "AIM")
+                    {
+                        DrawReference("Up · 上方向", operation.up, operation.upPath);
+                        EditorGUILayout.Vector3Field("Aim 轴", operation.aimAxis);
+                        EditorGUILayout.Vector3Field("Up 轴", operation.upAxis);
+                    }
+                }
+            }
+        }
+
+        private static void DrawReference(string label, Transform value, string path)
+        {
+            EditorGUILayout.ObjectField(label, value, typeof(Transform), true);
+            if (value == null && !string.IsNullOrEmpty(path))
+                EditorGUILayout.LabelField("保存路径", path, EditorStyles.miniLabel);
         }
 
         private static string EmptyLabel(string value)

@@ -1712,13 +1712,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static int CountHoAuxOperations(HoAuxRig rig)
         {
-            int count = rig.DirectOperations.Count;
-            foreach (HoAuxRig.Layer layer in rig.Layers)
-            {
-                if (layer != null && layer.operations != null)
-                    count += layer.operations.Count;
-            }
-            return count;
+            return rig.OperationCount;
         }
 
         private void ClearAllStandardConstraints()
