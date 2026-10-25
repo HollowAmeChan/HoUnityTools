@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -31,7 +32,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private const string ConstraintKind = "rigConstraintIR";
         private const string CollectionKind = "collections";
         private const string ConstraintSchema = "hotools.rig-constraint-ir";
-        private const int ConstraintSchemaVersion = 2;
+        private const int ConstraintSchemaVersion = 3;
 
         [Serializable]
         private sealed class MetadataManifest
@@ -72,6 +73,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             Twist,
             Fan,
             Unknown,
+            Direct,
         }
 
         /// <summary>
@@ -102,9 +104,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private const string ConstraintModeTooltip =
             "决定约束最终以什么形态落盘：\n" +
             "· Unity 内置约束 —— 约束组件挂在被驱动的每根骨骼上，会散在整个骨架里。\n" +
-            "· HoAux Rig —— Parent / Twist / Fan 收进一个 HoAuxRig 中控组件，挂在约束根物体上。\n" +
+            "· HoAux Rig —— Parent / Twist / Fan 与 v3 Copy / Armature / Aim 收进一个 HoAuxRig 中控组件。\n" +
             "· VRC 约束 —— 每条约束一个独立空物体、全部摊在约束根物体底下；空物体只是挂点，\n" +
             "  约束的 TargetTransform 指回被驱动的那根骨骼。需要工程里装了 VRChat SDK。\n" +
+            "内置 / VRC 的 Armature 使用刚性 Parent 映射；部分旋转采用原生插值，差异会在预览标出。\n" +
+            "通用栈首版以 Owner 的静置局部姿态为输入，不覆盖其独立动画。\n" +
             "换形态会清掉上一次由本工具导入的其它形态，手工创建的约束不受影响。\n" +
             "\n" +
             "求值时机：HoAuxRig 只在播放模式求值；VRC 约束默认编辑模式也会求值，\n" +
@@ -150,6 +154,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public BlenderConstraintInfo copyRotation;
             public BlenderConstraintInfo stretchTo;
             public BlenderConstraintInfo rawConstraint;
+            public HoDirectConstraintImporter.Entry directEntry;
         }
 
         [SerializeField] private GameObject fbxAsset;
@@ -511,7 +516,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 ConstraintPlanEntry entry = plan[rowIndex];
                 string description = DescribeConstraintImport(entry, constraintMode);
-                if (entry.kind != ConstraintPlanKind.Unknown &&
+                if(entry.kind==ConstraintPlanKind.Direct&&previewTransforms!=null)
+                {
+                    previewTransforms.TryGetValue(entry.ownerBone,out Transform directOwner);
+                    string sceneIssue=HoDirectConstraintImporter.SceneIssue(directOwner,targetRig);
+                    if(sceneIssue!=null)description="已识别 / 不支持："+sceneIssue;
+                }
+                if (entry.kind != ConstraintPlanKind.Unknown && entry.kind != ConstraintPlanKind.Direct &&
                     !(constraintMode == ConstraintMode.HoAux &&
                       !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason)) &&
                     previewTransforms != null)
@@ -591,6 +602,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static string DescribeConstraintImport(ConstraintPlanEntry entry, ConstraintMode mode)
         {
+            if(entry.kind == ConstraintPlanKind.Direct)
+                return HoDirectConstraintImporter.Describe(entry.directEntry,(HoDirectConstraintImporter.Backend)(int)mode);
             if (entry.kind == ConstraintPlanKind.Unknown)
             {
                 string type = entry.rawConstraint == null
@@ -674,9 +687,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 error = $"不支持的约束 schema：{config.schema ?? "<空>"}。";
                 return false;
             }
-            if (config.schemaVersion != ConstraintSchemaVersion)
+            if (config.schemaVersion != 2 && config.schemaVersion != ConstraintSchemaVersion)
             {
-                error = $"不支持的约束 IR 版本：{config.schemaVersion}，当前要求 {ConstraintSchemaVersion}。";
+                error = $"不支持的约束 IR 版本：{config.schemaVersion}，当前支持 2 / {ConstraintSchemaVersion}。";
                 return false;
             }
             if (string.IsNullOrEmpty(config.armatureName))
@@ -687,7 +700,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             if (config.mchEnabledBones == null || config.mchBindings == null || config.auxBones == null ||
                 config.knownConstraints == null || config.unknownConstraints == null)
             {
-                error = "约束 IR 缺少 v2 必需的关系或分类列表。";
+                error = "约束 IR 缺少必需的关系或分类列表。";
                 return false;
             }
 
@@ -702,7 +715,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
                 if (!string.Equals(known.relationType, "MCH_BINDING", StringComparison.Ordinal) &&
-                    !string.Equals(known.relationType, "AUX_CONSTRAINT", StringComparison.Ordinal))
+                    !string.Equals(known.relationType, "AUX_CONSTRAINT", StringComparison.Ordinal) &&
+                    !(config.schemaVersion == 3 && (known.relationType == "DIRECT_CONSTRAINT" || known.relationType == "AIM_BINDING")))
                 {
                     error = $"knownConstraints 中存在未知 relationType：{known.relationType ?? "<空>"}。";
                     return false;
@@ -839,6 +853,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             foreach (KnownConstraintInfo known in config.knownConstraints)
             {
                 string key = ConstraintRecordKey(known.ownerBone, known.constraint);
+                if(config.schemaVersion == 3 && (known.relationType == "DIRECT_CONSTRAINT" || known.relationType == "AIM_BINDING"))
+                    continue;
                 bool inMch = mchConstraintKeys.Contains(key);
                 bool inAux = false;
                 if (known.relationType == "AUX_CONSTRAINT" &&
@@ -859,8 +875,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return false;
                 }
             }
-            error = string.Empty;
-            return true;
+            return HoDirectConstraintImporter.ValidateV3(config,out error);
         }
 
         private static bool SameConstraintIdentity(
@@ -953,6 +968,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
             }
 
+            foreach(var direct in HoDirectConstraintImporter.Build(config))
+            {
+                result.Add(new ConstraintPlanEntry {kind=ConstraintPlanKind.Direct,ownerBone=direct.Owner,targetBone=direct.Target,directEntry=direct});
+                if(direct.aim!=null)
+                    foreach(int index in direct.aim.constraintStackIndices)consumed.Add(direct.Owner+"\u001f"+index);
+                else consumed.Add(ConstraintRecordKey(direct.raw.ownerBone,direct.raw.constraint));
+            }
             foreach (KnownConstraintInfo known in config.knownConstraints)
             {
                 if (consumed.Contains(ConstraintRecordKey(known.ownerBone, known.constraint)))
@@ -1520,6 +1542,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             int clearedCount = 0;
             foreach (HoImportedConstraintMarker marker in markers)
             {
+                if(marker.hostRole==ConstraintHostRole.GeneratedHelper)continue;
                 foreach (Component constraint in new List<Component>(marker.GetLiveConstraints()))
                 {
                     Undo.DestroyObjectImmediate(constraint);
@@ -1529,6 +1552,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     continue;
                 Undo.DestroyObjectImmediate(marker);
             }
+
+            HoDirectConstraintImporter.ClearHelpers(targetRig,constraintRoot,null,expectedArmature);
 
             // VRC 模式下"每条约束一个独立空物体当挂点"：约束组件已经被上面的循环删掉了，
             // 纯挂点的空物体连同它的导入标记一起收掉，别在根物体底下留一堆空壳。
@@ -1574,6 +1599,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return false;
 
             List<Component> vrcConstraints = HoVrcConstraintBridge.GetConstraintComponents(host);
+            var marker=host.GetComponent<HoImportedConstraintMarker>();
             Component[] components = host.GetComponents<Component>();
             for (int index = 0; index < components.Length; index++)
             {
@@ -1582,7 +1608,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     continue;
                 if (component is HoImportedConstraintMarker)
                     continue;
-                if (vrcConstraints.Contains(component))
+                if (vrcConstraints.Contains(component) && marker!=null && marker.Manages(component))
                     continue;
                 return false;
             }
@@ -1675,7 +1701,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static int CountHoAuxOperations(HoAuxRig rig)
         {
-            int count = 0;
+            int count = rig.DirectOperations.Count;
             foreach (HoAuxRig.Layer layer in rig.Layers)
             {
                 if (layer != null && layer.operations != null)
@@ -2370,18 +2396,38 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             List<ConstraintPlanEntry> plan = BuildConstraintImportPlan(config);
             Dictionary<string, Transform> transformMap = BuildTransformMap(rig.transform);
+            Transform directRoot = mode == ConstraintMode.Standard ? rig.transform : ResolveConstraintRoot(rig,explicitRoot);
+            var direct = HoDirectConstraintImporter.Prepare(config,rig,directRoot,transformMap,(HoDirectConstraintImporter.Backend)(int)mode);
 
             // 先把"能不能落盘"判完，再动任何东西。
             // 否则一旦后面抛错/全跳过，用户上一次的导入已经被清掉了，只留下半截状态。
             ValidateBeforeClearing(config, rig, mode, plan, transformMap, explicitRoot);
+            bool legacyUsable = plan.Any(e=>e.kind!=ConstraintPlanKind.Unknown&&e.kind!=ConstraintPlanKind.Direct&&
+                !(mode==ConstraintMode.HoAux&&!string.IsNullOrEmpty(e.hoAuxUnsupportedReason))&&
+                transformMap.ContainsKey(e.ownerBone)&&transformMap.ContainsKey(e.targetBone));
+            var allDirect=HoDirectConstraintImporter.Build(config);
+            bool intentionallyDisabled=allDirect.Count>0&&allDirect.All(e=>e.Muted&&HoDirectConstraintImporter.Issue(e,(HoDirectConstraintImporter.Backend)(int)mode)==null);
+            intentionallyDisabled |= config.knownConstraints.Count>0&&config.knownConstraints.All(k=>k.constraint.parameters!=null&&
+                !float.IsNaN(k.constraint.parameters.influence)&&!float.IsInfinity(k.constraint.parameters.influence)&&
+                k.constraint.parameters.influence>=0&&k.constraint.parameters.influence<=1&&
+                (k.constraint.parameters.mute||k.constraint.parameters.influence==0));
+            if(!legacyUsable&&direct.entries.Count==0&&!intentionallyDisabled)
+                throw new InvalidOperationException("没有可装配的约束；现有导入保持不变。请查看已识别但不支持／unknown 的预览与诊断。");
 
             // 三种形态互斥：清掉上一次由本工具导入的三种形态，再落新的。
             // HoAuxRig 按"约束根物体/骨架"这个范围回收，不按骨架名 ——
             // 在"约束骨架"下拉里换了候选（armatureName 变了）时旧组件也必须回收，
             // 否则两种形态会同时驱动同一批骨骼。
+            Undo.IncrementCurrentGroup();
+            int transaction=Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("导入 Ho Rig 约束 IR");
+            Undo.RecordObjects(rig.GetComponentsInChildren<Transform>(true),"保存约束输入姿态");
+            try
+            {
             ClearImportedStandardConstraints(rig);
             int removedHoAux = RemoveImportedHoAuxRigs(rig, explicitRoot);
             int removedVrcObjects = RemoveImportedVrcConstraintObjects(rig, explicitRoot);
+            HoDirectConstraintImporter.ClearHelpers(rig,explicitRoot);
 
             int count = 0;
             switch (mode)
@@ -2396,12 +2442,21 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     count = ApplyStandardConstraints(plan, transformMap, config);
                     break;
             }
+            HoAuxRig directHo = mode == ConstraintMode.HoAux ? ResolveSingleHoAuxRig(directRoot.gameObject) : null;
+            count += HoDirectConstraintImporter.Apply(direct,directHo);
 
             if (removedHoAux > 0)
                 Debug.Log($"HoFBX: 已回收上一次导入的 {removedHoAux} 个 HoAuxRig。");
             if (removedVrcObjects > 0)
                 Debug.Log($"HoFBX: 已回收上一次导入的 {removedVrcObjects} 个 VRC 约束空物体。");
+            Undo.CollapseUndoOperations(transaction);
             return count;
+            }
+            catch
+            {
+                Undo.RevertAllDownToGroup(transaction);
+                throw;
+            }
         }
 
         /// <summary>
@@ -2418,7 +2473,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             foreach (ConstraintPlanEntry entry in plan)
             {
-                if (entry.kind == ConstraintPlanKind.Unknown)
+                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (mode == ConstraintMode.HoAux && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
                     continue;
@@ -2452,7 +2507,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             int count = 0;
             foreach (ConstraintPlanEntry entry in plan)
             {
-                if (entry.kind == ConstraintPlanKind.Unknown)
+                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
                     continue;
@@ -2575,7 +2630,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             for (int index = 0; index < plan.Count; index++)
             {
                 ConstraintPlanEntry entry = plan[index];
-                if (entry.kind == ConstraintPlanKind.Unknown)
+                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
                     continue;
@@ -2960,11 +3015,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static int ClearImportedStandardConstraints(GameObject rig)
         {
+            HoDirectConstraintImporter.ClearHelpers(rig,null,"Standard");
             int count = 0;
             foreach (HoImportedConstraintMarker marker in
                      rig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
             {
-                if (marker.hostRole == ConstraintHostRole.VrcConstraintObject)
+                if (marker.hostRole == ConstraintHostRole.VrcConstraintObject || marker.hostRole == ConstraintHostRole.GeneratedHelper)
                     continue;
 
                 foreach (Component constraint in new List<Component>(marker.GetLiveConstraints()))
@@ -2984,6 +3040,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         /// </summary>
         private static int RemoveImportedVrcConstraintObjects(GameObject rig, Transform explicitRoot)
         {
+            HoDirectConstraintImporter.ClearHelpers(rig,explicitRoot,"Vrc");
             var hosts = new List<GameObject>();
             var seen = new HashSet<int>();
             foreach (HoImportedConstraintMarker marker in CollectImportedMarkers(rig, explicitRoot))
@@ -2998,15 +3055,19 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     hosts.Add(marker.gameObject);
             }
 
+            int removed=0;
             foreach (GameObject host in hosts)
             {
                 if (host == null)
                     continue;
-                foreach (Component constraint in HoVrcConstraintBridge.GetConstraintComponents(host))
+                var marker=host.GetComponent<HoImportedConstraintMarker>();
+                foreach (Component constraint in marker.GetLiveConstraints().ToList())
                     Undo.DestroyObjectImmediate(constraint);
-                Undo.DestroyObjectImmediate(host);
+                marker.ClearManaged();
+                if(IsPureVrcHost(host)){Undo.DestroyObjectImmediate(host);removed++;}
+                else EditorUtility.SetDirty(marker);
             }
-            return hosts.Count;
+            return removed;
         }
 
         /// <summary>

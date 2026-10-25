@@ -20,7 +20,7 @@ namespace Hollow.HoUnityTools.RigConstraints
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32000)]
     [AddComponentMenu("")]
-    public sealed class HoAuxRig : MonoBehaviour
+    public sealed partial class HoAuxRig : MonoBehaviour
     {
         public enum OperationType
         {
@@ -164,6 +164,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         private void OnEnable()
         {
             ResolveReferences();
+            ResolveDirectReferences();
             needsBinding = !HasCompleteBindPose();
         }
 
@@ -238,6 +239,7 @@ namespace Hollow.HoUnityTools.RigConstraints
                     EvaluateOperation(operation);
                 }
             }
+            EvaluateDirectOperations();
         }
 
         /// <summary>重新以当前骨架姿态作为绑定姿态。</summary>
@@ -263,6 +265,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         /// </summary>
         public void RestoreOwnersToBindPose()
         {
+            RestoreDirectOwners();
             var restored = new HashSet<Transform>();
             for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
             {
@@ -286,6 +289,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         public void ClearOperations()
         {
             layers.Clear();
+            directOperations.Clear();
             needsBinding = true;
         }
 

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Animations;
 
 namespace Hollow.HoUnityTools.Editor.RigConstraints
 {
@@ -26,6 +27,96 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
     /// </summary>
     internal static class HoVrcConstraintBridge
     {
+        internal static void ValidateDirectApi(string kind)
+        {
+            var type=ResolveType("VRC.SDK3.Dynamics.Constraint.Components.VRC"+kind+"Constraint");
+            if(type==null)throw new InvalidOperationException("VRC 缺少 "+kind+"Constraint；未清除现有导入");
+            Func<Type,string,Type> member=(t,n)=>{
+                var field=t.GetField(n,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic);
+                var prop=t.GetProperty(n,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic);
+                return field!=null?field.FieldType:prop==null?null:prop.PropertyType;
+            };
+            var required=new Dictionary<string,Type>{{"TargetTransform",typeof(Transform)},{"GlobalWeight",typeof(float)},{"IsActive",typeof(bool)},{"Locked",typeof(bool)},{"SolveInLocalSpace",typeof(bool)}};
+            string axes=kind=="Scale"?"Scale":kind=="Position"?"Position":"Rotation";
+            foreach(string axis in new[]{"X","Y","Z"})required.Add("Affects"+axes+axis,typeof(bool));
+            if(kind=="Parent")foreach(string axis in new[]{"X","Y","Z"})required.Add("AffectsPosition"+axis,typeof(bool));
+            if(kind=="Aim")
+            {
+                required.Add("AimAxis",typeof(Vector3));required.Add("UpAxis",typeof(Vector3));required.Add("WorldUpTransform",typeof(Transform));
+                var up=member(type,"WorldUp");
+                if(up==null||!up.IsEnum||!Enum.IsDefined(up,"ObjectUp"))throw new InvalidOperationException("VRC WorldUp API 不匹配；未清除现有导入");
+            }
+            foreach(var item in required)if(member(type,item.Key)!=item.Value)throw new InvalidOperationException("VRC API 不匹配："+kind+"."+item.Key+"；未清除现有导入");
+            foreach(string name in new[]{"ZeroConstraint","ApplyConfigurationChanges"})
+                if(type.GetMethod(name,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance,null,Type.EmptyTypes,null)==null)
+                    throw new InvalidOperationException("VRC 方法缺失："+name+"；未清除现有导入");
+            Type list=member(type,"Sources"),source=list==null?null:member(list,"source0");
+            if(source==null||member(list,"totalLength")!=typeof(int)||member(list,"overflowList")==null||
+               member(source,"SourceTransform")!=typeof(Transform)||member(source,"Weight")!=typeof(float)||
+               kind=="Parent"&&(member(source,"ParentPositionOffset")!=typeof(Vector3)||member(source,"ParentRotationOffset")!=typeof(Vector3)))
+                throw new InvalidOperationException("VRC Sources 序列化布局不匹配；未清除现有导入");
+        }
+
+        internal static Component AddDirectConstraint(GameObject host,string kind,Transform driven,
+            IList<ConstraintSource> sources,IList<Vector3> positionOffsets,IList<Vector3> rotationOffsets,
+            IDictionary<string,object> settings,float influence=1)
+        {
+            Type type=ResolveType("VRC.SDK3.Dynamics.Constraint.Components.VRC"+kind+"Constraint");
+            if(type==null)throw new InvalidOperationException("VRC 类型不可用："+kind);
+            Component c=Undo.AddComponent(host,type);
+            try
+            {
+                if(!SetProperty(c,"TargetTransform",driven)||!SetProperty(c,"GlobalWeight",1f)||
+                   !SetProperty(c,"Locked",false)||!SetProperty(c,"SolveInLocalSpace",false))
+                    throw new InvalidOperationException("VRC 通用配置成员缺失："+kind);
+                var transforms=new List<Transform>();foreach(var s in sources)transforms.Add(s.sourceTransform);
+                if(!TryWriteSources(c,transforms,out string sourceError))throw new InvalidOperationException(sourceError);
+                if(settings!=null)foreach(var item in settings)
+                {
+                    object value=item.Value;
+                    var field=type.GetField(item.Key,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance);
+                    var property=type.GetProperty(item.Key,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance);
+                    Type memberType=field!=null?field.FieldType:property==null?null:property.PropertyType;
+                    if(memberType!=null&&memberType.IsEnum&&value is string) value=Enum.Parse(memberType,(string)value);
+                    if(!SetProperty(c,item.Key,value))throw new InvalidOperationException("VRC 成员缺失："+item.Key);
+                }
+                string axes=kind=="Scale"?"Scale":kind=="Position"?"Position":"Rotation";
+                foreach(string axis in new[]{"X","Y","Z"})
+                    if(!SetProperty(c,"Affects"+axes+axis,true))throw new InvalidOperationException("VRC 轴字段缺失："+axes+axis);
+                if(kind=="Parent")foreach(string axis in new[]{"X","Y","Z"})
+                    if(!SetProperty(c,"AffectsPosition"+axis,true))throw new InvalidOperationException("VRC Parent 位置轴缺失");
+                ApplyConfigurationChanges(c);
+                // Copy semantics require Zero, never Activate-and-preserve-offset.
+                if(!InvokeNoArg(c,"ZeroConstraint"))throw new InvalidOperationException("VRC ZeroConstraint 不可用");
+                var serialized=new SerializedObject(c);var list=serialized.FindProperty("Sources");
+                var flat=CollectFlatSourceSlots(list);var overflow=list.FindPropertyRelative("overflowList");
+                for(int i=0;i<sources.Count;i++)
+                {
+                    var slot=i<flat.Count?flat[i]:overflow.GetArrayElementAtIndex(i-flat.Count);
+                    var weight=slot.FindPropertyRelative("Weight");
+                    if(weight==null)throw new InvalidOperationException("VRC Source.Weight 缺失");
+                    weight.floatValue=sources[i].weight;
+                    if(positionOffsets!=null)
+                    {
+                        var value=slot.FindPropertyRelative("ParentPositionOffset");
+                        if(value==null)throw new InvalidOperationException("VRC ParentPositionOffset 缺失");
+                        value.vector3Value=positionOffsets[i];
+                    }
+                    if(rotationOffsets!=null)
+                    {
+                        var value=slot.FindPropertyRelative("ParentRotationOffset");
+                        if(value==null)throw new InvalidOperationException("VRC ParentRotationOffset 缺失");
+                        value.vector3Value=rotationOffsets[i];
+                    }
+                }
+                serialized.ApplyModifiedPropertiesWithoutUndo();ApplyConfigurationChanges(c);
+                if(!SetProperty(c,"GlobalWeight",influence))throw new InvalidOperationException("VRC GlobalWeight 缺失");
+                ApplyConfigurationChanges(c);
+                RecordPrefabOverrides(c);return c;
+            }
+            catch { Undo.DestroyObjectImmediate(c);throw; }
+        }
+
         internal const string RotationConstraintTypeName =
             "VRC.SDK3.Dynamics.Constraint.Components.VRCRotationConstraint";
 

@@ -16,6 +16,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
 
         /// <summary>VRC 模式专用的约束空物体：约束删掉后可以连物体一起回收。</summary>
         VrcConstraintObject = 2,
+        GeneratedHelper = 3,
     }
 
     /// <summary>
@@ -61,6 +62,11 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         /// 才是"导入器现建、可以连物体一起收掉"的空物体。
         /// </summary>
         public ConstraintHostRole hostRole = ConstraintHostRole.None;
+        public string directBackend;
+        public bool hasOwnerBindPose;
+        public Vector3 bindLocalPosition;
+        public Quaternion bindLocalRotation = Quaternion.identity;
+        public Vector3 bindLocalScale = Vector3.one;
 
         /// <summary>
         /// 本骨骼上由导入器管理的约束组件引用列表。

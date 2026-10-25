@@ -18,6 +18,8 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public List<AuxBoneInfo> auxBones;
         public List<KnownConstraintInfo> knownConstraints;
         public List<UnknownConstraintInfo> unknownConstraints;
+        public List<AimBindingInfo> aimBindings;
+        public ConstraintBindingContext bindingContext;
     }
 
     [System.Serializable]
@@ -69,6 +71,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string targetObjectName;
         public string targetBoneName;
         public BlenderConstraintParameters parameters;
+        public BlenderConstraintReferences references;
     }
 
     /// <summary>
@@ -110,5 +113,47 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public bool use_scale_x;
         public bool use_scale_y;
         public bool use_scale_z;
+        public bool use_bbone_shape;
+        public bool use_deform_preserve_volume;
+        public bool use_bone_envelopes;
+        public bool use_current_location;
+        public string track_axis;
+        public string lock_axis;
+    }
+
+    [System.Serializable] public class BlenderObjectReference { public string name; public string rnaType; }
+    [System.Serializable] public class BlenderArmatureTargetProperties
+    {
+        public BlenderObjectReference target;
+        public string subtarget;
+        public float weight;
+    }
+    [System.Serializable] public class BlenderArmatureTarget
+    {
+        public string rnaType;
+        public BlenderArmatureTargetProperties properties;
+    }
+    [System.Serializable] public class BlenderConstraintReferences
+    {
+        public List<BlenderArmatureTarget> targets;
+    }
+    [System.Serializable] public class AimBindingInfo
+    {
+        public string ownerBone, semanticType, targetBone, upBone, aimAxis, upAxis, upMode;
+        public int semanticVersion;
+        public bool muted;
+        public int[] constraintStackIndices;
+    }
+    [System.Serializable] public class ConstraintBoneBinding
+    {
+        public string boneName, parentBone, inheritScale;
+        public float[] restMatrix, poseBasis;
+        public bool connected, positionOnly, hasPoseAnimation;
+    }
+    [System.Serializable] public class ConstraintBindingContext
+    {
+        public string space, matrixLayout, fbxBoneAxes;
+        public float[] objectMatrix;
+        public List<ConstraintBoneBinding> bones;
     }
 }
