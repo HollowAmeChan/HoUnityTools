@@ -30,6 +30,9 @@ The checks cover:
 - v2 compatibility, v3 ownership uniqueness, invalid Aim rejection;
 - reference-path restoration from a serialized Ho prefab;
 - standard and Ho copy stacks at 0.3 with dynamic parents and object transforms;
+- position-only stacks alongside unknown rotation tracking, preserving external
+  rotation and nonuniform local scale;
+- multi-source Armature preview labels and explicit duplicate-object wording;
 - collinear/sparse binding data with the declared HoFBX Y/X axis convention;
 - repeated import without helper leaks and preservation of manual host content;
 - multi-source weights, per-source offsets, Aim's zero-weight dependencies,

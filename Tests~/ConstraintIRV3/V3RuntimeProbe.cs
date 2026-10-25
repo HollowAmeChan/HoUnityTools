@@ -23,7 +23,7 @@ public class V3RuntimeProbe : MonoBehaviour
     private V3Fixture data;private readonly List<Route> routes=new List<Route>();
     private readonly V3Result result=new V3Result();private int index,frame;private bool ready,started;
     private readonly List<Toy> toys=new List<Toy>();
-    private class Toy {public string backend;public bool sparse;public Transform root,parent,owner,target,a,b;public Vector3 bind;}
+    private class Toy {public string backend;public bool sparse,positionOnly;public Transform root,parent,owner,target,a,b;public Vector3 bind,preservedScale;public Quaternion preservedRotation;}
     private class Route
     {
         public string name;public GameObject rig;public Transform outer;
@@ -61,6 +61,7 @@ public class V3RuntimeProbe : MonoBehaviour
         }
         Apply(0);
         foreach(string backend in new[]{"Standard","HoAux"})foreach(bool sparse in new[]{false,true})toys.Add(CreateToy(backend,sparse));
+        foreach(string backend in new[]{"Standard","HoAux"})toys.Add(CreateToy(backend,false,true));
         ApplyToys(0);
     }
     private Matrix4x4 Fit(Route r)
@@ -110,10 +111,11 @@ public class V3RuntimeProbe : MonoBehaviour
         foreach(var t in toys)
         {
             Vector3 want=Vector3.Lerp(t.parent.TransformPoint(t.bind),t.target.position,.3f);
-            float p=Vector3.Distance(t.owner.position,want),a=Angle(t.owner.rotation,Quaternion.Slerp(t.a.rotation,t.b.rotation,.3f));
-            result.measurements.Add(new V3Measurement {backend=t.backend,sample="toy_"+sample.name,bone=t.sparse?"CopyStackSparse":"CopyStack",timing=timing,positionError=p,angleError=a});
-            float contractAngle=t.backend=="Standard"?Angle(t.owner.rotation,Quaternion.Lerp(t.a.rotation,t.b.rotation,.3f)):a;
+            float p=Vector3.Distance(t.owner.position,want),a=t.positionOnly?Angle(t.owner.localRotation,t.preservedRotation):Angle(t.owner.rotation,Quaternion.Slerp(t.a.rotation,t.b.rotation,.3f));
+            result.measurements.Add(new V3Measurement {backend=t.backend,sample="toy_"+sample.name,bone=t.positionOnly?"PositionKeepsRotationScale":t.sparse?"CopyStackSparse":"CopyStack",timing=timing,positionError=p,angleError=a});
+            float contractAngle=t.backend=="Standard"&&!t.positionOnly?Angle(t.owner.rotation,Quaternion.Lerp(t.a.rotation,t.b.rotation,.3f)):a;
             if(p>.00003f||contractAngle>.03f)throw new Exception(t.backend+" copy stack drift: "+sample.name+" p="+p+" contractAngle="+contractAngle);
+            if(t.positionOnly&&Vector3.Distance(t.owner.localScale,t.preservedScale)>1e-6f)throw new Exception("Position-only import overwrote scale");
         }
         foreach(var r in routes)
         {
@@ -128,9 +130,9 @@ public class V3RuntimeProbe : MonoBehaviour
             if(ho!=null&&sample.name!="nonuniform_scale"&&!string.IsNullOrEmpty(ho.LastDirectError))throw new Exception(ho.LastDirectError);
         }
     }
-    private Toy CreateToy(string backend,bool sparse)
+    private Toy CreateToy(string backend,bool sparse,bool positionOnly=false)
     {
-        var t=new Toy {backend=backend,sparse=sparse,root=new GameObject("Toy "+backend+(sparse?" sparse":"")).transform};
+        var t=new Toy {backend=backend,sparse=sparse,positionOnly=positionOnly,root=new GameObject("Toy "+backend+(sparse?" sparse":"")+(positionOnly?" partial":"")).transform};
         t.parent=Child(t.root,"Parent",sparse?Vector3.zero:new Vector3(.1f,.2f,.3f));t.owner=Child(t.parent,"Owner",sparse?Vector3.right*.2f:new Vector3(.2f,.3f,.4f));
         t.owner.localRotation=Quaternion.Euler(15,8,60);t.bind=t.owner.localPosition;
         t.target=Child(t.root,"Target",Vector3.right);t.a=Child(t.root,"A",sparse?Vector3.right*2:Vector3.up);t.b=Child(t.root,"B",sparse?Vector3.right*3:Vector3.forward);
@@ -140,12 +142,17 @@ public class V3RuntimeProbe : MonoBehaviour
         foreach(var tr in new[]{t.parent,t.owner,t.target,t.a,t.b})config.bindingContext.bones.Add(new ConstraintBoneBinding {boneName=tr.name,parentBone=tr.parent==t.root?"":tr.parent.name,restMatrix=Flat(flip*tr.localToWorldMatrix*flip),poseBasis=Flat(Matrix4x4.identity),inheritScale="FULL"});
         foreach(var spec in new[]{Tuple.Create("COPY_LOCATION","Target",.3f),Tuple.Create("COPY_ROTATION","A",1f),Tuple.Create("COPY_ROTATION","B",.3f)})
             config.knownConstraints.Add(new KnownConstraintInfo {ownerBone="Owner",relationType="DIRECT_CONSTRAINT",constraint=new BlenderConstraintInfo {name=spec.Item1+config.knownConstraints.Count,stackIndex=config.knownConstraints.Count,constraintType=spec.Item1,targetObjectName="Toy",targetBoneName=spec.Item2,parameters=new BlenderConstraintParameters {owner_space="WORLD",target_space="WORLD",influence=spec.Item3,use_x=true,use_y=true,use_z=true,mix_mode="REPLACE"},references=new BlenderConstraintReferences()}});
+        if(positionOnly)
+        {
+            config.knownConstraints.RemoveRange(1,2);
+            for(int i=0;i<2;i++)config.unknownConstraints.Add(new UnknownConstraintInfo {ownerBone="Owner",reason="unmarked tracking",constraint=new BlenderConstraintInfo {name="Track"+i,stackIndex=i+1,constraintType=i==0?"DAMPED_TRACK":"LOCKED_TRACK",targetObjectName="Toy",targetBoneName=i==0?"A":"B",parameters=new BlenderConstraintParameters {influence=1,owner_space="WORLD",target_space="WORLD"}}});
+        }
         var type=AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType("Hollow.HoUnityTools.Editor.RigConstraints.HoFbxImportProcessingWindow")).First(x=>x!=null);
         var mode=type.GetNestedType("ConstraintMode",BindingFlags.NonPublic);
         var method=type.GetMethod("ApplyConstraints",BindingFlags.NonPublic|BindingFlags.Static);
         int first=(int)method.Invoke(null,new object[]{new TextAsset(JsonUtility.ToJson(config)),t.root.gameObject,Enum.Parse(mode,backend),t.root});
         int again=(int)method.Invoke(null,new object[]{new TextAsset(JsonUtility.ToJson(config)),t.root.gameObject,Enum.Parse(mode,backend),t.root});
-        if(first!=3||again!=3)throw new Exception("Reimport count mismatch");
+        if(first!=(positionOnly?1:3)||again!=first)throw new Exception("Reimport count mismatch");
         return t;
     }
     private static Transform Child(Transform parent,string name,Vector3 position)
@@ -161,6 +168,12 @@ public class V3RuntimeProbe : MonoBehaviour
             t.target.localPosition=new Vector3(1,.002f*sample,-.001f*sample);
             t.a.localRotation=Quaternion.Euler(sample*.7f,20+sample,-15);
             t.b.localRotation=Quaternion.Euler(-sample*.3f,-40+sample*.2f,25);
+            if(t.positionOnly)
+            {
+                t.preservedRotation=Quaternion.Euler(7+sample,15-sample*.3f,20);
+                t.preservedScale=new Vector3(1.3f,.9f,1.1f);
+                t.owner.localRotation=t.preservedRotation;t.owner.localScale=t.preservedScale;
+            }
         }
     }
     private void Add(Route r,V3Sample sample,string bone,string timing,float pos,float angle)

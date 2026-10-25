@@ -62,9 +62,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     }
                     previous=next;
                 }
-                Position(p,owner,new[]{Source(previous,1)});
-                Rotation(p,owner,new[]{Source(previous,1)});
-                Scale(p,owner,previous);
+                int written=0;
+                foreach(var e in group)
+                {
+                    bool point=e.Type=="ARMATURE"&&group.Count()==1&&p.config.bindingContext.bones.First(b=>b.boneName==e.Owner).positionOnly;
+                    written|=HoAuxRig.DirectWriteChannels(e.Type,point);
+                }
+                if((written&HoAuxRig.DirectPosition)!=0)Position(p,owner,new[]{Source(previous,1)});
+                if((written&HoAuxRig.DirectRotation)!=0)Rotation(p,owner,new[]{Source(previous,1)});
+                if((written&HoAuxRig.DirectScaleChannel)!=0)Scale(p,owner,previous);
                 {
                     var marker=Marker(p,owner.gameObject,ConstraintHostRole.Bone);
                     marker.hasOwnerBindPose=true;marker.bindLocalPosition=local.GetColumn(3);

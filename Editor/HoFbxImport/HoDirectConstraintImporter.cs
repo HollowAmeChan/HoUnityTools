@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -45,6 +46,24 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             foreach(var aim in config.aimBindings)result.Add(new Entry {config=config,aim=aim});
             return result.OrderBy(e=>e.Owner,StringComparer.Ordinal).ThenBy(e=>e.Index).ToList();
         }
+
+        internal static string TargetLabel(Entry e)
+        {
+            if(e.aim!=null)return e.aim.targetBone+"（瞄准） / "+e.aim.upBone+"（上方向）";
+            if(e.Type!="ARMATURE")return e.Target;
+            var targets=e.raw.constraint.references==null?null:e.raw.constraint.references.targets;
+            if(targets==null||targets.Count==0)return "无来源";
+            double total=targets.Where(t=>t!=null&&t.properties!=null&&Finite(t.properties.weight)).Sum(t=>(double)t.properties.weight);
+            return string.Join(" + ",targets.Select(t=>{
+                var p=t==null?null:t.properties;
+                if(p==null)return "无效来源";
+                string weight=p.weight.ToString("G4",CultureInfo.InvariantCulture);
+                string normalized=total>0&&Finite(p.weight)?"（"+(p.weight/total).ToString("P1",CultureInfo.InvariantCulture)+"）":"";
+                return p.subtarget+" × "+weight+normalized;
+            }));
+        }
+
+        internal static IEnumerable<string> ReferencedBones(Entry e){return References(e);}
 
         internal static bool ValidateV3(ConstraintConfig config,out string error)
         {
@@ -143,7 +162,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         internal static string Issue(Entry e,Backend backend)
         {
-            if(e.config.unknownConstraints.Any(x=>x.ownerBone==e.Owner))return "同一 Owner 有 unknown 栈屏障";
+            string barrier=StackBarrier(e);
+            if(barrier!=null)return barrier;
             if(e.config.knownConstraints.Any(x=>x.ownerBone==e.Owner&&x.relationType!="DIRECT_CONSTRAINT"&&x.relationType!="AIM_BINDING"))return "同一 Owner 混合旧 Aux/MCH 与通用栈";
             if(backend==Backend.HoAux)
                 foreach(var legacy in e.config.knownConstraints.Where(k=>k.relationType=="MCH_BINDING"||k.relationType=="AUX_CONSTRAINT"))
@@ -185,6 +205,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return null;
         }
 
+        internal static string StackBarrier(Entry e)
+        {
+            var unknown=e.config.unknownConstraints.Where(x=>x.ownerBone==e.Owner).ToList();
+            if(unknown.Count==0)return null;
+            bool positionOnly=e.config.knownConstraints.Where(x=>x.ownerBone==e.Owner).All(x=>
+                x.relationType=="DIRECT_CONSTRAINT"&&x.constraint.constraintType=="COPY_LOCATION");
+            bool rotationOnlyUnknown=unknown.All(x=>x.constraint.constraintType=="DAMPED_TRACK"||x.constraint.constraintType=="LOCKED_TRACK");
+            return positionOnly&&rotationOnlyUnknown?null:"同一 Owner 有影响当前通道的 unknown 栈屏障";
+        }
+
         internal static Prepared Prepare(ConstraintConfig config,GameObject rig,Transform root,
             Dictionary<string,Transform> map,Backend backend)
         {
@@ -197,7 +227,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 string issue=null;
                 if(!map.TryGetValue(group.Key,out Transform owner)||owner==rig.transform)issue="Owner 缺失／不能驱动 rig-space 本身";
-                if(config.unknownConstraints.Any(x=>x.ownerBone==group.Key))issue="同一 Owner 存在 unknown 栈屏障，保持原顺序前无法完整装配";
+                issue=issue??StackBarrier(group.First());
                 if(config.knownConstraints.Any(x=>x.ownerBone==group.Key&&x.relationType!="DIRECT_CONSTRAINT"&&x.relationType!="AIM_BINDING"))issue="同一 Owner 混合了旧 Aux/MCH 与通用栈，暂不跨语义重排";
                 var binding=config.bindingContext.bones.FirstOrDefault(b=>b.boneName==group.Key);
                 if(binding==null||!Identity(binding.poseBasis)||binding.connected&&group.Any(e=>e.Type=="COPY_LOCATION"||e.Type=="ARMATURE")||binding.inheritScale!="FULL")issue="Owner 需要 FULL 继承和静置输入，位置操作需非连接骨";

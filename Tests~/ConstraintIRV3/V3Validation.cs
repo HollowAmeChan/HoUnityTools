@@ -23,6 +23,15 @@ public static class V3Validation
             var validate=window.GetMethod("TryValidateConstraintConfig",BindingFlags.NonPublic|BindingFlags.Static);
             object[] args={config,null};if(!(bool)validate.Invoke(null,args))throw new Exception("v3 validator: "+args[1]);
             if(HoDirectConstraintImporter.Build(config).Count!=11)throw new Exception("Expected 9 direct + 2 Aim operations");
+            var armEntry=HoDirectConstraintImporter.Build(config).First(e=>e.Type=="ARMATURE");
+            string armLabel=HoDirectConstraintImporter.TargetLabel(armEntry);
+            if(!armLabel.Contains("breast_L")||!armLabel.Contains("breast_R")||!armLabel.Contains("%"))throw new Exception("Armature multi-source preview missing sources/weights");
+            var ambiguityRoot=new GameObject("Ambiguity wording");
+            foreach(string group in new[]{"First","Second"}){var parent=new GameObject(group);parent.transform.SetParent(ambiguityRoot.transform,false);new GameObject("Shared").transform.SetParent(parent.transform,false);}
+            var map=window.GetMethod("BuildTransformMap",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{ambiguityRoot.transform});
+            var wording=(string)window.GetMethod("ResolutionIssue",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{map,"Shared","Target"});
+            if(!wording.Contains("存在复数个对象，无法确定"))throw new Exception("Ambiguity wording mismatch");
+            UnityEngine.Object.DestroyImmediate(ambiguityRoot);
             var legacy=new ConstraintConfig {schema="hotools.rig-constraint-ir",schemaVersion=2,armatureName="Legacy",mchEnabledBones=new System.Collections.Generic.List<string>(),mchBindings=new System.Collections.Generic.List<MchBindingInfo>(),auxBones=new System.Collections.Generic.List<AuxBoneInfo>(),knownConstraints=new System.Collections.Generic.List<KnownConstraintInfo>(),unknownConstraints=new System.Collections.Generic.List<UnknownConstraintInfo>()};
             args=new object[]{legacy,null};if(!(bool)validate.Invoke(null,args))throw new Exception("v2 compatibility broken");
             var bad=JsonUtility.FromJson<ConstraintConfig>(configAsset.text);bad.aimBindings[0].upAxis=bad.aimBindings[0].aimAxis;

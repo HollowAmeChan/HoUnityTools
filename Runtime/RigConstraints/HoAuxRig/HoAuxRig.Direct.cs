@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.RigConstraints
@@ -35,6 +36,14 @@ namespace Hollow.HoUnityTools.RigConstraints
         public IList<DirectOperation> DirectOperations { get { return directOperations; } }
         public string LastDirectError { get; private set; }
 
+        public const int DirectPosition=1, DirectRotation=2, DirectScaleChannel=4, DirectAll=7;
+        public static int DirectWriteChannels(string type,bool positionOnly=false)
+        {
+            if(type=="COPY_LOCATION")return DirectPosition;
+            if(type=="COPY_ROTATION"||type=="AIM")return DirectRotation;
+            return type=="ARMATURE"&&positionOnly?DirectPosition:DirectAll;
+        }
+
         public void SetDirectSpace(Transform value)
         {
             directSpace = value;
@@ -67,13 +76,14 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void RestoreDirectOwners()
         {
-            var seen = new HashSet<Transform>();
-            foreach (DirectOperation op in directOperations)
+            ResolveDirectReferences();
+            foreach (var group in directOperations.Where(op=>op.owner!=null).GroupBy(op=>op.owner))
             {
-                if (op.owner == null || !seen.Add(op.owner)) continue;
-                op.owner.localPosition = op.bindLocalPosition;
-                op.owner.localRotation = op.bindLocalRotation;
-                op.owner.localScale = op.bindLocalScale;
+                var op=group.First();int count=group.Count();
+                int mask=group.Aggregate(0,(channels,item)=>channels|DirectWriteChannels(item.type,item.positionOnly&&count==1));
+                if((mask&DirectPosition)!=0)op.owner.localPosition = op.bindLocalPosition;
+                if((mask&DirectRotation)!=0)op.owner.localRotation = op.bindLocalRotation;
+                if((mask&DirectScaleChannel)!=0)op.owner.localScale = op.bindLocalScale;
             }
         }
 
@@ -104,9 +114,10 @@ namespace Hollow.HoUnityTools.RigConstraints
             Matrix4x4 toWorld = directSpace.localToWorldMatrix;
             foreach (Transform owner in order)
             {
-                var ops = groups[owner]; var first = ops[0];
+                var ops = groups[owner];
                 Matrix4x4 parent = ReadDirect(owner.parent, values);
-                Matrix4x4 current = parent * Matrix4x4.TRS(first.bindLocalPosition, first.bindLocalRotation, first.bindLocalScale);
+                int written=ops.Aggregate(0,(channels,item)=>channels|DirectWriteChannels(item.type,item.positionOnly&&ops.Count==1));
+                Matrix4x4 current = parent * Matrix4x4.TRS(owner.localPosition,owner.localRotation,owner.localScale);
                 bool valid = true;
                 foreach (DirectOperation op in ops)
                 {
@@ -157,12 +168,14 @@ namespace Hollow.HoUnityTools.RigConstraints
                 }
                 if (!valid) { DirectError("Invalid direct operation on " + owner.name); continue; }
                 values[owner] = current;
-                if (ops.Count == 1 && first.type == "ARMATURE" && first.positionOnly)
+                if (written == DirectPosition)
                 { owner.position = toWorld.MultiplyPoint3x4(current.GetColumn(3)); continue; }
                 Matrix4x4 local = parent.inverse * current;
                 if (!TryDirectTrs(local, out Vector3 pos, out Quaternion rot, out Vector3 scale))
                 { DirectError("Non-TRS affine result cannot be written exactly: " + owner.name); continue; }
-                owner.localPosition = pos; owner.localRotation = rot; owner.localScale = scale;
+                if((written&DirectPosition)!=0)owner.localPosition = pos;
+                if((written&DirectRotation)!=0)owner.localRotation = rot;
+                if((written&DirectScaleChannel)!=0)owner.localScale = scale;
             }
         }
 

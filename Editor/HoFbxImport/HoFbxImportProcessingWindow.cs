@@ -519,8 +519,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 if(entry.kind==ConstraintPlanKind.Direct&&previewTransforms!=null)
                 {
                     previewTransforms.TryGetValue(entry.ownerBone,out Transform directOwner);
-                    string sceneIssue=HoDirectConstraintImporter.SceneIssue(directOwner,targetRig);
+                    string sceneIssue=directOwner==null?ResolutionIssue(previewTransforms,entry.ownerBone,"Owner"):HoDirectConstraintImporter.SceneIssue(directOwner,targetRig);
                     if(sceneIssue!=null)description="已识别 / 不支持："+sceneIssue;
+                    var sourceIssues=HoDirectConstraintImporter.ReferencedBones(entry.directEntry)
+                        .Select(name=>ResolutionIssue(previewTransforms,name,"Target")).Where(message=>message!=null).ToArray();
+                    if(sourceIssues.Length>0)description="已识别 / 跳过："+string.Join("；",sourceIssues);
                 }
                 if (entry.kind != ConstraintPlanKind.Unknown && entry.kind != ConstraintPlanKind.Direct &&
                     !(constraintMode == ConstraintMode.HoAux &&
@@ -530,7 +533,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     if (!TryResolveTransform(previewTransforms, entry.ownerBone, out Transform owner) ||
                         !TryResolveTransform(previewTransforms, entry.targetBone, out _))
                     {
-                        description = "跳过：目标骨架缺少或无法唯一定位 Owner/Target";
+                        description = "跳过："+string.Join("；",new[]{
+                            ResolutionIssue(previewTransforms,entry.ownerBone,"Owner"),
+                            ResolutionIssue(previewTransforms,entry.targetBone,"Target")}.Where(message=>message!=null));
                     }
                     else if (constraintMode == ConstraintMode.Standard &&
                              HasUnmanagedStandardConstraint(owner, entry.kind))
@@ -540,7 +545,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 }
                 DrawConstraintPreviewRow(
                     entry.ownerBone,
-                    entry.targetBone,
+                    entry.kind==ConstraintPlanKind.Direct?HoDirectConstraintImporter.TargetLabel(entry.directEntry):entry.targetBone,
                     description,
                     rowIndex);
             }
@@ -585,7 +590,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             string result,
             int index)
         {
-            Rect row = GUILayoutUtility.GetRect(0f, 19f, GUILayout.ExpandWidth(true));
+            float available=Mathf.Max(360f,EditorGUIUtility.currentViewWidth-45f);
+            float relationWidth=Mathf.Clamp(available*.46f,200f,460f);
+            var style=new GUIStyle(EditorStyles.miniLabel){wordWrap=true};
+            string relation=owner+" -> "+target;
+            float height=Mathf.Max(19f,Mathf.Max(style.CalcHeight(new GUIContent(relation),relationWidth-10f),
+                style.CalcHeight(new GUIContent(result),Mathf.Max(140f,available-relationWidth-10f)))+4f);
+            Rect row = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true));
             if ((index & 1) != 0)
             {
                 Color stripe = EditorGUIUtility.isProSkin
@@ -594,10 +605,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 EditorGUI.DrawRect(row, stripe);
             }
 
-            Rect relationRect = new Rect(row.x + 5f, row.y, 215f, row.height);
-            Rect resultRect = new Rect(row.x + 225f, row.y, row.width - 230f, row.height);
-            GUI.Label(relationRect, $"{owner} -> {target}", EditorStyles.miniLabel);
-            GUI.Label(resultRect, new GUIContent(result, result), EditorStyles.miniLabel);
+            Rect relationRect = new Rect(row.x + 5f, row.y+2f, relationWidth-10f, row.height-4f);
+            Rect resultRect = new Rect(row.x + relationWidth, row.y+2f, Mathf.Max(140f,row.width-relationWidth-5f), row.height-4f);
+            GUI.Label(relationRect,new GUIContent(relation,relation),style);
+            GUI.Label(resultRect,new GUIContent(result,result),style);
         }
 
         private static string DescribeConstraintImport(ConstraintPlanEntry entry, ConstraintMode mode)
@@ -2829,8 +2840,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return true;
             }
 
-            Debug.LogWarning(
-                $"HoFBX: 无法解析约束骨骼 {entry.ownerBone} -> {entry.targetBone}，已跳过。");
+            Debug.LogWarning("HoFBX: 已跳过："+string.Join("；",new[]{
+                ResolutionIssue(transformMap,entry.ownerBone,"Owner"),
+                ResolutionIssue(transformMap,entry.targetBone,"Target")}.Where(message=>message!=null)));
             bone = null;
             target = null;
             return false;
@@ -2889,6 +2901,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             transform = null;
             return !string.IsNullOrEmpty(pathOrName) && transformMap.TryGetValue(pathOrName, out transform);
+        }
+
+        private static string ResolutionIssue(Dictionary<string,Transform> map,string name,string role)
+        {
+            if(TryResolveTransform(map,name,out _))return null;
+            bool multiple=!string.IsNullOrEmpty(name)&&map.Values.Where(t=>t!=null&&t.name==name).Distinct().Take(2).Count()>1;
+            return multiple?"存在复数个对象，无法确定 "+role+"："+name:"未找到 "+role+"："+(name??"<空>");
         }
 
         private static bool HasUnmanagedStandardConstraint(
