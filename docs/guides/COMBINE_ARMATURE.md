@@ -37,11 +37,14 @@ Character                         ← 角色根，包含相关动画和组件引
 - 非均匀缩放与旋转组合形成的剪切不能放进单个 Transform 时，用捕获的局部 TRS 链表示参考帧。源骨架根在无需偏移时保留原位；需要偏移时也可以移动到本体对应根下，身份保持不变。
 - 将衣服独有分支接到对应本体骨骼下。仅分支根加 `衣服骨架名__原名` 的命名空间，分支内部结构保持不变；碰撞时追加数字。
 - 重映射角色范围内组件的序列化 Transform / GameObject 引用，包括数组、约束来源和 Renderer.probeAnchor。源骨架根本身保留身份，普通组件对它的引用不改；蒙皮根引用按骨骼映射处理。
+- HoAuxRig 另外迁移约束语义数据：求值空间、Armature 逆绑定矩阵、父坐标系发生变化的绑定局部姿态，以及分支改名／迁移后的引用恢复路径。HoAux 的骨架空间引用可以指向合并后的对应根，不受普通组件保留源根身份的规则限制；保持规则数量和已捕获的绑定，不把当前显示姿态重新烘焙为绑定。
 - 骨架子树之外的网格、衣服根、开关节点保持原父级与名字。
 
 **衣服骨架子树是可重组区域。** 匹配的共享骨骼上仅允许 Transform 和根上的 HoCombineArmature；网格、Animator、开关动画等放在外面。专用分支上可以有骨骼附属组件，但不能有 Renderer/Animator。
 
 本工具不包含 MA 的动画路径重写和 Active 状态传播系统。检测到已绑定 AnimatorController / Legacy Animation 中有轨道指向衣服骨架子树，会拒绝处理；即使是专用骨骼轨道，也需要先移出这种使用方式。未挂到 Animator 的孤立动画资产、Timeline、自定义字符串路径、外部 ScriptableObject 内部数据、运行时实例化的对象引用不在自动修复范围内。
+
+HoAuxRig 的保存路径属于上面专门处理的绑定数据。其他携带自定义绑定矩阵／路径的组件，可以实现独立 Runtime 程序集中的 `IHoArmatureMergeParticipant`：在 `PrepareArmatureMerge` 中捕获转换所需数据，返回层级迁移与对象引用重映射之后执行的回调。只有普通对象引用的组件继续使用通用重映射。
 
 关闭 Outfit_A 可以隐藏其子网格，但合并后移入本体的专用骨骼和物理组件不会自动随 Outfit_A 一起停用。若需要暂停其物理模拟，应在换装配置中显式控制对应组件。不要用衣服骨架根本身作为开关。
 
@@ -96,6 +99,8 @@ GameObject baked = HoCombineArmatureProcessor.BakeCopy(sourceCharacter);
 2026-10-24 验证：Unity 6000.3.15f1（批处理）和 2021.3.45f2（普通编辑器自动执行）各通过 47 项检查；两版均实际进入/退出 Play，后一个约束测试关闭 Domain Reload、保持 Scene Reload。整包 Runtime / Editor 另通过离线编译。Warudo FastBuild 的处理入口已接入，并验证 LoadPrefabContents → 处理 → 保存/重载这段公共路径；尚未对用户角色执行完整 UMod 打包与 Warudo 运行验收。
 
 2026-10-25 更新：组件显示名统一为 `Ho CombineArmature`，C# 类型为 `HoCombineArmature`，保留原 MonoScript GUID 并声明旧类型迁移。两版 Unity 各通过 58 项检查，增加不同绑定姿势、原局部坐标系、剪切/镜像缩放、偏移约束和旧类型序列化迁移验证。
+
+2026-10-26 HoAux 兼容修复：旧处理器只改对象引用，保留在原处的衣服根或 FBX 外层仍可能被作为通用约束空间，根运动会在 Armature 点上重复计算，原路径也随分支改名失效。新增 [HoAux 合并对照测试](../../Tests~/HoAuxMerge/README.md)，600 次检查覆盖根运动、整体缩放、Local Fan、旧 Parent、Armature、Copy Location、Aim、偏移根以及 Prefab 保存／路径恢复；旧处理器在同样的数值用例中失败 96 项。修复后独立 CombineArmature 的 58 项检查与 IR 的 8160 次测量通过。完整泳装 110 条规则在同绑定参考骨架合并及实际巫女服合入泳装主骨架两种场景中，各通过 2120 次姿态比较，均经过自动进入 Play 的场景处理；本轮没有执行 Warudo 客户端或 VRC 上传验收。新增迁移代码另通过 Unity 2021.3.18f1 引用程序集的 API 编译检查。
 
 ### WTD 两套衣服的配置实例
 

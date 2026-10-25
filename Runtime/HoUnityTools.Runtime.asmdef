@@ -2,7 +2,8 @@
   "name": "HoUnityTools.Runtime",
   "rootNamespace": "Hollow.HoUnityTools",
   "references": [
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "HoUnityTools.Armatures.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

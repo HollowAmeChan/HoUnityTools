@@ -355,6 +355,14 @@ namespace Hollow.HoUnityTools.Editor.Armatures
             // the outfit bone, under a constant reference frame attached to the matching body
             // bone. Keeping the outfit's original local TRS also preserves local-space consumers.
             var output = new Dictionary<Transform, Transform>(plan.map);
+            foreach (OffsetBone offset in plan.offsets) output[offset.bone] = offset.bone;
+            var finishBindings = new List<Action>();
+            foreach (Component component in plan.scope.GetComponentsInChildren<Component>(true))
+                if (component is IHoArmatureMergeParticipant participant)
+                {
+                    Action finish = participant.PrepareArmatureMerge(output);
+                    if (finish != null) finishBindings.Add(() => { finish(); if (component != null) EditorUtility.SetDirty(component); });
+                }
             foreach (OffsetBone offset in plan.offsets)
             {
                 Transform frame = CreateOffsetFrame(offset, plan.namePrefix);
@@ -403,6 +411,7 @@ namespace Hollow.HoUnityTools.Editor.Armatures
             // Descendants first. Moved unique branches have already left the deleted subtree.
             for (int i = plan.matched.Count - 1; i > 0; i--)
                 if (!plan.retained.Contains(plan.matched[i])) Object.DestroyImmediate(plan.matched[i].gameObject);
+            foreach (Action finish in finishBindings) finish();
         }
 
         private static List<LocalPose> CapturePath(Transform bone, Transform scope)

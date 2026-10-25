@@ -39,6 +39,8 @@ HoAuxRig 继续保留旧层与更新模式，v3 通用栈另存于同一组件�
 
 HoAuxRig Inspector 的总数同时包含分层与通用操作，并单独展示 Copy Location、Copy Rotation、Armature、Aim 的类型分布。展开“查看通用约束绑定”可查看 Owner、Target、每个 Armature 来源及权重、Aim Up 与轴；运行时通用栈错误也在该区域显示。分层数量不包含通用栈，例如 99 条分层 + 11 条通用的总数为 110，仍可只有 3 个旧层。
 
+与 [Ho CombineArmature](COMBINE_ARMATURE.md) 直接合并配合时，HoAuxRig 参与合并前后迁移，更新约束空间、逆绑定及恢复路径；仅重映射 Transform 引用不足以保持 Armature 点的根运动结果。请在源角色上重新进入 Play 或重新生成装配副本，以执行更新后的迁移；旧的已烘焙产物不会自动恢复被删除的层级。
+
 ## 验证
 
 `Tests~/ConstraintIRV3/Run.ps1` 新建隔离 Unity 工程。可同时传入 `-FullConfig` 和 `-FullModel`，从配置及 FBX 的副本验证完整 WTD 导入的 99 + 11 = 110 及 Prefab 序列化；源资产不写入。覆盖 v2/v3 验证、Aim 标记、Prefab 引用恢复、顺序复制、动态父级、稀疏骨架、重复导入、VRC 多源／overflow 序列化、手工内容保护和装配异常回滚。

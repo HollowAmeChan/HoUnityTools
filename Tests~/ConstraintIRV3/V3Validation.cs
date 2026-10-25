@@ -43,6 +43,8 @@ public static class V3Validation
             StructuralChecks(configAsset,config,window);
             CheckHoInspector(window);
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
+            V3HoMergeSetup.Prepare((asset,model,host)=>(int)Apply(window,asset,model,"HoAux",host));
+            V3HoMergeSetup.Prepare((asset,model,host)=>(int)Apply(window,asset,model,"HoAux",host),true);
             var go=new GameObject("IR v3 production pipeline parity");var runner=go.AddComponent<V3RuntimeProbe>();
             runner.model=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Fixture/ChestAddon.fbx");
             runner.fixture=AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Fixture/samples.json");runner.ir=configAsset;

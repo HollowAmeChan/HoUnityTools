@@ -4,7 +4,8 @@ param(
     [string]$Project='',
     [switch]$TestVrcApiShim,
     [string]$FullConfig='',
-    [string]$FullModel=''
+    [string]$FullModel='',
+    [string]$FullOutfit=''
 )
 $ErrorActionPreference='Stop'
 $taskRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -13,15 +14,20 @@ $Project=[IO.Path]::GetFullPath($Project)
 if(Test-Path -LiteralPath $Project){throw 'Use a new isolated validation project.'}
 New-Item -ItemType Directory -Force -Path "$Project\Assets\Runtime","$Project\Assets\Editor","$Project\Assets\Fixture","$Project\Packages","$Project\ProjectSettings"|Out-Null
 Copy-Item -LiteralPath "$taskRepo\Runtime\RigConstraints","$taskRepo\Runtime\BoneRenderer" -Destination "$Project\Assets\Runtime" -Recurse
+Copy-Item -LiteralPath "$taskRepo\Runtime\CombineArmature" -Destination "$Project\Assets\Runtime" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Runtime\HoEditorOnly.cs" -Destination "$Project\Assets\Runtime"
 Copy-Item -LiteralPath "$taskRepo\Editor\HoFbxImport","$taskRepo\Editor\HoAuxRig" -Destination "$Project\Assets\Editor" -Recurse
+Copy-Item -LiteralPath "$taskRepo\Editor\CombineArmature" -Destination "$Project\Assets\Editor" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Editor\Utils\HoEditorStyles.cs","$PSScriptRoot\V3Validation.cs" -Destination "$Project\Assets\Editor"
 Copy-Item -LiteralPath "$PSScriptRoot\V3RuntimeProbe.cs" -Destination "$Project\Assets"
+Copy-Item -LiteralPath "$PSScriptRoot\V3HoMergeProbe.cs" -Destination "$Project\Assets"
+Copy-Item -LiteralPath "$PSScriptRoot\V3HoMergeSetup.cs" -Destination "$Project\Assets\Editor"
 foreach($taskName in @('ChestAddon.fbx','samples.json','original_constraint_ir.json')){Copy-Item -LiteralPath (Join-Path $Fixture $taskName) -Destination "$Project\Assets\Fixture"}
 if($FullConfig -or $FullModel){
     if(-not $FullConfig -or -not $FullModel){throw 'FullConfig and FullModel must be provided together.'}
     Copy-Item -LiteralPath $FullConfig -Destination "$Project\Assets\Fixture\full_ir.json"
     Copy-Item -LiteralPath $FullModel -Destination "$Project\Assets\Fixture\FullModel.fbx"
+    if($FullOutfit){Copy-Item -LiteralPath $FullOutfit -Destination "$Project\Assets\Fixture\FullOutfit.fbx"}
 }
 if($TestVrcApiShim){
     New-Item -ItemType Directory -Force -Path "$Project\Assets\VrcApiShim"|Out-Null

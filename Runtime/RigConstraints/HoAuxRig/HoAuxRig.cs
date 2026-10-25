@@ -20,7 +20,7 @@ namespace Hollow.HoUnityTools.RigConstraints
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32000)]
     [AddComponentMenu("")]
-    public sealed partial class HoAuxRig : MonoBehaviour
+    public sealed partial class HoAuxRig : MonoBehaviour, Hollow.HoUnityTools.Armatures.IHoArmatureMergeParticipant
     {
         public enum OperationType
         {

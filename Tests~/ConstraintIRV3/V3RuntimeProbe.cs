@@ -194,6 +194,8 @@ public class V3RuntimeProbe : MonoBehaviour
     private void Fail(Exception e){result.failures.Add(e.ToString());Debug.LogException(e);Finish();}
     private void Finish()
     {
+        foreach(var merge in FindObjectsOfType<V3HoMergeProbe>())
+            if(!merge.Completed||merge.Failure!=null)result.failures.Add(merge.name+": "+(merge.Failure??"probe did not finish"));
         File.WriteAllText(outputPath,JsonUtility.ToJson(result,true));Debug.Log("IR_V3_RUNTIME_DONE "+result.measurements.Count+" failures="+result.failures.Count);
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.Exit(result.failures.Count==0?0:1);
