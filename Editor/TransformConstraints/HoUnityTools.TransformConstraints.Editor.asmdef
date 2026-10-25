@@ -1,0 +1,8 @@
+{
+  "name": "HoUnityTools.TransformConstraints.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.Editor.TransformConstraints",
+  "references": ["HoUnityTools.TransformConstraints.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

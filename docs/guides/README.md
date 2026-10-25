@@ -14,6 +14,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
+| [外置 Transform 约束](TRANSFORM_CONSTRAINTS.md) | 显式 Target + 多 Sources 的 Position／Rotation／Scale／Parent／Aim，支持偏移捕获与手动添加 |
 | [跟随约束](FOLLOW_CONSTRAINT.md) | 锚点坐标系、位置/旋转跟随和更新时机 |
 | [摆锤约束](PENDULUM_CONSTRAINT.md) | 摆锤与液面参数、材质契约和验证记录 |
 | [眨眼约束](BLINK_CONSTRAINT.md) | 自动眨眼、果冻眼及形态键输出的合并方式 |

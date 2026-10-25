@@ -1,0 +1,7 @@
+{
+  "name": "HoUnityTools.TransformConstraints.Runtime",
+  "rootNamespace": "Hollow.HoUnityTools.TransformConstraints",
+  "references": [],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
