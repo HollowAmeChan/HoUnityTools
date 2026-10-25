@@ -6,7 +6,7 @@
 
 | 想做什么 | 从这里开始 |
 | --- | --- |
-| 给角色安装独立衣服、合并或约束骨架 | [CombineArmature](guides/COMBINE_ARMATURE.md) |
+| 给角色安装独立衣服、合并或约束骨架 | [Ho CombineArmature](guides/COMBINE_ARMATURE.md) |
 | 使用跟随、摆锤、眨眼、注视约束 | [功能指南：角色约束](guides/README.md#角色约束) |
 | 预览动画、调整播放速度、截图或离线录制 | [功能指南：动画与录制](guides/README.md#动画与录制) |
 | 把角色或面部控制器导出给 Warudo | [Warudo FastBuild](guides/WARUDO_FAST_BUILD.md) |

@@ -24,7 +24,7 @@ public static class CombineArmatureValidation
         public GameObject root;
         public Transform rig, hips, chest, outfit, source, sourceHips, sourceChest, skirt, tip;
         public SkinnedMeshRenderer renderer;
-        public CombineArmature config;
+        public HoCombineArmature config;
         public CombineArmatureTestReferences references;
         public Mesh mesh;
         public void Dispose()
@@ -48,10 +48,12 @@ public static class CombineArmatureValidation
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             TestMergeAndSkin();
+            TestOffsetBindFrames();
             TestMatchingAndFailures();
             TestAnimations();
             TestMultipleOutfits();
             TestPrefabCopy();
+            TestLegacySerialization();
             TestConstraintStructure();
             PreparePlayScene(true);
             EditorSettings.enterPlayModeOptionsEnabled = false;
@@ -71,8 +73,8 @@ public static class CombineArmatureValidation
         {
             PreparePlayScene(false);
             GameObject root = GameObject.Find("PlayCharacter");
-            root.GetComponentInChildren<CombineArmature>(true).mode = CombineArmatureMode.Constraints;
-            CombineArmatureProcessor.ProcessHierarchy(root);
+            root.GetComponentInChildren<HoCombineArmature>(true).mode = HoCombineArmatureMode.Constraints;
+            HoCombineArmatureProcessor.ProcessHierarchy(root);
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
             EditorSettings.enterPlayModeOptionsEnabled = false;
             SessionState.SetInt(StageKey, 3);
@@ -92,7 +94,7 @@ public static class CombineArmatureValidation
             using (var after = new MeshScope())
             {
                 f.renderer.BakeMesh(before.mesh);
-                var report = CombineArmatureProcessor.ProcessHierarchy(f.root);
+                var report = HoCombineArmatureProcessor.ProcessHierarchy(f.root);
                 f.renderer.BakeMesh(after.mesh);
                 Check(report.IsValid && report.matchedBones == 3, "merge maps root/hips/chest");
                 Check(f.sourceHips == null && f.sourceChest == null, "duplicate bones removed");
@@ -112,14 +114,14 @@ public static class CombineArmatureValidation
                 f.renderer.BakeMesh(after.mesh);
                 Check(Vector3.Distance(after.mesh.vertices[0], before.mesh.vertices[0]) > 0.1f,
                     "merged clothing follows animated target bone");
-                Check(f.root.GetComponentsInChildren<CombineArmature>(true).Length == 0, "authoring marker stripped");
-                Check(CombineArmatureProcessor.ProcessHierarchy(f.root).matchedBones == 0, "processing is idempotent");
+                Check(f.root.GetComponentsInChildren<HoCombineArmature>(true).Length == 0, "authoring marker stripped");
+                Check(HoCombineArmatureProcessor.ProcessHierarchy(f.root).matchedBones == 0, "processing is idempotent");
             }
         }
         using (Fixture f = Create())
         {
             f.outfit.gameObject.SetActive(false);
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(!f.outfit.gameObject.activeSelf && f.sourceChest == null, "inactive outfit is processed and remains hidden");
         }
     }
@@ -135,13 +137,15 @@ public static class CombineArmatureValidation
             // Unmatched names that don't have the prefix are independent unique branches.
             Child(f.sourceHips, "RibbonOne", Vector3.zero);
             Child(f.sourceHips, "RibbonTwo", Vector3.zero);
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(f.renderer.bones[0] == f.chest, "prefix/suffix matching and unmatched branches");
         }
         using (Fixture f = Create())
         {
             f.sourceChest.localPosition += Vector3.right;
-            ExpectFailure(f, "mismatched bind pose fails atomically");
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
+            Check(f.sourceChest != null && f.renderer.bones[0] == f.sourceChest,
+                "different bind poses retain offset bones instead of rejecting the outfit");
         }
         using (Fixture f = Create())
         {
@@ -163,7 +167,7 @@ public static class CombineArmatureValidation
             f.sourceChest.name = "UnmatchedChest";
             // Matching is relative to the matched parent, not a global name lookup.
             Child(f.rig, "UnmatchedChest", f.sourceChest.position);
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(f.renderer.bones[0] == f.sourceChest && f.sourceChest != null,
                 "same name under wrong parent does not match");
         }
@@ -177,17 +181,71 @@ public static class CombineArmatureValidation
         using (Fixture f = Create())
         {
             f.config.enabled = false;
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
-            Check(f.sourceChest != null && f.root.GetComponentInChildren<CombineArmature>(true) == null,
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
+            Check(f.sourceChest != null && f.root.GetComponentInChildren<HoCombineArmature>(true) == null,
                 "disabled marker stripped without merging");
         }
         using (Fixture f = Create())
         {
             f.config.processAutomatically = false;
-            CombineArmatureProcessor.ProcessHierarchy(f.root, true);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root, true);
             Check(f.sourceChest != null && f.config != null, "automatic processing respects manual-only flag");
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(f.sourceChest == null && f.config == null, "explicit export processes manual-only configuration");
+        }
+    }
+
+    private static void TestOffsetBindFrames()
+    {
+        using (Fixture f = Create())
+        using (var before = new MeshScope())
+        using (var after = new MeshScope())
+        {
+            f.sourceChest.localPosition += new Vector3(0.12f, 0.03f, -0.02f);
+            f.sourceChest.localRotation = Quaternion.Euler(13, -21, 7);
+            f.sourceChest.localScale = new Vector3(1.1f, 0.9f, 1.05f);
+            f.skirt.SetParent(f.sourceChest, true);
+            Vector3 position = f.sourceChest.localPosition, scale = f.sourceChest.localScale;
+            Quaternion rotation = f.sourceChest.localRotation;
+            Matrix4x4 sourceBind = f.sourceChest.localToWorldMatrix;
+            Matrix4x4 targetBind = f.chest.localToWorldMatrix;
+            Mesh originalMesh = f.renderer.sharedMesh;
+            f.renderer.BakeMesh(before.mesh);
+            var report = HoCombineArmatureProcessor.ProcessHierarchy(f.root);
+            f.renderer.BakeMesh(after.mesh);
+            Check(report.offsetBones == 1, "different source bind frame is retained under the matching body bone");
+            Check(VertexError(before.mesh, after.mesh) < 0.0001f, "offset merge preserves baked skin vertices");
+            Check(f.renderer.sharedMesh == originalMesh, "offset merge does not modify or clone mesh assets");
+            Check(f.sourceChest.localPosition == position && f.sourceChest.localScale == scale &&
+                Quaternion.Angle(f.sourceChest.localRotation, rotation) < 0.01f,
+                "offset merge preserves original local TRS for local-space rig consumers");
+            Check(f.skirt.parent == f.sourceChest, "unique branch retains its offset source parent");
+            Check(f.references.bone == f.sourceChest && f.renderer.probeAnchor == f.sourceChest,
+                "serialized/probe references retain the offset coordinate frame");
+            f.chest.localRotation = Quaternion.Euler(-11, 28, 6);
+            f.chest.localPosition += Vector3.right * 0.15f;
+            Matrix4x4 expected = f.chest.localToWorldMatrix * targetBind.inverse * sourceBind;
+            Check(MatrixError(f.sourceChest.localToWorldMatrix, expected) < 0.0001f,
+                "retained bind frame follows body animation with the original offset");
+        }
+        using (Fixture f = Create())
+        using (var before = new MeshScope())
+        using (var after = new MeshScope())
+        {
+            f.rig.localScale = new Vector3(0.8f, 1.3f, 1.1f);
+            f.hips.localRotation = Quaternion.Euler(25, -5, 17);
+            f.source.localRotation = Quaternion.Euler(17, -8, 3);
+            f.source.localScale = new Vector3(-1.1f, 0.8f, 1.3f);
+            f.sourceHips.localRotation = Quaternion.Euler(-8, 11, 30);
+            Matrix4x4 sourceChest = f.sourceChest.localToWorldMatrix;
+            f.renderer.BakeMesh(before.mesh);
+            var report = HoCombineArmatureProcessor.ProcessHierarchy(f.root);
+            f.renderer.BakeMesh(after.mesh);
+            Check(report.offsetBones == 3 && f.source != null && f.sourceChest != null,
+                "mirrored and non-uniform bind frames remain supported");
+            Check(MatrixError(f.sourceChest.localToWorldMatrix, sourceChest) < 0.0002f &&
+                VertexError(before.mesh, after.mesh) < 0.0002f,
+                "factored bind frame preserves shear without changing skin shape");
         }
     }
 
@@ -204,7 +262,7 @@ public static class CombineArmatureValidation
             AssetDatabase.AddObjectToAsset(clip, controller);
             controller.AddMotion(clip);
             animator.runtimeAnimatorController = controller;
-            Check(CombineArmatureProcessor.Validate(f.config).IsValid, "mesh toggle animation accepted");
+            Check(HoCombineArmatureProcessor.Validate(f.config).IsValid, "mesh toggle animation accepted");
             AnimationUtility.SetEditorCurve(clip,
                 EditorCurveBinding.FloatCurve("Outfits/A/Outfits_A/Hips/Chest", typeof(Transform), "m_LocalPosition.x"),
                 AnimationCurve.Constant(0, 1, 0));
@@ -216,7 +274,7 @@ public static class CombineArmatureValidation
             AnimationUtility.SetEditorCurve(clip,
                 EditorCurveBinding.FloatCurve("Rig/Hips/Chest", typeof(Transform), "m_LocalScale.x"),
                 AnimationCurve.Linear(0, 1, 1, 1.2f));
-            f.config.mode = CombineArmatureMode.Constraints;
+            f.config.mode = HoCombineArmatureMode.Constraints;
             ExpectFailure(f, "constraint backend rejects unsupported target bone scale animation");
         }
         using (Fixture f = Create())
@@ -231,7 +289,7 @@ public static class CombineArmatureValidation
             AssetDatabase.AddObjectToAsset(clip, controller);
             controller.AddMotion(clip);
             animator.runtimeAnimatorController = controller;
-            f.config.mode = CombineArmatureMode.Constraints;
+            f.config.mode = HoCombineArmatureMode.Constraints;
             ExpectFailure(f, "scale validation includes body-only Animator outside outfit subtree");
         }
     }
@@ -250,7 +308,7 @@ public static class CombineArmatureValidation
             Object.DestroyImmediate(second.root);
             second.root = null;
             f.outfit.gameObject.SetActive(false);
-            CombineArmatureProcessor.ProcessHierarchy(f.root);
+            HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(f.skirt != null && second.skirt != null && f.skirt != second.skirt &&
                 f.skirt.parent == f.hips && second.skirt.parent == f.hips && f.skirt.name != second.skirt.name,
                 "two outfits retain independent namespaced special bones");
@@ -261,7 +319,7 @@ public static class CombineArmatureValidation
         }
         using (Fixture f = Create())
         {
-            var second = Child(f.root.transform, "BadOutfit", Vector3.zero).gameObject.AddComponent<CombineArmature>();
+            var second = Child(f.root.transform, "BadOutfit", Vector3.zero).gameObject.AddComponent<HoCombineArmature>();
             second.targetArmature = f.rig;
             second.characterRoot = f.root.transform;
             ExpectFailure(f, "all outfits validated before first mutation");
@@ -278,9 +336,9 @@ public static class CombineArmatureValidation
             GameObject baked = null;
             try
             {
-                baked = CombineArmatureProcessor.BakeCopy(instance);
+                baked = HoCombineArmatureProcessor.BakeCopy(instance);
                 Check(instance.transform.Find("Outfits/A/Outfits_A/Hips/Chest") != null &&
-                    instance.GetComponentInChildren<CombineArmature>(true) != null,
+                    instance.GetComponentInChildren<HoCombineArmature>(true) != null,
                     "bake copy leaves prefab instance unchanged");
                 Check(prefab.transform.Find("Outfits/A/Outfits_A/Hips/Chest") != null,
                     "source prefab hierarchy unchanged");
@@ -291,7 +349,7 @@ public static class CombineArmatureValidation
                 GameObject loaded = PrefabUtility.LoadPrefabContents("Assets/Baked.prefab");
                 try
                 {
-                    Check(loaded.GetComponentInChildren<CombineArmature>(true) == null &&
+                    Check(loaded.GetComponentInChildren<HoCombineArmature>(true) == null &&
                         loaded.GetComponentInChildren<SkinnedMeshRenderer>(true).bones.All(b => b != null),
                         "processed prefab reload has no dangling skin references or authoring component");
                 }
@@ -300,9 +358,9 @@ public static class CombineArmatureValidation
                 GameObject contents = PrefabUtility.LoadPrefabContents("Assets/Source.prefab");
                 try
                 {
-                    CombineArmatureProcessor.ProcessHierarchy(contents);
+                    HoCombineArmatureProcessor.ProcessHierarchy(contents);
                     PrefabUtility.SaveAsPrefabAsset(contents, "Assets/Exported.prefab");
-                    Check(contents.GetComponentInChildren<CombineArmature>(true) == null,
+                    Check(contents.GetComponentInChildren<HoCombineArmature>(true) == null,
                         "exporter can process isolated LoadPrefabContents copy");
                 }
                 finally { PrefabUtility.UnloadPrefabContents(contents); }
@@ -321,13 +379,41 @@ public static class CombineArmatureValidation
     {
         using (Fixture f = Create())
         {
-            f.config.mode = CombineArmatureMode.Constraints;
-            var report = CombineArmatureProcessor.ProcessHierarchy(f.root);
+            f.config.mode = HoCombineArmatureMode.Constraints;
+            var report = HoCombineArmatureProcessor.ProcessHierarchy(f.root);
             Check(f.sourceChest.parent == f.sourceHips && f.skirt.parent == f.sourceHips &&
                 f.renderer.bones[0] == f.sourceChest, "constraint mode preserves hierarchy and skin references");
             Check(report.generatedConstraints == 3 && f.sourceChest.GetComponent<ParentConstraint>().locked &&
                 f.sourceChest.GetComponent<ScaleConstraint>() == null,
                 "constraint mode creates configured native parent constraints without scale writers");
+        }
+    }
+
+    private static void TestLegacySerialization()
+    {
+        using (Fixture f = Create())
+        {
+            AssetDatabase.CreateAsset(f.mesh, "Assets/LegacyMesh.asset");
+            f.config.enabled = false;
+            f.config.bonePrefix = "legacy_";
+            f.config.boneSuffix = "_suffix";
+            f.config.mode = HoCombineArmatureMode.Constraints;
+            PrefabUtility.SaveAsPrefabAsset(f.root, "Assets/LegacySource.prefab");
+            string yaml = File.ReadAllText("Assets/LegacySource.prefab");
+            int script = yaml.IndexOf("guid: e728499dd926419ca259bb6d7519c346", StringComparison.Ordinal);
+            int field = yaml.IndexOf("  m_EditorClassIdentifier:", script, StringComparison.Ordinal);
+            int end = yaml.IndexOf('\n', field);
+            yaml = yaml.Substring(0, field) + "  m_EditorClassIdentifier: HoUnityTools.Armatures.Runtime::Hollow.HoUnityTools.Armatures.CombineArmature\n" + yaml.Substring(end + 1);
+            File.WriteAllText("Assets/Legacy.prefab", yaml);
+            AssetDatabase.ImportAsset("Assets/Legacy.prefab", ImportAssetOptions.ForceSynchronousImport);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Legacy.prefab");
+            var migrated = prefab.GetComponentInChildren<HoCombineArmature>(true);
+            Check(migrated != null && !migrated.enabled && migrated.bonePrefix == "legacy_" &&
+                migrated.boneSuffix == "_suffix" && migrated.mode == HoCombineArmatureMode.Constraints &&
+                migrated.targetArmature != null && migrated.characterRoot == prefab.transform,
+                "legacy component class identifier retains settings and references after Ho rename");
+            Check(AssetDatabase.GUIDToAssetPath("e728499dd926419ca259bb6d7519c346").EndsWith("/HoCombineArmature.cs", StringComparison.Ordinal),
+                "component rename preserves the existing MonoScript GUID");
         }
     }
 
@@ -339,6 +425,14 @@ public static class CombineArmatureValidation
         AssetDatabase.CreateAsset(f.mesh, prefix + "Mesh.asset");
         f.root.name = "PlayCharacter";
         f.root.transform.localScale = Vector3.one * 1.3f;
+        if (!animateScale)
+        {
+            f.sourceChest.localPosition += new Vector3(0.12f, -0.03f, 0.02f);
+            f.sourceChest.localRotation = Quaternion.Euler(-3, 14, 5);
+            f.sourceChest.localScale = new Vector3(1.1f, 0.9f, 1.05f);
+            f.references.useBindOffset = true;
+            f.references.bindOffset = f.chest.worldToLocalMatrix * f.sourceChest.localToWorldMatrix;
+        }
         var animator = f.root.AddComponent<Animator>();
         animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         var avatar = AvatarBuilder.BuildGenericAvatar(f.root, "Rig");
@@ -377,7 +471,7 @@ public static class CombineArmatureValidation
             {
                 GameObject root = GameObject.Find("PlayCharacter");
                 if (root == null || Time.frameCount < 12) return;
-                Check(root.GetComponentInChildren<CombineArmature>(true) == null &&
+                Check(root.GetComponentInChildren<HoCombineArmature>(true) == null &&
                     root.transform.Find("Outfits/A/Outfits_A/Hips") == null,
                     "real Play entry automatically merges scene copy");
                 Check(root.GetComponentInChildren<SkinnedMeshRenderer>(true).bones[0] == root.transform.Find("Rig/Hips/Chest"),
@@ -389,13 +483,13 @@ public static class CombineArmatureValidation
             {
                 GameObject root = GameObject.Find("PlayCharacter");
                 Check(root.transform.Find("Outfits/A/Outfits_A/Hips/Chest") != null &&
-                    root.GetComponentInChildren<CombineArmature>(true) != null,
+                    root.GetComponentInChildren<HoCombineArmature>(true) != null,
                     "exiting Play restores original hierarchy and marker");
                 // Independent fixtures/controllers prevent Write Defaults or native controller
                 // caches from carrying animated scale from the previous Play session.
                 PreparePlayScene(false);
                 root = GameObject.Find("PlayCharacter");
-                root.GetComponentInChildren<CombineArmature>(true).mode = CombineArmatureMode.Constraints;
+                root.GetComponentInChildren<HoCombineArmature>(true).mode = HoCombineArmatureMode.Constraints;
                 EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
                 // Also exercise Domain Reload disabled while retaining safe Scene Reload.
                 EditorSettings.enterPlayModeOptionsEnabled = true;
@@ -410,7 +504,7 @@ public static class CombineArmatureValidation
                 if (root == null) return;
                 var probe = root.GetComponent<CombineArmatureTestReferences>();
                 if (probe.samples < 30) return;
-                Check(root.GetComponentInChildren<CombineArmature>(true) == null &&
+                Check(root.GetComponentInChildren<HoCombineArmature>(true) == null &&
                     root.transform.Find("Outfits/A/Outfits_A/Hips/Chest") != null,
                     "real Play constraints preserve original skeleton paths");
                 Check(probe.maxPositionError < 0.001f && probe.maxRotationError < 0.05f && probe.maxScaleError < 0.001f,
@@ -427,7 +521,7 @@ public static class CombineArmatureValidation
                         "prebaked constraints remain intact on returning to edit mode");
                 else
                     Check(root.GetComponentInChildren<ParentConstraint>(true) == null &&
-                        root.GetComponentInChildren<CombineArmature>(true) != null,
+                        root.GetComponentInChildren<HoCombineArmature>(true) != null,
                         "exiting constraints Play removes generated constraints and restores authoring");
                 EditorSettings.enterPlayModeOptionsEnabled = false;
                 SessionState.SetInt(StageKey, 0);
@@ -473,7 +567,7 @@ public static class CombineArmatureValidation
         f.references.boneObject = f.sourceHips.gameObject;
         f.references.bones = new[] { f.sourceChest, f.tip };
         f.references.sourceRoot = f.source;
-        f.config = f.source.gameObject.AddComponent<CombineArmature>();
+        f.config = f.source.gameObject.AddComponent<HoCombineArmature>();
         f.config.targetArmature = f.rig;
         f.config.characterRoot = f.root.transform;
         return f;
@@ -492,7 +586,7 @@ public static class CombineArmatureValidation
     private static void ExpectFailure(Fixture f, string name)
     {
         bool rejected = false;
-        try { CombineArmatureProcessor.ProcessHierarchy(f.root); }
+        try { HoCombineArmatureProcessor.ProcessHierarchy(f.root); }
         catch (InvalidOperationException) { rejected = true; }
         Check(rejected && f.sourceChest != null && f.sourceChest.parent == f.sourceHips && f.config != null, name);
     }
@@ -502,6 +596,13 @@ public static class CombineArmatureValidation
         float error = 0;
         Vector3[] av = a.vertices, bv = b.vertices;
         for (int i = 0; i < av.Length; i++) error = Mathf.Max(error, Vector3.Distance(av[i], bv[i]));
+        return error;
+    }
+
+    private static float MatrixError(Matrix4x4 a, Matrix4x4 b)
+    {
+        float error = 0;
+        for (int i = 0; i < 16; i++) error = Mathf.Max(error, Mathf.Abs(a[i] - b[i]));
         return error;
     }
 

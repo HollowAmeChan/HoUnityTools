@@ -2013,7 +2013,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
                 // Authoring settings are consumed on the temporary prefab before script remapping.
                 // They are not runtime mod scripts and must not enter the staged source closure.
-                if (behaviour is Hollow.HoUnityTools.Armatures.CombineArmature)
+                if (behaviour is Hollow.HoUnityTools.Armatures.HoCombineArmature)
                     continue;
 
                 MonoScript script = MonoScript.FromMonoBehaviour(behaviour);
@@ -2573,7 +2573,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         continue;
 
                     string typeName = GetScriptTypeName(candidate);
-                    if (string.Equals(typeName, typeof(Hollow.HoUnityTools.Armatures.CombineArmature).FullName, StringComparison.Ordinal) ||
+                    if (string.Equals(typeName, typeof(Hollow.HoUnityTools.Armatures.HoCombineArmature).FullName, StringComparison.Ordinal) ||
                         IsUnsafeRuntimeScript(candidate, typeName) ||
                         IsHostProvidedRuntimeScript(candidate, typeName))
                         continue;
@@ -3141,7 +3141,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             try
             {
                 root.name = "Character";
-                Hollow.HoUnityTools.Editor.Armatures.CombineArmatureProcessor.ProcessHierarchy(root);
+                Hollow.HoUnityTools.Editor.Armatures.HoCombineArmatureProcessor.ProcessHierarchy(root);
                 MonoBehaviour[] behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);
                 foreach (MonoBehaviour behaviour in behaviours)
                 {

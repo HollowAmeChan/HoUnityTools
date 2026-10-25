@@ -9,9 +9,9 @@ using UnityEngine.SceneManagement;
 namespace Hollow.HoUnityTools.Editor.Armatures
 {
     [InitializeOnLoad]
-    internal sealed class CombineArmatureSceneProcessor : IProcessSceneWithReport
+    internal sealed class HoCombineArmatureSceneProcessor : IProcessSceneWithReport
     {
-        static CombineArmatureSceneProcessor()
+        static HoCombineArmatureSceneProcessor()
         {
             EditorApplication.playModeStateChanged += CheckSceneReload;
         }
@@ -20,12 +20,12 @@ namespace Hollow.HoUnityTools.Editor.Armatures
         {
             if (change != PlayModeStateChange.ExitingEditMode || !EditorSettings.enterPlayModeOptionsEnabled ||
                 (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableSceneReload) == 0) return;
-            foreach (var config in Resources.FindObjectsOfTypeAll<CombineArmature>())
+            foreach (var config in Resources.FindObjectsOfTypeAll<HoCombineArmature>())
             {
                 if (config == null || !config.enabled || !config.processAutomatically ||
                     EditorUtility.IsPersistent(config) || !config.gameObject.scene.IsValid() ||
                     !config.gameObject.scene.isLoaded || EditorSceneManagerIsPreview(config.gameObject.scene)) continue;
-                Debug.LogError("[CombineArmature] 自动装配需要启用 Scene Reload，以便退出 Play 时恢复源层级。" +
+                Debug.LogError("[HoCombineArmature] 自动装配需要启用 Scene Reload，以便退出 Play 时恢复源层级。" +
                     "请开启场景重载，或关闭组件自动处理并使用烘焙副本。", config);
                 EditorApplication.isPlaying = false;
                 return;
@@ -50,7 +50,7 @@ namespace Hollow.HoUnityTools.Editor.Armatures
             {
                 try
                 {
-                    CombineArmatureProcessor.ProcessHierarchy(root, true);
+                    HoCombineArmatureProcessor.ProcessHierarchy(root, true);
                 }
                 catch (Exception exception)
                 {

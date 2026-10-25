@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.Armatures
 {
-    [CustomEditor(typeof(CombineArmature))]
-    internal sealed class CombineArmatureEditor : UnityEditor.Editor
+    [CustomEditor(typeof(HoCombineArmature))]
+    internal sealed class HoCombineArmatureEditor : UnityEditor.Editor
     {
         private string validation;
         private MessageType validationType;
@@ -14,6 +14,9 @@ namespace Hollow.HoUnityTools.Editor.Armatures
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUILayout.ObjectField(new GUIContent("衣服骨架根（挂载处）", "组件自身所在的骨架根；不要挂在包含网格和 Animator 的 FBX 模型根上。"),
+                    ((HoCombineArmature)target).transform, typeof(Transform), true);
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("targetArmature"), new GUIContent("本体骨架根"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("characterRoot"), new GUIContent("角色根（可自动）"));
@@ -27,10 +30,10 @@ namespace Hollow.HoUnityTools.Editor.Armatures
             serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Space();
-            EditorGUILayout.HelpBox("挂在衣服骨架根，目标指向本体对应根。网格、换装开关和 Animator 放在该子树外。" +
+            EditorGUILayout.HelpBox("挂在衣服骨架根，目标指向本体对应根；角色根选同时包含两套骨架和网格的共同父对象。网格、换装开关和 Animator 放在衣服骨架子树外。" +
                 "仅处理 Play / 构建 / 烘焙副本，不改源 FBX 或动画资产。", MessageType.Info);
-            var config = (CombineArmature)target;
-            if (config.mode == CombineArmatureMode.Constraints)
+            var config = (HoCombineArmature)target;
+            if (config.mode == HoCombineArmatureMode.Constraints)
                 EditorGUILayout.HelpBox("生成 ParentConstraint，跟随位置和旋转，保留骨架及所有原路径。" +
                     "不复制骨骼缩放；需要动态缩放时请用直接合并。目标由 LateUpdate/物理等后续阶段改写时，需要验证求值顺序。", MessageType.Warning);
 
@@ -38,13 +41,13 @@ namespace Hollow.HoUnityTools.Editor.Armatures
             {
                 if (GUILayout.Button("检查骨骼匹配与引用"))
                 {
-                    var report = CombineArmatureProcessor.Validate(config);
+                    var report = HoCombineArmatureProcessor.Validate(config);
                     validation = report.ToString();
                     validationType = report.IsValid ? MessageType.Info : MessageType.Error;
                 }
                 if (GUILayout.Button("生成已装配的角色副本"))
                 {
-                    Transform root = CombineArmatureProcessor.GetCharacterRoot(config);
+                    Transform root = HoCombineArmatureProcessor.GetCharacterRoot(config);
                     if (root == null)
                     {
                         validation = "请先指定本体骨架根与完整角色根。";
@@ -54,8 +57,8 @@ namespace Hollow.HoUnityTools.Editor.Armatures
                     {
                         try
                         {
-                            GameObject copy = CombineArmatureProcessor.BakeCopy(root.gameObject);
-                            Undo.RegisterCreatedObjectUndo(copy, "Bake CombineArmature copy");
+                            GameObject copy = HoCombineArmatureProcessor.BakeCopy(root.gameObject);
+                            Undo.RegisterCreatedObjectUndo(copy, "Bake HoCombineArmature copy");
                             Selection.activeGameObject = copy;
                             EditorGUIUtility.PingObject(copy);
                         }

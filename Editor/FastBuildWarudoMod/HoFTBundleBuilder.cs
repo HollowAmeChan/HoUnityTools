@@ -143,7 +143,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 try
                 {
                     instance.name = rigSource.name;
-                    Hollow.HoUnityTools.Editor.Armatures.CombineArmatureProcessor.ProcessHierarchy(instance);
+                    Hollow.HoUnityTools.Editor.Armatures.HoCombineArmatureProcessor.ProcessHierarchy(instance);
                     PrefabUtility.SaveAsPrefabAsset(instance, tempPath);
                 }
                 finally

@@ -1,8 +1,9 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace Hollow.HoUnityTools.Armatures
 {
-    public enum CombineArmatureMode
+    public enum HoCombineArmatureMode
     {
         Merge,
         Constraints,
@@ -13,16 +14,17 @@ namespace Hollow.HoUnityTools.Armatures
     /// Put this component on the outfit armature, with meshes and switching objects outside that subtree.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("HoUnityTools/CombineArmature")]
-    public sealed class CombineArmature : MonoBehaviour
+    [AddComponentMenu("HoUnityTools/Ho CombineArmature")]
+    [MovedFrom(true, "Hollow.HoUnityTools.Armatures", "HoUnityTools.Armatures.Runtime", "CombineArmature")]
+    public sealed class HoCombineArmature : MonoBehaviour
     {
         [Tooltip("本体中对应的骨架根。组件自身所在的 Transform 是衣服骨架根。")]
         public Transform targetArmature;
 
-        [Tooltip("包含本体、衣服和所有相关引用的角色根。留空时使用共同祖先及其最近的 Animator。")]
+        [Tooltip("完整角色的共同父对象，须包含本体骨架、衣服骨架和衣服网格；不是两套骨架之一。留空时自动寻找。")]
         public Transform characterRoot;
 
-        public CombineArmatureMode mode = CombineArmatureMode.Merge;
+        public HoCombineArmatureMode mode = HoCombineArmatureMode.Merge;
 
         [Tooltip("匹配衣服骨骼时移除的名称前缀。骨架根本身不按名称匹配。")]
         public string bonePrefix = string.Empty;
