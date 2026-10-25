@@ -216,26 +216,19 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
 
             EditorGUILayout.Space(2.0f);
 
-            // 按层级缩进列出集合开关。多选编辑时,可见性状态以第一个对象为准显示。
+            // 按层级先序绘制,让子集合紧跟父集合,而不依赖 JSON 中的扁平排列顺序。
             HashSet<string> hidden = ReadHiddenSet();
             HashSet<string> unselectable = ReadUnselectableSet();
-            var depthCache = new Dictionary<string, int>();
 
-            for (int i = 0; i < set.collections.Count; i++)
+            foreach (var row in GetCollectionRows(set))
             {
-                HoBoneCollection collection = set.collections[i];
-                if (collection == null || string.IsNullOrEmpty(collection.name))
-                {
-                    continue;
-                }
-
-                int depth = GetCollectionDepth(set, collection.name, depthCache);
+                HoBoneCollection collection = row.collection;
                 bool visible = !hidden.Contains(collection.name);
                 bool selectable = !unselectable.Contains(collection.name);
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    GUILayout.Space(depth * 14.0f);
+                    GUILayout.Space(row.depth * 14.0f);
 
                     Color swatch = collection.color;
                     Rect colorRect = GUILayoutUtility.GetRect(12.0f, 12.0f, GUILayout.Width(12.0f), GUILayout.Height(12.0f));
@@ -339,32 +332,69 @@ namespace Hollow.HoUnityTools.Editor.BoneRendering
             return count;
         }
 
-        private static int GetCollectionDepth(HoBoneGroupSet set, string collectionName, Dictionary<string, int> cache)
+        private static IEnumerable<(HoBoneCollection collection, int depth)> GetCollectionRows(HoBoneGroupSet set)
         {
-            if (cache.TryGetValue(collectionName, out int cached))
+            var collectionsByName = new Dictionary<string, HoBoneCollection>();
+            var children = new Dictionary<HoBoneCollection, List<HoBoneCollection>>();
+            var roots = new List<HoBoneCollection>();
+
+            foreach (HoBoneCollection collection in set.collections)
             {
-                return cached;
+                if (collection != null && !string.IsNullOrEmpty(collection.name) && !collectionsByName.ContainsKey(collection.name))
+                {
+                    collectionsByName.Add(collection.name, collection);
+                }
             }
 
-            int depth = 0;
-            string current = collectionName;
-            int guard = 0;
-            int max = set.collections.Count + 1;
-            while (guard <= max)
+            foreach (HoBoneCollection collection in set.collections)
             {
-                HoBoneCollection collection = set.FindCollection(current);
-                if (collection == null || string.IsNullOrEmpty(collection.parent))
+                if (collection == null || string.IsNullOrEmpty(collection.name))
                 {
-                    break;
+                    continue;
                 }
 
-                depth++;
-                current = collection.parent;
-                guard++;
+                // 父集合缺失时仍作为顶层显示。建表时保留 JSON 中的同级顺序。
+                if (string.IsNullOrEmpty(collection.parent) || !collectionsByName.TryGetValue(collection.parent, out HoBoneCollection parent))
+                {
+                    roots.Add(collection);
+                    continue;
+                }
+
+                if (!children.TryGetValue(parent, out List<HoBoneCollection> siblings))
+                {
+                    siblings = new List<HoBoneCollection>();
+                    children.Add(parent, siblings);
+                }
+
+                siblings.Add(collection);
             }
 
-            cache[collectionName] = depth;
-            return depth;
+            // 正常树遍历后再兜底处理未访问的集合,避免环形父引用让行消失或死循环。
+            roots.AddRange(set.collections);
+            var pending = new Stack<(HoBoneCollection collection, int depth)>();
+            for (int i = roots.Count - 1; i >= 0; i--)
+            {
+                pending.Push((roots[i], 0));
+            }
+
+            var visited = new HashSet<HoBoneCollection>();
+            while (pending.Count > 0)
+            {
+                var row = pending.Pop();
+                if (row.collection == null || string.IsNullOrEmpty(row.collection.name) || !visited.Add(row.collection))
+                {
+                    continue;
+                }
+
+                yield return row;
+                if (children.TryGetValue(row.collection, out List<HoBoneCollection> descendants))
+                {
+                    for (int i = descendants.Count - 1; i >= 0; i--)
+                    {
+                        pending.Push((descendants[i], row.depth + 1));
+                    }
+                }
+            }
         }
 
         private void SetCollectionHidden(string collectionName, bool hidden)
