@@ -167,21 +167,23 @@ Warudo 侧走 `AssetBundle.LoadFromMemory`，那份读得了；**别用默认 LZ
 
 ## 为什么使用临时副本
 
-Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化、Prefab 拆包和 Transform 修改。对于已经在 Blender/Unity 侧完成约束和姿态处理的角色，这些副作用可能破坏结果。所以 FastBuild 只复制 Prefab，将副本根节点命名为 `Character`，再调用官方 Build API。
+Warudo 的 `Setup Character` 会对选中的对象做骨骼归一化和 Transform 修改。对于已经在 Blender/Unity 侧完成约束和姿态处理的角色，这些副作用可能破坏结果。FastBuild 复制 Prefab，在临时内容副本中完全解包所有嵌套 Prefab／FBX 实例，再进行骨架烘焙与脚本重绑，将副本根节点命名为 `Character` 后调用官方 Build API。解包范围包括衣服和目标骨架，避免后续层级修改或 UMod 链接弹出“无法重构预制件实例”；源 Prefab 与 FBX 的连接不变。
 
-不要替换临时 Prefab 的 `m_Script` GUID。UMod Linker 会先读取原组件，再按脚本的完整类型名寻找编译后的类型；保留原引用才能让链接过程和 Unity 中的组件语义一致。
+需要随 Mod 编译的组件会在临时 Prefab 上重绑到同名的暂存 `MonoScript`；重绑前必须确认暂存类型可加载、继承 `MonoBehaviour` 且完整类型名与源组件一致。不要直接改 YAML 中的 `m_Script` GUID，也不要把组件绑定到无法在编辑器加载的脚本。UMod Linker 读取这些有效组件后，按完整类型名寻找 Mod 中编译后的类型。
 
 （坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：替换 GUID 会破坏 UMod 按完整类型名链接的契约。）
 
 ## 脚本依赖和安全边界
 
-依赖预览的入口是 Prefab 上直接挂载的 `MonoBehaviour`。当前工具会合并同一源码的多个挂载，并显示引用次数。构建时，如果选中的脚本属于非 Editor asmdef，FastBuild 会继续收集该运行时程序集目录下的源码闭包，避免临时 Mod 只带组件脚本而遗失 `HoUnityTools.Runtime` 这类程序集内部类型；Editor 目录、`AssemblyInfo.cs` 和明确的编辑器骨骼绘制器会被排除。
+依赖预览扫描 Prefab 全部层级（包括禁用对象）的 `Component`，覆盖 Unity 原生组件、有 `.cs` 源码的 MonoBehaviour，以及 DLL 中的 MonoBehaviour。列表合并同一类型的重复挂载，标题显示类型数与挂载总数；DLL 按程序集和完整类型名区分，不会把同一 DLL 中的不同组件合成一行。原生组件随 Prefab 序列化保留，宿主清单中的组件保留原引用，两者都不复制源码。`HoCombineArmature` 显示为“构建前烘焙”，由临时 Prefab 处理流程消费后移除。无法识别宿主的 DLL 组件会保留在列表中提示确认，不会因没有 `.cs` 就漏扫，也不能勾选为源码。
+
+构建时，如果选中的脚本属于非 Editor asmdef，FastBuild 会继续收集该运行时程序集目录下的源码闭包，避免临时 Mod 只带组件脚本而遗失 `HoUnityTools.Runtime` 这类程序集内部类型；Editor 目录、`AssemblyInfo.cs` 和明确的编辑器骨骼绘制器会被排除。原生组件不属于 UMod 的 MonoBehaviour 链接记录，产物复核仍只比对临时 Prefab 的 MonoBehaviour。
 
 脚本复制遵循以下规则：
 
-- `HoAuxRig` 是独立运行时脚本，可以复制到临时 Mod。
+- `HoAuxRig` 的主文件、partial 文件和运行时依赖必须一起复制到临时 Mod。
 - 位于 `Editor` 目录的脚本不作为运行时源码复制。
-- `HoBoneRenderer` 含编辑器可视化逻辑，默认从临时 Prefab 移除。
+- `HoBoneRenderer` 含编辑器可视化逻辑，默认从临时 Prefab 移除。`Runtime/QuickCapture` 是编辑器录制工具的运行时驱动与命名辅助，不属于角色运行时依赖，也从角色源码闭包中排除，避免无关的文件 API 触发 UMod 安全校验。
 - 默认勾选规则按**包名**判断脚本是否属于本工具或本工程，而不是按目录名（见上文"包目录名也曾影响脚本默认勾选"）。
 - MC1 (`MagicaCloth`) 与 MC2 (`MagicaCloth2`) 由 Warudo 宿主提供。FastBuild 会保留
   Prefab 上的组件引用，但禁止复制其源码，也不会把其 asmdef 源码闭包加入临时 Mod。
@@ -204,7 +206,7 @@ typeof(SomeType).GetProperty("Value")
 methodInfo.Invoke(target, args)
 ```
 
-当前版本不创建额外 asmdef；临时脚本必须位于普通、可被 Unity 导入的 `Assets` 路径。FastBuild 临时源码使用编辑器条件包装，避免 Unity 编辑器侧出现重复类型，而 UMod 构建在已验证的 SDK 版本中仍会生成运行时类型——这个行为属于 SDK 版本相关实现，**不能只以 `Build succeeded` 判断成功**，必须同时检查构建日志和产物中的程序集类型。
+当前版本不创建额外 asmdef；临时脚本必须位于普通、可被 Unity 导入的 `Assets` 路径。整份运行时源码闭包在编辑器和 UMod 中都参与编译，暂存源码仅抑制与原包同名类型产生的 CS0436 警告。不能只启用挂载组件的主文件，却用 `#if !UNITY_EDITOR` 隐藏 partial、基类或辅助文件，否则会先编译失败，再使 Prefab 重绑得到无效的 `MonoScript`。**不能只以 `Build succeeded` 判断成功**，必须同时检查构建日志和产物中的程序集类型。
 
 （坑另记：[踩过的坑 · Warudo 打包与工具链](../pitfalls/BUILD_AND_TOOLING.md)：额外 asmdef 可能让临时源码落到错误的 `.csproj`（`not in the .csproj file and will not be compiled`）；`Assets/...~` 等 Unity 忽略目录不能作为 Mod 工作区。）
 

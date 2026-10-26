@@ -50,6 +50,16 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             public bool copySource;
             public bool removeWhenExcluded;
             public bool hostProvided;
+            public bool nativeComponent;
+            public bool bakeBeforeBuild;
+            public bool HasSource
+            {
+                get { return string.Equals(Path.GetExtension(sourcePath), ".cs", StringComparison.OrdinalIgnoreCase); }
+            }
+            public bool CanCopySource
+            {
+                get { return HasSource && !nativeComponent && !bakeBeforeBuild; }
+            }
             public int referenceCount;
             public List<string> componentReferences = new List<string>();
             public bool showReferencedAssets;
@@ -248,8 +258,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
 
             RefreshSdkStatus();
-            if (sourcePrefab != null && scriptPreview.Count == 0)
-                RefreshDependencyPreview();
+            if (sourcePrefab != null)
+                RefreshDependencyPreview(true);
         }
 
         private void OnGUI()
@@ -1329,7 +1339,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             {
                 int runtimeAssetCount = runtimeAssetPreview == null ? 0 : runtimeAssetPreview.Count;
                 int uncompiledComponents = CountComponentsWithoutRuntimeSource();
-                string dependencyStatus = scriptPreview.Count + " 个脚本";
+                string dependencyStatus = scriptPreview.Count + " 种组件 / " +
+                                          scriptPreview.Sum(item => item.referenceCount) + " 处挂载";
                 if (runtimeAssetCount > 0)
                     dependencyStatus += " / " + runtimeAssetCount + " 个脚本资源";
                 if (uncompiledComponents > 0)
@@ -1340,7 +1351,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     dependencyStatus,
                     new Color(0.62f, 0.45f, 0.84f),
                     "FilterByType",
-                    "此处只管理需要单独编译成运行时程序的 C# 源码；" +
+                    "扫描全部组件，按类型合并挂载；宿主组件保留引用，只有可复制的 C# 源码需要勾选。" +
                     "UMod 会自动按 Prefab 引用收集其它资源（本 Prefab 共 " + dependencyCount +
                     " 项依赖，其中非脚本 " + nonScriptDependencyCount + " 项）。");
 
@@ -1365,7 +1376,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                         MessageType.Error);
                 }
 
-                if (scriptPreview.Count > 0 && !HasGeneratedProjectFiles())
+                if (copySelectedScripts && scriptPreview.Any(item => item.copySource && item.CanCopySource) &&
+                    !HasGeneratedProjectFiles())
                 {
                     EditorGUILayout.HelpBox(
                         "工程根目录没有 Unity 生成的 .csproj。UMod 靠它定位脚本工程，缺失时会跳过全部脚本编译，" +
@@ -1376,7 +1388,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (uncompiledComponents > 0)
                 {
                     EditorGUILayout.HelpBox(
-                        uncompiledComponents + " 个组件不会随 Mod 编译，产物里会是 Missing Script；请在下方列表勾选它们的源码。",
+                        uncompiledComponents + " 个组件既未选择运行时源码，也未识别为宿主提供。" +
+                        "有源码的组件请勾选；DLL 组件需先确认 Warudo 是否提供对应程序集及类型，不能直接复制为源码。",
                         MessageType.Error);
                 }
 
@@ -1396,7 +1409,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 scriptScroll = EditorGUILayout.BeginScrollView(scriptScroll, GUILayout.MinHeight(170f), GUILayout.MaxHeight(310f));
                 if (scriptPreview.Count == 0)
                 {
-                    EditorGUILayout.HelpBox("当前 Prefab 没有扫描到可定位源码的 MonoBehaviour。", MessageType.Warning);
+                    EditorGUILayout.HelpBox("当前 Prefab 没有扫描到可解析的组件。", MessageType.Warning);
                 }
                 else
                 {
@@ -1562,7 +1575,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 item.showReferencedAssets = GUI.Toggle(foldRect, item.showReferencedAssets, GUIContent.none, EditorStyles.foldout);
 
             using (new EditorGUI.DisabledScope(
-                       !copySelectedScripts || item.removeWhenExcluded || item.hostProvided))
+                       !copySelectedScripts || !item.CanCopySource || item.removeWhenExcluded || item.hostProvided))
             {
                 item.copySource = GUI.Toggle(toggleRect, item.copySource, GUIContent.none, EditorStyles.toggle);
             }
@@ -1581,10 +1594,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 new GUIContent(TruncateToWidth(mount, statusColumnStyle, mountRect.width), tooltip),
                 statusColumnStyle);
 
-            string sourceStatus = item.hostProvided
-                ? "宿主 " + (string.IsNullOrEmpty(item.sourceAssembly) ? "?" : item.sourceAssembly) +
-                  " / " + Path.GetFileName(item.sourcePath)
-                : Path.GetFileName(item.sourcePath);
+            string sourceStatus = item.bakeBeforeBuild ? "构建前烘焙" :
+                item.nativeComponent ? "Unity 原生 / " + item.sourceAssembly :
+                item.hostProvided ? "宿主 / " + item.sourceAssembly :
+                item.HasSource ? Path.GetFileName(item.sourcePath) : "待确认 DLL / " + item.sourceAssembly;
             GUI.Label(
                 sourceRect,
                 new GUIContent(
@@ -1965,7 +1978,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (preserveSelection)
             {
                 previousSelection = scriptPreview
-                    .Where(item => item != null && !string.IsNullOrEmpty(item.sourcePath))
+                    .Where(item => item != null && item.CanCopySource)
                     .ToDictionary(item => item.sourcePath, item => item.copySource, StringComparer.OrdinalIgnoreCase);
             }
 
@@ -2005,53 +2018,59 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
 
             var rows = new Dictionary<string, ScriptPreview>(StringComparer.OrdinalIgnoreCase);
-            MonoBehaviour[] behaviours = prefab.GetComponentsInChildren<MonoBehaviour>(true);
-            foreach (MonoBehaviour behaviour in behaviours)
+            Component[] components = prefab.GetComponentsInChildren<Component>(true);
+            foreach (Component component in components)
             {
-                if (behaviour == null)
+                if (component == null)
                     continue;
 
-                // Authoring settings are consumed on the temporary prefab before script remapping.
-                // They are not runtime mod scripts and must not enter the staged source closure.
-                if (behaviour is Hollow.HoUnityTools.Armatures.HoCombineArmature)
-                    continue;
-
-                MonoScript script = MonoScript.FromMonoBehaviour(behaviour);
+                MonoBehaviour behaviour = component as MonoBehaviour;
+                MonoScript script = behaviour == null ? null : MonoScript.FromMonoBehaviour(behaviour);
                 string path = script == null ? string.Empty : AssetDatabase.GetAssetPath(script);
-                if (string.IsNullOrEmpty(path) ||
-                    !string.Equals(Path.GetExtension(path), ".cs", StringComparison.OrdinalIgnoreCase))
-                    continue;
+                Type componentType = component.GetType();
+                string typeName = componentType.FullName;
+                string assemblyName = GetTypeAssemblyName(componentType);
+                bool hasSource = string.Equals(Path.GetExtension(path), ".cs", StringComparison.OrdinalIgnoreCase);
+                // A DLL can expose many MonoBehaviours; its asset path is not a component identity.
+                string rowKey = hasSource ? path : assemblyName + ":" + typeName;
 
                 ScriptPreview row;
-                if (!rows.TryGetValue(path, out row))
+                if (!rows.TryGetValue(rowKey, out row))
                 {
-                    Type scriptType = script.GetClass();
-                    string typeName = scriptType == null ? string.Empty : scriptType.FullName;
-                    string assemblyName = GetTypeAssemblyName(scriptType);
                     bool unsafeForRuntime = IsUnsafeRuntimeScript(path, typeName);
                     bool hostProvided = IsHostProvidedRuntimeScript(path, typeName, assemblyName);
+                    bool bakeBeforeBuild = component is Hollow.HoUnityTools.Armatures.HoCombineArmature;
                     row = new ScriptPreview
                     {
                         sourcePath = path,
                         typeName = typeName,
                         sourceAssembly = assemblyName,
-                        copySource = !unsafeForRuntime && !hostProvided && ShouldCopyScriptByDefault(path),
+                        copySource = hasSource && !bakeBeforeBuild && !unsafeForRuntime &&
+                                     !hostProvided && ShouldCopyScriptByDefault(path),
                         removeWhenExcluded = unsafeForRuntime,
                         hostProvided = hostProvided,
-                        note = GetScriptNote(path, typeName, unsafeForRuntime, assemblyName),
+                        nativeComponent = behaviour == null,
+                        bakeBeforeBuild = bakeBeforeBuild,
+                        note = bakeBeforeBuild
+                            ? "骨架装配配置：在临时 Prefab 上完成烘焙后移除，不复制为运行时源码。"
+                            : behaviour == null
+                                ? "Unity 原生组件：随 Prefab 序列化保留，无需复制 C# 源码。"
+                                : !hasSource && !hostProvided
+                                    ? "DLL 组件：未识别为 Warudo 宿主提供；需确认宿主版本或另行提供运行时依赖。"
+                                    : GetScriptNote(path, typeName, unsafeForRuntime, assemblyName),
                     };
                     bool previousValue;
-                    if (!hostProvided && previousSelection != null &&
+                    if (row.CanCopySource && !unsafeForRuntime && !hostProvided && previousSelection != null &&
                         previousSelection.TryGetValue(path, out previousValue))
                         row.copySource = previousValue;
-                    rows.Add(path, row);
+                    rows.Add(rowKey, row);
                 }
 
                 row.referenceCount++;
                 row.componentReferences.Add(
-                    GetTransformPath(prefab.transform, behaviour.transform) +
+                    GetTransformPath(prefab.transform, component.transform) +
                     " / " +
-                    behaviour.GetType().Name);
+                    componentType.Name);
             }
 
             scriptPreview = rows.Values
@@ -2071,7 +2090,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             var rows = new Dictionary<string, RuntimeAssetPreview>(StringComparer.OrdinalIgnoreCase);
             foreach (ScriptPreview script in scriptPreview)
             {
-                if (script == null || string.IsNullOrEmpty(script.sourcePath))
+                if (script == null || !script.CanCopySource)
                     continue;
 
                 string absoluteSource = AssetPathToAbsolute(script.sourcePath);
@@ -2144,10 +2163,18 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             string normalized = path.Replace('\\', '/');
             return normalized.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   IsOwnQuickCaptureSource(path) ||
                    string.Equals(
                        typeName,
                        "Hollow.HoUnityTools.BoneRendering.HoBoneRenderer",
                        StringComparison.Ordinal);
+        }
+
+        private static bool IsOwnQuickCaptureSource(string path)
+        {
+            string root = OwnPackageRoot;
+            return !string.IsNullOrEmpty(root) && NormalizeAssetPath(path).StartsWith(
+                root.TrimEnd('/') + "/Runtime/QuickCapture/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string GetScriptNote(string path, string typeName, bool unsafeForRuntime,
@@ -2155,13 +2182,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             if (unsafeForRuntime)
             {
+                if (IsOwnQuickCaptureSource(path))
+                    return "编辑器录制工具使用的运行时驱动，不属于角色 Mod；默认移除，避免带入文件 API。";
                 if (string.Equals(typeName, "Hollow.HoUnityTools.BoneRendering.HoBoneRenderer", StringComparison.Ordinal))
                     return "HoBoneRenderer 含编辑器侧可视化逻辑，默认不复制，并建议从临时 Prefab 移除。";
                 return "该脚本位于 Editor 目录，不能作为 Warudo 运行时组件打包。";
             }
 
             if (string.Equals(typeName, "Hollow.HoUnityTools.RigConstraints.HoAuxRig", StringComparison.Ordinal))
-                return "HoAuxRig 运行时脚本可独立复制；UMod 会按完整类型名链接现有组件。";
+                return "HoAuxRig 会连同 partial 文件和运行时依赖一起复制；UMod 按完整类型名链接组件。";
             if (IsWarudoHostAssembly(assemblyName))
                 return "宿主自带（Warudo 实测清单里有 " + assemblyName +
                        "）：保留 Prefab 组件引用，不复制、不重新编译源码。";
@@ -2333,7 +2362,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             int count = 0;
             foreach (ScriptPreview item in scriptPreview)
             {
-                if (item == null || item.hostProvided || item.removeWhenExcluded || item.copySource)
+                if (item == null || item.nativeComponent || item.bakeBeforeBuild || item.hostProvided ||
+                    item.removeWhenExcluded || (copySelectedScripts && item.copySource))
                     continue;
                 count += item.referenceCount;
             }
@@ -2345,7 +2375,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             foreach (ScriptPreview item in scriptPreview)
             {
-                if (!item.removeWhenExcluded && !item.hostProvided)
+                if (item.CanCopySource && !item.removeWhenExcluded && !item.hostProvided)
                     item.copySource = selected;
             }
         }
@@ -2496,12 +2526,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             EnsureAssetFolder(scriptsRoot);
             List<string> sourcePaths = CollectRuntimeSourceClosure();
             var stagedScripts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var componentSourcePaths = new HashSet<string>(
-                scriptPreview
-                    .Where(item => item != null && item.copySource && !item.removeWhenExcluded &&
-                                   !item.hostProvided && !string.IsNullOrEmpty(item.sourcePath))
-                    .Select(item => NormalizeAssetPath(item.sourcePath)),
-                StringComparer.OrdinalIgnoreCase);
             int scriptIndex = 0;
 
             foreach (string sourcePath in sourcePaths)
@@ -2521,9 +2545,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 string sourceText = File.ReadAllText(absoluteSource, Encoding.UTF8);
                 sourceText = sourceText.Replace("\r\n", "\n").Replace("\r", "\n");
                 string normalizedSource = sourceText.Replace("\n", "\r\n");
-                string wrappedSource = componentSourcePaths.Contains(sourcePath)
-                    ? "#pragma warning disable 0436\r\n" + normalizedSource + "\r\n"
-                    : "#if !UNITY_EDITOR\r\n" + normalizedSource + "\r\n#endif\r\n";
+                // The entire closure must compile in the editor too: partial declarations,
+                // base classes and internal helpers are part of the same assembly as the
+                // staged component. Hiding helpers behind !UNITY_EDITOR leaves invalid MonoScripts.
+                string wrappedSource = "#pragma warning disable 0436\r\n" + normalizedSource + "\r\n";
                 File.WriteAllText(absoluteDestination, wrappedSource, new UTF8Encoding(false));
                 WriteFreshMetaFile(absoluteDestination + ".meta");
                 stagedScripts[sourcePath] = stagedPath;
@@ -2806,6 +2831,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     throw new InvalidOperationException("上一次构建在 UMod 调用期间发生了域重载，已停止重复构建。");
                 if (!string.Equals(state.phase, PendingPhase, StringComparison.Ordinal))
                     throw new InvalidOperationException("未知的 FastBuild 状态：" + state.phase);
+
+                if (EditorUtility.scriptCompilationFailed)
+                    throw new InvalidOperationException("Unity 脚本编译失败，已停止临时 Prefab 重绑。请先处理控制台中的 C# 编译错误。");
 
                 PrepareStagedPrefab(state);
                 ValidateTemporaryPlayerSettings(state);
@@ -3137,9 +3165,34 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             foreach (ScriptMapping mapping in state.scripts ?? Array.Empty<ScriptMapping>())
                 mappings[mapping.sourcePath] = mapping;
 
+            // Validate every replacement before modifying components or baking the prefab.
+            foreach (ScriptMapping mapping in mappings.Values)
+            {
+                if (mapping.removeFromPrefab)
+                    continue;
+                MonoScript sourceScript = AssetDatabase.LoadAssetAtPath<MonoScript>(mapping.sourcePath);
+                MonoScript stagedScript = AssetDatabase.LoadAssetAtPath<MonoScript>(mapping.stagedPath);
+                Type sourceType = sourceScript == null ? null : sourceScript.GetClass();
+                Type stagedType = stagedScript == null ? null : stagedScript.GetClass();
+                if (sourceType == null || stagedType == null ||
+                    !typeof(MonoBehaviour).IsAssignableFrom(stagedType) || stagedType.IsAbstract ||
+                    !string.Equals(sourceType.FullName, stagedType.FullName, StringComparison.Ordinal))
+                    throw new InvalidOperationException("临时组件脚本未编译为匹配的 MonoBehaviour，已停止重绑：" +
+                                                        mapping.sourcePath + " -> " + mapping.stagedPath);
+            }
+
             GameObject root = PrefabUtility.LoadPrefabContents(state.temporaryPrefabPath);
             try
             {
+                // The export copy must contain no nested prefab/model connections. Baking
+                // can affect both the outfit and its target rig, and UMod also rewrites
+                // components during linking; unpacking only the outfit is insufficient.
+                foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (child != null && PrefabUtility.IsOutermostPrefabInstanceRoot(child.gameObject))
+                        PrefabUtility.UnpackPrefabInstance(
+                            child.gameObject, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
                 root.name = "Character";
                 Hollow.HoUnityTools.Editor.Armatures.HoCombineArmatureProcessor.ProcessHierarchy(root);
                 MonoBehaviour[] behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);

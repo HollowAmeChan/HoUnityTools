@@ -34,7 +34,7 @@ Make sure the .csproj file exists
 
 ## 3. 临时 Prefab 的引用规则（两条都要守）
 
-- **不要替换临时 Prefab 的 `m_Script` GUID**：UMod Linker 先读原组件，再按脚本完整类型名找编译后的类型。
+- **不要直接改 YAML 中的 `m_Script` GUID 或重绑无效脚本**：必须先确认暂存 `MonoScript.GetClass()` 是有效、同完整类型名的 `MonoBehaviour`，再通过序列化 API 重绑临时组件。UMod Linker 需要读到有效组件，才能按完整类型名找编译后的类型。
 - **不能保留包内 `MonoScript` 引用**：否则 UMod 会记录原 asmdef 的程序集名，运行时即使编译了同名类型也显示 Missing Script。
 
 ## 4. 运行时脚本禁用反射
@@ -158,8 +158,7 @@ UMod 多 Mod 模式按 Unity 生成的运行时 `.csproj` 判断源码能否进�
 
 ## 6. "Build succeeded" 不等于成功
 
-FastBuild 的临时源码用编辑器条件包装，避免编辑器侧重复类型；而 UMod 构建在已验证的 SDK 版本里仍会生成运行时类型 ——
-这是**版本相关的实现**。所以必须同时看构建日志与产物里的程序集类型，不能只看构建返回成功。
+FastBuild 的整份暂存源码闭包必须在编辑器侧编译，才能保存引用这些脚本的临时 Prefab。不能将 partial 或基类文件包进 `#if !UNITY_EDITOR`：例如 `HoAuxRig.Merge.cs` 被隐藏后，主文件会报未实现接口，随后 `MonoScript.GetClass()` 为空，Prefab 保存再报“不继承 MonoBehaviour”。先处理 C# 编译错误并验证暂存类型，再进行重绑。构建完成还必须同时看构建日志与产物里的程序集类型，不能只看构建返回成功。
 
 ## 7. 判据别硬编码
 
