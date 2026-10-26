@@ -6,6 +6,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
+| [FBX 描边顶点色烘焙](FBX_OUTLINE_VERTEX_COLORS.md) | 默认关闭，按 FBX 烘焙 lilToon RGBA 方向 / 厚度；无需 GD |
 | [Rig Constraint IR v3](RIG_CONSTRAINT_IR_V3.md) | 常用复制／Armature、独立 Aim 语义与三后端能力边界 |
 | [Ho CombineArmature](COMBINE_ARMATURE.md) | 独立衣服骨架装配；直接合并或保留层级的位置/旋转约束；不依赖 MA、NDMF 或 VRC SDK |
 | [Warudo FastBuild](WARUDO_FAST_BUILD.md) | 角色 Mod、脚本暂存、产物复核，以及 HoFT 控制器和 rig 的 AssetBundle 导出 |

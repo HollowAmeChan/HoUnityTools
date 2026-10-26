@@ -6,6 +6,7 @@
 
 | 想做什么 | 从这里开始 |
 | --- | --- |
+| 在 FBX 导入时烘焙 lilToon 描边修正顶点色 | [FBX 描边顶点色烘焙](guides/FBX_OUTLINE_VERTEX_COLORS.md) |
 | 给角色安装独立衣服、合并或约束骨架 | [Ho CombineArmature](guides/COMBINE_ARMATURE.md) |
 | 使用跟随、摆锤、眨眼、注视约束 | [功能指南：角色约束](guides/README.md#角色约束) |
 | 预览动画、调整播放速度、截图或离线录制 | [功能指南：动画与录制](guides/README.md#动画与录制) |
