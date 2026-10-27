@@ -44,8 +44,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 EditorGUI.showMixedValue = mixedEnabled;
                 EditorGUI.BeginChangeCheck();
                 bool nextEnabled = EditorGUILayout.ToggleLeft(new GUIContent("烘焙 lilToon 描边顶点色",
-                    "HoUnityTools：默认关闭。覆盖此 FBX 的全部 RGBA 顶点色，RGB 为方向、A 为厚度。\n" +
-                    "点击原生 Apply 应用；关闭后 Apply 可恢复 FBX 原顶点色。需要导入法线和切线，无需 GD。"), enabled);
+                    "HoUnityTools：先清除原顶点色，再写入全部 RGBA 修正数据（RGB 为方向、A 为厚度），无需在导出前清理。\n" +
+                    "自动正交修复异常切线。点击原生 Apply 应用；关闭后 Apply 可恢复 FBX 原数据。需要导入法线和切线，无需 GD。"), enabled);
                 if (EditorGUI.EndChangeCheck())
                 {
                     UpdateSettings(editor, nextEnabled, null);

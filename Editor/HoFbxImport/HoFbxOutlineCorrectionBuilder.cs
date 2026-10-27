@@ -42,6 +42,30 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static ulong Hash(ulong h, int value) => unchecked((h ^ (uint)value) * 1099511628211UL);
 
+        internal static int RepairTangentFrames(Mesh mesh)
+        {
+            Vector3[] normals=mesh.normals;Vector4[] tangents=mesh.tangents;
+            if(normals.Length!=mesh.vertexCount||tangents.Length!=mesh.vertexCount)
+                throw new InvalidOperationException("Mesh 必须提供法线和切线，以编码 lilToon RGBA 描边方向。");
+            int repaired=0;
+            for(int i=0;i<tangents.Length;i++)
+            {
+                Vector3 n=normals[i].normalized,t=((Vector3)tangents[i]);
+                if(n.sqrMagnitude<1e-12f)throw new InvalidOperationException("Mesh 存在零长度法线。");
+                float handedness=tangents[i].w<0?-1:1;
+                if(Mathf.Abs(Vector3.Dot(n,t.normalized))<=1e-5f&&Mathf.Abs(t.sqrMagnitude-1)<=1e-4f&&
+                    Mathf.Abs(tangents[i].w-handedness)<=1e-5f)continue;
+                // Imported custom normals can be almost parallel to their UV tangents.
+                // Keep UV orientation where possible and provide the orthogonal frame expected by RGBA consumers.
+                t-=n*Vector3.Dot(n,t);
+                if(t.sqrMagnitude<1e-12f)t=Vector3.Cross(Mathf.Abs(n.z)<.9f?Vector3.forward:Vector3.up,n);
+                t.Normalize();t-=n*Vector3.Dot(n,t);t.Normalize();
+                tangents[i]=new Vector4(t.x,t.y,t.z,handedness);repaired++;
+            }
+            if(repaired>0)mesh.tangents=tangents;
+            return repaired;
+        }
+
         internal static Vector4[] Build(Mesh mesh, bool weldCoincidentVertices = true)
         {
             if (mesh == null) throw new ArgumentNullException(nameof(mesh));

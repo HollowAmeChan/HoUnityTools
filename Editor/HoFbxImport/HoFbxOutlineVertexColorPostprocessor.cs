@@ -38,7 +38,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return enabled ? data + (weld ? WeldMarker : SplitMarker) : data;
         }
 
-        public override uint GetVersion() => 1;
+        public override uint GetVersion() => 2;
         public override int GetPostprocessOrder() => 1000;
 
         private void OnPostprocessModel(GameObject root)
@@ -55,19 +55,27 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             foreach (Mesh mesh in meshes)
             {
                 if (mesh.vertexCount == 0) continue;
+                Vector4[] originalTangents=mesh.tangents;
                 try
                 {
+                    HoFbxOutlineCorrectionBuilder.RepairTangentFrames(mesh);
+                    // Remove the authored channel explicitly. It must never be interpreted as correction data.
+                    mesh.colors=Array.Empty<Color>();
                     Vector4[] encoded = HoFbxOutlineCorrectionBuilder.Build(mesh, GetWeld(assetImporter));
                     var colors = new Color[encoded.Length];
                     for (int i = 0; i < colors.Length; i++)
                         colors[i] = new Color(encoded[i].x, encoded[i].y, encoded[i].z, encoded[i].w);
-                    // Assign only after the whole mesh succeeded. Keep float RGBA precision.
+                    // Create a fresh Float32 RGBA channel, not a blend with the imported colours.
                     mesh.colors = colors;
                 }
                 catch (Exception exception)
                 {
+                    mesh.tangents=originalTangents;
+                    var fallback=new Color[mesh.vertexCount];
+                    for(int i=0;i<fallback.Length;i++)fallback[i]=new Color(.5f,.5f,1,1);
+                    mesh.colors=Array.Empty<Color>();mesh.colors=fallback;
                     context.LogImportWarning($"描边顶点色烘焙跳过 Mesh「{mesh.name}」：{exception.Message} " +
-                        "请检查模型的 Normals / Tangents 导入设置；该 Mesh 保留原顶点色。");
+                        "请检查模型的 Normals / Tangents 导入设置；已使用中性修正值回退到网格法线，避免将原顶点色误读为修正数据。");
                 }
             }
         }

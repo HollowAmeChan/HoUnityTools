@@ -18,13 +18,18 @@ Inspector 扩展使用 Unity 的 `Editor.finishedDefaultHeaderGUI` 事件追加�
 
 - 使用 GD 的 `HoGeometryDataOutlineCorrectionBuilder` / HoTools `SOLIDIFY_RAW2SMOOTH` 算法：按边的两面角累计方向、Laplacian 判断曲率符号、角点加权求厚度因子。
 - RGB 为切线空间方向编码 `direction * 0.5 + 0.5`；A 保留 GD 的 0.5 中性编码，由 lilToon 现有 RGBA 路径直接乘描边宽度。平面 A 为 0.5，和 GD 模式相同；按需要调整材质描边宽度。
-- 覆盖 FBX 内所有 MeshFilter / SkinnedMeshRenderer 使用的 Mesh 的全部 RGBA 顶点色。保留几何、UV、法线、切线、蒙皮与形态键。
+- 清除导入的原顶点色通道，再写入全新的 Float32 RGBA 修正数据；不混合旧颜色，导出前无需手工删除顶点色。
+- 保留位置、索引、UV、法线、蒙皮与形态键；对几乎平行于法线、退化或长度异常的切线进行正交修复，保证 lilToon 的 TBN 解码与烘焙一致。有效切线保持原值。
 - 仅当位置、蒙皮权重与所有形态键帧的位置变化一致时，才连接重合顶点；不会把变形不同的接缝强行连在一起。
-- 模型必须带法线与切线；在 Model Importer 中导入或计算它们，不要设为 None。仅支持三角形 / 四边形拓扑。无法烘焙的 Mesh 会保留原顶点色，并在导入日志中警告。
+- 模型必须带法线与切线；在 Model Importer 中导入或计算它们，不要设为 None。仅支持三角形 / 四边形拓扑。无法烘焙时写入中性修正值 RGB=(0.5,0.5,1)、A=1 并警告，避免 Shader 误把原色作为修正方向。
 - Read/Write 可以关闭；烘焙在编辑器导入阶段完成，无需运行时组件或额外 GPU buffer。
 - 多个 FBX 的开关互相独立；其他工具的 importer userData 保持原样。
+- 后处理版本已升为 2，启用烘焙的 FBX 会重新生成缓存；关闭功能并重新导入仍可恢复源文件的顶点色与切线。
 
 ## 验证
+
+2026-10-27：Unity 2022.3.22f1 的 Built-in 独立工程通过 66 项检查，包含真实宇宙猫 FBX、退化切线帧修复、Float32 覆盖、失败时中性回退、Read/Write 关闭、原生 Apply/Revert，以及关闭后原色与切线恢复。
+同一宇宙猫模型的“带原顶点色／无顶点色”导出对照中，主体、底部、眼睛和耳朵的解码方向在浮点误差内一致；原色引起的顶点拆分不再放大主体上的 TBN 接缝。
 
 自动验证入口：[Tests~/FbxOutline/Run.ps1](../../Tests~/FbxOutline/Run.ps1)。脚本建立独立 Built-in 管线工程，编译完整 FBX 窗口及相关工具，按参数复制 GD 算法作为测试参照；验证工程没有安装 URP、lilToon 或 Ho 渲染包。
 

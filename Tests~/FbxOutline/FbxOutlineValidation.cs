@@ -124,6 +124,26 @@ public static class FbxOutlineValidation
         Mesh cube = UnityEngine.Object.Instantiate(cubeObject.GetComponent<MeshFilter>().sharedMesh);
         UnityEngine.Object.DestroyImmediate(cubeObject);
         Parity(cube, "Hard-normal / UV seam cube");
+        var malformed=UnityEngine.Object.Instantiate(cube);
+        var malformedTangents=malformed.tangents;
+        for(int i=0;i<malformedTangents.Length;i++)
+        {
+            Vector3 t=(malformed.normals[i]*.99f+(Vector3)malformedTangents[i]*.01f).normalized;
+            malformedTangents[i]=new Vector4(t.x,t.y,t.z,malformedTangents[i].w);
+        }
+        malformed.tangents=malformedTangents;
+        Check(HoFbxOutlineCorrectionBuilder.RepairTangentFrames(malformed)>0,"Repair almost-parallel imported tangent frames");
+        Check(malformed.normals.Zip(malformed.tangents,(n,t)=>Mathf.Abs(Vector3.Dot(n.normalized,((Vector3)t).normalized))<1e-5f).All(v=>v),"Repaired tangent frames are orthogonal");
+        Vector4[] repairedColors=HoFbxOutlineCorrectionBuilder.Build(malformed);
+        Check(repairedColors.Select((c,i)=>
+        {
+            Vector3 n=malformed.normals[i].normalized,t=((Vector3)malformed.tangents[i]).normalized;
+            Vector3 b=Vector3.Cross(n,t).normalized*malformed.tangents[i].w;
+            Vector3 decoded=t*(c.x*2-1)+b*(c.y*2-1)+n*(c.z*2-1);
+            return Vector3.Dot(decoded.normalized,malformed.vertices[i].normalized)>.9999f;
+        }).All(v=>v),"Repaired RGBA still decodes to the geometric direction");
+        Check(HoFbxOutlineCorrectionBuilder.RepairTangentFrames(malformed)==0,"Tangent frame repair is idempotent");
+        UnityEngine.Object.DestroyImmediate(malformed);
         Vector4[] encoded = HoFbxOutlineCorrectionBuilder.Build(cube);
         Vector3[] positions = cube.vertices, normals = cube.normals;
         Vector4[] tangents = cube.tangents;
@@ -177,15 +197,19 @@ public static class FbxOutlineValidation
         Color[][] colors = original.Select(m => m.colors).ToArray();
         if (path == "Assets/OutlineFixture.fbx")
             Check(colors.All(c => c.Length > 0 && c.All(v => Mathf.Abs(v.a - 0.8f) < 0.01f)), path + ": fixture has original authored RGBA");
-        string[] geometry = original.Select(Geometry).ToArray();
-        Vector4[][] expected = original.Select(m => HoGeometryDataOutlineCorrectionBuilder.Build(m)).ToArray();
+        string[] originalGeometry=original.Select(Geometry).ToArray();
+        Mesh[] prepared=original.Select(m=>UnityEngine.Object.Instantiate(m)).ToArray();
+        for(int i=0;i<prepared.Length;i++){prepared[i].name=original[i].name;HoFbxOutlineCorrectionBuilder.RepairTangentFrames(prepared[i]);}
+        string[] geometry = prepared.Select(Geometry).ToArray();
+        Vector4[][] expected = prepared.Select(m => HoGeometryDataOutlineCorrectionBuilder.Build(m)).ToArray();
+        foreach(Mesh mesh in prepared)UnityEngine.Object.DestroyImmediate(mesh);
         string otherData = importer.userData;
         HoFbxOutlineVertexColorPostprocessor.SetSettings(importer, true, true);
         if (path == "Assets/OutlineFixture.fbx")
         {
             importer.importTangents = ModelImporterTangents.None;
             importer.SaveAndReimport();
-            Check(Meshes(path).Select((m, i) => m.colors.SequenceEqual(colors[i])).All(v => v), path + ": missing tangents preserves original colors");
+            Check(Meshes(path).All(m=>m.colors.All(c=>((Vector4)c-new Vector4(.5f,.5f,1,1)).sqrMagnitude<1e-10f)), path + ": missing tangents replaces authored colors with neutral correction data");
             importer.importTangents = ModelImporterTangents.CalculateMikk;
         }
         importer.SaveAndReimport();
@@ -193,6 +217,7 @@ public static class FbxOutlineValidation
         Check(baked.Length == original.Length && baked.Select((m, i) => Geometry(m) == geometry[i]).All(v => v), path + ": geometry / skin / morphs preserved");
         Check(baked.Select((m, i) => m.colors.Length == expected[i].Length && m.colors.Select((c, v) => ((Vector4)c - expected[i][v]).sqrMagnitude < 1e-10f).All(v => v)).All(v => v), path + ": imported colors equal GD output");
         Check(baked.Any(m => m.colors.Any(c => Mathf.Abs(c.a - 0.5f) < 0.3f)), path + ": alpha was replaced");
+        Check(baked.All(m=>m.GetVertexAttributeFormat(UnityEngine.Rendering.VertexAttribute.Color)==UnityEngine.Rendering.VertexAttributeFormat.Float32),path+": correction RGBA is Float32");
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
         Check(HoFbxOutlineVertexColorPostprocessor.IsEnabled(AssetImporter.GetAtPath(path)), path + ": opt-in persists through forced import");
         importer = (ModelImporter)AssetImporter.GetAtPath(path);
@@ -213,6 +238,7 @@ public static class FbxOutlineValidation
         Check(importer.userData == otherData, path + ": other userData preserved exactly");
         importer.SaveAndReimport();
         Check(Meshes(path).Select((m, i) => m.colors.SequenceEqual(colors[i])).All(v => v), path + ": disabling restores original vertex colors");
+        Check(Meshes(path).Select((m,i)=>Geometry(m)==originalGeometry[i]).All(v=>v),path+": disabling restores original geometry / tangents");
     }
 
     private static void WriteFixture()
