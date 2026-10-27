@@ -6,6 +6,7 @@
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 *.csproj
+!Tools~/PmxImport/ParserValidation/ParserValidation.csproj
 *.sln
 *.user
 *.pidb
@@ -23,6 +24,8 @@
 # Local upstream source checkouts used for design research.
 /.research/
 /.research.meta
+/research~/PmxImportReferences/
+/research~/PmxImportReferences.meta
 /.warudo-mod-research
 /.lab
 # 临时工作区（反编译产物、核查报告、编译校验工程等，都是可再生的）
