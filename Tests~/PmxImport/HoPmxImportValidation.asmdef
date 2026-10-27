@@ -1,0 +1,6 @@
+{
+  "name": "HoUnityTools.Pmx.Validation.Editor",
+  "references": ["HoUnityTools.Pmx.Editor", "Unity.RenderPipelines.Universal.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

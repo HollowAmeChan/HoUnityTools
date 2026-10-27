@@ -1,0 +1,142 @@
+{
+  "date": "2026-10-28",
+  "unity": "6000.3.15f1",
+  "pipeline": "HoURP 17.3 + local Ho lilToon",
+  "importStatus": "PASS",
+  "importChecks": 158,
+  "materialCount": 137,
+  "triangleCount": 1012941,
+  "samples": [
+    {
+      "path": "Assets/Samples/马戏团/场景.pmx",
+      "renderers": 29,
+      "triangles": 286342,
+      "materials": 29,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    },
+    {
+      "path": "Assets/Samples/血月古堡/1.pmx",
+      "renderers": 15,
+      "triangles": 241472,
+      "materials": 15,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    },
+    {
+      "path": "Assets/Samples/云景千山/云景千山v2.pmx",
+      "renderers": 43,
+      "triangles": 88210,
+      "materials": 43,
+      "normalMappedMaterials": 29,
+      "metalMappedMaterials": 36
+    },
+    {
+      "path": "Assets/Samples/朱木古堂/主体.pmx",
+      "renderers": 35,
+      "triangles": 254448,
+      "materials": 35,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    },
+    {
+      "path": "Assets/Samples/朱木古堂/吊饰.pmx",
+      "renderers": 3,
+      "triangles": 38160,
+      "materials": 3,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    },
+    {
+      "path": "Assets/Samples/朱木古堂/家具.pmx",
+      "renderers": 7,
+      "triangles": 70147,
+      "materials": 7,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    },
+    {
+      "path": "Assets/Samples/朱木古堂/外院.pmx",
+      "renderers": 5,
+      "triangles": 34162,
+      "materials": 5,
+      "normalMappedMaterials": 0,
+      "metalMappedMaterials": 0
+    }
+  ],
+  "parser": {
+    "syntheticAssertions": 14,
+    "files": 319,
+    "passed": 319,
+    "sourceStatsUnchanged": 319,
+    "totalVertices": 25251321,
+    "totalTriangles": 24330640
+  },
+  "sourceCopy": {
+    "source_files": 158,
+    "hashes_unchanged": 158,
+    "changed": []
+  },
+  "implementationHashes": {
+    "Editor/PmxImport/Format/HoPmxDocument.cs": "5750b32c5960009b9efa017031d8d4c9ee9fbae30cc4a52adf269c175a5d36fe",
+    "Editor/PmxImport/Format/HoPmxReader.cs": "8f63716b2eeb5c0be981189758668f08cba99925756d656f3487bd96d8cf670d",
+    "Editor/PmxImport/HoPmxImporter.cs": "2faf1f3fdbd6d78bdfd1438d6561d960f1977df97be35cd0b1d3710053fc040d",
+    "Editor/PmxImport/HoPmxImporterEditor.cs": "c607352cb3a61db570d4d7cc95ae51264bada1497f0a631c4aef09f1bb967acb",
+    "Editor/PmxImport/HoPmxImportReport.cs": "1877abdb95e3835fd3b65e7ac67d465d6ff004d347ea8f03ea83d8f417e2ae53",
+    "Editor/PmxImport/HoPmxMaterialExtraction.cs": "a409a93416754ae8b640d0a5dcf05032827bdc9b4e8c1abe84630db4528d4991",
+    "Editor/PmxImport/HoPmxMaterials.cs": "59a5b0ca7f6a1ad2a3c3bbf438767f7c3508700b7119a8c70d0e88bf0c03aa55",
+    "Editor/PmxImport/HoPmxMorphBake.cs": "95bdb9925cac08496d5aa2329a95de179f1e950e1245a9f3e3a74031acf3f631",
+    "Editor/PmxImport/HoPmxSourceImage.cs": "afd746d2f51ab1cde3326af20d20358b23be873da25792a530729cce5dc1e388",
+    "Editor/PmxImport/HoPmxTextures.cs": "eef09c513c2148eaa2c2bb4f6ea79de10e7d4f8764c2ed8f540d5ea0f4cbabbd",
+    "Editor/PmxImport/Ray/HoPmxRayDocument.cs": "d97d992ed0212e2414e04651408162ff43a83b87de88bd0f78f54e979d644dd6",
+    "Editor/PmxImport/Ray/HoPmxRayExpression.cs": "8463d28d8e1235311ce36b3ae438738c489e75de39c84e9c13b75751de0375be",
+    "Editor/PmxImport/Ray/HoPmxRayReader.cs": "1ee033e0a2564db3b750ff7ac783b2cf9351196dfb7728de8b95600f17bc5fbb"
+  },
+  "sourceImageSyntheticCases": 37,
+  "rayDataValidation": {
+    "synthetic": "PASS",
+    "realCloudPackage": {
+      "materialSlots": 43,
+      "uniqueFx": 25,
+      "normalConfigurations": 21,
+      "metallicConfigurations": 20,
+      "cutoutFx": 2,
+      "validDependencies": 68
+    }
+  },
+  "graphics": {
+    "gammaDirect3D11": {
+      "status": "PASS",
+      "log": "Results/render-gamma-verified.log",
+      "checks": 9,
+      "scope": "four scene visibility/error-shader smoke; manual image inspection; not author-render parity",
+      "images": {
+        "circus.png": "13054a78d9ba170ce52b3b5381e033c9ec5e8618aac47eec67d2eb5b8f0248d2",
+        "castle.png": "0eb204aa50e86a1d8a6df05d92ac721c5939256c1ff7f93725ffe8d381351e85",
+        "mountain.png": "2da93721b91976fab7fbb3ba6d5def64f79534ff574bf1a830e09c4bf14b6316",
+        "hall.png": "734e2f5c8a3e00d2190dbedfe0d18ec241973e84cb778b8dcde0c0ecdc28e3a3"
+      }
+    },
+    "linearDirect3D11": {
+      "status": "FAIL_DEVICE_LOST",
+      "log": "Results/render-linear-verified.log",
+      "code": "0x887A0005"
+    },
+    "linearDirect3D12": {
+      "status": "FAIL_GPU_HUNG",
+      "log": "Results/render-linear-d3d12.log",
+      "code": "0x887A0006",
+      "outOfMemoryReported": false
+    },
+    "limitation": "Baseline Gamma visibility smoke passed. Additional Linear device loss/hung and a later Gamma probe stall remain unresolved; no attribution to the importer, pipeline or driver is established.",
+    "additionalGammaAngleProbe": {
+      "status": "STOPPED_STALLED",
+      "log": "Results/render-gamma-final.log",
+      "note": "No new result images; prior PASS files are not counted as a new pass."
+    }
+  },
+  "localEvidenceDirectory": "D:\\Unity_Fork\\.codex_temp\\HoPmxImportValidation\\Results",
+  "knownPipelineDiagnostics": [
+    "Unity exit reports four Persistent native allocations in the full Ho pipeline validation environment; this was not isolated to the PMX importer."
+  ]
+}

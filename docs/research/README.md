@@ -4,6 +4,7 @@
 
 | 主题 | 内容 | 对应功能 |
 | --- | --- | --- |
+| [PMX 导入器](PMX_IMPORT_REFERENCES.md) | 原生 Unity PMX 导入仓库、许可证、坐标与材质提取取舍 | [Ho PMX 场景导入](../guides/PMX_SCENE_IMPORT.md) |
 | [骨架装配](COMBINE_ARMATURE.md) | MA 组件摆放与匹配实现、模块化角色的行业形态，以及本轮约束实验的限制 | [Ho CombineArmature](../guides/COMBINE_ARMATURE.md) |
 | [手工加权附着框架](WEIGHTED_ATTACHMENT_PARITY.md) | WTD 双三角定向与旋转混合的 Blender／Unity 数值验证、契约提案边界 | HoFBX 约束导入（待接线） |
 | [常用约束直通方案](DIRECT_CONSTRAINT_IMPORT_PLAN.md) | 三类通用约束的 known 分类与 Standard／HoAux／VRC 后端映射、能力边界 | HoFBX 约束导入（设计） |
