@@ -1,0 +1,9 @@
+{
+  "name": "HoUnityTools.Pmx.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.Editor.Pmx",
+  "references": [],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true,
+  "allowUnsafeCode": false,
+  "noEngineReferences": false
+}
