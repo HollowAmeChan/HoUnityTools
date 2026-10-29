@@ -2191,6 +2191,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
             if (string.Equals(typeName, "Hollow.HoUnityTools.RigConstraints.HoAuxRig", StringComparison.Ordinal))
                 return "HoAuxRig 会连同 partial 文件和运行时依赖一起复制；UMod 按完整类型名链接组件。";
+            if (IsHoVtsRoleComponent(typeName))
+                return "HoVts 角色运行时组件：随角色 Mod 一起复制源码并按完整类型名重绑。";
             if (IsWarudoHostAssembly(assemblyName))
                 return "宿主自带（Warudo 实测清单里有 " + assemblyName +
                        "）：保留 Prefab 组件引用，不复制、不重新编译源码。";
@@ -2201,6 +2203,19 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
                 return "外部包运行时脚本：默认不复制；启用前请确认它的源码依赖也能由 UMod 编译。";
             return "项目运行时脚本：勾选后会生成独立临时副本。";
+        }
+
+        private static bool IsHoVtsRoleComponent(string typeName)
+        {
+            return string.Equals(typeName,
+                       "Hollow.HoUnityTools.FaceTracking.HoVtsParameterReceiver",
+                       StringComparison.Ordinal) ||
+                   string.Equals(typeName,
+                       "Hollow.HoUnityTools.FaceTracking.HoVtsController",
+                       StringComparison.Ordinal) ||
+                   string.Equals(typeName,
+                       "Hollow.HoUnityTools.FaceTracking.HoVtsLookAt",
+                       StringComparison.Ordinal);
         }
 
         /// <summary>组件所属程序集名；取不到时返回空串。</summary>
