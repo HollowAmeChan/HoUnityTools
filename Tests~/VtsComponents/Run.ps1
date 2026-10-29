@@ -12,7 +12,7 @@ $packageRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Pat
 $runtime = Join-Path $Project 'Assets\VtsRuntime'
 $editor = Join-Path $Project 'Assets\Editor'
 New-Item -ItemType Directory -Force -Path $runtime, $editor | Out-Null
-foreach ($name in @('HoVtsController.cs','HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs',
+foreach ($name in @('HoVtsController.cs','HoVtsLookAt.cs','HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs',
     'HoFaceMiddleware.cs','HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot "Runtime\FaceTracking\$name") -Destination $runtime
 }

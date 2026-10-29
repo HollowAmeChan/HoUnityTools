@@ -28,7 +28,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("")]
-    [DefaultExecutionOrder(32000)]
+    [DefaultExecutionOrder(31000)]
     public sealed class HoVtsController : MonoBehaviour
     {
         [SerializeField] private HoVtsParameterReceiver parameterReceiver;

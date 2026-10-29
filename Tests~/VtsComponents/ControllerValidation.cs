@@ -41,6 +41,7 @@ public static class HoVtsControllerValidation
     private static void Run()
     {
         Delivery();
+        Pose();
         var root = new GameObject("Character");
         var originalAnimator = root.AddComponent<Animator>();
         originalAnimator.enabled = false;
@@ -178,6 +179,99 @@ public static class HoVtsControllerValidation
         UnityEngine.Object.Destroy(root);
         UnityEngine.Object.Destroy(other);
     }
+
+    private static void Pose()
+    {
+        var root = new GameObject("PoseCharacter");
+        root.transform.rotation = Quaternion.Euler(12, 150, -5);
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var head = new GameObject("Head").transform;
+        head.SetParent(root.transform, false);
+        head.localRotation = Quaternion.Euler(7, 5, 11);
+        Quaternion headRest = head.localRotation;
+        var left = new GameObject("LeftEye").transform;
+        left.SetParent(head, false);
+        left.localRotation = Quaternion.Euler(3, 65, 9);
+        Quaternion leftRest = left.localRotation;
+        var right = new GameObject("RightEye").transform;
+        right.SetParent(head, false);
+        right.localRotation = Quaternion.Euler(-3, -65, 9);
+        Quaternion rightRest = right.localRotation;
+        var pose = root.AddComponent<HoVtsLookAt>();
+        pose.AutoRun = false;
+        pose.ParameterReceiver = receiver;
+        pose.ReferenceFrame = root.transform;
+        pose.Head = head; pose.LeftEye = left; pose.RightEye = right;
+        var raw = new Dictionary<string, float> {
+            { "Rotation_x", 10 }, { "Rotation_y", -25 }, { "Rotation_z", 8 },
+            { "EyeLeft_x", -5 }, { "EyeLeft_y", 12 }, { "EyeLeft_z", 0 },
+            { "EyeRight_x", -4 }, { "EyeRight_y", 11 }, { "EyeRight_z", 1 } };
+        receiver.ApplyRawFrame(raw, true, 1);
+        Check(pose.EvaluateNow(0), "pose works with no Animator or Avatar: " + pose.Status);
+        Quaternion frame = root.transform.rotation;
+        Quaternion headOffset = Quaternion.Euler(10, -25, 8);
+        Quaternion leftOffset = Quaternion.Euler(-5, 12, 0);
+        Quaternion rightOffset = Quaternion.Euler(-4, 11, 1);
+        RotationNear(head.rotation, frame * headOffset * headRest, "head uses reference axes");
+        RotationNear(left.rotation, frame * leftOffset * Quaternion.Inverse(frame) * head.rotation * leftRest, "left eye uses reference axes on rotated bone");
+        RotationNear(right.rotation, frame * rightOffset * Quaternion.Inverse(frame) * head.rotation * rightRest, "right eye uses independent pose");
+        Quaternion first = head.localRotation;
+        for (int i = 0; i < 500; i++) pose.EvaluateNow(1f / 60);
+        RotationNear(head.localRotation, first, "pose offsets do not accumulate");
+        root.transform.rotation = Quaternion.Euler(-10, 25, 15);
+        pose.EvaluateNow(0);
+        RotationNear(head.rotation, root.transform.rotation * headOffset * headRest, "moving reference frame remains consistent");
+
+        Quaternion animatedBase = Quaternion.Euler(-7, 4, 13);
+        head.localRotation = animatedBase;
+        pose.EvaluateNow(0);
+        RotationNear(head.rotation, root.transform.rotation * headOffset * animatedBase, "upstream pose becomes the current baseline");
+        pose.HeadEnabled = false;
+        pose.EvaluateNow(0);
+        RotationNear(head.localRotation, animatedBase, "head can be released for official pose chain");
+        Check(left.localRotation != leftRest, "eyes remain independently driven");
+        pose.HeadEnabled = true;
+        pose.EvaluateNow(0);
+        receiver.ApplyRawFrame(raw, false, 2);
+        Check(pose.EvaluateNow(0), "lost tracking returns pose");
+        RotationNear(head.localRotation, animatedBase, "lost tracking head neutral");
+        RotationNear(left.localRotation, leftRest, "lost tracking eye neutral");
+
+        pose.SmoothingSeconds = .2f;
+        receiver.ApplyRawFrame(raw, true, 3);
+        pose.EvaluateNow(.2f);
+        Quaternion smoothOffset = Quaternion.Slerp(Quaternion.identity, headOffset, 1 - Mathf.Exp(-1));
+        RotationNear(head.rotation, root.transform.rotation * smoothOffset * animatedBase, "pose smoothing uses elapsed time");
+        pose.SmoothingSeconds = 0;
+        pose.EvaluateNow(0);
+        Quaternion held = head.localRotation;
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Rotation_x", 89 } }, true, 4);
+        pose.EvaluateNow(0);
+        RotationNear(head.localRotation, held, "partial rotation packet holds last complete rotation");
+        pose.ParameterSource = HoVtsPoseParameterSource.Processed;
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Rotation_x", 0 }, { "Rotation_y", 15 }, { "Rotation_z", 0 } });
+        Check(pose.EvaluateNow(0), "processed pose is an explicit optional source");
+        RotationNear(head.rotation, root.transform.rotation * Quaternion.Euler(0, 15, 0) * animatedBase, "processed source does not secretly read raw pose");
+
+        Quaternion external = Quaternion.Euler(20, 10, 30);
+        head.localRotation = external;
+        pose.enabled = false;
+        RotationNear(head.localRotation, external, "disable does not undo a newer external bone writer");
+        RotationNear(left.localRotation, leftRest, "disable restores owned eye pose");
+        pose.enabled = true;
+        pose.EvaluateNow(0);
+        receiver.ClearFrame();
+        Check(!pose.EvaluateNow(0), "input release stops pose constraint");
+        RotationNear(head.localRotation, external, "input release restores pose baseline");
+        receiver.ApplyRawFrame(raw, true, 5);
+        pose.ParameterSource = HoVtsPoseParameterSource.CalibratedRaw;
+        pose.ReferenceFrame = head;
+        Check(!pose.EvaluateNow(0), "driven bone cannot also be its reference frame");
+        UnityEngine.Object.Destroy(root);
+    }
+
+    private static void RotationNear(Quaternion actual, Quaternion expected, string name) =>
+        Check(Quaternion.Angle(actual, expected) < .1f, name + ": angular error=" + Quaternion.Angle(actual, expected));
 
     private static void Delivery()
     {
