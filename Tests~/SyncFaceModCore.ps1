@@ -1,15 +1,6 @@
-# sync-modcore.ps1
-#
-# Copies the face middle-layer runtime sources from the HoUnityTools package into the
-# Warudo mod workspace, so the editor panel and the Warudo runtime evaluate the *same*
-# code. Only the namespace changes.
-#
-# Why a script and not a symlink/junction: Unity's asset database does not follow
-# junctions reliably, and the two projects are separate Unity projects.
-#
-# ASCII-only on purpose: PowerShell 5.1 reads .ps1 as ANSI unless there is a BOM, so any
-# non-ASCII byte in this file becomes mojibake. The Chinese explanation lives in
-# Mods-Ho/HoFaceTracking/Core/PORTED.md inside the mod workspace.
+# Synchronize only the shared protocol parser sources.
+# Role rules, controller evaluation and hubs are not copied into the input plugin.
+# ASCII-only for Windows PowerShell 5.1.
 
 param(
     [string] $PackageRoot = (Split-Path -Parent $PSScriptRoot),
@@ -21,26 +12,8 @@ $ErrorActionPreference = 'Stop'
 
 # source (in the package) -> destination (in the mod). Same file name.
 $files = @(
-    'HoFaceOutputTable.cs',       # sequential reads and in-place output overrides
-    'HoFaceExpression.cs',        # the expression evaluator (parse once, evaluate per frame)
-    'HoFaceMiddleware.cs',        # row objects, curve transfer, modifier kinds (no built-in defaults: deleted)
-    'HoFaceProfile.cs',           # the *.hoface.json format: name + entry points
-    'HoJson.cs',                  # the shared minimal JSON reader (JsonUtility drops nested lists)
-    'HoVtsPacket.cs',             # VTS iPhone wire format: request builder + payload parser (pure, testable)
-    'HoFaceProfileJson.cs',       # our own JSON reader/writer (JsonUtility drops the list fields in a player)
-    'HoFaceTrackingChannels.cs',  # the 52 canonical ARKit names
-    'HoFaceNaming.cs',            # parameter naming rules
-    # The dynamic-parameter Hub (single component since 2026-09-27). The CHARACTER PREFAB carries it, and
-    # that prefab is authored in a mod workspace -- so both assemblies need the SAME type, byte-identical.
-    # It only uses UnityEngine (MonoBehaviour + List<struct>); verified to compile and lint clean inside a
-    # mod assembly. NOTE: deliberately NO #if UNITY_EDITOR inside it -- this script only prepends a header
-    # and rewrites the namespace, so conditional blocks diverge.
-    # 2026-09-26: the vocabulary became a COMPONENT (Connector), not a ScriptableObject asset -- there is
-    # no .asset file anymore; the slot TABLE was deleted too (whoever writes claims the slot by name).
-    # 2026-09-27: the Connector itself is GONE (it only re-pointed at the hub once the table was gone),
-    # and the hub is now ONE list of (key, value) tuples instead of two parallel arrays (the curve path
-    # that needed `float[] values` was deleted 2026-09-26).
-    'HoFaceSemanticHub.cs'              # the (key, value) list: opened by whoever writes, read/written by name
+    'HoJson.cs',       # protocol JSON reader only; rules belong to character components
+    'HoVtsPacket.cs'   # complete VTS iPhone wire packet
 )
 
 $fromNamespace = 'Hollow.HoUnityTools.FaceTracking'
