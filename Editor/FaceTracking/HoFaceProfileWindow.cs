@@ -35,6 +35,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         private const string LeftWidthPref = "HoUnityTools.FaceProfile.LeftWidth";
 
         private TextAsset profile;
+        [SerializeField] private HoVtsParameterReceiver componentTarget;
+        [SerializeField] private bool componentMode;
+        [SerializeField] private string componentDraft;
+        [SerializeField] private bool componentDraftDirty;
         private HoFaceMiddleware middleware;
         private int selected = -1;
         private string search = "";
@@ -215,8 +219,22 @@ namespace Hollow.HoUnityTools.FaceTracking
         public static void Open(TextAsset profile)
         {
             HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
+            window.componentMode = false;
+            window.componentTarget = null;
             window.profile = profile;
             window.selected = -1;
+            window.ReloadProfile(true);
+            window.Repaint();
+        }
+
+        public static void Open(HoVtsParameterReceiver receiver)
+        {
+            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "角色规则", true);
+            if (window.componentMode && window.componentTarget == receiver && window.middleware != null) return;
+            window.componentMode = true;
+            window.componentTarget = receiver;
+            window.profile = null;
+            window.componentDraft = null;
             window.ReloadProfile(true);
             window.Repaint();
         }
@@ -225,11 +243,26 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             minSize = new Vector2(560.0f, 420.0f);
             leftWidth = Mathf.Clamp(EditorPrefs.GetFloat(LeftWidthPref, leftWidth), LeftWidthMin, LeftWidthMax);
-            if (middleware == null && profile != null) ReloadProfile(true);
+            if (componentMode && !string.IsNullOrEmpty(componentDraft)
+                && HoFaceProfile.TryParse(componentDraft, out var draft, out _))
+            {
+                middleware = draft;
+                dirty = componentDraftDirty;
+                ClearHistory();
+            }
+            else if (middleware == null && (profile != null || componentMode)) ReloadProfile(true);
         }
 
         private void OnLostFocus() => ReleaseSplitter();
-        private void OnDisable() => ReleaseSplitter();
+        private void OnDisable()
+        {
+            if (componentMode && middleware != null)
+            {
+                componentDraft = HoFaceProfile.Write(middleware);
+                componentDraftDirty = dirty;
+            }
+            ReleaseSplitter();
+        }
 
         private void ReleaseSplitter()
         {
@@ -398,6 +431,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void DrawTopBar()
         {
+            if (componentMode) { DrawComponentTopBar(); return; }
             using (HoConstraintEditorControls.Card())
             {
                 // ⚠️ 顶栏**不在任何 ScrollView 里**（见 OnGUI），所以它一旦撑宽就是整个窗口出滚动条。
@@ -1671,6 +1705,93 @@ ActiveRows().Insert(to, moved);
         /// * 从空开始，`输入行 N / 输出行 M` 与状态行会如实说"什么都还没有"，
         ///   比"建出来就 52 行、不知道哪来的"好查。
         /// </summary>
+        private void DrawComponentTopBar()
+        {
+            using (HoConstraintEditorControls.Card())
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.ObjectField("角色规则组件", componentTarget, typeof(HoVtsParameterReceiver), true);
+                    if (Application.isPlaying && HoVtsRuleAuthoring.PrefabSource(componentTarget) != null)
+                        EditorGUILayout.ObjectField("保存目标", HoVtsRuleAuthoring.PrefabSource(componentTarget), typeof(HoVtsParameterReceiver), false);
+                }
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    int mode = GUILayout.Toolbar(editingInputs ? 1 : 0, RowKindNames, GUILayout.Width(120));
+                    if ((mode == 1) != editingInputs)
+                    {
+                        editingInputs = mode == 1;
+                        selected = -1;
+                        listScroll = Vector2.zero;
+                        GUI.FocusControl(null);
+                    }
+                    using (new EditorGUI.DisabledScope(componentTarget == null))
+                    {
+                        if (GUILayout.Button(Application.isPlaying ? "应用到当前实例" : "保存到组件")) SaveComponent(false);
+                        if (Application.isPlaying)
+                        {
+                            using (new EditorGUI.DisabledScope(HoVtsRuleAuthoring.PrefabSource(componentTarget) == null))
+                                if (GUILayout.Button("保存到角色预制件")) SaveComponent(true);
+                        }
+                        if (GUILayout.Button("重新读取")) ReloadProfile(false);
+                    }
+                }
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("导入 JSON")) ImportComponentDraft();
+                    using (new EditorGUI.DisabledScope(middleware == null))
+                    {
+                        if (GUILayout.Button("导出 JSON"))
+                        {
+                            string path = EditorUtility.SaveFilePanel("导出角色规则", Application.dataPath, "角色规则.hoface.json", "json");
+                            if (!string.IsNullOrEmpty(path))
+                            {
+                                try { WriteText(path, HoFaceProfile.Write(middleware)); SetMessage("已导出 " + path, false); }
+                                catch (Exception error) { SetMessage(error.Message, true); }
+                            }
+                        }
+                    }
+                    using (new EditorGUI.DisabledScope(!CanUndo)) if (GUILayout.Button("撤销")) Undo();
+                    using (new EditorGUI.DisabledScope(!CanRedo)) if (GUILayout.Button("重做")) Redo();
+                    if (dirty) GUILayout.Label("有未保存改动", EditorStyles.miniLabel);
+                }
+                if (Application.isPlaying)
+                    EditorGUILayout.HelpBox("应用到当前实例仅用于本次播放；保存到角色预制件才会保留到下一次运行。", MessageType.None);
+                if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, messageIsError ? MessageType.Error : MessageType.None);
+            }
+        }
+
+        private void ImportComponentDraft()
+        {
+            string path = EditorUtility.OpenFilePanel("导入角色规则草稿", Application.dataPath, "json");
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                if (!HoFaceProfile.TryParse(System.IO.File.ReadAllText(path), out var parsed, out string error))
+                    throw new InvalidOperationException(error);
+                RecordIfChanged();
+                middleware = parsed;
+                selected = -1;
+                dirty = true;
+                RecordIfChanged();
+                SetMessage("已导入为草稿，保存或应用后生效", false);
+            }
+            catch (Exception error) { SetMessage(error.Message, true); }
+        }
+
+        private void SaveComponent(bool saveToPrefab)
+        {
+            try
+            {
+                string backup = HoVtsRuleAuthoring.Commit(componentTarget, middleware, saveToPrefab);
+                bool temporary = Application.isPlaying && !EditorUtility.IsPersistent(componentTarget) && !saveToPrefab;
+                dirty = temporary;
+                SetMessage(temporary ? "已应用到当前播放实例；未写入角色预制件"
+                    : "角色规则已保存；修改前备份：" + backup, false);
+            }
+            catch (Exception error) { SetMessage(error.Message, true); }
+        }
+
         private void NewProfile()
         {
             string path = EditorUtility.SaveFilePanelInProject("新建面捕配置", NewProfileName, "hoface.json",
@@ -1701,6 +1822,11 @@ ActiveRows().Insert(to, moved);
 
         private void SaveProfile()
         {
+            if (componentMode)
+            {
+                SaveComponent(false);
+                return;
+            }
             if (profile == null)
             {
                 SetMessage("没有选中配置文件。", true);
@@ -1732,6 +1858,15 @@ ActiveRows().Insert(to, moved);
 
         private void ReloadProfile(bool silent)
         {
+            if (componentMode)
+            {
+                middleware = componentTarget != null ? HoVtsRuleAuthoring.Clone(componentTarget.Middleware) : null;
+                selected = -1;
+                dirty = false;
+                ClearHistory();
+                if (!silent) SetMessage(componentTarget != null ? "已读取角色组件规则" : "目标组件已丢失", componentTarget == null);
+                return;
+            }
             if (profile == null)
             {
                 middleware = null;

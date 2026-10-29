@@ -47,6 +47,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Project 'ProjectSettings\ProjectSet
 }
 Copy-Item -LiteralPath (Join-Path $SourceProject 'Assets\ExportSettings.asset') -Destination (Join-Path $Project 'Assets\ExportSettings.asset')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'PackagingValidation.cs') -Destination $editor
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'AuthoringValidation.cs') -Destination $editor
 if ([string]::IsNullOrEmpty($ModCore)) { $ModCore = Join-Path $SourceProject 'Assets\HoWarudoModTests\Mods-Ho\HoFaceTracking\Core' }
 $delivery = Join-Path $Project 'Assets\Delivery'
 New-Item -ItemType Directory -Force -Path $delivery | Out-Null
@@ -62,7 +63,7 @@ $arguments = @('-batchmode', '-nographics', '-projectPath', ('"' + $Project + '"
 $process = Start-Process -FilePath $Unity -ArgumentList $arguments -WindowStyle Hidden -PassThru
 Write-Output "Unity packaging validation PID: $($process.Id)"
 $process.WaitForExit()
-Get-Content -LiteralPath $log | Select-String 'HO_VTS_PACKAGING|error CS|Illegal reference|validation failed'
+Get-Content -LiteralPath $log | Select-String 'HO_VTS_AUTHORING|HO_VTS_PACKAGING|error CS|Illegal reference|validation failed'
 if ($process.ExitCode -ne 0) { throw "Unity packaging validation failed ($($process.ExitCode)); see $log" }
 if (-not (Test-Path -LiteralPath $report) -or -not (Select-String -LiteralPath $report -Pattern '^HO_VTS_PACKAGING PASS' -Quiet)) {
     throw 'Packaging PASS report missing.'
@@ -76,7 +77,7 @@ $arguments = @('-batchmode', '-nographics', '-projectPath', ('"' + $Project + '"
 $process = Start-Process -FilePath $Unity -ArgumentList $arguments -WindowStyle Hidden -PassThru
 Write-Output "Unity artifact runtime validation PID: $($process.Id)"
 $process.WaitForExit()
-Get-Content -LiteralPath $runtimeLog | Select-String 'HO_VTS_PACKAGING|HO_VTS_MOD_RUNTIME|error CS|Exception:'
+Get-Content -LiteralPath $runtimeLog | Select-String 'HO_VTS_AUTHORING|HO_VTS_PACKAGING|HO_VTS_MOD_RUNTIME|error CS|Exception:'
 if ($process.ExitCode -ne 0) { throw "UMod runtime validation failed ($($process.ExitCode)); see $runtimeLog" }
 if (-not (Test-Path -LiteralPath $runtimeReport) -or -not (Select-String -LiteralPath $runtimeReport -Pattern '^HO_VTS_MOD_RUNTIME PASS' -Quiet)) {
     throw 'Mod runtime PASS report missing.'

@@ -31,8 +31,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
         private List<HoVtsParameterSlot> values = new List<HoVtsParameterSlot>();
-        // The rule data belongs to the role. It is hidden from the default inspector until
-        // the dedicated rule editor is migrated; it is intentionally not a TextAsset path.
+        // Role-owned data. The dedicated editor edits detached drafts before explicit save.
         [SerializeField, HideInInspector] private HoFaceMiddleware middleware = new HoFaceMiddleware();
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
@@ -101,6 +100,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             evaluator = null;
             lastEvaluationTime = -1.0;
+            evaluatedUnityFrame = -1;
         }
 
         private void EnsureEvaluator()
@@ -287,6 +287,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         private void OnDisable() { ClearFrame(); }
+        private void OnValidate() { RebuildEvaluator(); }
         private void LateUpdate()
         {
             if (evaluatedUnityFrame != Time.frameCount) Tick(Time.realtimeSinceStartupAsDouble);

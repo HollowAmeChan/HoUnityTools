@@ -39,6 +39,7 @@ public static class HoVtsPackagingValidation
                 Call("FinishBuildState", previous, true);
             }
             PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_4_6);
+            HoVtsAuthoringValidation.Run();
             CreateFixture();
             var settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>("Assets/ExportSettings.asset");
             Require(settings != null, "SDK export settings loaded");
@@ -153,6 +154,7 @@ public static class HoVtsPackagingValidation
         var delivery = new HoVtsFrameDelivery();
         try
         {
+            HoVtsAuthoringValidation.RunPlay();
             string artifact = Path.Combine(Project, "Artifacts/HoVtsComponentsValidation.warudo");
             Require(File.Exists(artifact), "built artifact exists");
             host = UMod.Mod.Load(new Uri(artifact), true);
@@ -180,6 +182,13 @@ public static class HoVtsPackagingValidation
             raw["JawOpen"] = .2f;
             value = (float)receiver.GetType().GetMethod("GetRaw").Invoke(receiver, new object[] { "JawOpen", -1f });
             Require(Mathf.Abs(value - .6f) < .0001f, "Mod receiver owns a copied raw frame");
+            double sampleTime = Time.realtimeSinceStartupAsDouble;
+            raw["JawOpen"] = 0;
+            delivery.Deliver(instance, raw, true, sampleTime, "validation");
+            raw["JawOpen"] = 1;
+            delivery.Deliver(instance, raw, true, sampleTime + .1, "validation");
+            value = (float)receiver.GetType().GetMethod("Get").Invoke(receiver, new object[] { "Drive", -1f });
+            Require(value != 1, "bundled nested modifiers participate in the solve");
             Require((bool)controller.GetType().GetMethod("EvaluateNow", new[] { typeof(float) }).Invoke(controller, new object[] { 0f }),
                 "Mod controller graph evaluates its bundled controller");
             var mesh = instance.GetComponentInChildren<SkinnedMeshRenderer>();
@@ -233,7 +242,10 @@ public static class HoVtsPackagingValidation
             host.transform.SetParent(root.transform, false);
             var receiver = host.AddComponent<HoVtsParameterReceiver>();
             var rules = new HoFaceMiddleware();
-            rules.outputs.Add(new HoFaceOutput { parameter = "Drive", expression = "JawOpen" });
+            var input = new HoFaceOutput { parameter = "Canonical", expression = "JawOpen", curve = AnimationCurve.Linear(-1, -1, 1, 1) };
+            input.modifiers.Add(new HoFaceModifier { kind = HoFaceModifierKind.Smooth, seconds = .1f });
+            rules.inputs.Add(input);
+            rules.outputs.Add(new HoFaceOutput { parameter = "Drive", expression = "Canonical", curve = AnimationCurve.Linear(-1, -1, 1, 1) });
             receiver.SetMiddleware(rules);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(Folder + "/Face.controller");
             controller.AddParameter("Drive", AnimatorControllerParameterType.Float);
