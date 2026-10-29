@@ -77,6 +77,10 @@ HoFaceVTS接收器 → HoFaceVTS参数标定 → 角色输入桥接 → HoVtsPar
 
 标定后的数据应由明确的桥接入口写入目标角色。桥接可以是标定节点的目标角色接口或独立薄写入节点，具体数量在实施时确定；不能声称网络接收器既只交原始值，又能越过标定节点直接写入角色。桥接只查找组件、交付字典与追踪状态，不运行规则或控制器，不自动给角色添加组件。
 
+目前实现为独立的“HoVTS角色输入”节点：角色选择 CharacterAsset，标定节点的“标定后原始值”接同名输入，网络接收节点的“新鲜”接“输入新鲜”。插件每帧调用隐藏执行入口，以 Warudo 的正常依赖求值拉取上游，无需再接一条可见执行线或连接状态输出。蓝图停用、节点销毁、切换角色、插件卸载时释放旧输入。
+
+跨 Mod 使用 Unity 消息交付：先以 HoVtsFindReceiver 查询当前角色层级的启用接收器，恰好一份时才发送 HoVtsReceiveFrame。消息仅包含 Dictionary<string,float>、bool、double、string 和 Action<GameObject>，不共享自定义组件或 DTO 类型，也不调用 System.Reflection。角色同步复制字典、执行自己的规则并确认接收。多份接收器报歧义，不任取第一份。释放消息带来源标记，旧来源不能清掉其他来源已经写入的帧。
+
 输入必须覆盖完整 VTS 字典，而不只包含 ARKit 形状。当前 iPhone 实测字段为 52 个形状、12 个头/眼姿态分量及 FaceFound、Hotkey、Timestamp；未知自定义键不因固定标定表而丢失。头姿和位移不能统一压成 0～1；FaceFound、Hotkey、Timestamp 原样透传，不做连续标定。新鲜度与 FaceFound 一起决定追踪状态，不能仅凭字典非空判断有脸。时间行为使用单调本地时钟，不能把已转为 float 的协议 Timestamp 当精确计时器。
 
 标定值保留在 Warudo 蓝图中，同一角色换设备时无需重打角色 Mod。Unity 调试可以直接喂原始数据或接输入侧标定；不向角色组件另存一份标定配置。
@@ -186,6 +190,8 @@ Hollow.HoUnityTools.FaceTracking.HoVtsLookAt
 
 本文记录最终目标和分阶段进度，不代表整套系统已经完成。`HoVtsParameterReceiver` 已接入包内 `HoVtsRuleEvaluator`，收到一帧后按角色组件持有的 `HoFaceMiddleware` 求值并写入处理后表；`HoVtsController` 已能读取这份表，独立求值控制器并写回角色。
 
-FastBuild 已登记三个 `HoVts*` 完整类型名的组件说明，并在导出副本重绑脚本之前准备控制器动画绑定。控制器已通过 Unity 2021.3.45f2 播放模式的混合树、禁用角色 Animator、属性写入范围、默认参数、释放恢复、多角色隔离和预制件序列化验证；入口为 Tests~/VtsComponents/Run.ps1，仅用于有标记的一次性验证工程。包内 Runtime 与 Editor 源码也已对实际工程引用编译通过。这些检查不等于 UMod 实际产物验收，跨 Mod 桥接与 UMod 构建仍待验证。
+FastBuild 已登记三个 `HoVts*` 完整类型名的组件说明，并在导出副本重绑脚本之前准备控制器动画绑定。控制器已通过 Unity 2021.3.45f2 播放模式的混合树、禁用角色 Animator、属性写入范围、默认参数、释放恢复、多角色隔离和预制件序列化验证；入口为 Tests~/VtsComponents/Run.ps1，仅用于有标记的一次性验证工程。包内 Runtime 与 Editor 源码也已对实际工程引用编译通过。
 
-HoVtsLookAt、输入桥接、断流时域行为和 Unity 调试面板迁移仍未完成。当前仓库中的 HoFT 页面、HoFace 控制求解节点、参数处理节点和影子控制器仍属于旧实现，按本文分阶段迁移。
+HoVTS角色输入节点已实现并注册，插件对真实 Warudo DLL 编译和现有 UMod 静态 lint 通过。交付器在不引用角色程序集的独立 Unity 程序集中，通过了消息交付、完整未知键、负姿态、FaceFound/新鲜度、来源释放、多接收器歧义和禁用接收器验证。当前集成探针共 58 项断言通过。这些检查不等于真实 UMod 产物和 Warudo 运行验收，两项仍待完成。无追踪帧保留原始诊断值，规则从声明默认值重新求值，不保持旧表情；主动释放输入则交还控制器拥有的属性。未受适配器驱动时的自主超时行为仍待补齐。
+
+HoVtsLookAt、自主断流时域行为、角色迁移和 Unity 调试面板迁移仍未完成。当前仓库中的 HoFT 页面、HoFace 控制求解节点、参数处理节点和影子控制器仍属于旧实现，按本文分阶段迁移。

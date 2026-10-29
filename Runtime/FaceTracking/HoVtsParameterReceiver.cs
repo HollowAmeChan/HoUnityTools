@@ -21,35 +21,57 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// <summary>
     /// Per-character VTS parameter hub.
     ///
-    /// This component is deliberately a small runtime boundary first. It does not know about
-    /// Warudo, AnimatorController, AssetBundle, or any specific consumer. An input adapter owns
-    /// the raw frame; the future rule runner writes processed values; controller and LookAt
-    /// components read the same per-character state.
+    /// An input adapter provides complete VTS frames. The role's rules publish processed
+    /// values for controller and LookAt consumers; no platform API is referenced here.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("")]
     public sealed class HoVtsParameterReceiver : MonoBehaviour
     {
-        [SerializeField] private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
-        [SerializeField] private List<HoVtsParameterSlot> values = new List<HoVtsParameterSlot>();
+        private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
+        private List<HoVtsParameterSlot> values = new List<HoVtsParameterSlot>();
         // The rule data belongs to the role. It is hidden from the default inspector until
         // the dedicated rule editor is migrated; it is intentionally not a TextAsset path.
         [SerializeField, HideInInspector] private HoFaceMiddleware middleware = new HoFaceMiddleware();
-        [SerializeField] private bool tracked;
-        [SerializeField] private double lastFrameTime = -1.0;
-        [SerializeField] private string source = string.Empty;
+        private bool tracked;
+        private double lastFrameTime = -1.0;
+        private string source = string.Empty;
 
         private readonly Dictionary<string, int> rawIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> valueIndices = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> evaluationRaw = new Dictionary<string, float>(StringComparer.Ordinal);
         private HoVtsRuleEvaluator evaluator;
         private double lastEvaluationTime = -1.0;
 
         public bool Tracked => tracked;
+        public bool HasFrame => lastFrameTime >= 0;
         public double LastFrameTime => lastFrameTime;
         public string Source => source ?? string.Empty;
         public int RawCount => rawValues != null ? rawValues.Count : 0;
         public int ValueCount => values != null ? values.Count : 0;
         public HoFaceMiddleware Middleware => middleware;
+
+        // Unity messages deliberately use only Unity/BCL types. Character and input-adapter
+        // mods are separate assemblies and must not cast copies of our component type.
+        public void HoVtsFindReceiver(Action<GameObject> found)
+        {
+            if (isActiveAndEnabled) found?.Invoke(gameObject);
+        }
+
+        public void HoVtsReceiveFrame(object payload)
+        {
+            var packet = payload as object[];
+            if (!isActiveAndEnabled || packet == null || packet.Length != 5
+                || !(packet[0] is Dictionary<string, float>) || !(packet[1] is bool)
+                || !(packet[2] is double) || !(packet[3] is string) || !(packet[4] is Action<GameObject>)) return;
+            ApplyRawFrame((Dictionary<string, float>)packet[0], (bool)packet[1], (double)packet[2], (string)packet[3]);
+            ((Action<GameObject>)packet[4])(gameObject);
+        }
+
+        public void HoVtsReleaseInput(object owner)
+        {
+            if (owner is string name && name == Source) ClearFrame();
+        }
 
         public void SetMiddleware(HoFaceMiddleware value)
         {
@@ -73,17 +95,28 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void ApplyRawFrame(Dictionary<string, float> frame, bool faceTracked, double timestamp,
             string frameSource = null)
         {
+            if (double.IsNaN(timestamp) || double.IsInfinity(timestamp) || timestamp < 0)
+                throw new ArgumentOutOfRangeException(nameof(timestamp), "Use a finite nonnegative local clock.");
             EnsureTables();
             Replace(rawValues, rawIndices, frame);
+            bool wasTracked = tracked;
             tracked = faceTracked;
             lastFrameTime = timestamp;
             source = frameSource ?? string.Empty;
 
+            if (!faceTracked && wasTracked)
+            {
+                // Keep the raw packet for diagnosis, but do not hold a stale facial expression.
+                evaluator = null;
+                lastEvaluationTime = -1.0;
+            }
             EnsureEvaluator();
             float deltaTime = lastEvaluationTime >= 0.0 && timestamp >= lastEvaluationTime
                 ? Mathf.Min((float)(timestamp - lastEvaluationTime), 0.25f)
                 : 0f;
-            evaluator.Evaluate(frame, deltaTime, timestamp);
+            evaluationRaw.Clear();
+            if (faceTracked) CopyTo(rawValues, evaluationRaw);
+            evaluator.Evaluate(evaluationRaw, deltaTime, timestamp);
             SetProcessedValues(evaluator.Parameters);
             lastEvaluationTime = timestamp;
         }
@@ -198,5 +231,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             return float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
         }
+
+        private void OnDisable() { ClearFrame(); }
     }
 }

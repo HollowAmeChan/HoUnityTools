@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string] $Project,
-    [string] $Unity = 'D:\Unity\Unity 2021.3.45f2\Editor\Unity.exe'
+    [string] $Unity = 'D:\Unity\Unity 2021.3.45f2\Editor\Unity.exe',
+    [string] $ModCore = 'D:\Unity_Project\BreakWarudo\Assets\HoWarudoModTests\Mods-Ho\HoFaceTracking\Core'
 )
 $ErrorActionPreference = 'Stop'
 $Project = (Resolve-Path -LiteralPath $Project).Path
@@ -17,6 +18,10 @@ foreach ($name in @('HoVtsController.cs','HoVtsParameterReceiver.cs','HoVtsRuleE
 }
 Copy-Item -LiteralPath (Join-Path $packageRoot 'Editor\FaceTracking\HoVtsControllerEditor.cs') -Destination $editor
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ControllerValidation.cs') -Destination $editor
+$bridge = Join-Path $Project 'Assets\Delivery'
+New-Item -ItemType Directory -Force -Path $bridge | Out-Null
+Copy-Item -LiteralPath (Join-Path $ModCore 'HoVtsFrameDelivery.cs') -Destination $bridge
+Set-Content -LiteralPath (Join-Path $bridge 'HoVtsDeliveryValidation.asmdef') -Value '{"name":"HoVtsDeliveryValidation","references":[],"autoReferenced":true}'
 $log = Join-Path $Project 'vts-controller.log'
 $arguments = @('-batchmode', '-nographics', '-projectPath', ('"' + $Project + '"'),
     '-executeMethod', 'HoVtsControllerValidation.RunBatch', '-logFile', ('"' + $log + '"'))

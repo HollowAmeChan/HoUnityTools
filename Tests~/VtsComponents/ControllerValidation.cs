@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.Editor.FaceTracking;
+using HoFaceTracking.Core;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -39,6 +40,7 @@ public static class HoVtsControllerValidation
 
     private static void Run()
     {
+        Delivery();
         var root = new GameObject("Character");
         var originalAnimator = root.AddComponent<Animator>();
         originalAnimator.enabled = false;
@@ -140,6 +142,11 @@ public static class HoVtsControllerValidation
         receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", 1 } });
         Check(component.EvaluateNow(0), "reenable recreates graph");
         Near(renderer.GetBlendShapeWeight(0), 100, "reenabled output");
+        receiver.ClearFrame();
+        Check(!component.EvaluateNow(0), "released input stops the controller");
+        Near(renderer.GetBlendShapeWeight(0), 17, "released input restores owned shape");
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", 1 } });
+        Check(component.EvaluateNow(0), "new input restarts released controller");
         receiver.enabled = false;
         Check(!component.EvaluateNow(0), "disabled receiver releases output");
         Near(renderer.GetBlendShapeWeight(0), 17, "receiver disable restores shape");
@@ -170,6 +177,63 @@ public static class HoVtsControllerValidation
         component.Stop();
         UnityEngine.Object.Destroy(root);
         UnityEngine.Object.Destroy(other);
+    }
+
+    private static void Delivery()
+    {
+        var character = new GameObject("DeliveryCharacter");
+        var host = new GameObject("VTS");
+        host.transform.SetParent(character.transform, false);
+        var receiver = host.AddComponent<HoVtsParameterReceiver>();
+        var rules = new HoFaceMiddleware();
+        rules.outputs.Add(new HoFaceOutput { parameter = "Drive", expression = "JawOpen" });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Pose", expression = "RotationPitch" });
+        rules.outputs.Add(new HoFaceOutput { parameter = "One", expression = "", defaultValue = 1 });
+        receiver.SetMiddleware(rules);
+        var delivery = new HoVtsFrameDelivery();
+        var raw = new Dictionary<string, float> { { "JawOpen", .6f }, { "RotationPitch", -45 }, { "FaceFound", 1 }, { "Custom", 123 }, { "Invalid", float.NaN } };
+        Check(delivery.Deliver(character, raw, true, 1, "test"), "cross-assembly message delivery: " + delivery.Status);
+        Check(receiver.Tracked && receiver.Source == "test", "tracking and source delivered");
+        Near(receiver.Get("Drive"), .6f, "delivery invokes character-owned rules");
+        Near(receiver.Get("Pose"), -45, "signed pose has no implicit clamp");
+        Near(receiver.GetRaw("Custom"), 123, "unknown VTS field retained");
+        Near(receiver.GetRaw("Invalid"), 0, "nonfinite raw input sanitized");
+        raw["JawOpen"] = .9f;
+        Near(receiver.GetRaw("JawOpen"), .6f, "input dictionary copied before sender reuses it");
+
+        Check(delivery.Deliver(character, raw, false, 2, "test"), "stale input delivered as untracked");
+        Check(!receiver.Tracked, "freshness participates in tracking");
+        Near(receiver.Get("Drive"), 0, "lost tracking releases stale expression");
+        Near(receiver.Get("One"), 1, "lost tracking preserves author constants");
+        raw["FaceFound"] = 0;
+        delivery.Deliver(character, raw, true, 3, "test");
+        Check(!receiver.Tracked, "FaceFound zero overrides fresh network input");
+        raw.Remove("FaceFound");
+        delivery.Deliver(character, raw, true, 4, "test");
+        Check(!receiver.Tracked, "dictionary nonempty is insufficient for face tracking");
+        raw["FaceFound"] = 1;
+        delivery.Deliver(character, raw, true, 5, "test");
+        receiver.ApplyRawFrame(raw, true, 6, "another-source");
+        delivery.Release();
+        Check(receiver.Source == "another-source", "old sender release does not clear another source");
+        delivery.Deliver(character, raw, true, 7, "test");
+        delivery.Release();
+        Check(!receiver.Tracked && receiver.RawCount == 0 && receiver.ValueCount == 0, "sender release clears its frame");
+
+        var duplicate = new GameObject("Duplicate");
+        duplicate.transform.SetParent(character.transform, false);
+        duplicate.AddComponent<HoVtsParameterReceiver>();
+        Check(!delivery.Deliver(character, raw, true, 8, "test"), "ambiguous receivers rejected");
+        Check(receiver.RawCount == 0, "ambiguous discovery delivers no partial frame");
+        duplicate.SetActive(false);
+        Check(delivery.Deliver(character, raw, true, 9, "test"), "inactive receiver excluded");
+        receiver.enabled = false;
+        Check(!delivery.Deliver(character, raw, true, 10, "test"), "disabled receiver excluded");
+        receiver.enabled = true;
+        Check(!delivery.Deliver(null, raw, true, 11, "test"), "missing character rejected");
+        Check(character.GetComponentsInChildren<HoVtsParameterReceiver>(true).Length == 2, "delivery does not add components");
+        delivery.Release();
+        UnityEngine.Object.Destroy(character);
     }
 
     private static AnimationClip Clip(string name, float shape, float position, float scale)

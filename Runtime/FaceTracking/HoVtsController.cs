@@ -127,6 +127,12 @@ namespace Hollow.HoUnityTools.FaceTracking
                     : parameterReceiver == null ? "未指定参数接收器" : "参数接收器已停用";
                 return false;
             }
+            if (!parameterReceiver.HasFrame && parameterReceiver.ValueCount == 0)
+            {
+                Stop();
+                status = "等待输入帧";
+                return false;
+            }
             if (graph.IsValid() && resolvedController == controller && resolvedOutputRoot == outputRoot
                 && resolvedReceiver == parameterReceiver) return true;
             Stop();
