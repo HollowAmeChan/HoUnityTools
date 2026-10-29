@@ -41,6 +41,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private readonly Dictionary<string, int> rawIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> valueIndices = new Dictionary<string, int>(StringComparer.Ordinal);
+        private HoVtsRuleEvaluator evaluator;
+        private double lastEvaluationTime = -1.0;
 
         public bool Tracked => tracked;
         public double LastFrameTime => lastFrameTime;
@@ -52,6 +54,19 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void SetMiddleware(HoFaceMiddleware value)
         {
             middleware = value ?? new HoFaceMiddleware();
+            evaluator = null;
+            lastEvaluationTime = -1.0;
+        }
+
+        public void RebuildEvaluator()
+        {
+            evaluator = null;
+            lastEvaluationTime = -1.0;
+        }
+
+        private void EnsureEvaluator()
+        {
+            if (evaluator == null) evaluator = new HoVtsRuleEvaluator(middleware);
         }
 
         /// <summary>Accept one raw adapter frame. Values are copied; the caller may reuse its dictionary.</summary>
@@ -63,6 +78,14 @@ namespace Hollow.HoUnityTools.FaceTracking
             tracked = faceTracked;
             lastFrameTime = timestamp;
             source = frameSource ?? string.Empty;
+
+            EnsureEvaluator();
+            float deltaTime = lastEvaluationTime >= 0.0 && timestamp >= lastEvaluationTime
+                ? Mathf.Min((float)(timestamp - lastEvaluationTime), 0.25f)
+                : 0f;
+            evaluator.Evaluate(frame, deltaTime, timestamp);
+            SetProcessedValues(evaluator.Parameters);
+            lastEvaluationTime = timestamp;
         }
 
         /// <summary>Replace processed values after the rule runner has evaluated one frame.</summary>
@@ -86,6 +109,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             tracked = false;
             lastFrameTime = -1.0;
             source = string.Empty;
+            evaluator = null;
+            lastEvaluationTime = -1.0;
         }
 
         public bool TryGet(string name, out float value)
