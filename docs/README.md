@@ -11,8 +11,8 @@
 | 给角色安装独立衣服、合并或约束骨架 | [Ho CombineArmature](guides/COMBINE_ARMATURE.md) |
 | 使用跟随、摆锤、眨眼、注视约束 | [功能指南：角色约束](guides/README.md#角色约束) |
 | 预览动画、调整播放速度、截图或离线录制 | [功能指南：动画与录制](guides/README.md#动画与录制) |
-| 把角色或面部控制器导出给 Warudo | [Warudo FastBuild](guides/WARUDO_FAST_BUILD.md) |
-| 使用或维护面捕工具 | [面捕入口](face-tracking/README.md) |
+| 把角色导出给 Warudo | [Warudo FastBuild](guides/WARUDO_FAST_BUILD.md) |
+| 使用或维护面捕工具 | [面捕入口](face-tracking/README.md) · [新 VTS 角色组件架构](face-tracking/VTS_COMPONENT_ARCHITECTURE.md) |
 | 排查面捕、资产引用、Unity 时序或打包问题 | [排错索引](pitfalls/README.md) |
 | 排查 VRChat 组件白名单或播放调参回写 | [VRC 构建组件](pitfalls/VRC_BUILD_COMPONENT_WHITELIST.md) · [播放调参回写](pitfalls/PLAYMODE_VALUE_ROUNDTRIP.md) |
 | 修改 Inspector 界面 | [编辑器 UI 设计约定](guides/EDITOR_UI_SYSTEM.md) |

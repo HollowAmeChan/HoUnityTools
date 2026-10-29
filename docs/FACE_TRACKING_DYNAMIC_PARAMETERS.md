@@ -1,5 +1,7 @@
 ﻿# 动态参数（语义输出）：Hub + 前缀
 
+> **旧设计记录**：面捕参数中枢的新规划见 [VTS 角色组件架构](face-tracking/VTS_COMPONENT_ARCHITECTURE.md)。下文记录旧 HoFaceSemanticHub；新角色的规则与参数归 HoVtsParameterReceiver，本轮尚未迁移代码。
+
 2026-09-25 定稿；**2026-09-26 ~ 27 连着改了五次设计**，最后落成现在这个形状：
 **一个组件**（`HoFaceSemanticHub`）、**一条键值对列表**、**一个写入口**（中间层）。
 ⚠️ 中间那几版（ScriptableObject 词表 / 曲线写 `values.<i>` / 控制器状态上的写手 / 槽表 / 「把手」Connector）

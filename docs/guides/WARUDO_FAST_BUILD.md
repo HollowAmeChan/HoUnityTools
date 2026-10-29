@@ -136,7 +136,9 @@ UMod.BuildEngine.ModToolsUtil.StartBuild(
 
 FastBuild 通过反射查找这个入口，因此 HoUnityTools 包本身不强依赖 Warudo DLL。没有 SDK 的工程仍可安装并使用其他 HoUnityTools 功能；FastBuild 窗口会保留入口，但整个面板会禁用并显示原因。
 
-## HoFT 页：控制器 → AssetBundle（面捕）
+## HoFT 页：控制器 → AssetBundle（面捕，旧路线）
+
+> 已被新规划取代。新系统把控制器和中间层放进角色预制件的 HoVtsController / HoVtsParameterReceiver 组件，不再依赖 HoFT AssetBundle。此节保留作旧角色迁移和历史复现参考；新角色不要继续扩展这条路线。新架构见 [VTS 角色组件架构](../face-tracking/VTS_COMPONENT_ARCHITECTURE.md)。
 
 窗口第三个页签，跟角色/其他 Mod 的构建流程**没有关系**（不碰 ExportSettings、不调 UMod 构建）：
 它把一个 `AnimatorController` 和**它驱动的那套预制体**打成一个 `AssetBundle` 文件，给 Warudo 的
