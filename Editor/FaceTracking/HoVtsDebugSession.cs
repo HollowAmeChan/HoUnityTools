@@ -21,6 +21,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public GameObject Target { get; }
         public HoVtsParameterReceiver Receiver { get; }
         public bool Disposed { get; private set; }
+        public string SourceId => source;
         public IReadOnlyDictionary<string, float> InputPins => inputPins;
         public IReadOnlyDictionary<string, float> OutputPins => outputPins;
         public void ReleaseInput(string name) { inputPins.Remove(name); pinsChanged = true; }

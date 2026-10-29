@@ -48,6 +48,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly Dictionary<string, float> inputOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> outputOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private string overrideSource;
+        public event Action<HoVtsParameterReceiver, double, float> Evaluated;
+        public int RuleRevision { get; private set; }
+        public bool TryReadRuleStages(bool input, int row, out float expression, out float curve, out bool active)
+        {
+            expression = curve = 0; active = false;
+            return evaluator != null && evaluator.TryReadStages(input, row, out expression, out curve, out active);
+        }
 
         /// <summary>Transient diagnostic overrides. They never modify serialized role rules.</summary>
         public void SetDebugOverrides(IReadOnlyDictionary<string, float> inputs, IReadOnlyDictionary<string, float> outputs, string ownerSource = null)
@@ -119,12 +126,14 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void SetMiddleware(HoFaceMiddleware value)
         {
             middleware = value ?? new HoFaceMiddleware();
+            RuleRevision++;
             evaluator = null;
             lastEvaluationTime = -1.0;
         }
 
         public void RebuildEvaluator()
         {
+            RuleRevision++;
             evaluator = null;
             lastEvaluationTime = -1.0;
             evaluatedUnityFrame = -1;
@@ -200,6 +209,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             SetProcessedValues(evaluator.Parameters);
             lastEvaluationTime = now;
             evaluatedUnityFrame = Time.frameCount;
+            Evaluated?.Invoke(this, now, deltaTime);
         }
 
         /// <summary>Replace processed values after the rule runner has evaluated one frame.</summary>

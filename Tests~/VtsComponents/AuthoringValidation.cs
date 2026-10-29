@@ -76,6 +76,7 @@ public static class HoVtsAuthoringValidation
 
     public static void RunPlay()
     {
+        Trace();
         DebugSession();
         var asset = AssetDatabase.LoadAssetAtPath<GameObject>(PathName);
         Require(asset != null, "authoring fixture exists for play-mode editing");
@@ -111,6 +112,56 @@ public static class HoVtsAuthoringValidation
             Debug.Log("HO_VTS_AUTHORING_PLAY PASS");
         }
         finally { UnityEngine.Object.DestroyImmediate(instance); Undo.ClearAll(); }
+    }
+
+    private static void Trace()
+    {
+        var root = new GameObject("Trace");
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var rules = new HoFaceMiddleware();
+        rules.inputs.Add(new HoFaceOutput { parameter = "Canonical", expression = "Wire", curve = AnimationCurve.Linear(-1, -2, 1, 2) });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Result", expression = "Canonical * 2", curve = AnimationCurve.Linear(-2, -6, 2, 6) });
+        receiver.SetMiddleware(rules);
+        try
+        {
+            using (var session = new HoVtsDebugSession(root, false))
+            using (var recording = new HoVtsTraceRecorder(session, 0, 10))
+            {
+                session.PinOutput("Result", .9f);
+                double now = Time.realtimeSinceStartupAsDouble;
+                session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .1f } }, true, now);
+                receiver.Tick(now + .05);
+                for (int i = 0; i < 20; i++) receiver.Get("Result");
+                Require(!receiver.Tick(now + .05) && recording.Samples == 2, "trace observes actual solves without adding solves for reads or repeated time");
+                recording.Stop();
+                var lines = File.ReadAllLines(recording.FilePath);
+                Require(lines.Length == 4 && lines[0].Contains("ho-vts-trace") && lines[3].Contains("manual-stop"), "trace file has header, observed frames and an explicit footer");
+                var frame = JsonUtility.FromJson<HoVtsTraceRecorder.Frame>(lines[1]);
+                Require(Mathf.Abs(frame.inputs[0].expression - .1f) < .0001f && Mathf.Abs(frame.inputs[0].curve - .2f) < .0001f,
+                    "trace captures actual input expression and signed curve stages");
+                Require(Mathf.Abs(frame.outputs[0].expression - .4f) < .0001f && Mathf.Abs(frame.outputs[0].curve - 1.2f) < .0001f
+                    && Mathf.Abs(frame.outputs[0].modified - 1.2f) < .0001f && frame.outputs[0].published == .9f,
+                    "trace separates expression, curve, solved and overridden publication");
+                Require(frame.wires[0].value == .1f && frame.outputOverrides[0].value == .9f && frame.tracked, "trace includes raw values, overrides and tracking state");
+                var second = JsonUtility.FromJson<HoVtsTraceRecorder.Frame>(lines[2]);
+                Require(second.clock > frame.clock && second.lastReceivedAt == frame.lastReceivedAt, "autonomous tick does not pretend a packet arrived");
+                using (var changed = new HoVtsTraceRecorder(session, 0, 10))
+                {
+                    receiver.SetMiddleware(HoVtsRuleAuthoring.Clone(rules));
+                    receiver.Tick(now + .1);
+                    Require(!changed.Recording && changed.StopReason == "configuration-changed" && changed.Samples == 0,
+                        "trace does not mix different rule revisions");
+                }
+                using (var external = new HoVtsTraceRecorder(session, 0, 10))
+                {
+                    receiver.ApplyRawFrame(new System.Collections.Generic.Dictionary<string, float>(), false, now + .2, "external");
+                    Require(!external.Recording && external.StopReason == "input-source-changed" && external.Samples == 0,
+                        "trace does not collect another input owner's data");
+                }
+            }
+            Debug.Log("HO_VTS_TRACE PASS");
+        }
+        finally { UnityEngine.Object.DestroyImmediate(root); }
     }
 
     private static void DebugSession()
@@ -162,6 +213,9 @@ public static class HoVtsAuthoringValidation
             Require(receiver.Source == "external" && receiver.HasFrame, "stopping debug does not clear a newer external source");
             receiver.ClearFrame();
             Require(HoVtsDebugHost.Start(root), "new panel host starts from only the character target");
+            HoVtsDebugHost.Record(5, 0);
+            HoVtsDebugHost.Session.Feed(new System.Collections.Generic.Dictionary<string, float>(), false, Time.realtimeSinceStartupAsDouble);
+            Require(HoVtsDebugHost.Recorder.Recording && HoVtsDebugHost.Recorder.Samples == 1, "panel host records the component session");
             HoVtsDebugWindow.Open();
             var window = EditorWindow.GetWindow<HoVtsDebugWindow>();
             try
@@ -178,8 +232,10 @@ public static class HoVtsAuthoringValidation
             }
             finally { window.Close(); }
             Require(HoVtsDebugHost.Running, "closing the panel keeps the debug host running");
+            Require(HoVtsDebugHost.Recorder.Recording, "closing the panel keeps recording active");
             HoVtsDebugHost.Stop();
             Require(!HoVtsDebugHost.Running, "panel host stop releases the session");
+            Require(!HoVtsDebugHost.Recorder.Recording && HoVtsDebugHost.Recorder.StopReason == "session-stopped", "panel host stop closes its trace with a reason");
             var extra = new GameObject("Ambiguous"); extra.transform.SetParent(root.transform, false); extra.AddComponent<HoVtsParameterReceiver>();
             bool ambiguous = false;
             try { new HoVtsDebugSession(root, false); } catch (InvalidOperationException) { ambiguous = true; }

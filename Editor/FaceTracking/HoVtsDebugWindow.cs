@@ -10,6 +10,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     {
         public static HoVtsDebugSession Session { get; private set; }
         public static string Error { get; private set; }
+        public static HoVtsTraceRecorder Recorder { get; private set; }
+        public static void Record(double seconds, double interval)
+        {
+            Recorder?.Stop();
+            try { Recorder = new HoVtsTraceRecorder(Session, interval, seconds); Error = null; }
+            catch (Exception error) { Error = error.Message; }
+        }
         public static bool Running => Session != null && !Session.Disposed;
         public static bool Start(GameObject target)
         {
@@ -18,7 +25,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             try { Session = new HoVtsDebugSession(target); Error = null; return true; }
             catch (Exception error) { Error = error.Message; return false; }
         }
-        public static void Stop() { Session?.Dispose(); Session = null; Error = null; }
+        public static void Stop() { Recorder?.Stop("session-stopped"); Session?.Dispose(); Session = null; Error = null; }
     }
 
     public sealed class HoVtsDebugWindow : EditorWindow
@@ -31,6 +38,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private int tab;
         private bool componentsExpanded;
         private double nextRepaint;
+        private float recordSeconds = 5, recordInterval;
 
         [MenuItem("HoUnityTools/面捕/调试面板", false, 10)]
         public static void Open() => GetWindow<HoVtsDebugWindow>("Ho VTS 调试");
@@ -98,6 +106,21 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var session = HoVtsDebugHost.Running && HoVtsDebugHost.Session.Target == target ? HoVtsDebugHost.Session : null;
             using (new EditorGUI.DisabledScope(session == null))
                 if (GUILayout.Button("清除全部临时覆盖")) session?.ClearPins();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label("录样 秒 / 间隔", GUILayout.Width(95));
+                recordSeconds = EditorGUILayout.FloatField(recordSeconds, GUILayout.Width(48));
+                recordInterval = EditorGUILayout.FloatField(recordInterval, GUILayout.Width(48));
+                bool recording = HoVtsDebugHost.Recorder != null && HoVtsDebugHost.Recorder.Recording;
+                using (new EditorGUI.DisabledScope(session == null))
+                    if (GUILayout.Button(recording ? "停止录样" : "开始录样"))
+                    {
+                        if (recording) HoVtsDebugHost.Recorder.Stop(); else HoVtsDebugHost.Record(recordSeconds, recordInterval);
+                    }
+                if (HoVtsDebugHost.Recorder != null && GUILayout.Button("定位文件")) EditorUtility.RevealInFinder(HoVtsDebugHost.Recorder.FilePath);
+            }
+            if (HoVtsDebugHost.Recorder != null) EditorGUILayout.LabelField("录样", HoVtsDebugHost.Recorder.Samples + " 帧 · "
+                + (HoVtsDebugHost.Recorder.Recording ? "进行中" : HoVtsDebugHost.Recorder.StopReason));
             scroll = EditorGUILayout.BeginScrollView(scroll);
             if (tab == 0)
             {
@@ -120,7 +143,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         : receiver.TryReadOutputRow(i, out configured, out effective);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        GUILayout.Label(new GUIContent(row.parameter, row.expression), GUILayout.MinWidth(140), GUILayout.ExpandWidth(true));
+                        receiver.TryReadRuleStages(tab == 1, i, out float expression, out float curve, out _);
+                        GUILayout.Label(new GUIContent(row.parameter, row.expression + "\n表达式 " + expression + " → 曲线 " + curve
+                            + " → 修饰 " + configured + " → 发布 " + effective), GUILayout.MinWidth(140), GUILayout.ExpandWidth(true));
                         GUILayout.Label(present ? configured.ToString("G5") : "—", GUILayout.Width(62));
                         GUILayout.Label(present ? effective.ToString("G5") : "—", GUILayout.Width(62));
                         DrawPin(session, row.parameter, present ? effective : row.defaultValue);

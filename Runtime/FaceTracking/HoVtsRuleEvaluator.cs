@@ -43,6 +43,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         public int InputRowCount { get { return inputRows.Length; } }
 
         private IReadOnlyDictionary<string, float> inputOverrides, outputOverrides;
+        private readonly float[] inputExpressionsSeen, inputCurvesSeen, outputExpressionsSeen, outputCurvesSeen;
+        public bool TryReadStages(bool input, int row, out float expression, out float curve, out bool active)
+        {
+            expression = curve = 0; active = false;
+            if (row < 0 || row >= (input ? inputRows.Length : outputs.Length)) return false;
+            expression = (input ? inputExpressionsSeen : outputExpressionsSeen)[row];
+            curve = (input ? inputCurvesSeen : outputCurvesSeen)[row];
+            active = (input ? inputExpressions[row] : expressions[row]) != null;
+            return true;
+        }
         public void SetOverrides(IReadOnlyDictionary<string, float> inputs, IReadOnlyDictionary<string, float> outputs)
         { inputOverrides = inputs; outputOverrides = outputs; }
 
@@ -134,6 +144,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             inputRows = new HoFaceOutput[inputList.Count];
             inputExpressions = new HoFaceExpression[inputList.Count];
             inputValues = new float[inputList.Count];
+            inputExpressionsSeen = new float[inputList.Count]; inputCurvesSeen = new float[inputList.Count];
             inputFresh = new bool[inputList.Count];
             // 修饰符状态按「行 × 第几个修饰符」开槽（先算前缀和，再按槽位总数分配）。
             inputModifierOffset = new int[inputList.Count];
@@ -159,6 +170,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 // **这一行的默认值**（照 VBridger 的 `defaultValue`）：那条线名一帧都没来过时，
                 // 这个规范名就是它 —— 摆成初值，于是"没数据"不再等于隐式 0。
                 inputValues[i] = inputList[i].defaultValue;
+                inputExpressionsSeen[i] = inputCurvesSeen[i] = inputValues[i];
                 HoFaceExpression parsed;
                 string parseError;
                 if (string.IsNullOrWhiteSpace(inputList[i].expression))
@@ -181,6 +193,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             outputKeys = new string[rows.Count];
             expressions = new HoFaceExpression[rows.Count];
             outputValues = new float[rows.Count];
+            outputExpressionsSeen = new float[rows.Count]; outputCurvesSeen = new float[rows.Count];
             // 同上：输出行的修饰符状态也按「行 × 第几个修饰符」开槽。
             modifierOffset = new int[rows.Count];
             int modifierSlots = 0;
@@ -299,7 +312,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                     if (!Has(rawValues, touched[i])) { present = false; break; }
                 if (!present) { inputFresh[row] = false; continue; }
 
+                inputExpressionsSeen[row] = value;
                 value = inputRows[row].Transform(value);
+                inputCurvesSeen[row] = value;
                 value = ApplyModifiers(inputModifierOffset[row], inputRows[row], value, deltaTime, now,
                     inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay, inputDelayHeld);
                 inputValues[row] = value;
@@ -321,9 +336,10 @@ namespace Hollow.HoUnityTools.FaceTracking
                 // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
                 // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
                 //    ⇒ 走同一条路：**始终输出 defaultValue**。
-                float value = expressions[row] != null
-                    ? output.Transform(expressions[row].Evaluate(Lookup, LookupOutput))
-                    : output.defaultValue;
+                float value = expressions[row] != null ? expressions[row].Evaluate(Lookup, LookupOutput) : output.defaultValue;
+                outputExpressionsSeen[row] = value;
+                if (expressions[row] != null) value = output.Transform(value);
+                outputCurvesSeen[row] = value;
                 value = ApplyModifiers(row, output, value, Mathf.Max(0f, deltaTime), now);
 
                 // ⑤ **极小值归零**（2026-09-27 用户实测）：面板用 F4 显示，于是"影子台里是
