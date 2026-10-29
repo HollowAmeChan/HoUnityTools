@@ -32,6 +32,9 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         [SerializeField] private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
         [SerializeField] private List<HoVtsParameterSlot> values = new List<HoVtsParameterSlot>();
+        // The rule data belongs to the role. It is hidden from the default inspector until
+        // the dedicated rule editor is migrated; it is intentionally not a TextAsset path.
+        [SerializeField, HideInInspector] private HoFaceMiddleware middleware = new HoFaceMiddleware();
         [SerializeField] private bool tracked;
         [SerializeField] private double lastFrameTime = -1.0;
         [SerializeField] private string source = string.Empty;
@@ -44,6 +47,12 @@ namespace Hollow.HoUnityTools.FaceTracking
         public string Source => source ?? string.Empty;
         public int RawCount => rawValues != null ? rawValues.Count : 0;
         public int ValueCount => values != null ? values.Count : 0;
+        public HoFaceMiddleware Middleware => middleware;
+
+        public void SetMiddleware(HoFaceMiddleware value)
+        {
+            middleware = value ?? new HoFaceMiddleware();
+        }
 
         /// <summary>Accept one raw adapter frame. Values are copied; the caller may reuse its dictionary.</summary>
         public void ApplyRawFrame(Dictionary<string, float> frame, bool faceTracked, double timestamp,
