@@ -216,6 +216,8 @@ Hollow.HoUnityTools.FaceTracking.HoVtsLookAt
 
 ## 10. 当前状态
 
+2026-10-30 用户明确由自己执行后续 Build Mod 与 Warudo 客户端测试。代码迁移继续推进，不再以自动启动客户端验收作为下一步动作；已有测试结论按实际证据记录，不将 SDK 内验证等同于设备实测。
+
 本文记录最终目标和分阶段进度，不代表整套系统已经完成。三个角色组件均已存在：`HoVtsParameterReceiver` 接收完整帧并执行角色规则，`HoVtsController` 独立求值表情控制器，`HoVtsLookAt` 独立处理头眼旋转。
 
 FastBuild 已登记三个 `HoVts*` 完整类型名的组件说明，并在导出副本重绑脚本之前准备控制器动画绑定。控制器已通过 Unity 2021.3.45f2 播放模式的混合树、禁用角色 Animator、属性写入范围、默认参数、释放恢复、多角色隔离和预制件序列化验证；入口为 Tests~/VtsComponents/Run.ps1，仅用于有标记的一次性验证工程。包内 Runtime 与 Editor 源码也已对实际工程引用编译通过。

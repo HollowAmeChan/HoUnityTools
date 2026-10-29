@@ -58,4 +58,8 @@ SHA-256：C367972FCD45B538F31192CCF60EA4745BB26EFE470FFA6765A1F9042022AD1C。
 
 ## 尚未证明的项目
 
+后续 Build Mod 和 Warudo 客户端测试按用户要求由用户执行。输入插件也已通过官方 UMod 构建，87 个类型中确认包含新角色输入、标定、姿态输出和交付器，并确认相应节点注册。标定倍率已修正为围绕参数零点缩放、最后限制输出范围，14 项数值回归通过。
+
+本轮曾将验证产物复制到本机 Warudo 安装目录，旧 WTD.warudo 与 HoFaceTracking.warudo 保存在 D:/Unity_Project/BreakWarudo/Logs/HoVtsClientDeployment/20261029-163749。新插件指纹为 E202BFBDF0B64900373402E776C8FB980B06A1AC9DD9C26E7EC6B7E2A3A970AE。首次直接启动客户端因 Steam API 初始化失败停在启动阶段，随后已停止该测试进程，未完成客户端验收，也未修改蓝图。用户提出自行测试后，不再继续客户端启动和验收操作。
+
 WTD 的实际 Character Mod 构建与 SDK 内产物加载已验证。Warudo 客户端加载、现有蓝图切换到 HoVTS角色输入，以及设备驱动下表情与官方姿态共存仍需继续验收。Unity 中实际 UMod 加载不等于 Warudo 客户端验收。
