@@ -3210,6 +3210,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 }
                 root.name = "Character";
                 Hollow.HoUnityTools.Editor.Armatures.HoCombineArmatureProcessor.ProcessHierarchy(root);
+                Hollow.HoUnityTools.Editor.FaceTracking.HoVtsControllerBindings.PrepareHierarchy(root);
                 MonoBehaviour[] behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);
                 foreach (MonoBehaviour behaviour in behaviours)
                 {

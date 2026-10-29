@@ -1,0 +1,203 @@
+// Real-engine integration checks. Install only in a disposable project with Run.ps1.
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Hollow.HoUnityTools.FaceTracking;
+using Hollow.HoUnityTools.Editor.FaceTracking;
+using UnityEditor;
+using UnityEditor.Animations;
+using UnityEngine;
+
+public static class HoVtsControllerValidation
+{
+    private const string Pending = "HoVtsControllerValidation.Pending";
+    private static int assertions;
+
+    [InitializeOnLoadMethod]
+    private static void Resume() { EditorApplication.update += RunWhenPlaying; }
+
+    public static void RunBatch()
+    {
+        if (!File.Exists(Path.Combine(Application.dataPath, "../.ho-vts-validation")))
+            throw new InvalidOperationException("Disposable project marker missing");
+        SessionState.SetBool(Pending, true);
+        EditorApplication.isPlaying = true;
+    }
+
+    private static void RunWhenPlaying()
+    {
+        if (!SessionState.GetBool(Pending, false) || !EditorApplication.isPlaying || EditorApplication.isCompiling) return;
+        SessionState.SetBool(Pending, false);
+        try
+        {
+            Run();
+            Debug.Log("HO_VTS_CONTROLLER PASS assertions=" + assertions);
+            EditorApplication.Exit(0);
+        }
+        catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+    }
+
+    private static void Run()
+    {
+        var root = new GameObject("Character");
+        var originalAnimator = root.AddComponent<Animator>();
+        originalAnimator.enabled = false;
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var face = new GameObject("Face");
+        face.transform.SetParent(root.transform, false);
+        var mesh = new Mesh { vertices = new[] { Vector3.zero, Vector3.right, Vector3.up }, triangles = new[] { 0, 1, 2 } };
+        mesh.AddBlendShapeFrame("Driven", 100, new Vector3[3], new Vector3[3], new Vector3[3]);
+        mesh.AddBlendShapeFrame("Unowned", 100, new Vector3[3], new Vector3[3], new Vector3[3]);
+        AssetDatabase.CreateAsset(mesh, "Assets/Face.asset");
+        var renderer = face.AddComponent<SkinnedMeshRenderer>();
+        renderer.sharedMesh = mesh;
+        renderer.SetBlendShapeWeight(0, 17);
+        renderer.SetBlendShapeWeight(1, 33);
+        var bone = new GameObject("Bone").transform;
+        bone.SetParent(root.transform, false);
+        bone.localPosition = new Vector3(1, 2, 3);
+        var gate = new GameObject("Gate").transform;
+        gate.SetParent(root.transform, false);
+        var rotation = new GameObject("Rotation").transform;
+        rotation.SetParent(root.transform, false);
+        var host = new GameObject("VTS");
+        host.transform.SetParent(root.transform, false);
+        var component = host.AddComponent<HoVtsController>();
+        component.AutoRun = false;
+        component.ParameterReceiver = receiver;
+        component.OutputRoot = root.transform;
+        var controller = AnimatorController.CreateAnimatorControllerAtPath("Assets/Validation.controller");
+        controller.AddParameter("Drive", AnimatorControllerParameterType.Float);
+        controller.AddParameter("One", AnimatorControllerParameterType.Float);
+        var controllerParams = controller.parameters;
+        controllerParams[1].defaultFloat = 1;
+        controller.parameters = controllerParams;
+        var low = Clip("Low", 0, 1, 1);
+        var high = Clip("High", 100, 5, 2);
+        AssetDatabase.AddObjectToAsset(low, controller);
+        AssetDatabase.AddObjectToAsset(high, controller);
+        var tree = new BlendTree { name = "Face", blendType = BlendTreeType.Simple1D, blendParameter = "Drive", useAutomaticThresholds = false };
+        tree.AddChild(low, 0); tree.AddChild(high, 1);
+        AssetDatabase.AddObjectToAsset(tree, controller);
+        var state = controller.layers[0].stateMachine.AddState("Face");
+        state.motion = tree;
+        state.writeDefaultValues = false;
+        // A separate layer verifies missing dictionary parameters keep their controller defaults.
+        controller.AddLayer("Constant");
+        var layers = controller.layers;
+        layers[1].defaultWeight = 1;
+        controller.layers = layers;
+        var constant = new BlendTree { name = "Constant", blendType = BlendTreeType.Simple1D, blendParameter = "One", useAutomaticThresholds = false };
+        var zeroScale = ScaleClip("Zero", 1);
+        var oneScale = ScaleClip("One", 3);
+        AssetDatabase.AddObjectToAsset(zeroScale, controller);
+        AssetDatabase.AddObjectToAsset(oneScale, controller);
+        constant.AddChild(zeroScale, 0); constant.AddChild(oneScale, 1);
+        AssetDatabase.AddObjectToAsset(constant, controller);
+        var constantState = layers[1].stateMachine.AddState("Constant");
+        constantState.motion = constant;
+        constantState.writeDefaultValues = false;
+        component.Controller = controller;
+        HoVtsControllerBindings.Prepare(component);
+        Check(component.BindingCount == 8, "authored property count");
+
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", .5f } });
+        Check(component.EvaluateNow(0), "controller evaluates: " + component.Status);
+        Near(renderer.GetBlendShapeWeight(0), 50, "blend tree input");
+        Near(renderer.GetBlendShapeWeight(1), 33, "unowned shape preserved");
+        Near(bone.localPosition.x, 3, "position curve");
+        Near(bone.localScale.y, 1.5f, "scale curve");
+        Near(gate.localScale.z, 3, "missing One preserves default 1");
+        Near(Quaternion.Angle(rotation.localRotation, Quaternion.Euler(0, 0, 25)), 0, "quaternion animation");
+        Check(!originalAnimator.enabled && originalAnimator.runtimeAnimatorController == null, "disabled character Animator untouched");
+        Check(host.GetComponent<Animator>() == null, "controller slot requires no attached Animator");
+
+        bone.localPosition = new Vector3(3, 77, 88);
+        bone.localScale = new Vector3(7, bone.localScale.y, bone.localScale.z);
+        bone.localRotation = Quaternion.Euler(11, 22, 33);
+        renderer.SetBlendShapeWeight(1, 65);
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", 0 } });
+        Check(component.EvaluateNow(0), "second evaluation");
+        Near(renderer.GetBlendShapeWeight(0), 0, "authored zero is written");
+        Near(renderer.GetBlendShapeWeight(1), 65, "other shape writer coexists");
+        Near(bone.localPosition.x, 1, "new parameter is applied immediately");
+        Near(bone.localPosition.y, 77, "unowned position axis preserved");
+        Near(bone.localScale.x, 7, "unowned scale axis preserved");
+        Near(Quaternion.Angle(bone.localRotation, Quaternion.Euler(11, 22, 33)), 0, "official rotation writer coexists");
+
+        var other = new GameObject("Other");
+        var otherReceiver = other.AddComponent<HoVtsParameterReceiver>();
+        otherReceiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", 1 } });
+        Check(component.EvaluateNow(0), "other character frame cannot change this controller");
+        Near(renderer.GetBlendShapeWeight(0), 0, "per-character isolation");
+
+        component.enabled = false;
+        Check(!component.IsReady, "disabling releases graph");
+        Near(renderer.GetBlendShapeWeight(0), 17, "disable restores owned shape");
+        Near(renderer.GetBlendShapeWeight(1), 65, "disable preserves unowned shape");
+        Near(bone.localPosition.y, 77, "disable preserves external axis");
+        component.enabled = true;
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", 1 } });
+        Check(component.EvaluateNow(0), "reenable recreates graph");
+        Near(renderer.GetBlendShapeWeight(0), 100, "reenabled output");
+        receiver.enabled = false;
+        Check(!component.EvaluateNow(0), "disabled receiver releases output");
+        Near(renderer.GetBlendShapeWeight(0), 17, "receiver disable restores shape");
+        receiver.enabled = true;
+        component.Controller = null;
+        Check(!component.EvaluateNow(0) && !component.IsReady, "removed controller releases graph");
+
+        // Binding metadata survives serialization with the controller and role references.
+        component.Controller = controller;
+        HoVtsControllerBindings.Prepare(component);
+        string prefabPath = "Assets/Character.prefab";
+        PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        var saved = prefab.GetComponentInChildren<HoVtsController>();
+        Check(saved.BindingCount == 8 && saved.Controller == controller && saved.ParameterReceiver != null && saved.OutputRoot == prefab.transform,
+            "prefab retains slot, ownership and internal references");
+        var second = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        var secondComponent = second.GetComponentInChildren<HoVtsController>();
+        secondComponent.ParameterReceiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", .25f } });
+        Check(secondComponent.EvaluateNow(0), "second character independently evaluates");
+        Near(second.GetComponentInChildren<SkinnedMeshRenderer>().GetBlendShapeWeight(0), 25, "second character output");
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Drive", .75f } });
+        Check(component.EvaluateNow(0), "first character independently evaluates");
+        Near(renderer.GetBlendShapeWeight(0), 75, "first character output");
+        Near(second.GetComponentInChildren<SkinnedMeshRenderer>().GetBlendShapeWeight(0), 25, "first controller cannot affect second");
+        secondComponent.Stop();
+        UnityEngine.Object.Destroy(second);
+        component.Stop();
+        UnityEngine.Object.Destroy(root);
+        UnityEngine.Object.Destroy(other);
+    }
+
+    private static AnimationClip Clip(string name, float shape, float position, float scale)
+    {
+        var clip = new AnimationClip { name = name };
+        Curve(clip, "Face", typeof(SkinnedMeshRenderer), "blendShape.Driven", shape);
+        Curve(clip, "Bone", typeof(Transform), "m_LocalPosition.x", position);
+        Curve(clip, "Bone", typeof(Transform), "m_LocalScale.y", scale);
+        Quaternion rotation = Quaternion.Euler(0, 0, shape * .5f);
+        Curve(clip, "Rotation", typeof(Transform), "m_LocalRotation.x", rotation.x);
+        Curve(clip, "Rotation", typeof(Transform), "m_LocalRotation.y", rotation.y);
+        Curve(clip, "Rotation", typeof(Transform), "m_LocalRotation.z", rotation.z);
+        Curve(clip, "Rotation", typeof(Transform), "m_LocalRotation.w", rotation.w);
+        return clip;
+    }
+    private static AnimationClip ScaleClip(string name, float value)
+    {
+        var clip = new AnimationClip { name = name };
+        Curve(clip, "Gate", typeof(Transform), "m_LocalScale.z", value);
+        return clip;
+    }
+    private static void Curve(AnimationClip clip, string path, Type type, string property, float value) =>
+        AnimationUtility.SetEditorCurve(clip, EditorCurveBinding.FloatCurve(path, type, property), AnimationCurve.Constant(0, 1, value));
+    private static void Near(float actual, float expected, string name) => Check(Mathf.Abs(actual - expected) < .01f, name + ": " + actual + " vs " + expected);
+    private static void Check(bool condition, string name)
+    {
+        assertions++;
+        if (!condition) throw new Exception(name);
+        Debug.Log("HO_VTS_CONTROLLER ok " + name);
+    }
+}
