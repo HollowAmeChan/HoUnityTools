@@ -63,6 +63,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly double[] inputStepSince;      // 候选档最后一次变化的时刻（进 / 退维持用）
         private readonly int[] inputStepRaw;           // 上一帧的候选档（变了就重新计时）
         private readonly Queue<(double At, float Value)>[] inputDelay;
+        private readonly float[] inputDelayHeld;
 
         /// <summary>
         /// 规范名 → 输入行号。
@@ -89,6 +90,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly double[] stepSince;
         private readonly int[] stepRaw;
         private readonly Queue<(double At, float Value)>[] outputDelay;
+        private readonly float[] outputDelayHeld;
         private readonly HoFaceOutputTable outputTable = new HoFaceOutputTable();
 
         /// <summary>表达式引用到的变量名（草稿：每行求值时攒一遍，见 <see cref="Evaluate"/>）。</summary>
@@ -126,6 +128,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             inputStepSince = new double[inputModifierSlots];
             inputStepRaw = new int[inputModifierSlots];
             inputDelay = new Queue<(double At, float Value)>[inputModifierSlots];
+            inputDelayHeld = new float[inputModifierSlots];
             for (int i = 0; i < inputStepIndex.Length; i++) inputStepIndex[i] = -1;
             for (int i = 0; i < inputStepRaw.Length; i++) inputStepRaw[i] = -1;
             for (int i = 0; i < inputList.Count; i++)
@@ -171,6 +174,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             stepSince = new double[modifierSlots];
             stepRaw = new int[modifierSlots];
             outputDelay = new Queue<(double At, float Value)>[modifierSlots];
+            outputDelayHeld = new float[modifierSlots];
             for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档
             for (int i = 0; i < stepRaw.Length; i++) stepRaw[i] = -1;
 
@@ -275,7 +279,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
                 value = inputRows[row].Transform(value);
                 value = ApplyModifiers(inputModifierOffset[row], inputRows[row], value, deltaTime, now,
-                    inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay);
+                    inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay, inputDelayHeld);
                 inputValues[row] = value;
                 inputFresh[row] = true;
             }
@@ -348,7 +352,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// </summary>
         private float ApplyModifiers(int slotBase, HoFaceOutput output, float value, float deltaTime, double now,
             float[] smooth, int[] stepRows, double[] stepUntil, double[] stepSince, int[] stepRaw,
-            Queue<(double At, float Value)>[] delay)
+            Queue<(double At, float Value)>[] delay, float[] delayHeld)
         {
             if (output.modifiers == null || output.modifiers.Count == 0) return value;
             for (int i = 0; i < output.modifiers.Count; i++)
@@ -369,7 +373,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                         value = Step(slot, modifier, value, now, stepRows, stepUntil, stepSince, stepRaw);
                         break;
                     case HoFaceModifierKind.Delay:
-                        value = Delay(slot, modifier, value, now, delay);
+                        value = Delay(slot, modifier, value, now, delay, delayHeld);
                         break;
                     default:
                         break;
@@ -381,7 +385,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now) =>
             ApplyModifiers(modifierOffset[row], output, value, deltaTime, now,
-                outputSmooth, stepIndex, stepUntil, stepSince, stepRaw, outputDelay);
+                outputSmooth, stepIndex, stepUntil, stepSince, stepRaw, outputDelay, outputDelayHeld);
 
         /// <summary>
         /// 延迟：一个**每行一条的 FIFO**，进去的值等 <c>seconds</c> 秒之后再出来。
@@ -393,10 +397,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// * **不推入 NaN / 无穷** —— 放进去会让整条队列的值都变成 NaN，而且是永久性的。
         /// * **首帧先垫**：队列为空时直接返回 <paramref name="value"/>，不先垫一个 0，
         ///   否则会话一开始会从 0 爬上来（跟平滑那边 `primed` 的道理一样）。
-        /// * **队列超时上限**：读数时间戳有抖动时，防止一条永远取不出来的队列无限长大。
+        /// * 后续只发布已经到期的值；队首尚未到期时保持上次发布值。
         /// </summary>
         private float Delay(int slot, HoFaceModifier modifier, float value, double now,
-            Queue<(double At, float Value)>[] delay)
+            Queue<(double At, float Value)>[] delay, float[] held)
         {
             float seconds = Mathf.Max(0.0001f, modifier.seconds);
             Queue<(double At, float Value)> queue = delay[slot];
@@ -404,6 +408,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 queue = new Queue<(double At, float Value)>();
                 delay[slot] = queue;
+                held[slot] = value;
             }
 
             if (!float.IsNaN(value) && !float.IsInfinity(value))
@@ -411,13 +416,12 @@ namespace Hollow.HoUnityTools.FaceTracking
                 queue.Enqueue((now + seconds, value));
             }
 
-            float result = queue.Count > 0 ? queue.Peek().Value : value;
-            while (queue.Count > 0 && (queue.Peek().At <= now || queue.Count > 512))
+            while (queue.Count > 0 && queue.Peek().At <= now)
             {
-                result = queue.Dequeue().Value;
+                held[slot] = queue.Dequeue().Value;
             }
 
-            return result;
+            return held[slot];
         }
 
         /// <summary>

@@ -26,6 +26,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("")]
+    [DefaultExecutionOrder(30000)]
     public sealed class HoVtsParameterReceiver : MonoBehaviour
     {
         private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
@@ -33,7 +34,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         // The rule data belongs to the role. It is hidden from the default inspector until
         // the dedicated rule editor is migrated; it is intentionally not a TextAsset path.
         [SerializeField, HideInInspector] private HoFaceMiddleware middleware = new HoFaceMiddleware();
+        [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
+        private bool inputExpired;
         private double lastFrameTime = -1.0;
         private string source = string.Empty;
 
@@ -42,14 +45,28 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly Dictionary<string, float> evaluationRaw = new Dictionary<string, float>(StringComparer.Ordinal);
         private HoVtsRuleEvaluator evaluator;
         private double lastEvaluationTime = -1.0;
+        private int evaluatedUnityFrame = -1;
 
         public bool Tracked => tracked;
         public bool HasFrame => lastFrameTime >= 0;
+        public bool InputExpired => inputExpired;
         public double LastFrameTime => lastFrameTime;
         public string Source => source ?? string.Empty;
         public int RawCount => rawValues != null ? rawValues.Count : 0;
         public int ValueCount => values != null ? values.Count : 0;
         public HoFaceMiddleware Middleware => middleware;
+        public string RuleError => evaluator != null ? evaluator.Error : null;
+        public double LastEvaluationTime => lastEvaluationTime;
+        public float InputTimeoutSeconds
+        {
+            get => inputTimeoutSeconds;
+            set
+            {
+                if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0)
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                inputTimeoutSeconds = value;
+            }
+        }
 
         // Unity messages deliberately use only Unity/BCL types. Character and input-adapter
         // mods are separate assemblies and must not cast copies of our component type.
@@ -97,11 +114,14 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (double.IsNaN(timestamp) || double.IsInfinity(timestamp) || timestamp < 0)
                 throw new ArgumentOutOfRangeException(nameof(timestamp), "Use a finite nonnegative local clock.");
+            if (timestamp < lastFrameTime || timestamp < lastEvaluationTime)
+                throw new ArgumentOutOfRangeException(nameof(timestamp), "Input and evaluation must use the same monotonic local clock.");
             EnsureTables();
             Replace(rawValues, rawIndices, frame);
             bool wasTracked = tracked;
             tracked = faceTracked;
             lastFrameTime = timestamp;
+            inputExpired = false;
             source = frameSource ?? string.Empty;
 
             if (!faceTracked && wasTracked)
@@ -110,15 +130,47 @@ namespace Hollow.HoUnityTools.FaceTracking
                 evaluator = null;
                 lastEvaluationTime = -1.0;
             }
+            EvaluateAt(timestamp);
+        }
+
+        /// <summary>
+        /// Advance rules and loss detection without inventing a new input packet. The owning
+        /// host may call this for offline stepping; readers never advance time. Unity runs it
+        /// once in LateUpdate when the adapter has not already evaluated this render frame.
+        /// </summary>
+        public bool Tick(double now)
+        {
+            if (double.IsNaN(now) || double.IsInfinity(now) || now < 0)
+                throw new ArgumentOutOfRangeException(nameof(now));
+            if (!HasFrame || now <= lastEvaluationTime || now < lastFrameTime) return false;
+            float timeout = inputTimeoutSeconds > 0 && !float.IsNaN(inputTimeoutSeconds) && !float.IsInfinity(inputTimeoutSeconds)
+                ? inputTimeoutSeconds : 1f;
+            if (now - lastFrameTime > timeout)
+            {
+                inputExpired = true;
+                if (tracked)
+                {
+                    tracked = false;
+                    evaluator = null;
+                    lastEvaluationTime = -1;
+                }
+            }
+            EvaluateAt(now);
+            return true;
+        }
+
+        private void EvaluateAt(double now)
+        {
             EnsureEvaluator();
-            float deltaTime = lastEvaluationTime >= 0.0 && timestamp >= lastEvaluationTime
-                ? Mathf.Min((float)(timestamp - lastEvaluationTime), 0.25f)
+            float deltaTime = lastEvaluationTime >= 0.0 && now >= lastEvaluationTime
+                ? (float)(now - lastEvaluationTime)
                 : 0f;
             evaluationRaw.Clear();
-            if (faceTracked) CopyTo(rawValues, evaluationRaw);
-            evaluator.Evaluate(evaluationRaw, deltaTime, timestamp);
+            if (tracked) CopyTo(rawValues, evaluationRaw);
+            evaluator.Evaluate(evaluationRaw, deltaTime, now);
             SetProcessedValues(evaluator.Parameters);
-            lastEvaluationTime = timestamp;
+            lastEvaluationTime = now;
+            evaluatedUnityFrame = Time.frameCount;
         }
 
         /// <summary>Replace processed values after the rule runner has evaluated one frame.</summary>
@@ -140,10 +192,12 @@ namespace Hollow.HoUnityTools.FaceTracking
             values.Clear();
             valueIndices.Clear();
             tracked = false;
+            inputExpired = false;
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;
             lastEvaluationTime = -1.0;
+            evaluatedUnityFrame = -1;
         }
 
         public bool TryGet(string name, out float value)
@@ -233,5 +287,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         private void OnDisable() { ClearFrame(); }
+        private void LateUpdate()
+        {
+            if (evaluatedUnityFrame != Time.frameCount) Tick(Time.realtimeSinceStartupAsDouble);
+        }
     }
 }

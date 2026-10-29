@@ -13,6 +13,11 @@ public static class HoVtsControllerValidation
 {
     private const string Pending = "HoVtsControllerValidation.Pending";
     private static int assertions;
+    private static GameObject timingProbe;
+    private static HoVtsParameterReceiver timingReceiver;
+    private static Transform timingHead;
+    private static double timingStarted;
+    private static int timingFrame;
 
     [InitializeOnLoadMethod]
     private static void Resume() { EditorApplication.update += RunWhenPlaying; }
@@ -27,13 +32,47 @@ public static class HoVtsControllerValidation
 
     private static void RunWhenPlaying()
     {
+        if (timingProbe != null)
+        {
+            try
+            {
+                if (timingReceiver.InputExpired)
+                {
+                    Check(Time.frameCount > timingFrame, "automatic timeout ran across real Unity frames");
+                    Check(!timingReceiver.Tracked && timingReceiver.HasFrame, "LateUpdate expires a silent adapter");
+                    Near(timingReceiver.Get("Pose"), 0, "automatic timeout publishes neutral rules");
+                    Near(timingReceiver.GetRaw("Rotation_y"), 30, "automatic timeout retains raw diagnosis");
+                    RotationNear(timingHead.localRotation, Quaternion.identity, "automatic pose consumer returns to neutral after receiver tick");
+                    UnityEngine.Object.Destroy(timingProbe);
+                    timingProbe = null;
+                    Debug.Log("HO_VTS_CONTROLLER PASS assertions=" + assertions);
+                    EditorApplication.Exit(0);
+                }
+                else if (Time.realtimeSinceStartupAsDouble - timingStarted > 5) throw new Exception("Unity automatic timeout did not run");
+            }
+            catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+            return;
+        }
         if (!SessionState.GetBool(Pending, false) || !EditorApplication.isPlaying || EditorApplication.isCompiling) return;
         SessionState.SetBool(Pending, false);
         try
         {
             Run();
-            Debug.Log("HO_VTS_CONTROLLER PASS assertions=" + assertions);
-            EditorApplication.Exit(0);
+            timingProbe = new GameObject("AutomaticTiming");
+            timingReceiver = timingProbe.AddComponent<HoVtsParameterReceiver>();
+            timingReceiver.InputTimeoutSeconds = .3f;
+            var rules = new HoFaceMiddleware();
+            rules.outputs.Add(new HoFaceOutput { parameter = "Pose", expression = "Rotation_y" });
+            timingReceiver.SetMiddleware(rules);
+            timingHead = new GameObject("Head").transform;
+            timingHead.SetParent(timingProbe.transform, false);
+            var pose = timingProbe.AddComponent<HoVtsLookAt>();
+            pose.ParameterReceiver = timingReceiver; pose.ReferenceFrame = timingProbe.transform; pose.Head = timingHead;
+            timingStarted = Time.realtimeSinceStartupAsDouble;
+            timingFrame = Time.frameCount;
+            timingReceiver.ApplyRawFrame(new Dictionary<string, float> { { "Rotation_x", 0 }, { "Rotation_y", 30 }, { "Rotation_z", 0 } }, true, timingStarted);
+            pose.EvaluateNow(0);
+            RotationNear(timingHead.localRotation, Quaternion.Euler(0, 30, 0), "automatic timeout probe starts with an active pose");
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
     }
@@ -41,6 +80,7 @@ public static class HoVtsControllerValidation
     private static void Run()
     {
         Delivery();
+        Timing();
         Pose();
         var root = new GameObject("Character");
         var originalAnimator = root.AddComponent<Animator>();
@@ -178,6 +218,63 @@ public static class HoVtsControllerValidation
         component.Stop();
         UnityEngine.Object.Destroy(root);
         UnityEngine.Object.Destroy(other);
+    }
+
+    private static void Timing()
+    {
+        var root = new GameObject("Timing");
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        receiver.InputTimeoutSeconds = .5f;
+        var rules = new HoFaceMiddleware();
+        var row = new HoFaceOutput { parameter = "Smoothed", expression = "Raw" };
+        row.modifiers.Add(new HoFaceModifier { kind = HoFaceModifierKind.Smooth, seconds = .1f });
+        rules.outputs.Add(row);
+        var delayed = new HoFaceOutput { parameter = "Delayed", expression = "Raw" };
+        delayed.modifiers.Add(new HoFaceModifier { kind = HoFaceModifierKind.Delay, seconds = .2f });
+        rules.outputs.Add(delayed);
+        var held = new HoFaceOutput { parameter = "Held", expression = "Raw" };
+        held.modifiers.Add(new HoFaceModifier { kind = HoFaceModifierKind.Steps,
+            steps = new List<HoFaceStep> { new HoFaceStep { trigger = .5f, target = 1, enterSeconds = .2f } } });
+        rules.outputs.Add(held);
+        rules.outputs.Add(new HoFaceOutput { parameter = "One", expression = "", defaultValue = 1 });
+        receiver.SetMiddleware(rules);
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 0 } }, true, 10, "clock-test");
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 10.1, "clock-test");
+        Near(receiver.Get("Smoothed"), 1 - Mathf.Exp(-1), "smoothing advances on input");
+        Check(receiver.Tick(10.2), "host can advance without a network packet");
+        Near(receiver.Get("Smoothed"), 1 - Mathf.Exp(-2), "smoothing continues between packets");
+        Check(receiver.LastFrameTime == 10.1 && receiver.LastEvaluationTime == 10.2, "packet age is separate from evaluation time");
+        float before = receiver.Get("Smoothed");
+        var snapshot = new Dictionary<string, float>();
+        for (int i = 0; i < 20; i++) { receiver.CopyValuesTo(snapshot); receiver.Get("Smoothed"); }
+        Near(receiver.Get("Smoothed"), before, "multiple consumers do not advance rules");
+        Check(!receiver.Tick(10.2), "same time does not advance modifiers twice");
+        receiver.Tick(10.25);
+        receiver.Tick(10.29);
+        Near(receiver.Get("Delayed"), 0, "delay cannot expose the next sample before it is due");
+        Near(receiver.Get("Held"), 0, "enter hold waits for its full duration");
+        receiver.Tick(10.31);
+        Near(receiver.Get("Delayed"), 1, "delayed value releases without another network packet");
+        Near(receiver.Get("Held"), 1, "enter hold completes between network packets");
+        receiver.Tick(10.6);
+        Check(receiver.Tracked && !receiver.InputExpired, "input is valid through timeout boundary");
+        receiver.Tick(10.60001);
+        Check(!receiver.Tracked && receiver.InputExpired && receiver.HasFrame, "stopped adapter expires without another input frame");
+        Near(receiver.Get("Smoothed"), 0, "timeout resets stale expression to neutral");
+        Near(receiver.Get("One"), 1, "timeout preserves author constants");
+        Near(receiver.GetRaw("Raw"), 1, "timeout preserves raw diagnostic snapshot");
+        Check(receiver.Source == "clock-test" && receiver.LastFrameTime == 10.1, "timeout does not pretend a new packet arrived");
+        receiver.Tick(10.8);
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 11, "clock-test");
+        Check(receiver.Tracked && !receiver.InputExpired && receiver.Get("Smoothed") > 0 && receiver.Get("Smoothed") < 1, "fresh input reacquires from neutral state");
+        Check(!receiver.Tick(10.9), "backward host time cannot rewind filters");
+        bool rejected = false;
+        try { receiver.ApplyRawFrame(snapshot, true, 10.9); }
+        catch (ArgumentOutOfRangeException) { rejected = true; }
+        Check(rejected && receiver.LastFrameTime == 11, "backward input time is rejected without replacing state");
+        receiver.ClearFrame();
+        Check(!receiver.InputExpired && !receiver.Tick(12) && !receiver.HasFrame, "clear releases timeout state and stops ticking");
+        UnityEngine.Object.Destroy(root);
     }
 
     private static void Pose()
