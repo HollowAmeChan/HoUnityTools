@@ -76,6 +76,7 @@ public static class HoVtsAuthoringValidation
 
     public static void RunPlay()
     {
+        Isolation();
         Trace();
         DebugSession();
         var asset = AssetDatabase.LoadAssetAtPath<GameObject>(PathName);
@@ -112,6 +113,63 @@ public static class HoVtsAuthoringValidation
             Debug.Log("HO_VTS_AUTHORING_PLAY PASS");
         }
         finally { UnityEngine.Object.DestroyImmediate(instance); Undo.ClearAll(); }
+    }
+
+    private static void Isolation()
+    {
+        var root = new GameObject("Isolation");
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var rules = new HoFaceMiddleware();
+        rules.outputs.Add(new HoFaceOutput { parameter = "Gate", expression = "Wire", defaultValue = 0 });
+        rules.outputs.Add(new HoFaceOutput { parameter = "LipCustom", expression = "Wire", defaultValue = .1f });
+        rules.outputs.Add(new HoFaceOutput { parameter = "BrowCustom", expression = "Wire * 2", defaultValue = .2f });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Gate", expression = "", defaultValue = 1 });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Pose", expression = "Wire * 10" });
+        receiver.SetMiddleware(rules);
+        string original = HoFaceProfile.Write(rules);
+        try
+        {
+            using (var session = new HoVtsDebugSession(root, false))
+            {
+                var raw = new System.Collections.Generic.Dictionary<string, float> { { "Wire", .3f } };
+                string[] scope = { "LipCustom", "BrowCustom", "Gate" };
+                session.PinOutput("BrowCustom", .7f);
+                session.IsolateOutputs(new[] { "LipCustom" }, scope);
+                using (var recording = new HoVtsTraceRecorder(session, 0, 10))
+                {
+                    double now = Time.realtimeSinceStartupAsDouble;
+                    session.Feed(raw, true, now);
+                    recording.Stop();
+                    Require(receiver.Get("LipCustom") == .3f && receiver.Get("BrowCustom") == .2f,
+                        "isolation keeps selected custom outputs and uses declared neutral values for others");
+                    Require(receiver.Get("Gate") == 1 && receiver.Get("Pose") == 3, "isolation preserves constant gates and outputs outside the explicit scope");
+                    Require(session.OutputPins["BrowCustom"] == .7f && session.IsolationOverrides.Count == 1,
+                        "isolation overlays manual pins without deleting them");
+                    var frame = JsonUtility.FromJson<HoVtsTraceRecorder.Frame>(File.ReadAllLines(recording.FilePath)[1]);
+                    Require(frame.isolationOverrides.Length == 1 && frame.isolationOverrides[0].value == .2f
+                        && frame.manualOutputOverrides[0].value == .7f && frame.outputOverrides[0].value == .2f,
+                        "trace distinguishes isolation, saved manual pins and effective publication");
+                }
+                session.RestoreIsolation();
+                session.Feed(raw, true, Time.realtimeSinceStartupAsDouble);
+                Require(receiver.Get("BrowCustom") == .7f && session.IsolationOverrides.Count == 0, "restore returns the previous manual override");
+                session.IsolateOutputs(new[] { "BrowCustom" }, scope);
+                session.Feed(raw, true, Time.realtimeSinceStartupAsDouble);
+                Require(receiver.Get("LipCustom") == .1f && receiver.Get("BrowCustom") == .7f, "switching isolated regions does not accumulate old mute state");
+                bool rejected = false;
+                try { session.IsolateOutputs(new[] { "Unknown" }, scope); } catch (ArgumentException) { rejected = true; }
+                Require(rejected && session.IsolationOverrides.ContainsKey("LipCustom"), "invalid selection leaves current isolation intact");
+                receiver.SetMiddleware(HoVtsRuleAuthoring.Clone(rules));
+                session.Feed(raw, true, Time.realtimeSinceStartupAsDouble);
+                Require(session.IsolationOverrides.Count == 0 && receiver.Get("LipCustom") == .3f, "changing rules exits isolation instead of retaining stale defaults");
+                Require(HoFaceProfile.Write(receiver.Middleware) == original, "isolation never edits character rules");
+                session.ClearPins();
+                session.Feed(raw, true, Time.realtimeSinceStartupAsDouble);
+                Require(Mathf.Abs(receiver.Get("BrowCustom") - .6f) < .0001f, "clear all overrides also exits isolation");
+            }
+            Debug.Log("HO_VTS_ISOLATION PASS");
+        }
+        finally { UnityEngine.Object.DestroyImmediate(root); }
     }
 
     private static void Trace()

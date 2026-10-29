@@ -14,6 +14,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly Dictionary<string, float> raw = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> inputPins = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> outputPins = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> isolation = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> publishedPins = new Dictionary<string, float>(StringComparer.Ordinal);
+        private int ruleRevision;
         private readonly bool automaticInput;
         private double lastSourceTime = -1;
         private int lastUnityFrame = -1;
@@ -24,6 +27,44 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public string SourceId => source;
         public IReadOnlyDictionary<string, float> InputPins => inputPins;
         public IReadOnlyDictionary<string, float> OutputPins => outputPins;
+        public IReadOnlyDictionary<string, float> IsolationOverrides => isolation;
+        public IReadOnlyDictionary<string, float> PublishedOutputPins
+        {
+            get
+            {
+                publishedPins.Clear();
+                foreach (var pair in outputPins) publishedPins[pair.Key] = pair.Value;
+                foreach (var pair in isolation) publishedPins[pair.Key] = pair.Value;
+                return publishedPins;
+            }
+        }
+        public void IsolateOutputs(IEnumerable<string> selectedNames, IEnumerable<string> scopeNames)
+        {
+            if (Disposed) throw new ObjectDisposedException(nameof(HoVtsDebugSession));
+            var selected = new HashSet<string>(selectedNames ?? new string[0], StringComparer.Ordinal);
+            var scope = new HashSet<string>(scopeNames ?? new string[0], StringComparer.Ordinal);
+            var muted = new Dictionary<string, float>(StringComparer.Ordinal);
+            bool found = false;
+            var rows = Receiver.Middleware?.outputs;
+            if (rows == null) throw new InvalidOperationException("角色没有输出规则。");
+            foreach (var row in rows)
+            {
+                if (row == null || string.IsNullOrEmpty(row.parameter) || !scope.Contains(row.parameter)) continue;
+                if (selected.Contains(row.parameter)) { found = true; continue; }
+                // Constant-one and author gates are not expression-driven facial channels.
+                if (!string.IsNullOrWhiteSpace(row.expression)) muted[row.parameter] = row.defaultValue;
+                else muted.Remove(row.parameter); // Last same-name row owns the published parameter.
+            }
+            if (!found) throw new ArgumentException("隔离范围内没有选中的输出。");
+            isolation.Clear(); foreach (var pair in muted) isolation[pair.Key] = pair.Value;
+            pinsChanged = true;
+        }
+        public void RestoreIsolation() { isolation.Clear(); pinsChanged = true; }
+        private void CheckRules()
+        {
+            if (ruleRevision == Receiver.RuleRevision) return;
+            ruleRevision = Receiver.RuleRevision; RestoreIsolation();
+        }
         public void ReleaseInput(string name) { inputPins.Remove(name); pinsChanged = true; }
         public void ReleaseOutput(string name) { outputPins.Remove(name); pinsChanged = true; }
 
@@ -38,6 +79,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (Receiver.HasFrame) throw new InvalidOperationException("角色已有输入，请先停止原输入再开始调试。");
             if (!owners.Add(Receiver)) throw new InvalidOperationException("这个角色已在调试中。");
             Target = target;
+            ruleRevision = Receiver.RuleRevision;
             this.automaticInput = automaticInput;
             EditorApplication.update += Update;
             AssemblyReloadEvents.beforeAssemblyReload += Dispose;
@@ -52,7 +94,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (string.IsNullOrEmpty(name) || float.IsNaN(value) || float.IsInfinity(value)) throw new ArgumentException("覆盖名称和值必须有效。");
             pins[name] = value; pinsChanged = true;
         }
-        public void ClearPins() { inputPins.Clear(); outputPins.Clear(); pinsChanged = true; }
+        public void ClearPins() { inputPins.Clear(); outputPins.Clear(); RestoreIsolation(); }
 
         public void Feed(Dictionary<string, float> values, bool tracked, double now)
         {
@@ -63,7 +105,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 Dispose();
                 throw new InvalidOperationException("角色输入已由其他来源接管，调试已停止。");
             }
-            Receiver.SetDebugOverrides(inputPins, outputPins, source);
+            CheckRules();
+            Receiver.SetDebugOverrides(inputPins, PublishedOutputPins, source);
             Receiver.ApplyRawFrame(values, tracked, now, source);
             pinsChanged = false;
         }
@@ -72,6 +115,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             if (Disposed) return;
             if (Target == null || Receiver == null || !Receiver.isActiveAndEnabled) { Dispose(); return; }
+            CheckRules();
             if (!automaticInput || !EditorApplication.isPlaying || lastUnityFrame == Time.frameCount) return;
             lastUnityFrame = Time.frameCount;
             double stamp = HoFaceInputHub.LastFrameTime;
@@ -80,7 +124,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (!newPacket && Receiver.HasFrame)
             {
                 if (Receiver.Source != source) { Dispose(); return; }
-                Receiver.SetDebugOverrides(inputPins, outputPins, source);
+                Receiver.SetDebugOverrides(inputPins, PublishedOutputPins, source);
                 Receiver.Tick(Time.realtimeSinceStartupAsDouble);
                 pinsChanged = false;
                 return;

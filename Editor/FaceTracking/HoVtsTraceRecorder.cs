@@ -25,7 +25,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             public double elapsed, clock, lastReceivedAt;
             public float deltaTime;
             public bool tracked, inputExpired;
-            public HoFaceTraceValue[] wires, inputOverrides, outputOverrides;
+            public HoFaceTraceValue[] wires, inputOverrides, outputOverrides, manualOutputOverrides, isolationOverrides;
             public Row[] inputs, outputs;
         }
         [Serializable] private sealed class Header
@@ -89,7 +89,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 var frame = new Frame { sample = Samples, unityFrame = Time.frameCount, revision = revision,
                     elapsed = elapsed, clock = now, deltaTime = dt, lastReceivedAt = receiver.LastFrameTime,
                     tracked = receiver.Tracked, inputExpired = receiver.InputExpired, source = receiver.Source,
-                    wires = Values(values), inputOverrides = Values(session.InputPins), outputOverrides = Values(session.OutputPins),
+                    wires = Values(values), inputOverrides = Values(session.InputPins), outputOverrides = Values(session.PublishedOutputPins),
+                    manualOutputOverrides = Values(session.OutputPins), isolationOverrides = Values(session.IsolationOverrides),
                     inputs = Rows(true), outputs = Rows(false) };
                 writer.WriteLine(JsonUtility.ToJson(frame));
                 Samples++;

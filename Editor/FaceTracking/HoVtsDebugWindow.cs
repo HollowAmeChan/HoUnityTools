@@ -39,6 +39,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private bool componentsExpanded;
         private double nextRepaint;
         private float recordSeconds = 5, recordInterval;
+        private int isolationChoice;
 
         [MenuItem("HoUnityTools/面捕/调试面板", false, 10)]
         public static void Open() => GetWindow<HoVtsDebugWindow>("Ho VTS 调试");
@@ -104,6 +105,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             tab = GUILayout.Toolbar(tab, new[] { "原始输入", "规则输入", "规则输出" });
             search = EditorGUILayout.TextField("筛选", search);
             var session = HoVtsDebugHost.Running && HoVtsDebugHost.Session.Target == target ? HoVtsDebugHost.Session : null;
+            if (tab == 2 && receiver != null) DrawIsolation(session, receiver);
             using (new EditorGUI.DisabledScope(session == null))
                 if (GUILayout.Button("清除全部临时覆盖")) session?.ClearPins();
             using (new EditorGUILayout.HorizontalScope())
@@ -156,6 +158,38 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         }
 
         private bool Matches(string key) => string.IsNullOrEmpty(search) || key.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
+        private void DrawIsolation(HoVtsDebugSession session, HoVtsParameterReceiver receiver)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                isolationChoice = EditorGUILayout.Popup(isolationChoice, new[] { "当前筛选输出", "嘴（ARKit）", "眉（ARKit）", "脸颊（ARKit）", "眼睑（ARKit）", "眼球（ARKit）" });
+                var selected = new List<string>(); var scope = new List<string>();
+                var regions = new[] { HoFaceRegion.All, HoFaceRegion.Mouth, HoFaceRegion.Brows, HoFaceRegion.Cheeks, HoFaceRegion.Eyelids, HoFaceRegion.Gaze };
+                if (receiver.Middleware?.outputs != null) foreach (var row in receiver.Middleware.outputs)
+                {
+                    if (row == null || string.IsNullOrEmpty(row.parameter)) continue;
+                    if (isolationChoice == 0)
+                    {
+                        scope.Add(row.parameter);
+                        if (!string.IsNullOrEmpty(search) && Matches(row.parameter)) selected.Add(row.parameter);
+                    }
+                    else
+                    {
+                        string name = row.parameter.StartsWith("ARKit/", StringComparison.Ordinal) ? row.parameter.Substring(6) : row.parameter;
+                        int index = HoFaceTrackingChannels.IndexOf(name);
+                        if (index < 0) continue;
+                        scope.Add(row.parameter);
+                        if (HoFaceTrackingChannels.Region(HoFaceTrackingChannels.Names[index]) == regions[isolationChoice]) selected.Add(row.parameter);
+                    }
+                }
+                using (new EditorGUI.DisabledScope(session == null || selected.Count == 0))
+                    if (GUILayout.Button("仅此范围", GUILayout.Width(78))) session.IsolateOutputs(selected, scope);
+                using (new EditorGUI.DisabledScope(session == null || session.IsolationOverrides.Count == 0))
+                    if (GUILayout.Button("恢复", GUILayout.Width(48))) session.RestoreIsolation();
+            }
+            if (session != null && session.IsolationOverrides.Count > 0)
+                EditorGUILayout.LabelField("隔离中", session.IsolationOverrides.Count + " 个其他输出暂用其行默认值；常量保持");
+        }
         private void DrawPin(HoVtsDebugSession session, string name, float value)
         {
             var pins = session != null ? tab == 1 ? session.InputPins : session.OutputPins : null;
