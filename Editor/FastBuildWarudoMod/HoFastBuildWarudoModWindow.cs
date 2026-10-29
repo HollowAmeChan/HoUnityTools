@@ -254,6 +254,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
 
         private void OnEnable()
         {
+            // Old saved windows can still contain the removed HoFT page index.
+            if (currentPage != ModBuildPage.Character && currentPage != ModBuildPage.OtherMod)
+                currentPage = ModBuildPage.Character;
             if (sourcePrefab == null && IsPrefab(sourcePrefabPath))
                 sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
 
@@ -273,12 +276,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (currentPage == ModBuildPage.OtherMod)
             {
                 DrawOtherModPage();
-                return;
-            }
-
-            if (currentPage == ModBuildPage.HoFT)
-            {
-                DrawHoFTPage();
                 return;
             }
 
