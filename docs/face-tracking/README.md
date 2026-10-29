@@ -1,6 +1,6 @@
 ﻿# 面捕
 
-> 当前新架构规划见 [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)。它取代旧的 Warudo 参数处理节点、HoFace 控制求解节点和 HoFT AssetBundle 路线。本文下方的旧流水线入口暂时保留作迁移参考。
+> 当前使用入口见 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md)，架构边界见 [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)。旧的 Warudo 参数处理节点、HoFace 控制求解节点和 HoFT AssetBundle 仅在归档中保留。
 
 面捕主线是 **VTS / iPhone 原始输入 → 中间层 → 面部控制器与语义输出 → Unity / Warudo**。新实现先看上面的组件架构；旧流水线、控制器与参数文档用于维护和迁移。
 
@@ -9,17 +9,16 @@
 | 想查什么 | 文档或工具 |
 | --- | --- |
 | **新规划**：角色组件中枢、控制器、LookAt、Unity 调试和迁移边界 | [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md) |
-| 整条链的分工、输入输出和资产归属 | [流水线](../PIPELINE.md) |
-| 控制器结构、命名、装配和混合树边界 | [控制器](../CONTROLLER.md) |
-| 每根轴的表达式、曲线、修饰符和实测依据 | [轴与状态](../AXES.md) |
-| 原始线名、规范名、设备验证和取舍 | [参数规范](../PARAMETERS.md) |
-| 旧动态语义参数 Hub 的设计记录 | [动态参数](../FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
+| 整条链的分工、输入输出和资产归属 | [组件架构](VTS_COMPONENT_ARCHITECTURE.md) · [WTD 记录](WTD_COMPONENT_MIGRATION.md) |
+| 控制器结构、绑定属性和角色配置 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
+| 原始线名、姿态字段、标定和设备输入 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
+| 旧动态语义参数 Hub 设计 | [归档记录](../archive/FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
 | 生成、隔离、检查、录样和统计 | [FaceTracking 作者工具](../../Tools~/FaceTracking/README.md) |
 | 机器可读的命名与参数对应 | [词表](../VTS_HIGH_QUALITY_FACE_CATALOG.json) |
 | 包内配置与控制器如何复制使用 | [Profiles](../../Editor/FaceTracking/Profiles/README.md) · [Controllers](../../Editor/FaceTracking/Controllers/README.md) |
 | Warudo 角色打包（HoFT 独立导出已废弃） | [FastBuild](../guides/WARUDO_FAST_BUILD.md) |
 
-这些规范保留在 `docs/` 原路径，避免影响生成器、配置注释和已有外部引用；本页提供按主题阅读的入口。
+历史规范保留在 `docs/archive/`，本页提供当前组件路线的入口。
 
 ## 修改与验证
 
