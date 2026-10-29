@@ -238,7 +238,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             return path.Substring(root.Length).TrimStart('\\', '/').Replace('\\', '/');
         }
 
-        [MenuItem("HoUnityTools/面捕/调试面板", false, 10)]
+        [MenuItem("HoUnityTools/面捕/旧版调试面板", false, 90)]
         public static void ShowWindow() => GetWindow<HoFaceTrackingWindow>("Ho 面捕调试");
 
         private void OnEnable()

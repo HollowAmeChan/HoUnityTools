@@ -88,6 +88,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 本宿主只管**会话那一侧**：进播放才推进，且必须是一帧内"设参数 → 读结果"跑完。
             if (!EditorApplication.isPlaying) return;
             if (settings == null) return;
+            var character = settings.Character();
+            if (character != null && character.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
+            {
+                HoFaceInputHub.Stop(settings);
+                return;
+            }
 
             HoFaceInputHub.Tick(Settings);
             HoFaceInputHub.LateTick(Settings);
@@ -107,6 +113,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // 等于给"根本没在用面捕"的人每次开播都报一次错。
             if (change == PlayModeStateChange.EnteredPlayMode && Settings != null && Settings.startOnPlay && Settings.HasProfile)
             {
+                var character = Settings.Character();
+                if (character != null && character.GetComponentInChildren<HoVtsParameterReceiver>(true) != null) return;
                 try { Start(); }
                 catch (Exception e) { Debug.LogWarning("[Ho 面捕] 自动开始失败：" + e.Message); }
             }

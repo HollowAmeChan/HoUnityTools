@@ -141,6 +141,12 @@ public static class HoVtsAuthoringValidation
             Require(receiver.TryReadOutputRow(0, out float modified, out float published)
                 && modified == .8f && published == .9f, "output monitor separates solved and published values");
             Require(HoFaceProfile.Write(receiver.Middleware) == original, "debug pins never modify serialized role rules");
+            session.ReleaseInput("Canonical");
+            session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .2f } }, true, Time.realtimeSinceStartupAsDouble);
+            Require(receiver.Get("Result") == .9f && Mathf.Abs(receiver.Get("Downstream") - 1.4f) < .0001f, "one input pin can be released without removing output pins");
+            session.ReleaseOutput("Result");
+            session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .2f } }, true, Time.realtimeSinceStartupAsDouble);
+            Require(receiver.Get("Result") == .4f, "one output pin can be released independently");
             session.ClearPins();
             session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .3f } }, true, Time.realtimeSinceStartupAsDouble);
             Require(Mathf.Abs(receiver.Get("Result") - .6f) < .0001f, "clearing pins restores normal role evaluation");
@@ -155,6 +161,25 @@ public static class HoVtsAuthoringValidation
             }
             Require(receiver.Source == "external" && receiver.HasFrame, "stopping debug does not clear a newer external source");
             receiver.ClearFrame();
+            Require(HoVtsDebugHost.Start(root), "new panel host starts from only the character target");
+            HoVtsDebugWindow.Open();
+            var window = EditorWindow.GetWindow<HoVtsDebugWindow>();
+            try
+            {
+                window.position = new Rect(50, 50, 480, 540);
+                typeof(HoVtsDebugWindow).GetField("target", Private).SetValue(window, root);
+                for (int tab = 0; tab < 3; tab++)
+                {
+                    typeof(HoVtsDebugWindow).GetField("tab", Private).SetValue(window, tab);
+                    window.SendEvent(new Event { type = EventType.Layout });
+                    window.SendEvent(new Event { type = EventType.Repaint });
+                }
+                Require(HoVtsDebugHost.Running, "all three panel views render without stopping the character");
+            }
+            finally { window.Close(); }
+            Require(HoVtsDebugHost.Running, "closing the panel keeps the debug host running");
+            HoVtsDebugHost.Stop();
+            Require(!HoVtsDebugHost.Running, "panel host stop releases the session");
             var extra = new GameObject("Ambiguous"); extra.transform.SetParent(root.transform, false); extra.AddComponent<HoVtsParameterReceiver>();
             bool ambiguous = false;
             try { new HoVtsDebugSession(root, false); } catch (InvalidOperationException) { ambiguous = true; }

@@ -21,6 +21,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public GameObject Target { get; }
         public HoVtsParameterReceiver Receiver { get; }
         public bool Disposed { get; private set; }
+        public IReadOnlyDictionary<string, float> InputPins => inputPins;
+        public IReadOnlyDictionary<string, float> OutputPins => outputPins;
+        public void ReleaseInput(string name) { inputPins.Remove(name); pinsChanged = true; }
+        public void ReleaseOutput(string name) { outputPins.Remove(name); pinsChanged = true; }
 
         public HoVtsDebugSession(GameObject target, bool automaticInput = true)
         {
@@ -72,6 +76,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             double stamp = HoFaceInputHub.LastFrameTime;
             bool newPacket = stamp > 0 && stamp != lastSourceTime;
             if (!newPacket && !pinsChanged) return;
+            if (!newPacket && Receiver.HasFrame)
+            {
+                if (Receiver.Source != source) { Dispose(); return; }
+                Receiver.SetDebugOverrides(inputPins, outputPins, source);
+                Receiver.Tick(Time.realtimeSinceStartupAsDouble);
+                pinsChanged = false;
+                return;
+            }
             if (newPacket)
             {
                 raw.Clear();
