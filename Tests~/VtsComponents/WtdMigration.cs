@@ -85,6 +85,24 @@ public static class HoVtsWtdMigration
     private const string Controller = "Assets/Hollow/WTD/FT/CTR_Face_ARKit.controller";
     private const string Rules = "Assets/Hollow/WTD/FT/ho-iPhoneVTS.arkit.hoface.json";
 
+    public static void PreserveOfficialPoseBatch()
+    {
+        GameObject root = null;
+        try
+        {
+            root = PrefabUtility.LoadPrefabContents(Prefab);
+            var pose = root.GetComponentInChildren<HoVtsLookAt>(true);
+            if (pose == null) throw new Exception("Migrated WTD pose component missing");
+            pose.AutoRun = false;
+            pose.enabled = false;
+            PrefabUtility.SaveAsPrefabAsset(root, Prefab);
+            Debug.Log("HO_VTS_WTD_POSE_POLICY PASS: AutoRun=false and component disabled");
+            EditorApplication.Exit(0);
+        }
+        catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+        finally { if (root != null) PrefabUtility.UnloadPrefabContents(root); }
+    }
+
     public static void RunBatch()
     {
         GameObject root = null;
@@ -134,6 +152,7 @@ public static class HoVtsWtdMigration
                 pose.RightEye = originalAnimator.GetBoneTransform(HumanBodyBones.RightEye);
             }
             pose.enabled = false; // Official Warudo posture chain remains the current writer.
+            pose.AutoRun = false; // UMod can restore a disabled Behaviour as enabled.
             report.AppendLine("Optional pose disabled. Head=" + (pose.Head != null ? pose.Head.name : "unset")
                 + ", LeftEye=" + (pose.LeftEye != null ? pose.LeftEye.name : "unset") + ", RightEye=" + (pose.RightEye != null ? pose.RightEye.name : "unset"));
             if (originalAnimator != null && (originalAnimator.enabled != originalEnabled || originalAnimator.runtimeAnimatorController != originalController))

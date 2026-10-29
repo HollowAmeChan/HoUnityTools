@@ -8,7 +8,7 @@
 
 - HoVtsParameterReceiver：内嵌 FT/ho-iPhoneVTS.arkit.hoface.json 的 74 条输入与 66 条输出规则。
 - HoVtsController：显式引用该接收器、FT/CTR_Face_ARKit.controller 和角色输出根物体。控制器有 104 个动画片段，共 208 个不同的动画属性绑定，全部经过目标路径与形态键验证。
-- HoVtsLookAt：引用同一接收器，姿态参考为角色根，骨骼为 head、eye.L、eye.R；组件禁用，继续由现有官方姿态链控制头眼。
+- HoVtsLookAt：引用同一接收器，姿态参考为角色根，骨骼为 head、eye.L、eye.R；组件禁用且 AutoRun=false，继续由现有官方姿态链控制头眼。
 
 控制器的 54 个参数中，52 个由 ARKit 输出驱动，Ho/Drive/W/One 与 Ho/Drive/Gate/Arkit 保留控制器默认值 1。原动画、控制器、规则 JSON 未修改，原 Animator 状态和控制器引用未修改，预制件 GUID 未修改。
 
@@ -30,11 +30,32 @@ SHA-256：
 
 | 文件 | 值 |
 | --- | --- |
-| WTD-BUILD.prefab | B749CE1B56D83B1217F74109743170EEEA3F00EAEE181006DA797F7ED0D95293 |
+| WTD-BUILD.prefab | CAC83B3597002FD891F77BBA72CAA39D6E7F6FF633DC5CCEF91873D68C50BB92 |
 | WTD-BUILD.prefab.meta | 376D13D80492B81E7D7ED4640A2B50C6FAB9E8353D9F5D99366B38F0E710742A |
 | CTR_Face_ARKit.controller | 1612CCFFA29FA5278950FE285FED1891525E5D77B11820C485EE5A71B6CC270B |
 | ho-iPhoneVTS.arkit.hoface.json | 3958D4851F409FB00ED72C7E33A5E2C74944570DCBA734EA662BE01152345648 |
 
+## 实际 Character Mod 构建与加载
+
+Tests~/VtsComponents/WtdPackaging.cs 在实际工作工程中调用生产 FastBuild 的依赖收集、暂存源码、预制件准备与重绑、UMod 官方构建和产物复核。
+
+- 57/57 个脚本实际加入编译，193 个类型。
+- 33/33 个组件链接确认，三个 HoVts 组件均在实际角色 Mod 程序集中。
+- 导出副本保留 208 个动画属性、74/66 条规则及组件间引用。
+- UMod 产物由第二个 Unity 进程实际加载；使用分发的角色 Mod 类型和生产 HoVtsFrameDelivery 交付输入。
+- 禁用原 Animator 和其他写入者后，52/52 表情通道在真实 Mod 模型中产生形态键变化；释放输入后求值图停止。
+- 构建后源预制件与构建前快照完全相同，ExportSettings 字节级恢复一致，Assets 中暂存源码数为 0；一次性 Editor 执行脚本已清除。
+
+产物：D:/Unity_Project/BreakWarudo/Logs/HoVtsWtdPackaging/Artifacts/WTD.warudo。
+
+SHA-256：C367972FCD45B538F31192CCF60EA4745BB26EFE470FFA6765A1F9042022AD1C。
+
+构建报告：Logs/HoVtsWtdPackaging/result.txt；实际加载报告：Logs/HoVtsWtdPackaging/runtime-result.txt。标记为 HO_VTS_WTD_PACKAGING PASS 与 HO_VTS_WTD_MOD_RUNTIME PASS。失败尝试的证据保留在 Logs 下相邻的验证归档目录。
+
+### UMod 启用状态问题
+
+第一次实际产物加载发现，源预制件中 enabled=false 的 HoVtsLookAt 在 UMod 实例中变为 enabled=true。因此角色当前以显式序列化的 AutoRun=false 作为保留官方姿态链的运行开关，源组件勾选框也保持关闭。重新构建后实际产物确认 Behaviour.enabled=True、AutoRun=False，姿态不会自动运行。作者日后启用自有姿态时，需要明确设置 AutoRun=true，并先解除官方节点对同一骨骼的写入。
+
 ## 尚未证明的项目
 
-当前证明的是实际 WTD 资产的绑定、序列化和 Unity 原生运行。WTD 的真实 Character Mod 构建、Warudo 客户端加载、现有蓝图切换到 HoVTS角色输入，以及设备驱动下的表情与官方姿态共存仍需继续验收。此前已通过的三组件样例 Mod 构建与加载不能代替 WTD 实际产物验收。
+WTD 的实际 Character Mod 构建与 SDK 内产物加载已验证。Warudo 客户端加载、现有蓝图切换到 HoVTS角色输入，以及设备驱动下表情与官方姿态共存仍需继续验收。Unity 中实际 UMod 加载不等于 Warudo 客户端验收。
