@@ -6,19 +6,7 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.Warudo
 {
-    /// <summary>
-    /// FastBuild Warudo Mod —— **HoFT 页**（面捕）：把一份控制器打成 Warudo 能读的 AssetBundle。
-    ///
-    /// 【为什么单独一页，而不是塞在面捕那套窗口里】
-    /// 它产出的是**给 Warudo 用的文件**（bundle 落点通常是 Warudo 的插件沙箱），
-    /// 跟"在工程里装配控制器"是两件事：那一页改工程里的资产，这一页只吐一个文件。
-    /// 放在 FastBuild 里也顺手 —— 打包和部署是同一类动作。
-    ///
-    /// 【和「面捕 / 控制器编辑」的分工】
-    /// 控制器编辑：**在工作区里**把片段填进混合树、把形态键曲线重绑到调试对象上（改的是工程资产）。
-    /// 这一页：把**已经装配好的**那份控制器 + 它绑定的那套 rig 原样打成一个 bundle（不改任何资产）。
-    /// 所以流程是：控制器编辑 → 这一页打包 → 把文件放到 Warudo 的插件沙箱 → 节点上选它。
-    /// </summary>
+    /// <summary>HoFT export page: select a controller, let the page infer the rig, export one bundle.</summary>
     internal sealed partial class HoFastBuildWarudoModWindow
     {
         private const string HoFTBundlePrefKey = "HoUnityTools.FastBuild.HoFT.BundleName";
@@ -29,171 +17,92 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         [SerializeField] private string hoftBundleName = string.Empty;
         [SerializeField] private string hoftOutputDirectory = string.Empty;
         [SerializeField] private bool hoftOutputIsCustom;
+        [SerializeField] private bool hoftShowAdvanced;
         [SerializeField] private Vector2 hoftScroll;
         [SerializeField] private string hoftStatus = string.Empty;
         [SerializeField] private bool hoftStatusIsError;
-
-        // ---------------------------------------------------------------------
-        // 页面
-        // ---------------------------------------------------------------------
 
         private void DrawHoFTPage()
         {
             hoftScroll = EditorGUILayout.BeginScrollView(hoftScroll);
             GUILayout.Space(8f);
-
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.Space(10f);
+                GUILayout.Space(12f);
                 using (new EditorGUILayout.VerticalScope())
                 {
                     DrawHoFTHeader();
-                    GUILayout.Space(6f);
-                    DrawHoFTForm();
-                    GUILayout.Space(6f);
+                    GUILayout.Space(8f);
+                    DrawHoFTMain();
+                    GUILayout.Space(8f);
                     DrawHoFTActions();
-                    DrawHoFTFooter();
                 }
-                GUILayout.Space(10f);
+                GUILayout.Space(12f);
             }
-
             GUILayout.Space(10f);
             EditorGUILayout.EndScrollView();
         }
 
         private static void DrawHoFTHeader()
         {
-            EditorGUILayout.LabelField("面捕控制器 → AssetBundle", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "把一份控制器（混合树那套）和**它绑定的那套 rig** 打成一个文件，给 Warudo 的「HoFace控制求解」用。",
-                EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField("导出面捕控制器", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("选一份控制器，自动识别绑定预制体，点一次导出。", EditorStyles.wordWrappedMiniLabel);
         }
 
-        private void DrawHoFTForm()
+        private void DrawHoFTMain()
         {
-            // ── 控制器 ──────────────────────────────────────────────────────────
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("控制器", GUILayout.Width(FormLabelWidth));
                 var picked = (RuntimeAnimatorController)EditorGUILayout.ObjectField(
-                    GUIContent.none, hoftController, typeof(RuntimeAnimatorController), false,
-                    GUILayout.MinWidth(160f));
+                    GUIContent.none, hoftController, typeof(RuntimeAnimatorController), false, GUILayout.MinWidth(180f));
                 if (picked != hoftController)
                 {
                     hoftController = picked;
-                    if (!hoftOutputIsCustom && picked != null)
-                    {
-                        string path = AssetDatabase.GetAssetPath(picked);
-                        if (!string.IsNullOrEmpty(path))
-                            hoftOutputDirectory = Path.GetDirectoryName(path).Replace('\\', '/');
-                    }
-                    if (string.IsNullOrEmpty(hoftBundleName) && picked != null)
-                        hoftBundleName = picked.name.ToLowerInvariant() + ".bundle";
-
-                    hoftStatus = string.Empty;
+                    PrepareHoFTDefaults();
                     GUI.FocusControl(null);
                 }
             }
 
-            using (new EditorGUILayout.HorizontalScope())
+            if (hoftController == null)
             {
-                EditorGUILayout.LabelField(string.Empty, GUILayout.Width(FormLabelWidth));
-                EditorGUILayout.LabelField("必须是纯 Unity AnimatorController（不接受 OverrideController）。",
-                    EditorStyles.miniLabel);
+                EditorGUILayout.HelpBox("先选择 AnimatorController。", MessageType.Info);
+                return;
             }
 
-            GUILayout.Space(4f);
-
-            // ── 控制器驱动的预制体 ──────────────────────────────────────────────
-            // 为什么让用户指：控制器和 rig 常常不是同一个资产，靠"扫绑定反推"只覆盖顺利情况，
-            // 而且反推失败时打出来的是个**空 bundle**（运行时静默采不到东西）。
-            // 指定之后我们还会拿它**校验**每条绑定的路径能不能解析到，对不上就点名。
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("绑定预制体", GUILayout.Width(FormLabelWidth));
-                var pickedRig = (GameObject)EditorGUILayout.ObjectField(
-                    GUIContent.none, hoftRigPrefab, typeof(GameObject), false, GUILayout.MinWidth(160f));
-                if (pickedRig != hoftRigPrefab)
-                {
-                    hoftRigPrefab = pickedRig;
-                    hoftStatus = string.Empty;
-                    GUI.FocusControl(null);
-                }
+                EditorGUILayout.LabelField("自动导出配置", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("绑定预制体", hoftRigPrefab != null ? hoftRigPrefab.name : "自动识别失败，将在导出时重试");
+                EditorGUILayout.LabelField("输出文件", string.IsNullOrEmpty(hoftOutputDirectory)
+                    ? "未设置输出目录"
+                    : Path.Combine(hoftOutputDirectory, string.IsNullOrEmpty(hoftBundleName) ? "(自动命名)" : hoftBundleName).Replace('\\', '/'));
+                EditorGUILayout.LabelField("导出内容", "控制器 + 绑定预制体 + 动画片段");
+            }
 
-                using (new EditorGUI.DisabledScope(hoftController == null))
+            hoftShowAdvanced = EditorGUILayout.Foldout(hoftShowAdvanced, "高级设置", true);
+            if (!hoftShowAdvanced) return;
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                hoftRigPrefab = (GameObject)EditorGUILayout.ObjectField("绑定预制体", hoftRigPrefab, typeof(GameObject), false);
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button("自动找", GUILayout.Width(64f)))
+                    hoftOutputDirectory = EditorGUILayout.TextField("输出目录", hoftOutputDirectory);
+                    if (GUILayout.Button("浏览…", GUILayout.Width(58f)))
                     {
-                        string note;
-                        var guessed = HoFTBundleBuilder.GuessRig(hoftController, out note);
-                        if (guessed != null) hoftRigPrefab = guessed;
-                        hoftStatus = guessed != null ? "已选：" + note : "自动找失败：" + note;
-                        hoftStatusIsError = guessed == null;
+                        string start = string.IsNullOrEmpty(hoftOutputDirectory) ? Application.dataPath : hoftOutputDirectory;
+                        string picked = EditorUtility.OpenFolderPanel("选择 AssetBundle 输出目录", start, string.Empty);
+                        if (!string.IsNullOrEmpty(picked))
+                        {
+                            hoftOutputDirectory = picked.Replace('\\', '/');
+                            hoftOutputIsCustom = true;
+                        }
                         GUI.FocusControl(null);
                     }
                 }
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(string.Empty, GUILayout.Width(FormLabelWidth));
-                EditorGUILayout.LabelField("**这个控制器真正驱动的那套预制体** —— 它会跟着一起打进 bundle，"
-                    + "打包时还会拿它校验每条绑定路径。留空则退回\"按绑定自动找\"。", EditorStyles.wordWrappedMiniLabel);
-            }
-
-            GUILayout.Space(4f);
-
-            // ── 输出目录 ────────────────────────────────────────────────────────
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField("输出目录", GUILayout.Width(FormLabelWidth));
-                EditorGUI.BeginChangeCheck();
-                string edited = EditorGUILayout.TextField(hoftOutputDirectory);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    hoftOutputDirectory = edited;
-                    hoftOutputIsCustom = true;
-                }
-
-                if (GUILayout.Button("浏览…", GUILayout.Width(56f)))
-                {
-                    string start = string.IsNullOrEmpty(hoftOutputDirectory) ? Application.dataPath : hoftOutputDirectory;
-                    string picked = EditorUtility.OpenFolderPanel("选输出目录", start, string.Empty);
-                    if (!string.IsNullOrEmpty(picked))
-                    {
-                        hoftOutputDirectory = picked.Replace('\\', '/');
-                        hoftOutputIsCustom = true;
-                    }
-                    GUI.FocusControl(null);
-                }
-
-                using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(hoftOutputDirectory)))
-                {
-                    if (GUILayout.Button("打开", GUILayout.Width(48f))) RevealHoFTOutput();
-                }
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(string.Empty, GUILayout.Width(FormLabelWidth));
-                EditorGUILayout.LabelField("可以是**工程外**的绝对路径 —— Warudo 的插件沙箱就在工程外（就在那儿选）。",
-                    EditorStyles.miniLabel);
-            }
-
-            GUILayout.Space(4f);
-
-            // ── 文件名 ──────────────────────────────────────────────────────────
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField("文件名", GUILayout.Width(FormLabelWidth));
-                hoftBundleName = EditorGUILayout.TextField(hoftBundleName);
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(string.Empty, GUILayout.Width(FormLabelWidth));
-                EditorGUILayout.LabelField("Warudo 的 `控制器` 下拉列表列的就是沙箱里的 `*.bundle`。",
-                    EditorStyles.miniLabel);
+                hoftBundleName = EditorGUILayout.TextField("文件名", hoftBundleName);
+                EditorGUILayout.LabelField("目标文件名必须以 .bundle 结尾；输出目录可直接指向 Warudo 插件沙箱。", EditorStyles.miniLabel);
             }
         }
 
@@ -201,58 +110,52 @@ namespace Hollow.HoUnityTools.Editor.Warudo
         {
             using (new EditorGUI.DisabledScope(hoftController == null))
             {
-                if (GUILayout.Button("打包", GUILayout.Height(24f)))
+                if (GUILayout.Button("一键导出 AssetBundle", GUILayout.Height(30f)))
                 {
+                    PrepareHoFTDefaults();
                     var result = HoFTBundleBuilder.Build(hoftController, hoftRigPrefab, hoftOutputDirectory, hoftBundleName);
                     hoftStatus = result.message;
                     hoftStatusIsError = !result.ok;
                     if (result.warnings.Count > 0)
-                        hoftStatus += "\n⚠ " + string.Join("\n⚠ ", result.warnings.ToArray());
-                    if (result.ok) EditorUtility.RevealInFinder(result.bundlePath);
+                        hoftStatus += "\n" + string.Join("\n", result.warnings.ToArray());
+                    if (result.ok)
+                    {
+                        SaveHoFTPreferences();
+                        EditorUtility.RevealInFinder(result.bundlePath);
+                    }
                 }
-            }
-
-            if (hoftController == null)
-            {
-                EditorGUILayout.HelpBox("先在上面选一份控制器。控制器还没做？用「面捕 / 控制器编辑」那一页装配一份。",
-                    MessageType.Info);
             }
 
             if (!string.IsNullOrEmpty(hoftStatus))
             {
-                EditorGUILayout.Space(2f);
+                EditorGUILayout.Space(4f);
                 EditorGUILayout.HelpBox(hoftStatus, hoftStatusIsError ? MessageType.Error : MessageType.Info);
             }
         }
 
-        private void DrawHoFTFooter()
+        private void PrepareHoFTDefaults()
         {
-            GUILayout.Space(4f);
-            EditorGUILayout.LabelField("打包之后：把这个文件放到 Warudo 的插件沙箱（和中间层配置同一个目录），"
-                + "在「HoFace控制求解」的 `控制器` 下拉里选它，然后按节点上的「重读控制器」。",
-                EditorStyles.wordWrappedMiniLabel);
+            if (hoftController == null) return;
 
-            GUILayout.Space(4f);
-            EditorGUILayout.LabelField("⚠️ AssetBundle 与 Unity 版本绑定：必须在 **2021.3.45f2**（= Warudo 本体版本）里打。",
-                EditorStyles.wordWrappedMiniLabel);
-        }
+            if (string.IsNullOrEmpty(hoftBundleName))
+                hoftBundleName = hoftController.name.ToLowerInvariant() + ".bundle";
+            if (!hoftBundleName.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase))
+                hoftBundleName += ".bundle";
 
-        private void RevealHoFTOutput()
-        {
-            string path = hoftOutputDirectory;
-            if (string.IsNullOrEmpty(path)) return;
-
-            if (!Directory.Exists(path))
+            if (!hoftOutputIsCustom && string.IsNullOrEmpty(hoftOutputDirectory))
             {
-                EditorUtility.DisplayDialog("HoFT", "这个目录还不存在：\n" + path, "好");
-                return;
+                string controllerPath = AssetDatabase.GetAssetPath(hoftController);
+                if (!string.IsNullOrEmpty(controllerPath))
+                    hoftOutputDirectory = Path.GetDirectoryName(controllerPath).Replace('\\', '/');
             }
-            EditorUtility.RevealInFinder(path);
-        }
 
-        // ---------------------------------------------------------------------
-        // 记住上次填的（换页/重开窗口都还在）
-        // ---------------------------------------------------------------------
+            string note;
+            var guessed = HoFTBundleBuilder.GuessRig(hoftController, out note);
+            if (guessed != null) hoftRigPrefab = guessed;
+            hoftStatus = guessed != null ? "已自动识别绑定预制体：" + guessed.name : string.Empty;
+            hoftStatusIsError = false;
+            GUI.FocusControl(null);
+        }
 
         private void LoadHoFTPreferences()
         {
