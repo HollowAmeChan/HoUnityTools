@@ -42,6 +42,27 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>有几行输入（面板显示用）。</summary>
         public int InputRowCount { get { return inputRows.Length; } }
 
+        private IReadOnlyDictionary<string, float> inputOverrides, outputOverrides;
+        public void SetOverrides(IReadOnlyDictionary<string, float> inputs, IReadOnlyDictionary<string, float> outputs)
+        { inputOverrides = inputs; outputOverrides = outputs; }
+
+        public bool TryReadInput(int row, out float configured, out float effective, out bool fresh)
+        {
+            configured = effective = 0; fresh = false;
+            if (row < 0 || row >= inputRows.Length || inputRows[row] == null) return false;
+            configured = inputValues[row]; effective = Lookup(inputRows[row].parameter); fresh = inputFresh[row];
+            return true;
+        }
+
+        public bool TryReadOutput(int row, out float modified, out float published)
+        {
+            modified = published = 0;
+            if (row < 0 || row >= outputs.Length || outputs[row] == null) return false;
+            modified = outputValues[row];
+            if (outputKeys[row] != null) Parameters.TryGetValue(outputKeys[row], out published);
+            return true;
+        }
+
         /// <summary>
         /// 编译期的问题（表达式解析失败、修饰符 kind 不认得）。
         /// 逐帧求值**不看它** —— 它只用来在面板上点名。
@@ -248,7 +269,8 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 string key = outputKeys[i];
                 if (string.IsNullOrEmpty(key)) continue;
-                Parameters[key] = outputValues[i];
+                Parameters[key] = outputOverrides != null && outputOverrides.TryGetValue(outputs[i].parameter, out float pinned)
+                    ? pinned : outputValues[i];
             }
         }
 
@@ -327,7 +349,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         private float Lookup(string name)
         {
             int row;
-            if (name != null && inputIndex.TryGetValue(name, out row)) return inputValues[row];
+            if (name != null && inputIndex.TryGetValue(name, out row))
+                return inputOverrides != null && inputOverrides.TryGetValue(name, out float pinned) ? pinned : inputValues[row];
             return Raw(current, name);
         }
 

@@ -76,6 +76,7 @@ public static class HoVtsAuthoringValidation
 
     public static void RunPlay()
     {
+        DebugSession();
         var asset = AssetDatabase.LoadAssetAtPath<GameObject>(PathName);
         Require(asset != null, "authoring fixture exists for play-mode editing");
         var source = asset.GetComponent<HoVtsParameterReceiver>();
@@ -110,6 +111,57 @@ public static class HoVtsAuthoringValidation
             Debug.Log("HO_VTS_AUTHORING_PLAY PASS");
         }
         finally { UnityEngine.Object.DestroyImmediate(instance); Undo.ClearAll(); }
+    }
+
+    private static void DebugSession()
+    {
+        var root = new GameObject("DebugSession");
+        var child = new GameObject("VTS"); child.transform.SetParent(root.transform, false);
+        var receiver = child.AddComponent<HoVtsParameterReceiver>();
+        var rules = new HoFaceMiddleware();
+        rules.inputs.Add(new HoFaceOutput { parameter = "Canonical", expression = "Wire" });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Result", expression = "Canonical * 2" });
+        rules.outputs.Add(new HoFaceOutput { parameter = "Downstream", expression = "out(\"Result\") + 1" });
+        receiver.SetMiddleware(rules);
+        string original = HoFaceProfile.Write(rules);
+        try
+        {
+            var session = new HoVtsDebugSession(root, false);
+            Require(session.Receiver == receiver, "debug target discovers its own receiver without rules/controller inputs");
+            bool duplicate = false;
+            try { new HoVtsDebugSession(root, false); } catch (InvalidOperationException) { duplicate = true; }
+            Require(duplicate, "two debug sessions cannot drive one receiver");
+            session.PinInput("Canonical", .4f);
+            session.PinOutput("Result", .9f);
+            session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .2f } }, true, Time.realtimeSinceStartupAsDouble);
+            Require(receiver.Get("Result") == .9f && Mathf.Abs(receiver.Get("Downstream") - 1.8f) < .0001f,
+                "input pins affect expressions; output pins publish after ordered rule evaluation");
+            Require(receiver.TryReadInputRow(0, out float configured, out float effective, out bool fresh)
+                && configured == .2f && effective == .4f && fresh, "input monitor separates configured and overridden values");
+            Require(receiver.TryReadOutputRow(0, out float modified, out float published)
+                && modified == .8f && published == .9f, "output monitor separates solved and published values");
+            Require(HoFaceProfile.Write(receiver.Middleware) == original, "debug pins never modify serialized role rules");
+            session.ClearPins();
+            session.Feed(new System.Collections.Generic.Dictionary<string, float> { { "Wire", .3f } }, true, Time.realtimeSinceStartupAsDouble);
+            Require(Mathf.Abs(receiver.Get("Result") - .6f) < .0001f, "clearing pins restores normal role evaluation");
+            session.Dispose();
+            Require(!receiver.HasFrame && receiver.ValueCount == 0, "debug stop releases only its own input");
+            using (var next = new HoVtsDebugSession(root, false))
+            {
+                next.PinOutput("Result", .123f);
+                next.Feed(new System.Collections.Generic.Dictionary<string, float>(), false, Time.realtimeSinceStartupAsDouble);
+                receiver.ApplyRawFrame(new System.Collections.Generic.Dictionary<string, float> { { "Wire", 1 } }, true, Time.realtimeSinceStartupAsDouble, "external");
+                Require(receiver.Get("Result") == 2, "source-bound debug overrides cannot affect another input source");
+            }
+            Require(receiver.Source == "external" && receiver.HasFrame, "stopping debug does not clear a newer external source");
+            receiver.ClearFrame();
+            var extra = new GameObject("Ambiguous"); extra.transform.SetParent(root.transform, false); extra.AddComponent<HoVtsParameterReceiver>();
+            bool ambiguous = false;
+            try { new HoVtsDebugSession(root, false); } catch (InvalidOperationException) { ambiguous = true; }
+            Require(ambiguous && root.GetComponentsInChildren<HoVtsParameterReceiver>().Length == 2, "ambiguous targets fail without creating components");
+            Debug.Log("HO_VTS_DEBUG_SESSION PASS");
+        }
+        finally { UnityEngine.Object.DestroyImmediate(root); }
     }
 
     private static void Require(bool condition, string message)

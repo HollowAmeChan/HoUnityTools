@@ -40,9 +40,11 @@
 
 本次产物：Artifacts/HoVtsComponentsValidation.warudo。
 
-SHA-256：5CBBD85B9BC08F366B689B8590DCBFC97A4C0FF522AFAB80D3B90AC844678A30。
+SHA-256：23EA57B90C998D917DADEE640102EFB20DB4EA257FB2501D596DEFE92564D9A9。
 
 ## 加载产物后运行
+
+同一 SDK 工程的播放阶段还验证了 HoVtsDebugSession：只选对象查找接收器、拒绝重复会话与多接收器歧义、输入/输出临时覆盖、配置值与有效值分离、修饰后值与发布值分离、规则不被覆盖改写、停止清理及外部来源接管保护。结果标记为 HO_VTS_DEBUG_SESSION PASS。此处验证的是会话后端，面板和完整录样仍未迁移完成。
 
 在第二个 Unity 进程进入播放模式，通过 UMod.Mod.Load 实际加载上述产物并实例化 Character。
 

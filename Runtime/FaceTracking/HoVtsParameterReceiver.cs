@@ -45,6 +45,33 @@ namespace Hollow.HoUnityTools.FaceTracking
         private HoVtsRuleEvaluator evaluator;
         private double lastEvaluationTime = -1.0;
         private int evaluatedUnityFrame = -1;
+        private readonly Dictionary<string, float> inputOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> outputOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
+        private string overrideSource;
+
+        /// <summary>Transient diagnostic overrides. They never modify serialized role rules.</summary>
+        public void SetDebugOverrides(IReadOnlyDictionary<string, float> inputs, IReadOnlyDictionary<string, float> outputs, string ownerSource = null)
+        {
+            CopyOverrides(inputs, inputOverrides); CopyOverrides(outputs, outputOverrides);
+            overrideSource = ownerSource;
+        }
+        public void ClearDebugOverrides() { inputOverrides.Clear(); outputOverrides.Clear(); overrideSource = null; }
+        private static void CopyOverrides(IReadOnlyDictionary<string, float> sourceValues, Dictionary<string, float> destination)
+        {
+            destination.Clear();
+            if (sourceValues != null) foreach (var pair in sourceValues)
+                if (!string.IsNullOrEmpty(pair.Key)) destination[pair.Key] = Safe(pair.Value);
+        }
+        public bool TryReadInputRow(int row, out float configured, out float effective, out bool fresh)
+        {
+            configured = effective = 0; fresh = false;
+            return evaluator != null && evaluator.TryReadInput(row, out configured, out effective, out fresh);
+        }
+        public bool TryReadOutputRow(int row, out float modified, out float published)
+        {
+            modified = published = 0;
+            return evaluator != null && evaluator.TryReadOutput(row, out modified, out published);
+        }
 
         public bool Tracked => tracked;
         public bool HasFrame => lastFrameTime >= 0;
@@ -167,6 +194,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                 : 0f;
             evaluationRaw.Clear();
             if (tracked) CopyTo(rawValues, evaluationRaw);
+            bool useOverrides = overrideSource == null || overrideSource == Source;
+            evaluator.SetOverrides(useOverrides ? inputOverrides : null, useOverrides ? outputOverrides : null);
             evaluator.Evaluate(evaluationRaw, deltaTime, now);
             SetProcessedValues(evaluator.Parameters);
             lastEvaluationTime = now;
