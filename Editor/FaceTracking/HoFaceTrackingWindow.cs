@@ -136,7 +136,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             var environment = HoFaceInputEnvironment.instance;
-            if (settings.Character() != null && settings.Character().GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
+            var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
+            if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
             {
                 HoVtsComponentDebugView.Draw(settings);
                 return;
