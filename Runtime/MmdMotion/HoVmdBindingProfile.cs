@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.MmdMotion
 {
     /// <summary>Saved source-name to target-path mapping for a Unity FBX/GLTF character.</summary>
-    [CreateAssetMenu(menuName = "Ho/MMD/VMD Binding Profile", fileName = "VMD Binding Profile")]
+    [CreateAssetMenu(menuName = "HoUnityTools/MMD/VMD Binding Profile", fileName = "VMD Binding Profile")]
     public sealed class HoVmdBindingProfile : ScriptableObject
     {
         [Serializable] public sealed class BoneMap { public string sourceName; public string targetPath; }

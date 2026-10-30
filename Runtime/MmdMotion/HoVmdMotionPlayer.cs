@@ -8,7 +8,7 @@ namespace Hollow.HoUnityTools.MmdMotion
     /// <summary>Plays imported VMD bone/morph/show-IK tracks on an existing Unity hierarchy.</summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32050)]
-    [AddComponentMenu("Ho/MMD/VMD Motion Player")]
+    [AddComponentMenu("HoUnityTools/MMD/VMD Motion Player")]
     public sealed class HoVmdMotionPlayer : MonoBehaviour
     {
         [Serializable] public sealed class BoneBinding { public string vmdName; public Transform target; }
@@ -202,7 +202,7 @@ namespace Hollow.HoUnityTools.MmdMotion
     /// <summary>Applies a VMD camera track through a target plus camera child rig.</summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32060)]
-    [AddComponentMenu("Ho/MMD/VMD Camera Player")]
+    [AddComponentMenu("HoUnityTools/MMD/VMD Camera Player")]
     public sealed class HoVmdCameraPlayer : MonoBehaviour
     {
         public HoVmdAnimation animation;

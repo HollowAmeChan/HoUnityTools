@@ -14,6 +14,8 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdBindingProfileBuilder` 可以从选中的 FBX/GLTF 角色层级生成初始 Profile：优先精确名称，其次规范化名称，再尝试 Humanoid `HumanBodyBones`。生成结果需要人工检查，尤其是 MMD 的 WIK、toe、眼睛和作者专用 morph。
 
+组件统一从 **Add Component → HoUnityTools → MMD** 添加：`VMD Motion Player`、`VMD Camera Player`；Profile 资产和 Profile Builder 也位于 `HoUnityTools/MMD`。MMD 足部约束使用 **Add Component → HoUnityTools → Constraints → CCD IK**，不再暴露独立的 `Ho` 顶层入口。
+
 ### VMD morph 依赖审查
 
 `HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：显式 `HoVmdBindingProfile.morphs` 映射、精确名称、去掉标点并转小写后的规范化名称；同名跨多个 Renderer 或失效的 Profile 映射会记为冲突，找不到的名称会记为缺失。结果包含需求总数、三类命中计数以及具体的 `exactMatchNames`、`normalizedMatchNames`、`profileMappedNames`、`missingNames`、`conflictNames`，可以直接作为角色适配的门槛。

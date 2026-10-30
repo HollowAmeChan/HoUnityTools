@@ -15,7 +15,7 @@ namespace Hollow.HoUnityTools.RigConstraints
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(32100)]
-    [AddComponentMenu("Ho/Constraints/CCD IK")]
+    [AddComponentMenu("HoUnityTools/Constraints/CCD IK")]
     public sealed class HoIkConstraint : MonoBehaviour
     {
         public enum UpdateMode

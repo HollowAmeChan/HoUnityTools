@@ -70,7 +70,7 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             return profile;
         }
 
-        [MenuItem("Tools/Ho/MMD/Create Binding Profile From Selected VMD And Character")]
+        [MenuItem("HoUnityTools/MMD/Create Binding Profile From Selected VMD And Character")]
         private static void CreateFromSelection()
         {
             var animation = Selection.activeObject as HoVmdAnimation;
