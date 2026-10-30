@@ -216,6 +216,7 @@ Hollow.HoUnityTools.FaceTracking.HoVtsLookAt
 - 官方姿态链可独立保留，自有 LookAt 不与其抢同一批骨骼；无需以替换官方链为完成条件；
 - 完整姿态和信号未因形状表过滤而丢失，断流、缺键和多消费者时域行为通过回归；
 - Unity 调试只选对象即可取得组件引用的 JSON、规则和控制器，三段读数、覆盖和录样能力保留；
+- HoVtsLookAt 的 Scene Gizmo 显示参考坐标、实际骨骼前方和 VTS 目标前方；Warudo 侧 `HoFaceVTS姿态显示` 节点使用与 `HoFace骨骼全量显示` 相同的 `Camera.onPostRender` 叠加路径，在 Game 视图显示头部和双眼的实际/目标轴向；
 - 新系统完成后，旧 HoFT Bundle 和 HoFace 控制求解路线不再出现在活文档入口中。
 
 ## 10. 当前状态
