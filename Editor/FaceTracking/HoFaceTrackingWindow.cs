@@ -139,7 +139,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
             if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
             {
-                HoVtsComponentDebugView.Draw(settings);
+                HoVtsComponentDebugView.Draw(settings, componentCandidate);
                 return;
             }
             // **整页滚轮滚动**（2026-09-27 用户：「给这个完整的界面加上滚轮能上下滚动，现在太长的就看不了了」）：

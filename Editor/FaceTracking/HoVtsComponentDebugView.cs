@@ -45,9 +45,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static bool componentsExpanded = true;
         private static bool profileExpanded = true, diagnoseExpanded;
 
-        public static void Draw(HoFaceDebugSettings settings)
+        public static void Draw(HoFaceDebugSettings settings, GameObject initialTarget = null)
         {
-            var target = settings.Character();
+            var target = initialTarget != null ? initialTarget : settings.Character();
             using (var page = new EditorGUILayout.ScrollViewScope(scroll))
             {
                 scroll = page.scrollPosition;
