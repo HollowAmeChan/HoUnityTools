@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -136,6 +136,12 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             var environment = HoFaceInputEnvironment.instance;
+            var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
+            if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
+            {
+                HoVtsComponentDebugView.Draw(settings, componentCandidate);
+                return;
+            }
             var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
             if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
             {
@@ -896,8 +902,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         /// <summary>
         /// **纯调试**：中间层**求出来的值** —— 逐输出行摊开（参数名 / 值 / 表达式）。
-        ///
-        /// 所以"Hub 里是什么"不用另找地方看 —— 就是这里。
         ///
         /// 为什么要单独一栏：脸不动的时候，"配置没求好值"和"求好了但写不进去"是两件事，
         /// 而在界面上**都表现为"什么都没发生"**。这一栏把两者分开：

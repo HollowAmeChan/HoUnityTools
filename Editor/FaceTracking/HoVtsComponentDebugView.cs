@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Hollow.HoUnityTools.FaceTracking;
+using Hollow.HoUnityTools.Editor.Constraints;
 using UnityEditor;
 using UnityEngine;
 
@@ -51,33 +52,46 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             using (var page = new EditorGUILayout.ScrollViewScope(scroll))
             {
                 scroll = page.scrollPosition;
-                EditorGUILayout.LabelField("Ho VTS 角色调试", EditorStyles.boldLabel);
-                EditorGUI.BeginChangeCheck();
-                var picked = (GameObject)EditorGUILayout.ObjectField("调试对象", target, typeof(GameObject), true);
-                if (EditorGUI.EndChangeCheck())
+                HoConstraintEditorControls.Title("Ho VTS 角色调试", target == null ? "未选择对象" : target.name,
+                    ("输入", HoFaceInputHub.Connected), ("会话", HoVtsDebugHost.Running));
+                using (HoConstraintEditorControls.Card())
                 {
-                    HoVtsDebugHost.Stop(); settings.SetCharacter(picked); settings.Save();
-                    target = picked;
+                    using (HoConstraintEditorControls.Row(true))
+                    {
+                        HoConstraintEditorControls.Label("调试对象", HoConstraintEditorTheme.LabelWidth,
+                            "只选择角色对象；规则、控制器和姿态引用从角色组件读取。");
+                        EditorGUI.BeginChangeCheck();
+                        var picked = (GameObject)EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90), target, typeof(GameObject), true);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            HoVtsDebugHost.Stop(); settings.SetCharacter(picked); settings.Save();
+                            target = picked;
+                        }
+                    }
                 }
                 var receivers = target != null ? target.GetComponentsInChildren<HoVtsParameterReceiver>(true) : new HoVtsParameterReceiver[0];
                 var receiver = receivers.Length == 1 ? receivers[0] : null;
-                using (new EditorGUILayout.HorizontalScope())
+                using (HoConstraintEditorControls.Card())
+                using (HoConstraintEditorControls.Row(true))
                 {
-                    autoStart = EditorGUILayout.ToggleLeft("进入播放自动开始", autoStart, GUILayout.Width(155));
+                    autoStart = HoConstraintEditorControls.Toggle("自动驱动", autoStart, "进入播放自动开始组件会话。");
+                    HoConstraintEditorControls.Gap(8);
                     using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || receiver == null || HoVtsDebugHost.Running))
-                        if (GUILayout.Button("开始调试")) HoVtsDebugHost.Start(target);
+                        if (HoConstraintEditorControls.Button("开始调试", "开始角色组件调试会话。", true, 90)) HoVtsDebugHost.Start(target);
+                    HoConstraintEditorControls.Gap(6);
                     using (new EditorGUI.DisabledScope(!HoVtsDebugHost.Running))
-                        if (GUILayout.Button("停止并交还")) HoVtsDebugHost.Stop();
+                        if (HoConstraintEditorControls.Button("停止并交还", "释放输入和写入对象。", false, 90)) HoVtsDebugHost.Stop();
+                    HoConstraintEditorControls.Gap(6);
                     using (new EditorGUI.DisabledScope(receiver == null))
-                        if (GUILayout.Button("编辑角色规则")) HoFaceProfileWindow.Open(receiver);
+                        if (HoConstraintEditorControls.Button("编辑角色规则", "打开组件规则草稿编辑器。", false, 90)) HoFaceProfileWindow.Open(receiver);
                 }
                 if (target != null && receiver == null)
                     EditorGUILayout.HelpBox(receivers.Length == 0 ? "对象上没有 HoVtsParameterReceiver" : "对象下有多个接收器。", MessageType.Warning);
                 if (!string.IsNullOrEmpty(HoVtsDebugHost.Error)) EditorGUILayout.HelpBox(HoVtsDebugHost.Error, MessageType.Error);
                 DrawInputConnection();
                 if (receiver == null) return;
-                EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时 · 已回中性" : receiver.Tracked ? "追踪中" : "未追踪 / 手动调试");
-                componentsExpanded = EditorGUILayout.Foldout(componentsExpanded, "角色组件", true);
+                HoConstraintEditorControls.Pill(!receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪", receiver.Tracked);
+                componentsExpanded = HoConstraintEditorSectionGui.DrawSectionHeader(ref componentsExpanded, "角色组件", "自动发现", HoConstraintEditorTheme.AccentDriver);
                 if (componentsExpanded) DrawComponents(target, receiver);
                 DrawProfile(receiver);
                 DrawRecordControls();
@@ -114,19 +128,42 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private static void DrawDiagnose(GameObject target, HoVtsParameterReceiver receiver)
         {
-            diagnoseExpanded = EditorGUILayout.Foldout(diagnoseExpanded, "排查", true);
+            diagnoseExpanded = HoConstraintEditorSectionGui.DrawSectionHeader(ref diagnoseExpanded, "排查", "授权 · 端口 · 包统计", HoConstraintEditorTheme.AccentDebug);
             if (!diagnoseExpanded) return;
-            using (new EditorGUI.IndentLevelScope())
+            using (HoConstraintEditorControls.Card())
             {
-                EditorGUILayout.LabelField("输入源", HoFaceInputHub.Connected ? "已连接 · " + HoFaceInputHub.SourceCount + " 条源" : "未连接");
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("防火墙", HoConstraintEditorTheme.LabelWidthSm);
+                    if (!HoFaceFirewall.Supported) HoConstraintEditorControls.Caption("当前系统不支持自动检查");
+                    else
+                    {
+                        HoConstraintEditorControls.Pill(HoFaceFirewall.Exists ? "已放行" : "未放行", HoFaceFirewall.Exists);
+                        HoConstraintEditorControls.Gap(6);
+                        using (new EditorGUI.DisabledScope(HoFaceFirewall.Busy))
+                            if (HoConstraintEditorControls.Button("授予权限", "为当前 Unity 编辑器放行入站 UDP。", true, 72)) HoFaceFirewall.Grant();
+                        using (new EditorGUI.DisabledScope(!HoFaceFirewall.Exists || HoFaceFirewall.Busy))
+                            if (HoConstraintEditorControls.Button("撤销", "撤销当前规则。", false, 42)) HoFaceFirewall.Revoke();
+                    }
+                }
+                if (!string.IsNullOrEmpty(HoFaceFirewall.Status)) HoConstraintEditorControls.Caption(HoFaceFirewall.Status);
+                if (!string.IsNullOrEmpty(HoFaceFirewall.LastLog)) HoConstraintEditorControls.CaptionTrim(HoFaceFirewall.LastLog, 420);
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("输入源", HoConstraintEditorTheme.LabelWidthSm);
+                    HoConstraintEditorControls.Caption(HoFaceInputHub.Connected ? "已连接 · " + HoFaceInputHub.SourceCount + " 条源" : "未连接");
+                    HoConstraintEditorControls.Flex();
+                    long packets = 0, invalid = 0, rejected = 0;
+                    foreach (var source in HoFaceInputHub.Sources) { packets += source.Packets; invalid += source.Invalid; rejected += source.Rejected; }
+                    HoConstraintEditorControls.CaptionTrim("包 " + packets + " · 无效 " + invalid + " · 其他来源 " + rejected + " · " + HoFaceInputHub.LastFrameTime.ToString("F3"), 260);
+                }
                 double age = HoFaceInputHub.LastFrameTime > 0 ? HoFaceClock.Now - HoFaceInputHub.LastFrameTime : double.PositiveInfinity;
-                EditorGUILayout.LabelField("最近输入", double.IsInfinity(age) ? "从未收到" : age.ToString("F2") + " 秒前");
-                EditorGUILayout.LabelField("接收器", receiver.HasFrame ? receiver.Source : "没有当前帧");
-                EditorGUILayout.LabelField("原始键 / 处理后", receiver.RawCount + " / " + receiver.ValueCount);
+                HoConstraintEditorControls.Caption("最近输入：" + (double.IsInfinity(age) ? "从未收到" : age.ToString("F2") + " 秒前"));
+                HoConstraintEditorControls.Caption("接收器：" + (receiver.HasFrame ? receiver.Source : "没有当前帧") + " · 原始键/处理后 " + receiver.RawCount + "/" + receiver.ValueCount);
                 if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
                 if (target != null)
                     foreach (var controller in target.GetComponentsInChildren<HoVtsController>(true))
-                        if (controller.ParameterReceiver == receiver) EditorGUILayout.LabelField("绑定动画属性", controller.BindingCount.ToString());
+                        if (controller.ParameterReceiver == receiver) HoConstraintEditorControls.Caption("绑定动画属性：" + controller.BindingCount);
             }
         }
 
