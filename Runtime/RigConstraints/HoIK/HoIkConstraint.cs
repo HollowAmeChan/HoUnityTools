@@ -248,7 +248,12 @@ namespace Hollow.HoUnityTools.RigConstraints
         {
             if (links.Count == 0 || links[0] == null || links[0].bone == null)
                 return;
-            Transform knee = links[0].bone;
+            // With the documented order (ankle, knee, thigh), the second link
+            // is the actual knee/elbow pivot. Fall back to the first link for a
+            // one-link toe/hand chain.
+            Transform knee = links.Count > 1 && links[1] != null && links[1].bone != null
+                ? links[1].bone
+                : links[0].bone;
             Vector3 axis = target.position - knee.position;
             if (axis.sqrMagnitude < 1e-10f) return;
             Vector3 current = Vector3.ProjectOnPlane(effector.position - knee.position, axis);
