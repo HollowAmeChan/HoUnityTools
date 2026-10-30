@@ -137,7 +137,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             var environment = HoFaceInputEnvironment.instance;
-            var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
+            // 选中的角色优先：旧设置里可能还留着上一套面板的角色，不能挡住用户刚选中的新组件角色。
+            var configuredCandidate = settings.Character();
+            var selectedCandidate = Selection.activeGameObject;
+            var componentCandidate = selectedCandidate != null
+                && selectedCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null
+                ? selectedCandidate
+                : configuredCandidate;
             if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
             {
                 HoVtsComponentDebugView.Draw(settings, componentCandidate);
