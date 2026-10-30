@@ -105,28 +105,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly HashSet<string> parameters = new HashSet<string>(StringComparer.Ordinal);
         private GameObject shadowRoot;
         private Animator shadow;
-
-        /// <summary>角色身上的 Hub（中间层算出来的参数往它写）。换角色 / 换引用时重新找。</summary>
-        private HoFaceSemanticHub semanticHub;
-        private GameObject semanticOwner;
-        /// <summary>这一轮**新声明**的名字（角色 Hub 上刚开出来的格），只留前几个用来点名。</summary>
-        private readonly List<string> semanticSkipped = new List<string>();
-        /// <summary>上一次报过的发布状态（结构变了才重算字符串 + 报一次，免得每帧刷屏）。</summary>
-        private string semanticReported;
-
-        /// <summary>
-        /// **语义输出的结构摘要**（写了几个槽、新声明了哪几个名字）。面板直接读它 —— 值本身去读 Hub。
-        /// 只在结构变化时更新，所以不用担心每帧分配字符串。
-        /// </summary>
-        public string SemanticStatus { get; private set; }
-
-        /// <summary>
-        /// 这一帧往**角色 Hub** 写了几个槽（给面板的"链路走到哪一步"用）。
-        /// **−1 = 没有可写的目标**（角色上没有 Connector，或它没填 Hub）；**0 = 有目标但一行输出都没有**。
-        /// </summary>
-        public int SemanticPublishedCount { get; private set; } = -1;
-
-        private RuntimeAnimatorController runningController;
+private RuntimeAnimatorController runningController;
         private string mappingStamp;
         private bool disposed;
         private bool configured;
@@ -206,7 +185,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             shadow = shadowRoot.AddComponent<Animator>();
             shadow.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             // ⚠️ 影子根上**没有** Hub —— 中间层算出来的参数直接写**角色身上**那片 Hub
-            // （见 PublishSemantics）。曾经这里放过一片"影子 Hub"，那是给控制器里的状态机行为写的，
             // 那条路 2026-09-26 整个删掉了。
         }
 
@@ -373,100 +351,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             // 影子算完 → 中间层这一帧的输出行都定了 → 按名字写进角色身上那片 Hub
             // （Warudo 侧由「HoFace写动态参数」节点做同一件事：写的是参数处理/合并字典那份字典）。
-            PublishSemantics();
             TraceCompleted?.Invoke(this, frameNow, deltaTime);
-        }
-
-        /// <summary>
-        /// 把**中间层这一帧算出来的输出行**按名字写进**角色身上**那片 Hub
-        /// （<see cref="HoFaceSemanticHub"/>）。
-        ///
-        /// ⚠️ **默认不写**：由调试设置的 `writeParameterHub` 开关决定（2026-09-26 用户定）——
-        /// 调试台不需要这个出口（面板「参数输出」栏就是同一份值），Warudo 侧由「HoFace写动态参数」节点写。
-        /// 打开时才走下面这条链。
-        ///
-        /// 【为什么是中间层写】（2026-09-26 清理）
-        /// 这些值本来就是这里算出来的（每一行 = `曲线(表达式(源键…))`，值就在 `outputValues` 里）。
-        /// 以前绕一圈：控制器里的状态机行为从 Animator 参数再算一遍、写进**影子** Hub，再由会话中转到角色 ——
-        /// 那是**两份真相**，而且那个写者只在 bundle 里跑、编辑器里根本看不见。
-        ///
-        /// 【写的是**全部**输出行】不按"控制器里有没有这个参数"过滤：Hub 是"中间层算出来的动态参数"
-        /// 本身（跟面板的「参数输出」栏同一份）。控制器里没那些口时它们不驱动动画，但仍然是这份配置的输出。
-        /// 调试滑条（<see cref="SetPreview"/>）盖掉同名行时，Hub 里也跟着是那个值 —— 它驱的是影子那棵树。
-        ///
-        /// ⚠️ **名字对不上**现在只有一个来源：输出行的 `parameter` 写错了（敲成别的名字）。
-        /// 没有表就没有校验点，所以"新声明"（Hub 上刚开出来的格）会点名报一次。
-        /// </summary>
-        private void PublishSemantics()
-        {
-            // 调试台**默认不写 Hub**（2026-09-26 用户定）：Hub 是"把值挂出去给别的脚本/蓝图读"的出口，
-            // 调试台自己不需要（面板「参数输出」栏看的是同一份值），Warudo 侧也不靠它。
-            // 开关在调试设置里（`HoFaceDebugSettings.writeParameterHub`），下一帧生效。
-            if (!Settings.writeParameterHub)
-            {
-                SemanticPublishedCount = -1;
-                if (semanticReported != "off")
-                {
-                    semanticReported = "off";
-                    SemanticStatus = "动态参数：没往 Hub 写（「写动态参数 Hub」关着 —— 默认就是关的）";
-                }
-                return;
-            }
-
-            GameObject character = Settings.Character();
-            if (semanticHub == null || semanticOwner != character)
-            {
-                semanticOwner = character;
-                semanticHub = character != null
-                    ? character.GetComponentInChildren<HoFaceSemanticHub>(true)
-                    : null;
-                semanticReported = null;
-            }
-
-            if (semanticHub == null)
-            {
-                SemanticPublishedCount = -1;
-                if (semanticReported != "no-hub")
-                {
-                    semanticReported = "no-hub";
-                    SemanticStatus = "⚠ 角色上没有 HoFaceSemanticHub ⇒ 中间层算出来的参数没有地方落";
-                }
-                return;
-            }
-
-            int written = 0;
-            int claimed = 0;
-            semanticSkipped.Clear();      // 这一轮的"新声明"（名字从输出行来，这是唯一的来源记录）
-            for (int row = 0; row < outputs.Length; row++)
-            {
-                var output = outputs[row];
-                if (output == null || string.IsNullOrEmpty(output.parameter)) continue;
-
-                float value;
-                if (!previews.TryGetValue(output.parameter, out value))
-                    value = outputTable.TryRead(output.parameter, out float published) ? published : outputValues[row];
-
-                if (semanticHub.IndexOf(output.parameter) < 0)
-                {
-                    claimed++;                                      // 谁写谁开：名字由写的人声明
-                    if (semanticSkipped.Count < 6) semanticSkipped.Add(output.parameter);
-                }
-
-                if (!semanticHub.SetFloat(output.parameter, value)) continue;
-                written++;
-            }
-
-            SemanticPublishedCount = written;
-
-            string state = written + "|" + claimed + "|" + string.Join(",", semanticSkipped);
-            if (state == semanticReported) return;
-            semanticReported = state;
-
-            SemanticStatus = "动态参数：写 " + written + " 格"
-                + (claimed > 0 ? " · **新声明 " + claimed + " 个**（" + string.Join("、", semanticSkipped) + "）" : " · 名字都在");
-            if (claimed > 0)
-                Debug.Log("[Ho 面捕] 动态参数：角色 Hub 上开了 " + claimed + " 个新槽（"
-                    + string.Join("、", semanticSkipped) + "）—— 名字就是中间层输出行的 `parameter`。");
         }
 
         /// <summary>按配置行序求值；全部完成后调用方再发布参数。</summary>

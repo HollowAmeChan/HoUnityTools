@@ -25,7 +25,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// values for controller and LookAt consumers; no platform API is referenced here.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("")]
+    [AddComponentMenu("HoUnityTools/面捕/VTS 参数接收器")]
     [DefaultExecutionOrder(30000)]
     public sealed class HoVtsParameterReceiver : MonoBehaviour
     {

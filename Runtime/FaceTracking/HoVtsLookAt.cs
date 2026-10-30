@@ -14,7 +14,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// the model's bone axes. No Animator, Avatar, IK pass, or face controller is required.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("")]
+    [AddComponentMenu("HoUnityTools/面捕/VTS 头眼姿态")]
     [DefaultExecutionOrder(32000)]
     public sealed class HoVtsLookAt : MonoBehaviour
     {

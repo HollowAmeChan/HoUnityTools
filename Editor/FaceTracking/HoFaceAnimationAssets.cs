@@ -532,7 +532,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             // `HoFaceSemanticWriterBehaviour`（挂在状态上、按表达式把 Animator 参数写进影子 Hub）。
             // 删掉它的理由：那些值**中间层本来就算得出来**（它就是写参数的那个人），让控制器再算一遍
             // = 两份真相 + 一个只在 bundle 里跑、编辑器里看不见的写者。现在中间层算完直接写角色上的 Hub
-            // （Unity 侧 `HoFaceAnimationSession.PublishSemantics`，Warudo 侧「HoFace写动态参数」节点）。
             // 于是这条校验又回到"一律拒绝"，也不再需要"只放过某一个"这种例外。
             if (machine.behaviours.Length != 0)
                 throw new InvalidOperationException("不支持 StateMachineBehaviour（状态机上）：" + machine.name

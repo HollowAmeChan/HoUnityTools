@@ -27,7 +27,7 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// on the character Animator being enabled. Only authored animation properties are copied back.
     /// </summary>
     [DisallowMultipleComponent]
-    [AddComponentMenu("")]
+    [AddComponentMenu("HoUnityTools/面捕/VTS 表情控制器")]
     [DefaultExecutionOrder(31000)]
     public sealed class HoVtsController : MonoBehaviour
     {
