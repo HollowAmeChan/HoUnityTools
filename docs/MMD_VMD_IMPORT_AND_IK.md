@@ -10,6 +10,8 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdMotionPlayer` 提供第一版运行时适配：按骨骼名写入 FK 位置/旋转，按 morph 名称写入 `SkinnedMeshRenderer` blend shape，按 `HoIkConstraint.IkName` 应用 show/IK 开关。`HoVmdCameraPlayer` 使用 target + Camera 两节点读取 VMD 镜头的目标位置、距离、旋转、FOV 和透视开关。复杂 MMD transform order、物理烘焙和模型专用重命名仍应接 UMT solver 或后续 Ho 适配层。
 
+`HoVmdBindingProfile` 是 FBX/GLTF 角色的可保存适配资产：用 target path 映射 VMD 骨骼，用 renderer path + blend shape name 映射 morph，用 constraint path 映射动作级 IK。播放器优先使用 Profile，再用同名自动匹配作为起点。Profile 属于角色资产，不属于动作包。
+
 ## HoIkConstraint
 
 `Hollow.HoUnityTools.RigConstraints.HoIkConstraint` 是 Unity 运行时的通用 CCD 约束：
