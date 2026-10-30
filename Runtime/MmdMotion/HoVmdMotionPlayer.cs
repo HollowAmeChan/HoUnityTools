@@ -160,6 +160,11 @@ namespace Hollow.HoUnityTools.MmdMotion
                 }
             if (applyIkToggles && animation.showIkFrames.Count>0)
                 foreach (var control in ikControls)control.Value.SolveEnabled=SampleIk(control.Key,frame);
+            // StandardRequest review runs in editor mode, so there is no
+            // LateUpdate pass to solve the newly applied pose. Runtime playback
+            // keeps the normal HoIkConstraint LateUpdate order.
+            if (!Application.isPlaying)
+                foreach (var control in ikControls.Values) control.SolveNow();
         }
 
         private Transform FindBone(string name)
