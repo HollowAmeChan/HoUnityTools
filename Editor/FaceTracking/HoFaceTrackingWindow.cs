@@ -95,6 +95,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             StopRecording(false);
             traceRecorder?.Stop("window-closed");
             RememberTraceResult();
+            HoVtsDebugHost.Stop();
         }
 
         private void Refresh()
@@ -136,12 +137,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private void OnGUI()
         {
             var environment = HoFaceInputEnvironment.instance;
-            var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
-            if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
-            {
-                HoVtsComponentDebugView.Draw(settings, componentCandidate);
-                return;
-            }
             var componentCandidate = settings.Character() != null ? settings.Character() : Selection.activeGameObject;
             if (componentCandidate != null && componentCandidate.GetComponentInChildren<HoVtsParameterReceiver>(true) != null)
             {
