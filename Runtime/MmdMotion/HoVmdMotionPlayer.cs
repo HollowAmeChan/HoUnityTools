@@ -86,6 +86,11 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (root == null) return;
             foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
                 if (!autoBones.ContainsKey(child.name)) autoBones.Add(child.name, child);
+            foreach (Transform child in autoBones.Values)
+            {
+                if (!bindPositions.ContainsKey(child)) bindPositions.Add(child, child.localPosition);
+                if (!bindRotations.ContainsKey(child)) bindRotations.Add(child, child.localRotation);
+            }
             foreach (var binding in boneBindings)
                 if (binding != null && binding.target != null) { bindPositions[binding.target] = binding.target.localPosition; bindRotations[binding.target] = binding.target.localRotation; }
             foreach (SkinnedMeshRenderer renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
