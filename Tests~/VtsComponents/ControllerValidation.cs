@@ -306,9 +306,9 @@ public static class HoVtsControllerValidation
         receiver.ApplyRawFrame(raw, true, 1);
         Check(pose.EvaluateNow(0), "pose works with no Animator or Avatar: " + pose.Status);
         Quaternion frame = root.transform.rotation;
-        Quaternion headOffset = Quaternion.Euler(10, -25, 8);
-        Quaternion leftOffset = Quaternion.Euler(-5, 12, 0);
-        Quaternion rightOffset = Quaternion.Euler(-4, 11, 1);
+        Quaternion headOffset = PoseRotation(10, -25, 8, false);
+        Quaternion leftOffset = PoseRotation(-5, 12, 0, true);
+        Quaternion rightOffset = PoseRotation(-4, 11, 1, true);
         RotationNear(head.rotation, frame * headOffset * headRest, "head uses reference axes");
         RotationNear(left.rotation, frame * leftOffset * Quaternion.Inverse(frame) * head.rotation * leftRest, "left eye uses reference axes on rotated bone");
         RotationNear(right.rotation, frame * rightOffset * Quaternion.Inverse(frame) * head.rotation * rightRest, "right eye uses independent pose");
@@ -348,7 +348,7 @@ public static class HoVtsControllerValidation
         pose.ParameterSource = HoVtsPoseParameterSource.Processed;
         receiver.SetProcessedValues(new Dictionary<string, float> { { "Rotation_x", 0 }, { "Rotation_y", 15 }, { "Rotation_z", 0 } });
         Check(pose.EvaluateNow(0), "processed pose is an explicit optional source");
-        RotationNear(head.rotation, root.transform.rotation * Quaternion.Euler(0, 15, 0) * animatedBase, "processed source does not secretly read raw pose");
+        RotationNear(head.rotation, root.transform.rotation * PoseRotation(0, 15, 0, false) * animatedBase, "processed source does not secretly read raw pose");
 
         Quaternion external = Quaternion.Euler(20, 10, 30);
         head.localRotation = external;
@@ -369,6 +369,15 @@ public static class HoVtsControllerValidation
 
     private static void RotationNear(Quaternion actual, Quaternion expected, string name) =>
         Check(Quaternion.Angle(actual, expected) < .1f, name + ": angular error=" + Quaternion.Angle(actual, expected));
+
+    private static Quaternion PoseRotation(float x, float y, float z, bool eye)
+    {
+        float yaw = x;
+        float pitch = eye ? -y : y;
+        return Quaternion.AngleAxis(yaw, Vector3.up)
+            * Quaternion.AngleAxis(pitch, Vector3.right)
+            * Quaternion.AngleAxis(z, Vector3.forward);
+    }
 
     private static void Delivery()
     {

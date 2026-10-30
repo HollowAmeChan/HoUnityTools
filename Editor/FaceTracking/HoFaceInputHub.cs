@@ -122,8 +122,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     || !CalibrationOffsets.TryGetValue(xKey, out float ox)
                     || !CalibrationOffsets.TryGetValue(yKey, out float oy)
                     || !CalibrationOffsets.TryGetValue(zKey, out float oz)) continue;
-                Quaternion corrected = Quaternion.Euler(x, y, z)
-                    * Quaternion.Inverse(Quaternion.Euler(ox, oy, oz));
+                bool eye = prefix != "Rotation_";
+                Quaternion corrected = PoseRotation(x, y, z, eye)
+                    * Quaternion.Inverse(PoseRotation(ox, oy, oz, eye));
                 Vector3 euler = corrected.eulerAngles;
                 values[xKey] = NormalizeAngle(euler.x);
                 values[yKey] = NormalizeAngle(euler.y);
@@ -136,6 +137,15 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             while (value > 180f) value -= 360f;
             while (value < -180f) value += 360f;
             return value;
+        }
+
+        private static Quaternion PoseRotation(float x, float y, float z, bool eye)
+        {
+            float yaw = x;
+            float pitch = eye ? -y : y;
+            return Quaternion.AngleAxis(yaw, Vector3.up)
+                * Quaternion.AngleAxis(pitch, Vector3.right)
+                * Quaternion.AngleAxis(z, Vector3.forward);
         }
 
         /// <summary>环境里至少有一条源在跑，就算"连着"。</summary>

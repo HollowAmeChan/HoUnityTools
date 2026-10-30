@@ -12,7 +12,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             Field("parameterReceiver", "参数接收器");
             Field("referenceFrame", "姿态参考物体", "使用这个物体的轴向解释 VTS 角度，通常是角色根物体。");
-            Field("upperBody", "上身骨骼", "可选：胸口/脊柱的上段。启用后以较低权重跟随头部姿态，模拟 Live2D 式上身摆动。");
+            Field("upperBodyChain", "上身骨骼链", "按 Spine → Chest → UpperChest 顺序填写。它是分布式姿态跟随链，不是单根骨骼 IK。通常优先使用 Chest/UpperChest，不要只填头骨。");
             Field("head", "头部骨骼");
             Field("leftEye", "左眼骨骼");
             Field("rightEye", "右眼骨骼");

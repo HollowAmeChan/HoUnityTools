@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hollow.HoUnityTools.FaceTracking
@@ -44,6 +45,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private HoVtsParameterReceiver parameterReceiver;
         [SerializeField] private Transform referenceFrame;
         [SerializeField] private Transform upperBody;
+        [SerializeField] private Transform[] upperBodyChain = new Transform[0];
         [SerializeField] private Transform head;
         [SerializeField] private Transform leftEye;
         [SerializeField] private Transform rightEye;
@@ -57,7 +59,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private bool drawGizmos = true;
         [SerializeField, Min(0.01f)] private float gizmoLength = 0.12f;
 
-        private RotationState upperBodyState, headState, leftState, rightState;
+        private RotationState[] upperBodyStates = new RotationState[0];
+        private RotationState headState, leftState, rightState;
         private Transform resolvedReference;
         private HoVtsParameterReceiver resolvedReceiver;
         private HoVtsPoseParameterSource resolvedSource;
@@ -66,6 +69,11 @@ namespace Hollow.HoUnityTools.FaceTracking
         public HoVtsParameterReceiver ParameterReceiver { get => parameterReceiver; set { if (parameterReceiver != value) { Stop(); parameterReceiver = value; } } }
         public Transform ReferenceFrame { get => referenceFrame; set { if (referenceFrame != value) { Stop(); referenceFrame = value; } } }
         public Transform UpperBody { get => upperBody; set { if (upperBody != value) { Stop(); upperBody = value; } } }
+        public Transform[] UpperBodyChain
+        {
+            get => upperBodyChain;
+            set { Stop(); upperBodyChain = value ?? new Transform[0]; }
+        }
         public Transform Head { get => head; set { if (head != value) { Stop(); head = value; } } }
         public Transform LeftEye { get => leftEye; set { if (leftEye != value) { Stop(); leftEye = value; } } }
         public Transform RightEye { get => rightEye; set { if (rightEye != value) { Stop(); rightEye = value; } } }
@@ -144,13 +152,13 @@ namespace Hollow.HoUnityTools.FaceTracking
                 status = referenceFrame == null ? "未指定姿态参考物体" : "等待参数接收器输入";
                 return false;
             }
-            if (head == null && leftEye == null && rightEye == null)
+            if (head == null && leftEye == null && rightEye == null && ResolveUpperBodyChain().Length == 0)
             {
                 Stop(); status = "未指定头部或眼球骨骼"; return false;
             }
             if ((head != null && (head == leftEye || head == rightEye))
                 || (leftEye != null && leftEye == rightEye)
-                || (upperBody != null && (upperBody == head || upperBody == leftEye || upperBody == rightEye)))
+                || UpperBodyTargetsOverlap())
             {
                 Stop(); status = "头部与左右眼必须使用不同骨骼"; return false;
             }
@@ -159,7 +167,6 @@ namespace Hollow.HoUnityTools.FaceTracking
                 Stop(); status = "姿态参考物体不能位于被驱动骨骼内"; return false;
             }
             if (resolvedReference != referenceFrame || resolvedReceiver != parameterReceiver || resolvedSource != parameterSource
-                || (upperBodyState != null ? upperBodyState.Target : null) != upperBody
                 || (headState != null ? headState.Target : null) != head
                 || (leftState != null ? leftState.Target : null) != leftEye
                 || (rightState != null ? rightState.Target : null) != rightEye)
@@ -168,12 +175,38 @@ namespace Hollow.HoUnityTools.FaceTracking
                 resolvedReference = referenceFrame;
                 resolvedReceiver = parameterReceiver;
                 resolvedSource = parameterSource;
-                upperBodyState = upperBody != null ? new RotationState(upperBody) : null;
+                Transform[] bodyTargets = ResolveUpperBodyChain();
+                upperBodyStates = new RotationState[bodyTargets.Length];
+                for (int i = 0; i < bodyTargets.Length; i++) upperBodyStates[i] = new RotationState(bodyTargets[i]);
                 headState = head != null ? new RotationState(head) : null;
                 leftState = leftEye != null ? new RotationState(leftEye) : null;
                 rightState = rightEye != null ? new RotationState(rightEye) : null;
             }
             return true;
+        }
+
+        private Transform[] ResolveUpperBodyChain()
+        {
+            if (upperBodyChain != null && upperBodyChain.Length > 0)
+            {
+                var result = new List<Transform>();
+                foreach (var target in upperBodyChain)
+                    if (target != null && !result.Contains(target)) result.Add(target);
+                return result.ToArray();
+            }
+            return upperBody != null ? new[] { upperBody } : new Transform[0];
+        }
+
+        private bool UpperBodyTargetsOverlap()
+        {
+            var targets = ResolveUpperBodyChain();
+            for (int i = 0; i < targets.Length; i++)
+            {
+                if (targets[i] == head || targets[i] == leftEye || targets[i] == rightEye) return true;
+                for (int j = i + 1; j < targets.Length; j++)
+                    if (targets[i] == targets[j]) return true;
+            }
+            return false;
         }
 
         private bool InvalidReference(Transform target) => target != null && (referenceFrame == target || referenceFrame.IsChildOf(target));
@@ -197,34 +230,48 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private bool ApplyBody(Quaternion frame, float blend)
         {
-            if (upperBodyState == null) return false;
+            if (upperBodyStates == null || upperBodyStates.Length == 0) return false;
             if (!upperBodyEnabled || upperBodyWeight <= 0f)
             {
-                upperBodyState.Release();
+                foreach (var state in upperBodyStates) state.Release();
                 return false;
             }
+            bool written = false;
             if (parameterReceiver.Tracked
                 && Read("Rotation_x", out float vx)
                 && Read("Rotation_y", out float vy)
                 && Read("Rotation_z", out float vz))
             {
                 Quaternion pose = PoseRotation(vx, vy, vz, false);
-                upperBodyState.Sample(Quaternion.Slerp(Quaternion.identity, pose, Mathf.Clamp01(upperBodyWeight)));
+                float perBone = Mathf.Clamp01(upperBodyWeight) / upperBodyStates.Length;
+                foreach (var state in upperBodyStates)
+                {
+                    state.Sample(Quaternion.Slerp(Quaternion.identity, pose, perBone));
+                    written |= state.Apply(frame, blend);
+                }
             }
-            else upperBodyState.ReturnToNeutral();
-            return upperBodyState.Apply(frame, blend);
+            else
+            {
+                foreach (var state in upperBodyStates)
+                {
+                    state.ReturnToNeutral();
+                    written |= state.Apply(frame, blend);
+                }
+            }
+            return written;
         }
 
         /// <summary>
-        /// VTS 的姿态分量不是 Unity Transform 的 XYZ 顺序：
-        /// Rotation_x/y/z 对应抬低头、左右转、歪头；Face 规范中 X/Y 为负号。
-        /// 眼球的 x/y 分量对应左右/上下，所以要换到 Unity 的 yaw/pitch 轴。
+        /// VTS 这套设备输出里 Rotation_x 是左右转、Rotation_y 是点头、Rotation_z 是歪头；
+        /// 眼球的 x/y 分量对应水平/垂直，所以只做轴语义转换，不把三轴直接当 Unity Euler 顺序。
         /// 用 AngleAxis 组合避免直接 Quaternion.Euler 的轴顺序把某一方向压掉。
         /// </summary>
         private static Quaternion PoseRotation(float x, float y, float z, bool eye)
         {
-            float yaw = eye ? x : -y;
-            float pitch = eye ? -y : -x;
+            // VTS face pose: Rotation_x = left/right turn, Rotation_y = nod,
+            // Rotation_z = roll. Eye x/y already use horizontal/vertical.
+            float yaw = eye ? x : x;
+            float pitch = eye ? -y : y;
             float roll = z;
             return Quaternion.AngleAxis(yaw, Vector3.up)
                 * Quaternion.AngleAxis(pitch, Vector3.right)
@@ -233,8 +280,10 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public void Stop()
         {
-            upperBodyState?.Release(); headState?.Release(); leftState?.Release(); rightState?.Release();
-            upperBodyState = null; headState = null; leftState = null; rightState = null;
+            if (upperBodyStates != null) foreach (var state in upperBodyStates) state?.Release();
+            upperBodyStates = new RotationState[0];
+            headState?.Release(); leftState?.Release(); rightState?.Release();
+            headState = null; leftState = null; rightState = null;
             resolvedReference = null; resolvedReceiver = null;
             status = "已停止";
         }
