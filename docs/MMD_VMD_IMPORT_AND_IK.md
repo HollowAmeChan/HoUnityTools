@@ -8,6 +8,8 @@ MMD 动作不是普通 FK 动画。VMD 可能同时包含骨骼帧、形态键�
 
 HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它先把 VMD 作为独立数据资产导入，保留原始模型名和各类轨道；这一步不猜模型映射、不自动改骨骼，也不和静态 `.pmx` importer 抢扩展名。后续播放器/适配器读取该资产并选择目标骨架。
 
+`HoVmdMotionPlayer` 提供第一版运行时适配：按骨骼名写入 FK 位置/旋转，按 morph 名称写入 `SkinnedMeshRenderer` blend shape，按 `HoIkConstraint.IkName` 应用 show/IK 开关。`HoVmdCameraPlayer` 使用 target + Camera 两节点读取 VMD 镜头的目标位置、距离、旋转、FOV 和透视开关。复杂 MMD transform order、物理烘焙和模型专用重命名仍应接 UMT solver 或后续 Ho 适配层。
+
 ## HoIkConstraint
 
 `Hollow.HoUnityTools.RigConstraints.HoIkConstraint` 是 Unity 运行时的通用 CCD 约束：
@@ -19,7 +21,7 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 - `LateUpdate` 适合 Animator/VMD 曲线之后求解；`Manual` 适合由 MMD transform manager 或自定义播放控制器在明确顺序中调用。
 - `CaptureBindPose` 只记录局部旋转；开启 `restoreBindRotation` 时每次求解前恢复这些旋转。普通 VMD 播放应保持关闭，让动画先写入骨骼。
 
-`.vmd` 资产面板会显示骨骼、morph、镜头、灯光和 show/IK 段数量。实际动作绑定仍需一个目标骨架和名称映射；这让“导入成功”和“动作适配成功”保持可区分。
+`.vmd` 资产面板会显示骨骼、morph、镜头、灯光和 show/IK 段数量。实际动作绑定仍需一个目标骨架和名称映射；这让“导入成功”和“动作适配成功”保持可区分。播放器默认按名称自动匹配，出现重名或作者专用骨骼时使用显式绑定列表。
 
 典型配置：
 
