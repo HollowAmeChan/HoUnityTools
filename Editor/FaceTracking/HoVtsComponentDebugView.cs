@@ -477,6 +477,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             using (HoConstraintEditorControls.Card())
             {
                 DrawFirewallRow(); DrawWaitingHint(); DrawPacketStats(receiver);
+                if (!string.IsNullOrEmpty(HoFaceInputHub.ConnectionError)) EditorGUILayout.HelpBox(HoFaceInputHub.ConnectionError, MessageType.Error);
+                foreach (var source in HoFaceInputHub.Sources)
+                    if (!string.IsNullOrEmpty(source.Error)) EditorGUILayout.HelpBox(source.Error, MessageType.Error);
                 if (receiver != null)
                 {
                     if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
