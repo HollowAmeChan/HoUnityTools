@@ -37,8 +37,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         private TextAsset profile;
         [SerializeField] private HoVtsParameterReceiver componentTarget;
         [SerializeField] private bool componentMode;
-        [SerializeField] private string componentDraft;
-        [SerializeField] private bool componentDraftDirty;
         private HoFaceMiddleware middleware;
         private int selected = -1;
         private string search = "";
@@ -229,12 +227,12 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public static void Open(HoVtsParameterReceiver receiver)
         {
-            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "角色规则", true);
-            if (window.componentMode && window.componentTarget == receiver && window.middleware != null) return;
+            HoFaceProfileWindow window = GetWindow<HoFaceProfileWindow>(false, "角色规则 JSON", true);
+            if (window.componentMode && window.componentTarget == receiver && window.profile == receiver?.ProfileAsset
+                && window.profile != null && window.middleware != null) return;
             window.componentMode = true;
             window.componentTarget = receiver;
-            window.profile = null;
-            window.componentDraft = null;
+            window.profile = receiver != null ? receiver.ProfileAsset : null;
             window.ReloadProfile(true);
             window.Repaint();
         }
@@ -243,24 +241,12 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             minSize = new Vector2(560.0f, 420.0f);
             leftWidth = Mathf.Clamp(EditorPrefs.GetFloat(LeftWidthPref, leftWidth), LeftWidthMin, LeftWidthMax);
-            if (componentMode && !string.IsNullOrEmpty(componentDraft)
-                && HoFaceProfile.TryParse(componentDraft, out var draft, out _))
-            {
-                middleware = draft;
-                dirty = componentDraftDirty;
-                ClearHistory();
-            }
-            else if (middleware == null && (profile != null || componentMode)) ReloadProfile(true);
+            if (middleware == null && (profile != null || componentMode)) ReloadProfile(true);
         }
 
         private void OnLostFocus() => ReleaseSplitter();
         private void OnDisable()
         {
-            if (componentMode && middleware != null)
-            {
-                componentDraft = HoFaceProfile.Write(middleware);
-                componentDraftDirty = dirty;
-            }
             ReleaseSplitter();
         }
 
@@ -1709,15 +1695,31 @@ ActiveRows().Insert(to, moved);
         {
             using (HoConstraintEditorControls.Card())
             {
-                using (new EditorGUI.DisabledScope(true))
+                using (HoConstraintEditorControls.Row())
                 {
-                    EditorGUILayout.ObjectField("角色规则组件", componentTarget, typeof(HoVtsParameterReceiver), true);
-                    if (Application.isPlaying && HoVtsRuleAuthoring.PrefabSource(componentTarget) != null)
-                        EditorGUILayout.ObjectField("保存目标", HoVtsRuleAuthoring.PrefabSource(componentTarget), typeof(HoVtsParameterReceiver), false);
+                    HoConstraintEditorControls.Label("角色组件", HoConstraintEditorTheme.LabelWidthSm);
+                    EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(100), componentTarget, typeof(HoVtsParameterReceiver), true);
+                    HoConstraintEditorControls.Flex();
                 }
-                using (new EditorGUILayout.HorizontalScope())
+                using (HoConstraintEditorControls.Row())
                 {
-                    int mode = GUILayout.Toolbar(editingInputs ? 1 : 0, RowKindNames, GUILayout.Width(120));
+                    HoConstraintEditorControls.Label("规则 JSON", HoConstraintEditorTheme.LabelWidthSm, "组件引用的可复用 .hoface.json 文本资产。");
+                    EditorGUI.BeginChangeCheck();
+                    var picked = (TextAsset)EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(100), profile, typeof(TextAsset), false);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        profile = picked;
+                        if (componentTarget != null)
+                        {
+                            try { HoVtsRuleAuthoring.AssignProfile(componentTarget, picked); }
+                            catch (Exception error) { SetMessage(error.Message, true); }
+                        }
+                        ReloadProfile(false);
+                    }
+                }
+                using (HoConstraintEditorControls.Row())
+                {
+                    int mode = HoConstraintEditorControls.Segmented(HoConstraintEditorControls.Next(120.0f), editingInputs ? 1 : 0, RowKindNames, "输出行：规范名 → 控制器参数。\n输入行：设备线名 → 规范名。");
                     if ((mode == 1) != editingInputs)
                     {
                         editingInputs = mode == 1;
@@ -1725,45 +1727,56 @@ ActiveRows().Insert(to, moved);
                         listScroll = Vector2.zero;
                         GUI.FocusControl(null);
                     }
-                    using (new EditorGUI.DisabledScope(componentTarget == null))
+                    HoConstraintEditorControls.Gap();
+                    if (HoConstraintEditorControls.Button("新建配置…", "新建一份空的可复用 JSON，并自动接到当前组件。")) NewProfile();
+                    HoConstraintEditorControls.Gap();
+                    using (new EditorGUI.DisabledScope(profile == null))
                     {
-                        if (GUILayout.Button(Application.isPlaying ? "应用到当前实例" : "保存到组件")) SaveComponent(false);
-                        if (Application.isPlaying)
-                        {
-                            using (new EditorGUI.DisabledScope(HoVtsRuleAuthoring.PrefabSource(componentTarget) == null))
-                                if (GUILayout.Button("保存到角色预制件")) SaveComponent(true);
-                        }
-                        if (GUILayout.Button("重新读取")) ReloadProfile(false);
+                        if (HoConstraintEditorControls.Button("保存", "把当前编辑内容写回 JSON 资产。", true)) SaveProfile();
+                        HoConstraintEditorControls.Gap();
+                        if (HoConstraintEditorControls.Button("重新载入", "丢掉内存改动，从磁盘重读 JSON。")) ReloadProfile(false);
                     }
+                    HoConstraintEditorControls.Gap();
+                    using (new EditorGUI.DisabledScope(!CanUndo)) if (HoConstraintEditorControls.Button("↶ 撤销", "Ctrl+Z。")) Undo();
+                    HoConstraintEditorControls.Gap();
+                    using (new EditorGUI.DisabledScope(!CanRedo)) if (HoConstraintEditorControls.Button("↷ 重做", "Ctrl+Shift+Z 或 Ctrl+Y。")) Redo();
+                    HoConstraintEditorControls.Flex();
+                    if (dirty) HoConstraintEditorControls.Pill("有未保存改动", true);
                 }
-                using (new EditorGUILayout.HorizontalScope())
+                using (HoConstraintEditorControls.Row(true))
                 {
-                    if (GUILayout.Button("导入 JSON")) ImportComponentDraft();
+                    string path = profile == null ? "（未选择规则 JSON）" : AssetDatabase.GetAssetPath(profile);
+                    HoConstraintEditorControls.Caption(path, "组件和 Warudo 侧共同使用的规则文件。");
+                    if (middleware != null)
+                    {
+                        HoConstraintEditorControls.Gap();
+                        HoConstraintEditorControls.Caption("· " + middleware.inputs.Count + " 输入 / " + middleware.outputs.Count + " 输出");
+                    }
+                    HoConstraintEditorControls.Flex();
+                    if (HoConstraintEditorControls.Button("导入 JSON", "从磁盘导入内容到当前规则资产；不会修改组件引用。", false, 78))
+                        ImportComponentDraft();
                     using (new EditorGUI.DisabledScope(middleware == null))
                     {
-                        if (GUILayout.Button("导出 JSON"))
+                        if (HoConstraintEditorControls.Button("导出 JSON", "导出当前编辑内容为另一份 JSON。", false, 78))
                         {
-                            string path = EditorUtility.SaveFilePanel("导出角色规则", Application.dataPath, "角色规则.hoface.json", "json");
-                            if (!string.IsNullOrEmpty(path))
+                            string exportPath = EditorUtility.SaveFilePanel("导出面捕配置", Application.dataPath, "face-profile.hoface.json", "json");
+                            if (!string.IsNullOrEmpty(exportPath))
                             {
-                                try { WriteText(path, HoFaceProfile.Write(middleware)); SetMessage("已导出 " + path, false); }
+                                try { WriteText(exportPath, HoFaceProfile.Write(middleware)); SetMessage("已导出 " + exportPath, false); }
                                 catch (Exception error) { SetMessage(error.Message, true); }
                             }
                         }
                     }
-                    using (new EditorGUI.DisabledScope(!CanUndo)) if (GUILayout.Button("撤销")) Undo();
-                    using (new EditorGUI.DisabledScope(!CanRedo)) if (GUILayout.Button("重做")) Redo();
-                    if (dirty) GUILayout.Label("有未保存改动", EditorStyles.miniLabel);
                 }
-                if (Application.isPlaying)
-                    EditorGUILayout.HelpBox("应用到当前实例仅用于本次播放；保存到角色预制件才会保留到下一次运行。", MessageType.None);
+                if (profile == null)
+                    EditorGUILayout.HelpBox("组件还没有规则 JSON。请选择已有文件，或点「新建配置…」自动创建并接入。", MessageType.Warning);
                 if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, messageIsError ? MessageType.Error : MessageType.None);
             }
         }
 
         private void ImportComponentDraft()
         {
-            string path = EditorUtility.OpenFilePanel("导入角色规则草稿", Application.dataPath, "json");
+            string path = EditorUtility.OpenFilePanel("导入角色规则 JSON", Application.dataPath, "json");
             if (string.IsNullOrEmpty(path)) return;
             try
             {
@@ -1774,20 +1787,15 @@ ActiveRows().Insert(to, moved);
                 selected = -1;
                 dirty = true;
                 RecordIfChanged();
-                SetMessage("已导入为草稿，保存或应用后生效", false);
-            }
-            catch (Exception error) { SetMessage(error.Message, true); }
-        }
-
-        private void SaveComponent(bool saveToPrefab)
-        {
-            try
-            {
-                string backup = HoVtsRuleAuthoring.Commit(componentTarget, middleware, saveToPrefab);
-                bool temporary = Application.isPlaying && !EditorUtility.IsPersistent(componentTarget) && !saveToPrefab;
-                dirty = temporary;
-                SetMessage(temporary ? "已应用到当前播放实例；未写入角色预制件"
-                    : "角色规则已保存；修改前备份：" + backup, false);
+                if (profile == null)
+                {
+                    SetMessage("已导入到内存，请先选择或新建规则 JSON 再保存。", false);
+                }
+                else
+                {
+                    SaveProfile();
+                    SetMessage("已导入并保存到当前规则 JSON", false);
+                }
             }
             catch (Exception error) { SetMessage(error.Message, true); }
         }
@@ -1813,6 +1821,11 @@ ActiveRows().Insert(to, moved);
 
             // 直接把新文件接上来，免得"建好了还要再选一次"
             profile = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            if (componentMode && componentTarget != null)
+            {
+                try { HoVtsRuleAuthoring.AssignProfile(componentTarget, profile); }
+                catch (Exception error) { SetMessage(error.Message, true); }
+            }
             selected = -1;
             editingInputs = false;
             ClearHistory();
@@ -1822,11 +1835,6 @@ ActiveRows().Insert(to, moved);
 
         private void SaveProfile()
         {
-            if (componentMode)
-            {
-                SaveComponent(false);
-                return;
-            }
             if (profile == null)
             {
                 SetMessage("没有选中配置文件。", true);
@@ -1843,14 +1851,20 @@ ActiveRows().Insert(to, moved);
 
             WriteText(path, HoFaceProfile.Write(middleware));
             AssetDatabase.ImportAsset(path);
+            profile = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
             dirty = false;
 
             // 设置对象按"路径 + 文件写盘时间戳"缓存解析结果 —— 存完盘时间戳一定变，
             // 但为了让面板立刻看到新内容（而不是等下一次 tick），这里主动敲一下。
             EditorApplication.delayCall += () =>
             {
-                HoFaceDebugHost.Settings.ReloadProfile();
-                HoFaceDebugHost.Save();
+                if (componentMode && componentTarget != null)
+                    componentTarget.SetProfile(profile);
+                else
+                {
+                    HoFaceDebugHost.Settings.ReloadProfile();
+                    HoFaceDebugHost.Save();
+                }
             };
 
             SetMessage("已保存 " + path, false);
@@ -1860,11 +1874,30 @@ ActiveRows().Insert(to, moved);
         {
             if (componentMode)
             {
-                middleware = componentTarget != null ? HoVtsRuleAuthoring.Clone(componentTarget.Middleware) : null;
+                middleware = null;
                 selected = -1;
                 dirty = false;
                 ClearHistory();
-                if (!silent) SetMessage(componentTarget != null ? "已读取角色组件规则" : "目标组件已丢失", componentTarget == null);
+                if (componentTarget == null)
+                {
+                    if (!silent) SetMessage("目标组件已丢失", true);
+                    return;
+                }
+                profile = componentTarget.ProfileAsset;
+                if (profile == null)
+                {
+                    if (!silent) SetMessage("组件没有引用规则 JSON", true);
+                    return;
+                }
+                if (HoFaceProfile.TryParse(profile.text, out var componentProfile, out string componentError))
+                {
+                    middleware = componentProfile;
+                    if (!silent) SetMessage("已读取 " + AssetDatabase.GetAssetPath(profile), false);
+                }
+                else if (!silent)
+                {
+                    SetMessage("读不了这份规则 JSON：" + componentError, true);
+                }
                 return;
             }
             if (profile == null)

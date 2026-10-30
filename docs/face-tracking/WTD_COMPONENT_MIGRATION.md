@@ -6,11 +6,11 @@
 
 预制件 Assets/Hollow/WTD/WTD-BUILD.prefab 新增 HoVTS 空物体：
 
-- HoVtsParameterReceiver：内嵌 FT/ho-iPhoneVTS.arkit.hoface.json 的 74 条输入与 66 条输出规则。
+- HoVtsParameterReceiver：引用 FT/ho-iPhoneVTS.arkit.hoface.json，运行时读取其中 74 条输入与 66 条输出规则；规则不再内嵌到角色组件。
 - HoVtsController：显式引用该接收器、FT/CTR_Face_ARKit.controller 和角色输出根物体。控制器有 104 个动画片段，共 208 个不同的动画属性绑定，全部经过目标路径与形态键验证。
 - HoVtsLookAt：引用同一接收器，姿态参考为角色根，骨骼为 head、eye.L、eye.R；组件禁用且 AutoRun=false，继续由现有官方姿态链控制头眼。
 
-控制器的 54 个参数中，52 个由 ARKit 输出驱动，Ho/Drive/W/One 与 Ho/Drive/Gate/Arkit 保留控制器默认值 1。原动画、控制器、规则 JSON 未修改，原 Animator 状态和控制器引用未修改，预制件 GUID 未修改。
+控制器的 54 个参数中，52 个由 ARKit 输出驱动，Ho/Drive/W/One 与 Ho/Drive/Gate/Arkit 保留控制器默认值 1。原动画、控制器、规则 JSON 未修改，原 Animator 状态和控制器引用未修改，预制件 GUID 未修改。组件现在只保存 JSON 资产引用，规则文件可由多个角色复用。
 
 迁移前完整预制件备份：D:/Unity_Project/BreakWarudo/Logs/HoVtsMigration/20261029-161439/WTD-BUILD.prefab，旁边保留原 .meta 和 result.txt。目录时间使用 UTC。逐条比较发现原有 1688 条 YAML 对象记录全部一致，仅新增 5 条记录（空物体、Transform、三个组件）。
 
@@ -30,7 +30,7 @@ SHA-256：
 
 | 文件 | 值 |
 | --- | --- |
-| WTD-BUILD.prefab | CAC83B3597002FD891F77BBA72CAA39D6E7F6FF633DC5CCEF91873D68C50BB92 |
+| WTD-BUILD.prefab | B5BDB6D34C9BDD1573EBDEE7E06DDA5EE2448778C26D2DF4F15860F1D7B36D07 |
 | WTD-BUILD.prefab.meta | 376D13D80492B81E7D7ED4640A2B50C6FAB9E8353D9F5D99366B38F0E710742A |
 | CTR_Face_ARKit.controller | 1612CCFFA29FA5278950FE285FED1891525E5D77B11820C485EE5A71B6CC270B |
 | ho-iPhoneVTS.arkit.hoface.json | 3958D4851F409FB00ED72C7E33A5E2C74944570DCBA734EA662BE01152345648 |

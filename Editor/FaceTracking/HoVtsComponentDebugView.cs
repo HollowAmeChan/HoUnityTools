@@ -257,8 +257,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     HoConstraintEditorControls.Label("角色组件", HoConstraintEditorTheme.LabelWidth, "这些组件必须挂在角色预制件或其 HoVTS 子物体上。");
                     HoConstraintEditorControls.Caption(receiver == null ? "未找到" : "已找到接收器" + (receivers.Length > 1 ? "（多个）" : "")); HoConstraintEditorControls.Flex();
-                    using (new EditorGUI.DisabledScope(receiver == null))
-                        if (HoConstraintEditorControls.Button("编辑角色规则", "打开角色组件上的规则草稿编辑器。", false, 104)) HoFaceProfileWindow.Open(receiver);
+                    using (new EditorGUI.DisabledScope(receiver == null || receiver.ProfileAsset == null))
+                        if (HoConstraintEditorControls.Button("编辑角色规则", "打开并直接编辑当前角色引用的 JSON 规则文件。", false, 104)) HoFaceProfileWindow.Open(receiver);
+                    if (receiver != null && receiver.ProfileAsset == null)
+                    {
+                        if (HoConstraintEditorControls.Button("创建规则 JSON", "把旧内嵌规则迁移成可复用 JSON，并自动接到组件。", false, 104))
+                        {
+                            try { HoVtsRuleAuthoring.CreateProfileFromInline(receiver); }
+                            catch (Exception error) { Debug.LogError("[Ho 面捕] 创建规则 JSON 失败：" + error.Message); }
+                        }
+                    }
+                }
+                using (HoConstraintEditorControls.Row())
+                {
+                    HoConstraintEditorControls.Label("规则 JSON", HoConstraintEditorTheme.LabelWidth, "组件只引用这份可复用文件；规则编辑器会直接保存它。");
+                    var currentProfile = receiver != null ? receiver.ProfileAsset : null;
+                    EditorGUI.BeginChangeCheck();
+                    var pickedProfile = (TextAsset)EditorGUI.ObjectField(HoConstraintEditorControls.NextFlexible(90), currentProfile, typeof(TextAsset), false);
+                    if (EditorGUI.EndChangeCheck() && receiver != null)
+                    {
+                        try { HoVtsRuleAuthoring.AssignProfile(receiver, pickedProfile); }
+                        catch (Exception error) { Debug.LogError("[Ho 面捕] 指定规则 JSON 失败：" + error.Message); }
+                    }
+                    HoConstraintEditorControls.Flex();
+                    using (new EditorGUI.DisabledScope(receiver == null || receiver.ProfileAsset == null))
+                        if (HoConstraintEditorControls.Button("打开编辑器", "切换到当前角色引用的 JSON 文件。", false, 90)) HoFaceProfileWindow.Open(receiver);
                 }
                 if (receiver != null) DrawComponentSummary(target, receiver);
                 HoConstraintEditorControls.Separator(3, 3);

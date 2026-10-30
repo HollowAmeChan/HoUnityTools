@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
@@ -21,8 +22,9 @@ namespace Hollow.HoUnityTools.FaceTracking
     /// <summary>
     /// Per-character VTS parameter hub.
     ///
-    /// An input adapter provides complete VTS frames. The role's rules publish processed
-    /// values for controller and LookAt consumers; no platform API is referenced here.
+    /// An input adapter provides complete VTS frames. The component references a reusable
+    /// .hoface.json TextAsset whose rules publish processed values for controller and LookAt
+    /// consumers; no platform API is referenced here.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("HoUnityTools/面捕/VTS 参数接收器")]
@@ -31,8 +33,12 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         private List<HoVtsParameterSlot> rawValues = new List<HoVtsParameterSlot>();
         private List<HoVtsParameterSlot> values = new List<HoVtsParameterSlot>();
-        // Role-owned data. The dedicated editor edits detached drafts before explicit save.
-        [SerializeField, HideInInspector] private HoFaceMiddleware middleware = new HoFaceMiddleware();
+        // Legacy inline rules are retained only so old prefabs can still open and be migrated.
+        // New characters use profileAsset; the JSON asset is the authoritative rule source.
+        [SerializeField, HideInInspector, FormerlySerializedAs("middleware")]
+        private HoFaceMiddleware legacyMiddleware = new HoFaceMiddleware();
+        [NonSerialized] private HoFaceMiddleware middleware = new HoFaceMiddleware();
+        [SerializeField] private TextAsset profileAsset;
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
         private bool inputExpired;
@@ -43,6 +49,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly Dictionary<string, int> valueIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> evaluationRaw = new Dictionary<string, float>(StringComparer.Ordinal);
         private HoVtsRuleEvaluator evaluator;
+        private TextAsset loadedProfileAsset;
+        private int loadedProfileHash;
+        private bool profileLoaded;
+        private string profileError;
         private double lastEvaluationTime = -1.0;
         private int evaluatedUnityFrame = -1;
         private readonly Dictionary<string, float> inputOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
@@ -87,8 +97,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         public string Source => source ?? string.Empty;
         public int RawCount => rawValues != null ? rawValues.Count : 0;
         public int ValueCount => values != null ? values.Count : 0;
-        public HoFaceMiddleware Middleware => middleware;
-        public string RuleError => evaluator != null ? evaluator.Error : null;
+        public HoFaceMiddleware Middleware { get { EnsureProfileLoaded(); return middleware; } }
+        public TextAsset ProfileAsset => profileAsset;
+        public string RuleError => !string.IsNullOrEmpty(profileError) ? profileError : evaluator != null ? evaluator.Error : null;
         public double LastEvaluationTime => lastEvaluationTime;
         public float InputTimeoutSeconds
         {
@@ -123,9 +134,33 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (owner is string name && name == Source) ClearFrame();
         }
 
+        /// <summary>Assign the reusable JSON profile used by this role.</summary>
+        public void SetProfile(TextAsset value)
+        {
+            profileAsset = value;
+            legacyMiddleware = new HoFaceMiddleware();
+            loadedProfileAsset = null;
+            loadedProfileHash = 0;
+            profileLoaded = false;
+            profileError = null;
+            evaluator = null;
+            lastEvaluationTime = -1.0;
+            RuleRevision++;
+            EnsureProfileLoaded();
+        }
+
+        /// <summary>
+        /// Legacy/test API for an inline rule table. Assigning one explicitly detaches the
+        /// profile asset so callers never silently edit a different source of truth.
+        /// </summary>
         public void SetMiddleware(HoFaceMiddleware value)
         {
+            profileAsset = null;
             middleware = value ?? new HoFaceMiddleware();
+            legacyMiddleware = middleware;
+            profileLoaded = true;
+            loadedProfileAsset = null;
+            profileError = null;
             RuleRevision++;
             evaluator = null;
             lastEvaluationTime = -1.0;
@@ -141,7 +176,57 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private void EnsureEvaluator()
         {
+            EnsureProfileLoaded();
             if (evaluator == null) evaluator = new HoVtsRuleEvaluator(middleware);
+        }
+
+        private void EnsureProfileLoaded()
+        {
+            if (profileAsset == null)
+            {
+                if (!profileLoaded)
+                    middleware = legacyMiddleware ?? new HoFaceMiddleware();
+                else if (middleware == null)
+                    middleware = new HoFaceMiddleware();
+                if (!profileLoaded)
+                {
+                    profileLoaded = true;
+                    profileError = null;
+                }
+                return;
+            }
+
+            string text;
+            int hash;
+#if UNITY_EDITOR
+            text = profileAsset.text ?? string.Empty;
+            hash = text.GetHashCode();
+            if (profileLoaded && loadedProfileAsset == profileAsset && loadedProfileHash == hash) return;
+#else
+            if (profileLoaded && loadedProfileAsset == profileAsset) return;
+            text = profileAsset.text ?? string.Empty;
+            hash = 0;
+#endif
+
+            HoFaceMiddleware parsed;
+            string error;
+            if (HoFaceProfile.TryParse(text, out parsed, out error))
+            {
+                middleware = parsed ?? new HoFaceMiddleware();
+                profileError = null;
+            }
+            else
+            {
+                middleware = new HoFaceMiddleware();
+                profileError = "规则 JSON 读取失败：" + error;
+            }
+
+            loadedProfileAsset = profileAsset;
+            loadedProfileHash = hash;
+            profileLoaded = true;
+            evaluator = null;
+            lastEvaluationTime = -1.0;
+            RuleRevision++;
         }
 
         /// <summary>Accept one raw adapter frame. Values are copied; the caller may reuse its dictionary.</summary>
@@ -326,7 +411,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         private void OnDisable() { ClearFrame(); }
-        private void OnValidate() { RebuildEvaluator(); }
+        private void OnValidate()
+        {
+            if (profileAsset != null) legacyMiddleware = new HoFaceMiddleware();
+            profileLoaded = false;
+            loadedProfileAsset = null;
+            RebuildEvaluator();
+        }
         private void LateUpdate()
         {
             if (evaluatedUnityFrame != Time.frameCount) Tick(Time.realtimeSinceStartupAsDouble);

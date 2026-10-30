@@ -9,9 +9,44 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
-    /// <summary>Detached rule drafts, explicit apply/save, and recoverable pre-save snapshots.</summary>
+    /// <summary>Reusable JSON profile references, migration from legacy inline rules, and editor assignment.</summary>
     public static class HoVtsRuleAuthoring
     {
+        public static void AssignProfile(HoVtsParameterReceiver component, TextAsset profile, bool saveToPrefab = false)
+        {
+            if (component == null) throw new ArgumentNullException(nameof(component));
+            HoVtsParameterReceiver destination = saveToPrefab ? PrefabSource(component) : component;
+            if (destination == null) throw new InvalidOperationException("当前实例没有可保存的预制件来源。");
+            if (EditorUtility.IsPersistent(destination) && !AssetDatabase.IsOpenForEdit(AssetDatabase.GetAssetPath(destination)))
+                throw new InvalidOperationException("角色预制件不可编辑。");
+
+            Undo.RecordObject(destination, "指定面捕规则 JSON");
+            destination.SetProfile(profile);
+            EditorUtility.SetDirty(destination);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(destination);
+            if (PrefabUtility.IsPartOfPrefabAsset(destination))
+                PrefabUtility.SavePrefabAsset(destination.transform.root.gameObject);
+            else if (destination.gameObject.scene.IsValid())
+                EditorSceneManager.MarkSceneDirty(destination.gameObject.scene);
+
+            if (destination != component) component.SetProfile(profile);
+        }
+
+        /// <summary>把旧组件里的内嵌规则一次性写成可复用 JSON，并接回组件。</summary>
+        public static TextAsset CreateProfileFromInline(HoVtsParameterReceiver component)
+        {
+            if (component == null) throw new ArgumentNullException(nameof(component));
+            string path = EditorUtility.SaveFilePanelInProject(
+                "创建面捕规则 JSON", "face-profile" + HoFaceProfile.Extension,
+                "hoface.json", "把当前组件规则保存为可复用的 JSON 资产。");
+            if (string.IsNullOrEmpty(path)) return null;
+            System.IO.File.WriteAllText(path, HoFaceProfile.Write(component.Middleware), new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path);
+            var profile = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            AssignProfile(component, profile);
+            return profile;
+        }
+
         public static HoFaceMiddleware Clone(HoFaceMiddleware rules)
         {
             if (!HoFaceProfile.TryParse(HoFaceProfile.Write(rules), out var copy, out string error))
@@ -93,11 +128,28 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("inputTimeoutSeconds"), new GUIContent("输入超时（秒）"));
+            var profileProperty = serializedObject.FindProperty("profileAsset");
+            EditorGUILayout.PropertyField(profileProperty, new GUIContent("面捕规则 JSON"));
             serializedObject.ApplyModifiedProperties();
             var receiver = (HoVtsParameterReceiver)target;
             var rules = receiver.Middleware;
-            EditorGUILayout.LabelField("角色规则", (rules?.inputs?.Count ?? 0) + " 输入 / " + (rules?.outputs?.Count ?? 0) + " 输出");
-            if (GUILayout.Button("编辑角色规则")) HoFaceProfileWindow.Open(receiver);
+            if (receiver.ProfileAsset == null)
+            {
+                EditorGUILayout.HelpBox("当前组件还没有引用规则 JSON。旧内嵌规则仍可运行，建议先创建可复用资产。", MessageType.Warning);
+                if (GUILayout.Button("从当前规则创建 JSON"))
+                {
+                    try { HoVtsRuleAuthoring.CreateProfileFromInline(receiver); }
+                    catch (Exception error) { Debug.LogError("[Ho 面捕] 创建规则 JSON 失败：" + error.Message); }
+                }
+            }
+            else
+            {
+                EditorGUILayout.LabelField("规则", AssetDatabase.GetAssetPath(receiver.ProfileAsset));
+                EditorGUILayout.LabelField("规则行", (rules?.inputs?.Count ?? 0) + " 输入 / " + (rules?.outputs?.Count ?? 0) + " 输出");
+            }
+            if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
+            using (new EditorGUI.DisabledScope(receiver.ProfileAsset == null))
+                if (GUILayout.Button("编辑规则 JSON")) HoFaceProfileWindow.Open(receiver);
             if (Application.isPlaying)
             {
                 EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");
