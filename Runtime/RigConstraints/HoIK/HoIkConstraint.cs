@@ -46,6 +46,8 @@ namespace Hollow.HoUnityTools.RigConstraints
         }
 
         [Header("Targets")]
+        [SerializeField, Tooltip("MMD show/IK tracks use this name to toggle the constraint. Empty falls back to the GameObject name.")]
+        private string ikName = string.Empty;
         [SerializeField, Tooltip("The bone that must reach the target. Usually the foot/hand/toe bone.")]
         private Transform effector;
         [SerializeField, Tooltip("World-space IK goal. It may be animated by another rig or a VMD prop/controller.")]
@@ -74,6 +76,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         private readonly HashSet<string> warned = new HashSet<string>();
 
         public Transform Effector { get => effector; set => effector = value; }
+        public string IkName { get => string.IsNullOrEmpty(ikName) ? name : ikName; set => ikName = value ?? string.Empty; }
         public Transform Target { get => target; set => target = value; }
         public Transform Pole { get => pole; set => pole = value; }
         public IList<Link> Links => links;
