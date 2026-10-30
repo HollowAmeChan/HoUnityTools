@@ -12,7 +12,7 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdBindingProfile` 是 FBX/GLTF 角色的可保存适配资产：用 target path 映射 VMD 骨骼，用 renderer path + blend shape name 映射 morph，用 constraint path 映射动作级 IK。播放器优先使用 Profile，再用同名自动匹配作为起点。Profile 属于角色资产，不属于动作包。
 
-`HoVmdBindingProfileBuilder` 可以从选中的 FBX/GLTF 角色层级生成初始 Profile：优先精确名称，其次规范化名称，再尝试 Humanoid `HumanBodyBones`。生成结果需要人工检查，尤其是 MMD 的 WIK、toe、眼睛和作者专用 morph。
+`HoVmdBindingProfileBuilder` 可以从所选 FBX/GLTF 角色生成当前 VMD 所需的初始 Profile：优先精确名称，其次规范化名称、常见骨名别名和 Humanoid `HumanBodyBones`。多骨架角色可指定主骨架；IK 控制轨道使用 `HoIkConstraint.Target`，而不是脚踝骨。生成结果需要人工检查，尤其是 MMD 的中心、Groove、WIK、toe、眼睛和作者专用 morph。中心轨道不会自动合并到 hips。
 
 组件统一从 **Add Component → HoUnityTools → MMD** 添加：`VMD Motion Player`、`VMD Camera Player`；Profile 资产和 Profile Builder 也位于 `HoUnityTools/MMD`。MMD 足部约束使用 **Add Component → HoUnityTools → Constraints → CCD IK**，不再暴露独立的 `Ho` 顶层入口。
 
@@ -28,7 +28,13 @@ VMD 摄像机不是普通 Transform 曲线：每个关键帧保存轨道中心�
 
 `HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：显式 `HoVmdBindingProfile.morphs` 映射、精确名称、去掉标点并转小写后的规范化名称；同名跨多个 Renderer 或失效的 Profile 映射会记为冲突，找不到的名称会记为缺失。结果包含需求总数、三类命中计数以及具体的 `exactMatchNames`、`normalizedMatchNames`、`profileMappedNames`、`missingNames`、`conflictNames`，可以直接作为角色适配的门槛。
 
-在 `HoVmdAnimation` Inspector 中选择目标 FBX/GLTF 角色后点击 **Audit morphs against selected character**；如有角色 Profile，可一并填入 **Optional binding profile**，这样审查会验证 Renderer path 和 BlendShape name 是否仍然有效。结果写到 `Library/HoMmdStages/MorphAudit/`。这一步只读目标角色，不修改 BlendShape、VMD 或 Profile。
+选中 `.vmd` 后，在上方中文导入面板的 **角色绑定与检查** 中拖入 **目标角色根**，可选填 **主骨架** 与 **角色绑定配置**，点击 **检查所选角色的表情依赖**。检查工具放在 `HoVmdScriptedImporterEditor` 中；下方 Imported Object 是 Unity 的只读导入预览，不承载可操作按钮。也可从已有统一菜单 **HoUnityTools/MMD/角色绑定与表情检查** 打开相同工具。结果写到 `Library/HoMmdStages/MorphAudit/`，同时在面板列出缺失/冲突名称。规范化命中是候选，需要保存到配置并赋给播放器才能生效。检查过程只读角色。
+
+### 播放器与 Bone Bindings
+
+`HoVmdMotionPlayer` 面板现有中文字段、轨道名称选择、生成绑定配置、填充动作骨骼列表和表情检查。具体步骤与 WTD 示例见 [VMD 播放与绑定](guides/VMD_PLAYBACK.md)。
+
+绑定优先级为：组件的 **骨骼绑定**（目标非空）→ **角色绑定配置** → **精确同名骨骼**。骨骼绑定左边使用 VMD 源名，右边是目标 Transform；无需重命名目标骨骼。配置中的路径相对于 **角色根**，`.` 表示根本身。生成工具只处理名称和目标查找，不会为任意 FBX 自动完成骨轴、比例、中心父级和追加/继承的重定向。
 
 编辑器定格 review 会在写入 FK/morph 和 IK 开关后立即调用 Ho IK；播放模式仍由约束的 LateUpdate 执行。这样后台多角度渲染能检查到实际脚底/膝盖结果。
 

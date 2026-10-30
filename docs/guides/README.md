@@ -28,6 +28,7 @@
 | 功能 | 说明 |
 | --- | --- |
 | [动画剪辑直通预览](ANIMATION_CLIP_PREVIEW.md) | 不依赖角色控制器的剪辑预览及 Playable 求值边界 |
+| [VMD 播放与绑定](VMD_PLAYBACK.md) | 中文 VMD Inspector、Bone Bindings、WTD 主骨架与表情缺项检查 |
 | [播放速度面板](PLAY_SPEED_PANEL.md) | 播放速度调试与速度条 |
 | [快速渲染面板](QUICK_CAPTURE_PANEL.md) | 游戏视图/相机截图、透明背景和离线录制 |
 

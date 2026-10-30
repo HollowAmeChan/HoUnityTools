@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Hollow.HoUnityTools.MmdMotion;
+using Hollow.HoUnityTools.RigConstraints;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,51 +14,54 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
     /// <summary>Creates a reusable VMD binding asset from an existing FBX/GLTF hierarchy.</summary>
     public static class HoVmdBindingProfileBuilder
     {
-        public static HoVmdBindingProfile Build(HoVmdAnimation animation, GameObject target, string assetPath)
+        public static HoVmdBindingProfile Build(HoVmdAnimation animation, GameObject target, string assetPath, Transform skeletonRoot = null)
         {
             if (animation == null) throw new ArgumentNullException(nameof(animation));
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (string.IsNullOrEmpty(assetPath) || !assetPath.StartsWith("Assets/", StringComparison.Ordinal))
                 throw new ArgumentException("The profile path must be an Assets/... path.", nameof(assetPath));
+            if (skeletonRoot != null && skeletonRoot != target.transform && !skeletonRoot.IsChildOf(target.transform))
+                throw new ArgumentException("主骨架必须位于目标角色根下。", nameof(skeletonRoot));
 
             var profile = ScriptableObject.CreateInstance<HoVmdBindingProfile>();
             profile.name = Path.GetFileNameWithoutExtension(assetPath);
             profile.sourceModel = animation.modelName;
 
-            var transforms = target.GetComponentsInChildren<Transform>(true);
+            var transforms = (skeletonRoot != null ? skeletonRoot : target.transform).GetComponentsInChildren<Transform>(true);
             var byName = new Dictionary<string, Transform>(StringComparer.Ordinal);
-            foreach (Transform transform in transforms)
-                if (!byName.ContainsKey(transform.name)) byName.Add(transform.name, transform);
-            var animator = target.GetComponentInChildren<Animator>(true);
-            var mappedTransforms = new HashSet<Transform>();
+            foreach (var group in transforms.GroupBy(x => x.name, StringComparer.Ordinal))
+                if (group.Count() == 1) byName.Add(group.Key, group.First());
+            var animator = skeletonRoot != null ? skeletonRoot.GetComponentInParent<Animator>() : target.GetComponent<Animator>();
+            var ik = target.GetComponentsInChildren<HoIkConstraint>(true);
 
             foreach (string sourceName in animation.boneFrames.Select(x => x.boneName).Distinct(StringComparer.Ordinal))
             {
                 Transform targetTransform = FindBone(sourceName, byName, animator);
+                var controls = ik.Where(x => Normalize(x.IkName) == Normalize(sourceName) && x.Target != null).ToArray();
+                if (controls.Length == 1) targetTransform = controls[0].Target;
                 if (targetTransform == null) continue;
                 profile.bones.Add(new HoVmdBindingProfile.BoneMap
                 {
                     sourceName = sourceName,
                     targetPath = RelativePath(target.transform, targetTransform)
                 });
-                mappedTransforms.Add(targetTransform);
             }
 
-            var shapes = new Dictionary<string, (SkinnedMeshRenderer renderer, int index)>(StringComparer.Ordinal);
+            var shapes = new List<(SkinnedMeshRenderer renderer, int index)>();
             foreach (SkinnedMeshRenderer renderer in target.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 if (renderer.sharedMesh == null) continue;
                 for (int i = 0; i < renderer.sharedMesh.blendShapeCount; i++)
                 {
-                    string name = renderer.sharedMesh.GetBlendShapeName(i);
-                    if (!shapes.ContainsKey(name)) shapes.Add(name, (renderer, i));
-                    string normalized = Normalize(name);
-                    if (!shapes.ContainsKey(normalized)) shapes.Add(normalized, (renderer, i));
+                    shapes.Add((renderer, i));
                 }
             }
             foreach (string sourceName in animation.morphFrames.Select(x => x.morphName).Distinct(StringComparer.Ordinal))
             {
-                if (!TryShape(shapes, sourceName, out var shape)) continue;
+                var candidates = shapes.Where(x => x.renderer.sharedMesh.GetBlendShapeName(x.index) == sourceName).ToArray();
+                if (candidates.Length == 0) candidates = shapes.Where(x => Normalize(x.renderer.sharedMesh.GetBlendShapeName(x.index)) == Normalize(sourceName)).ToArray();
+                if (candidates.Length != 1) continue;
+                var shape = candidates[0];
                 profile.morphs.Add(new HoVmdBindingProfile.MorphMap
                 {
                     sourceName = sourceName,
@@ -64,40 +69,35 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
                     blendShapeName = shape.renderer.sharedMesh.GetBlendShapeName(shape.index)
                 });
             }
+            var switches = animation.showIkFrames.SelectMany(x => x.toggles ?? Array.Empty<HoVmdIkToggle>())
+                .Select(x => x.boneName).Union(ik.Select(x => x.IkName), StringComparer.Ordinal);
+            foreach (string source in switches)
+            {
+                var candidates = ik.Where(x => Normalize(x.IkName) == Normalize(source)).ToArray();
+                if (candidates.Length == 1)
+                    profile.ik.Add(new HoVmdBindingProfile.IkMap { sourceName = source,
+                        constraintPath = RelativePath(target.transform, candidates[0].transform), constraintName = candidates[0].IkName });
+            }
 
             AssetDatabase.CreateAsset(profile, AssetDatabase.GenerateUniqueAssetPath(assetPath));
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(profile);
             return profile;
         }
 
-        [MenuItem("HoUnityTools/MMD/Create Binding Profile From Selected VMD And Character")]
+        [MenuItem("HoUnityTools/MMD/角色绑定与表情检查")]
         private static void CreateFromSelection()
         {
-            var animation = Selection.activeObject as HoVmdAnimation;
-            var target = Selection.activeGameObject;
-            if (animation == null || target == null)
-            {
-                EditorUtility.DisplayDialog("Ho VMD Binding", "Select a HoVmdAnimation asset, then a target character GameObject.", "OK");
-                return;
-            }
-            string path = EditorUtility.SaveFilePanelInProject("Save VMD Binding Profile", target.name + " VMD Binding", "asset", "Choose a profile path.");
-            if (string.IsNullOrEmpty(path)) return;
-            Build(animation, target, path);
-            Selection.activeObject = AssetDatabase.LoadAssetAtPath<HoVmdBindingProfile>(path);
-        }
-
-        private static bool TryShape(Dictionary<string, (SkinnedMeshRenderer renderer, int index)> shapes, string source, out (SkinnedMeshRenderer renderer, int index) result)
-        {
-            if (shapes.TryGetValue(source, out result)) return true;
-            return shapes.TryGetValue(Normalize(source), out result);
+            HoVmdBindingWindow.Open();
         }
 
         private static Transform FindBone(string source, Dictionary<string, Transform> byName, Animator animator)
         {
             if (byName.TryGetValue(source, out Transform exact)) return exact;
             string key = Normalize(source);
-            foreach (var pair in byName)
-                if (Normalize(pair.Key) == key) return pair.Value;
+            var normalized = byName.Where(x => Normalize(x.Key) == key).Select(x => x.Value).ToArray();
+            if (normalized.Length == 1) return normalized[0];
+            string alias = BoneAlias(source);
+            if (alias != null && byName.TryGetValue(alias, out var aliased)) return aliased;
             if (animator != null)
             {
                 HumanBodyBones human = HumanBone(source);
@@ -110,8 +110,6 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
         private static HumanBodyBones HumanBone(string name)
         {
             string side = name.StartsWith("左", StringComparison.Ordinal) ? "Left" : name.StartsWith("右", StringComparison.Ordinal) ? "Right" : string.Empty;
-            string core = name.TrimStart('左', '右', 'Ｉ', 'K');
-            if (name == "センター") return HumanBodyBones.Hips;
             if (name == "上半身") return HumanBodyBones.Spine;
             if (name == "上半身2") return HumanBodyBones.Chest;
             if (name == "下半身") return HumanBodyBones.Hips;
@@ -128,10 +126,36 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             return HumanBodyBones.LastBone;
         }
 
+        private static string BoneAlias(string name)
+        {
+            switch (name)
+            {
+                case "下半身": return "hips";
+                case "上半身": return "spine";
+                case "上半身2": return "chest";
+                case "首": return "neck";
+                case "頭": return "head";
+            }
+            string suffix = name.StartsWith("左", StringComparison.Ordinal) ? ".L" : name.StartsWith("右", StringComparison.Ordinal) ? ".R" : null;
+            if (suffix == null) return null;
+            switch (name.Substring(1))
+            {
+                case "肩": return "shoulder" + suffix;
+                case "腕": return "upper_arm" + suffix;
+                case "ひじ": return "lower_arm" + suffix;
+                case "手首": return "hand" + suffix;
+                case "足": return "upper_leg" + suffix;
+                case "ひざ": return "lower_leg" + suffix;
+                case "足首": return "foot" + suffix;
+                case "つま先": return "toes" + suffix;
+                default: return null;
+            }
+        }
+
         private static string Normalize(string value)
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
-            var chars = value.Where(char.IsLetterOrDigit).ToArray();
+            var chars = value.Normalize(NormalizationForm.FormKC).Where(char.IsLetterOrDigit).ToArray();
             return new string(chars).ToLowerInvariant();
         }
 

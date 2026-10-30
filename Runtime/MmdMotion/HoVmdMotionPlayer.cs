@@ -99,9 +99,9 @@ namespace Hollow.HoUnityTools.MmdMotion
                 foreach (var map in bindingProfile.bones)
                 {
                     if (map == null || string.IsNullOrEmpty(map.sourceName) || string.IsNullOrEmpty(map.targetPath)) continue;
-                    Transform mapped = root.Find(map.targetPath);
+                    Transform mapped = map.targetPath == "." ? root : root.Find(map.targetPath);
                     if (mapped == null) continue;
-                    if (!autoBones.ContainsKey(map.sourceName)) autoBones.Add(map.sourceName, mapped);
+                    autoBones[map.sourceName] = mapped;
                     if (!bindPositions.ContainsKey(mapped)) bindPositions.Add(mapped, mapped.localPosition);
                     if (!bindRotations.ContainsKey(mapped)) bindRotations.Add(mapped, mapped.localRotation);
                 }
@@ -119,7 +119,7 @@ namespace Hollow.HoUnityTools.MmdMotion
                 foreach (var map in bindingProfile.morphs)
                 {
                     if (map == null || string.IsNullOrEmpty(map.sourceName) || string.IsNullOrEmpty(map.rendererPath)) continue;
-                    var renderer = root.Find(map.rendererPath)?.GetComponent<SkinnedMeshRenderer>();
+                    var renderer = (map.rendererPath == "." ? root : root.Find(map.rendererPath))?.GetComponent<SkinnedMeshRenderer>();
                     if (renderer == null || renderer.sharedMesh == null) continue;
                     int index = renderer.sharedMesh.GetBlendShapeIndex(map.blendShapeName);
                     if (index < 0) continue;
@@ -132,7 +132,7 @@ namespace Hollow.HoUnityTools.MmdMotion
                 foreach (var map in bindingProfile.ik)
                 {
                     if (map == null || string.IsNullOrEmpty(map.sourceName) || string.IsNullOrEmpty(map.constraintPath)) continue;
-                    var constraint = root.Find(map.constraintPath)?.GetComponent<HoIkConstraint>();
+                    var constraint = (map.constraintPath == "." ? root : root.Find(map.constraintPath))?.GetComponent<HoIkConstraint>();
                     if (constraint != null) ikControls[map.sourceName] = constraint;
                 }
         }
