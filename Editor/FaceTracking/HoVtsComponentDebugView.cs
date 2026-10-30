@@ -293,9 +293,13 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         if (connected) HoFaceInputHub.Disconnect(); else HoFaceInputHub.Connect();
                     }
                     HoConstraintEditorControls.Gap(8);
-                    bool canStart = EditorApplication.isPlaying && receiver != null && !receiver.HasFrame;
+                    bool canStart = EditorApplication.isPlaying && receiver != null;
                     using (new EditorGUI.DisabledScope(!canStart || HoVtsDebugHost.Running))
-                        if (HoConstraintEditorControls.Button("开始调试", "没有外部输入时，用手机源驱动当前角色并开放临时覆盖。", true, 104)) HoVtsDebugHost.Start(target);
+                        if (HoConstraintEditorControls.Button(receiver != null && receiver.HasFrame ? "启用覆盖" : "开始调试",
+                            receiver != null && receiver.HasFrame
+                                ? "保留当前 VTS 输入，只把面板里的临时输入/输出覆盖注入角色求值。"
+                                : "没有外部输入时，用手机源驱动当前角色并开放临时覆盖。",
+                            true, 104)) HoVtsDebugHost.Start(target);
                     using (new EditorGUI.DisabledScope(!HoVtsDebugHost.Running))
                         if (HoConstraintEditorControls.Button("停止并交还", "清除临时覆盖并把写入交还角色组件。", false, 104)) HoVtsDebugHost.Stop();
                     HoConstraintEditorControls.Flex();

@@ -53,6 +53,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 var animator = root.GetComponent<Animator>();
                 if (animator != null && animator.isHuman)
                 {
+                    pose.UpperBody = animator.GetBoneTransform(HumanBodyBones.Chest)
+                        ?? animator.GetBoneTransform(HumanBodyBones.UpperChest)
+                        ?? animator.GetBoneTransform(HumanBodyBones.Spine);
                     pose.Head = animator.GetBoneTransform(HumanBodyBones.Head);
                     pose.LeftEye = animator.GetBoneTransform(HumanBodyBones.LeftEye);
                     pose.RightEye = animator.GetBoneTransform(HumanBodyBones.RightEye);

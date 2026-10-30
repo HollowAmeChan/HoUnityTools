@@ -12,17 +12,31 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             Field("parameterReceiver", "参数接收器");
             Field("referenceFrame", "姿态参考物体", "使用这个物体的轴向解释 VTS 角度，通常是角色根物体。");
+            Field("upperBody", "上身骨骼", "可选：胸口/脊柱的上段。启用后以较低权重跟随头部姿态，模拟 Live2D 式上身摆动。");
             Field("head", "头部骨骼");
             Field("leftEye", "左眼骨骼");
             Field("rightEye", "右眼骨骼");
             var source = serializedObject.FindProperty("parameterSource");
             source.enumValueIndex = EditorGUILayout.Popup("参数来源", source.enumValueIndex, new[] { "标定后原始值", "中间层输出" });
             Field("headEnabled", "控制头部");
+            Field("upperBodyEnabled", "上身摆动");
+            using (new EditorGUI.DisabledScope(!serializedObject.FindProperty("upperBodyEnabled").boolValue))
+                Field("upperBodyWeight", "上身摆动强度");
             Field("eyesEnabled", "控制双眼");
             Field("smoothingSeconds", "姿态平滑（秒）", "0 为直通；丢追时使用同样的平滑回到中性姿态。");
+            Field("drawGizmos", "场景姿态 Gizmo", "选中组件时显示参考轴、实际骨骼朝向和目标朝向。");
+            using (new EditorGUI.DisabledScope(!serializedObject.FindProperty("drawGizmos").boolValue))
+                Field("gizmoLength", "Gizmo 长度");
             Field("autoRun", "自动运行");
             serializedObject.ApplyModifiedProperties();
-            if (Application.isPlaying) EditorGUILayout.LabelField("状态", ((HoVtsLookAt)target).Status);
+            var lookAt = (HoVtsLookAt)target;
+            if (Application.isPlaying)
+            {
+                EditorGUILayout.LabelField("状态", lookAt.Status);
+                HoVtsLookAtDebug debug = lookAt.GetDebug();
+                EditorGUILayout.LabelField("输入", debug.hasFrame ? (debug.tracked ? "追踪中" : "未追踪") : "无当前帧");
+                EditorGUILayout.LabelField("说明", "黄 = 实际骨骼前方，紫 = VTS 目标前方，红绿蓝 = 参考坐标轴");
+            }
         }
 
         private void Field(string property, string label, string tooltip = null) =>

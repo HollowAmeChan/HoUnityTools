@@ -18,6 +18,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private readonly Dictionary<string, float> publishedPins = new Dictionary<string, float>(StringComparer.Ordinal);
         private int ruleRevision;
         private readonly bool automaticInput;
+        private readonly bool overlayOnly;
         private double lastSourceTime = -1;
         private int lastUnityFrame = -1;
         private bool pinsChanged;
@@ -25,6 +26,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public HoVtsParameterReceiver Receiver { get; }
         public bool Disposed { get; private set; }
         public string SourceId => source;
+        public bool OverlayOnly => overlayOnly;
         public IReadOnlyDictionary<string, float> InputPins => inputPins;
         public IReadOnlyDictionary<string, float> OutputPins => outputPins;
         public IReadOnlyDictionary<string, float> IsolationOverrides => isolation;
@@ -76,9 +78,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (receivers.Length != 1) throw new InvalidOperationException(receivers.Length == 0 ? "对象上没有 HoVtsParameterReceiver" : "对象下有多个参数接收器，请缩小选择范围。");
             Receiver = receivers[0];
             if (!Receiver.isActiveAndEnabled) throw new InvalidOperationException("参数接收器未启用。");
-            if (Receiver.HasFrame) throw new InvalidOperationException("角色已有输入，请先停止原输入再开始调试。");
             if (!owners.Add(Receiver)) throw new InvalidOperationException("这个角色已在调试中。");
             Target = target;
+            overlayOnly = Receiver.HasFrame;
             ruleRevision = Receiver.RuleRevision;
             this.automaticInput = automaticInput;
             EditorApplication.update += Update;
@@ -100,6 +102,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             if (Disposed) throw new ObjectDisposedException(nameof(HoVtsDebugSession));
             if (Receiver == null || !Receiver.isActiveAndEnabled) throw new InvalidOperationException("参数接收器不可用。");
+            if (overlayOnly)
+            {
+                CheckRules();
+                Receiver.SetDebugOverrides(inputPins, PublishedOutputPins, null);
+                Receiver.Tick(now);
+                pinsChanged = false;
+                return;
+            }
             if (Receiver.HasFrame && Receiver.Source != source)
             {
                 Dispose();
@@ -116,6 +126,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (Disposed) return;
             if (Target == null || Receiver == null || !Receiver.isActiveAndEnabled) { Dispose(); return; }
             CheckRules();
+            if (overlayOnly)
+            {
+                if (!Receiver.HasFrame) { Dispose(); return; }
+                Receiver.SetDebugOverrides(inputPins, PublishedOutputPins, null);
+                Receiver.Tick(Time.realtimeSinceStartupAsDouble);
+                pinsChanged = false;
+                return;
+            }
             if (!automaticInput || !EditorApplication.isPlaying || lastUnityFrame == Time.frameCount) return;
             lastUnityFrame = Time.frameCount;
             double stamp = HoFaceInputHub.LastFrameTime;
@@ -154,7 +172,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (Receiver != null)
             {
                 Receiver.ClearDebugOverrides();
-                if (Receiver.Source == source)
+                if (!overlayOnly && Receiver.Source == source)
                 {
                     Receiver.ClearFrame();
                     if (Target != null)
