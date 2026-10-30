@@ -12,6 +12,8 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdBindingProfile` 是 FBX/GLTF 角色的可保存适配资产：用 target path 映射 VMD 骨骼，用 renderer path + blend shape name 映射 morph，用 constraint path 映射动作级 IK。播放器优先使用 Profile，再用同名自动匹配作为起点。Profile 属于角色资产，不属于动作包。
 
+`HoVmdBindingProfileBuilder` 可以从选中的 FBX/GLTF 角色层级生成初始 Profile：优先精确名称，其次规范化名称，再尝试 Humanoid `HumanBodyBones`。生成结果需要人工检查，尤其是 MMD 的 WIK、toe、眼睛和作者专用 morph。
+
 编辑器定格 review 会在写入 FK/morph 和 IK 开关后立即调用 Ho IK；播放模式仍由约束的 LateUpdate 执行。这样后台多角度渲染能检查到实际脚底/膝盖结果。
 
 ## HoIkConstraint
