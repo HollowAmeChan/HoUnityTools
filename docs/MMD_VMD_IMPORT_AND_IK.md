@@ -16,6 +16,14 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 组件统一从 **Add Component → HoUnityTools → MMD** 添加：`VMD Motion Player`、`VMD Camera Player`；Profile 资产和 Profile Builder 也位于 `HoUnityTools/MMD`。MMD 足部约束使用 **Add Component → HoUnityTools → Constraints → CCD IK**，不再暴露独立的 `Ho` 顶层入口。
 
+### VMD 摄像机播放约定
+
+VMD 摄像机不是普通 Transform 曲线：每个关键帧保存轨道中心、带符号距离、弧度 Euler 旋转、FOV、透视开关和 24 字节相机专用 Bezier 曲线。`HoVmdCameraPlayer` 因此使用两个节点：`cameraTarget` 表示 MMD 轨道中心，`targetCamera` 表示实际 Unity Camera。播放时先把 MMD 坐标转换到 Unity，再按 `target + R * (0, 0, -distance)` 求相机位置，并同时写入相机旋转和 FOV。
+
+相邻帧通常是作者有意制作的跳切；组件默认不会在帧间距小于等于 1 时滑动插值，可通过 `snapAdjacentFrames` 关闭这个策略。负距离保留其符号，正交关键帧会根据距离和 FOV 推导 `orthographicSize`，避免沿用上一个投影模式的旧缩放。`mmdToUnityScale` 默认 `0.08`，需要与角色/场景导入比例一致。
+
+摄像机 VMD 可以独立于角色 VMD 播放：把 `.vmd` 导入为 `HoVmdAnimation`，将它填到 `VMD Camera Player`，再绑定目标 Camera 和轨道中心。静帧或 CLI review 可直接调用 `ApplyAtFrame`，运行时则由组件的 frame rate、loop 和 play on enable 控制。作者动作若另带 `camera.vmd`，应把镜头作为同一动作实例的独立资产记录，不把它误当作角色骨骼动画。
+
 ### VMD morph 依赖审查
 
 `HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：显式 `HoVmdBindingProfile.morphs` 映射、精确名称、去掉标点并转小写后的规范化名称；同名跨多个 Renderer 或失效的 Profile 映射会记为冲突，找不到的名称会记为缺失。结果包含需求总数、三类命中计数以及具体的 `exactMatchNames`、`normalizedMatchNames`、`profileMappedNames`、`missingNames`、`conflictNames`，可以直接作为角色适配的门槛。

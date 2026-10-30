@@ -205,23 +205,79 @@ namespace Hollow.HoUnityTools.MmdMotion
     [AddComponentMenu("HoUnityTools/MMD/VMD Camera Player")]
     public sealed class HoVmdCameraPlayer : MonoBehaviour
     {
-        public HoVmdAnimation animation;
-        public Camera targetCamera;
-        public Transform cameraTarget;
-        public float frameRate=30;
-        public bool playOnEnable=true, loop=true;
-        public float currentFrame;
+        [SerializeField] public new HoVmdAnimation animation;
+        [SerializeField] public Camera targetCamera;
+        [SerializeField] public Transform cameraTarget;
+        [SerializeField, Min(1.0f)] public float frameRate=30;
+        [SerializeField] public bool playOnEnable=true, loop=true;
+        [SerializeField, Min(0.0f)] public float currentFrame;
+        [SerializeField, Min(0.0001f)] public float mmdToUnityScale=.08f;
+        [SerializeField] public bool snapAdjacentFrames=true;
+        [SerializeField, Min(0.0001f)] public float orthographicSizeMultiplier=1.0f;
         private bool playing;
-        private void OnEnable(){playing=playOnEnable;}
-        private void LateUpdate(){if(!Application.isPlaying||!playing||animation==null||targetCamera==null||cameraTarget==null||animation.cameraFrames.Count==0)return;ApplyAtFrame(currentFrame);currentFrame+=Time.deltaTime*frameRate;if(currentFrame>animation.LastCameraFrame){if(loop)currentFrame%=Mathf.Max(1,animation.LastCameraFrame);else{currentFrame=animation.LastCameraFrame;playing=false;}}}
+        private readonly List<HoVmdCameraFrame> cameraTrack = new List<HoVmdCameraFrame>();
+        private bool trackDirty=true;
+
+        public HoVmdAnimation Animation { get => animation; set { animation=value; trackDirty=true; } }
+        public Camera TargetCamera { get => targetCamera; set => targetCamera=value; }
+        public Transform CameraTarget { get => cameraTarget; set => cameraTarget=value; }
+        public float CurrentFrame { get => currentFrame; set => currentFrame=Mathf.Max(0, value); }
+        public bool Playing { get => playing; set => playing=value; }
+
+        private void OnEnable(){playing=playOnEnable;trackDirty=true;}
+        private void OnValidate(){frameRate=Mathf.Max(1,frameRate);currentFrame=Mathf.Max(0,currentFrame);mmdToUnityScale=Mathf.Max(.0001f,mmdToUnityScale);orthographicSizeMultiplier=Mathf.Max(.0001f,orthographicSizeMultiplier);trackDirty=true;}
+        private void LateUpdate(){if(!Application.isPlaying||!playing||animation==null||targetCamera==null||cameraTarget==null)return;if(trackDirty)RebuildTrack();if(cameraTrack.Count==0)return;ApplyAtFrame(currentFrame);currentFrame+=Time.deltaTime*frameRate;if(currentFrame>LastFrame){if(loop)currentFrame%=Mathf.Max(1,LastFrame);else{currentFrame=LastFrame;playing=false;}}}
+
+        public uint LastFrame => cameraTrack.Count>0 ? cameraTrack[cameraTrack.Count-1].frame : animation!=null ? animation.LastCameraFrame : 0;
+
+        public void RebuildTrack()
+        {
+            cameraTrack.Clear();
+            if(animation==null||animation.cameraFrames==null){trackDirty=false;return;}
+            cameraTrack.AddRange(animation.cameraFrames);
+            cameraTrack.Sort((a,b)=>a.frame.CompareTo(b.frame));
+            trackDirty=false;
+        }
+
         public void ApplyAtFrame(float frame)
         {
-            var track=animation.cameraFrames;if(track.Count==0)return;int next=1;while(next<track.Count&&track[next].frame<frame)next++;var value=track[Mathf.Clamp(next-1,0,track.Count-1)];
-            if(next<track.Count&&track[next].frame>value.frame){var b=track[next];float u=(frame-value.frame)/Mathf.Max(1,b.frame-value.frame);float t=Bezier(b.interpolation.movement,u);value.targetPosition=Vector3.Lerp(value.targetPosition,b.targetPosition,t);value.distance=Mathf.Lerp(value.distance,b.distance,Bezier(b.interpolation.distance,u));value.rotation=Vector3.Lerp(value.rotation,b.rotation,Bezier(b.interpolation.rotation,u));value.viewAngle=(uint)Mathf.Lerp(value.viewAngle,b.viewAngle,Bezier(b.interpolation.viewAngle,u));}
-            cameraTarget.position=new Vector3(-value.targetPosition.x,value.targetPosition.y,-value.targetPosition.z)*.08f;
-            Vector3 euler=new Vector3(-value.rotation.x*Mathf.Rad2Deg,value.rotation.y*Mathf.Rad2Deg+180,value.rotation.z*Mathf.Rad2Deg);cameraTarget.rotation=Quaternion.Euler(euler);
-            targetCamera.transform.position=cameraTarget.position-cameraTarget.forward*Mathf.Abs(value.distance)*.08f;targetCamera.fieldOfView=value.viewAngle;targetCamera.orthographic=value.perspectiveOff;
+            if(animation==null||targetCamera==null||cameraTarget==null)return;
+            if(trackDirty)RebuildTrack();
+            if(cameraTrack.Count==0)return;
+            HoVmdCameraFrame value=Sample(frame);
+            cameraTarget.position=new Vector3(-value.targetPosition.x,value.targetPosition.y,-value.targetPosition.z)*mmdToUnityScale;
+            Vector3 euler=new Vector3(-value.rotation.x*Mathf.Rad2Deg,value.rotation.y*Mathf.Rad2Deg+180,value.rotation.z*Mathf.Rad2Deg);
+            Quaternion rotation=Quaternion.Euler(euler);
+            cameraTarget.rotation=rotation;
+            targetCamera.transform.rotation=rotation;
+            // MMD's signed distance is meaningful: negative values pull the camera
+            // through the orbit center instead of being clamped to the other side.
+            targetCamera.transform.position=cameraTarget.position-rotation*Vector3.forward*(value.distance*mmdToUnityScale);
+            targetCamera.fieldOfView=Mathf.Clamp(value.viewAngle,1,179);
+            targetCamera.orthographic=value.perspectiveOff;
+            if(value.perspectiveOff)
+                targetCamera.orthographicSize=Mathf.Max(.0001f,Mathf.Abs(value.distance*mmdToUnityScale)*Mathf.Tan(targetCamera.fieldOfView*Mathf.Deg2Rad*.5f)*orthographicSizeMultiplier);
         }
+
+        private HoVmdCameraFrame Sample(float frame)
+        {
+            if(frame<=cameraTrack[0].frame)return cameraTrack[0];
+            int next=1;while(next<cameraTrack.Count&&cameraTrack[next].frame<frame)next++;
+            HoVmdCameraFrame value=cameraTrack[Mathf.Clamp(next-1,0,cameraTrack.Count-1)];
+            if(next>=cameraTrack.Count)return value;
+            HoVmdCameraFrame b=cameraTrack[next];
+            if(frame>=b.frame)return b;
+            uint gap=b.frame-value.frame;
+            // Adjacent camera keys are commonly authored as hard cuts.
+            if(snapAdjacentFrames&&gap<=1)return value;
+            float u=(frame-value.frame)/Mathf.Max(1,gap);float movement=Bezier(b.interpolation.movement,u);
+            value.targetPosition=Vector3.Lerp(value.targetPosition,b.targetPosition,movement);
+            value.distance=Mathf.Lerp(value.distance,b.distance,Bezier(b.interpolation.distance,u));
+            value.rotation=Vector3.Lerp(value.rotation,b.rotation,Bezier(b.interpolation.rotation,u));
+            value.viewAngle=(uint)Mathf.Round(Mathf.Lerp(value.viewAngle,b.viewAngle,Bezier(b.interpolation.viewAngle,u)));
+            return value;
+        }
+
         private static float Bezier(HoVmdBezier c,float x){float t=x;for(int i=0;i<6;i++){float o=1-t;float f=3*o*o*t*c.x1+3*o*t*t*c.x2+t*t*t-x;float d=3*o*o*c.x1+6*o*t*(c.x2-c.x1)+3*t*t*(1-c.x2);if(Mathf.Abs(d)<1e-5f)break;t=Mathf.Clamp01(t-f/d);}float o2=1-t;return 3*o2*o2*t*c.y1+3*o2*t*t*c.y2+t*t*t;}
     }
 }
