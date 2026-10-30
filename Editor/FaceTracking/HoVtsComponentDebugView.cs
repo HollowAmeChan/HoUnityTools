@@ -319,7 +319,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 {
                     autoStart = HoConstraintEditorControls.Toggle("进入播放自动开始", autoStart, "播放时如果角色没有任何输入，自动建立一个可覆盖的调试会话。");
                     HoConstraintEditorControls.Flex();
-                    if (autoStart && EditorApplication.isPlaying && receiver != null && !receiver.HasFrame && !HoVtsDebugHost.Running) HoVtsDebugHost.Start(target);
+                    if (autoStart && EditorApplication.isPlaying && receiver != null && !HoVtsDebugHost.Running) HoVtsDebugHost.Start(target);
                 }
             }
             if (!string.IsNullOrEmpty(HoVtsDebugHost.Error)) EditorGUILayout.HelpBox(HoVtsDebugHost.Error, MessageType.Error);
