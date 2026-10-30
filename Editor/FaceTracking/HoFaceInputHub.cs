@@ -32,6 +32,22 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static readonly Dictionary<string, float> Merged = new Dictionary<string, float>(StringComparer.Ordinal);
         /// <summary>每个线名最后一次被"新鲜源"提供的时刻（会话判断断流用）。</summary>
         private static readonly Dictionary<string, double> MergedAt = new Dictionary<string, double>(StringComparer.Ordinal);
+        private static readonly string[] CalibrationKeys =
+        {
+            "Rotation_x", "Rotation_y", "Rotation_z",
+            "Position_x", "Position_y", "Position_z",
+            "EyeLeft_x", "EyeLeft_y", "EyeLeft_z",
+            "EyeRight_x", "EyeRight_y", "EyeRight_z"
+        };
+        private static readonly Dictionary<string, float> CalibrationOffsets =
+            new Dictionary<string, float>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, double> CalibrationSums =
+            new Dictionary<string, double>(StringComparer.Ordinal);
+        private static bool calibrationActive;
+        private static double calibrationStartedAt;
+        private static double calibrationDuration = 3.0;
+        private static int calibrationSamples;
+        private static string calibrationStatus = "未校准";
 
         private static readonly Dictionary<HoFaceDebugSettings, HoFaceAnimationSession> Sessions = new Dictionary<HoFaceDebugSettings, HoFaceAnimationSession>();
         private static readonly Dictionary<HoFaceDebugSettings, string> Errors = new Dictionary<HoFaceDebugSettings, string>();
@@ -45,6 +61,82 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         public static double LastFrameTime { get; private set; }
         public static double ConnectStartedAt { get; private set; }
         public static string ConnectionError { get; private set; } = "";
+
+        public static bool CalibrationActive => calibrationActive;
+        public static string CalibrationStatus => calibrationStatus;
+
+        /// <summary>开始三秒姿态中性采样；表情形态键和规则 JSON 不由校准入口修改。</summary>
+        public static void BeginCalibration(double seconds = 3.0)
+        {
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds <= 0) seconds = 3.0;
+            CalibrationSums.Clear();
+            foreach (string key in CalibrationKeys) CalibrationSums[key] = 0.0;
+            calibrationSamples = 0;
+            calibrationStartedAt = Now;
+            calibrationDuration = seconds;
+            calibrationActive = true;
+            calibrationStatus = "校准中：请保持正面和自然表情（" + seconds.ToString("0.#") + " 秒）";
+        }
+
+        private static void AccumulateCalibration(bool receivedFrame, double now)
+        {
+            if (!calibrationActive || !receivedFrame) return;
+            foreach (string key in CalibrationKeys)
+                if (!Merged.ContainsKey(key)) return;
+            if (Merged.TryGetValue("FaceFound", out float faceFound) && faceFound <= 0.5f) return;
+            foreach (string key in CalibrationKeys)
+                if (Merged.TryGetValue(key, out float value)
+                    && !float.IsNaN(value) && !float.IsInfinity(value))
+                    CalibrationSums[key] += value;
+            calibrationSamples++;
+            if (now - calibrationStartedAt < calibrationDuration) return;
+            if (calibrationSamples == 0)
+            {
+                calibrationActive = false;
+                calibrationStatus = "校准失败：三秒内没有收到有效帧";
+                return;
+            }
+            CalibrationOffsets.Clear();
+            foreach (string key in CalibrationKeys)
+                CalibrationOffsets[key] = (float)(CalibrationSums[key] / calibrationSamples);
+            calibrationActive = false;
+            calibrationStatus = "已校准（" + calibrationSamples + " 帧）";
+        }
+
+        private static float Corrected(string key, float value)
+        {
+            if (!CalibrationOffsets.TryGetValue(key, out float offset)) return value;
+            if (key.StartsWith("Rotation_", StringComparison.Ordinal)
+                || key.StartsWith("EyeLeft_", StringComparison.Ordinal)
+                || key.StartsWith("EyeRight_", StringComparison.Ordinal)) return value;
+            return value - offset;
+        }
+
+        private static void ApplyPoseCalibration(Dictionary<string, float> values)
+        {
+            foreach (string prefix in new[] { "Rotation_", "EyeLeft_", "EyeRight_" })
+            {
+                string xKey = prefix + "x", yKey = prefix + "y", zKey = prefix + "z";
+                if (!values.TryGetValue(xKey, out float x) || !values.TryGetValue(yKey, out float y)
+                    || !values.TryGetValue(zKey, out float z)
+                    || !CalibrationOffsets.TryGetValue(xKey, out float ox)
+                    || !CalibrationOffsets.TryGetValue(yKey, out float oy)
+                    || !CalibrationOffsets.TryGetValue(zKey, out float oz)) continue;
+                Quaternion corrected = Quaternion.Euler(x, y, z)
+                    * Quaternion.Inverse(Quaternion.Euler(ox, oy, oz));
+                Vector3 euler = corrected.eulerAngles;
+                values[xKey] = NormalizeAngle(euler.x);
+                values[yKey] = NormalizeAngle(euler.y);
+                values[zKey] = NormalizeAngle(euler.z);
+            }
+        }
+
+        private static float NormalizeAngle(float value)
+        {
+            while (value > 180f) value -= 360f;
+            while (value < -180f) value += 360f;
+            return value;
+        }
 
         /// <summary>环境里至少有一条源在跑，就算"连着"。</summary>
         public static bool Connected => Receivers.Any(receiver => receiver.Running);
@@ -143,6 +235,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             LatestTime.Clear();
             Merged.Clear();
             MergedAt.Clear();
+            if (calibrationActive) calibrationStatus = "校准已取消";
+            calibrationActive = false;
         }
 
         public static HoFaceAnimationSession Session(HoFaceDebugSettings settings) => settings != null && Sessions.TryGetValue(settings, out var session) ? session : null;
@@ -276,6 +370,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             if (missing) return;
 
             double now = Now;
+            bool receivedFrame = false;
             for (int i = 0; i < Receivers.Count; i++)
             {
                 if (Receivers[i].TryTake(out var packet, out double timestamp))
@@ -283,6 +378,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     Latest[i] = packet;
                     LatestTime[i] = timestamp;
                     LastFrameTime = timestamp;
+                    receivedFrame = true;
                 }
             }
 
@@ -294,6 +390,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 if (now - LatestTime[i] > FreshSeconds) continue;   // 这条源不新鲜了，让位给后面的
                 foreach (var pair in packet.Values)
                     if (!Merged.ContainsKey(pair.Key)) { Merged[pair.Key] = pair.Value; MergedAt[pair.Key] = LatestTime[i]; }
+            }
+
+            AccumulateCalibration(receivedFrame, now);
+            if (CalibrationOffsets.Count > 0)
+            {
+                var corrected = new Dictionary<string, float>(Merged, StringComparer.Ordinal);
+                foreach (var pair in corrected) Merged[pair.Key] = Corrected(pair.Key, pair.Value);
+                ApplyPoseCalibration(Merged);
             }
         }
 

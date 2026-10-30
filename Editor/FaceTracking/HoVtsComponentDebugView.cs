@@ -302,6 +302,17 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
                 using (HoConstraintEditorControls.Row(true))
                 {
+                    HoConstraintEditorControls.Label("姿态校准", HoConstraintEditorTheme.LabelWidthSm,
+                        "保持正面和自然表情，采样三秒头部、头位和双眼姿态作为中性偏移。");
+                    using (new EditorGUI.DisabledScope(!connected || HoFaceInputHub.CalibrationActive))
+                        if (HoConstraintEditorControls.Button("校准 3 秒", "开始三秒姿态中性校准；不会修改表情规则或输入范围。", true, 96))
+                            HoFaceInputHub.BeginCalibration(3.0);
+                    HoConstraintEditorControls.Gap(8);
+                    HoConstraintEditorControls.Caption(HoFaceInputHub.CalibrationStatus);
+                    HoConstraintEditorControls.Flex();
+                }
+                using (HoConstraintEditorControls.Row(true))
+                {
                     autoStart = HoConstraintEditorControls.Toggle("进入播放自动开始", autoStart, "播放时如果角色没有任何输入，自动建立一个可覆盖的调试会话。");
                     HoConstraintEditorControls.Flex();
                     if (autoStart && EditorApplication.isPlaying && receiver != null && !receiver.HasFrame && !HoVtsDebugHost.Running) HoVtsDebugHost.Start(target);

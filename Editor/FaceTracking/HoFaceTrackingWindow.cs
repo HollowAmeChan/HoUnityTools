@@ -395,6 +395,19 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
                 HoConstraintEditorControls.Separator(3.0f, 3.0f);
 
+                using (HoConstraintEditorControls.Row(true))
+                {
+                    HoConstraintEditorControls.Label("姿态校准", HoConstraintEditorTheme.LabelWidthSm,
+                        "保持正面和自然表情，采样三秒头部、头位和双眼姿态作为中性偏移。");
+                    using (new EditorGUI.DisabledScope(!connected || HoFaceInputHub.CalibrationActive))
+                        if (HoConstraintEditorControls.Button("校准 3 秒",
+                            "开始三秒姿态中性校准；不会修改表情规则或输入范围。", true, 96.0f))
+                            HoFaceInputHub.BeginCalibration(3.0);
+                    HoConstraintEditorControls.Gap(8.0f);
+                    HoConstraintEditorControls.Caption(HoFaceInputHub.CalibrationStatus);
+                    HoConstraintEditorControls.Flex();
+                }
+
                 // ── 最后两行（2026-09-27 用户定）─────────────────────────────────────
                 // 倒数第二行 = 布尔开关（预览混合树 / 自动驱动 / 写动态参数 + 灰色的 Hub 目标），
                 // 最后一行 = 功能按钮（连接 / 开始驱动），**放大 + 居中**，在这一栏最底下。
