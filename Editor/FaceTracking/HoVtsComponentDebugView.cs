@@ -43,6 +43,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private static int isolationChoice;
         private static Vector2 scroll;
         private static bool componentsExpanded = true;
+        private static bool profileExpanded = true, diagnoseExpanded;
 
         public static void Draw(HoFaceDebugSettings settings)
         {
@@ -78,6 +79,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时 · 已回中性" : receiver.Tracked ? "追踪中" : "未追踪 / 手动调试");
                 componentsExpanded = EditorGUILayout.Foldout(componentsExpanded, "角色组件", true);
                 if (componentsExpanded) DrawComponents(target, receiver);
+                DrawProfile(receiver);
                 DrawRecordControls();
                 tab = GUILayout.Toolbar(tab, new[] { "原始输入", "规则输入", "规则输出" });
                 search = EditorGUILayout.TextField("筛选", search);
@@ -85,6 +87,46 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (new EditorGUI.DisabledScope(session == null)) if (GUILayout.Button("清除全部临时覆盖")) session?.ClearPins();
                 if (tab == 2) DrawIsolation(session, receiver);
                 DrawValues(session, receiver);
+                DrawDiagnose(target, receiver);
+            }
+        }
+
+        private static void DrawProfile(HoVtsParameterReceiver receiver)
+        {
+            string summary = receiver.Middleware == null ? "规则未加载" : "输入行 " + receiver.Middleware.inputs.Count + " · 输出行 " + receiver.Middleware.outputs.Count;
+            profileExpanded = EditorGUILayout.Foldout(profileExpanded, "配置详情 · " + summary, true);
+            if (!profileExpanded || receiver.Middleware == null) return;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                EditorGUILayout.LabelField("输入行", EditorStyles.miniBoldLabel);
+                foreach (var row in receiver.Middleware.inputs) DrawProfileRow(row);
+                EditorGUILayout.LabelField("输出行", EditorStyles.miniBoldLabel);
+                foreach (var row in receiver.Middleware.outputs) DrawProfileRow(row);
+            }
+        }
+
+        private static void DrawProfileRow(HoFaceOutput row)
+        {
+            if (row == null) return;
+            string mods = row.modifiers == null || row.modifiers.Count == 0 ? "—" : row.modifiers.Count + " 个修饰符";
+            EditorGUILayout.LabelField(row.parameter ?? "", (row.expression ?? "") + "  ·  " + mods, EditorStyles.miniLabel);
+        }
+
+        private static void DrawDiagnose(GameObject target, HoVtsParameterReceiver receiver)
+        {
+            diagnoseExpanded = EditorGUILayout.Foldout(diagnoseExpanded, "排查", true);
+            if (!diagnoseExpanded) return;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                EditorGUILayout.LabelField("输入源", HoFaceInputHub.Connected ? "已连接 · " + HoFaceInputHub.SourceCount + " 条源" : "未连接");
+                double age = HoFaceInputHub.LastFrameTime > 0 ? HoFaceClock.Now - HoFaceInputHub.LastFrameTime : double.PositiveInfinity;
+                EditorGUILayout.LabelField("最近输入", double.IsInfinity(age) ? "从未收到" : age.ToString("F2") + " 秒前");
+                EditorGUILayout.LabelField("接收器", receiver.HasFrame ? receiver.Source : "没有当前帧");
+                EditorGUILayout.LabelField("原始键 / 处理后", receiver.RawCount + " / " + receiver.ValueCount);
+                if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
+                if (target != null)
+                    foreach (var controller in target.GetComponentsInChildren<HoVtsController>(true))
+                        if (controller.ParameterReceiver == receiver) EditorGUILayout.LabelField("绑定动画属性", controller.BindingCount.ToString());
             }
         }
 
