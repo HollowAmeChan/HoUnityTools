@@ -122,6 +122,9 @@ namespace Hollow.HoUnityTools.FaceTracking
             debug.headTargetRotation = ReadPoseTarget(frame, "Rotation_x", "Rotation_y", "Rotation_z", false);
             debug.leftEyeTargetRotation = ReadPoseTarget(frame, "EyeLeft_x", "EyeLeft_y", "EyeLeft_z", true);
             debug.rightEyeTargetRotation = ReadPoseTarget(frame, "EyeRight_x", "EyeRight_y", "EyeRight_z", true);
+            if (headState != null) debug.headTargetRotation = headState.TargetRotation(frame);
+            if (leftState != null) debug.leftEyeTargetRotation = leftState.TargetRotation(frame);
+            if (rightState != null) debug.rightEyeTargetRotation = rightState.TargetRotation(frame);
             return debug;
         }
 
@@ -283,6 +286,12 @@ namespace Hollow.HoUnityTools.FaceTracking
                 sampled = true;
             }
             public void ReturnToNeutral() { desired = Quaternion.identity; }
+            public Quaternion TargetRotation(Quaternion frame)
+            {
+                if (!sampled || Target == null) return Target != null ? Target.rotation : Quaternion.identity;
+                Quaternion parent = Target.parent != null ? Target.parent.rotation : Quaternion.identity;
+                return frame * offset * Quaternion.Inverse(frame) * parent * rest;
+            }
             public bool Apply(Quaternion frame, float blend)
             {
                 if (!sampled || Target == null) return false;
