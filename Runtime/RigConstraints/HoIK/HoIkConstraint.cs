@@ -70,6 +70,12 @@ namespace Hollow.HoUnityTools.RigConstraints
         private bool restoreBindRotation;
         [SerializeField, Tooltip("Use the pole after CCD to keep a knee/elbow plane stable.")]
         private bool usePole = true;
+        [Header("Scene Debug")]
+        [SerializeField] private bool drawGizmos = true;
+        [SerializeField, Min(0.001f)] private float gizmoSize = 0.04f;
+        [SerializeField] private Color chainColor = new Color(0.15f, 0.85f, 1.0f, 0.9f);
+        [SerializeField] private Color targetColor = new Color(1.0f, 0.75f, 0.1f, 0.95f);
+        [SerializeField] private Color poleColor = new Color(1.0f, 0.25f, 0.55f, 0.95f);
 
         private bool hasBindPose;
         private string lastError;
@@ -88,6 +94,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         public float MaxStepAngle { get => maxStepAngle; set => maxStepAngle = Mathf.Clamp(value, 0.0f, 180.0f); }
         public bool RestoreBindRotation { get => restoreBindRotation; set => restoreBindRotation = value; }
         public string LastError => lastError;
+        public bool DrawGizmos { get => drawGizmos; set => drawGizmos = value; }
 
         private void OnEnable()
         {
@@ -281,6 +288,44 @@ namespace Hollow.HoUnityTools.RigConstraints
             lastError = message;
             if (warned.Add(message))
                 Debug.LogWarning("HoIkConstraint (" + name + "): " + message, this);
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (!drawGizmos) return;
+            float size = Mathf.Max(0.001f, gizmoSize);
+            if (effector != null)
+            {
+                Gizmos.color = chainColor;
+                Gizmos.DrawWireSphere(effector.position, size);
+                Gizmos.DrawLine(transform.position, effector.position);
+            }
+            if (links != null)
+            {
+                Gizmos.color = chainColor;
+                Transform previous = effector;
+                for (int i = 0; i < links.Count; i++)
+                {
+                    Transform bone = links[i] != null ? links[i].bone : null;
+                    if (bone == null) continue;
+                    Gizmos.DrawWireSphere(bone.position, size * (i == 0 ? 1.25f : 0.9f));
+                    if (previous != null) Gizmos.DrawLine(previous.position, bone.position);
+                    previous = bone;
+                }
+            }
+            if (target != null)
+            {
+                Gizmos.color = targetColor;
+                Gizmos.DrawWireSphere(target.position, size * 1.5f);
+                if (effector != null) Gizmos.DrawLine(effector.position, target.position);
+            }
+            if (pole != null)
+            {
+                Gizmos.color = poleColor;
+                Gizmos.DrawWireSphere(pole.position, size * 1.35f);
+                Transform knee = links != null && links.Count > 1 && links[1] != null ? links[1].bone : null;
+                if (knee != null) Gizmos.DrawLine(knee.position, pole.position);
+            }
         }
     }
 }
