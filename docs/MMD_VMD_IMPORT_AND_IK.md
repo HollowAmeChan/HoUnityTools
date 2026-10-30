@@ -6,6 +6,8 @@ MMD 动作不是普通 FK 动画。VMD 可能同时包含骨骼帧、形态键�
 
 当前 `HoUnityTools` 的 PMX importer 主要是静态模型导入。动画导入应使用研究目录里的 UMT 方案作为基线：它已经具备 PMX 骨骼/形态键、MMD transform order、CCD IK、VMD bone/morph/IK toggle、VMD camera 两节点 rig 和可选物理烘焙。HoAux 继续处理 Unity 侧的 twist、fan、体积保持等辅助形变。
 
+HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它先把 VMD 作为独立数据资产导入，保留原始模型名和各类轨道；这一步不猜模型映射、不自动改骨骼，也不和静态 `.pmx` importer 抢扩展名。后续播放器/适配器读取该资产并选择目标骨架。
+
 ## HoIkConstraint
 
 `Hollow.HoUnityTools.RigConstraints.HoIkConstraint` 是 Unity 运行时的通用 CCD 约束：
@@ -16,6 +18,8 @@ MMD 动作不是普通 FK 动画。VMD 可能同时包含骨骼帧、形态键�
 - 可选 Pole 目标稳定膝盖/手肘平面。
 - `LateUpdate` 适合 Animator/VMD 曲线之后求解；`Manual` 适合由 MMD transform manager 或自定义播放控制器在明确顺序中调用。
 - `CaptureBindPose` 只记录局部旋转；开启 `restoreBindRotation` 时每次求解前恢复这些旋转。普通 VMD 播放应保持关闭，让动画先写入骨骼。
+
+`.vmd` 资产面板会显示骨骼、morph、镜头、灯光和 show/IK 段数量。实际动作绑定仍需一个目标骨架和名称映射；这让“导入成功”和“动作适配成功”保持可区分。
 
 典型配置：
 
