@@ -14,6 +14,12 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdBindingProfileBuilder` 可以从选中的 FBX/GLTF 角色层级生成初始 Profile：优先精确名称，其次规范化名称，再尝试 Humanoid `HumanBodyBones`。生成结果需要人工检查，尤其是 MMD 的 WIK、toe、眼睛和作者专用 morph。
 
+### VMD morph 依赖审查
+
+`HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：显式 `HoVmdBindingProfile.morphs` 映射、精确名称、去掉标点并转小写后的规范化名称；同名跨多个 Renderer 或失效的 Profile 映射会记为冲突，找不到的名称会记为缺失。结果包含需求总数、三类命中计数以及具体的 `exactMatchNames`、`normalizedMatchNames`、`profileMappedNames`、`missingNames`、`conflictNames`，可以直接作为角色适配的门槛。
+
+在 `HoVmdAnimation` Inspector 中选择目标 FBX/GLTF 角色后点击 **Audit morphs against selected character**；如有角色 Profile，可一并填入 **Optional binding profile**，这样审查会验证 Renderer path 和 BlendShape name 是否仍然有效。结果写到 `Library/HoMmdStages/MorphAudit/`。这一步只读目标角色，不修改 BlendShape、VMD 或 Profile。
+
 编辑器定格 review 会在写入 FK/morph 和 IK 开关后立即调用 Ho IK；播放模式仍由约束的 LateUpdate 执行。这样后台多角度渲染能检查到实际脚底/膝盖结果。
 
 ## HoIkConstraint
