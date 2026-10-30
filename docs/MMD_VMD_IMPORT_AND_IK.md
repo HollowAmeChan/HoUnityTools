@@ -4,7 +4,7 @@
 
 MMD 动作不是普通 FK 动画。VMD 可能同时包含骨骼帧、形态键帧、镜头帧、灯光帧、自阴影帧以及 `show/IK` 开关帧；动作作者还可能只针对某个模型的骨骼布局制作。MMD 运行顺序包含追加/继承、IK、物理和形态键，不能只把 VMD 骨骼曲线直接套到 Unity Transform 上。
 
-当前 `HoUnityTools` 的 PMX importer 主要是静态模型导入。动画导入应使用研究目录里的 UMT 方案作为基线：它已经具备 PMX 骨骼/形态键、MMD transform order、CCD IK、VMD bone/morph/IK toggle、VMD camera 两节点 rig 和可选物理烘焙。HoAux 继续处理 Unity 侧的 twist、fan、体积保持等辅助形变。
+当前 `HoUnityTools` 的 PMX importer 主要服务静态场景。角色 PMX 不作为当前最终运行时目标，因此不要求把角色 PMX 的完整蒙皮、物理和 Humanoid Avatar 流程接进 Ho 管线。动作适配使用 PMX 角色作为元数据参考，真正播放目标可以是已经进入 Unity 的 FBX/GLTF/其他角色骨架。动画导入研究以 UMT 为基线：它具备 PMX 骨骼/形态键、MMD transform order、CCD IK、VMD bone/morph/IK toggle、VMD camera 两节点 rig 和可选物理烘焙。HoAux 继续处理 Unity 侧的 twist、fan、体积保持等辅助形变。
 
 HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它先把 VMD 作为独立数据资产导入，保留原始模型名和各类轨道；这一步不猜模型映射、不自动改骨骼，也不和静态 `.pmx` importer 抢扩展名。后续播放器/适配器读取该资产并选择目标骨架。
 
@@ -47,9 +47,11 @@ Pole：左ひざ辅助目标（可选）
 5. 镜头使用独立 target + camera 两节点 rig，将 VMD distance、target position、rotation、FOV 和 perspective 开关转换到 Unity 相机。
 6. 用主镜头、左右观察镜头和至少一个动作时间点检查脚底、膝盖、脚趾、手腕、脸部 morph 与镜头裁切。
 
-## Sour 式模型
+角色 PMX 的完整蒙皮/物理验证不属于当前交付范围。下一步验证使用 Unity 已有的 FBX/GLTF 角色：VMD 资产解析、显式骨骼映射、morph 映射、IK 开关和相机轨道分别验证，再按动作 README 调整适配参数。
 
-`E:/BaiduSyncdisk/大师/_完整角色/Sour暄/Sour式初音ミクVer.1.02_by_Sour暄_194b7aa2b8fd2f9d6f0221d8767ad951.zip` 是卜逻desu 和 Taitohimea 动作适配的参考源。适配报告必须记录模型实际存在的：足 IK、脚趾 IK、膝盖链、toe 父骨、眼睛骨和 morph 名称。不能把作者名或动作名当作骨骼标准。
+## Sour 式模型（参考数据，不是最终角色导入目标）
+
+`E:/BaiduSyncdisk/大师/_完整角色/Sour暄/Sour式初音ミクVer.1.02_by_Sour暄_194b7aa2b8fd2f9d6f0221d8767ad951.zip` 是卜逻desu 和 Taitohimea 动作适配的参考源。它只用于核对动作作者依赖、足 IK/toe IK 链、WIK 控制器和 morph 命名；真正动作目标可换成 FBX/GLTF 角色，再通过显式映射适配。不能把作者名或动作名当作骨骼标准。
 
 ## 当前动作库证据
 
