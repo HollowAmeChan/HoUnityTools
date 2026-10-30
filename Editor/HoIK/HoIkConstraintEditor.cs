@@ -12,7 +12,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             HoIkConstraint constraint = (HoIkConstraint)target;
             EditorGUILayout.HelpBox(
-                "链条顺序必须是：效应器的父骨骼 → 更靠近根的骨骼。MMD 足 IK 常见顺序是脚踝、膝盖、大腿；toe IK 可以用脚趾父骨或脚掌作为效应器。",
+                "链条顺序：效应器父骨骼 → 根。脚 IK：效应器=脚踝，链=膝盖→大腿；toe IK：效应器=脚趾，链=脚踝。Pole 是链外的弯曲方向参考；不要让 Target 成为被解算骨骼的子物体。",
                 MessageType.Info);
 
             DrawDefaultInspector();
