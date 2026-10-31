@@ -293,9 +293,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             // VTS face pose: Rotation_x = left/right turn, Rotation_y = nod,
             // Rotation_z = roll. Eye x/y already use horizontal/vertical.
-            // VTS horizontal pose values use the opposite sign from the Unity
-            // character's forward frame.
-            float yaw = -x;
+            float yaw = x;
             float pitch = eye ? -y : y;
             float roll = z;
             return Quaternion.AngleAxis(yaw, Vector3.up)
