@@ -2413,7 +2413,6 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (HasPendingBuildState())
                 throw new InvalidOperationException("已有未完成的 FastBuild，请等待恢复流程完成。");
 
-            CleanupStaleTemporaryBuildRoots();
             SynchronizeSourcePrefab();
             if (!IsDependencyPreviewCurrent())
                 RefreshDependencyPreview(true);
@@ -2501,10 +2500,20 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (settings == null)
                 throw new InvalidOperationException("无法加载 ExportSettings：" + exportSettingsPath);
 
+            CleanupStaleTemporaryBuildRoots();
+
+            string modName;
+            string modExportPath;
             string originalModPath;
             int activeProfileIndex;
-            if (!TryReadActiveModAssetPath(settings, out originalModPath, out activeProfileIndex))
+            if (!TryReadActiveExportProfile(
+                    settings,
+                    out modName,
+                    out modExportPath,
+                    out originalModPath,
+                    out activeProfileIndex))
                 throw new InvalidOperationException("ExportSettings 中找不到活动配置的 modAssetPath。");
+            ValidateExportTargetWritable(modName, modExportPath);
 
             string buildId = DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
             string temporaryRoot = TemporaryAssetRoot + "/" + buildId;
@@ -2577,6 +2586,38 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 if (IsSafeTemporaryAssetPath(temporaryRoot))
                     AssetDatabase.DeleteAsset(temporaryRoot);
                 throw;
+            }
+        }
+
+        private static void ValidateExportTargetWritable(string modName, string modExportPath)
+        {
+            if (string.IsNullOrEmpty(modName) || string.IsNullOrEmpty(modExportPath))
+                return;
+
+            string artifactPath = Path.Combine(modExportPath, modName + ".warudo");
+            if (!File.Exists(artifactPath))
+                return;
+
+            try
+            {
+                using (var stream = new FileStream(
+                           artifactPath,
+                           FileMode.Open,
+                           FileAccess.ReadWrite,
+                           FileShare.None))
+                {
+                }
+            }
+            catch (IOException)
+            {
+                throw new InvalidOperationException(
+                    "目标 Mod 文件正在被其他进程占用：\n" + artifactPath +
+                    "\n通常是 Warudo 仍在运行并锁定了这个 .warudo 文件。请完全退出 Warudo 后重新构建。");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw new InvalidOperationException(
+                    "没有权限写入目标 Mod 文件：\n" + artifactPath);
             }
         }
 
