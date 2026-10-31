@@ -39,10 +39,10 @@ public static class HoVtsControllerValidation
                 if (timingReceiver.InputExpired)
                 {
                     Check(Time.frameCount > timingFrame, "automatic timeout ran across real Unity frames");
-                    Check(!timingReceiver.Tracked && timingReceiver.HasFrame, "LateUpdate expires a silent adapter");
-                    Near(timingReceiver.Get("Pose"), 0, "automatic timeout publishes neutral rules");
+                    Check(!timingReceiver.Tracked && !timingReceiver.HasFrame, "LateUpdate clears a silent adapter frame");
+                    Near(timingReceiver.Get("Pose"), 0, "automatic timeout clears processed rules");
                     Near(timingReceiver.GetRaw("Rotation_y"), 30, "automatic timeout retains raw diagnosis");
-                    RotationNear(timingHead.localRotation, Quaternion.identity, "automatic pose consumer returns to neutral after receiver tick");
+                    RotationNear(timingHead.localRotation, Quaternion.identity, "automatic pose consumer stops writing after receiver timeout");
                     UnityEngine.Object.Destroy(timingProbe);
                     timingProbe = null;
                     Debug.Log("HO_VTS_CONTROLLER PASS assertions=" + assertions);

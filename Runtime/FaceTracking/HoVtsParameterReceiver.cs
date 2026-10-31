@@ -240,17 +240,17 @@ namespace Hollow.HoUnityTools.FaceTracking
                 throw new ArgumentOutOfRangeException(nameof(timestamp), "Input and evaluation must use the same monotonic local clock.");
             EnsureTables();
             Replace(rawValues, rawIndices, frame);
-            bool wasTracked = tracked;
             tracked = faceTracked;
             lastFrameTime = timestamp;
             inputExpired = false;
             source = frameSource ?? string.Empty;
 
-            if (!faceTracked && wasTracked)
+            if (!faceTracked)
             {
-                // Keep the raw packet for diagnosis, but do not hold a stale facial expression.
-                evaluator = null;
-                lastEvaluationTime = -1.0;
+                // Keep the raw packet for diagnosis, but invalidate the frame so
+                // consumers stop writing bones instead of fighting the host pose.
+                ClearFrame(clearRaw: false);
+                return;
             }
             EvaluateAt(timestamp);
         }
@@ -269,13 +269,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                 ? inputTimeoutSeconds : 1f;
             if (now - lastFrameTime > timeout)
             {
-                inputExpired = true;
-                if (tracked)
-                {
-                    tracked = false;
-                    evaluator = null;
-                    lastEvaluationTime = -1;
-                }
+                ClearFrame(clearRaw: false, expired: true);
+                return true;
             }
             EvaluateAt(now);
             return true;
@@ -306,7 +301,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>Clear values and mark the receiver untracked without destroying the component.</summary>
-        public void ClearFrame(bool clearRaw = true)
+        public void ClearFrame(bool clearRaw = true, bool expired = false)
         {
             EnsureTables();
             if (clearRaw)
@@ -317,7 +312,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             values.Clear();
             valueIndices.Clear();
             tracked = false;
-            inputExpired = false;
+            inputExpired = expired;
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;
