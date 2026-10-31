@@ -29,8 +29,10 @@ namespace Hollow.HoUnityTools.FaceTracking
 
     public enum HoVtsPoseParameterSource
     {
-        CalibratedRaw,
-        Processed
+        /// <summary>角色 .hoface.json 规则输出。 This is the safe default.</summary>
+        Processed = 0,
+        /// <summary>接收器在规则前的镜像归一化 raw 值。</summary>
+        CalibratedRaw = 1
     }
 
     /// <summary>
@@ -49,7 +51,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private Transform head;
         [SerializeField] private Transform leftEye;
         [SerializeField] private Transform rightEye;
-        [SerializeField] private HoVtsPoseParameterSource parameterSource = HoVtsPoseParameterSource.CalibratedRaw;
+        [SerializeField] private HoVtsPoseParameterSource parameterSource = HoVtsPoseParameterSource.Processed;
         [SerializeField] private bool headEnabled = true;
         [SerializeField] private bool upperBodyEnabled;
         [SerializeField, Range(0f, 1f)] private float upperBodyWeight = .25f;

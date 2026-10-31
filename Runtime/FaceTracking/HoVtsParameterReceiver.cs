@@ -42,6 +42,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
         private bool inputExpired;
+        private bool mirrorInput;
         private double lastFrameTime = -1.0;
         private string source = string.Empty;
 
@@ -91,6 +92,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         public bool Tracked => tracked;
+        public bool InputMirrored => mirrorInput;
         public bool HasFrame => lastFrameTime >= 0;
         public bool InputExpired => inputExpired;
         public double LastFrameTime => lastFrameTime;
@@ -122,10 +124,19 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void HoVtsReceiveFrame(object payload)
         {
             var packet = payload as object[];
-            if (!isActiveAndEnabled || packet == null || packet.Length != 5
+            if (!isActiveAndEnabled || packet == null || (packet.Length != 5 && packet.Length != 6)
                 || !(packet[0] is Dictionary<string, float>) || !(packet[1] is bool)
                 || !(packet[2] is double) || !(packet[3] is string) || !(packet[4] is Action<GameObject>)) return;
-            ApplyRawFrame((Dictionary<string, float>)packet[0], (bool)packet[1], (double)packet[2], (string)packet[3]);
+            mirrorInput = packet.Length == 6 && packet[5] is bool && (bool)packet[5];
+            Dictionary<string, float> frame = (Dictionary<string, float>)packet[0];
+            if (mirrorInput)
+            {
+                var mirrored = new Dictionary<string, float>(frame.Count, StringComparer.Ordinal);
+                foreach (var pair in frame)
+                    mirrored[pair.Key] = MirrorPoseValue(pair.Key, pair.Value);
+                frame = mirrored;
+            }
+            ApplyRawFrame(frame, (bool)packet[1], (double)packet[2], (string)packet[3]);
             ((Action<GameObject>)packet[4])(gameObject);
         }
 
@@ -317,6 +328,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             valueIndices.Clear();
             tracked = false;
             inputExpired = false;
+            mirrorInput = false;
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;
@@ -408,6 +420,23 @@ namespace Hollow.HoUnityTools.FaceTracking
         private static float Safe(float value)
         {
             return float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
+        }
+
+        private static float MirrorPoseValue(string key, float value)
+        {
+            if (key == null) return value;
+            if (key.EndsWith("Rotation_x", StringComparison.Ordinal)
+                || key.EndsWith("Position_x", StringComparison.Ordinal)
+                || string.Equals(key, "EyeLeft_x", StringComparison.Ordinal)
+                || string.Equals(key, "EyeRight_x", StringComparison.Ordinal)
+                || key.EndsWith("/EyeLeft_x", StringComparison.Ordinal)
+                || key.EndsWith("/EyeRight_x", StringComparison.Ordinal))
+            {
+                // The receiver applies the pose-axis mirror after the blueprint
+                // calibration and immediately before the profile JSON evaluator.
+                return -value;
+            }
+            return value;
         }
 
         private void OnDisable() { ClearFrame(); }
