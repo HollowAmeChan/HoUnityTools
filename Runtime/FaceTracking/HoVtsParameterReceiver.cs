@@ -121,22 +121,19 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (isActiveAndEnabled) found?.Invoke(gameObject);
         }
 
+        public void HoVtsSetInputMirror(object payload)
+        {
+            if (payload is bool value) mirrorInput = value;
+        }
+
         public void HoVtsReceiveFrame(object payload)
         {
             var packet = payload as object[];
-            if (!isActiveAndEnabled || packet == null || (packet.Length != 5 && packet.Length != 6)
+            if (!isActiveAndEnabled || packet == null || packet.Length != 5
                 || !(packet[0] is Dictionary<string, float>) || !(packet[1] is bool)
                 || !(packet[2] is double) || !(packet[3] is string) || !(packet[4] is Action<GameObject>)) return;
-            mirrorInput = packet.Length == 6 && packet[5] is bool && (bool)packet[5];
-            Dictionary<string, float> frame = (Dictionary<string, float>)packet[0];
-            if (mirrorInput)
-            {
-                var mirrored = new Dictionary<string, float>(frame.Count, StringComparer.Ordinal);
-                foreach (var pair in frame)
-                    mirrored[pair.Key] = MirrorPoseValue(pair.Key, pair.Value);
-                frame = mirrored;
-            }
-            ApplyRawFrame(frame, (bool)packet[1], (double)packet[2], (string)packet[3]);
+            ApplyRawFrame((Dictionary<string, float>)packet[0], (bool)packet[1],
+                (double)packet[2], (string)packet[3]);
             ((Action<GameObject>)packet[4])(gameObject);
         }
 
@@ -422,22 +419,6 @@ namespace Hollow.HoUnityTools.FaceTracking
             return float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
         }
 
-        private static float MirrorPoseValue(string key, float value)
-        {
-            if (key == null) return value;
-            if (key.EndsWith("Rotation_x", StringComparison.Ordinal)
-                || key.EndsWith("Position_x", StringComparison.Ordinal)
-                || string.Equals(key, "EyeLeft_x", StringComparison.Ordinal)
-                || string.Equals(key, "EyeRight_x", StringComparison.Ordinal)
-                || key.EndsWith("/EyeLeft_x", StringComparison.Ordinal)
-                || key.EndsWith("/EyeRight_x", StringComparison.Ordinal))
-            {
-                // The receiver applies the pose-axis mirror after the blueprint
-                // calibration and immediately before the profile JSON evaluator.
-                return -value;
-            }
-            return value;
-        }
 
         private void OnDisable() { ClearFrame(); }
         private void OnValidate()
