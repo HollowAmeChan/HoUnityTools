@@ -82,9 +82,11 @@ bool Tracked { get; }
 
 Warudo 网络接收节点与参数标定节点保留：接收器只交出原始字典和新鲜度，标定只处理输入范围、倍率和最终输出范围。中间层运算迁入角色组件，不迁入标定节点。
 
-**2026-10-31 镜像轴约定与验证：**当前 WTD 使用的 ARKit 直通 JSON 将 `Rotation_x/y/z` 原名输出，LookAt 将 x 解释为水平转头、y 解释为上下点头、z 解释为歪头。接收器镜像必须反转 `Rotation_x` 与 `Rotation_z`，保留 `Rotation_y`；API 参数 `FaceAngleX/Z` 同样反向，`FaceAngleY` 保持。不能再按 Unity 欧拉分量名直接反转 y。水平位移与眼球水平角反向、左右眼及左右形态键互换的处理保留。处理顺序为：接收器镜像/灵敏度/同眨 → 标定节点的中性姿态校准与范围倍率 → 角色 JSON → 消费组件。镜像开关切换时，中性偏移和采样中的累计值也同步镜像。
+**2026-10-31 基础方向与镜像约定：**LookAt 将输出 `Rotation_x` 解释为水平转头、y 为上下点头、z 为歪头。设备头姿的水平正方向与当前 ARKit 表情的左右定义相反，因此包内 ARKit 模板及 WTD 现用 JSON 在输出层统一为 `Rotation_x = -Rotation_x`、`Rotation_y = Rotation_y`、`Rotation_z = -Rotation_z`。输入行与解析器保留设备原值，眼球及 ARKit 表情输出不作这次方向修正。该固定映射是默认方向归一化，不是用户镜像开关。
 
-Unity 的 `Quaternion.eulerAngles` 返回 pitch/yaw/roll，而上述 VTS 字段为 yaw/pitch/roll；校准回写需要 x 取 Euler.y、y 取 Euler.x，眼球 y 还需恢复其原有反号。Unity 调试与 Warudo 的校准保持相同约定。包内 ARKit 模板与 WTD 的姿态输出同样直通，姿态曲线使用 ±180 恒等范围，而非 ARKit 表情的 0–1。`Tests~/VtsComponents/RunMirror.ps1` 在隔离工程中使用实际解析、接收、校准、JSON、标定数学及 LookAt 源码，通过真实 Unity 骨骼验证正负转头、点头、混合姿态及实时镜像切换；旧的 y 轴镜像会被回归测试拒绝。
+接收器镜像仍在 JSON 以前执行，反转 `Rotation_x/z`、保留 y，左右形态键互换；API 参数 `FaceAngleX/Z` 同样反向，`FaceAngleY` 保持。这样切换镜像会同时翻转脸部和归一化后的头姿，不会用它抵消默认的方向错误。水平位移、眼球水平角及左右眼的原有镜像处理保留。完整顺序为：接收器镜像/灵敏度/同眨 → 标定节点的中性姿态校准与范围倍率 → 角色 JSON 方向归一化与规则 → 消费组件。镜像切换时，中性偏移及正在采样的累计值同步镜像。
+
+Unity 的 `Quaternion.eulerAngles` 返回 pitch/yaw/roll，而上述 VTS 字段为 yaw/pitch/roll；校准回写需要 x 取 Euler.y、y 取 Euler.x，眼球 y 还需恢复其原有反号。Unity 调试与 Warudo 的校准保持相同约定。姿态曲线使用 ±180 恒等范围，而非 ARKit 表情的 0–1；X/Z 的方向修正只写在输出表达式中。`Tests~/VtsComponents/RunMirror.ps1` 在隔离工程中使用实际解析、接收、校准、JSON、标定数学及 LookAt 源码，通过真实 Unity 骨骼验证归一化后的正负转头、点头、歪头、混合姿态及实时镜像切换；旧的 y 轴镜像会被回归测试拒绝。
 
 ~~~text
 HoFaceVTS接收器 → HoFaceVTS参数标定 → 角色输入桥接 → HoVtsParameterReceiver

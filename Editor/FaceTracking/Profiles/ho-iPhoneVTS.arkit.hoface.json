@@ -1923,7 +1923,7 @@
         },
         {
             "parameter": "Rotation_x",
-            "expression": "Rotation_x",
+            "expression": "-Rotation_x",
             "defaultValue": 0,
             "curve": {
                 "keys": [
@@ -1942,7 +1942,7 @@
                 ]
             },
             "modifiers": [],
-            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+            "notes": "头姿方向归一化（2026-10-31）：左右转头固定反向，与当前 ARKit 表情左右约定对齐。输入层保留设备原值；接收器镜像仍在 JSON 之前执行。"
         },
         {
             "parameter": "Rotation_y",
@@ -1969,7 +1969,7 @@
         },
         {
             "parameter": "Rotation_z",
-            "expression": "Rotation_z",
+            "expression": "-Rotation_z",
             "defaultValue": 0,
             "curve": {
                 "keys": [
@@ -1988,7 +1988,7 @@
                 ]
             },
             "modifiers": [],
-            "notes": "ARKit 直通（2026-09-28 用户要求）：输出行 = 线名本身，恒等曲线、无修饰符、无门控。给“直接吃 ARKit 参数”的控制器用。"
+            "notes": "头姿方向归一化（2026-10-31）：左右歪头固定反向，与当前 ARKit 表情左右约定对齐。输入层保留设备原值；接收器镜像仍在 JSON 之前执行。"
         },
         {
             "parameter": "Position_x",

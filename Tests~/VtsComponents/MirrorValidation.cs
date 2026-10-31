@@ -123,7 +123,10 @@ public static class HoVtsMirrorValidation
             receiver.ApplyRawFrame(processedInput, true, 1, "mirror-validation");
             Check(string.IsNullOrEmpty(receiver.RuleError), "profile parses: " + receiver.RuleError);
             foreach (string key in new[] { "Rotation_x", "Rotation_y", "Rotation_z", "EyeLeft_x", "EyeLeft_y", "EyeLeft_z" })
-                Near(receiver.Get(key), processedInput[key], "actual profile keeps signed pose " + key);
+            {
+                float expected = key == "Rotation_x" || key == "Rotation_z" ? -processedInput[key] : processedInput[key];
+                Near(receiver.Get(key), expected, "profile aligns head with ARKit while preserving other pose axes " + key);
+            }
             var bone = new GameObject("Head").transform;
             bone.SetParent(root.transform, false);
             Quaternion rest = Quaternion.Euler(5, 3, 2);
@@ -140,12 +143,14 @@ public static class HoVtsMirrorValidation
             look.LeftEye = eye;
             Check(look.EvaluateNow(0), "LookAt consumes processed pose: " + look.Status);
 
-            // Independent expectation: Unity Euler accepts pitch/yaw/roll.
-            float yaw = mirror ? -head.x : head.x;
-            float roll = mirror ? -head.z : head.z;
+            // The profile aligns the device's horizontal head convention with
+            // ARKit by reversing yaw/roll. The user mirror toggles that whole
+            // convention again before the profile; pitch and eyes keep theirs.
+            float yaw = mirror ? head.x : -head.x;
+            float roll = mirror ? head.z : -head.z;
             Quaternion target = Quaternion.Euler(head.y, yaw, roll);
             if (calibrated)
-                target *= Quaternion.Inverse(Quaternion.Euler(-6, mirror ? -8 : 8, mirror ? -3 : 3));
+                target *= Quaternion.Inverse(Quaternion.Euler(-6, mirror ? 8 : -8, mirror ? 3 : -3));
             RotationNear(bone.rotation, root.transform.rotation * target * rest,
                 profile.name + " head mirror=" + mirror + " calibrated=" + calibrated + " input=" + head);
             float ex = mirror ? -5 : -11;
