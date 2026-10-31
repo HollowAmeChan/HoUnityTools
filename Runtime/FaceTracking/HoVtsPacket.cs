@@ -130,10 +130,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// `Rotation` → semantic VTS pose keys. The raw iOS payload uses the
-        /// Vector3 component order x = pitch/up-down, y = yaw/right-left,
-        /// z = roll, while VTS names those semantic axes Rotation_y,
-        /// Rotation_x and Rotation_z respectively.
+        /// `Rotation` → `Rotation_x/_y/_z`. In the measured VTS coordinate
+        /// definition x is pitch, y is yaw and z is roll.
         /// </summary>
         private static void ReadVector(HoJsonReader reader, Dictionary<string, float> into, string name)
         {
@@ -157,20 +155,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                 }
             }
 
-            if (name == "Rotation")
-            {
-                // Keep downstream code in VTS semantic coordinates:
-                // Rotation_x = turn left/right, Rotation_y = nod up/down.
-                into["Rotation_x"] = y;
-                into["Rotation_y"] = x;
-                into["Rotation_z"] = z;
-            }
-            else
-            {
-                into[name + "_x"] = x;
-                into[name + "_y"] = y;
-                into[name + "_z"] = z;
-            }
+            into[name + "_x"] = x;
+            into[name + "_y"] = y;
+            into[name + "_z"] = z;
         }
 
         /// <summary>`BlendShapes: [{k, v}, …]` → 线名 = 原值。**这一条就是 JsonUtility 丢掉的那 52 个键。**</summary>

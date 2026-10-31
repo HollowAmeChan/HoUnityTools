@@ -274,16 +274,17 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// VTS 这套设备输出里 Rotation_x 是左右转、Rotation_y 是点头、Rotation_z 是歪头；
+        /// VTS 这套设备输出里 Rotation_x 是点头、Rotation_y 是左右转、
+        /// Rotation_z 是歪头；正负号沿用手机实测坐标。
         /// 眼球的 x/y 分量对应水平/垂直，所以只做轴语义转换，不把三轴直接当 Unity Euler 顺序。
         /// 用 AngleAxis 组合避免直接 Quaternion.Euler 的轴顺序把某一方向压掉。
         /// </summary>
         private static Quaternion PoseRotation(float x, float y, float z, bool eye)
         {
-            // VTS face pose: Rotation_x = left/right turn, Rotation_y = nod,
-            // Rotation_z = roll. Eye x/y already use horizontal/vertical.
-            float yaw = x;
-            float pitch = eye ? -y : y;
+            // Head pose: x = pitch/up-down, y = yaw/left-right.
+            // Eye pose keeps the existing Eye*_x/y convention until separately calibrated.
+            float yaw = eye ? x : y;
+            float pitch = eye ? -y : x;
             float roll = z;
             return Quaternion.AngleAxis(yaw, Vector3.up)
                 * Quaternion.AngleAxis(pitch, Vector3.right)
