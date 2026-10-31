@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using Hollow.HoUnityTools.MmdMotion;
 using Hollow.HoUnityTools.Editor.PlaySpeed;
 using Hollow.HoUnityTools.PlaySpeed;
 using UnityEditor;
@@ -61,8 +62,8 @@ public static class PlaySpeedValidation
         Check(HoPlaySpeedSession.IsActive, "Session baseline exists without a panel");
         Near(HoPlaySpeedSession.OriginalSpeed, .25f, "Original desired speed");
         Near(HoPlaySpeedSession.OriginalTimeScale, 1f, "Original actual speed");
-        Check(!HoPlaySpeedControl.HasOverride && !HoPlaySpeedControl.ManuallyUnlocked,
-            "Fresh play has no stale request or manual takeover");
+        Check((!HoPlaySpeedControl.HasOverride || HoPlaySpeedControl.Owner is HoVmdSequencePlayer) &&
+            !HoPlaySpeedControl.ManuallyUnlocked, "Fresh play has no stale request or manual takeover");
 
         var root = new GameObject("Named automation source");
         var source = root.AddComponent<HoPlaySpeedOverride>();
@@ -117,6 +118,8 @@ public static class PlaySpeedValidation
         Check(!HoPlaySpeedControl.HasOverride && !HoPlaySpeedControl.IsPanelLocked, "Release clears source");
         UnityEngine.Object.DestroyImmediate(other);
 
+        CheckSequenceControl();
+
         HoPlaySpeedControl.SetPanelLocked(false);
         Time.timeScale = .125f;
         HoPlaySpeedControl.SetPanelLocked(true);
@@ -136,6 +139,53 @@ public static class PlaySpeedValidation
         // the following frame at the first BGM test's requested speed.
         Time.timeScale = 1f;
         Debug.Log("PASS playback ownership, info, lock, manual takeover, preferences and panel lifecycle");
+    }
+
+    private static void CheckSequenceControl()
+    {
+        var root = new GameObject("MMD playback ownership");
+        root.SetActive(false);
+        var sequence = root.AddComponent<HoVmdSequencePlayer>();
+        root.SetActive(true);
+        Check(HoPlaySpeedControl.Owner == sequence && HoPlaySpeedControl.IsPanelLocked,
+            "MMD sequence automatically owns and locks playback");
+        Near(Time.timeScale, 1f, "MMD starts at explicit normal speed");
+        Check(HoPlaySpeedControl.SourceName.Contains(nameof(HoVmdSequencePlayer)) &&
+            HoPlaySpeedControl.SourceName.Contains(root.name), "MMD source is identifiable");
+
+        HoPlaySpeedControl.SetPanelLocked(false);
+        Time.timeScale = .25f;
+        sequence.Restart();
+        HoPlaySpeedControl.Tick();
+        Near(Time.timeScale, .25f, "MMD restart respects manual takeover");
+        Check(!HoPlaySpeedControl.IsPanelLocked, "MMD restart cannot relock after manual unlock");
+        HoPlaySpeedControl.SetPanelLocked(true);
+        Near(Time.timeScale, 1f, "Relock restores MMD's requested speed");
+
+        sequence.Playing = false;
+        Check(!HoPlaySpeedControl.HasOverride && !HoPlaySpeedControl.IsPanelLocked,
+            "MMD pause releases playback ownership");
+        sequence.Playing = true;
+        Check(HoPlaySpeedControl.Owner == sequence && HoPlaySpeedControl.IsPanelLocked,
+            "MMD resume acquires normal playback");
+
+        var recorder = new GameObject("Offline capture owner");
+        HoPlaySpeedControl.SetOverride(recorder, 1f, lockPanel: true);
+        sequence.ExternallyDriven = true;
+        sequence.enabled = false;
+        Check(HoPlaySpeedControl.Owner == recorder && HoPlaySpeedControl.IsPanelLocked,
+            "External control and MMD disable cannot release the recorder's request");
+        HoPlaySpeedControl.Release(recorder);
+        UnityEngine.Object.DestroyImmediate(recorder);
+
+        sequence.ExternallyDriven = false;
+        Check(!HoPlaySpeedControl.HasOverride, "Disabled sequence cannot reacquire playback");
+        sequence.enabled = true;
+        Check(HoPlaySpeedControl.Owner == sequence, "Re-enabled sequence reacquires playback");
+        UnityEngine.Object.DestroyImmediate(root);
+        Check(!HoPlaySpeedControl.HasOverride && !HoPlaySpeedControl.IsPanelLocked,
+            "Destroying the MMD sequence releases its request");
+        Debug.Log("PASS MMD sequence lock, manual takeover, pause/resume, capture handoff and cleanup");
     }
 
     private static void CheckExitAndRepeat()

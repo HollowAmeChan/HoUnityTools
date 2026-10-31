@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Hollow.HoUnityTools.MmdMotion;
+using Hollow.HoUnityTools.PlaySpeed;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -120,6 +121,7 @@ public sealed class PlaySpeedProbe : MonoBehaviour
                 case 13:
                     Near(sequence.CurrentTime, .01f, "Last sample is clamped to duration");
                     Check(!sequence.Playing, "Non-looping sequence stops at duration");
+                    Check(HoPlaySpeedControl.Owner != sequence, "End of sequence releases playback ownership");
                     passed.Add("End of sequence samples exact final time");
                     sequence.Duration = .02f;
                     typeof(HoVmdSequencePlayer).GetField("loop",

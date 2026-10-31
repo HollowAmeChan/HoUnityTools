@@ -1,4 +1,5 @@
 using UnityEngine;
+using Hollow.HoUnityTools.PlaySpeed;
 
 namespace Hollow.HoUnityTools.MmdMotion
 {
@@ -36,7 +37,18 @@ namespace Hollow.HoUnityTools.MmdMotion
         private const float MaxAudioPitch = 3f;
         private const float AudioSyncTolerance = .1f;
         private float lastSampleTime = -1;
-        public bool ExternallyDriven { get; set; }
+        private bool externallyDriven;
+        public bool ExternallyDriven
+        {
+            get => externallyDriven;
+            set
+            {
+                if (externallyDriven == value) return;
+                externallyDriven = value;
+                if (value) HoPlaySpeedControl.Release(this);
+                else RequestPlaybackSpeed();
+            }
+        }
         public float ExternalTime { get; set; }
 
         public Animator TargetAnimator { get => targetAnimator; set => targetAnimator = value; }
@@ -67,8 +79,14 @@ namespace Hollow.HoUnityTools.MmdMotion
             get => playing;
             set
             {
+                bool wasPlaying = playing;
                 playing = value;
-                if (!value) PauseMusic();
+                if (!value)
+                {
+                    PauseMusic();
+                    HoPlaySpeedControl.Release(this);
+                }
+                else if (!wasPlaying) RequestPlaybackSpeed();
             }
         }
         public float Duration
@@ -91,6 +109,13 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (body != null) body.Playing = false;
             if (face != null) face.Playing = false;
             if (cameraPlayer != null) cameraPlayer.Playing = false;
+            RequestPlaybackSpeed();
+        }
+
+        private void RequestPlaybackSpeed()
+        {
+            if (Application.isPlaying && isActiveAndEnabled && playing && !ExternallyDriven)
+                HoPlaySpeedControl.SetOverride(this, 1f, lockPanel: true);
         }
 
         private void LateUpdate()
@@ -132,7 +157,7 @@ namespace Hollow.HoUnityTools.MmdMotion
                 {
                     nextTime %= end;
                 }
-                else { nextTime = end; playing = false; }
+                else { nextTime = end; Playing = false; }
             }
             Sample(nextTime);
             if (playing) UpdateMusic();
@@ -232,6 +257,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             audioStarted = false;
             audioPaused = false;
             playing = true;
+            RequestPlaybackSpeed();
             if (music != null) music.Stop();
         }
 
@@ -245,6 +271,7 @@ namespace Hollow.HoUnityTools.MmdMotion
 
         private void OnDisable()
         {
+            HoPlaySpeedControl.Release(this);
             ReleaseMusic();
             if (music != null) music.Stop();
         }
