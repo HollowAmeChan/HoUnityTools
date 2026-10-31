@@ -42,7 +42,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
         private bool inputExpired;
-        private bool mirrorInput;
         private double lastFrameTime = -1.0;
         private string source = string.Empty;
 
@@ -92,7 +91,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         public bool Tracked => tracked;
-        public bool InputMirrored => mirrorInput;
         public bool HasFrame => lastFrameTime >= 0;
         public bool InputExpired => inputExpired;
         public double LastFrameTime => lastFrameTime;
@@ -119,11 +117,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void HoVtsFindReceiver(Action<GameObject> found)
         {
             if (isActiveAndEnabled) found?.Invoke(gameObject);
-        }
-
-        public void HoVtsSetInputMirror(object payload)
-        {
-            if (payload is bool value) mirrorInput = value;
         }
 
         public void HoVtsReceiveFrame(object payload)
@@ -325,7 +318,6 @@ namespace Hollow.HoUnityTools.FaceTracking
             valueIndices.Clear();
             tracked = false;
             inputExpired = false;
-            mirrorInput = false;
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;
