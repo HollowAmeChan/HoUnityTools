@@ -3,27 +3,26 @@
 // 干什么：播放模式下直接改 Time.timeScale —— 慢放看清某一帧、快进跳过没意思的一段，不用改代码重进 Play。
 // 形态与图标都仿 dotsquid 的 ChronoHelper（一排速度点 + 非线性滑杆 + 数字格 + 复位 / 自动复位 / 锁定 / 警告闪烁；
 // 图标字节直接从它那儿搬 —— 那份是 **CC0 1.0**，见 HoPlaySpeedIcons.cs 的说明），
-// 按本仓的规矩重写：中文界面、配置存 EditorPrefs、**只有一行**、菜单里只留一个入口。
+// 按本仓的规矩重写：中文界面、配置存 EditorPrefs、速度控件单行、菜单里只留一个入口。
 //
 // 四条硬规矩（别改）：
 //   ① **只在播放模式写 Time.timeScale**。编辑模式写它没有意义，还会把"进播放时那个值"这个复位基准弄脏。
 //   ② **进播放先记下 Time.timeScale 与期望速度，退出播放（或关窗口）时还原**。面板是"借"时间的：
 //      不还就会把工程留在 0.25× 上，下一次 Play 莫名其妙地慢，而这种问题很难联想到这里。
-//   ③ **面板永远跟随外部改动，不跟外部抢时间**（2026-09-30 用户定：不要"锁定"那档）。
-//      外部改了 Time.timeScale，面板就把值收下来显示出去，并按警告设置闪一下 —— 也就是说
-//      **脚本每帧自己设 timeScale 时，面板设的速度会被顶掉**；要压住脚本得用组件，不是编辑器窗口。
+//   ③ 默认跟随外部改动。自动化通过 HoPlaySpeedControl 显式声明倍率与来源，可锁住控件；
+//      用户解锁即本次播放手动接管，重复请求不能抢回控制权。锁定来源在附加的信息行显示。
 //   ④ 速度值一律夹在 [0, 100]。0 是暂停，负数是没定义的，100 以上固定步长追不上。
 //
 // ⚠️ 已知边界（都不是 bug，是"面板只在自己画的时候才管事"）：
-//   · 窗口被折叠 / 切到别的页签时 OnGUI 不跑 ⇒ 锁定在这段时间里没有强制力（外部改了就改成了）。
-//     顺带：警告也只有下次重画时才会发现。要 100% 兜住外部改动得用组件而不是编辑器窗口。
-//   · 播放中重编译脚本会走一次域重载：窗口重建时把"当前速度"当成原速记下来（拿不到更早的值了）。
+//   · 普通外部写入的警告在重画时发现；显式自动化锁定由运行时驱动，不依赖窗口重画。
+//   · 播放基准存 SessionState，域重载后也不把当前调试倍率当作原速。
 //   · 相对时间被改的东西一律跟着变：`Time.time` / 物理 / 动画 / `WaitForSeconds` / 粒子。
 //     **不受影响**：`Time.unscaledTime`、`Time.realtimeSinceStartup`、`WaitForSecondsRealtime`、编辑器自己的刷新。
 //     慢放到 0× 时画面还在画，只是逻辑停住。
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Hollow.HoUnityTools.PlaySpeed;
 using UnityEditor;
 using UnityEngine;
 
@@ -32,8 +31,10 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
     /// <summary>播放速度条。菜单：<c>HoUnityTools/播放速度</c>（唯一的入口；设置从条上的齿轮按钮进）。</summary>
     internal sealed class HoPlaySpeedWindow : EditorWindow, IHasCustomMenu
     {
-        // ── 排版常量（**只有一行**：横着排不下就撑宽，不换行、不叠第二排）──
+        // ── 速度控件保持单行；有自动化 / 手动锁定状态时额外显示一条 info ──
         private const float BarHeight = 24f;
+        private const float InfoHeight = 32f;
+        private const float LockButtonWidth = 48f;
         private const float MinWidth = 320f;
         private const float MaxWidth = 8192f;
         private const float EdgePadding = 4f;
@@ -220,6 +221,8 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                     //（各版本行为不一致，不赌它）。少了这一刀，症状是"设好 0.25× 按 Play 却是 1×"，
                     //  而且在「跟随」模式下会被当成外部改动、把用户设的值悄悄改成 1。
                     EnterPlay();
+                    if (HoPlaySpeedControl.HasOverride)
+                        HoPlaySpeedSettings.Data.speed = Time.timeScale;
                     ApplySpeed(HoPlaySpeedSettings.Data);
                     break;
 
@@ -238,10 +241,14 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
             }
 
             armed = true;
+            HoPlaySpeedSession.BeginPlay();
             HoPlaySpeedSettingsData data = HoPlaySpeedSettings.Data;
-            originalTimeScale = Time.timeScale;
-            originalSpeed = data.speed;
-            ApplySpeed(data);
+            originalTimeScale = HoPlaySpeedSession.OriginalTimeScale;
+            originalSpeed = HoPlaySpeedSession.OriginalSpeed;
+            if (HoPlaySpeedControl.HasOverride)
+                data.speed = Time.timeScale;
+            else
+                ApplySpeed(data);
         }
 
         private void ExitPlay()
@@ -252,6 +259,9 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
             }
 
             armed = false;
+            // The runtime request outlives the window. Only play-session teardown
+            // may restore its baseline; closing a tab must not stop automation.
+            if (EditorApplication.isPlaying && HoPlaySpeedControl.HasOverride) return;
             HoPlaySpeedSettingsData data = HoPlaySpeedSettings.Data;
             RestoreOriginal(data, data.resetOnPlayEnd);
         }
@@ -260,8 +270,8 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
         /// 把时间还回去：<c>Time.timeScale</c> **一定**还原成进播放时那个值；
         /// 期望速度要不要一起还原由调用方定（「复位」按钮 = 要；退出播放 = 看「自动复位」开关）。
         ///
-        /// 复位按钮为什么无条件还原期望值：锁定时面板是权威，期望值不跟着回去的话，
-        /// 按了复位下一帧又被写回慢速 —— 按钮看起来"坏了"。
+        /// 复位按钮必须让期望值与还原后的实际值一致，否则 OnGUI 末尾的 ApplySpeed
+        /// 会立刻把原速覆盖掉。退出播放时则按自动复位设置恢复进播放前的期望值。
         /// </summary>
         private void RestoreOriginal(HoPlaySpeedSettingsData data, bool resetDesiredSpeed)
         {
@@ -272,13 +282,13 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
 
             if (resetDesiredSpeed)
             {
-                data.speed = originalSpeed;
+                data.speed = armed ? originalTimeScale : originalSpeed;
             }
         }
 
         private void ApplySpeed(HoPlaySpeedSettingsData data)
         {
-            if (!armed)
+            if (!armed || HoPlaySpeedControl.IsPanelLocked)
             {
                 return;
             }
@@ -296,8 +306,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
 
         /// <summary>
         /// 谁改的 Time.timeScale？面板自己写完是立刻一致的，所以"不一致"只可能来自外部（脚本、别的工具）。
-        /// **面板永远跟随**：把外部的值收下来当期望值（于是滑杆与数字格跟着动），并按警告设置闪一下。
-        /// 不跟外部抢时间是有意的 —— 每帧对着写会打架（物理步长与动画都会抖），而且"到底谁说了算"就没法回答了。
+        /// 普通外部写入仍跟随；显式自动化的倍率由运行时 HoPlaySpeedControl 维护。
         /// </summary>
         private void SyncWithExternal(HoPlaySpeedSettingsData data)
         {
@@ -353,7 +362,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
 
         /// <summary>
         /// 播放中 20Hz 重画：既是为了让警告闪起来，也是为了定期看一眼外部有没有改速度
-        /// （不开锁定时把它显示出来、开锁定时顶回去）。编辑模式没有任何东西会自己变，就不重画。
+        /// （自动化锁定由运行时驱动，不依赖重画）。编辑模式没有任何东西会自己变，就不重画。
         /// </summary>
         private void OnEditorUpdate()
         {
@@ -409,21 +418,66 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
         /// <summary>一条横排：速度点那排 + 滑杆那块（谁在左看「块顺序」）。**不换行**。</summary>
         private void DrawBar(HoPlaySpeedSettingsData data)
         {
-            ApplyWindowSize(Mathf.Max(MinWidth, buttonsWidth + SliderBlockWidth), BarHeight);
+            bool hasInfo = EditorApplication.isPlaying &&
+                (HoPlaySpeedControl.HasOverride || HoPlaySpeedControl.IsPanelLocked ||
+                 HoPlaySpeedControl.ManuallyUnlocked);
+            ApplyWindowSize(Mathf.Max(MinWidth, buttonsWidth + SliderBlockWidth + LockButtonWidth),
+                BarHeight + (hasInfo ? InfoHeight : 0f));
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (data.blockOrder == HoPlaySpeedBlockOrder.Reversed)
+                using (new EditorGUI.DisabledScope(HoPlaySpeedControl.IsPanelLocked))
                 {
-                    DrawSliderBlock(data);
-                    DrawButtons(data);
+                    if (data.blockOrder == HoPlaySpeedBlockOrder.Reversed)
+                    {
+                        DrawSliderBlock(data);
+                        DrawButtons(data);
+                    }
+                    else
+                    {
+                        DrawButtons(data);
+                        DrawSliderBlock(data);
+                    }
                 }
-                else
+
+                using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying))
                 {
-                    DrawButtons(data);
-                    DrawSliderBlock(data);
+                    bool locked = HoPlaySpeedControl.IsPanelLocked;
+                    bool edited = GUILayout.Toggle(locked,
+                        new GUIContent("锁定", "仅本次播放：关闭后由用户手动接管，自动化脚本不能立即抢回；再次开启则恢复自动化请求。"),
+                        EditorStyles.miniButton, GUILayout.Width(LockButtonWidth), ButtonHeightOption);
+                    if (edited != locked) HoPlaySpeedControl.SetPanelLocked(edited);
                 }
             }
+
+            if (hasInfo) DrawControlInfo();
+        }
+
+        private void DrawControlInfo()
+        {
+            string info = ControlInfo();
+            Rect rect = GUILayoutUtility.GetRect(0f, InfoHeight - 2f, GUILayout.ExpandWidth(true));
+            EditorGUI.HelpBox(rect, info, MessageType.Info);
+            GUI.Label(rect, new GUIContent(string.Empty, info));
+        }
+
+        private static string ControlInfo()
+        {
+            string source = HoPlaySpeedControl.SourceName;
+            string info;
+            if (HoPlaySpeedControl.ManuallyUnlocked)
+                info = "已手动解锁，本次播放由用户接管" +
+                    (string.IsNullOrEmpty(source) ? "。" : "；请求来源：" + source);
+            else if (HoPlaySpeedControl.IsManuallyLocked)
+                info = "用户手动锁定了调速面板" +
+                    (string.IsNullOrEmpty(source) ? "；退出播放后清除。" : "；倍率请求来源：" + source);
+            else if (HoPlaySpeedControl.HasOverride)
+                info = (HoPlaySpeedControl.IsPanelLocked ? "自动化已锁定：" : "自动化请求：") + source +
+                    " · " + HoPlaySpeedControl.RequestedSpeed.ToString("0.###", CultureInfo.InvariantCulture) + "×";
+            else
+                info = "用户手动锁定了调速面板；退出播放后清除。";
+
+            return info;
         }
 
         /// <summary>横排里滑杆那一块要往下挪一点：它比按钮矮，不挪就贴不到一条线上。</summary>
@@ -445,8 +499,9 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 // 滑杆：1× 以下线性、1× 以上压到 [1, 最大速度点]。只认"用户真的拖了"这个事实，
                 // 否则手填的 4× 会在下一帧被"滑杆夹到上限再换算回来"悄悄改成 2×。
                 float linear = SpeedToLinear(data.speed, max);
+                EditorGUI.BeginChangeCheck();
                 float moved = GUILayout.HorizontalSlider(linear, 0f, LinearMax, GUILayout.ExpandWidth(true), GUILayout.MaxWidth(MaxWidth));
-                if (!Mathf.Approximately(moved, linear))
+                if (EditorGUI.EndChangeCheck())
                 {
                     data.speed = LinearToSpeed(moved, max);
                 }
@@ -455,8 +510,9 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
 
                 Rect fieldRect = GUILayoutUtility.GetRect(FieldWidth, FieldWidth, 18f, 18f);
                 float rounded = (float)Math.Round(data.speed, 3);
+                EditorGUI.BeginChangeCheck();
                 float typed = EditorGUI.FloatField(fieldRect, rounded);
-                if (!Mathf.Approximately(typed, data.speed))
+                if (EditorGUI.EndChangeCheck())
                 {
                     data.speed = Mathf.Clamp(typed, 0f, HoPlaySpeedSettings.MaxSpeed);
                 }
@@ -650,7 +706,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
             menu.AddSeparator(string.Empty);
 
             // 没在播放时"复位"没有意义：originalTimeScale 还是字段默认值，点下去只会把期望速度改成 1
-            if (armed)
+            if (armed && !HoPlaySpeedControl.IsPanelLocked)
             {
                 menu.AddItem(MenuReset, false, () => RestoreOriginal(HoPlaySpeedSettings.Data, true));
             }
@@ -659,6 +715,13 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 menu.AddDisabledItem(MenuReset);
             }
 
+            if (HoPlaySpeedControl.IsPanelLocked)
+            {
+                menu.AddDisabledItem(MenuAutoReset, data.resetOnPlayEnd);
+                menu.AddSeparator(string.Empty);
+                menu.AddDisabledItem(MenuResetAll);
+                return;
+            }
             menu.AddItem(MenuAutoReset, data.resetOnPlayEnd, () =>
             {
                 data.resetOnPlayEnd = !data.resetOnPlayEnd;

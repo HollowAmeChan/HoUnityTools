@@ -1,6 +1,6 @@
 // HoPlaySpeedSettingsWindow.cs -- 播放速度面板的设置窗口
 //
-// 这里改的全是**面板自己的样子与规则**：速度点那排按钮、布局、外部改动怎么警告、锁定与自动复位。
+// 这里改的全是**面板自己的样子与规则**：速度点、布局、外部改动警告与自动复位。运行时锁定不存配置。
 // 「现在速度是多少」不在这里改（那是速度条上的活），但这里会显示它。
 //
 // 排版一律走约束面板那套设计令牌与控件（`HoConstraintEditorTheme` / `HoConstraintEditorControls`）：
@@ -24,7 +24,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
         private static readonly string[] WarningOptions = { "从不", "总是" };
 
         private const string ResetAllLabel = "恢复全部默认";
-        private const string ResetAllTooltip = "速度点、布局、警告、锁定、自动复位全部回到出厂值（会先问你一次）。";
+        private const string ResetAllTooltip = "速度点、布局、警告、自动复位全部回到出厂值（会先问你一次）。";
 
         private const string SortLabel = "按值排序";
         private const string SortTooltip = "把速度点从小到大排好。编辑数值时不会自动排 —— 那样行会在你手底下跳。";
@@ -304,7 +304,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Caption(
-                        "面板**只有一行**（24px 高）：排不下就把窗口撑宽，不换行、不叠第二排。",
+                        "速度控件保持一行（24px）；有运行时锁定/接管状态时，下面增加一条 info。",
                         "最小宽度 = 速度点那排 + 滑杆那块。停靠在窄缝里放不下时，先把「按钮宽度」切自适应、或删掉几个速度点。");
                 }
             }
@@ -329,7 +329,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 {
                     HoConstraintEditorControls.Caption(
                         "有人（脚本 / 别的工具）改了 Time.timeScale 时，速度条底色闪一下。",
-                        "面板自己写进去的值不算；只有「对不上」才会闪 —— 面板永远跟随外部，对不上就等于有人在改。");
+                        "面板自己写进去的值不算；普通外部写入会被采纳，显式自动化锁定由运行时接口维护。");
                 }
 
                 int warning = DrawEnumRow("警告", "从不 / 总是", (int)data.warning, WarningOptions);
@@ -431,15 +431,15 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Caption(
-                        "面板**永远跟随**外部改动（2026-09-30 用户定：不要「锁定」那档）：",
-                        "外部改了 Time.timeScale，面板就把值收下来显示出去，并按警告设置闪一下。");
+                        "默认跟随外部倍率；自动化可显式请求倍率并锁定调速面板，信息行显示请求脚本。",
+                        "运行时接口：HoPlaySpeedControl.SetOverride(this, speed, lockPanel: true)。");
                 }
 
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Caption(
-                        "所以脚本每帧自己设 timeScale 时，面板设的速度会被顶掉 —— 要压住脚本得用组件，不是编辑器窗口。",
-                        "面板不跟外部抢时间是有意的：每帧对着写会打架，物理步长与动画都会抖。");
+                        "手动关闭「锁定」即本次播放接管；自动化重复请求不会抢回，重新锁定才恢复。",
+                        "不修改场景组件的锁定布尔字段；下一次播放会重新按组件配置启动。");
                 }
 
                 HoConstraintEditorControls.Separator();
@@ -447,8 +447,8 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                 using (HoConstraintEditorControls.Row(true))
                 {
                     HoConstraintEditorControls.Caption(
-                        "退出播放或关掉速度条窗口时，Time.timeScale 一定会还原成进播放时那个值。",
-                        "这是硬保证：面板是借时间的，不还就会把工程留在慢速上。");
+                        "退出播放时清除锁定并还原实际倍率；开启自动复位时，面板期望倍率也还原。",
+                        "自动化请求在窗口关闭后仍有效；运行时锁定 / 解锁不存进场景、Prefab 或 EditorPrefs。");
                 }
             }
         }
@@ -467,7 +467,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
                     {
                         if (EditorUtility.DisplayDialog(
                                 "恢复播放速度的默认设置",
-                                "速度点、布局、警告、锁定、自动复位都会回到出厂值。确定？",
+                                "速度点、布局、警告、自动复位都会回到出厂值。确定？",
                                 "恢复",
                                 "算了"))
                         {

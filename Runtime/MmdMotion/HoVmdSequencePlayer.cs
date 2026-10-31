@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Hollow.HoUnityTools.MmdMotion
 {
-    /// <summary>One clock for body, expressions, camera and audio. Supports deterministic offline sampling.</summary>
+    /// <summary>Scaled game time drives body, expressions, camera and audio. Supports deterministic offline sampling.</summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(29000)]
     [AddComponentMenu("HoUnityTools/MMD/VMD Sequence Player")]
@@ -28,6 +28,13 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField, InspectorName("正在播放")] private bool playing;
         private float prerollRemaining;
         private bool audioStarted;
+        private bool audioPaused;
+        private AudioSource controlledMusic;
+        private float originalMusicPitch;
+        // AudioSource cannot follow the panel's full 0..100 range. Outside its
+        // positive pitch range, keep sampling the animation and pause the audio.
+        private const float MaxAudioPitch = 3f;
+        private const float AudioSyncTolerance = .1f;
         private float lastSampleTime = -1;
         public bool ExternallyDriven { get; set; }
         public float ExternalTime { get; set; }
@@ -42,7 +49,16 @@ namespace Hollow.HoUnityTools.MmdMotion
         public HoVmdMotionPlayer Face { get => face; set => face = value; }
         public HoVmdHumanoidRetargeter Retargeter { get => retargeter; set => retargeter = value; }
         public HoVmdCameraPlayer CameraPlayer { get => cameraPlayer; set => cameraPlayer = value; }
-        public AudioSource Music { get => music; set => music = value; }
+        public AudioSource Music
+        {
+            get => music;
+            set
+            {
+                if (music == value) return;
+                ReleaseMusic();
+                music = value;
+            }
+        }
         public float FrameRate { get => frameRate; set => frameRate = Mathf.Max(1, value); }
         public float Preroll { get => preroll; set => preroll = Mathf.Max(0, value); }
         public float CurrentTime => currentTime;
@@ -52,9 +68,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             set
             {
                 playing = value;
-                if (music == null) return;
-                if (!value) music.Pause();
-                else if (audioStarted) music.UnPause();
+                if (!value) PauseMusic();
             }
         }
         public float Duration
@@ -73,6 +87,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             playing = playOnEnable;
             prerollRemaining = preroll;
             audioStarted = false;
+            audioPaused = false;
             if (body != null) body.Playing = false;
             if (face != null) face.Playing = false;
             if (cameraPlayer != null) cameraPlayer.Playing = false;
@@ -83,13 +98,18 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (!Application.isPlaying) return;
             if (ExternallyDriven)
             {
+                ReleaseMusic();
                 if (body != null) body.Playing = false;
                 if (face != null) face.Playing = false;
                 if (cameraPlayer != null) cameraPlayer.Playing = false;
                 Sample(ExternalTime);
                 return;
             }
-            if (!playing) return;
+            if (!playing)
+            {
+                PauseMusic();
+                return;
+            }
             // Component OnEnable order is not guaranteed; subordinate players
             // must remain externally clocked even after a later enable.
             if (body != null) body.Playing = false;
@@ -101,24 +121,86 @@ namespace Hollow.HoUnityTools.MmdMotion
                 prerollRemaining -= Time.deltaTime;
                 return;
             }
-            if (!audioStarted)
-            {
-                if (music != null && music.clip != null) { music.time = currentTime; music.Play(); }
-                audioStarted = true;
-            }
-            // In an interactive preview the audio sample cursor is the clock.
-            // Offline capture supplies ExternalTime and muxes the original audio.
-            Sample(music != null && music.isPlaying ? music.time : currentTime);
-            currentTime += Time.deltaTime;
-            if (Duration > 0 && currentTime >= Duration)
+            // AudioSource.time advances independently of Time.timeScale. Using it
+            // as the master clock cancels slow motion (and even timeScale = 0)
+            // whenever a soundtrack is present. Audio follows the scaled clock.
+            float nextTime = currentTime + Time.deltaTime;
+            float end = Duration;
+            if (end > 0 && nextTime >= end)
             {
                 if (loop)
                 {
-                    currentTime %= Duration;
-                    audioStarted = false;
+                    nextTime %= end;
                 }
-                else { currentTime = Duration; playing = false; }
+                else { nextTime = end; playing = false; }
             }
+            Sample(nextTime);
+            if (playing) UpdateMusic();
+            else PauseMusic();
+        }
+
+        private void UpdateMusic()
+        {
+            if (controlledMusic != music)
+            {
+                ReleaseMusic();
+                if (music != null)
+                {
+                    controlledMusic = music;
+                    originalMusicPitch = music.pitch;
+                }
+            }
+            if (music == null || music.clip == null) return;
+
+            float speed = Time.timeScale;
+            if (speed <= 0 || speed > MaxAudioPitch || currentTime >= music.clip.length)
+            {
+                PauseMusic();
+                return;
+            }
+
+            music.pitch = speed;
+            if (!audioStarted)
+            {
+                music.time = currentTime;
+                music.Play();
+                audioStarted = true;
+            }
+            else if (audioPaused)
+            {
+                music.time = currentTime;
+                music.UnPause();
+            }
+            else if (!music.isPlaying)
+            {
+                // A loop can wrap after the AudioSource has reached its end.
+                music.time = currentTime;
+                music.Play();
+            }
+            else if (Mathf.Abs(music.time - currentTime) > AudioSyncTolerance)
+            {
+                music.time = currentTime;
+            }
+            audioPaused = false;
+        }
+
+        private void PauseMusic()
+        {
+            if (controlledMusic == null || !audioStarted || audioPaused) return;
+            controlledMusic.Pause();
+            audioPaused = true;
+        }
+
+        private void ReleaseMusic()
+        {
+            if (controlledMusic != null)
+            {
+                controlledMusic.Stop();
+                controlledMusic.pitch = originalMusicPitch;
+                controlledMusic = null;
+            }
+            audioStarted = false;
+            audioPaused = false;
         }
 
         public void Sample(float seconds)
@@ -148,6 +230,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             currentTime = 0;
             prerollRemaining = preroll;
             audioStarted = false;
+            audioPaused = false;
             playing = true;
             if (music != null) music.Stop();
         }
@@ -160,6 +243,10 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (music != null) music.clip = soundtrack;
         }
 
-        private void OnDisable() { if (music != null) music.Stop(); }
+        private void OnDisable()
+        {
+            ReleaseMusic();
+            if (music != null) music.Stop();
+        }
     }
 }

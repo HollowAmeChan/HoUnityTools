@@ -27,7 +27,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
         AsIs,
     }
 
-    /// <summary>什么时候闪警告（有人在面板背后改了 Time.timeScale）。面板永远跟随外部，所以只有两档。</summary>
+    /// <summary>什么时候闪警告（面板发现外部改了 Time.timeScale）。不控制运行时自动化锁定。</summary>
     public enum HoPlaySpeedWarning
     {
         /// <summary>从不。</summary>
@@ -146,7 +146,15 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
 
             try
             {
-                EditorPrefs.SetString(PrefsKey, JsonUtility.ToJson(data));
+                var saved = data;
+                if (HoPlaySpeedSession.IsActive && data.resetOnPlayEnd)
+                {
+                    // Settings changes and window teardown can save during play.
+                    // Persist layout etc., but never persist a transient play speed.
+                    saved = JsonUtility.FromJson<HoPlaySpeedSettingsData>(JsonUtility.ToJson(data));
+                    saved.speed = HoPlaySpeedSession.OriginalSpeed;
+                }
+                EditorPrefs.SetString(PrefsKey, JsonUtility.ToJson(saved));
             }
             catch (Exception exception)
             {
@@ -177,7 +185,7 @@ namespace Hollow.HoUnityTools.Editor.PlaySpeed
             Sanitize(data);
         }
 
-        /// <summary>恢复全部默认（速度点、布局、警告、锁定全回去）。</summary>
+        /// <summary>恢复全部可存默认配置。运行时锁定 / 手动接管不属于 EditorPrefs 配置。</summary>
         public static void ResetToDefault()
         {
             data = new HoPlaySpeedSettingsData();

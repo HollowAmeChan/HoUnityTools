@@ -12,7 +12,7 @@
 // 【皮肤怎么选】
 // `*_light` = 深色皮肤用的白线图标，`*_dark` = 浅色皮肤用的黑线图标（名字说的是"配哪种皮肤"，
 // 不是"图标什么颜色"）。有一个例外照抄原实现：`AutoResetOn` 只有 light 一版。
-// （原实现里还有 Locked / Unlocked 两张，本面板"永远跟随"、没有锁定档，所以没搬过来。）
+// （原实现里的 Locked / Unlocked 两张未搬；本面板的运行时锁定使用文字布尔按钮。）
 using System;
 using System.Collections.Generic;
 using UnityEditor;
