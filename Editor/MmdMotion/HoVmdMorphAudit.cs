@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Hollow.HoUnityTools.MmdMotion;
 using UnityEditor;
 using UnityEngine;
@@ -18,11 +19,13 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
         public int required;
         public int exactMatches;
         public int normalizedMatches;
+        public int localMatches;
         public int profileMatches;
         public int missing;
         public int conflicts;
         public string[] exactMatchNames = Array.Empty<string>();
         public string[] normalizedMatchNames = Array.Empty<string>();
+        public string[] localMappedNames = Array.Empty<string>();
         public string[] missingNames = Array.Empty<string>();
         public string[] conflictNames = Array.Empty<string>();
         public string[] profileMappedNames = Array.Empty<string>();
@@ -41,7 +44,8 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             public string name;
         }
 
-        public static HoVmdMorphAuditResult Audit(HoVmdAnimation animation, GameObject target, HoVmdBindingProfile profile = null)
+        public static HoVmdMorphAuditResult Audit(HoVmdAnimation animation, GameObject target,
+            HoVmdBindingProfile profile = null, IEnumerable<HoVmdMotionPlayer.MorphBinding> localBindings = null)
         {
             if (animation == null) throw new ArgumentNullException(nameof(animation));
             if (target == null) throw new ArgumentNullException(nameof(target));
@@ -59,11 +63,30 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             var profileConflicts = new List<string>();
             var exactNames = new List<string>();
             var normalizedNames = new List<string>();
-            int exact = 0, normalized = 0, profileCount = 0;
+            var localNames = new List<string>();
+            var localBySource = (localBindings ?? Enumerable.Empty<HoVmdMotionPlayer.MorphBinding>())
+                .Where(x => x != null && !string.IsNullOrEmpty(x.vmdName))
+                .GroupBy(x => x.vmdName, StringComparer.Ordinal)
+                .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+            int exact = 0, normalized = 0, profileCount = 0, localCount = 0;
             string[] required = (animation.morphFrames ?? new List<HoVmdMorphFrame>())
                 .Select(x => x.morphName).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
             foreach (string source in required)
             {
+                if (localBySource.TryGetValue(source, out var mappings))
+                {
+                    var validMappings = mappings.Where(x => x.renderer != null &&
+                        (x.renderer.transform == target.transform || x.renderer.transform.IsChildOf(target.transform)) &&
+                        x.renderer.sharedMesh != null &&
+                        x.blendShapeIndex >= 0 && x.blendShapeIndex < x.renderer.sharedMesh.blendShapeCount).ToArray();
+                    if (validMappings.Length > 0)
+                    {
+                        localCount++;
+                        localNames.Add(source);
+                        if (validMappings.Length != mappings.Length) conflicts.Add(source);
+                        continue;
+                    }
+                }
                 if (profile != null && TryProfile(profile, source, target, out bool profileConflict))
                 {
                     profileCount++; profileMapped.Add(source);
@@ -87,11 +110,13 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
                 required = required.Length,
                 exactMatches = exact,
                 normalizedMatches = normalized,
+                localMatches = localCount,
                 profileMatches = profileCount,
                 missing = missing.Count,
                 conflicts = conflicts.Count,
                 exactMatchNames = exactNames.ToArray(),
                 normalizedMatchNames = normalizedNames.ToArray(),
+                localMappedNames = localNames.ToArray(),
                 missingNames = missing.ToArray(),
                 conflictNames = conflicts.ToArray(),
                 profileMappedNames = profileMapped.ToArray(),
@@ -99,9 +124,10 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             };
         }
 
-        public static string WriteJson(HoVmdAnimation animation, GameObject target, HoVmdBindingProfile profile, string path)
+        public static string WriteJson(HoVmdAnimation animation, GameObject target, HoVmdBindingProfile profile, string path,
+            IEnumerable<HoVmdMotionPlayer.MorphBinding> localBindings = null)
         {
-            HoVmdMorphAuditResult result = Audit(animation, target, profile);
+            HoVmdMorphAuditResult result = Audit(animation, target, profile, localBindings);
             string fullPath = Path.GetFullPath(path);
             string directory = Path.GetDirectoryName(fullPath);
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
@@ -131,7 +157,11 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
         private static string Normalize(string value)
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
-            return new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+            string normalized = value.Normalize(NormalizationForm.FormKC);
+            var builder = new StringBuilder(normalized.Length);
+            foreach (char c in normalized)
+                if (char.IsLetterOrDigit(c)) builder.Append(char.ToLowerInvariant(c));
+            return builder.ToString();
         }
 
         private static Transform ResolvePath(Transform root, string path)

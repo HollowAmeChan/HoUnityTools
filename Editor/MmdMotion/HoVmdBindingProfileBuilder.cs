@@ -84,7 +84,7 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             return profile;
         }
 
-        [MenuItem("HoUnityTools/MMD/角色绑定与表情检查")]
+        [MenuItem("HoUnityTools/MMD/VMD 轨道与表情检查")]
         private static void CreateFromSelection()
         {
             HoVmdBindingWindow.Open();

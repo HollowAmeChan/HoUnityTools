@@ -10,7 +10,7 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
         private HoVmdAnimation animation;
         private readonly HoVmdBindingPanel binding = new HoVmdBindingPanel();
         private Vector2 scroll;
-        public static void Open() => GetWindow<HoVmdBindingWindow>("VMD 角色绑定");
+        public static void Open() => GetWindow<HoVmdBindingWindow>("VMD 轨道检查");
         private void OnGUI()
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);

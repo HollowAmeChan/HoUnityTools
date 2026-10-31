@@ -13,10 +13,12 @@ namespace Hollow.HoUnityTools.MmdMotion
     {
         [Serializable] public sealed class BoneBinding { public string vmdName; public Transform target; }
         [Serializable] public sealed class MorphBinding { public string vmdName; public SkinnedMeshRenderer renderer; public int blendShapeIndex = -1; }
+        [Serializable] public sealed class IkToggleBinding { public string vmdName; public GameObject targetObject; }
 
-        [SerializeField] private HoVmdAnimation animation;
-        [SerializeField] private HoVmdBindingProfile bindingProfile;
+        [SerializeField] private new HoVmdAnimation animation;
+        [SerializeField, HideInInspector] private HoVmdBindingProfile bindingProfile;
         [SerializeField] private Transform modelRoot;
+        [SerializeField] private Transform skeletonRoot;
         [SerializeField, Min(1.0f)] private float frameRate = 30.0f;
         [SerializeField] private bool playOnEnable = true;
         [SerializeField] private bool loop = true;
@@ -25,6 +27,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField] private bool applyIkToggles = true;
         [SerializeField] private List<BoneBinding> boneBindings = new List<BoneBinding>();
         [SerializeField] private List<MorphBinding> morphBindings = new List<MorphBinding>();
+        [SerializeField] private List<IkToggleBinding> ikToggleBindings = new List<IkToggleBinding>();
         [SerializeField, Min(0.0f)] private float currentFrame;
         [SerializeField] private bool playing;
 
@@ -32,7 +35,10 @@ namespace Hollow.HoUnityTools.MmdMotion
         private readonly Dictionary<string, List<HoVmdMorphFrame>> morphTracks = new Dictionary<string, List<HoVmdMorphFrame>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Transform> autoBones = new Dictionary<string, Transform>(StringComparer.Ordinal);
         private readonly Dictionary<string, List<MorphBinding>> autoMorphs = new Dictionary<string, List<MorphBinding>>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Transform> explicitBones = new Dictionary<string, Transform>(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<MorphBinding>> explicitMorphs = new Dictionary<string, List<MorphBinding>>(StringComparer.Ordinal);
         private readonly Dictionary<string, HoIkConstraint> ikControls = new Dictionary<string, HoIkConstraint>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameObject> ikObjects = new Dictionary<string, GameObject>(StringComparer.Ordinal);
         private readonly Dictionary<Transform, Vector3> bindPositions = new Dictionary<Transform, Vector3>();
         private readonly Dictionary<Transform, Quaternion> bindRotations = new Dictionary<Transform, Quaternion>();
         private bool bindingsDirty = true;
@@ -40,11 +46,13 @@ namespace Hollow.HoUnityTools.MmdMotion
         public HoVmdAnimation Animation { get => animation; set { animation = value; bindingsDirty = true; } }
         public HoVmdBindingProfile BindingProfile { get => bindingProfile; set { bindingProfile = value; bindingsDirty = true; } }
         public Transform ModelRoot { get => modelRoot != null ? modelRoot : transform; set { modelRoot = value; bindingsDirty = true; } }
+        public Transform SkeletonRoot { get => skeletonRoot != null ? skeletonRoot : ModelRoot; set { skeletonRoot = value; bindingsDirty = true; } }
         public float FrameRate { get => frameRate; set => frameRate = Mathf.Max(1.0f, value); }
         public float CurrentFrame { get => currentFrame; set => currentFrame = Mathf.Max(0.0f, value); }
         public bool Playing { get => playing; set => playing = value; }
         public IList<BoneBinding> BoneBindings => boneBindings;
         public IList<MorphBinding> MorphBindings => morphBindings;
+        public IList<IkToggleBinding> IkToggleBindings => ikToggleBindings;
 
         private void OnEnable()
         {
@@ -79,42 +87,82 @@ namespace Hollow.HoUnityTools.MmdMotion
         public void RebuildBindings()
         {
             bindingsDirty = false;
-            boneTracks.Clear(); morphTracks.Clear(); autoBones.Clear(); autoMorphs.Clear(); ikControls.Clear();
+            boneTracks.Clear(); morphTracks.Clear(); autoBones.Clear(); autoMorphs.Clear();
+            explicitBones.Clear(); explicitMorphs.Clear(); ikControls.Clear(); ikObjects.Clear();
             bindPositions.Clear(); bindRotations.Clear();
             if (animation == null) return;
             foreach (var frame in animation.boneFrames) Track(boneTracks, frame.boneName, frame);
             foreach (var frame in animation.morphFrames) Track(morphTracks, frame.morphName, frame);
             Transform root = ModelRoot;
             if (root == null) return;
-            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                if (!autoBones.ContainsKey(child.name)) autoBones.Add(child.name, child);
-            foreach (Transform child in autoBones.Values)
-            {
-                if (!bindPositions.ContainsKey(child)) bindPositions.Add(child, child.localPosition);
-                if (!bindRotations.ContainsKey(child)) bindRotations.Add(child, child.localRotation);
-            }
+
             foreach (var binding in boneBindings)
-                if (binding != null && binding.target != null) { bindPositions[binding.target] = binding.target.localPosition; bindRotations[binding.target] = binding.target.localRotation; }
-            if (bindingProfile != null)
-                foreach (var map in bindingProfile.bones)
+                if (binding != null && !string.IsNullOrEmpty(binding.vmdName) && binding.target != null)
                 {
-                    if (map == null || string.IsNullOrEmpty(map.sourceName) || string.IsNullOrEmpty(map.targetPath)) continue;
-                    Transform mapped = map.targetPath == "." ? root : root.Find(map.targetPath);
-                    if (mapped == null) continue;
-                    autoBones[map.sourceName] = mapped;
-                    if (!bindPositions.ContainsKey(mapped)) bindPositions.Add(mapped, mapped.localPosition);
-                    if (!bindRotations.ContainsKey(mapped)) bindRotations.Add(mapped, mapped.localRotation);
+                    if (!explicitBones.ContainsKey(binding.vmdName)) explicitBones.Add(binding.vmdName, binding.target);
+                    CacheBindPose(binding.target);
                 }
+
+            foreach (HoIkConstraint control in root.GetComponentsInChildren<HoIkConstraint>(true))
+                if (control != null) ikControls[control.IkName] = control;
+
+            Transform boneRoot = SkeletonRoot != null ? SkeletonRoot : root;
+            var exactNames = new Dictionary<string, List<Transform>>(StringComparer.Ordinal);
+            var normalizedNames = new Dictionary<string, List<Transform>>(StringComparer.Ordinal);
+            foreach (Transform bone in boneRoot.GetComponentsInChildren<Transform>(true))
+            {
+                AddCandidate(exactNames, bone.name, bone);
+                AddCandidate(normalizedNames, NormalizeBoneName(bone.name), bone);
+            }
+            Animator animator = FindAnimator(boneRoot, root);
+            foreach (string sourceName in UniqueNames(boneTracks))
+            {
+                Transform mapped = FindExplicitBone(sourceName);
+                if (mapped == null && bindingProfile != null && bindingProfile.TryBone(sourceName, out string path))
+                    mapped = path == "." ? root : root.Find(path);
+                if (mapped == null) mapped = FindIkTarget(sourceName);
+                if (mapped == null) mapped = FindHumanoidBone(animator, sourceName);
+                if (mapped == null) mapped = FindNamedBone(exactNames, normalizedNames, sourceName);
+                if (mapped == null) continue;
+                autoBones[sourceName] = mapped;
+                CacheBindPose(mapped);
+            }
+
+            var activeMorphNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string sourceName in morphTracks.Keys)
+                activeMorphNames.Add(NormalizeBoneName(sourceName));
+            var normalizedMorphs = new Dictionary<string, List<MorphBinding>>(StringComparer.Ordinal);
             foreach (SkinnedMeshRenderer renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                 if (renderer.sharedMesh != null) for (int i=0;i<renderer.sharedMesh.blendShapeCount;i++)
                 {
                     string name=renderer.sharedMesh.GetBlendShapeName(i);
-                    if (!autoMorphs.TryGetValue(name,out var list))autoMorphs.Add(name,list=new List<MorphBinding>());
-                    list.Add(new MorphBinding{vmdName=name,renderer=renderer,blendShapeIndex=i});
+                    var candidate = new MorphBinding { vmdName = name, renderer = renderer, blendShapeIndex = i };
+                    if (morphTracks.ContainsKey(name))
+                    {
+                        if (!autoMorphs.TryGetValue(name, out var list))
+                            autoMorphs.Add(name, list = new List<MorphBinding>());
+                        list.Add(candidate);
+                    }
+                    string normalized = NormalizeBoneName(name);
+                    if (activeMorphNames.Contains(normalized))
+                    {
+                        if (!normalizedMorphs.TryGetValue(normalized, out var list))
+                            normalizedMorphs.Add(normalized, list = new List<MorphBinding>());
+                        list.Add(candidate);
+                    }
                 }
             foreach (var binding in morphBindings)
-                if (binding != null && binding.renderer != null && binding.blendShapeIndex < 0 && binding.renderer.sharedMesh != null)
-                    binding.blendShapeIndex=binding.renderer.sharedMesh.GetBlendShapeIndex(binding.vmdName);
+            {
+                if (binding == null || string.IsNullOrEmpty(binding.vmdName) || binding.renderer == null ||
+                    binding.renderer.sharedMesh == null) continue;
+                if (binding.blendShapeIndex < 0)
+                    binding.blendShapeIndex = binding.renderer.sharedMesh.GetBlendShapeIndex(binding.vmdName);
+                if (binding.blendShapeIndex < 0 || binding.blendShapeIndex >= binding.renderer.sharedMesh.blendShapeCount)
+                    continue;
+                if (!explicitMorphs.TryGetValue(binding.vmdName, out var list))
+                    explicitMorphs.Add(binding.vmdName, list = new List<MorphBinding>());
+                list.Add(binding);
+            }
             if (bindingProfile != null)
                 foreach (var map in bindingProfile.morphs)
                 {
@@ -126,8 +174,17 @@ namespace Hollow.HoUnityTools.MmdMotion
                     if (!autoMorphs.TryGetValue(map.sourceName, out var list)) autoMorphs.Add(map.sourceName, list = new List<MorphBinding>());
                     list.Add(new MorphBinding { vmdName = map.sourceName, renderer = renderer, blendShapeIndex = index });
                 }
-            foreach (HoIkConstraint control in root.GetComponentsInChildren<HoIkConstraint>(true))
-                if (control != null) ikControls[control.IkName]=control;
+            foreach (string sourceName in morphTracks.Keys)
+            {
+                if (explicitMorphs.ContainsKey(sourceName) || autoMorphs.ContainsKey(sourceName)) continue;
+                string normalized = NormalizeBoneName(sourceName);
+                if (normalizedMorphs.TryGetValue(normalized, out var candidates) && candidates.Count == 1)
+                    autoMorphs.Add(sourceName, new List<MorphBinding>
+                    {
+                        new MorphBinding { vmdName = sourceName, renderer = candidates[0].renderer,
+                            blendShapeIndex = candidates[0].blendShapeIndex }
+                    });
+            }
             if (bindingProfile != null)
                 foreach (var map in bindingProfile.ik)
                 {
@@ -135,6 +192,13 @@ namespace Hollow.HoUnityTools.MmdMotion
                     var constraint = (map.constraintPath == "." ? root : root.Find(map.constraintPath))?.GetComponent<HoIkConstraint>();
                     if (constraint != null) ikControls[map.sourceName] = constraint;
                 }
+            foreach (var binding in ikToggleBindings)
+            {
+                if (binding == null || string.IsNullOrEmpty(binding.vmdName) || binding.targetObject == null) continue;
+                HoIkConstraint constraint = binding.targetObject.GetComponent<HoIkConstraint>();
+                if (constraint != null) ikControls[binding.vmdName] = constraint;
+                else ikObjects[binding.vmdName] = binding.targetObject;
+            }
         }
 
         public void ApplyAtFrame(float frame)
@@ -155,11 +219,23 @@ namespace Hollow.HoUnityTools.MmdMotion
                 foreach (var pair in morphTracks)
                 {
                     float value=SampleMorph(pair.Value,frame)*100.0f;
-                    if (autoMorphs.TryGetValue(pair.Key,out var list))foreach(var binding in list)binding.renderer.SetBlendShapeWeight(binding.blendShapeIndex,value);
-                    foreach(var binding in morphBindings)if(binding!=null&&binding.vmdName==pair.Key&&binding.renderer!=null&&binding.blendShapeIndex>=0)binding.renderer.SetBlendShapeWeight(binding.blendShapeIndex,value);
+                    if (explicitMorphs.TryGetValue(pair.Key, out var explicitBindings))
+                    {
+                        foreach (var binding in explicitBindings)
+                            binding.renderer.SetBlendShapeWeight(binding.blendShapeIndex, value);
+                    }
+                    else if (autoMorphs.TryGetValue(pair.Key,out var list))
+                        foreach(var binding in list)binding.renderer.SetBlendShapeWeight(binding.blendShapeIndex,value);
                 }
             if (applyIkToggles && animation.showIkFrames.Count>0)
+            {
                 foreach (var control in ikControls)control.Value.SolveEnabled=SampleIk(control.Key,frame);
+                foreach (var item in ikObjects)
+                {
+                    bool active = SampleIk(item.Key, frame);
+                    if (item.Value != null && item.Value.activeSelf != active) item.Value.SetActive(active);
+                }
+            }
             // StandardRequest review runs in editor mode, so there is no
             // LateUpdate pass to solve the newly applied pose. Runtime playback
             // keeps the normal HoIkConstraint LateUpdate order.
@@ -169,22 +245,156 @@ namespace Hollow.HoUnityTools.MmdMotion
 
         private Transform FindBone(string name)
         {
-            foreach(var binding in boneBindings)if(binding!=null&&binding.vmdName==name&&binding.target!=null)return binding.target;
+            if (explicitBones.TryGetValue(name, out var explicitTarget)) return explicitTarget;
             autoBones.TryGetValue(name,out var target);return target;
         }
 
-        private bool SampleIk(string name,float frame)
+        private Transform FindExplicitBone(string sourceName)
         {
-            bool value=true;
-            for(int i=0;i<animation.showIkFrames.Count;i++)if(animation.showIkFrames[i].frame<=frame)foreach(var toggle in animation.showIkFrames[i].toggles)if(toggle.boneName==name)value=toggle.enabled;
-            return value;
+            return explicitBones.TryGetValue(sourceName, out Transform target) ? target : null;
+        }
+
+        private Transform FindIkTarget(string sourceName)
+        {
+            if (ikControls.TryGetValue(sourceName, out var exact) && exact.Target != null)
+                return exact.Target;
+            string normalized = NormalizeBoneName(sourceName);
+            foreach (var pair in ikControls)
+                if (NormalizeBoneName(pair.Key) == normalized && pair.Value != null && pair.Value.Target != null)
+                    return pair.Value.Target;
+            return null;
+        }
+
+        private static Transform FindHumanoidBone(Animator animator, string sourceName)
+        {
+            if (animator == null || !animator.isHuman) return null;
+            HumanBodyBones bone = HumanBodyBone(sourceName);
+            return bone == HumanBodyBones.LastBone ? null : animator.GetBoneTransform(bone);
+        }
+
+        private static Transform FindNamedBone(Dictionary<string, List<Transform>> exactNames,
+            Dictionary<string, List<Transform>> normalizedNames, string sourceName)
+        {
+            if (TryUnique(exactNames, sourceName, out Transform match)) return match;
+            string alias = BoneAlias(sourceName);
+            if (!string.IsNullOrEmpty(alias) && TryUnique(exactNames, alias, out match)) return match;
+            return TryUnique(normalizedNames, NormalizeBoneName(sourceName), out match) ? match : null;
+        }
+
+        private static Animator FindAnimator(Transform skeleton, Transform root)
+        {
+            Animator animator = skeleton.GetComponentInParent<Animator>();
+            if (animator != null && animator.isHuman &&
+                (animator.transform == root || animator.transform.IsChildOf(root))) return animator;
+            foreach (Animator candidate in skeleton.GetComponentsInChildren<Animator>(true))
+                if (candidate != null && candidate.isHuman) return candidate;
+            return null;
+        }
+
+        private void CacheBindPose(Transform target)
+        {
+            if (target == null) return;
+            if (!bindPositions.ContainsKey(target)) bindPositions.Add(target, target.localPosition);
+            if (!bindRotations.ContainsKey(target)) bindRotations.Add(target, target.localRotation);
+        }
+
+        private static IEnumerable<string> UniqueNames<T>(Dictionary<string, List<T>> tracks)
+        {
+            foreach (var pair in tracks) yield return pair.Key;
+        }
+
+        private static void AddCandidate(Dictionary<string, List<Transform>> index, string key, Transform value)
+        {
+            if (!index.TryGetValue(key, out var list)) index.Add(key, list = new List<Transform>());
+            list.Add(value);
+        }
+
+        private static bool TryUnique(Dictionary<string, List<Transform>> index, string key, out Transform value)
+        {
+            if (index.TryGetValue(key, out var list) && list.Count == 1)
+            {
+                value = list[0];
+                return true;
+            }
+            value = null;
+            return false;
+        }
+
+        private static HumanBodyBones HumanBodyBone(string name)
+        {
+            string side = name.StartsWith("左", StringComparison.Ordinal) ? "Left" :
+                name.StartsWith("右", StringComparison.Ordinal) ? "Right" : string.Empty;
+            if (name == "上半身") return HumanBodyBones.Spine;
+            if (name == "上半身2") return HumanBodyBones.Chest;
+            if (name == "下半身" || name == "腰") return HumanBodyBones.Hips;
+            if (name == "首") return HumanBodyBones.Neck;
+            if (name == "頭") return HumanBodyBones.Head;
+            if (name == "左肩" || name == "右肩") return side == "Left" ? HumanBodyBones.LeftShoulder : HumanBodyBones.RightShoulder;
+            if (name == "左腕" || name == "右腕") return side == "Left" ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
+            if (name == "左ひじ" || name == "右ひじ") return side == "Left" ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
+            if (name == "左手首" || name == "右手首") return side == "Left" ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+            if (name == "左足" || name == "右足") return side == "Left" ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg;
+            if (name == "左ひざ" || name == "右ひざ") return side == "Left" ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
+            if (name == "左足首" || name == "右足首") return side == "Left" ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
+            if (name == "左つま先" || name == "右つま先") return side == "Left" ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
+            return HumanBodyBones.LastBone;
+        }
+
+        private static string BoneAlias(string name)
+        {
+            switch (name)
+            {
+                case "下半身": return "hips";
+                case "上半身": return "spine";
+                case "上半身2": return "chest";
+                case "首": return "neck";
+                case "頭": return "head";
+            }
+            string suffix = name.StartsWith("左", StringComparison.Ordinal) ? ".L" :
+                name.StartsWith("右", StringComparison.Ordinal) ? ".R" : null;
+            if (suffix == null) return null;
+            switch (name.Substring(1))
+            {
+                case "肩": return "shoulder" + suffix;
+                case "腕": return "upper_arm" + suffix;
+                case "ひじ": return "lower_arm" + suffix;
+                case "手首": return "hand" + suffix;
+                case "足": return "upper_leg" + suffix;
+                case "ひざ": return "lower_leg" + suffix;
+                case "足首": return "foot" + suffix;
+                case "つま先": return "toes" + suffix;
+                default: return null;
+            }
+        }
+
+        private static string NormalizeBoneName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            string normalized = value.Normalize(System.Text.NormalizationForm.FormKC);
+            var builder = new System.Text.StringBuilder(normalized.Length);
+            foreach (char c in normalized)
+                if (char.IsLetterOrDigit(c)) builder.Append(char.ToLowerInvariant(c));
+            return builder.ToString();
+        }
+
+        private bool SampleIk(string name, float frame)
+        {
+            bool enabled = true;
+            for (int i = 0; i < animation.showIkFrames.Count; i++)
+            {
+                HoVmdShowIkFrame frameData = animation.showIkFrames[i];
+                if (frameData.frame > frame || frameData.toggles == null) continue;
+                foreach (var toggle in frameData.toggles)
+                    if (toggle.boneName == name) enabled = toggle.enabled;
+            }
+            return enabled;
         }
 
         private static Vector3 ToUnityPosition(Vector3 value)=>new Vector3(-value.x,value.y,-value.z)*.08f;
         private static Quaternion ToUnityRotation(Quaternion value)=>new Quaternion(-value.x,value.y,-value.z,value.w).normalized;
 
         private static void Track<T>(Dictionary<string,List<T>> tracks,string name,T frame)
-        { if(!tracks.TryGetValue(name,out var list))tracks.Add(name,list=new List<T>());list.Add(frame); }
+        { if(string.IsNullOrEmpty(name))return;if(!tracks.TryGetValue(name,out var list))tracks.Add(name,list=new List<T>());list.Add(frame); }
 
         private static HoVmdBoneFrame SampleBone(List<HoVmdBoneFrame> track,float frame)
         {
@@ -199,85 +409,4 @@ namespace Hollow.HoUnityTools.MmdMotion
         { float t=x;for(int i=0;i<6;i++){float omt=1-t;float f=3*omt*omt*t*curve.x1+3*omt*t*t*curve.x2+t*t*t-x;float d=3*omt*omt*curve.x1+6*omt*t*(curve.x2-curve.x1)+3*t*t*(1-curve.x2);if(Mathf.Abs(d)<1e-5f)break;t=Mathf.Clamp01(t-f/d);}float omt2=1-t;return 3*omt2*omt2*t*curve.y1+3*omt2*t*t*curve.y2+t*t*t; }
     }
 
-    /// <summary>Applies a VMD camera track through a target plus camera child rig.</summary>
-    [DisallowMultipleComponent]
-    [DefaultExecutionOrder(32060)]
-    [AddComponentMenu("HoUnityTools/MMD/VMD Camera Player")]
-    public sealed class HoVmdCameraPlayer : MonoBehaviour
-    {
-        [SerializeField] public new HoVmdAnimation animation;
-        [SerializeField] public Camera targetCamera;
-        [SerializeField] public Transform cameraTarget;
-        [SerializeField, Min(1.0f)] public float frameRate=30;
-        [SerializeField] public bool playOnEnable=true, loop=true;
-        [SerializeField, Min(0.0f)] public float currentFrame;
-        [SerializeField, Min(0.0001f)] public float mmdToUnityScale=.08f;
-        [SerializeField] public bool snapAdjacentFrames=true;
-        [SerializeField, Min(0.0001f)] public float orthographicSizeMultiplier=1.0f;
-        private bool playing;
-        private readonly List<HoVmdCameraFrame> cameraTrack = new List<HoVmdCameraFrame>();
-        private bool trackDirty=true;
-
-        public HoVmdAnimation Animation { get => animation; set { animation=value; trackDirty=true; } }
-        public Camera TargetCamera { get => targetCamera; set => targetCamera=value; }
-        public Transform CameraTarget { get => cameraTarget; set => cameraTarget=value; }
-        public float CurrentFrame { get => currentFrame; set => currentFrame=Mathf.Max(0, value); }
-        public bool Playing { get => playing; set => playing=value; }
-
-        private void OnEnable(){playing=playOnEnable;trackDirty=true;}
-        private void OnValidate(){frameRate=Mathf.Max(1,frameRate);currentFrame=Mathf.Max(0,currentFrame);mmdToUnityScale=Mathf.Max(.0001f,mmdToUnityScale);orthographicSizeMultiplier=Mathf.Max(.0001f,orthographicSizeMultiplier);trackDirty=true;}
-        private void LateUpdate(){if(!Application.isPlaying||!playing||animation==null||targetCamera==null||cameraTarget==null)return;if(trackDirty)RebuildTrack();if(cameraTrack.Count==0)return;ApplyAtFrame(currentFrame);currentFrame+=Time.deltaTime*frameRate;if(currentFrame>LastFrame){if(loop)currentFrame%=Mathf.Max(1,LastFrame);else{currentFrame=LastFrame;playing=false;}}}
-
-        public uint LastFrame => cameraTrack.Count>0 ? cameraTrack[cameraTrack.Count-1].frame : animation!=null ? animation.LastCameraFrame : 0;
-
-        public void RebuildTrack()
-        {
-            cameraTrack.Clear();
-            if(animation==null||animation.cameraFrames==null){trackDirty=false;return;}
-            cameraTrack.AddRange(animation.cameraFrames);
-            cameraTrack.Sort((a,b)=>a.frame.CompareTo(b.frame));
-            trackDirty=false;
-        }
-
-        public void ApplyAtFrame(float frame)
-        {
-            if(animation==null||targetCamera==null||cameraTarget==null)return;
-            if(trackDirty)RebuildTrack();
-            if(cameraTrack.Count==0)return;
-            HoVmdCameraFrame value=Sample(frame);
-            cameraTarget.position=new Vector3(-value.targetPosition.x,value.targetPosition.y,-value.targetPosition.z)*mmdToUnityScale;
-            Vector3 euler=new Vector3(-value.rotation.x*Mathf.Rad2Deg,value.rotation.y*Mathf.Rad2Deg+180,value.rotation.z*Mathf.Rad2Deg);
-            Quaternion rotation=Quaternion.Euler(euler);
-            cameraTarget.rotation=rotation;
-            targetCamera.transform.rotation=rotation;
-            // MMD's signed distance is meaningful: negative values pull the camera
-            // through the orbit center instead of being clamped to the other side.
-            targetCamera.transform.position=cameraTarget.position-rotation*Vector3.forward*(value.distance*mmdToUnityScale);
-            targetCamera.fieldOfView=Mathf.Clamp(value.viewAngle,1,179);
-            targetCamera.orthographic=value.perspectiveOff;
-            if(value.perspectiveOff)
-                targetCamera.orthographicSize=Mathf.Max(.0001f,Mathf.Abs(value.distance*mmdToUnityScale)*Mathf.Tan(targetCamera.fieldOfView*Mathf.Deg2Rad*.5f)*orthographicSizeMultiplier);
-        }
-
-        private HoVmdCameraFrame Sample(float frame)
-        {
-            if(frame<=cameraTrack[0].frame)return cameraTrack[0];
-            int next=1;while(next<cameraTrack.Count&&cameraTrack[next].frame<frame)next++;
-            HoVmdCameraFrame value=cameraTrack[Mathf.Clamp(next-1,0,cameraTrack.Count-1)];
-            if(next>=cameraTrack.Count)return value;
-            HoVmdCameraFrame b=cameraTrack[next];
-            if(frame>=b.frame)return b;
-            uint gap=b.frame-value.frame;
-            // Adjacent camera keys are commonly authored as hard cuts.
-            if(snapAdjacentFrames&&gap<=1)return value;
-            float u=(frame-value.frame)/Mathf.Max(1,gap);float movement=Bezier(b.interpolation.movement,u);
-            value.targetPosition=Vector3.Lerp(value.targetPosition,b.targetPosition,movement);
-            value.distance=Mathf.Lerp(value.distance,b.distance,Bezier(b.interpolation.distance,u));
-            value.rotation=Vector3.Lerp(value.rotation,b.rotation,Bezier(b.interpolation.rotation,u));
-            value.viewAngle=(uint)Mathf.Round(Mathf.Lerp(value.viewAngle,b.viewAngle,Bezier(b.interpolation.viewAngle,u)));
-            return value;
-        }
-
-        private static float Bezier(HoVmdBezier c,float x){float t=x;for(int i=0;i<6;i++){float o=1-t;float f=3*o*o*t*c.x1+3*o*t*t*c.x2+t*t*t-x;float d=3*o*o*c.x1+6*o*t*(c.x2-c.x1)+3*t*t*(1-c.x2);if(Mathf.Abs(d)<1e-5f)break;t=Mathf.Clamp01(t-f/d);}float o2=1-t;return 3*o2*o2*t*c.y1+3*o2*t*t*c.y2+t*t*t;}
-    }
 }

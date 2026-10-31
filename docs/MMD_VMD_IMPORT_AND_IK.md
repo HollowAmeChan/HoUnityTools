@@ -10,42 +10,42 @@ HoUnityTools 现在也提供 `HoVmdAnimation` 与 `.vmd` ScriptedImporter。它�
 
 `HoVmdMotionPlayer` 提供第一版运行时适配：按骨骼名写入 FK 位置/旋转，按 morph 名称写入 `SkinnedMeshRenderer` blend shape，按 `HoIkConstraint.IkName` 应用 show/IK 开关。`HoVmdCameraPlayer` 使用 target + Camera 两节点读取 VMD 镜头的目标位置、距离、旋转、FOV 和透视开关。复杂 MMD transform order、物理烘焙和模型专用重命名仍应接 UMT solver 或后续 Ho 适配层。
 
-`HoVmdBindingProfile` 是 FBX/GLTF 角色的可保存适配资产：用 target path 映射 VMD 骨骼，用 renderer path + blend shape name 映射 morph，用 constraint path 映射动作级 IK。播放器优先使用 Profile，再用同名自动匹配作为起点。Profile 属于角色资产，不属于动作包。
+`HoVmdMotionPlayer` 会把当前 VMD 实际出现的骨骼、表情与 IK 开关轨道映射保存在播放器组件实例中，不要求每个动作生成外部配置资产。旧的 `HoVmdBindingProfile` 仍可供既有资产读取，但不是常规播放前置条件。
 
-`HoVmdBindingProfileBuilder` 可以从所选 FBX/GLTF 角色生成当前 VMD 所需的初始 Profile：优先精确名称，其次规范化名称、常见骨名别名和 Humanoid `HumanBodyBones`。多骨架角色可指定主骨架；IK 控制轨道使用 `HoIkConstraint.Target`，而不是脚踝骨。生成结果需要人工检查，尤其是 MMD 的中心、Groove、WIK、toe、眼睛和作者专用 morph。中心轨道不会自动合并到 hips。
+指定 VMD、角色根或骨骼搜索根时，播放器会扫描实际有关键帧的轨道；也可点 **扫描 VMD 轨道并匹配角色** 重扫。匹配优先使用对应的 IK Target，然后是 Humanoid Avatar 骨骼，最后匹配搜索根内唯一的精确名或规范化名称。多骨架角色可指定主骨架。生成结果保存在播放器组件中，仍需人工检查 MMD 中心、Groove、WIK、toe、眼睛和作者专用 morph。中心轨道不会自动合并到 hips。
 
-组件统一从 **Add Component → HoUnityTools → MMD** 添加：`VMD Motion Player`、`VMD Camera Player`；Profile 资产和 Profile Builder 也位于 `HoUnityTools/MMD`。MMD 足部约束使用 **Add Component → HoUnityTools → Constraints → CCD IK**，不再暴露独立的 `Ho` 顶层入口。
+组件统一从 **Add Component → HoUnityTools → MMD** 添加：`VMD Motion Player`、`VMD Camera Player`。旧 Profile 资产 API 为已有项目保留，普通动作映射直接储存在播放器组件中。IK 约束使用 **Add Component → HoUnityTools → Constraints → Ho IK Constraint**，与同组的 `Ho Follow Constraint`、`Ho Look At Constraint` 等组件保持命名一致；CCD 是内部求解算法。
 
 ### VMD 摄像机播放约定
 
-VMD 摄像机不是普通 Transform 曲线：每个关键帧保存轨道中心、带符号距离、弧度 Euler 旋转、FOV、透视开关和 24 字节相机专用 Bezier 曲线。`HoVmdCameraPlayer` 因此使用两个节点：`cameraTarget` 表示 MMD 轨道中心，`targetCamera` 表示实际 Unity Camera。播放时先把 MMD 坐标转换到 Unity，再按 `target + R * (0, 0, -distance)` 求相机位置，并同时写入相机旋转和 FOV。
+VMD 摄像机不是普通 Transform 曲线：每个关键帧保存轨道中心、带符号距离、弧度 Euler 旋转、FOV、透视开关和 24 字节相机专用 Bezier 曲线。`VMD Camera Player` 是可独立挂载的组件，添加入口为 **HoUnityTools → MMD → VMD Camera Player**；把它挂在带 `Camera` 的物体上，指定 `.vmd` 动画并在 Play 模式播放即可。目标 Camera 自动取所在物体的 Camera；轨道中心在内部计算，无需另建空物体。可选的 `cameraTarget` 仅用于把轨道中心显示在场景层级中以便调试。
 
 相邻帧通常是作者有意制作的跳切；组件默认不会在帧间距小于等于 1 时滑动插值，可通过 `snapAdjacentFrames` 关闭这个策略。负距离保留其符号，正交关键帧会根据距离和 FOV 推导 `orthographicSize`，避免沿用上一个投影模式的旧缩放。`mmdToUnityScale` 默认 `0.08`，需要与角色/场景导入比例一致。
 
-摄像机 VMD 可以独立于角色 VMD 播放：把 `.vmd` 导入为 `HoVmdAnimation`，将它填到 `VMD Camera Player`，再绑定目标 Camera 和轨道中心。静帧或 CLI review 可直接调用 `ApplyAtFrame`，运行时则由组件的 frame rate、loop 和 play on enable 控制。作者动作若另带 `camera.vmd`，应把镜头作为同一动作实例的独立资产记录，不把它误当作角色骨骼动画。
+摄像机 VMD 可以独立于角色 VMD 播放：把 `.vmd` 导入为 `HoVmdAnimation` 并填入 `镜头 VMD`。组件自动使用所在物体的 Camera，Play 模式下根据帧率、循环和自动播放设置驱动镜头。静帧或 CLI review 可直接调用 `ApplyAtFrame`。作者动作若另带 `camera.vmd`，应把镜头作为同一动作实例的独立资产记录，不把它误当作角色骨骼动画。
 
 ### VMD morph 依赖审查
 
-`HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：显式 `HoVmdBindingProfile.morphs` 映射、精确名称、去掉标点并转小写后的规范化名称；同名跨多个 Renderer 或失效的 Profile 映射会记为冲突，找不到的名称会记为缺失。结果包含需求总数、三类命中计数以及具体的 `exactMatchNames`、`normalizedMatchNames`、`profileMappedNames`、`missingNames`、`conflictNames`，可以直接作为角色适配的门槛。
+`HoVmdMorphAudit` 会把 `HoVmdAnimation.morphFrames` 中出现过的形态键名称，与目标角色层级下所有 `SkinnedMeshRenderer.sharedMesh` 的 BlendShape 对照。每个需求按以下顺序处理：当前播放器的显式表情映射、旧版 `HoVmdBindingProfile.morphs` 映射、精确名称、规范化名称；同名跨多个 Renderer 或失效映射会记为冲突，找不到的名称会记为缺失。结果包括组件映射、精确命中、规范化候选、旧配置命中、缺失与冲突名称，可作为角色适配检查结果。
 
-选中 `.vmd` 后，在上方中文导入面板的 **角色绑定与检查** 中拖入 **目标角色根**，可选填 **主骨架** 与 **角色绑定配置**，点击 **检查所选角色的表情依赖**。检查工具放在 `HoVmdScriptedImporterEditor` 中；下方 Imported Object 是 Unity 的只读导入预览，不承载可操作按钮。也可从已有统一菜单 **HoUnityTools/MMD/角色绑定与表情检查** 打开相同工具。结果写到 `Library/HoMmdStages/MorphAudit/`，同时在面板列出缺失/冲突名称。规范化命中是候选，需要保存到配置并赋给播放器才能生效。检查过程只读角色。
+选中 `.vmd` 后，在上方中文导入面板的 **VMD 轨道与表情检查** 中拖入 **目标角色根**，可选填 **主骨架**，点击 **检查所选角色的表情依赖**。检查工具放在 `HoVmdScriptedImporterEditor` 中；下方 Imported Object 是 Unity 的只读导入预览，不承载可操作按钮。也可从 **HoUnityTools/MMD/VMD 轨道与表情检查** 打开相同工具。结果写到 `Library/HoMmdStages/MorphAudit/`，同时在面板列出缺失/冲突名称。播放器映射在 VMD Motion Player 组件内单独确认，无需生成角色配置资产。检查过程只读角色。
 
-### 播放器与 Bone Bindings
+### 播放器轨道映射
 
-`HoVmdMotionPlayer` 面板现有中文字段、轨道名称选择、生成绑定配置、填充动作骨骼列表和表情检查。具体步骤与 WTD 示例见 [VMD 播放与绑定](guides/VMD_PLAYBACK.md)。
+`HoVmdMotionPlayer` Inspector 只在动画或角色搜索根变化、或手动扫描时遍历角色层级；普通界面重绘使用已保存的扫描结果。待处理的骨骼、表情和 IK 开关映射留在组件实例中。具体步骤与 WTD 示例见 [VMD 播放与绑定](guides/VMD_PLAYBACK.md)。
 
-绑定优先级为：组件的 **骨骼绑定**（目标非空）→ **角色绑定配置** → **精确同名骨骼**。骨骼绑定左边使用 VMD 源名，右边是目标 Transform；无需重命名目标骨骼。配置中的路径相对于 **角色根**，`.` 表示根本身。生成工具只处理名称和目标查找，不会为任意 FBX 自动完成骨轴、比例、中心父级和追加/继承的重定向。
+骨骼映射优先级为：组件内手动映射 → VMD IK 控制器的 Target → Humanoid Avatar → 搜索根内唯一精确名/规范化名称。表情和 IK 开关同样有组件内目标映射。映射只解决轨道到对象的对应，不会自动完成骨轴、比例、中心父级和追加/继承的重定向。
 
 编辑器定格 review 会在写入 FK/morph 和 IK 开关后立即调用 Ho IK；播放模式仍由约束的 LateUpdate 执行。这样后台多角度渲染能检查到实际脚底/膝盖结果。
 
 ## HoIkConstraint
 
-`Hollow.HoUnityTools.RigConstraints.HoIkConstraint` 是 Unity 运行时的通用 CCD 约束：
+`Hollow.HoUnityTools.RigConstraints.HoIkConstraint` 是 Unity 运行时的 IK 约束，结合双节铰链解析解与通用 CCD：
 
 - 一条链支持任意节数；链表从效应器父骨骼向根排列。
 - `weight` 可作为 MMD `show/IK` 开关的适配目标；关闭时保留动画 FK 姿态。
 - 每节支持最大步进角、局部欧拉角限制和局部轴遮罩。
-- 可选 Pole 目标稳定膝盖/手肘平面。
+- 可选 Pole 目标稳定膝盖/手肘平面；至少两节链才有弯曲平面，单节 toe IK 不执行 Pole 修正。
 - `LateUpdate` 适合 Animator/VMD 曲线之后求解；`Manual` 适合由 MMD transform manager 或自定义播放控制器在明确顺序中调用。
 - `CaptureBindPose` 只记录局部旋转；开启 `restoreBindRotation` 时每次求解前恢复这些旋转。普通 VMD 播放应保持关闭，让动画先写入骨骼。
 
@@ -56,13 +56,21 @@ VMD 摄像机不是普通 Transform 曲线：每个关键帧保存轨道中心�
 ```text
 左脚 IK 目标：左足IK
 效应器：左足首（或模型的脚掌骨）
-链：左足首 → 左ひざ → 左足
+链：左ひざ → 左足（膝盖 → 大腿，不重复填写效应器）
 Pole：左ひざ辅助目标（可选）
 
 左脚趾 IK：
 效应器：左つま先
 链：左つま先の親 / 左足首（按模型实际层级）
 ```
+
+Target 必须位于被解算骨骼的层级之外；否则骨骼运动也会移动目标，形成反馈。组件会拒绝这类配置以及重复链节点。控制空物体可以留在角色的约束分组，用 `HoParentConstraint` 在 IK 之前跟随所需参考系，不需要改原始骨架层级。
+
+常见的双节脚链若有单轴膝盖、Pole、自由旋转的根以及正的等比缩放，会使用解析两骨解：保持初始膝盖弯曲分支，并遵守膝盖的显式角度限制，不再让 CCD 在膝盖铰链的正反两个角度解间跳变。不可达的控制点保留原位，脚部沿目标方向停在可达边界，不改变骨长；控制点与脚部之间有连线并不自动代表错误。
+
+Inspector 的 **Pole Max Step Angle**（默认 `15°`）控制后续求解每次向 Pole 扭转的最大角度；首次求解直接对齐 Pole。目标经过 Pole 轴、弯曲平面没有唯一解时，沿用并平行搬运上一帧的腿平面，再逐步转向新方向。历史平面保存在根的父级旋转空间，Animator 每帧重置 FK 时也能连续求解；角色整体转向不会被误认为 Pole 翻转。显式调用 `CaptureBindPose` 会重新记录参考分支并清除这份连续性状态，不应每帧调用。更长链、带根部轴锁/限位或不满足解析条件的配置继续使用 CCD；Pole 修正只绕“根 → 当前效应器”轴旋转根节点，目标误差变大时撤销修正。
+
+回归入口为 `Tests~/MmdMotion/IkPoleValidation.cs` 的 `IkPoleValidation.Run()`。它在独立预览场景中测试双节链、单轴膝盖、正/负膝盖角度限制、半权重、旋转/等比缩放、穿越 Pole 轴、不可达目标与 WTD 主骨架的双腿/脚趾。WTD 另有后向/外向网格及完整伸展范围轨迹，连续输入和每帧重置 FK 分别测试，并检查大腿/膝盖角度突变；不可达部分检查的是与最近可达点的误差，而不是要求脚部突破腿长。结果写入项目 `Library/HoMmdStages/ik-pole-validation.json`，同时检查目标漂移、骨长、有限数值、原场景脏状态和 Prefab 文件不变。运行时需将测试脚本临时放入工程的 Editor 目录；`Tests~` 不参与包的正常编译。
 
 兰若的动作包有 README 要求关闭左/右足 IK 与 toe IK 的情况。这不是导入错误：动作可能已经把最终脚部姿态烘进 FK 帧，继续求解会二次修改。导入器需要把这类要求写成动作实例设置，而不是永久改模型骨骼。
 
