@@ -42,10 +42,23 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 host.transform.localRotation = Quaternion.identity;
                 host.transform.localScale = Vector3.one;
                 var receiver = Undo.AddComponent<HoVtsParameterReceiver>(host);
-                var controller = Undo.AddComponent<HoVtsController>(host);
+                var faceObject = new GameObject("HoVTS面捕");
+                Undo.RegisterCreatedObjectUndo(faceObject, "创建 HoVTS 面捕物体");
+                Undo.SetTransformParent(faceObject.transform, host.transform, "挂到 HoVTS");
+                faceObject.transform.localPosition = Vector3.zero;
+                faceObject.transform.localRotation = Quaternion.identity;
+                faceObject.transform.localScale = Vector3.one;
+                var controller = Undo.AddComponent<HoVtsController>(faceObject);
                 controller.ParameterReceiver = receiver;
                 controller.OutputRoot = root.transform;
-                var pose = Undo.AddComponent<HoVtsLookAt>(host);
+
+                var lookAtObject = new GameObject("HoVTSLookAt");
+                Undo.RegisterCreatedObjectUndo(lookAtObject, "创建 HoVTS LookAt 物体");
+                Undo.SetTransformParent(lookAtObject.transform, host.transform, "挂到 HoVTS");
+                lookAtObject.transform.localPosition = Vector3.zero;
+                lookAtObject.transform.localRotation = Quaternion.identity;
+                lookAtObject.transform.localScale = Vector3.one;
+                var pose = Undo.AddComponent<HoVtsLookAt>(lookAtObject);
                 pose.ParameterReceiver = receiver;
                 pose.ReferenceFrame = root.transform;
                 pose.AutoRun = false;
