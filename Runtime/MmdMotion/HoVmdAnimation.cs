@@ -25,6 +25,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         public string boneName;
         public uint frame;
         public Vector3 position;
+        // Unity coordinate basis, converted exactly once by the VMD parser.
         public Quaternion rotation;
         public HoVmdBoneInterpolation interpolation;
     }

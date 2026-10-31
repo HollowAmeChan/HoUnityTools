@@ -213,7 +213,9 @@ namespace Hollow.HoUnityTools.MmdMotion
                     if (!bindPositions.TryGetValue(target,out var position))position=target.localPosition;
                     if (!bindRotations.TryGetValue(target,out var rotation))rotation=target.localRotation;
                     target.localPosition=position+ToUnityPosition(value.position);
-                    target.localRotation=ToUnityRotation(value.rotation)*rotation;
+                    // HoVmdAnimation.Parse has already rebased the quaternion.
+                    // Rebasing it again undoes the conversion and reverses X/Z motion.
+                    target.localRotation=value.rotation*rotation;
                 }
             if (applyMorphs)
                 foreach (var pair in morphTracks)
@@ -240,7 +242,15 @@ namespace Hollow.HoUnityTools.MmdMotion
             // LateUpdate pass to solve the newly applied pose. Runtime playback
             // keeps the normal HoIkConstraint LateUpdate order.
             if (!Application.isPlaying)
-                foreach (var control in ikControls.Values) control.SolveNow();
+                SolveIkNow();
+        }
+
+        public void SolveIkNow()
+        {
+            // Profile aliases can refer to the same constraint more than once.
+            var solved = new HashSet<HoIkConstraint>();
+            foreach (var control in ikControls.Values)
+                if (control != null && solved.Add(control)) control.SolveNow();
         }
 
         private Transform FindBone(string name)
@@ -320,7 +330,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             return false;
         }
 
-        private static HumanBodyBones HumanBodyBone(string name)
+        public static HumanBodyBones HumanBodyBone(string name)
         {
             string side = name.StartsWith("左", StringComparison.Ordinal) ? "Left" :
                 name.StartsWith("右", StringComparison.Ordinal) ? "Right" : string.Empty;
@@ -329,6 +339,8 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (name == "下半身" || name == "腰") return HumanBodyBones.Hips;
             if (name == "首") return HumanBodyBones.Neck;
             if (name == "頭") return HumanBodyBones.Head;
+            if (name == "左目") return HumanBodyBones.LeftEye;
+            if (name == "右目") return HumanBodyBones.RightEye;
             if (name == "左肩" || name == "右肩") return side == "Left" ? HumanBodyBones.LeftShoulder : HumanBodyBones.RightShoulder;
             if (name == "左腕" || name == "右腕") return side == "Left" ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
             if (name == "左ひじ" || name == "右ひじ") return side == "Left" ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm;
@@ -337,6 +349,22 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (name == "左ひざ" || name == "右ひざ") return side == "Left" ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg;
             if (name == "左足首" || name == "右足首") return side == "Left" ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
             if (name == "左つま先" || name == "右つま先") return side == "Left" ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
+            if (!string.IsNullOrEmpty(side))
+            {
+                string normalized = name.Substring(1).Normalize(System.Text.NormalizationForm.FormKC);
+                string finger = normalized.StartsWith("親指", StringComparison.Ordinal) ? "Thumb" :
+                    normalized.StartsWith("人指", StringComparison.Ordinal) || normalized.StartsWith("人差指", StringComparison.Ordinal) ? "Index" :
+                    normalized.StartsWith("中指", StringComparison.Ordinal) ? "Middle" :
+                    normalized.StartsWith("薬指", StringComparison.Ordinal) ? "Ring" :
+                    normalized.StartsWith("小指", StringComparison.Ordinal) ? "Little" : null;
+                if (finger != null && normalized.Length > 0)
+                {
+                    char digit = normalized[normalized.Length - 1];
+                    string joint = finger == "Thumb" ? (digit == '0' ? "Proximal" : digit == '1' ? "Intermediate" : digit == '2' ? "Distal" : null) :
+                        digit == '1' ? "Proximal" : digit == '2' ? "Intermediate" : digit == '3' ? "Distal" : null;
+                    if (joint != null && Enum.TryParse(side + finger + joint, out HumanBodyBones mapped)) return mapped;
+                }
+            }
             return HumanBodyBones.LastBone;
         }
 
@@ -391,7 +419,6 @@ namespace Hollow.HoUnityTools.MmdMotion
         }
 
         private static Vector3 ToUnityPosition(Vector3 value)=>new Vector3(-value.x,value.y,-value.z)*.08f;
-        private static Quaternion ToUnityRotation(Quaternion value)=>new Quaternion(-value.x,value.y,-value.z,value.w).normalized;
 
         private static void Track<T>(Dictionary<string,List<T>> tracks,string name,T frame)
         { if(string.IsNullOrEmpty(name))return;if(!tracks.TryGetValue(name,out var list))tracks.Add(name,list=new List<T>());list.Add(frame); }
