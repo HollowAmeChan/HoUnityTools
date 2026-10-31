@@ -2413,6 +2413,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (HasPendingBuildState())
                 throw new InvalidOperationException("已有未完成的 FastBuild，请等待恢复流程完成。");
 
+            CleanupStaleTemporaryBuildRoots();
             SynchronizeSourcePrefab();
             if (!IsDependencyPreviewCurrent())
                 RefreshDependencyPreview(true);
@@ -2443,6 +2444,43 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 Debug.LogException(exception);
                 lastBuildStatus = "准备构建失败：\n" + GetRootMessage(exception);
                 EditorUtility.DisplayDialog(WindowTitle, lastBuildStatus, "确定");
+            }
+        }
+
+        /// <summary>
+        /// A failed/domain-reloaded build can leave an owned staging directory behind.
+        /// Unity compiles every script below the root, so starting another build while
+        /// an older staging tree remains produces duplicate type/member errors and makes
+        /// UMod appear to lose every script. No active build state exists here, therefore
+        /// the whole dedicated staging root is safe to clear before a new build.
+        /// </summary>
+        private static void CleanupStaleTemporaryBuildRoots()
+        {
+            string absoluteRoot = AssetPathToAbsolute(TemporaryAssetRoot);
+            if (!Directory.Exists(absoluteRoot))
+                return;
+
+            string[] directories = Directory.GetDirectories(absoluteRoot);
+            int removed = 0;
+            foreach (string absoluteDirectory in directories)
+            {
+                string relative = NormalizeAssetPath(
+                    absoluteDirectory.Substring(ProjectRoot.TrimEnd(Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar).Length)
+                        .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!IsSafeTemporaryAssetPath(relative))
+                    continue;
+
+                AssetDatabase.DeleteAsset(relative);
+                if (Directory.Exists(absoluteDirectory))
+                    Directory.Delete(absoluteDirectory, true);
+                removed++;
+            }
+
+            if (removed > 0)
+            {
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                Debug.Log("[HoUnityTools] 已清理 " + removed + " 个残留 FastBuild 暂存目录。");
             }
         }
 
