@@ -313,6 +313,16 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private static void ClampLocalEuler(Link link)
         {
+            // Unity's XYZ Euler decomposition represents an X hinge beyond
+            // 90 degrees as (180-x, 180, 180). Clamping Y/Z back to zero then
+            // folds a valid deep knee bend onto the wrong side. A pure
+            // single-axis hinge has an unambiguous signed quaternion angle.
+            if (TryGetSingleAxisLimits(link, link.bone.localRotation, out Vector3 axis,
+                out float angle, out float minimum, out float maximum))
+            {
+                link.bone.localRotation = Quaternion.AngleAxis(Mathf.Clamp(angle, minimum, maximum), axis);
+                return;
+            }
             Vector3 euler = NormalizeEuler(link.bone.localEulerAngles);
             euler.x = Mathf.Clamp(euler.x, link.localEulerMin.x, link.localEulerMax.x);
             euler.y = Mathf.Clamp(euler.y, link.localEulerMin.y, link.localEulerMax.y);
@@ -328,7 +338,8 @@ namespace Hollow.HoUnityTools.RigConstraints
         private static float NormalizeAngle(float angle)
         {
             angle %= 360.0f;
-            return angle > 180.0f ? angle - 360.0f : angle;
+            if (angle > 180.0f) return angle - 360.0f;
+            return angle < -180.0f ? angle + 360.0f : angle;
         }
 
         private bool TrySolveTwoBoneHinge()
@@ -478,11 +489,32 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private static bool IsWithinLimits(Link link, Quaternion rotation)
         {
-            Vector3 euler = NormalizeEuler(rotation.eulerAngles);
             const float epsilon = 0.001f;
+            if (TryGetSingleAxisLimits(link, rotation, out _, out float angle, out float minimum, out float maximum))
+                return angle >= minimum - epsilon && angle <= maximum + epsilon;
+            Vector3 euler = NormalizeEuler(rotation.eulerAngles);
             return euler.x >= link.localEulerMin.x - epsilon && euler.x <= link.localEulerMax.x + epsilon &&
                 euler.y >= link.localEulerMin.y - epsilon && euler.y <= link.localEulerMax.y + epsilon &&
                 euler.z >= link.localEulerMin.z - epsilon && euler.z <= link.localEulerMax.z + epsilon;
+        }
+
+        private static bool TryGetSingleAxisLimits(Link link, Quaternion rotation, out Vector3 axis,
+            out float angle, out float minimum, out float maximum)
+        {
+            axis = Vector3.zero; angle = minimum = maximum = 0;
+            // Only the pure hinge domain is special; compound Euler limits
+            // keep their existing interpretation.
+            if (!link.useAxisMask || EnabledAxisCount(link) != 1 ||
+                (!link.useX && (link.localEulerMin.x != 0 || link.localEulerMax.x != 0)) ||
+                (!link.useY && (link.localEulerMin.y != 0 || link.localEulerMax.y != 0)) ||
+                (!link.useZ && (link.localEulerMin.z != 0 || link.localEulerMax.z != 0)))
+                return false;
+            axis = link.useX ? Vector3.right : link.useY ? Vector3.up : Vector3.forward;
+            float component = link.useX ? rotation.x : link.useY ? rotation.y : rotation.z;
+            angle = NormalizeAngle(2.0f * Mathf.Atan2(component, rotation.w) * Mathf.Rad2Deg);
+            minimum = link.useX ? link.localEulerMin.x : link.useY ? link.localEulerMin.y : link.localEulerMin.z;
+            maximum = link.useX ? link.localEulerMax.x : link.useY ? link.localEulerMax.y : link.localEulerMax.z;
+            return true;
         }
 
         private static bool HasUniformScale(Transform bone)

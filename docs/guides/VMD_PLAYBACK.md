@@ -39,3 +39,11 @@
 可以直接拖入场景角色或 prefab；无需同时选中 VMD 和角色，也无需锁 Inspector。检查只读角色，JSON 存在 `Library/HoMmdStages/MorphAudit/`，面板也会列出缺失和冲突。规范化命中由播放器组件内的表情映射使用，无需保存到角色配置文件。
 
 验证入口：`Tests~/MmdMotion/VmdAuthoringValidation.cs`。在安装该包的 Unity 工程内临时复制到 Editor 目录，调用 `VmdAuthoringValidation.Run()`；结果写到 `Library/HoMmdStages/vmd-authoring-validation.json`，临时测试资产自动删除。
+
+## 影片片段的脚部排错
+
+优先用 `HoUnityTools/MMD/VMD Sequence Player` 管理动作、表情、镜头与 BGM 的共同时间，按用户指出的秒数定位源帧。脚尖方向异常时，先检查参考腿自己的 IK 残差和膝角，再看目标角色；仅证明目标脚踝到达“生成的目标点”不能证明参考动作正确。
+
+重定向的脚掌旋转由源 toe IK 结果传递，目标 ankle IK 负责比例修正；当前目标 toe 求解器关闭，避免对不同脚型重复求解。其未驱动的控制点不是位置精度指标。目标腿以当前参考膝盖为 Pole 时，不再额外积累交互式 Pole 平滑；随机跳帧应与顺序采样一致。
+
+`Tests~/MmdMotion/VmdRetargetAudit.cs` 通过临时 preview scene 读取已保存影片，导出密集脚部与乱序跳帧数据。它不执行运行时 HoAux/合骨架/衣物，不替代成片检查。建立测试宿主时先搜索项目中已有的同名验证类，避免重复编译定义。

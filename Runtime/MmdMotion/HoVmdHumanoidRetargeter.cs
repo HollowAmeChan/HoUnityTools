@@ -96,6 +96,10 @@ namespace Hollow.HoUnityTools.MmdMotion
                     foot.sourceIk.Links[0]?.bone != null)
                     foot.targetIk.Pole.position = targetSpace.TransformPoint(targetRestHips +
                         (sourceSpace.InverseTransformPoint(foot.sourceIk.Links[0].bone.position) - sourceRestHips) * translationScale);
+                // FK and the pole both describe this complete reference sample.
+                // Filtering against a previous interactive IK plane makes a
+                // timeline seek depend on which frames were visited beforehand.
+                foot.targetIk.ResetTemporalState();
                 foot.targetIk.SolveNow();
                 foot.targetIk.Effector.rotation = footRotation;
             }
