@@ -126,8 +126,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 Quaternion corrected = PoseRotation(x, y, z, eye)
                     * Quaternion.Inverse(PoseRotation(ox, oy, oz, eye));
                 Vector3 euler = corrected.eulerAngles;
-                values[xKey] = NormalizeAngle(euler.x);
-                values[yKey] = NormalizeAngle(euler.y);
+                // Unity Euler components are pitch/yaw/roll; keep the VTS
+                // yaw/pitch/roll field order after neutral-pose correction.
+                values[xKey] = NormalizeAngle(euler.y);
+                values[yKey] = NormalizeAngle(eye ? -euler.x : euler.x);
                 values[zKey] = NormalizeAngle(euler.z);
             }
         }
