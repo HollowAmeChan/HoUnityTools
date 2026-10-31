@@ -34,9 +34,13 @@ public static class HoVtsMirrorValidation
                     CheckPose(profile, new Vector3(-30, 0, 0), mirror, false);
                     CheckPose(profile, new Vector3(0, 20, 0), mirror, false);
                     CheckPose(profile, new Vector3(0, -20, 0), mirror, false);
+                    CheckPose(profile, new Vector3(0, 0, 15), mirror, false);
+                    CheckPose(profile, new Vector3(0, 0, -15), mirror, false);
                     CheckPose(profile, new Vector3(27, -18, 9), mirror, false);
                     CheckPose(profile, new Vector3(30, 0, 0), mirror, true);
                     CheckPose(profile, new Vector3(0, -20, 0), mirror, true);
+                    CheckPose(profile, new Vector3(0, 0, 15), mirror, true);
+                    CheckPose(profile, new Vector3(0, 0, -15), mirror, true);
                     CheckPose(profile, new Vector3(27, -18, 9), mirror, true);
                 }
                 UnityEngine.Object.DestroyImmediate(profile);
@@ -138,9 +142,10 @@ public static class HoVtsMirrorValidation
 
             // Independent expectation: Unity Euler accepts pitch/yaw/roll.
             float yaw = mirror ? -head.x : head.x;
-            Quaternion target = Quaternion.Euler(head.y, yaw, head.z);
+            float roll = mirror ? -head.z : head.z;
+            Quaternion target = Quaternion.Euler(head.y, yaw, roll);
             if (calibrated)
-                target *= Quaternion.Inverse(Quaternion.Euler(-6, mirror ? -8 : 8, 3));
+                target *= Quaternion.Inverse(Quaternion.Euler(-6, mirror ? -8 : 8, mirror ? -3 : 3));
             RotationNear(bone.rotation, root.transform.rotation * target * rest,
                 profile.name + " head mirror=" + mirror + " calibrated=" + calibrated + " input=" + head);
             float ex = mirror ? -5 : -11;
@@ -196,10 +201,17 @@ public static class HoVtsMirrorValidation
     {
         Reset();
         HoFaceInputState.SetInputOptions(true, true, 2);
-        var frame = Receive(Frame(new Vector3(30, -20, 7)));
+        var raw = Frame(new Vector3(30, -20, 7));
+        raw["FaceAngleX"] = 30;
+        raw["FaceAngleY"] = -20;
+        raw["FaceAngleZ"] = 7;
+        var frame = Receive(raw);
         Near(frame["Rotation_x"], -60, "mirror reverses horizontal turn before sensitivity");
         Near(frame["Rotation_y"], -40, "mirror preserves nod direction");
-        Near(frame["Rotation_z"], 14, "existing roll convention preserved");
+        Near(frame["Rotation_z"], -14, "mirror reverses head roll before sensitivity");
+        Near(frame["FaceAngleX"], -60, "API yaw mirrors like phone yaw");
+        Near(frame["FaceAngleY"], -40, "API pitch keeps vertical direction");
+        Near(frame["FaceAngleZ"], -14, "API roll mirrors like phone roll");
         Near(frame["Position_x"], -4, "horizontal position mirrored");
         Near(frame["Position_y"], 6, "vertical position preserved");
         Near(frame["EyeLeft_x"], -10, "eyes swap and horizontal gaze reverses");
