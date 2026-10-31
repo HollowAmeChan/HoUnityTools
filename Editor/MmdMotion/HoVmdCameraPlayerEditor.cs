@@ -23,6 +23,15 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             EditorGUILayout.PropertyField(P("frameRate"), new GUIContent("帧率"));
             EditorGUILayout.PropertyField(P("currentFrame"), new GUIContent("当前帧"));
             EditorGUILayout.PropertyField(P("mmdToUnityScale"), new GUIContent("场景比例"));
+            EditorGUILayout.PropertyField(P("motionOrigin"), new GUIContent("动作原点", "与角色共用的位移/朝向参考；不跟随骨盆抖动。"));
+            EditorGUILayout.PropertyField(P("centerOffset"), new GUIContent("构图中心偏移"));
+            EditorGUILayout.PropertyField(P("distanceMultiplier"), new GUIContent("镜头距离倍率", "横屏镜头改竖屏时，可适当拉远以保留手部动作。"));
+            EditorGUILayout.PropertyField(P("portraitFraming"), new GUIContent("竖屏景别保护", "保留作者运镜方向、焦距和切换，限制上下景别，避免头饰被裁或人物过小。"));
+            if (P("portraitFraming").boolValue)
+            {
+                EditorGUILayout.PropertyField(P("minimumVerticalSpan"), new GUIContent("最近镜头可见高度"));
+                EditorGUILayout.PropertyField(P("maximumVerticalSpan"), new GUIContent("最远镜头可见高度"));
+            }
             EditorGUILayout.PropertyField(P("snapAdjacentFrames"), new GUIContent("相邻关键帧按跳切处理"));
 
             EditorGUILayout.Space(4);

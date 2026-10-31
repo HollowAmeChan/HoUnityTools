@@ -42,6 +42,8 @@ namespace Hollow.HoUnityTools.MmdMotion
     public struct HoVmdCameraInterpolation
     {
         public HoVmdBezier movement, rotation, distance, viewAngle;
+        public HoVmdBezier positionX, positionY, positionZ;
+        public bool separatePosition;
     }
 
     [Serializable]
@@ -52,7 +54,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         public Vector3 targetPosition;
         public Vector3 rotation;
         public HoVmdCameraInterpolation interpolation;
-        public uint viewAngle;
+        public float viewAngle;
         public bool perspectiveOff;
     }
 
@@ -147,7 +149,9 @@ namespace Hollow.HoUnityTools.MmdMotion
         private static HoVmdCameraFrame ReadCamera(BinaryReader r)
         {
             uint frame=r.ReadUInt32(); float distance=r.ReadSingle(); Vector3 target=ReadVector(r); Vector3 rotation=ReadVector(r); byte[] raw=r.ReadBytes(24);
-            return new HoVmdCameraFrame{frame=frame,distance=distance,targetPosition=target,rotation=rotation,interpolation=new HoVmdCameraInterpolation{movement=CameraBezier(raw,0),rotation=CameraBezier(raw,12),distance=CameraBezier(raw,16),viewAngle=CameraBezier(raw,20)},viewAngle=r.ReadUInt32(),perspectiveOff=r.ReadByte()!=0};
+            return new HoVmdCameraFrame{frame=frame,distance=distance,targetPosition=target,rotation=rotation,interpolation=new HoVmdCameraInterpolation{
+                movement=CameraBezier(raw,0), positionX=CameraBezier(raw,0), positionY=CameraBezier(raw,4), positionZ=CameraBezier(raw,8),
+                separatePosition=true, rotation=CameraBezier(raw,12),distance=CameraBezier(raw,16),viewAngle=CameraBezier(raw,20)},viewAngle=r.ReadUInt32(),perspectiveOff=r.ReadByte()!=0};
         }
 
         private static HoVmdShowIkFrame ReadShowIk(BinaryReader r)
@@ -158,7 +162,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         }
 
         private static HoVmdBezier BoneBezier(byte[] raw,int channel)
-        { int offset=channel<2?channel:channel+15; return Bezier(raw,offset,offset+4,offset+8,offset+12); }
+        { return Bezier(raw,channel,channel+4,channel+8,channel+12); }
         private static HoVmdBezier CameraBezier(byte[] raw,int offset)
         { if(offset==0){return Bezier(raw,0,2,1,3);} return Bezier(raw,offset,offset+2,offset+1,offset+3); }
         private static HoVmdBezier Bezier(byte[] raw,int x1,int y1,int x2,int y2)=>new HoVmdBezier(raw[x1]/127.0f,raw[y1]/127.0f,raw[x2]/127.0f,raw[y2]/127.0f);

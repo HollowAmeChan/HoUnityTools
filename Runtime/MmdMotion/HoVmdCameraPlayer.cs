@@ -20,6 +20,12 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField, Min(0.0001f)] public float mmdToUnityScale = 0.08f;
         [SerializeField] public bool snapAdjacentFrames = true;
         [SerializeField, Min(0.0001f)] public float orthographicSizeMultiplier = 1.0f;
+        [SerializeField] public Transform motionOrigin;
+        [SerializeField] public Vector3 centerOffset;
+        [SerializeField, Min(.01f)] public float distanceMultiplier = 1;
+        [SerializeField] public bool portraitFraming;
+        [SerializeField, Min(.1f)] public float minimumVerticalSpan = .95f;
+        [SerializeField, Min(.1f)] public float maximumVerticalSpan = 2.05f;
 
         private bool playing;
         private readonly List<HoVmdCameraFrame> cameraTrack = new List<HoVmdCameraFrame>();
@@ -92,9 +98,24 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (cameraTrack.Count == 0) return;
 
             HoVmdCameraFrame value = Sample(frame);
-            Vector3 center = new Vector3(-value.targetPosition.x, value.targetPosition.y, -value.targetPosition.z) * mmdToUnityScale;
-            Vector3 euler = new Vector3(-value.rotation.x * Mathf.Rad2Deg, value.rotation.y * Mathf.Rad2Deg + 180.0f, value.rotation.z * Mathf.Rad2Deg);
+            Vector3 center = new Vector3(-value.targetPosition.x, value.targetPosition.y, -value.targetPosition.z) * mmdToUnityScale + centerOffset;
+            float distance = value.distance * mmdToUnityScale * distanceMultiplier;
+            if (portraitFraming)
+            {
+                float tangent = Mathf.Tan(Mathf.Clamp(value.viewAngle, 1, 179) * Mathf.Deg2Rad * .5f);
+                float span = Mathf.Clamp(2 * Mathf.Abs(distance) * tangent, minimumVerticalSpan,
+                    Mathf.Max(minimumVerticalSpan, maximumVerticalSpan));
+                distance = Mathf.Sign(distance) * span / (2 * tangent);
+                if (span >= 1.6f) center.y = Mathf.Min(center.y, span * .5f + .01f);
+            }
+            Vector3 euler = new Vector3(-value.rotation.x * Mathf.Rad2Deg, 180.0f - value.rotation.y * Mathf.Rad2Deg, -value.rotation.z * Mathf.Rad2Deg);
             Quaternion rotation = Quaternion.Euler(euler);
+            if (motionOrigin != null)
+            {
+                center = motionOrigin.TransformPoint(center);
+                rotation = motionOrigin.rotation * rotation;
+                distance *= Mathf.Abs(motionOrigin.lossyScale.y);
+            }
             if (cameraTarget != null)
             {
                 cameraTarget.position = center;
@@ -103,13 +124,14 @@ namespace Hollow.HoUnityTools.MmdMotion
 
             Camera camera = TargetCamera;
             camera.transform.rotation = rotation;
-            // MMD's signed distance is meaningful: negative values pull the camera through the orbit center.
-            camera.transform.position = center - rotation * Vector3.forward * (value.distance * mmdToUnityScale);
+            // A normal negative VMD distance places the camera behind its forward
+            // direction so it looks towards the orbit center, not away from it.
+            camera.transform.position = center + rotation * Vector3.forward * distance;
             camera.fieldOfView = Mathf.Clamp(value.viewAngle, 1.0f, 179.0f);
             camera.orthographic = value.perspectiveOff;
             if (value.perspectiveOff)
                 camera.orthographicSize = Mathf.Max(0.0001f,
-                    Mathf.Abs(value.distance * mmdToUnityScale) * Mathf.Tan(camera.fieldOfView * Mathf.Deg2Rad * 0.5f) * orthographicSizeMultiplier);
+                    Mathf.Abs(distance) * Mathf.Tan(camera.fieldOfView * Mathf.Deg2Rad * 0.5f) * orthographicSizeMultiplier);
         }
 
         private HoVmdCameraFrame Sample(float frame)
@@ -125,12 +147,21 @@ namespace Hollow.HoUnityTools.MmdMotion
             // Adjacent camera keys are commonly authored as hard cuts.
             if (snapAdjacentFrames && gap <= 1) return value;
             float u = (frame - value.frame) / Mathf.Max(1, gap);
-            value.targetPosition = Vector3.Lerp(value.targetPosition, b.targetPosition, Bezier(b.interpolation.movement, u));
+            value.targetPosition = b.interpolation.separatePosition
+                ? new Vector3(Mathf.Lerp(value.targetPosition.x, b.targetPosition.x, Bezier(b.interpolation.positionX, u)),
+                    Mathf.Lerp(value.targetPosition.y, b.targetPosition.y, Bezier(b.interpolation.positionY, u)),
+                    Mathf.Lerp(value.targetPosition.z, b.targetPosition.z, Bezier(b.interpolation.positionZ, u)))
+                : Vector3.Lerp(value.targetPosition, b.targetPosition, Bezier(b.interpolation.movement, u));
             value.distance = Mathf.Lerp(value.distance, b.distance, Bezier(b.interpolation.distance, u));
-            value.rotation = Vector3.Lerp(value.rotation, b.rotation, Bezier(b.interpolation.rotation, u));
-            value.viewAngle = (uint)Mathf.Round(Mathf.Lerp(value.viewAngle, b.viewAngle, Bezier(b.interpolation.viewAngle, u)));
+            float rotationTime = Bezier(b.interpolation.rotation, u);
+            value.rotation = new Vector3(LerpRadians(value.rotation.x, b.rotation.x, rotationTime),
+                LerpRadians(value.rotation.y, b.rotation.y, rotationTime), LerpRadians(value.rotation.z, b.rotation.z, rotationTime));
+            value.viewAngle = Mathf.Lerp(value.viewAngle, b.viewAngle, Bezier(b.interpolation.viewAngle, u));
             return value;
         }
+
+        private static float LerpRadians(float a, float b, float t) =>
+            (a * Mathf.Rad2Deg + Mathf.DeltaAngle(a * Mathf.Rad2Deg, b * Mathf.Rad2Deg) * t) * Mathf.Deg2Rad;
 
         private static float Bezier(HoVmdBezier curve, float x)
         {

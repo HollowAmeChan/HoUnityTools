@@ -2382,6 +2382,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
         }
 
+        internal static int ApplyHoAuxFromAutomation(TextAsset config, GameObject skeleton, Transform host)
+        {
+            return ApplyConstraints(config, skeleton, ConstraintMode.HoAux, host);
+        }
+
         private static int ApplyConstraints(
             TextAsset configAsset,
             GameObject rig,

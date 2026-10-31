@@ -6,7 +6,7 @@ using Hollow.HoUnityTools.MmdMotion;
 
 namespace Hollow.HoUnityTools.Editor.MmdMotion
 {
-    [ScriptedImporter(1, "vmd")]
+    [ScriptedImporter(2, "vmd")]
     public sealed class HoVmdScriptedImporter : ScriptedImporter
     {
         public override void OnImportAsset(AssetImportContext context)

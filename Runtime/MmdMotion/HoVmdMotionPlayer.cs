@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Hollow.HoUnityTools.RigConstraints;
 
@@ -41,6 +42,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         private readonly Dictionary<string, GameObject> ikObjects = new Dictionary<string, GameObject>(StringComparer.Ordinal);
         private readonly Dictionary<Transform, Vector3> bindPositions = new Dictionary<Transform, Vector3>();
         private readonly Dictionary<Transform, Quaternion> bindRotations = new Dictionary<Transform, Quaternion>();
+        private readonly List<HoVmdShowIkFrame> showIkTrack = new List<HoVmdShowIkFrame>();
         private bool bindingsDirty = true;
         private HoPmxPoseRig pmxPoseRig;
 
@@ -90,10 +92,16 @@ namespace Hollow.HoUnityTools.MmdMotion
             bindingsDirty = false;
             boneTracks.Clear(); morphTracks.Clear(); autoBones.Clear(); autoMorphs.Clear();
             explicitBones.Clear(); explicitMorphs.Clear(); ikControls.Clear(); ikObjects.Clear();
-            bindPositions.Clear(); bindRotations.Clear();
+            // A mapping/clip refresh is not a rest-pose capture. Rebuilding after
+            // playback has begun must retain the original local bind transforms;
+            // otherwise the current VMD rotation is multiplied in a second time.
+            showIkTrack.Clear();
             if (animation == null) return;
             foreach (var frame in animation.boneFrames) Track(boneTracks, frame.boneName, frame);
             foreach (var frame in animation.morphFrames) Track(morphTracks, frame.morphName, frame);
+            SortTracks(boneTracks, x => x.frame);
+            SortTracks(morphTracks, x => x.frame);
+            showIkTrack.AddRange(animation.showIkFrames.OrderBy(x => x.frame));
             Transform root = ModelRoot;
             if (root == null) return;
             pmxPoseRig = root.GetComponent<HoPmxPoseRig>();
@@ -201,6 +209,18 @@ namespace Hollow.HoUnityTools.MmdMotion
                 if (constraint != null) ikControls[binding.vmdName] = constraint;
                 else ikObjects[binding.vmdName] = binding.targetObject;
             }
+        }
+
+        /// <summary>
+        /// Explicitly adopt the current local transforms as a new rest pose.
+        /// Only call while the character is deliberately in its intended setup
+        /// pose, never as part of clip switching or routine binding refresh.
+        /// </summary>
+        public void CaptureCurrentPoseAsRest()
+        {
+            bindPositions.Clear();
+            bindRotations.Clear();
+            RebuildBindings();
         }
 
         public void ApplyAtFrame(float frame)
@@ -419,10 +439,11 @@ namespace Hollow.HoUnityTools.MmdMotion
         private bool SampleIk(string name, float frame)
         {
             bool enabled = true;
-            for (int i = 0; i < animation.showIkFrames.Count; i++)
+            for (int i = 0; i < showIkTrack.Count; i++)
             {
-                HoVmdShowIkFrame frameData = animation.showIkFrames[i];
-                if (frameData.frame > frame || frameData.toggles == null) continue;
+                HoVmdShowIkFrame frameData = showIkTrack[i];
+                if (frameData.frame > frame) break;
+                if (frameData.toggles == null) continue;
                 foreach (var toggle in frameData.toggles)
                     if (toggle.boneName == name) enabled = toggle.enabled;
             }
@@ -434,15 +455,30 @@ namespace Hollow.HoUnityTools.MmdMotion
         private static void Track<T>(Dictionary<string,List<T>> tracks,string name,T frame)
         { if(string.IsNullOrEmpty(name))return;if(!tracks.TryGetValue(name,out var list))tracks.Add(name,list=new List<T>());list.Add(frame); }
 
+        private static void SortTracks<T>(Dictionary<string, List<T>> tracks, Func<T, uint> frame)
+        {
+            // VMD files commonly preserve editing/insertion order, not timeline
+            // order. Stable sorting also gives duplicate frames a defined rule:
+            // the last record in the original file wins.
+            foreach (var track in tracks.Values)
+            {
+                if (track.Count < 2) continue;
+                var ordered = track.OrderBy(frame).GroupBy(frame).Select(x => x.Last()).ToArray();
+                track.Clear();
+                track.AddRange(ordered);
+            }
+        }
+
         private static HoVmdBoneFrame SampleBone(List<HoVmdBoneFrame> track,float frame)
         {
             if(track.Count==0)return default;if(frame<=track[0].frame)return track[0];if(frame>=track[track.Count-1].frame)return track[track.Count-1];
-            int next=1;while(next<track.Count&&track[next].frame<frame)next++;var a=track[next-1];var b=track[next];float u=(frame-a.frame)/Mathf.Max(1,b.frame-a.frame);float t=Bezier(b.interpolation.rotation,u);
+            int lo=0,hi=track.Count;while(lo<hi){int mid=(lo+hi)/2;if(track[mid].frame<=frame)lo=mid+1;else hi=mid;}int next=lo;
+            var a=track[next-1];var b=track[next];float u=(frame-a.frame)/Mathf.Max(1,b.frame-a.frame);float t=Bezier(b.interpolation.rotation,u);
             var value=b;value.position=Vector3.Lerp(a.position,b.position,Bezier(b.interpolation.positionX,u));value.position=new Vector3(value.position.x,Mathf.Lerp(a.position.y,b.position.y,Bezier(b.interpolation.positionY,u)),Mathf.Lerp(a.position.z,b.position.z,Bezier(b.interpolation.positionZ,u)));value.rotation=Quaternion.Slerp(a.rotation,b.rotation,t);return value;
         }
 
         private static float SampleMorph(List<HoVmdMorphFrame> track,float frame)
-        { if(track.Count==0)return 0;if(frame<=track[0].frame)return track[0].weight;if(frame>=track[track.Count-1].frame)return track[track.Count-1].weight;int next=1;while(next<track.Count&&track[next].frame<frame)next++;var a=track[next-1];var b=track[next];return Mathf.Lerp(a.weight,b.weight,(frame-a.frame)/Mathf.Max(1,b.frame-a.frame)); }
+        { if(track.Count==0)return 0;if(frame<=track[0].frame)return track[0].weight;if(frame>=track[track.Count-1].frame)return track[track.Count-1].weight;int lo=0,hi=track.Count;while(lo<hi){int mid=(lo+hi)/2;if(track[mid].frame<=frame)lo=mid+1;else hi=mid;}int next=lo;var a=track[next-1];var b=track[next];return Mathf.Lerp(a.weight,b.weight,(frame-a.frame)/Mathf.Max(1,b.frame-a.frame)); }
         private static float Bezier(HoVmdBezier curve,float x)
         { float t=x;for(int i=0;i<6;i++){float omt=1-t;float f=3*omt*omt*t*curve.x1+3*omt*t*t*curve.x2+t*t*t-x;float d=3*omt*omt*curve.x1+6*omt*t*(curve.x2-curve.x1)+3*t*t*(1-curve.x2);if(Mathf.Abs(d)<1e-5f)break;t=Mathf.Clamp01(t-f/d);}float omt2=1-t;return 3*omt2*omt2*t*curve.y1+3*omt2*t*t*curve.y2+t*t*t; }
     }

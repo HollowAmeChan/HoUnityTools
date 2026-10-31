@@ -5,6 +5,7 @@
     "HoUnityTools.Runtime",
     "HoUnityTools.Armatures.Runtime",
     "HoUnityTools.Armatures.Editor",
+    "HoUnityTools.Pmx.Editor",
     "Unity.RenderPipelines.Universal.Runtime"
   ],
   "includePlatforms": [
