@@ -24,6 +24,17 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("scale"), new GUIContent("缩放", "默认 0.08，将 MMD 单位转换为 Unity 米。"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("recalculateNormals"), new GUIContent("重算法线", "默认保留 PMX 原始法线。"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("generateOutline"), new GUIContent("启用源描边"));
+                using (new EditorGUI.DisabledScope(HasModified()))
+                    if (GUILayout.Button("提取无物理角色姿态预制体…"))
+                    {
+                        string selected = EditorUtility.SaveFolderPanel("无物理 PMX 角色", Path.GetFullPath(Path.GetDirectoryName(importer.assetPath)), "Character");
+                        if (!string.IsNullOrEmpty(selected))
+                        {
+                            string prefab = HoPmxCharacterExtraction.Extract(importer.assetPath, FileUtil.GetProjectRelativePath(selected));
+                            Selection.activeObject = AssetDatabase.LoadAssetAtPath<GameObject>(prefab);
+                            GUIUtility.ExitGUI();
+                        }
+                    }
                 if (report != null)
                 {
                     EditorGUILayout.Space(5);

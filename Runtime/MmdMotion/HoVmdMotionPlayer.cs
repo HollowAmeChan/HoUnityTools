@@ -42,6 +42,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         private readonly Dictionary<Transform, Vector3> bindPositions = new Dictionary<Transform, Vector3>();
         private readonly Dictionary<Transform, Quaternion> bindRotations = new Dictionary<Transform, Quaternion>();
         private bool bindingsDirty = true;
+        private HoPmxPoseRig pmxPoseRig;
 
         public HoVmdAnimation Animation { get => animation; set { animation = value; bindingsDirty = true; } }
         public HoVmdBindingProfile BindingProfile { get => bindingProfile; set { bindingProfile = value; bindingsDirty = true; } }
@@ -95,6 +96,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             foreach (var frame in animation.morphFrames) Track(morphTracks, frame.morphName, frame);
             Transform root = ModelRoot;
             if (root == null) return;
+            pmxPoseRig = root.GetComponent<HoPmxPoseRig>();
 
             foreach (var binding in boneBindings)
                 if (binding != null && !string.IsNullOrEmpty(binding.vmdName) && binding.target != null)
@@ -205,6 +207,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         {
             if (animation == null) return;
             if (bindingsDirty) RebuildBindings();
+            if (applyBones && pmxPoseRig != null) pmxPoseRig.BeginSample();
             if (applyBones)
                 foreach (var pair in boneTracks)
                 {
@@ -217,6 +220,7 @@ namespace Hollow.HoUnityTools.MmdMotion
                     // Rebasing it again undoes the conversion and reverses X/Z motion.
                     target.localRotation=value.rotation*rotation;
                 }
+            if (applyBones && pmxPoseRig != null) pmxPoseRig.CaptureInputsAndEvaluate();
             if (applyMorphs)
                 foreach (var pair in morphTracks)
                 {
@@ -241,7 +245,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             // StandardRequest review runs in editor mode, so there is no
             // LateUpdate pass to solve the newly applied pose. Runtime playback
             // keeps the normal HoIkConstraint LateUpdate order.
-            if (!Application.isPlaying)
+            if (!Application.isPlaying || pmxPoseRig != null)
                 SolveIkNow();
         }
 
@@ -251,6 +255,13 @@ namespace Hollow.HoUnityTools.MmdMotion
             var solved = new HashSet<HoIkConstraint>();
             foreach (var control in ikControls.Values)
                 if (control != null && solved.Add(control)) control.SolveNow();
+            if (pmxPoseRig != null) pmxPoseRig.EvaluateAppends();
+        }
+
+        public void ResetIkHistory()
+        {
+            foreach (var control in ikControls.Values)
+                if (control != null) control.ResetTemporalState();
         }
 
         private Transform FindBone(string name)

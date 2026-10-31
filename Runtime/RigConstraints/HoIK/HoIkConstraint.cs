@@ -111,6 +111,13 @@ namespace Hollow.HoUnityTools.RigConstraints
         public string LastError => lastError;
         public bool DrawGizmos { get => drawGizmos; set => drawGizmos = value; }
 
+        /// <summary>Reset only temporal pole smoothing when a timeline seeks or loops.</summary>
+        public void ResetTemporalState()
+        {
+            hasPolePlane = false;
+            lastError = null;
+        }
+
         private void OnEnable()
         {
             CaptureBindPose();
