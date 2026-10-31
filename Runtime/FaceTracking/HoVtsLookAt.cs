@@ -27,14 +27,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         public bool hasRightEye;
     }
 
-    public enum HoVtsPoseParameterSource
-    {
-        /// <summary>角色 .hoface.json 规则输出。 This is the safe default.</summary>
-        Processed = 0,
-        /// <summary>接收器在规则前的镜像归一化 raw 值。</summary>
-        CalibratedRaw = 1
-    }
-
     /// <summary>
     /// VTS head/eye rotation constraint. Uses the reference frame's axes rather than assuming
     /// the model's bone axes. No Animator, Avatar, IK pass, or face controller is required.
@@ -51,7 +43,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private Transform head;
         [SerializeField] private Transform leftEye;
         [SerializeField] private Transform rightEye;
-        [SerializeField] private HoVtsPoseParameterSource parameterSource = HoVtsPoseParameterSource.Processed;
         [SerializeField] private bool headEnabled = true;
         [SerializeField] private bool upperBodyEnabled;
         [SerializeField, Range(0f, 1f)] private float upperBodyWeight = .25f;
@@ -65,7 +56,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         private RotationState headState, leftState, rightState;
         private Transform resolvedReference;
         private HoVtsParameterReceiver resolvedReceiver;
-        private HoVtsPoseParameterSource resolvedSource;
         private string status = "未初始化";
         private int lastPreCullFrame = -1;
 
@@ -80,7 +70,6 @@ namespace Hollow.HoUnityTools.FaceTracking
         public Transform Head { get => head; set { if (head != value) { Stop(); head = value; } } }
         public Transform LeftEye { get => leftEye; set { if (leftEye != value) { Stop(); leftEye = value; } } }
         public Transform RightEye { get => rightEye; set { if (rightEye != value) { Stop(); rightEye = value; } } }
-        public HoVtsPoseParameterSource ParameterSource { get => parameterSource; set { if (parameterSource != value) { Stop(); parameterSource = value; } } }
         public bool HeadEnabled { get => headEnabled; set => headEnabled = value; }
         public bool UpperBodyEnabled { get => upperBodyEnabled; set => upperBodyEnabled = value; }
         public float UpperBodyWeight { get => upperBodyWeight; set => upperBodyWeight = Mathf.Clamp01(value); }
@@ -191,7 +180,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 Stop(); status = "姿态参考物体不能位于被驱动骨骼内"; return false;
             }
-            if (resolvedReference != referenceFrame || resolvedReceiver != parameterReceiver || resolvedSource != parameterSource
+            if (resolvedReference != referenceFrame || resolvedReceiver != parameterReceiver
                 || (headState != null ? headState.Target : null) != head
                 || (leftState != null ? leftState.Target : null) != leftEye
                 || (rightState != null ? rightState.Target : null) != rightEye)
@@ -199,7 +188,6 @@ namespace Hollow.HoUnityTools.FaceTracking
                 Stop();
                 resolvedReference = referenceFrame;
                 resolvedReceiver = parameterReceiver;
-                resolvedSource = parameterSource;
                 Transform[] bodyTargets = ResolveUpperBodyChain();
                 upperBodyStates = new RotationState[bodyTargets.Length];
                 for (int i = 0; i < bodyTargets.Length; i++) upperBodyStates[i] = new RotationState(bodyTargets[i]);
@@ -236,8 +224,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private bool InvalidReference(Transform target) => target != null && (referenceFrame == target || referenceFrame.IsChildOf(target));
 
-        private bool Read(string key, out float value) => parameterSource == HoVtsPoseParameterSource.CalibratedRaw
-            ? parameterReceiver.TryGetRaw(key, out value) : parameterReceiver.TryGet(key, out value);
+        private bool Read(string key, out float value) => parameterReceiver.TryGet(key, out value);
 
         private bool Apply(RotationState state, bool drive, string x, string y, string z,
             Quaternion frame, float blend, bool eye)
