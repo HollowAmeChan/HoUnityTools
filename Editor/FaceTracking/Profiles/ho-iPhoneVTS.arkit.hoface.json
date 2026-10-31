@@ -1923,7 +1923,7 @@
         },
         {
             "parameter": "Rotation_x",
-            "expression": "Rotation_x",
+            "expression": "Rotation_y",
             "defaultValue": 0,
             "curve": {
                 "keys": [
@@ -1946,7 +1946,7 @@
         },
         {
             "parameter": "Rotation_y",
-            "expression": "Rotation_y",
+            "expression": "Rotation_x",
             "defaultValue": 0,
             "curve": {
                 "keys": [

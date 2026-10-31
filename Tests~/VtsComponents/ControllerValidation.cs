@@ -372,8 +372,8 @@ public static class HoVtsControllerValidation
 
     private static Quaternion PoseRotation(float x, float y, float z, bool eye)
     {
-        float yaw = x;
-        float pitch = eye ? -y : y;
+        float yaw = eye ? x : y;
+        float pitch = eye ? -y : x;
         return Quaternion.AngleAxis(yaw, Vector3.up)
             * Quaternion.AngleAxis(pitch, Vector3.right)
             * Quaternion.AngleAxis(z, Vector3.forward);

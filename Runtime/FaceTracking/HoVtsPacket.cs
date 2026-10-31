@@ -130,10 +130,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// `Rotation` → official VTS semantic axes. The raw Vector3 uses
-        /// x = pitch/up-down and y = yaw/right-left; normalize that to
-        /// Rotation_x = FaceAngleX (left/right), Rotation_y = FaceAngleY
-        /// (up/down), Rotation_z = FaceAngleZ (lean).
+        /// `Rotation` → raw `Rotation_x/_y/_z` fields. Semantic axis conversion
+        /// belongs to the selected hoface.json profile, not the packet parser.
         /// </summary>
         private static void ReadVector(HoJsonReader reader, Dictionary<string, float> into, string name)
         {
@@ -157,18 +155,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                 }
             }
 
-            if (name == "Rotation")
-            {
-                into["Rotation_x"] = y;
-                into["Rotation_y"] = x;
-                into["Rotation_z"] = z;
-            }
-            else
-            {
-                into[name + "_x"] = x;
-                into[name + "_y"] = y;
-                into[name + "_z"] = z;
-            }
+            into[name + "_x"] = x;
+            into[name + "_y"] = y;
+            into[name + "_z"] = z;
         }
 
         /// <summary>`BlendShapes: [{k, v}, …]` → 线名 = 原值。**这一条就是 JsonUtility 丢掉的那 52 个键。**</summary>
