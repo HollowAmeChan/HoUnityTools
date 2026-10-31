@@ -65,6 +65,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private HoVtsParameterReceiver resolvedReceiver;
         private HoVtsPoseParameterSource resolvedSource;
         private string status = "未初始化";
+        private int lastPreCullFrame = -1;
 
         public HoVtsParameterReceiver ParameterReceiver { get => parameterReceiver; set { if (parameterReceiver != value) { Stop(); parameterReceiver = value; } } }
         public Transform ReferenceFrame { get => referenceFrame; set { if (referenceFrame != value) { Stop(); referenceFrame = value; } } }
@@ -88,7 +89,29 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float GizmoLength { get => gizmoLength; set => gizmoLength = Mathf.Max(0.01f, value); }
         public string Status => status;
 
+        private void OnEnable() { Camera.onPreCull += OnCameraPreCull; }
         private void LateUpdate() { if (autoRun) EvaluateNow(Time.deltaTime); }
+
+        private void OnCameraPreCull(Camera camera)
+        {
+            if (!autoRun || lastPreCullFrame == Time.frameCount) return;
+            lastPreCullFrame = Time.frameCount;
+            if (!EnsureTargets()) return;
+
+            // Warudo writes its humanoid pose after ordinary MonoBehaviour
+            // LateUpdate. Re-apply our sampled pose immediately before rendering.
+            Quaternion frame = referenceFrame.rotation;
+            bool written = false;
+            if (headEnabled) written |= headState != null && headState.Apply(frame, 1f);
+            if (upperBodyEnabled && upperBodyStates != null)
+                foreach (var state in upperBodyStates) written |= state.Apply(frame, 1f);
+            if (eyesEnabled)
+            {
+                written |= leftState != null && leftState.Apply(frame, 1f);
+                written |= rightState != null && rightState.Apply(frame, 1f);
+            }
+            if (written) status = parameterReceiver.Tracked ? "运行中" : "丢追回中性";
+        }
         public bool EvaluateNow() => EvaluateNow(Time.deltaTime);
 
         public bool EvaluateNow(float deltaTime)
@@ -270,7 +293,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             // VTS face pose: Rotation_x = left/right turn, Rotation_y = nod,
             // Rotation_z = roll. Eye x/y already use horizontal/vertical.
-            float yaw = eye ? x : x;
+            // VTS horizontal pose values use the opposite sign from the Unity
+            // character's forward frame.
+            float yaw = -x;
             float pitch = eye ? -y : y;
             float roll = z;
             return Quaternion.AngleAxis(yaw, Vector3.up)
@@ -285,10 +310,20 @@ namespace Hollow.HoUnityTools.FaceTracking
             headState?.Release(); leftState?.Release(); rightState?.Release();
             headState = null; leftState = null; rightState = null;
             resolvedReference = null; resolvedReceiver = null;
+            lastPreCullFrame = -1;
             status = "已停止";
         }
-        private void OnDisable() { Stop(); }
-        private void OnDestroy() { Stop(); }
+        private void OnDisable()
+        {
+            Camera.onPreCull -= OnCameraPreCull;
+            Stop();
+        }
+
+        private void OnDestroy()
+        {
+            Camera.onPreCull -= OnCameraPreCull;
+            Stop();
+        }
 
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()

@@ -50,6 +50,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private RuntimeAnimatorController resolvedController;
         private bool written;
         private string status = "未初始化";
+        private int lastPreCullFrame = -1;
 
         public HoVtsParameterReceiver ParameterReceiver
         {
@@ -82,7 +83,26 @@ namespace Hollow.HoUnityTools.FaceTracking
             bindings = compiled != null ? (HoVtsAnimationBinding[])compiled.Clone() : new HoVtsAnimationBinding[0];
         }
 
+        private void OnEnable() { Camera.onPreCull += OnCameraPreCull; }
         private void LateUpdate() { if (autoRun) EvaluateNow(Time.deltaTime); }
+
+        private void OnCameraPreCull(Camera camera)
+        {
+            if (!autoRun || lastPreCullFrame == Time.frameCount) return;
+            lastPreCullFrame = Time.frameCount;
+            if (!EnsureRuntime()) return;
+
+            // Warudo's CharacterAsset writes humanoid bones in its own LateUpdate,
+            // after ordinary component LateUpdate. Re-apply the already evaluated
+            // controller pose immediately before rendering so authored transform
+            // channels are not erased by that pipeline.
+            if (!written)
+            {
+                EvaluateNow(0f);
+                return;
+            }
+            foreach (var writer in writers) writer.Write();
+        }
 
         public bool EvaluateNow() => EvaluateNow(Time.deltaTime);
 
@@ -241,11 +261,21 @@ namespace Hollow.HoUnityTools.FaceTracking
             writers.Clear();
             proxies.Clear();
             controllerParameters.Clear();
+            lastPreCullFrame = -1;
             status = "已停止";
         }
 
-        private void OnDisable() { Stop(); }
-        private void OnDestroy() { Stop(); }
+        private void OnDisable()
+        {
+            Camera.onPreCull -= OnCameraPreCull;
+            Stop();
+        }
+
+        private void OnDestroy()
+        {
+            Camera.onPreCull -= OnCameraPreCull;
+            Stop();
+        }
 
         private abstract class PropertyWriter
         {
