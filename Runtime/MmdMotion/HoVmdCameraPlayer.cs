@@ -24,6 +24,9 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField] public Vector3 centerOffset;
         [SerializeField, Min(.01f)] public float distanceMultiplier = 1;
         [SerializeField] public bool portraitFraming;
+        [SerializeField, Range(0, 100)]
+        [Tooltip("0 保留作者视角。提高下限会在保持轨道中心景别的同时缩短透视镜头距离，方便室内运镜避开远处墙体。不会进行碰撞检测。")]
+        public float minimumPerspectiveFov;
         [SerializeField, Min(.1f)] public float minimumVerticalSpan = .95f;
         [SerializeField, Min(.1f)] public float maximumVerticalSpan = 2.05f;
 
@@ -100,13 +103,21 @@ namespace Hollow.HoUnityTools.MmdMotion
             HoVmdCameraFrame value = Sample(frame);
             Vector3 center = new Vector3(-value.targetPosition.x, value.targetPosition.y, -value.targetPosition.z) * mmdToUnityScale + centerOffset;
             float distance = value.distance * mmdToUnityScale * distanceMultiplier;
+            float authoredFov = Mathf.Clamp(value.viewAngle, 1, 179);
+            float outputFov = value.perspectiveOff ? authoredFov : Mathf.Max(authoredFov, minimumPerspectiveFov);
+            float authoredTangent = Mathf.Tan(authoredFov * Mathf.Deg2Rad * .5f);
             if (portraitFraming)
             {
-                float tangent = Mathf.Tan(Mathf.Clamp(value.viewAngle, 1, 179) * Mathf.Deg2Rad * .5f);
-                float span = Mathf.Clamp(2 * Mathf.Abs(distance) * tangent, minimumVerticalSpan,
+                float span = Mathf.Clamp(2 * Mathf.Abs(distance) * authoredTangent, minimumVerticalSpan,
                     Mathf.Max(minimumVerticalSpan, maximumVerticalSpan));
-                distance = Mathf.Sign(distance) * span / (2 * tangent);
+                distance = Mathf.Sign(distance) * span / (2 * Mathf.Tan(outputFov * Mathf.Deg2Rad * .5f));
                 if (span >= 1.6f) center.y = Mathf.Min(center.y, span * .5f + .01f);
+            }
+            else if (outputFov > authoredFov)
+            {
+                // Dolly towards the unchanged orbit center while retaining its
+                // projected vertical span. Authored perspective is unchanged at 0.
+                distance *= authoredTangent / Mathf.Tan(outputFov * Mathf.Deg2Rad * .5f);
             }
             Vector3 euler = new Vector3(-value.rotation.x * Mathf.Rad2Deg, 180.0f - value.rotation.y * Mathf.Rad2Deg, -value.rotation.z * Mathf.Rad2Deg);
             Quaternion rotation = Quaternion.Euler(euler);
@@ -127,7 +138,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             // A normal negative VMD distance places the camera behind its forward
             // direction so it looks towards the orbit center, not away from it.
             camera.transform.position = center + rotation * Vector3.forward * distance;
-            camera.fieldOfView = Mathf.Clamp(value.viewAngle, 1.0f, 179.0f);
+            camera.fieldOfView = outputFov;
             camera.orthographic = value.perspectiveOff;
             if (value.perspectiveOff)
                 camera.orthographicSize = Mathf.Max(0.0001f,

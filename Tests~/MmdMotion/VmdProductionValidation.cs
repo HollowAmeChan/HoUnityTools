@@ -170,6 +170,26 @@ public static class VmdProductionValidation
             player.RebuildTrack(); player.ApplyAtFrame(.5f);
             Check(debugCenter.position.sqrMagnitude < .00001f, "adjacent camera keys stay hard cuts at 60fps", report);
 
+            first.distance = -80; first.viewAngle = 20;
+            data.cameraFrames[0] = first;
+            player.portraitFraming = true; player.RebuildTrack(); player.ApplyAtFrame(0);
+            float authoredRadius = Vector3.Distance(camera.transform.position, debugCenter.position);
+            Vector3 authoredForward = camera.transform.forward;
+            Check(Mathf.Abs(camera.fieldOfView - 20) < .0001f, "zero indoor FOV floor preserves authored lens", report);
+            player.minimumPerspectiveFov = 45; player.ApplyAtFrame(0);
+            float indoorRadius = Vector3.Distance(camera.transform.position, debugCenter.position);
+            float indoorSpan = 2 * indoorRadius * Mathf.Tan(camera.fieldOfView * Mathf.Deg2Rad * .5f);
+            Check(indoorRadius < authoredRadius && Mathf.Abs(indoorSpan - player.maximumVerticalSpan) < .0001f,
+                "indoor lens floor shortens radius without changing central framing", report);
+            Check(Vector3.Dot(authoredForward, camera.transform.forward) > .99999f && debugCenter.position.sqrMagnitude < .00001f,
+                "indoor lens floor preserves orbit center and direction", report);
+            first.perspectiveOff = true; data.cameraFrames[0] = first;
+            player.minimumPerspectiveFov = 0; player.RebuildTrack(); player.ApplyAtFrame(0);
+            float orthographicSize = camera.orthographicSize;
+            player.minimumPerspectiveFov = 60; player.ApplyAtFrame(0);
+            Check(camera.orthographic && Mathf.Abs(camera.orthographicSize - orthographicSize) < .0001f &&
+                Mathf.Abs(camera.fieldOfView - 20) < .0001f, "indoor lens floor leaves orthographic shots unchanged", report);
+
             var character = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath), scene);
             character.transform.SetPositionAndRotation(new Vector3(2, 0, 3), Quaternion.Euler(0, 33, 0));
             character.transform.localScale = Vector3.one * 1.25f;

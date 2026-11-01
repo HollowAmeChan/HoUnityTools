@@ -38,6 +38,8 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
                 EditorGUILayout.PropertyField(P("minimumVerticalSpan"), new GUIContent("最近镜头可见高度"));
                 EditorGUILayout.PropertyField(P("maximumVerticalSpan"), new GUIContent("最远镜头可见高度"));
             }
+            EditorGUILayout.PropertyField(P("minimumPerspectiveFov"),
+                new GUIContent("最小透视视角（室内）", "0 保留作者镜头。提高后维持中心景别并缩短距离，减少窄视角远镜头退入墙体的情况；不是自动避障。"));
             EditorGUILayout.PropertyField(P("snapAdjacentFrames"), new GUIContent("相邻关键帧按跳切处理"));
 
             EditorGUILayout.Space(4);
