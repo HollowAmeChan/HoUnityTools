@@ -207,6 +207,43 @@ public static class VmdProductionValidation
             Check(report.referenceTransforms < 80 && report.mappedBones >= 45, "bounded reference rig maps body and fingers", report);
             Check(sequence.Retargeter.Feet.Count == 2 && sequence.Retargeter.Feet.All(x => x.targetIk != null),
                 "Humanoid feet receive automatic Ho IK when absent", report);
+            var driven = sequence.Retargeter.Bones.Select(x => x.target).Distinct().ToArray();
+            var initialPositions = driven.Select(x => x.localPosition).ToArray();
+            var initialRotations = driven.Select(x => x.localRotation).ToArray();
+            float clipDuration = sequence.Duration;
+            sequence.InitialPoseTransitionSeconds = 1;
+            sequence.Preroll = 1;
+            sequence.SamplePreparation(0);
+            Check(driven.Select((x, i) => Vector3.Distance(x.localPosition, initialPositions[i])).Max() < .0001f &&
+                driven.Select((x, i) => Quaternion.Angle(x.localRotation, initialRotations[i])).Max() < .05f,
+                "preparation starts at the original target pose after solving source IK", report);
+            sequence.SamplePreparation(.5f);
+            var halfwayPositions = driven.Select(x => x.localPosition).ToArray();
+            var halfwayRotations = driven.Select(x => x.localRotation).ToArray();
+            sequence.SamplePreparation(1);
+            var firstPositions = driven.Select(x => x.localPosition).ToArray();
+            var firstRotations = driven.Select(x => x.localRotation).ToArray();
+            Check(driven.Select((x, i) => Quaternion.Angle(firstRotations[i], initialRotations[i])).Max() > 1,
+                "preparation fixture exercises a nontrivial first pose", report);
+            Check(driven.Select((x, i) => Vector3.Distance(halfwayPositions[i],
+                    Vector3.Lerp(initialPositions[i], firstPositions[i], .5f))).Max() < .0001f &&
+                driven.Select((x, i) => Quaternion.Angle(halfwayRotations[i],
+                    Quaternion.Slerp(initialRotations[i], firstRotations[i], .5f))).Max() < .05f,
+                "preparation interpolates the solved target hierarchy without a first-frame jump", report);
+            sequence.SamplePreparation(2);
+            Check(driven.Select((x, i) => Quaternion.Angle(x.localRotation, firstRotations[i])).Max() < .05f &&
+                sequence.CurrentTime == 0 && sequence.Duration == clipDuration && sequence.PreparationDuration == 2,
+                "settling holds frame zero without extending the motion clock", report);
+            sequence.Sample(4);
+            var restartRotations = driven.Select(x => x.localRotation).ToArray();
+            sequence.Restart();
+            sequence.SamplePreparation(0);
+            Check(driven.Select((x, i) => Quaternion.Angle(x.localRotation, restartRotations[i])).Max() < .05f,
+                "restart transitions from the current pose without recapturing source bind data", report);
+            sequence.InitialPoseTransitionSeconds = 0;
+            sequence.SamplePreparation(0);
+            Check(driven.Select((x, i) => Quaternion.Angle(x.localRotation, firstRotations[i])).Max() < .05f,
+                "zero transition preserves legacy immediate frame-zero sampling", report);
             sequence.Sample(0);
             Vector3 position = sequence.Retargeter.TargetHips.position;
             Quaternion rotation = sequence.TargetAnimator.GetBoneTransform(HumanBodyBones.LeftHand).rotation;

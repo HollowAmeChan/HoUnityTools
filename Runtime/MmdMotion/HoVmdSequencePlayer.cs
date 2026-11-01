@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Hollow.HoUnityTools.PlaySpeed;
 
@@ -27,10 +28,13 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField, Min(0), InspectorName("时长（秒，0 为自动）")] private float duration;
         [SerializeField, InspectorName("运行时播放")] private bool playOnEnable = true;
         [SerializeField, InspectorName("循环")] private bool loop;
+        [SerializeField, Min(0), InspectorName("首帧姿态过渡（秒）")]
+        [Tooltip("从开始播放时的角色骨骼姿态平滑进入动作首帧，让衣物物理逐步适应。过渡不占用动作和 BGM 时间；0 保留原行为。")]
+        private float initialPoseTransitionSeconds;
         [SerializeField, Min(0), InspectorName("预热（秒）")] private float preroll = 1;
         [SerializeField, Min(0), InspectorName("当前时间（秒）")] private float currentTime;
         [SerializeField, InspectorName("正在播放")] private bool playing;
-        private float prerollRemaining;
+        private float preparationRemaining;
         private bool audioStarted;
         private bool audioPaused;
         private float appliedSoundtrackTimeOffset;
@@ -41,6 +45,14 @@ namespace Hollow.HoUnityTools.MmdMotion
         private const float MaxAudioPitch = 3f;
         private const float AudioSyncTolerance = .1f;
         private float lastSampleTime = -1;
+        private struct PreparationBone
+        {
+            public Transform target;
+            public Vector3 localPosition;
+            public Quaternion localRotation;
+        }
+        private readonly List<PreparationBone> preparationPose = new List<PreparationBone>();
+        private bool preparationPoseCaptured;
         private bool externallyDriven;
         public bool ExternallyDriven
         {
@@ -49,6 +61,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             {
                 if (externallyDriven == value) return;
                 externallyDriven = value;
+                ResetPreparationPose();
                 if (value) HoPlaySpeedControl.Release(this);
                 else RequestPlaybackSpeed();
             }
@@ -78,6 +91,12 @@ namespace Hollow.HoUnityTools.MmdMotion
         }
         public float FrameRate { get => frameRate; set => frameRate = Mathf.Max(1, value); }
         public float Preroll { get => preroll; set => preroll = Mathf.Max(0, value); }
+        public float InitialPoseTransitionSeconds
+        {
+            get => initialPoseTransitionSeconds;
+            set => initialPoseTransitionSeconds = Mathf.Max(0, value);
+        }
+        public float PreparationDuration => InitialPoseTransitionSeconds + Preroll;
         public float CurrentTime => currentTime;
         public bool Playing
         {
@@ -108,7 +127,8 @@ namespace Hollow.HoUnityTools.MmdMotion
         private void OnEnable()
         {
             playing = playOnEnable;
-            prerollRemaining = preroll;
+            preparationRemaining = PreparationDuration;
+            ResetPreparationPose();
             audioStarted = false;
             audioPaused = false;
             if (body != null) body.Playing = false;
@@ -132,7 +152,8 @@ namespace Hollow.HoUnityTools.MmdMotion
                 if (body != null) body.Playing = false;
                 if (face != null) face.Playing = false;
                 if (cameraPlayer != null) cameraPlayer.Playing = false;
-                Sample(ExternalTime);
+                if (ExternalTime < 0) SamplePreparation(PreparationDuration + ExternalTime);
+                else Sample(ExternalTime);
                 return;
             }
             if (!playing)
@@ -145,10 +166,10 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (body != null) body.Playing = false;
             if (face != null) face.Playing = false;
             if (cameraPlayer != null) cameraPlayer.Playing = false;
-            if (prerollRemaining > 0)
+            if (preparationRemaining > 0)
             {
-                Sample(0);
-                prerollRemaining -= Time.deltaTime;
+                SamplePreparation(PreparationDuration - preparationRemaining);
+                preparationRemaining -= Time.deltaTime;
                 return;
             }
             // AudioSource.time advances independently of Time.timeScale. Using it
@@ -259,10 +280,69 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (cameraPlayer != null) cameraPlayer.ApplyAtFrame(frame);
         }
 
+        /// <summary>
+        /// Advance preparation while the clip clock stays at zero. Physics and
+        /// HoAux continue on their normal updates after the blended main pose.
+        /// </summary>
+        public void SamplePreparation(float elapsedSeconds)
+        {
+            if (InitialPoseTransitionSeconds <= 0)
+            {
+                Sample(0);
+                return;
+            }
+            if (!preparationPoseCaptured) CapturePreparationPose();
+            Sample(0);
+            float progress = Mathf.Clamp01(elapsedSeconds / InitialPoseTransitionSeconds);
+            if (progress >= 1) return;
+            float weight = progress * progress * (3 - 2 * progress);
+            // Blend the solved target pose in local space. Blending IK controls
+            // alone would still teleport the Humanoid, or trigger another solve.
+            foreach (PreparationBone pose in preparationPose)
+            {
+                if (pose.target == null) continue;
+                pose.target.localPosition = Vector3.Lerp(pose.localPosition, pose.target.localPosition, weight);
+                pose.target.localRotation = Quaternion.Slerp(pose.localRotation, pose.target.localRotation, weight);
+            }
+        }
+
+        private void CapturePreparationPose()
+        {
+            preparationPose.Clear();
+            var seen = new HashSet<Transform>();
+            if (retargeter != null)
+            {
+                foreach (var bone in retargeter.Bones) Add(bone.target);
+                Add(retargeter.TargetHips);
+            }
+            else if (targetAnimator != null && targetAnimator.isHuman)
+            {
+                for (int i = 0; i < (int)HumanBodyBones.LastBone; ++i)
+                    Add(targetAnimator.GetBoneTransform((HumanBodyBones)i));
+            }
+            preparationPoseCaptured = true;
+
+            void Add(Transform target)
+            {
+                if (target == null || !seen.Add(target)) return;
+                preparationPose.Add(new PreparationBone
+                {
+                    target = target, localPosition = target.localPosition, localRotation = target.localRotation
+                });
+            }
+        }
+
+        private void ResetPreparationPose()
+        {
+            preparationPose.Clear();
+            preparationPoseCaptured = false;
+        }
+
         public void Restart()
         {
             currentTime = 0;
-            prerollRemaining = preroll;
+            preparationRemaining = PreparationDuration;
+            ResetPreparationPose();
             audioStarted = false;
             audioPaused = false;
             playing = true;
@@ -280,6 +360,7 @@ namespace Hollow.HoUnityTools.MmdMotion
 
         private void OnDisable()
         {
+            ResetPreparationPose();
             HoPlaySpeedControl.Release(this);
             ReleaseMusic();
             if (music != null) music.Stop();

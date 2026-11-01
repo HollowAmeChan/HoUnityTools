@@ -70,7 +70,10 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             EditorGUILayout.Space(4);
             EditorGUILayout.PropertyField(P("playOnEnable"));
             EditorGUILayout.PropertyField(P("loop"));
-            EditorGUILayout.PropertyField(P("preroll"));
+            EditorGUILayout.PropertyField(P("initialPoseTransitionSeconds"),
+                new GUIContent("首帧姿态过渡（秒）", "从播放开始时的骨骼姿态平滑进入动作首帧。过渡不计入动作与 BGM 时间；0 保留原行为。"));
+            EditorGUILayout.PropertyField(P("preroll"),
+                new GUIContent("首帧稳定等待（秒）", "姿态过渡结束后保持首帧，让衣物、辅助骨和渲染历史稳定。过渡和等待均不计入动作 / BGM 时间，CLI 录制也会跳过。"));
             EditorGUILayout.PropertyField(P("soundtrackTimeOffset"),
                 new GUIContent("BGM 时间偏移（秒）", "正值延后 BGM，负值提前。实时播放和离线合音使用同一个值；延后会延长自动时长，手动时长保持不变。"));
             if (Application.isPlaying)
