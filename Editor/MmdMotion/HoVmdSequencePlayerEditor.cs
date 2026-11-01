@@ -71,6 +71,8 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             EditorGUILayout.PropertyField(P("playOnEnable"));
             EditorGUILayout.PropertyField(P("loop"));
             EditorGUILayout.PropertyField(P("preroll"));
+            EditorGUILayout.PropertyField(P("soundtrackTimeOffset"),
+                new GUIContent("BGM 时间偏移（秒）", "正值延后 BGM，负值提前。实时播放和离线合音使用同一个值；延后会延长自动时长，手动时长保持不变。"));
             if (Application.isPlaying)
             {
                 using (new EditorGUILayout.HorizontalScope())

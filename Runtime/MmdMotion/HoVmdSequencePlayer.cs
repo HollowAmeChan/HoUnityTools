@@ -15,6 +15,9 @@ namespace Hollow.HoUnityTools.MmdMotion
         [SerializeField, InspectorName("表情 VMD")] private HoVmdAnimation expressionClip;
         [SerializeField, InspectorName("镜头 VMD")] private HoVmdAnimation cameraClip;
         [SerializeField, InspectorName("BGM")] private AudioClip soundtrack;
+        [SerializeField, InspectorName("BGM 时间偏移（秒）")]
+        [Tooltip("正值延后音乐，负值提前音乐。动作、表情和运镜的时间不变。")]
+        private float soundtrackTimeOffset;
         [SerializeField, InspectorName("动作播放器")] private HoVmdMotionPlayer body;
         [SerializeField, InspectorName("表情播放器")] private HoVmdMotionPlayer face;
         [SerializeField, InspectorName("角色适配")] private HoVmdHumanoidRetargeter retargeter;
@@ -30,6 +33,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         private float prerollRemaining;
         private bool audioStarted;
         private bool audioPaused;
+        private float appliedSoundtrackTimeOffset;
         private AudioSource controlledMusic;
         private float originalMusicPitch;
         // AudioSource cannot follow the panel's full 0..100 range. Outside its
@@ -57,6 +61,7 @@ namespace Hollow.HoUnityTools.MmdMotion
         public HoVmdAnimation ExpressionClip { get => expressionClip; set => expressionClip = value; }
         public HoVmdAnimation CameraClip { get => cameraClip; set => cameraClip = value; }
         public AudioClip Soundtrack { get => soundtrack; set => soundtrack = value; }
+        public float SoundtrackTimeOffset { get => soundtrackTimeOffset; set => soundtrackTimeOffset = value; }
         public HoVmdMotionPlayer Body { get => body; set => body = value; }
         public HoVmdMotionPlayer Face { get => face; set => face = value; }
         public HoVmdHumanoidRetargeter Retargeter { get => retargeter; set => retargeter = value; }
@@ -94,7 +99,7 @@ namespace Hollow.HoUnityTools.MmdMotion
             get
             {
                 if (duration > 0) return duration;
-                if (music != null && music.clip != null) return music.clip.length;
+                if (music != null && music.clip != null) return music.clip.length + Mathf.Max(0, soundtrackTimeOffset);
                 return body != null && body.Animation != null ? (body.Animation.LastBoneFrame + 1) / frameRate : 0;
             }
             set => duration = Mathf.Max(0, value);
@@ -178,7 +183,8 @@ namespace Hollow.HoUnityTools.MmdMotion
             if (music == null || music.clip == null) return;
 
             float speed = Time.timeScale;
-            if (speed <= 0 || speed > MaxAudioPitch || currentTime >= music.clip.length)
+            float audioTime = currentTime - soundtrackTimeOffset;
+            if (speed <= 0 || speed > MaxAudioPitch || audioTime < 0 || audioTime >= music.clip.length)
             {
                 PauseMusic();
                 return;
@@ -187,25 +193,28 @@ namespace Hollow.HoUnityTools.MmdMotion
             music.pitch = speed;
             if (!audioStarted)
             {
-                music.time = currentTime;
+                music.time = audioTime;
                 music.Play();
                 audioStarted = true;
             }
             else if (audioPaused)
             {
-                music.time = currentTime;
+                music.time = audioTime;
                 music.UnPause();
+                if (!music.isPlaying) music.Play();
             }
             else if (!music.isPlaying)
             {
                 // A loop can wrap after the AudioSource has reached its end.
-                music.time = currentTime;
+                music.time = audioTime;
                 music.Play();
             }
-            else if (Mathf.Abs(music.time - currentTime) > AudioSyncTolerance)
+            else if (!Mathf.Approximately(appliedSoundtrackTimeOffset, soundtrackTimeOffset) ||
+                     Mathf.Abs(music.time - audioTime) > AudioSyncTolerance)
             {
-                music.time = currentTime;
+                music.time = audioTime;
             }
+            appliedSoundtrackTimeOffset = soundtrackTimeOffset;
             audioPaused = false;
         }
 
