@@ -190,6 +190,49 @@ public static class VmdProductionValidation
             Check(camera.orthographic && Mathf.Abs(camera.orthographicSize - orthographicSize) < .0001f &&
                 Mathf.Abs(camera.fieldOfView - 20) < .0001f, "indoor lens floor leaves orthographic shots unchanged", report);
 
+            first.perspectiveOff = false;
+            first.rotation = new Vector3(.2f, .3f, .1f);
+            data.cameraFrames[0] = first;
+            player.portraitFraming = false; player.minimumPerspectiveFov = 0;
+            player.motionOrigin = origin; player.RebuildTrack(); player.ApplyAtFrame(0);
+            Vector3 authoredCenter = debugCenter.position;
+            Vector3 originalCameraPosition = camera.transform.position;
+            Quaternion originalCameraRotation = camera.transform.rotation;
+            float originalFov = camera.fieldOfView;
+            var follow = new GameObject("horizontal framing target").transform;
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(follow.gameObject, scene);
+            follow.position = authoredCenter + camera.transform.right * .45f + camera.transform.up * .2f;
+            player.framingFollowTarget = follow; player.framingFollowWeight = Vector2.zero; player.ApplyAtFrame(0);
+            Check(Vector3.Distance(camera.transform.position, originalCameraPosition) < .0001f,
+                "zero horizontal framing weight preserves authored camera", report);
+            player.framingFollowWeight = Vector2.right; player.ApplyAtFrame(0);
+            Vector3 adjustment = debugCenter.position - authoredCenter;
+            Check(Mathf.Abs(camera.WorldToViewportPoint(follow.position).x - .5f) < .0001f &&
+                Mathf.Abs(Vector3.Dot(adjustment, camera.transform.up)) < .0001f &&
+                Mathf.Abs(Vector3.Dot(adjustment, camera.transform.forward)) < .0001f &&
+                Quaternion.Angle(camera.transform.rotation, originalCameraRotation) < .01f &&
+                Mathf.Abs(camera.fieldOfView - originalFov) < .0001f,
+                "horizontal framing centers target in rotated scaled origin without vertical or lens changes", report);
+            player.framingFollowWeight = new Vector2(.5f, 0); player.ApplyAtFrame(0);
+            Check(Mathf.Abs(Vector3.Dot(debugCenter.position - authoredCenter, camera.transform.right) - .225f) < .0001f,
+                "horizontal framing supports partial composition weight", report);
+            Vector3 expectedPosition = camera.transform.position;
+            player.ApplyAtFrame(10); player.ApplyAtFrame(0);
+            Check(Vector3.Distance(camera.transform.position, expectedPosition) < .0001f,
+                "horizontal framing is deterministic after seeking", report);
+            player.framingFollowWeight = Vector2.one;
+            player.framingFollowOffset = new Vector2(0, -.1f);
+            player.ApplyAtFrame(0);
+            Check(Mathf.Abs(Vector3.Dot(debugCenter.position - authoredCenter, camera.transform.right) - .45f) < .0001f &&
+                Mathf.Abs(Vector3.Dot(debugCenter.position - authoredCenter, camera.transform.up) - .1f) < .0001f &&
+                Quaternion.Angle(camera.transform.rotation, originalCameraRotation) < .01f &&
+                Mathf.Abs(camera.fieldOfView - originalFov) < .0001f,
+                "vertical framing opt-in applies camera-space offset without changing lens or rotation", report);
+            player.framingFollowTarget = null; player.ApplyAtFrame(0);
+            Check(Vector3.Distance(camera.transform.position, originalCameraPosition) < .0001f,
+                "clearing horizontal target restores original authored camera", report);
+            player.motionOrigin = null;
+
             var character = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath), scene);
             character.transform.SetPositionAndRotation(new Vector3(2, 0, 3), Quaternion.Euler(0, 33, 0));
             character.transform.localScale = Vector3.one * 1.25f;

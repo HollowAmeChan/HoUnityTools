@@ -40,6 +40,13 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             }
             EditorGUILayout.PropertyField(P("minimumPerspectiveFov"),
                 new GUIContent("最小透视视角（室内）", "0 保留作者镜头。提高后维持中心景别并缩短距离，减少窄视角远镜头退入墙体的情况；不是自动避障。"));
+            EditorGUILayout.PropertyField(P("framingFollowTarget"),
+                new GUIContent("构图跟随目标（可选）", "可拖入头部、骨盆等目标。留空使用原运镜，适合固定机位改竖屏后角色横移或弯腰出画的情况。"));
+            if (P("framingFollowTarget").objectReferenceValue != null)
+            {
+                EditorGUILayout.PropertyField(P("framingFollowWeight"), new GUIContent("跟随权重（横向 / 纵向）"));
+                EditorGUILayout.PropertyField(P("framingFollowOffset"), new GUIContent("跟随中心偏移（右 / 上）"));
+            }
             EditorGUILayout.PropertyField(P("snapAdjacentFrames"), new GUIContent("相邻关键帧按跳切处理"));
 
             EditorGUILayout.Space(4);

@@ -29,6 +29,12 @@ namespace Hollow.HoUnityTools.MmdMotion
         public float minimumPerspectiveFov;
         [SerializeField, Min(.1f)] public float minimumVerticalSpan = .95f;
         [SerializeField, Min(.1f)] public float maximumVerticalSpan = 2.05f;
+        [SerializeField, Tooltip("可选：沿画面横轴/纵轴跟随此目标，保留作者的旋转、景别和切换。留空保留原运镜。可用于固定机位改竖屏后角色横移或弯腰出画的情况。")]
+        public Transform framingFollowTarget;
+        [SerializeField, Tooltip("X 为横向、Y 为纵向；各轴 0 保留作者构图，1 完全跟随。")]
+        public Vector2 framingFollowWeight = Vector2.right;
+        [SerializeField, Tooltip("沿相机右/上方向的跟随中心偏移，单位为世界米；仅对启用跟随的轴有效。")]
+        public Vector2 framingFollowOffset;
 
         private bool playing;
         private readonly List<HoVmdCameraFrame> cameraTrack = new List<HoVmdCameraFrame>();
@@ -126,6 +132,18 @@ namespace Hollow.HoUnityTools.MmdMotion
                 center = motionOrigin.TransformPoint(center);
                 rotation = motionOrigin.rotation * rotation;
                 distance *= Mathf.Abs(motionOrigin.lossyScale.y);
+            }
+            if (framingFollowTarget != null)
+            {
+                // Evaluate from the authored center every time. No tracking
+                // history means seeks and offline frame sampling agree.
+                Vector3 right = rotation * Vector3.right;
+                Vector3 up = rotation * Vector3.up;
+                Vector3 delta = framingFollowTarget.position - center;
+                center += right * ((Vector3.Dot(delta, right) + framingFollowOffset.x) *
+                    Mathf.Clamp01(framingFollowWeight.x));
+                center += up * ((Vector3.Dot(delta, up) + framingFollowOffset.y) *
+                    Mathf.Clamp01(framingFollowWeight.y));
             }
             if (cameraTarget != null)
             {
