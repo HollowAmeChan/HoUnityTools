@@ -41,6 +41,31 @@ HoAuxRig Inspector 的总数同时包含分层与通用操作，并单独展示 
 
 与 [Ho CombineArmature](COMBINE_ARMATURE.md) 直接合并配合时，HoAuxRig 参与合并前后迁移，更新约束空间、逆绑定及恢复路径；仅重映射 Transform 引用不足以保持 Armature 点的根运动结果。请在源角色上重新进入 Play 或重新生成装配副本，以执行更新后的迁移；旧的已烘焙产物不会自动恢复被删除的层级。
 
+## 求值阶段与物理
+
+HoAuxRig Inspector 的 **通用规则求值阶段** 控制整组 Armature / Aim / Copy 依赖图在哪个阶段执行：
+
+| 配置 | 执行时机 |
+| --- | --- |
+| 随分层规则（LateUpdate） | 默认值，保持旧资产的执行方式 |
+| 最终姿态（物理后、蒙皮前） | 普通 LateUpdate 和 PreLateUpdate 模拟完成后，在 PostLateUpdate 开始执行 |
+
+同一通用规则组每帧只在选择的阶段执行一次，保持 Owner 内原始栈序和组间拓扑依赖。
+不采用先算一次、物理后再补跑的策略；重导入保留组件选择的阶段。
+阶段是 Unity 宿主的配置，不根据角色名、胸骨名或第三方物理组件名判断。
+
+分层 Parent / MCH 父级、Twist、Fan 保持原 LateUpdate 阶段。MCH 是原始变换的缓存/中间结果；
+角色设计上不通过其子级传播最终变形，依赖者应通过约束并在其生产者之后读取。
+最终姿态阶段不会重新运行整套 `EvaluateNow()` 或恢复分层骨骼。
+通用组的晚期输出不能反过来供更早的分层规则作为同帧输入；Ho 不跨这两组自动反馈重排。
+
+例如 Magica BoneCloth 每帧先恢复动画骨姿态，在普通 LateUpdate 之后才写回模拟结果。
+读取这些骨骼生成刚性附件朝向的通用组应选择“最终姿态”，单纯提高 MonoBehaviour 执行顺序无法跨越该物理阶段。
+选择 `Manual` 时两种自动阶段均不接管，宿主仍通过 `EvaluateNow()` 在自己的时机完整求值。
+
+2026-11-01 WTD 胸饰时序的复现、Blender 只读探针、MCH 不变检查与实际渲染前残差，
+见 [HoAux 胸饰阶段回归](../../Tests~/HoAuxChestAim/README.md)。
+
 ## 验证
 
 `Tests~/ConstraintIRV3/Run.ps1` 新建隔离 Unity 工程。可同时传入 `-FullConfig` 和 `-FullModel`，从配置及 FBX 的副本验证完整 WTD 导入的 99 + 11 = 110 及 Prefab 序列化；源资产不写入。覆盖 v2/v3 验证、Aim 标记、Prefab 引用恢复、顺序复制、动态父级、稀疏骨架、重复导入、VRC 多源／overflow 序列化、手工内容保护和装配异常回滚。

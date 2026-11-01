@@ -190,6 +190,8 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void OnEnable()
         {
+            FinalPoseRigs.Add(this);
+            InstallFinalPosePass();
             ResolveReferences();
             ResolveDirectReferences();
             needsBinding = !HasCompleteBindPose();
@@ -197,12 +199,14 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void OnDisable()
         {
+            FinalPoseRigs.Remove(this);
             if (Application.isPlaying)
                 RestoreOwnersToBindPose();
         }
 
         private void OnDestroy()
         {
+            FinalPoseRigs.Remove(this);
             // 播放模式中途销毁组件时 OnDisable 已经恢复过一次；这里再兜一次，
             // 保证"任何时候删掉都很安全"，不会把骨架留在最后一帧的姿态上。
             if (Application.isPlaying)
@@ -225,11 +229,16 @@ namespace Hollow.HoUnityTools.RigConstraints
         private void LateUpdate()
         {
             if (Application.isPlaying && updateMode == UpdateMode.LateUpdate)
-                EvaluateNow();
+                EvaluateRig(directExecutionPhase == DirectExecutionPhase.WithLayers);
         }
 
         /// <summary>手动执行一次全部启用层。Warudo/其他宿主可在自己的 PostLateUpdate 调用。</summary>
         public void EvaluateNow()
+        {
+            EvaluateRig(true);
+        }
+
+        private void EvaluateRig(bool includeDirect)
         {
             if (!enabled || !Application.isPlaying)
                 return;
@@ -241,7 +250,8 @@ namespace Hollow.HoUnityTools.RigConstraints
             ResolveReferences();
             if (needsBinding)
                 CaptureBindPose();
-            RestoreOwnersToBindPose();
+            if (includeDirect) RestoreOwnersToBindPose();
+            else RestoreLayerOwnersToBindPose();
 
             List<Layer> sortedLayers = new List<Layer>(layers);
             sortedLayers.Sort((left, right) =>
@@ -266,7 +276,7 @@ namespace Hollow.HoUnityTools.RigConstraints
                     EvaluateOperation(operation);
                 }
             }
-            EvaluateDirectOperations();
+            if (includeDirect && directOperations.Count > 0) EvaluateDirectStack(false);
         }
 
         /// <summary>重新以当前骨架姿态作为绑定姿态。</summary>
@@ -293,6 +303,11 @@ namespace Hollow.HoUnityTools.RigConstraints
         public void RestoreOwnersToBindPose()
         {
             RestoreDirectOwners();
+            RestoreLayerOwnersToBindPose();
+        }
+
+        private void RestoreLayerOwnersToBindPose()
+        {
             var restored = new HashSet<Transform>();
             for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
             {

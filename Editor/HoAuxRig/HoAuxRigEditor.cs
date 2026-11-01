@@ -73,6 +73,22 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     rig.Mode == HoAuxRig.UpdateMode.Manual
                         ? "运行时手动调用 EvaluateNow"
                         : "运行时 LateUpdate（不在编辑态求值）");
+                if (rig.DirectOperationCount > 0)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    int phase = EditorGUILayout.Popup(
+                        new GUIContent("通用规则求值阶段", "通用依赖图在所选阶段只执行一次；Parent / MCH / Twist / Fan 保持原阶段。Manual 模式由宿主显式调用。"),
+                        (int)rig.DirectPhase,
+                        new[] { "随分层规则（LateUpdate）", "最终姿态（物理后、蒙皮前）" });
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(rig, "设置 HoAux 通用规则求值阶段");
+                        rig.DirectPhase = (HoAuxRig.DirectExecutionPhase)phase;
+                        EditorUtility.SetDirty(rig);
+                    }
+                    if (Application.isPlaying)
+                        EditorGUILayout.LabelField("本帧通用规则求值次数", rig.DirectEvaluationsThisFrame.ToString());
+                }
                 EditorGUILayout.LabelField("当前操作", $"{CountOperations(rig)} 条（分层 {rig.LayerOperationCount} + 通用 {rig.DirectOperationCount}）");
             }
         }

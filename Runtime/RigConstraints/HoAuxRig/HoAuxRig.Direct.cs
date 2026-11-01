@@ -32,9 +32,33 @@ namespace Hollow.HoUnityTools.RigConstraints
         [SerializeField] private Transform directSpace;
         [SerializeField] private string directSpacePath;
         [SerializeField] private List<DirectOperation> directOperations = new List<DirectOperation>();
+        public enum DirectExecutionPhase { WithLayers = 0, FinalPose = 1 }
+        [SerializeField] private DirectExecutionPhase directExecutionPhase = DirectExecutionPhase.WithLayers;
         private readonly HashSet<string> directWarnings = new HashSet<string>();
         public IList<DirectOperation> DirectOperations { get { return directOperations; } }
         public string LastDirectError { get; private set; }
+        public DirectExecutionPhase DirectPhase
+        {
+            get { return directExecutionPhase; }
+            set { directExecutionPhase = value; }
+        }
+        public int LastDirectEvaluationFrame { get; private set; } = -1;
+        private int directEvaluationsInFrame;
+        public int DirectEvaluationsThisFrame
+        {
+            get { return LastDirectEvaluationFrame == Time.frameCount ? directEvaluationsInFrame : 0; }
+        }
+
+        private void EvaluateDirectStack(bool restoreOwners = true)
+        {
+            // Keep MCH parent / Parent / Twist / Fan in their original phase.
+            // A group runs once in its configured phase, from its bind input.
+            if (restoreOwners) RestoreDirectOwners();
+            EvaluateDirectOperations();
+            if (LastDirectEvaluationFrame != Time.frameCount) directEvaluationsInFrame = 0;
+            LastDirectEvaluationFrame = Time.frameCount;
+            ++directEvaluationsInFrame;
+        }
 
         public const int DirectPosition=1, DirectRotation=2, DirectScaleChannel=4, DirectAll=7;
         public static int DirectWriteChannels(string type,bool positionOnly=false)
