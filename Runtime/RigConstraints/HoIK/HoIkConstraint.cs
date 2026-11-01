@@ -80,6 +80,7 @@ namespace Hollow.HoUnityTools.RigConstraints
         [SerializeField] private Color targetColor = new Color(1.0f, 0.75f, 0.1f, 0.95f);
         [SerializeField] private Color poleColor = new Color(1.0f, 0.25f, 0.55f, 0.95f);
 
+        private int suppressedAutomaticFrame = -1;
         private bool hasBindPose;
         private string lastError;
         private readonly HashSet<string> warned = new HashSet<string>();
@@ -120,6 +121,7 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void OnEnable()
         {
+            suppressedAutomaticFrame = -1;
             CaptureBindPose();
         }
 
@@ -136,7 +138,8 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void LateUpdate()
         {
-            if (Application.isPlaying && updateMode == UpdateMode.LateUpdate)
+            if (Application.isPlaying && updateMode == UpdateMode.LateUpdate &&
+                suppressedAutomaticFrame != Time.frameCount)
                 SolveNow();
         }
 
@@ -158,6 +161,17 @@ namespace Hollow.HoUnityTools.RigConstraints
                 links[0] != null && links[0].bone != null && links[1] != null && links[1].bone != null &&
                 effector != null && links[0].useAxisMask && EnabledAxisCount(links[0]) == 1)
                 CaptureHingeReference(links[0], links[1].bone);
+        }
+
+        /// <summary>
+        /// Evaluate an externally owned pose without another automatic solve
+        /// later in the same frame. The serialized update mode is unchanged.
+        /// </summary>
+        public void SolveNow(bool suppressAutomaticUpdate)
+        {
+            if (suppressAutomaticUpdate && Application.isPlaying)
+                suppressedAutomaticFrame = Time.frameCount;
+            SolveNow();
         }
 
         /// <summary>Run CCD once. Runtime callers can invoke this after animation evaluation.</summary>
