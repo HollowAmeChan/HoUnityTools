@@ -2,6 +2,12 @@
 using Hollow.HoUnityTools.MmdMotion;
 using UnityEditor;
 using UnityEngine;
+#if HO_URP_AVAILABLE
+using System.Linq;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEditor.SceneManagement;
+#endif
 
 namespace Hollow.HoUnityTools.Editor.MmdMotion
 {
@@ -45,6 +51,9 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
             EditorGUILayout.EndFoldoutHeaderGroup();
             serializedObject.ApplyModifiedProperties();
 
+#if HO_URP_AVAILABLE
+            DrawPostProcessingStatus();
+#endif
             if (Player.Animation == null)
                 EditorGUILayout.HelpBox("请指定镜头 VMD 资产。", MessageType.Warning);
             else if (Player.Animation.cameraFrames.Count == 0)
@@ -68,6 +77,33 @@ namespace Hollow.HoUnityTools.Editor.MmdMotion
                 EditorGUILayout.LabelField("摄像机只在 Play 模式下受 VMD 控制。", EditorStyles.miniLabel);
             }
         }
+
+#if HO_URP_AVAILABLE
+        private void DrawPostProcessingStatus()
+        {
+            var camera = Player.TargetCamera;
+            if (camera == null || !camera.gameObject.scene.IsValid()) return;
+            var data = camera.GetComponent<UniversalAdditionalCameraData>();
+            int mask = data != null ? data.volumeLayerMask.value : 1;
+            var globals = camera.gameObject.scene.GetRootGameObjects()
+                .SelectMany(x => x.GetComponentsInChildren<Volume>(true))
+                .Where(x => x.isGlobal && x.isActiveAndEnabled && x.weight > 0 && x.sharedProfile != null).ToArray();
+            bool missingVolumes = globals.Length > 0 && globals.All(x => (mask & (1 << x.gameObject.layer)) == 0);
+            if (data != null && data.renderPostProcessing && !missingVolumes) return;
+            EditorGUILayout.HelpBox(
+                (data == null || !data.renderPostProcessing ? "此相机尚未开启 URP 后处理。" : "") +
+                (missingVolumes ? "Volume Mask 没有包含场景全局 Volume 所在层。" : "") +
+                "开关与 Volume Mask 是两个独立设置。", MessageType.Warning);
+            if (!GUILayout.Button("启用本相机后处理并匹配场景 Volume")) return;
+            if (data == null) data = Undo.AddComponent<UniversalAdditionalCameraData>(camera.gameObject);
+            Undo.RecordObject(data, "配置 VMD 相机后处理");
+            data.renderPostProcessing = true;
+            foreach (var volume in globals) mask |= 1 << volume.gameObject.layer;
+            data.volumeLayerMask = mask;
+            EditorUtility.SetDirty(data);
+            EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
+        }
+#endif
     }
 }
 #endif

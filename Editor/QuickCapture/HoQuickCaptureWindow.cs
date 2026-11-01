@@ -19,7 +19,8 @@
 // Inspector 用的，而这里要的是**两行就干完活**。形态向隔壁播放速度条看齐：
 //   · 第一行：`[截帧]  <分辨率>  <输出目录>`
 //   · 第二行：`[录制]  <时长>`  /  录制中 = `[暂停] [停止]  ▇▇▇▇ 32%  4.2s`
-//   · 第三行：一个折叠「高级」，默认收起。所有其余设置（分辨率模式、帧率、前缀、
+//   · 第三行：质量档 / 常用比例 / 30 或 60 fps；用户要求验证阶段直接快速切换。
+//   · 第四行：一个折叠「高级」，默认收起。所有其余设置（分辨率模式、前缀、
 //     每次录制的子目录、完成后打开目录、PNG 质量、还原默认）都在里面。
 // **正文里不写说明文字** —— 该解释的一律进悬浮工具提示（`GUIContent` 的第二参）。
 // 例外只有两条：报错、录制进度，因为那两样是"现在发生了什么"，藏起来等于没说。
@@ -102,7 +103,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         {
             titleContent = new GUIContent("快速渲染", "快速保存当前游戏视图 / 离线录制一段。");
             HoQuickCaptureEngine.Changed += Repaint;
-            minSize = new Vector2(MinWindowWidth, 74f);
+            minSize = new Vector2(MinWindowWidth, 96f);
             advancedExpanded = EditorPrefs.GetBool(AdvancedPrefsKey, false);
         }
 
@@ -164,6 +165,9 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 DrawNotice(status);
             }
 
+            using (new EditorGUI.DisabledScope(status.IsBusy))
+                DrawQualityRow(data);
+
             GUILayout.Space(2f);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -182,6 +186,44 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
         }
 
         // ── 第一行：截帧 · 分辨率 · 输出目录 ────────────────────────
+
+        private void DrawQualityRow(HoQuickCaptureSettingsData data)
+        {
+            int width = data.customWidth, height = data.customHeight;
+            if (data.resolutionMode != HoQuickCaptureResolutionMode.Custom)
+                HoQuickCaptureGameView.GetRenderSize(out width, out height);
+            int quality = HoQuickCaptureQualityPresets.FindQuality(width, height);
+            int aspect = HoQuickCaptureQualityPresets.FindAspect(width, height);
+            string[] qualities = { "当前 / 自定", "验证 360p", "预览 720p", "精查 1080p", "高分 2160p" };
+            string[] aspects = { "当前 / 自定", "横屏 16:9", "竖屏 9:16", "4:3", "正方形" };
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Space(Pad);
+                GUILayout.Label(new GUIContent("质量", "只改输出分辨率，不关闭光照或后处理。验证档用于快速检查，非最终渲染。"),
+                    EditorStyles.miniLabel, GUILayout.Width(26));
+                int selectedQuality = EditorGUILayout.Popup(
+                    data.resolutionMode == HoQuickCaptureResolutionMode.Custom ? quality + 1 : 0,
+                    qualities, GUILayout.Width(100));
+                GUILayout.Label("比例", EditorStyles.miniLabel, GUILayout.Width(26));
+                int selectedAspect = EditorGUILayout.Popup(aspect + 1, aspects, GUILayout.Width(90));
+                if ((selectedQuality > 0 && selectedQuality != quality + 1) ||
+                    (selectedQuality > 0 && data.resolutionMode != HoQuickCaptureResolutionMode.Custom) ||
+                    (selectedAspect > 0 && selectedAspect != aspect + 1))
+                {
+                    HoQuickCaptureQualityPresets.Apply(data,
+                        selectedQuality > 0 ? selectedQuality - 1 : Mathf.Max(0, quality),
+                        selectedAspect > 0 ? selectedAspect - 1 : (width > height ? 0 : 1));
+                    HoQuickCaptureSettings.NotifyChanged();
+                }
+                GUILayout.Label("fps", EditorStyles.miniLabel, GUILayout.Width(22));
+                int rate = EditorGUILayout.Popup(Mathf.Approximately(data.frameRate, 60) ? 1 : 0,
+                    new[] { "30", "60" }, GUILayout.Width(48));
+                float chosenRate = rate == 1 ? 60 : 30;
+                if (GUI.enabled && !Mathf.Approximately(data.frameRate, chosenRate)) SetFrameRate(data, chosenRate);
+                GUILayout.FlexibleSpace();
+                GUILayout.Space(Pad);
+            }
+        }
 
         private void DrawShotRow(HoQuickCaptureSettingsData data, HoQuickCaptureStatus status)
         {
@@ -413,7 +455,7 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                 new GUIContent(
                     data.ResolveTargetFrames() + " 帧",
                     "按当前帧率与时长换算出来的实际帧数。\n当前帧率："
-                    + FormatFrameRate(data.frameRate) + " fps（在「高级」里改）。"),
+                    + FormatFrameRate(data.frameRate) + " fps（在面板上方切换）。"),
                 EditorStyles.miniLabel);
         }
 
@@ -743,35 +785,12 @@ namespace Hollow.HoUnityTools.Editor.QuickCapture
                     GUILayout.FlexibleSpace();
                 }
 
-                // 帧率 + 每次录制建子目录
+                // 帧率在主面板直接切换，避免高级字段与快捷档相互覆盖。
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.Label(new GUIContent("帧率", "出图序列的帧率。\n同时决定游戏时间每帧前进多少（Time.captureDeltaTime = 1/帧率）。"), EditorStyles.miniLabel, GUILayout.Width(52f));
 
-                    float rate = EditorGUI.FloatField(
-                        GUILayoutUtility.GetRect(FoldFieldWidth, FoldFieldWidth, ControlHeight, ControlHeight),
-                        (float)Math.Round(data.frameRate, 3));
-                    rate = Mathf.Clamp(rate, HoQuickCaptureSettings.MinFrameRate, HoQuickCaptureSettings.MaxFrameRate);
-                    if (!Mathf.Approximately(rate, data.frameRate))
-                    {
-                        data.frameRate = rate;
-                        HoQuickCaptureSettings.NotifyChanged();
-                    }
-
-                    if (GUILayout.Button(new GUIContent("24", "24 fps"), EditorStyles.miniButton, GUILayout.Width(24f)))
-                    {
-                        SetFrameRate(data, 24f);
-                    }
-
-                    if (GUILayout.Button(new GUIContent("30", "30 fps"), EditorStyles.miniButton, GUILayout.Width(24f)))
-                    {
-                        SetFrameRate(data, 30f);
-                    }
-
-                    if (GUILayout.Button(new GUIContent("60", "60 fps"), EditorStyles.miniButton, GUILayout.Width(24f)))
-                    {
-                        SetFrameRate(data, 60f);
-                    }
+                    GUILayout.Label(FormatFrameRate(data.frameRate) + " fps（在面板上方切换）", EditorStyles.miniLabel);
 
                     GUILayout.Space(Gap);
                     GUILayout.FlexibleSpace();
