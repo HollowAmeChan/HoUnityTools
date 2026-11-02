@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Hollow.HoUnityTools.Editor.MmdMotion;
+using Hollow.HoUnityTools.Editor.Pmx;
 using Hollow.HoUnityTools.MmdMotion;
 using Hollow.HoUnityTools.RigConstraints;
 using UnityEditor;
@@ -69,14 +70,22 @@ public static class VmdRetargetAudit
         public Vector3 sourcePosition, targetPosition;
         public Quaternion sourceRotation, targetRotation, offset;
     }
-    [Serializable] public sealed class SourReport { public string prefab, motion; public SourFrame[] frames; }
+    [Serializable] public sealed class SourReport { public string prefab, motion; public SourFrame rest; public SourFrame[] frames; }
     [Serializable] public sealed class SourFrame { public float vmdFrame; public SourBone[] bones; }
-    [Serializable] public sealed class SourBone { public string name; public Vector3 position; }
+    [Serializable] public sealed class SourBone
+    {
+        public string name, parent;
+        public Vector3 position, localPosition;
+        public Quaternion localRotation, rootRotation;
+    }
+    [Serializable] public sealed class BudgetReport { public BudgetRow[] samples; }
+    [Serializable] public sealed class BudgetRow { public int iterations; public float frame, error; public string ik; }
     private sealed class Pose
     {
         internal Vector3[] positions;
         internal Quaternion[] rotations;
     }
+    [Serializable] public sealed class AxisReport { public string pmx, prefab, motion; public int pmxAxisBones, appliedBones; public string[] missing; }
 
     public static string Run(string filmRoot, string output)
     {
@@ -267,17 +276,158 @@ public static class VmdRetargetAudit
             player.ModelRoot = model.transform; player.SkeletonRoot = model.transform.Find("MMD 骨架");
             player.RebuildBindings();
             var map = player.SkeletonRoot.GetComponentsInChildren<Transform>(true).ToDictionary(t => t.name);
+            var names = new[] { "全ての親", "センター", "グルーブ", "腰", "下半身", "腰キャンセル左", "腰キャンセル右",
+                "左足IK親", "右足IK親",
+                "左足", "左ひざ", "左足首", "左つま先", "左足ＩＫ", "左つま先ＩＫ", "右足", "右ひざ", "右足首",
+                "右つま先", "右足ＩＫ", "右つま先ＩＫ", "左足D", "左ひざD", "左足首D", "左足先EX",
+                "右足D", "右ひざD", "右足首D", "右足先EX" }.Where(map.ContainsKey).ToArray();
+            SourFrame Capture(float frame) => new SourFrame { vmdFrame = frame, bones = names.Select(n => new SourBone {
+                name = n, parent = map[n].parent?.name,
+                position = model.transform.InverseTransformPoint(map[n].position),
+                localPosition = map[n].localPosition, localRotation = map[n].localRotation,
+                rootRotation = Quaternion.Inverse(model.transform.rotation) * map[n].rotation
+            }).ToArray() };
+            var rest = Capture(-1);
             var frames = new List<SourFrame>();
-            for (int half = 450; half <= 630; half++)
+            foreach (float frame in new[] { 120f }.Concat(Enumerable.Range(450, 181).Select(x => x * .5f)))
             {
-                float frame = half * .5f;
                 player.ApplyAtFrame(frame);
-                frames.Add(new SourFrame { vmdFrame = frame, bones = new[] { "下半身", "左足", "左ひざ", "左足首",
-                    "左つま先", "左足ＩＫ", "左つま先ＩＫ", "右足", "右ひざ", "右足首", "右つま先",
-                    "右足ＩＫ", "右つま先ＩＫ" }.Select(n => new SourBone { name = n,
-                        position = model.transform.InverseTransformPoint(map[n].position) }).ToArray() });
+                frames.Add(Capture(frame));
             }
-            File.WriteAllText(output, JsonUtility.ToJson(new SourReport { prefab = prefab, motion = motion, frames = frames.ToArray() }, true));
+            File.WriteAllText(output, JsonUtility.ToJson(new SourReport { prefab = prefab, motion = motion,
+                rest = rest, frames = frames.ToArray() }, true));
+            return output;
+        }
+        finally { EditorSceneManager.ClosePreviewScene(preview); }
+    }
+
+    public static string RunSourFk(string prefab, string motion, string output)
+    {
+        var preview = EditorSceneManager.NewPreviewScene();
+        try
+        {
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefab), preview);
+            var player = model.AddComponent<HoVmdMotionPlayer>();
+            player.Animation = AssetDatabase.LoadAssetAtPath<HoVmdAnimation>(motion);
+            player.ModelRoot = model.transform; player.SkeletonRoot = model.transform.Find("MMD 骨架");
+            player.RebuildBindings();
+            foreach (var control in model.GetComponentsInChildren<HoIkConstraint>(true))
+                control.SolveEnabled = false;
+            var map = player.SkeletonRoot.GetComponentsInChildren<Transform>(true).ToDictionary(t => t.name);
+            string[] names = { "下半身", "腰キャンセル左", "腰キャンセル右", "左足", "左ひざ", "左足首",
+                "左つま先", "左足D", "左ひざD", "左足首D", "左足先EX", "右足", "右ひざ", "右足首",
+                "右つま先", "右足D", "右ひざD", "右足首D", "右足先EX" };
+            var frames = new List<SourFrame>();
+            foreach (float frame in new[] { 120f }.Concat(Enumerable.Range(450, 181).Select(x => x * .5f)))
+            {
+                player.ApplyAtFrame(frame);
+                frames.Add(new SourFrame { vmdFrame = frame, bones = names.Select(n => new SourBone {
+                    name = n, parent = map[n].parent?.name,
+                    position = model.transform.InverseTransformPoint(map[n].position),
+                    localPosition = map[n].localPosition, localRotation = map[n].localRotation,
+                    rootRotation = Quaternion.Inverse(model.transform.rotation) * map[n].rotation
+                }).ToArray() });
+            }
+            string path = Path.ChangeExtension(output, null) + "-fk.json";
+            File.WriteAllText(path, JsonUtility.ToJson(new SourReport { prefab = prefab, motion = motion,
+                frames = frames.ToArray() }, true));
+            return path;
+        }
+        finally { EditorSceneManager.ClosePreviewScene(preview); }
+    }
+
+    public static string RunSourAxisProbe(string pmxPath, string prefab, string motion, string output)
+    {
+        var preview = EditorSceneManager.NewPreviewScene();
+        try
+        {
+            var doc = HoPmxReader.Read(Path.GetFullPath(pmxPath));
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefab), preview);
+            var rig = model.GetComponent<HoPmxPoseRig>();
+            var transforms = model.GetComponentsInChildren<Transform>(true)
+                .GroupBy(t => t.name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+            var missing = new List<string>();
+            int expected = doc.Bones.Count(b => (b.Flags & 0x0800) != 0), applied = 0;
+            for (int i = 0; i < doc.Bones.Count; i++)
+            {
+                var source = doc.Bones[i];
+                if ((source.Flags & 0x0800) == 0) continue;
+                if (!transforms.TryGetValue(source.Name, out var matches) || matches.Length != 1)
+                { missing.Add(source.Name); continue; }
+                Vector3 x = PmxDirection(source.LocalAxisX);
+                Vector3 z = PmxDirection(source.LocalAxisZ);
+                if (x.sqrMagnitude < 1e-8f || z.sqrMagnitude < 1e-8f)
+                { missing.Add(source.Name + " (degenerate local axes)"); continue; }
+                x.Normalize(); z = Vector3.ProjectOnPlane(z, x).normalized;
+                if (z.sqrMagnitude < 1e-8f)
+                { missing.Add(source.Name + " (parallel local axes)"); continue; }
+                Vector3 y = Vector3.Cross(z, x).normalized;
+                z = Vector3.Cross(x, y).normalized;
+                matches[0].rotation = Quaternion.LookRotation(z, y);
+                applied++;
+            }
+            if (rig != null)
+                foreach (var append in rig.Appends)
+                {
+                    if (append.owner != null) append.restRotation = append.owner.localRotation;
+                    if (append.source != null) append.sourceRestRotation = append.source.localRotation;
+                }
+            foreach (var control in model.GetComponentsInChildren<HoIkConstraint>(true)) control.SolveEnabled = false;
+            var player = model.AddComponent<HoVmdMotionPlayer>();
+            player.Animation = AssetDatabase.LoadAssetAtPath<HoVmdAnimation>(motion);
+            player.ModelRoot = model.transform; player.SkeletonRoot = model.transform.Find("MMD 骨架");
+            player.RebuildBindings();
+            var required = new[] { "下半身", "腰キャンセル左", "腰キャンセル右", "左足", "左ひざ", "左足首",
+                "左つま先", "左足D", "左ひざD", "左足首D", "左足先EX", "右足", "右ひざ", "右足首",
+                "右つま先", "右足D", "右ひざD", "右足首D", "右足先EX", "左腕", "左ひじ", "左手首", "左親指１", "左人指１", "左中指１",
+                "左薬指１", "左小指１", "右腕", "右ひじ", "右手首", "右親指１", "右人指１", "右中指１",
+                "右薬指１", "右小指１" };
+            var map = player.SkeletonRoot.GetComponentsInChildren<Transform>(true).ToDictionary(t => t.name);
+            SourFrame Capture(float frame) => new SourFrame { vmdFrame = frame, bones = required
+                .Where(map.ContainsKey).Select(n => new SourBone { name=n, parent=map[n].parent?.name,
+                    position=model.transform.InverseTransformPoint(map[n].position), localPosition=map[n].localPosition,
+                    localRotation=map[n].localRotation,
+                    rootRotation=Quaternion.Inverse(model.transform.rotation)*map[n].rotation }).ToArray() };
+            var frames = new List<SourFrame>();
+            foreach (float frame in new[] { 235f, 240f, 261f, 270f, 273f, 274f, 281f, 299f, 300f, 304f, 309f })
+            { player.ApplyAtFrame(frame); frames.Add(Capture(frame)); }
+            var rest = Capture(-1);
+            string path = Path.ChangeExtension(output, null) + ".json";
+            File.WriteAllText(path, JsonUtility.ToJson(new SourReport { prefab=prefab,motion=motion,rest=rest,frames=frames.ToArray() },true));
+            string axesPath = Path.Combine(Path.GetDirectoryName(path),"sour-axis-probe.json");
+            File.WriteAllText(axesPath,JsonUtility.ToJson(new AxisReport{pmx=pmxPath,prefab=prefab,motion=motion,
+                pmxAxisBones=expected,appliedBones=applied,missing=missing.ToArray()},true));
+            return path;
+        }
+        finally { EditorSceneManager.ClosePreviewScene(preview); }
+    }
+
+    private static Vector3 PmxDirection(HoPmxVector3 value) => new Vector3(-value.X,value.Y,-value.Z);
+
+    public static string RunBudgets(string scenePath, string output)
+    {
+        var preview = EditorSceneManager.OpenPreviewScene(scenePath);
+        try
+        {
+            var sequence = preview.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<HoVmdSequencePlayer>(true))
+                .First(s => s.Retargeter != null);
+            sequence.Body.RebuildBindings();
+            var legs = sequence.Retargeter.Feet.Select(f => f.sourceIk).Where(i => i.Links.Count == 2).ToArray();
+            var rows = new List<BudgetRow>();
+            foreach (int iterations in new[] { 40, 80, 200, 800 })
+            {
+                foreach (var leg in legs) leg.Iterations = iterations;
+                sequence.Sample(0);
+                for (int half = 450; half <= 630; half++)
+                {
+                    float frame = half * .5f;
+                    sequence.Sample(frame / sequence.FrameRate);
+                    foreach (var leg in legs)
+                        rows.Add(new BudgetRow { iterations = iterations, frame = frame, ik = leg.IkName,
+                            error = Vector3.Distance(leg.Effector.position, leg.Target.position) });
+                }
+            }
+            File.WriteAllText(output, JsonUtility.ToJson(new BudgetReport { samples = rows.ToArray() }, true));
             return output;
         }
         finally { EditorSceneManager.ClosePreviewScene(preview); }
