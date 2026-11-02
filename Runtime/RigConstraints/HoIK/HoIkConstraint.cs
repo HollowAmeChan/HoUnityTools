@@ -358,6 +358,8 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private bool TrySolveTwoBoneHinge()
         {
+            if ((!usePole || pole == null) && TrySolveLimitedFkHinge())
+                return true;
             // The common ankle -> knee -> thigh case has a closed-form solve.
             // CCD alone can pick either hinge branch as the goal crosses behind
             // the leg, flipping thigh twist by 180 degrees despite a small
@@ -465,6 +467,63 @@ namespace Hollow.HoUnityTools.RigConstraints
                 hasPolePlane = true;
             }
             return true;
+        }
+
+        private bool TrySolveLimitedFkHinge()
+        {
+            // A reference MMD knee already has an authored FK plane and a
+            // signed hinge interval. Preserve that plane with the minimum
+            // root swing; CCD otherwise converges very slowly near extension.
+            // Interactive Pole and partial-weight policies keep their paths.
+            if (links.Count != 2 || maxStepAngle <= 0 || weight < .9999f)
+                return false;
+            Link hinge = links[0], rootLink = links[1];
+            if (!hinge.useLocalEulerLimits || rootLink.useLocalEulerLimits ||
+                (rootLink.useAxisMask && EnabledAxisCount(rootLink) != 3) ||
+                !TryGetSingleAxisLimits(hinge, hinge.bone.localRotation, out Vector3 localAxis,
+                    out float currentAngle, out float minimum, out float maximum))
+                return false;
+            Transform joint = hinge.bone, root = rootLink.bone;
+            if (joint.parent != root || effector.parent != joint ||
+                !HasUniformScale(root) || !HasUniformScale(joint))
+                return false;
+            Vector3 axis = joint.rotation * localAxis;
+            Vector3 upper = joint.position - root.position, lower = effector.position - joint.position;
+            if (upper.sqrMagnitude < 1e-10f || lower.sqrMagnitude < 1e-10f) return false;
+            Vector3 upperPlane = Vector3.ProjectOnPlane(upper, axis);
+            Vector3 lowerPlane = Vector3.ProjectOnPlane(lower, axis);
+            float a = Vector3.Dot(upperPlane, lowerPlane);
+            float b = Vector3.Dot(upperPlane, Vector3.Cross(axis, lowerPlane));
+            float radius = Mathf.Sqrt(a * a + b * b);
+            if (radius < 1e-10f) return false;
+            Vector3 goal = target.position - root.position;
+            float constant = Vector3.Dot(upper, axis) * Vector3.Dot(lower, axis);
+            float desiredDot = (goal.sqrMagnitude - upper.sqrMagnitude - lower.sqrMagnitude) * .5f;
+            float phase = Mathf.Atan2(b, a), bend = Mathf.Acos(Mathf.Clamp((desiredDot - constant) / radius, -1, 1));
+            float first = Mathf.Clamp(NormalizeAngle(currentAngle + (phase + bend) * Mathf.Rad2Deg), minimum, maximum);
+            float second = Mathf.Clamp(NormalizeAngle(currentAngle + (phase - bend) * Mathf.Rad2Deg), minimum, maximum);
+            float firstError = HingeDistanceError(first), secondError = HingeDistanceError(second);
+            float chosen = firstError < secondError - 1e-7f ? first :
+                secondError < firstError - 1e-7f ? second :
+                Mathf.Abs(first - currentAngle) <= Mathf.Abs(second - currentAngle) ? first : second;
+            float budget = maxStepAngle * Mathf.Max(1, iterations);
+            float step = Mathf.Clamp(chosen - currentAngle, -budget, budget);
+            joint.localRotation = Quaternion.AngleAxis(currentAngle + step, localAxis);
+            Vector3 end = effector.position - root.position;
+            if (end.sqrMagnitude < 1e-10f || goal.sqrMagnitude < 1e-10f) return true;
+            Vector3 plane = Vector3.ProjectOnPlane(joint.position - root.position, end);
+            if (plane.sqrMagnitude < 1e-10f) plane = Vector3.Cross(end, axis);
+            Quaternion swing = StableFromTo(end, goal, plane);
+            root.rotation = Quaternion.RotateTowards(root.rotation, swing * root.rotation, budget);
+            return true;
+
+            float HingeDistanceError(float angle)
+            {
+                float delta = (angle - currentAngle) * Mathf.Deg2Rad;
+                float squared = upper.sqrMagnitude + lower.sqrMagnitude +
+                    2 * (constant + a * Mathf.Cos(delta) + b * Mathf.Sin(delta));
+                return Mathf.Abs(squared - goal.sqrMagnitude);
+            }
         }
 
         private void CaptureHingeReference(Link hinge, Transform root)
