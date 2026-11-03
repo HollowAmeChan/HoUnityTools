@@ -45,7 +45,7 @@
           <TextBlock Text="{Binding DocumentName}" MaxWidth="230" TextTrimming="CharacterEllipsis" ToolTip="{Binding ValuePath}"/>
           <TextBlock Text="{Binding HeaderStatus}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="12,0,0,0"/>
         </StackPanel>
-        <ToggleButton Grid.Column="2" Content="文件信息" IsChecked="{Binding ShowFiles}" ToolTip="查看当前文件的完整路径"/>
+        <ToggleButton Grid.Column="2" Content="作品文件" IsChecked="{Binding ShowFiles}" ToolTip="查看路径，或分别选择 value 与 IR 文件"/>
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0,0,0,1">
@@ -74,12 +74,16 @@
         </Grid>
         <Border Visibility="{Binding ShowFiles, Converter={StaticResource VisibleIf}}" Padding="16,4,16,12">
           <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock Text="value" Foreground="{StaticResource MutedBrush}"/>
-            <TextBox Grid.Column="1" Text="{Binding ValuePath, Mode=OneWay}" IsReadOnly="True" ToolTip="{Binding ValuePath}"/>
+            <TextBox x:Name="ValueFilePathBox" Grid.Column="1" Text="{Binding ValueFilePath, Mode=OneWay}" IsReadOnly="True" ToolTip="{Binding ValueFilePath}"/>
+            <Button x:Name="BrowseValueFileButton" Grid.Column="2" Content="浏览…" Click="BrowseValueFileClicked" Margin="8,0,0,0"
+                ToolTip="打开文件选择窗口，选择 value JSON 并填写路径" AutomationProperties.Name="选择 Value JSON 文件"/>
             <TextBlock Grid.Row="1" Text="IR" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,0"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding IrPath, Mode=OneWay}" IsReadOnly="True" Margin="0,6,0,0" ToolTip="{Binding IrPath}"/>
+            <TextBox x:Name="IrFilePathBox" Grid.Row="1" Grid.Column="1" Text="{Binding IrFilePath, Mode=OneWay}" IsReadOnly="True" Margin="0,6,0,0" ToolTip="{Binding IrFilePath}"/>
+            <Button x:Name="BrowseIrFileButton" Grid.Row="1" Grid.Column="2" Content="浏览…" Click="BrowseIrFileClicked" Margin="8,6,0,0"
+                ToolTip="打开文件选择窗口，选择 IR JSON 并填写路径" AutomationProperties.Name="选择 IR JSON 文件"/>
           </Grid>
         </Border>
         <Border Visibility="{Binding ShowConnection, Converter={StaticResource VisibleIf}}" Padding="16,4,16,12">

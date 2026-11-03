@@ -21,6 +21,23 @@ internal static class Program
             var application = new App();
             application.InitializeComponent();
             var window = new MainWindow(false);
+            string sampleValuePath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.value.json"));
+            string sampleIrPath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.ir.json"));
+            Check(((Button)window.FindName("BrowseValueFileButton")).IsEnabled, "value browse button works before opening a document");
+            Check(((Button)window.FindName("BrowseIrFileButton")).IsEnabled, "IR browse button works before opening a document");
+            window.ChooseDocumentFilePath(true, sampleValuePath);
+            window.Dispatcher.Invoke(new Action(() => { }), System.Windows.Threading.DispatcherPriority.ContextIdle);
+            Check(!window.HasDocument && window.HasPendingFilePaths, "selecting one file waits for its pair");
+            Check(((TextBox)window.FindName("ValueFilePathBox")).Text == sampleValuePath, "value chooser fills the visible path immediately");
+            window.ChooseDocumentFilePath(false, sampleIrPath);
+            window.Dispatcher.Invoke(new Action(() => { }), System.Windows.Threading.DispatcherPriority.ContextIdle);
+            Check(window.HasDocument && !window.HasPendingFilePaths, "selecting the second JSON validates and loads the pair");
+            Check(((TextBox)window.FindName("IrFilePathBox")).Text == sampleIrPath, "IR chooser fills the visible path");
+            var reversePicker = new MainWindow(false);
+            reversePicker.ChooseDocumentFilePath(false, sampleIrPath);
+            Check(!reversePicker.HasDocument && reversePicker.IrFilePath == sampleIrPath, "IR can be chosen first independently");
+            reversePicker.ChooseDocumentFilePath(true, sampleValuePath);
+            Check(reversePicker.HasDocument && reversePicker.ValuePath == sampleValuePath, "value selection completes an IR-first pair");
             object Call(string command, object payload = null)
             {
                 using var json = JsonDocument.Parse(JsonSerializer.Serialize(payload ?? new { }));
@@ -39,6 +56,12 @@ internal static class Program
             Call("selectValue", new { parameter = "Mouth/Open" });
             Call("setValueCurveKey", new { parameter = "Mouth/Open", index = 1, value = .73 });
             Check(State().GetProperty("dirty").GetBoolean(), "curve edit is dirty");
+            window.ChooseDocumentFilePath(true, sampleValuePath);
+            Check(State().GetProperty("dirty").GetBoolean() && State().GetProperty("canUndo").GetBoolean(), "choosing the same file does not reload or lose edit history");
+            bool fileReplacementBlocked = false;
+            try { window.ChooseDocumentFilePath(false, sampleValuePath); }
+            catch (InvalidOperationException) { fileReplacementBlocked = true; }
+            Check(fileReplacementBlocked && window.IrPath == sampleIrPath, "independent file replacement protects unsaved edits");
             Call("selectValue", new { parameter = "Mouth/Form" });
             Call("undo");
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form", "undo preserves the current value selection");

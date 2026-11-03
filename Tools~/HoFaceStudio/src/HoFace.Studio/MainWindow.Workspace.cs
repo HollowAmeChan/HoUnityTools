@@ -10,6 +10,62 @@ namespace HoFace.Studio
     public partial class MainWindow
     {
         private bool showFiles, showConnection;
+        private string chosenValuePath, chosenIrPath;
+        public string ValueFilePath => chosenValuePath ?? document.ValuePath;
+        public string IrFilePath => chosenIrPath ?? document.IrPath;
+        public bool HasPendingFilePaths => chosenValuePath != null || chosenIrPath != null;
+        private void NotifyFilePaths()
+        {
+            OnPropertyChanged(nameof(ValueFilePath)); OnPropertyChanged(nameof(IrFilePath));
+            OnPropertyChanged(nameof(HasPendingFilePaths)); OnPropertyChanged(nameof(HeaderStatus));
+        }
+        private void BrowseValueFileClicked(object sender, RoutedEventArgs e) => BrowseDocumentFile(true);
+        private void BrowseIrFileClicked(object sender, RoutedEventArgs e) => BrowseDocumentFile(false);
+        private void BrowseDocumentFile(bool valueFile)
+        {
+            string current = valueFile ? ValueFilePath : IrFilePath;
+            string other = valueFile ? IrFilePath : ValueFilePath;
+            string availablePath = current ?? other;
+            string directory = string.IsNullOrWhiteSpace(availablePath) ? null : Path.GetDirectoryName(availablePath);
+            var dialog = new OpenFileDialog
+            {
+                Title = valueFile ? "选择 value JSON 文件" : "选择 IR JSON 文件",
+                Filter = valueFile
+                    ? "HoFace value (*.hoface.value.json;*.hoface.json)|*.hoface.value.json;*.hoface.json|JSON (*.json)|*.json"
+                    : "HoFace IR (*.hoface.ir.json)|*.hoface.ir.json|JSON (*.json)|*.json",
+                InitialDirectory = Directory.Exists(directory) ? directory : "",
+                CheckFileExists = true, Multiselect = false
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            if (string.Equals(Path.GetFullPath(dialog.FileName), current, StringComparison.OrdinalIgnoreCase)) return;
+            try
+            {
+                if (!ConfirmReplaceDocument()) return;
+                ChooseDocumentFilePath(valueFile, dialog.FileName, true);
+            }
+            catch (Exception error) { ShowError(error.Message); }
+        }
+        public void ChooseDocumentFilePath(bool valueFile, string path, bool discardChanges = false)
+        {
+            string selected = Path.GetFullPath(path);
+            if (!File.Exists(selected)) throw new FileNotFoundException("所选 JSON 文件不存在。", selected);
+            string current = valueFile ? ValueFilePath : IrFilePath;
+            if (string.Equals(selected, current, StringComparison.OrdinalIgnoreCase)) return;
+            if (HasUnsavedChanges && !discardChanges)
+                throw new InvalidOperationException("作品有未保存编辑，请先保存再更换文件。");
+            string valuePath = valueFile ? selected : ValueFilePath;
+            string irPath = valueFile ? IrFilePath : selected;
+            if (!string.IsNullOrWhiteSpace(valuePath) && !string.IsNullOrWhiteSpace(irPath))
+            {
+                OpenPaths(valuePath, irPath);
+            }
+            else
+            {
+                if (valueFile) chosenValuePath = selected; else chosenIrPath = selected;
+                NotifyFilePaths();
+            }
+            ShowFiles = true;
+        }
         private bool showEditor = true;
         private double preferredPlotRatio = .475;
         public bool ShowEditor

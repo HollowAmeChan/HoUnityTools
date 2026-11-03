@@ -126,7 +126,7 @@ namespace HoFace.Studio
                 OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
             }
         }
-        public string HeaderStatus => document.Value == null ? "未打开作品" : (HasTextDraft ? "文本待应用" : HasPropertyDraft ? "属性待应用" : document.IsDirty ? "● 未保存" : "已保存");
+        public string HeaderStatus => HasPendingFilePaths ? "等待配对文件" : document.Value == null ? "未打开作品" : (HasTextDraft ? "文本待应用" : HasPropertyDraft ? "属性待应用" : document.IsDirty ? "● 未保存" : "已保存");
         public string Status => document.Value == null ? "先打开一对 .hoface.value.json + .hoface.ir.json" : "就绪 · " + Mode;
         public string InputStatus => session.ReplayPlaying ? "回放 · 帧 " + session.ReplayIndex : "输入：" + session.TransportStatus;
         public string PhoneIp { get => phoneIp; set { phoneIp = value; OnPropertyChanged(); } }
@@ -319,6 +319,7 @@ namespace HoFace.Studio
             OnPropertyChanged(nameof(HasUnsavedChanges));
             Title = (document.IsDirty ? "● " : "") + (document.ValuePath == null ? "" : Path.GetFileName(document.ValuePath).Replace(".hoface.value.json", "") + " · ") + "HoFaceStudio";
             OnPropertyChanged(nameof(ValuePath)); OnPropertyChanged(nameof(IrPath)); OnPropertyChanged(nameof(HeaderStatus));
+            NotifyFilePaths();
             OnPropertyChanged(nameof(Status)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(InspectorSummary));
             RefreshTransport();
             if (HasManualPreview && Mode == "Preview")
@@ -624,6 +625,7 @@ namespace HoFace.Studio
         private void OpenPaths(string valuePath, string irPath)
         {
             document.Open(valuePath, irPath);
+            chosenValuePath = null; chosenIrPath = null;
             ClearManualPreview();
             selectedOutputIndex = document.Value.outputs.Count > 0 ? 0 : -1;
             RememberValueSelection();
