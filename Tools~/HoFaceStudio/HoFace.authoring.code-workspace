@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "HoUnityTools - core and studio",
+      "path": "../.."
+    },
+    {
+      "name": "Warudo Mod - receiver and integration",
+      "path": "../../../../Unity_Project/BreakWarudo/Assets/HoWarudoModTests"
+    }
+  ]
+}

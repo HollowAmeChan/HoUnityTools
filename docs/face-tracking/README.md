@@ -1,6 +1,8 @@
 ﻿# 面捕
 
-> 当前使用入口见 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md)，架构边界见 [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)。旧的 Warudo 参数处理节点、HoFace 控制求解节点和 HoFT AssetBundle 仅在归档中保留。
+> **下一阶段目标（2026-11-03）**：[HoFace 双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md)。外部控制台编辑 value / IR 并承担默认制作求值，角色内嵌模块用于发布运行及裸值转发测试。参见 [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md) 与 [实施计划](HOFACE_IMPLEMENTATION_PLAN.md)。当前仅有规划，尚未替代稳定实现。
+>
+> 当前使用入口见 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md)，现有架构边界见 [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)。旧的 Warudo 参数处理节点、HoFace 控制求解节点和 HoFT AssetBundle 仅在归档中保留。
 
 面捕主线是 **VTS / iPhone 原始输入 → 中间层 → 面部控制器与语义输出 → Unity / Warudo**。新实现先看上面的组件架构；旧流水线、控制器与参数文档用于维护和迁移。
 
@@ -8,11 +10,14 @@
 
 | 想查什么 | 文档或工具 |
 | --- | --- |
-| **新规划**：角色组件中枢、控制器、LookAt、Unity 调试和迁移边界 | [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md) |
+| **下一阶段目标**：双文件、两种调试模式、跨宿主共享核心 | [HoFace 双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md) |
+| Windows 图形编辑器选型与同工作区工程布局 | [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md) · [工程入口](../../Tools~/HoFaceStudio/README.md) |
+| 实施里程碑、迁移与退役验收 | [实施计划](HOFACE_IMPLEMENTATION_PLAN.md) |
+| **当前实现基线**：角色组件中枢、控制器、LookAt、Unity 调试 | [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md) |
 | 整条链的分工、输入输出和资产归属 | [组件架构](VTS_COMPONENT_ARCHITECTURE.md) · [WTD 记录](WTD_COMPONENT_MIGRATION.md) |
 | 控制器结构、绑定属性和角色配置 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
 | 原始线名、姿态字段、标定和设备输入 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
-| 旧动态语义参数 Hub 设计 | [归档记录](../archive/FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
+| 旧动态语义参数 Hub 设计 | [历史与排错记录](../pitfalls/FACE_TRACKING_DYNAMIC_PARAMETERS.md) |
 | 生成、隔离、检查、录样和统计 | [FaceTracking 作者工具](../../Tools~/FaceTracking/README.md) |
 | 机器可读的命名与参数对应 | [词表](../VTS_HIGH_QUALITY_FACE_CATALOG.json) |
 | 包内配置与控制器如何复制使用 | [Profiles](../../Editor/FaceTracking/Profiles/README.md) · [Controllers](../../Editor/FaceTracking/Controllers/README.md) |

@@ -41,23 +41,24 @@ git commit -F ".research\commit-msg-<主题>.txt"
 一个改动一个提交，信息写**为什么**（不是"改了什么"）：结论尽量带实测数字或出处，
 "未验证"的部分要明说未验证 —— 下次读历史的人靠这个判断能不能信。
 
-## 7. 面捕这一系列**横跨两个仓库**：单边绿不算验过
+## 7. 面捕横跨包、角色与插件：单边绿不算验过
 
-包（本仓库）与 mod（`D:\Unity_Project\BreakWarudo\Assets\HoWarudoModTests`，**它自己的仓库**、分支 `main`）
-是同一个功能的两半：包定词表与主本（`Runtime/FaceTracking/` + `Editor/FaceTracking/`），
-mod 是同一套逻辑的**运行期**（`Mods-Ho/HoFaceTracking/`）。
-两边是**两个 Unity 工程、两个程序集**，工程之间不能互相引用源码 ⇒
-求值器那 **9 份是"搬"过去的**（不是引用），清单在 mod 侧 `Mods-Ho/HoFaceTracking/Core/PORTED.md` §1。
+2026-11-03 核对：旧的“九份求值源码都复制进网络插件”已不是当前分工。以插件仓库
+`Mods-Ho/HoFaceTracking/Core/PORTED.md` 与包内 `Tests~/SyncFaceModCore.ps1` 的现行清单为准。
 
-| 你改了什么 | 必须顺手做什么 | 不做会怎样 |
-|---|---|---|
-| 包里那 9 份（`HoFaceMiddleware` / `HoFaceProfile` / `HoFaceProfileJson` / `HoJson` / `HoVtsPacket` / `HoFaceTrackingChannels` / `HoFaceExpression` / `HoFaceNaming` / `HoFaceSemanticHub`） | 跑 `.research/sync-modcore.ps1`，再两边各过一遍编译（包：`.research/compile-check-pkg.ps1`；mod：`tools/compile-check.ps1`）；`.research/drift-check.ps1` 能逐字节核"同步过没有" | mod 侧还是**旧语义**，**而且编译照样过** —— 表现是"Warudo 里和面板里不一样"，最难查 |
-| 直接改 mod 的 `Core/` 副本 | **别改**（那 6 行文件头就是提醒），改包侧再同步 | 下次同步**无声覆盖** |
-| 包侧的公共类型 / 命名空间 / 菜单名 | 两边都重编译一遍 | mod 是**另一份源码**，包侧改了它不会自动跟过去 |
-| mod 的节点 / 接收器 / 控制器 | `Assets/HoWarudoModTests/tools/compile-check.ps1` | Roslyn 全绿也可能**真构建失败**：`System.Reflection` / `System.IO` 只有 UMod 的 `RunCodeValidation` 拦（§4.1 of [构建与工具](BUILD_AND_TOOLING.md)） |
-| 只在 Unity 面板里看到"绿" | 别下结论 —— 面板绿只证明包侧那一半 | 见 [HO 参数规范 §0.0](../archive/PARAMETER_HO.md) 那张"改了哪一层 / 两边各怎么验"的表 |
+- **包与角色运行模块**：`Runtime/FaceTracking/` 是规则、表情与姿态实现主本，角色构建时进入角色 Mod。
+- **网络插件**：独立仓库 `D:\Unity_Project\BreakWarudo\Assets\HoWarudoModTests`，负责接收、标定、节点交付和诊断。当前清单同步 `HoJson.cs` 与 `HoVtsPacket.cs` 等协议源码，不重复运行角色规则。
+- **新桌面工具**：计划位于本仓库 `Tools~/HoFaceStudio/`，链接编译纯 C# 核心主本，不复制出另一份桌面求值器；目标方案见 [双文件架构](../face-tracking/HOFACE_VALUE_IR_ARCHITECTURE.md)。
 
-⚠️ **"两边各写一份"是本项目的既定做法，而且不止这一处**（两边都要存在的类型、角色预制件上的资产…）：
-别为某一处单独找"少写一份"的路子（不引用包侧、也不开子 asmdef），**清单 + 同步是唯一的保证**。
-⚠️ `.research/`（本仓库）与 mod 侧工作区都**不是**唯一出处：`.research/` 整个在 `.gitignore` 里，
-所以文档里写到脚本时，**同时要说清"清单/规则在哪个入库的文件里"**。
+| 变更范围 | 必须核对的边界 |
+| --- | --- |
+| 现行同步清单内的协议源码 | 改包侧主本，执行 `Tests~/SyncFaceModCore.ps1`，再以 `-Check` 检查；插件独立编译及 UMod 校验 |
+| 角色规则、IR、姿态与共享核心 | 桌面独立构建、Unity 角色编译、相关语义回归和实际角色打包；不要默认向网络插件复制 |
+| 插件节点、接收器或桥接 | 插件 `tools/compile-check.ps1 -ModsRoots Mods-Ho` 及实际宿主链路；离线编译不能替代实际 Mod 安全校验 |
+| 共享类型、命名空间、输入阶段或消息接口 | 检查全部消费者，保留版本、数据阶段与实际输出对照 |
+
+确需跨仓库副本时，先更新已入库清单，再同步与检查；不要编辑生成副本，也不要用 junction、子 asmdef 或本机临时补源码绕过构建边界。
+
+桌面 `.csproj` 链接同仓库源码不是让两个 Unity 工程互相引用源码。UI、网络和文件 IO 依赖不得进入角色共享核心。
+
+两仓库可通过 [HoFace 作者工作区](../../Tools~/HoFaceStudio/HoFace.authoring.code-workspace) 同时查看。`.research/` 始终是忽略目录，不能作为同步规则、依赖清单或验证脚本的唯一出处。
