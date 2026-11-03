@@ -25,6 +25,7 @@
 - `HoVtsIrController` 已接入角色运行时：直接读取 value 输出、求值 IR 并写形态键，不依赖 Animator；独立 Unity 工程验证通过。
 - HoFaceStudio 本地 AI 控制通道已接入：状态、截图、打开/保存、撤销/重做、选区、VTS、模式和预览命令已通过命名管道验证；录制/回放/冻结/诊断接口列为下一阶段。
 - Unity 旧 JSON/面捕调试窗口已从菜单入口撤下，旧全局调试宿主不再自动 tick；接收器 Inspector 改为启动 HoFaceStudio 并显示 Play 模式 raw 状态。
+- Blender HoTools 侧已新增正式 **HoFace** 模块：只接收 `hoface.preview` 最终权重，维护驱动物体列表、连接状态、形态键清空和显式预检查开关；旧混合矩阵面板入口已退役，提交为 `8553a0f3`。
 - 核心编译无警告；本机已有 .NET 10 SDK 与 WindowsDesktop 运行环境，暂未安装新环境。
 
 包级验证说明：原全量 Editor 扫描因既有 MMD 编辑器的 `Volume` 类型引用列表缺失而失败；给本机临时响应文件补上工程已存在的 `Unity.RenderPipelines.Core.Runtime.dll` 后，完整扫描可编译。未修改该 MMD 代码或将此问题归因于本次核心提取。真实 Unity 隔离工程则直接编译并执行了相关面捕源码。
