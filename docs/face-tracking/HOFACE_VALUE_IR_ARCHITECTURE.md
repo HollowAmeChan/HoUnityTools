@@ -101,9 +101,9 @@ VTS / 录样
 
 目标是角色参数接收器组件，不是把两份作品 JSON 塞进网络接收节点。优先保留既有帧桥接接口；不能再次通过隐式消息或随意扩展载荷改变参数含义。
 
-当前桌面原型保留裸值转发的会话边界，但不向 Warudo Mod 增加调试桥接。Warudo 是最终消费场所：角色组件在 Mod 内执行 value + IR；外部程序默认只用于作者制作预览。未来若需要向 Unity 编辑器中的角色组件转发裸值，单独增加 Unity 侧适配器，不能把作者调试协议塞进 Warudo 发布 Mod。
+当前桌面原型保留裸值转发的会话边界，但不向 Warudo Mod 增加调试桥接。Warudo 是最终消费场所：角色组件在 Mod 内执行 value + IR；外部程序默认只用于作者制作预览。Unity 编辑器中的角色组件通过 `HoFaceStudioRawInput` 接收裸值，不能把作者调试协议塞进 Warudo 发布 Mod。
 
-Unity 侧适配器已开始实现为编辑器专用的 `HoFaceStudioRawInput` 组件：它监听 `127.0.0.1:21415` 的 `hoface.raw` v1 帧，调用现有 `HoVtsParameterReceiver.ApplyRawFrame`，再由 Unity 侧的 value、HoVtsLookAt 和其他消费者继续运行。该组件不进入 Warudo Mod 发布路径；Blender 仍接收另一条最终权重预览帧。
+`HoFaceStudioRawInput` 是分类在 HoUnityTools 面捕组件下的编辑器专用组件，源码放在 Runtime 路径并用 `UNITY_EDITOR` 排除发布构建，确保可挂到场景角色上。它只绑定本机 loopback 的 `21415` 端口，接收 `hoface.raw` v1 帧后用 Unity 本地单调时钟调用现有 `HoVtsParameterReceiver.ApplyRawFrame`，并回传逐帧 ACK；Studio 只有收到该 ACK 才报告 Unity 接收器已连接。信封时间只用于记录与回放，不作为 Unity 的运行时钟，因此停止重连或回放跳转不会丢帧。两种 Studio 输出模式互斥；模式切换、断开和停止预览都会发送未追踪释放帧，Blender 仍只接收最终权重预览帧。
 
 ## 6. Warudo 正式运行
 

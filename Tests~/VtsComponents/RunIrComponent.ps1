@@ -11,9 +11,15 @@ $package = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $runtime = Join-Path $Project 'Assets\Runtime'
 $editor = Join-Path $Project 'Assets\Editor'
 New-Item -ItemType Directory -Force -Path $runtime, $editor | Out-Null
+$obsoleteEditorAdapter = Join-Path $editor 'HoFaceStudioRawInput.cs'
+foreach ($obsoletePath in @($obsoleteEditorAdapter, ($obsoleteEditorAdapter + '.meta'))) {
+    if (Test-Path -LiteralPath $obsoletePath) {
+        Remove-Item -LiteralPath $obsoletePath -Force
+    }
+}
 foreach ($name in @('HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceMiddleware.cs',
     'HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs','HoFaceProfile.cs',
-    'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs')) {
+    'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs','HoFaceStudioRawInput.cs')) {
     Copy-Item -LiteralPath (Join-Path $package "Runtime\FaceTracking\$name") -Destination $runtime
 }
 Get-ChildItem -LiteralPath (Join-Path $package 'Runtime\FaceTracking\Core') -Filter '*.cs' |

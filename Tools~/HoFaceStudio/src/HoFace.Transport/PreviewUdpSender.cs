@@ -18,6 +18,10 @@ namespace HoFace.Transport
         private UdpClient socket;
         private IPEndPoint destination;
         private long sequence;
+        private Dictionary<string, float> lastValues;
+        private Dictionary<string, float> lastWeights;
+        private double lastTime;
+        private bool lastTracked;
         private readonly JsonSerializerOptions json = new JsonSerializerOptions { WriteIndented = false, IncludeFields = true };
         public bool Running => socket != null;
         public long SentFrames { get; private set; }
@@ -37,6 +41,10 @@ namespace HoFace.Transport
             bool tracked, double time)
         {
             if (socket == null) return;
+            lastValues = values == null ? new Dictionary<string, float>() : new Dictionary<string, float>(values);
+            lastWeights = weights == null ? new Dictionary<string, float>() : new Dictionary<string, float>(weights);
+            lastTime = time;
+            lastTracked = tracked;
             var packet = new PreviewPacket
             {
                 type = "hoface.preview",
@@ -44,8 +52,8 @@ namespace HoFace.Transport
                 sequence = ++sequence,
                 time = time,
                 tracked = tracked,
-                values = values == null ? new Dictionary<string, float>() : new Dictionary<string, float>(values),
-                weights = weights == null ? new Dictionary<string, float>() : new Dictionary<string, float>(weights)
+                values = lastValues,
+                weights = lastWeights
             };
             byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(packet, json));
             socket.Send(bytes, bytes.Length, destination);
@@ -53,7 +61,10 @@ namespace HoFace.Transport
         }
         public void Stop()
         {
+            if (socket != null && lastTracked)
+                Send(lastValues, lastWeights, false, lastTime);
             socket?.Close(); socket?.Dispose(); socket = null; destination = null;
+            lastValues = null; lastWeights = null; lastTime = 0; lastTracked = false;
             Status = "预览未连接";
         }
         public void Dispose() => Stop();

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
 using HoFace.Transport;
@@ -16,9 +17,10 @@ internal static class Program
     {
         try
         {
-            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording();
-            AuthoringHistory(args.Length > 0 ? args[0] : FindRepositoryRoot());
-            string root = args.Length > 0 ? args[0] : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../../.."));
+            string root = args.Length > 0 ? args[0] : FindRepositoryRoot();
+            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording(); ReplayControls();
+            RawForwardTransport(); SessionModes(root);
+            AuthoringHistory(root);
             foreach (string file in new[]
             {
                 Path.Combine(root, "Editor/FaceTracking/Profiles/ho-iPhoneVTS.arkit.hoface.json"),
@@ -189,16 +191,112 @@ internal static class Program
         Check(json.Contains("\"version\":2"), "preview uses logical-output v2");
         Check(!json.Contains("\"targets\""), "preview packet carries no host mesh bindings");
         Check(json.Contains("\"tracked\":true"), "preview tracking state");
+        sender.Stop();
+        string release = Encoding.UTF8.GetString(receiver.Receive(ref endpoint));
+        Check(release.Contains("\"tracked\":false") && release.Contains("\"weights\":{\"jawOpen\":0.7"),
+            "stopping preview sends a final release frame for owned target ids");
     }
     private static void RawFrameEnvelope()
     {
         const string json = "{\"type\":\"hoface.raw\",\"version\":1,\"sequence\":4,\"time\":2.5,\"tracked\":true,\"values\":{\"JawOpen\":0.7,\"Rotation_x\":-12}}";
         Check(HoFaceRawFrameJson.TryParse(json, out var frame, out string error), error);
-        Check(frame.Tracked && frame.Values.Count == 2, "raw Unity envelope");
+        Check(frame.Tracked && frame.Values.Count == 2 && frame.Sequence == 4, "raw Unity envelope");
         Near(frame.Values["JawOpen"], .7f, "raw Unity expression value");
         Near((float)frame.Time, 2.5f, "raw Unity frame time");
         Check(!HoFaceRawFrameJson.TryParse(json.Replace("\"version\":1", "\"version\":9"), out _, out _),
             "future raw envelope rejected");
+        Check(!HoFaceRawFrameJson.TryParse(json.Replace("\"sequence\":4", "\"sequence\":0"), out _, out _),
+            "invalid raw sequence rejected");
+        string ackJson = HoFaceRawFrameJson.WriteAck(4, true, "Unity 已收到");
+        Check(HoFaceRawFrameJson.TryParseAck(ackJson, out var ack, out error), error);
+        Check(ack.Sequence == 4 && ack.Accepted && ack.Status == "Unity 已收到", "raw acknowledgement roundtrip");
+        Check(!HoFaceRawFrameJson.TryParseAck(ackJson.Replace("\"version\":1", "\"version\":2"), out _, out _),
+            "future raw acknowledgement rejected");
+    }
+    private static void RawForwardTransport()
+    {
+        using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        receiver.Client.ReceiveTimeout = 1000;
+        int port = ((IPEndPoint)receiver.Client.LocalEndPoint).Port;
+        using var sender = new HoFaceRawForwardSender();
+        sender.Start(port: port);
+        sender.Send(new Dictionary<string, float> { { "JawOpen", .7f } }, true, 1.25);
+        IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, 0);
+        byte[] bytes = receiver.Receive(ref endpoint);
+        string packet = Encoding.UTF8.GetString(bytes);
+        Check(HoFaceRawFrameJson.TryParse(packet, out var frame, out string error), error);
+        Check(frame.Sequence == 1 && frame.Tracked && frame.Values["JawOpen"] == .7f,
+            "raw sender transmits sequenced source values");
+        byte[] ack = Encoding.UTF8.GetBytes(HoFaceRawFrameJson.WriteAck(frame.Sequence, true, "Unity 接收器已连接"));
+        receiver.Send(ack, ack.Length, endpoint);
+        sender.Poll();
+        Check(sender.Status == "Unity 接收器已连接" && sender.LastAckedSequence == frame.Sequence,
+            "raw sender reports receiver acknowledgement");
+        sender.Stop();
+        Check(!sender.Running && sender.Status == "Unity 原始输入未连接", "raw sender stop clears connection state");
+    }
+    private static void SessionModes(string root)
+    {
+        var authoring = new HoFace.Studio.AuthoringDocument();
+        authoring.Open(
+            Path.Combine(root, "Tools~", "HoFaceStudio", "samples", "Mouth.hoface.value.json"),
+            Path.Combine(root, "Tools~", "HoFaceStudio", "samples", "Mouth.hoface.ir.json"));
+        using var previewReceiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        using var rawReceiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        previewReceiver.Client.ReceiveTimeout = 1000;
+        rawReceiver.Client.ReceiveTimeout = 1000;
+        var previewPort = ((IPEndPoint)previewReceiver.Client.LocalEndPoint).Port;
+        var rawPort = ((IPEndPoint)rawReceiver.Client.LocalEndPoint).Port;
+        using var session = new HoFace.Studio.AuthoringSession();
+        session.Configure(authoring);
+        session.RawForwardPort = rawPort;
+        var previewTracking = new List<bool>();
+        session.PreviewUpdated += (_, _, tracked) => previewTracking.Add(tracked);
+        session.Preview.Start(new PreviewUdpOptions { Port = previewPort });
+        session.SetMode(HoFace.Studio.AuthoringMode.RawForward);
+        IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, 0);
+        string previewRelease = Encoding.UTF8.GetString(previewReceiver.Receive(ref endpoint));
+        Check(previewRelease.Contains("\"tracked\":false") && !session.Preview.Running,
+            "switching to raw releases and stops preview output");
+        Check(session.RawForward.Running, "raw mode opens its waiting output channel");
+
+        using var vtsSender = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        int inputPort = FreeUdpPort();
+        session.Start(new VtsIphoneOptions { LocalPort = inputPort, PhoneAddress = "127.0.0.1", PhonePort = 9 });
+        SendVtsFrame(vtsSender, inputPort, true);
+        session.Poll();
+        byte[] rawBytes = rawReceiver.Receive(ref endpoint);
+        Check(HoFaceRawFrameJson.TryParse(Encoding.UTF8.GetString(rawBytes), out var rawFrame, out string error), error);
+        Check(rawFrame.Tracked && rawFrame.Values.ContainsKey("JawOpen"), "raw mode forwards VTS input without value/IR evaluation");
+
+        SendVtsFrame(vtsSender, inputPort, false);
+        session.Poll();
+        byte[] untrackedBytes = rawReceiver.Receive(ref endpoint);
+        Check(HoFaceRawFrameJson.TryParse(Encoding.UTF8.GetString(untrackedBytes), out rawFrame, out error), error);
+        Check(!rawFrame.Tracked, "raw mode forwards tracking loss");
+        Check(previewTracking.Count == 0, "raw mode never emits processed preview updates");
+
+        session.SetMode(HoFace.Studio.AuthoringMode.Preview);
+        byte[] rawReleaseBytes = rawReceiver.Receive(ref endpoint);
+        Check(HoFaceRawFrameJson.TryParse(Encoding.UTF8.GetString(rawReleaseBytes), out rawFrame, out error), error);
+        Check(!rawFrame.Tracked && !session.RawForward.Running, "switching to preview releases and stops raw output");
+        Check(session.Values.Count == 0 && session.Weights.Count == 0, "mode switch clears stale processed output tables");
+        SendVtsFrame(vtsSender, inputPort, false);
+        session.Poll();
+        Check(previewTracking.Count == 1 && !previewTracking[0], "preview event preserves VTS tracking-loss state");
+        session.Stop();
+    }
+    private static int FreeUdpPort()
+    {
+        using var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        return ((IPEndPoint)socket.Client.LocalEndPoint).Port;
+    }
+    private static void SendVtsFrame(UdpClient sender, int port, bool tracked)
+    {
+        string json = "{\"Timestamp\":1,\"FaceFound\":" + (tracked ? "true" : "false")
+            + ",\"BlendShapes\":[{\"k\":\"JawOpen\",\"v\":0.7}]}";
+        byte[] bytes = Encoding.UTF8.GetBytes(json);
+        sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, port));
     }
     private static void Recording()
     {
@@ -214,6 +312,40 @@ internal static class Program
             var frames = HoFaceRecordingReader.Read(path);
             Check(frames.Count == 2 && frames[1].tracked == false, "record replay roundtrip");
             Near(frames[0].values["JawOpen"], .2f, "record value");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+    private static void ReplayControls()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "hoface-replay-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        try
+        {
+            using (var writer = new HoFaceRecordingWriter(path, "value.json", "face.ir.json"))
+            {
+                foreach (double time in new[] { 0d, .001d, .05d, 100d })
+                    writer.Write(new HoFaceRecordedFrame
+                    {
+                        time = time,
+                        tracked = true,
+                        values = new Dictionary<string, float> { { "JawOpen", (float)time } }
+                    });
+            }
+            using var session = new HoFace.Studio.AuthoringSession();
+            session.OpenReplay(path);
+            session.PlayReplay();
+            Thread.Sleep(120);
+            session.SeekReplay(.001);
+            session.Poll();
+            Check(session.ReplayPlaying && session.ReplayIndex == 2,
+                "seek while playing restarts the replay clock without skipping the next frame");
+
+            session.SeekReplay(100);
+            session.Poll();
+            Check(!session.ReplayPlaying && session.ReplayIndex == 4, "replay reaches its end and pauses");
+            session.PlayReplay();
+            Check(session.ReplayPlaying && session.ReplayIndex == 0, "play after end rewinds to the first frame");
+            session.Poll();
+            Check(session.ReplayIndex == 1, "rewound replay emits its first frame");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

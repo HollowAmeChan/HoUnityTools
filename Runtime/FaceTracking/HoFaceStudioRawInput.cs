@@ -11,7 +11,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.FaceTracking
 {
     /// <summary>
-    /// Unity-only authoring adapter for HoFaceStudio raw mode.
+    /// Editor-only authoring adapter for HoFaceStudio raw mode.
     /// It forwards raw frames into the existing character receiver so value,
     /// LookAt and other Unity-side consumers continue to run in Unity.
     /// It is not part of the Warudo Mod runtime path.
@@ -25,8 +25,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         [SerializeField] private int localPort = 21415;
         [SerializeField] private bool autoStart = true;
         private UdpClient socket;
-        private double lastPacketTime = -1;
+        private float retryAt;
         private string status = "未启动";
+        private const string RawSource = "HoFaceStudio/UnityRaw";
 
         public HoVtsParameterReceiver ParameterReceiver
         {
@@ -44,7 +45,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         private void Update()
         {
-            if (socket == null && autoStart) StartListening();
+            if (socket == null && autoStart && Time.realtimeSinceStartup >= retryAt) StartListening();
             Poll();
         }
 
@@ -54,14 +55,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             try
             {
                 if (localPort < 1 || localPort > 65535) localPort = 21415;
-                socket = new UdpClient(localPort);
+                socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, localPort));
                 socket.Client.Blocking = false;
-                status = "监听 127.0.0.1:" + ((IPEndPoint)socket.Client.LocalEndPoint).Port;
+                retryAt = 0;
+                status = "监听 loopback:" + ((IPEndPoint)socket.Client.LocalEndPoint).Port;
             }
             catch (Exception error)
             {
                 socket = null;
                 status = "启动失败：" + error.Message;
+                retryAt = Time.realtimeSinceStartup + 2f;
             }
         }
 
@@ -70,8 +73,10 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             socket?.Close();
             socket?.Dispose();
             socket = null;
-            lastPacketTime = -1;
-            if (status != "启动失败") status = "未启动";
+            if (parameterReceiver != null && parameterReceiver.Source == RawSource)
+                parameterReceiver.HoVtsReleaseInput(RawSource);
+            retryAt = 0;
+            status = "未启动";
         }
 
         private void Poll()
@@ -96,16 +101,32 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     status = "帧错误：" + error;
                     continue;
                 }
-                if (frame.Time < lastPacketTime)
+                if (!IPAddress.IsLoopback(source.Address))
                 {
-                    status = "丢弃倒退时间帧";
+                    status = "拒绝非本机 raw 帧";
                     continue;
                 }
-                lastPacketTime = frame.Time;
-                receiver.ApplyRawFrame(frame.Values, frame.Tracked,
-                    Time.realtimeSinceStartupAsDouble, "HoFaceStudio/UnityRaw");
-                status = frame.Tracked ? "Unity 原始输入运行中" : "Unity 已收到帧但未追踪";
+                try
+                {
+                    receiver.ApplyRawFrame(frame.Values, frame.Tracked,
+                        Time.realtimeSinceStartupAsDouble, RawSource);
+                    status = frame.Tracked ? "Unity 原始输入运行中" : "Unity 已收到帧但未追踪";
+                    SendAck(source, frame.Sequence, true, status);
+                }
+                catch (Exception applyError)
+                {
+                    status = "拒绝 raw 帧：" + applyError.Message;
+                    SendAck(source, frame.Sequence, false, status);
+                }
             }
+        }
+
+        private void SendAck(IPEndPoint destination, long sequence, bool accepted, string message)
+        {
+            if (socket == null || destination == null) return;
+            byte[] bytes = Encoding.UTF8.GetBytes(HoFaceRawFrameJson.WriteAck(sequence, accepted, message));
+            try { socket.Send(bytes, bytes.Length, destination); }
+            catch (SocketException) { status = "回执发送失败"; }
         }
 
         private HoVtsParameterReceiver ResolveReceiver()
