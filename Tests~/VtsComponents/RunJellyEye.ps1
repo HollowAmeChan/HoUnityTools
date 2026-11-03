@@ -4,6 +4,7 @@ param(
     [switch] $PlayMode
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'UnityScriptCopy.ps1')
 $package = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Project) { $Project = Join-Path $package 'Temp~\VtsJellyValidation' }
 if (-not (Test-Path -LiteralPath $Project)) {
@@ -26,14 +27,14 @@ foreach ($name in @('HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceM
     'HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs','HoFaceProfile.cs',
     'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs','HoFaceOutputOwnership.cs',
     'HoFaceJelly.cs','HoVtsJellySpring.cs','HoVtsJellyEyeData.cs','HoVtsJellyEye.cs')) {
-    Copy-Item -LiteralPath (Join-Path $package "Runtime\FaceTracking\$name") -Destination $runtime
+    Copy-HoUnityScript -Source (Join-Path $package "Runtime\FaceTracking\$name") -Destination $runtime
 }
 Get-ChildItem -LiteralPath (Join-Path $package 'Runtime\FaceTracking\Core') -Filter '*.cs' |
-    Copy-Item -Destination $runtime
+    ForEach-Object { Copy-HoUnityScript -Source $_.FullName -Destination $runtime }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JellyEyeValidation.cs') -Destination $editor
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JellyEyeFrameProbe.cs') -Destination $runtime
 $inspector = Join-Path $package 'Editor\FaceTracking\HoVtsJellyEyeEditor.cs'
-if (Test-Path -LiteralPath $inspector) { Copy-Item -LiteralPath $inspector -Destination $editor }
+if (Test-Path -LiteralPath $inspector) { Copy-HoUnityScript -Source $inspector -Destination $editor }
 $method = if ($PlayMode) { 'HoVtsJellyEyeValidation.RunPlayMode' } else { 'HoVtsJellyEyeValidation.RunBatch' }
 $log = Join-Path $Project $(if ($PlayMode) { 'jelly-playmode.log' } else { 'jelly-eye.log' })
 $process = Start-Process -FilePath $Unity -ArgumentList @('-batchmode','-nographics',

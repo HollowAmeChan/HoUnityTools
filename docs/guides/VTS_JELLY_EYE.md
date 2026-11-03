@@ -87,11 +87,14 @@ IR 仍是静态表情求值器。果冻的时间状态属于角色组件，不�
 隔离 Unity 2021.3 工程入口：
 
 ```powershell
+.\Tests~\VtsComponents\TestUnityScriptCopy.ps1
 .\Tests~\VtsComponents\RunJellyEye.ps1
 .\Tests~\VtsComponents\RunJellyEye.ps1 -PlayMode
 ```
 
 默认在包内忽略目录 `Temp~/VtsJellyValidation` 创建有标记的临时工程；也可显式传入 `-Project` 和 `-Unity`。拒绝往没有验证标记的已有工程安装脚本。
+
+发布脚本连同仓库内真实 `.meta` 一起复制，复制前验证 GUID 必须为 32 位十六进制。不能只复制 `.cs` 后依靠 Unity 重建元数据，否则会漏过包资源被忽略的问题。2026-11-03 修复了弹簧与 Inspector 两个 `.meta` 中的 33 位 GUID；元数据回归 **7 项**通过，覆盖畸形 GUID 的拒绝、复制前拦截及源码／元数据内容保留。
 
 2026-11-03 验证结果：
 
