@@ -26,6 +26,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
     [InitializeOnLoad]
     public static class HoFaceDebugHost
     {
+        private static bool LegacyEditorDebugEnabled => false;
         /// <summary>设置文件落点（工程相对路径；在 `Assets/` 下，跟着工程走）。</summary>
         public const string DefaultSettingsPath = HoFaceDebugSettings.DefaultAssetPath;
 
@@ -52,6 +53,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
         static HoFaceDebugHost()
         {
+            if (!LegacyEditorDebugEnabled) return;
             EditorApplication.update += OnUpdate;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
         }
@@ -73,6 +75,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         /// <summary>开始跑（会话要求已经在播放模式）。</summary>
         public static void Start()
         {
+            if (!LegacyEditorDebugEnabled) throw new InvalidOperationException("旧 Unity 面捕调试已退役，请使用 HoFaceStudio。");
             HoFaceInputHub.Start(Settings);
         }
 

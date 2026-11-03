@@ -149,7 +149,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             }
             if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
             using (new EditorGUI.DisabledScope(receiver.ProfileAsset == null))
-                if (GUILayout.Button("编辑规则 JSON")) HoFaceProfileWindow.Open(receiver);
+                if (GUILayout.Button("打开 HoFaceStudio"))
+                {
+                    try { HoFaceStudioLauncher.Open(); }
+                    catch (Exception error) { Debug.LogError("[Ho 面捕] 启动 HoFaceStudio 失败：" + error.Message); }
+                }
             if (Application.isPlaying)
             {
                 EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");

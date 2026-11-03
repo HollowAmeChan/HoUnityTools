@@ -207,7 +207,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>当前选中的行号（-1 = 没选）。给「只改选中行」用。</summary>
         public int SelectedIndex => selected;
 
-        [MenuItem("HoUnityTools/面捕/配置文件", false, 30)]
+        [Obsolete("HoFaceStudio 已替代旧 Unity JSON 规则编辑窗口。")]
         private static void Open()
         {
             GetWindow<HoFaceProfileWindow>(false, "配置文件", true);
