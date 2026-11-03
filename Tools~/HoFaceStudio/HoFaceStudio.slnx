@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HoFace.Core.Checks/HoFace.Core.Checks.csproj" />
+    <Project Path="tests/HoFace.Studio.Checks/HoFace.Studio.Checks.csproj" />
   </Folder>
 </Solution>

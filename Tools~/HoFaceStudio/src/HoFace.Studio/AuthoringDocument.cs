@@ -27,8 +27,16 @@ namespace HoFace.Studio
         {
             if (edit == null) throw new ArgumentNullException(nameof(edit));
             var before = Snapshot();
-            edit(Value, Ir);
-            Remember(before);
+            try
+            {
+                edit(Value, Ir);
+                Remember(before);
+            }
+            catch
+            {
+                Restore(before);
+                throw;
+            }
         }
         public bool IsDirty => Value != null && (Snapshot().Value != savedValue || Snapshot().Ir != savedIr);
         public AuthoringSnapshot Snapshot() => new AuthoringSnapshot { Value = HoFaceValueDocument.Write(Value), Ir = Ir.Write() };

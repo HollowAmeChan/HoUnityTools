@@ -17,6 +17,7 @@ namespace HoFace.Studio
         public int SelectedIndex { get; private set; } = -1;
         public double CursorX { get; set; }
         public double CursorY { get; set; }
+        public object Viewport => new { minX, maxX, minY, maxY };
         public event Action EditBeginning, EditChanged, EditCommitted, SelectionChanged;
         public event Action<double, double> PreviewChanged;
         private double minX = -.1, maxX = 1.1, minY = -.1, maxY = 1.1;
@@ -31,7 +32,7 @@ namespace HoFace.Studio
         public ParameterPlot()
         {
             Focusable = true;
-            MinHeight = 220;
+            MinHeight = 160;
             ClipToBounds = true;
             Cursor = Cursors.Cross;
         }
@@ -48,6 +49,17 @@ namespace HoFace.Studio
             InvalidateVisual();
         }
         public void ClearSelection() { SelectedIndex = -1; InvalidateVisual(); }
+        public void SelectIndex(int index)
+        {
+            if (index < -1 || index >= DataPoints().Count) throw new ArgumentOutOfRangeException(nameof(index));
+            SelectedIndex = index;
+            SelectionChanged?.Invoke();
+            InvalidateVisual();
+        }
+        public void ValidateSelection()
+        {
+            if (SelectedIndex >= DataPoints().Count) SelectedIndex = DataPoints().Count - 1;
+        }
         private List<Point> DataPoints()
         {
             if (Rule != null)
@@ -69,6 +81,25 @@ namespace HoFace.Studio
         {
             base.OnRender(dc);
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(21, 27, 33)), null, new Rect(RenderSize));
+            if (Rule == null && Node?.type != "blend1d" && Node?.type != "blend2d")
+            {
+                string title = Node == null ? "选择参数或混合节点" : Node.name ?? Node.id;
+                Text(dc, title, new Point(26, 26), accent);
+                if (Node != null)
+                {
+                    Text(dc, Node.type == "pose" ? "POSE" : "DIRECT", new Point(26, 54));
+                    var entries = Node.type == "pose"
+                        ? Node.weights.Select(w => (w.target, w.value)).ToArray()
+                        : Node.children.Select(c => (c.node, c.weight)).ToArray();
+                    for (int i = 0; i < entries.Length && 98 + i * 28 < ActualHeight - 20; i++)
+                    {
+                        Text(dc, entries[i].Item1, new Point(26, 94 + i * 28));
+                        Text(dc, entries[i].Item2.ToString("0.###", CultureInfo.InvariantCulture),
+                            new Point(Math.Max(160, ActualWidth - 70), 94 + i * 28), accent);
+                    }
+                }
+                return;
+            }
             var grid = new Pen(new SolidColorBrush(Color.FromRgb(48, 59, 69)), 1);
             for (int i = 0; i <= 5; i++)
             {
@@ -113,10 +144,8 @@ namespace HoFace.Studio
             Point cursor = Screen(new Point(CursorX, Rule != null ? HoFaceCurve.Transfer(Rule.curve, (float)CursorX) : CursorY));
             dc.DrawLine(new Pen(hot, 1), new Point(cursor.X - 7, cursor.Y), new Point(cursor.X + 7, cursor.Y));
             dc.DrawLine(new Pen(hot, 1), new Point(cursor.X, cursor.Y - 7), new Point(cursor.X, cursor.Y + 7));
-            Text(dc, Rule != null ? "拖点或切线 · 双击加点 · 右键平移 · 滚轮缩放"
-                : Node?.type == "direct" ? "Direct 权重在子项列表中编辑"
-                : Node?.type == "pose" ? "在下方编辑这个姿势的目标权重"
-                : "拖点修改作品 · 点击空白覆盖预览参数 · 右键平移", new Point(Plot.Left, 2));
+            Text(dc, Rule != null ? "输入 → 输出" : Node.parameterX +
+                (Node.type == "blend2d" ? " / " + Node.parameterY : ""), new Point(Plot.Left, 2));
         }
         private Point? TangentHandle(int sign)
         {
@@ -133,6 +162,8 @@ namespace HoFace.Studio
             base.OnMouseDown(e);
             Focus();
             last = e.GetPosition(this);
+            if (!Plot.Contains(last)) return;
+            if (Rule == null && Node?.type != "blend1d" && Node?.type != "blend2d") return;
             if (e.ChangedButton == MouseButton.Right || e.ChangedButton == MouseButton.Middle)
             { panning = true; CaptureMouse(); e.Handled = true; return; }
             if (e.ChangedButton != MouseButton.Left) return;
@@ -191,6 +222,7 @@ namespace HoFace.Studio
             if (Rule?.curve != null)
             {
                 var keys = Rule.curve.keys;
+                if (SelectedIndex < 0 || SelectedIndex >= keys.Length) return;
                 var key = keys[SelectedIndex];
                 if (tangent != 0)
                 {
@@ -238,9 +270,26 @@ namespace HoFace.Studio
             base.OnMouseWheel(e);
             Point center = Data(e.GetPosition(this));
             double factor = e.Delta > 0 ? .85 : 1 / .85;
+            if ((maxX - minX) * factor < 1e-6 || (maxX - minX) * factor > 1e8) return;
             minX = center.X + (minX - center.X) * factor; maxX = center.X + (maxX - center.X) * factor;
             minY = center.Y + (minY - center.Y) * factor; maxY = center.Y + (maxY - center.Y) * factor;
             InvalidateVisual(); e.Handled = true;
+        }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.Key == Key.F) { Fit(); e.Handled = true; }
+            if (e.Key == Key.Delete && Rule?.curve != null && SelectedIndex >= 0 && Rule.curve.keys.Length > 2)
+            {
+                EditBeginning?.Invoke();
+                Rule.curve.keys = Rule.curve.keys.Where((_, i) => i != SelectedIndex).ToArray();
+                SelectedIndex = Math.Min(SelectedIndex, Rule.curve.keys.Length - 1);
+                EditChanged?.Invoke();
+                EditCommitted?.Invoke();
+                SelectionChanged?.Invoke();
+                InvalidateVisual();
+                e.Handled = true;
+            }
         }
     }
 }

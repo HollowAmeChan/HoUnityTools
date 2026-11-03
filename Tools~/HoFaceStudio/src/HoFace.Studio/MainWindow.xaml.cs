@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -35,6 +36,25 @@ namespace HoFace.Studio
         private string liveStatus = "VTS 未连接";
         private HoFaceOutput selectedValueRow;
         private HoFaceIrNode selectedNode;
+        private bool refreshingRows, loadingText;
+        private int structureTab, selectedOutputIndex = -1;
+        private string selectedNodeId;
+        private string textValueBaseline = "", textIrBaseline = "";
+        public int StructureTab
+        {
+            get => structureTab;
+            set
+            {
+                if (structureTab == value) return;
+                structureTab = value;
+                ResolveSelection();
+                RefreshPlot(true);
+                OnPropertyChanged();
+            }
+        }
+        public bool HasTextDraft => !loadingText &&
+            (ValueText.Text != textValueBaseline || IrText.Text != textIrBaseline);
+        public bool HasUnsavedChanges => document.IsDirty || HasTextDraft;
         public ObservableCollection<RuleRow> ValueRows { get; } = new ObservableCollection<RuleRow>();
         public ObservableCollection<NodeRow> NodeRows { get; } = new ObservableCollection<NodeRow>();
         public ObservableCollection<WeightRow> InspectorWeights { get; } = new ObservableCollection<WeightRow>();
@@ -45,18 +65,50 @@ namespace HoFace.Studio
         public string Mode { get => mode; set { mode = value; OnPropertyChanged(); OnPropertyChanged(nameof(Status)); } }
         public string ValueFilter { get => valueFilter; set { valueFilter = value ?? ""; RefreshRows(); OnPropertyChanged(); } }
         public string IrFilter { get => irFilter; set { irFilter = value ?? ""; RefreshRows(); OnPropertyChanged(); } }
-        public int CenterTab { get => centerTab; set { centerTab = value; OnPropertyChanged(); } }
+        public int CenterTab
+        {
+            get => centerTab;
+            set
+            {
+                if (centerTab == value) return;
+                if (centerTab == 1 && HasTextDraft)
+                {
+                    try { SyncText(); ReloadEditors(); }
+                    catch (Exception error)
+                    {
+                        ShowError(error.Message);
+                        Dispatcher.BeginInvoke(new Action(() => OnPropertyChanged(nameof(CenterTab))));
+                        return;
+                    }
+                }
+                centerTab = value; OnPropertyChanged();
+            }
+        }
         public RuleRow SelectedValueRow
         {
             get => ValueRows.FirstOrDefault(x => x.Row == selectedValueRow);
-            set { selectedValueRow = value?.Row; selectedNode = null; RefreshPlot(); OnPropertyChanged(); OnPropertyChanged(nameof(InspectorTitle)); }
+            set
+            {
+                if (refreshingRows || value == null) return;
+                selectedOutputIndex = value.Index;
+                structureTab = 0;
+                ResolveSelection(); RefreshPlot(true);
+                OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
+            }
         }
         public NodeRow SelectedNodeRow
         {
             get => NodeRows.FirstOrDefault(x => x.Node == selectedNode);
-            set { selectedNode = value?.Node; selectedValueRow = null; RefreshPlot(); OnPropertyChanged(); OnPropertyChanged(nameof(SelectedValueRow)); }
+            set
+            {
+                if (refreshingRows || value == null) return;
+                selectedNodeId = value.Node.id;
+                structureTab = 1;
+                ResolveSelection(); RefreshPlot(true);
+                OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
+            }
         }
-        public string HeaderStatus => document.Value == null ? "未打开文档" : (document.IsDirty ? "● 有未保存编辑" : "已保存");
+        public string HeaderStatus => document.Value == null ? "未打开作品" : (HasTextDraft ? "文本待应用" : document.IsDirty ? "● 未保存" : "已保存");
         public string Status => document.Value == null ? "先打开一对 .hoface.value.json + .hoface.ir.json" : "就绪 · " + Mode;
         public string InputStatus => "输入：" + session.TransportStatus;
         public string PhoneIp { get => phoneIp; set { phoneIp = value; OnPropertyChanged(); } }
@@ -69,19 +121,24 @@ namespace HoFace.Studio
         public bool WeightsReadOnly => selectedNode == null;
         public string InspectorName { get => selectedValueRow?.parameter ?? selectedNode?.name ?? ""; set { if (selectedValueRow != null) selectedValueRow.parameter = value; else if (selectedNode != null) selectedNode.name = value; OnPropertyChanged(); } }
         public string InspectorExpression { get => selectedValueRow?.expression ?? (selectedNode?.type + " · " + selectedNode?.parameterX + " / " + selectedNode?.parameterY) ?? ""; set { if (selectedValueRow != null) selectedValueRow.expression = value; OnPropertyChanged(); } }
-        public string Diagnostics { get; private set; } = "Blender：HoFaceStudio 执行 value + IR，仅写入表情权重。\nUnity：只转发 raw，value / LookAt 由 Unity 消费。";
+        public string Diagnostics { get; private set; } = "";
         public string PlotHint => selectedValueRow != null ? "曲线点/切线可拖动；双击添加点；滚轮缩放；右键平移。"
             : selectedNode == null ? "选择一个 IR 节点查看参数。" : selectedNode.type == "pose"
             ? "修改右侧形态键权重。" : selectedNode.type == "direct"
             ? "修改右侧子项权重；组合按 IR 归一化设置求值。" : "拖动或编辑右侧控制点坐标；预览游标是临时输入。";
-        public MainWindow()
+        public MainWindow() : this(true) { }
+        public MainWindow(bool startAutomation)
         {
             InitializeComponent();
             SourceInitialized += (_, _) => ApplyDarkWindowChrome();
             DataContext = this;
-            automation = new HoFaceAutomationServer(this);
-            automation.Start();
-            Plot.SizeChanged += (s, e) => Plot.Fit();
+            if (startAutomation)
+            {
+                automation = new HoFaceAutomationServer(this);
+                automation.Start();
+            }
+            ValueText.TextChanged += (_, _) => TextDraftChanged();
+            IrText.TextChanged += (_, _) => TextDraftChanged();
             session.StatusChanged += status => Dispatcher.Invoke(() =>
             {
                 liveStatus = status;
@@ -108,12 +165,12 @@ namespace HoFace.Studio
             });
             pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             pollTimer.Tick += (s, e) => session.Poll();
-            pollTimer.Start();
+            if (startAutomation) pollTimer.Start();
             Closing += OnClosing;
         }
         private void OnClosing(object sender, CancelEventArgs e)
         {
-            if (document.IsDirty)
+            if (HasUnsavedChanges)
             {
                 var answer = MessageBox.Show("当前有未保存的 value / IR 编辑，是否保存？", "HoFaceStudio", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
                 if (answer == MessageBoxResult.Cancel) e.Cancel = true;
@@ -121,15 +178,15 @@ namespace HoFace.Studio
             }
             if (!e.Cancel)
             {
-                automation.Dispose();
+                automation?.Dispose();
                 pollTimer.Stop();
                 session.Dispose();
             }
         }
         private void OpenClicked(object sender, RoutedEventArgs e) => OpenDocument();
         private void SaveClicked(object sender, RoutedEventArgs e) => TrySave();
-        private void UndoClicked(object sender, RoutedEventArgs e) { document.Undo(); ReloadEditors(); }
-        private void RedoClicked(object sender, RoutedEventArgs e) { document.Redo(); ReloadEditors(); }
+        private void UndoClicked(object sender, RoutedEventArgs e) => UndoDocument();
+        private void RedoClicked(object sender, RoutedEventArgs e) => RedoDocument();
         private void ModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
@@ -164,10 +221,10 @@ namespace HoFace.Studio
         }
         private void OpenExecuted(object sender, ExecutedRoutedEventArgs e) => OpenDocument();
         private void SaveExecuted(object sender, ExecutedRoutedEventArgs e) => TrySave();
-        private void SaveCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.Value != null && document.IsDirty;
-        private void UndoExecuted(object sender, ExecutedRoutedEventArgs e) { document.Undo(); ReloadEditors(); }
+        private void SaveCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.Value != null && HasUnsavedChanges;
+        private void UndoExecuted(object sender, ExecutedRoutedEventArgs e) => UndoDocument();
         private void UndoCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.CanUndo;
-        private void RedoExecuted(object sender, ExecutedRoutedEventArgs e) { document.Redo(); ReloadEditors(); }
+        private void RedoExecuted(object sender, ExecutedRoutedEventArgs e) => RedoDocument();
         private void RedoCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.CanRedo;
         private void WeightsCellEditEnding(object sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
         {
@@ -190,7 +247,11 @@ namespace HoFace.Studio
             if (value.ShowDialog() != true) return;
             var ir = new Microsoft.Win32.OpenFileDialog { Filter = "HoFace IR (*.hoface.ir.json)|*.hoface.ir.json|JSON|*.json" };
             if (ir.ShowDialog() != true) return;
-            try { document.Open(value.FileName, ir.FileName); session.Configure(document); ReloadEditors(); }
+            try
+            {
+                if (!ConfirmReplaceDocument()) return;
+                OpenPaths(value.FileName, ir.FileName);
+            }
             catch (Exception error) { MessageBox.Show(error.Message, "打开失败", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
         private void TrySave() { try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message, "保存失败", MessageBoxButton.OK, MessageBoxImage.Error); } }
@@ -198,39 +259,71 @@ namespace HoFace.Studio
         private void SyncText()
         {
             if (document.Value == null) return;
-            if (CenterTab == 1 && !string.IsNullOrWhiteSpace(ValueText.Text) && !string.IsNullOrWhiteSpace(IrText.Text))
+            if (HasTextDraft)
                 document.ApplyText(ValueText.Text, IrText.Text);
         }
         private void ReloadEditors()
         {
-            ValueText.Text = document.Value == null ? "" : HoFaceValueDocument.Write(document.Value);
-            IrText.Text = document.Ir == null ? "" : document.Ir.Write();
+            loadingText = true;
+            textValueBaseline = document.Value == null ? "" : HoFaceValueDocument.Write(document.Value);
+            textIrBaseline = document.Ir == null ? "" : document.Ir.Write();
+            ValueText.Text = textValueBaseline;
+            IrText.Text = textIrBaseline;
+            loadingText = false;
+            ResolveSelection();
             RefreshRows(); RefreshPlot();
+            if (document.Value != null) session.Configure(document);
+            Diagnostics = "";
+            OnPropertyChanged(nameof(Diagnostics)); OnPropertyChanged(nameof(HasTextDraft));
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+            Title = (document.IsDirty ? "● " : "") + (document.ValuePath == null ? "" : Path.GetFileName(document.ValuePath).Replace(".hoface.value.json", "") + " · ") + "HoFaceStudio";
             OnPropertyChanged(nameof(ValuePath)); OnPropertyChanged(nameof(IrPath)); OnPropertyChanged(nameof(HeaderStatus));
             OnPropertyChanged(nameof(Status)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(InspectorSummary));
         }
         private void RefreshRows()
         {
-            ValueRows.Clear();
-            NodeRows.Clear();
-            if (document.Value != null)
-                foreach (var row in document.Value.outputs.Where(x => string.IsNullOrWhiteSpace(ValueFilter) || (x.parameter + " " + x.expression).IndexOf(ValueFilter, StringComparison.OrdinalIgnoreCase) >= 0))
-                    ValueRows.Add(new RuleRow(row));
-            if (document.Ir != null)
-                foreach (var node in document.Ir.nodes.Where(x => string.IsNullOrWhiteSpace(IrFilter)
-                    || (x.id + " " + x.name + " " + x.type + " " + x.parameterX + " " + x.parameterY).IndexOf(IrFilter, StringComparison.OrdinalIgnoreCase) >= 0))
-                    NodeRows.Add(new NodeRow(node));
-            OnPropertyChanged(nameof(SelectedValueRow));
-            OnPropertyChanged(nameof(SelectedNodeRow));
+            refreshingRows = true;
+            try
+            {
+                var rules = document.Value?.outputs.Select((row, index) => new RuleRow(row, index))
+                    .Where(x => string.IsNullOrWhiteSpace(ValueFilter) || x.Display.IndexOf(ValueFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToArray() ?? Array.Empty<RuleRow>();
+                var nodes = document.Ir?.nodes.Where(x => string.IsNullOrWhiteSpace(IrFilter)
+                    || (x.id + " " + x.name + " " + x.type + " " + x.parameterX + " " + x.parameterY).IndexOf(IrFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Select(x => new NodeRow(x)).ToArray() ?? Array.Empty<NodeRow>();
+                Reconcile(ValueRows, rules, x => x.Index.ToString(), (old, next) => old.Update(next.Row));
+                Reconcile(NodeRows, nodes, x => x.Node.id, (old, next) => old.Update(next.Node));
+                OnPropertyChanged(nameof(SelectedValueRow));
+                OnPropertyChanged(nameof(SelectedNodeRow));
+                OnPropertyChanged(nameof(ValueCount)); OnPropertyChanged(nameof(NodeCount));
+            }
+            finally { refreshingRows = false; }
         }
-        private void RefreshPlot()
+        private void ResolveSelection()
+        {
+            selectedValueRow = structureTab == 0 && selectedOutputIndex >= 0 && document.Value != null &&
+                selectedOutputIndex < document.Value.outputs.Count ? document.Value.outputs[selectedOutputIndex] : null;
+            selectedNode = structureTab == 1 ? document.Ir?.nodes.FirstOrDefault(x => x.id == selectedNodeId) : null;
+        }
+        private static void Reconcile<T>(ObservableCollection<T> target, T[] items,
+            Func<T, string> key, Action<T, T> update)
+        {
+            for (int i = 0; i < items.Length; i++)
+            {
+                int found = -1;
+                for (int j = i; j < target.Count; j++) if (key(target[j]) == key(items[i])) { found = j; break; }
+                if (found < 0) target.Insert(i, items[i]);
+                else { if (found != i) target.Move(found, i); update(target[i], items[i]); }
+            }
+            while (target.Count > items.Length) target.RemoveAt(target.Count - 1);
+        }
+        private void RefreshPlot(bool newSelection = false)
         {
             Plot.Rule = selectedValueRow;
             Plot.Node = selectedNode;
-            Plot.Fit(); Plot.InvalidateVisual();
+            if (newSelection) { Plot.ClearSelection(); Plot.Fit(); }
+            Plot.ValidateSelection(); Plot.InvalidateVisual();
             InspectorWeights.Clear();
-            if (selectedValueRow != null)
-                InspectorWeights.Add(new WeightRow("expression", selectedValueRow.expression));
             if (selectedNode != null)
             {
                 if (selectedNode.type == "pose")
@@ -264,10 +357,17 @@ namespace HoFace.Studio
             }
             OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); OnPropertyChanged(nameof(InspectorSummary)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(PlotHint));
             OnPropertyChanged(nameof(WeightsReadOnly));
+            RefreshInspector();
         }
         private void PlotEditBeginning() { editBefore ??= document.Snapshot(); }
         private void PlotEditChanged() { Plot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
-        private void PlotEditCommitted() { if (editBefore != null) { document.Remember(editBefore); editBefore = null; } OnPropertyChanged(nameof(HeaderStatus)); }
+        private void PlotEditCommitted()
+        {
+            if (editBefore == null) return;
+            var before = editBefore; editBefore = null;
+            try { document.Remember(before); ReloadEditors(); }
+            catch (Exception error) { ReloadEditors(); ShowError(error.Message); }
+        }
         private void PlotSelectionChanged() { OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); }
         private void PlotPreviewChanged(double x, double y) { Plot.CursorX = x; Plot.CursorY = y; Plot.InvalidateVisual(); }
         private void OnPropertyChanged([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -361,8 +461,12 @@ namespace HoFace.Studio
         private void OpenPaths(string valuePath, string irPath)
         {
             document.Open(valuePath, irPath);
-            session.Configure(document);
+            selectedOutputIndex = document.Value.outputs.Count > 0 ? 0 : -1;
+            selectedNodeId = null;
+            structureTab = 0;
+            OnPropertyChanged(nameof(StructureTab));
             ReloadEditors();
+            Plot.Fit();
         }
 
         private void ApplyDarkWindowChrome()
@@ -393,17 +497,23 @@ namespace HoFace.Studio
         {
             string parameter = RequiredString(payload, "parameter");
             int index = ReadInt(payload, "index", -1);
-            var row = document.Value.outputs.FirstOrDefault(x => x.parameter == parameter);
+            int outputIndex = FindOutputIndex(parameter, ReadInt(payload, "outputIndex", -1));
+            var row = document.Value.outputs[outputIndex];
             if (row == null || index < 0 || row.curve == null || index >= row.curve.keys.Length)
                 throw new InvalidOperationException("value 曲线行或点位不存在。");
-            var keys = row.curve.keys;
-            var key = keys[index];
-            if (payload.TryGetProperty("time", out var time)) key.time = time.GetSingle();
-            if (payload.TryGetProperty("value", out var value)) key.value = value.GetSingle();
-            if (payload.TryGetProperty("inTangent", out var inTangent)) key.inTangent = inTangent.GetSingle();
-            if (payload.TryGetProperty("outTangent", out var outTangent)) key.outTangent = outTangent.GetSingle();
-            keys[index] = key;
-            document.Edit((profile, ir) => row.curve.keys = keys);
+            document.Edit((profile, ir) =>
+            {
+                var keys = profile.outputs[outputIndex].curve.keys;
+                var key = keys[index];
+                if (payload.TryGetProperty("time", out var time)) key.time = FiniteFloat(time, "time");
+                if (payload.TryGetProperty("value", out var value)) key.value = FiniteFloat(value, "value");
+                if (payload.TryGetProperty("inTangent", out var inTangent)) key.inTangent = ReadTangent(inTangent);
+                if (payload.TryGetProperty("outTangent", out var outTangent)) key.outTangent = ReadTangent(outTangent);
+                if (keys.Where((_, i) => i != index).Any(k => Math.Abs(k.time - key.time) < 1e-5))
+                    throw new ArgumentException("曲线点的输入坐标不能重复。");
+                keys[index] = key;
+                profile.outputs[outputIndex].curve.keys = keys;
+            });
             ReloadEditors();
         }
 
@@ -517,12 +627,21 @@ namespace HoFace.Studio
         private static double ReadDouble(JsonElement payload, string name) =>
             payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetDouble(out double result)
                 ? result : throw new ArgumentException("缺少数值参数：" + name);
-        public sealed class RuleRow
+        public sealed class RuleRow : INotifyPropertyChanged
         {
-            public HoFaceOutput Row { get; }
+            public HoFaceOutput Row { get; private set; }
+            public int Index { get; }
             public string parameter => Row.parameter;
+            public string Expression => Row.expression;
+            public string Name => Row.parameter;
             public string Display => Row.parameter + " = " + Row.expression;
-            public RuleRow(HoFaceOutput row) { Row = row; }
+            public RuleRow(HoFaceOutput row, int index = 0) { Row = row; Index = index; }
+            public event PropertyChangedEventHandler PropertyChanged;
+            public void Update(HoFaceOutput row)
+            {
+                Row = row;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(""));
+            }
         }
         public sealed class WeightRow
         {
@@ -537,11 +656,19 @@ namespace HoFace.Studio
                 Name = name; Value = value; Kind = kind; NodeId = nodeId; TargetId = targetId; ChildId = childId;
             }
         }
-        public sealed class NodeRow
+        public sealed class NodeRow : INotifyPropertyChanged
         {
-            public HoFaceIrNode Node { get; }
+            public HoFaceIrNode Node { get; private set; }
+            public string Name => string.IsNullOrWhiteSpace(Node.name) ? Node.id : Node.name;
+            public string Detail => Node.id + " · " + Node.type;
             public string Display => Node.id + " · " + Node.type + (string.IsNullOrEmpty(Node.name) ? "" : " · " + Node.name);
             public NodeRow(HoFaceIrNode node) { Node = node; }
+            public event PropertyChangedEventHandler PropertyChanged;
+            public void Update(HoFaceIrNode node)
+            {
+                Node = node;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(""));
+            }
         }
     }
 }
