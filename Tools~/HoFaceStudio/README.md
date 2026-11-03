@@ -1,4 +1,4 @@
-# HoFaceStudio（暂名）
+# HoFaceStudio
 
 这里是计划内嵌于 HoUnityTools 的 Windows 面捕制作控制台工程位置。
 
