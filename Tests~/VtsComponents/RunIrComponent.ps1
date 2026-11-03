@@ -17,7 +17,7 @@ foreach ($obsoletePath in @($obsoleteEditorAdapter, ($obsoleteEditorAdapter + '.
         Remove-Item -LiteralPath $obsoletePath -Force
     }
 }
-foreach ($name in @('HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceMiddleware.cs',
+foreach ($name in @('HoVtsController.cs','HoVtsLookAt.cs','HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceMiddleware.cs',
     'HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs','HoFaceProfile.cs',
     'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs','HoFaceStudioRawInput.cs')) {
     Copy-Item -LiteralPath (Join-Path $package "Runtime\FaceTracking\$name") -Destination $runtime
@@ -25,6 +25,7 @@ foreach ($name in @('HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceM
 Get-ChildItem -LiteralPath (Join-Path $package 'Runtime\FaceTracking\Core') -Filter '*.cs' |
     Copy-Item -Destination $runtime
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'IrComponentValidation.cs') -Destination $editor
+Copy-Item -LiteralPath (Join-Path $package 'Editor\FaceTracking\HoVtsCharacterSetup.cs') -Destination $editor
 $log = Join-Path $Project 'ir-component.log'
 $process = Start-Process -FilePath $Unity -ArgumentList @('-batchmode','-nographics',
     '-projectPath',('"' + $Project + '"'),'-executeMethod','HoVtsIrComponentValidation.RunBatch',

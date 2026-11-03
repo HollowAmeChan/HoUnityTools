@@ -83,6 +83,7 @@ public static class HoVtsIrComponentValidation
             Check(!ir.EvaluateNow(), "empty mesh list does not fall back to scene scanning");
             Near(renderer.GetBlendShapeWeight(0), 17, "clearing the list releases owned values");
             UnityEngine.Object.DestroyImmediate(root);
+            ValidateCharacterSetup();
             ValidateHoFaceStudioRawInput();
             Debug.Log("HO_VTS_IR_COMPONENT PASS assertions=" + assertions);
             EditorApplication.Exit(0);
@@ -126,6 +127,41 @@ public static class HoVtsIrComponentValidation
                 "stopping raw adapter releases its receiver ownership");
         }
         UnityEngine.Object.DestroyImmediate(root);
+    }
+
+    private static void ValidateCharacterSetup()
+    {
+        var root = new GameObject("SetupCharacter");
+        var firstRenderer = AddMesh(root, "FaceA", "JawOpen");
+        var secondRenderer = AddMesh(root, "FaceB", "MouthSmileLeft");
+        AddMesh(root, "NoBlendShapes", null);
+
+        HoVtsIrController controller = HoVtsCharacterSetup.Create(root);
+        var host = root.transform.Find("HoVTS");
+        var receiver = host != null ? host.GetComponent<HoVtsParameterReceiver>() : null;
+        var pose = host != null ? host.Find("HoVTSLookAt")?.GetComponent<HoVtsLookAt>() : null;
+        Check(host != null && controller != null && controller.gameObject == host.Find("HoVTS面捕").gameObject,
+            "one-click setup creates the face IR component on its own child");
+        Check(controller.ParameterReceiver == receiver, "one-click setup connects the IR component to the role receiver");
+        Check(controller.TargetMeshes.Count == 2 && controller.TargetMeshes.Contains(firstRenderer)
+            && controller.TargetMeshes.Contains(secondRenderer), "one-click setup fills only mesh renderers with shape keys");
+        Check(pose != null && pose.ParameterReceiver == receiver && !pose.AutoRun && !pose.enabled,
+            "one-click setup creates a separate disabled LookAt consumer");
+        Check(root.GetComponentInChildren<HoVtsController>(true) == null,
+            "one-click setup no longer creates the legacy Animator controller component");
+        UnityEngine.Object.DestroyImmediate(root);
+    }
+
+    private static SkinnedMeshRenderer AddMesh(GameObject root, string name, string shapeKey)
+    {
+        var child = new GameObject(name);
+        child.transform.SetParent(root.transform, false);
+        var mesh = new Mesh { vertices = new[] { Vector3.zero, Vector3.right, Vector3.up }, triangles = new[] { 0, 1, 2 } };
+        if (!string.IsNullOrEmpty(shapeKey))
+            mesh.AddBlendShapeFrame(shapeKey, 100, new Vector3[3], new Vector3[3], new Vector3[3]);
+        var renderer = child.AddComponent<SkinnedMeshRenderer>();
+        renderer.sharedMesh = mesh;
+        return renderer;
     }
 
     private static HoFaceRawAck SendRawFrame(HoFaceStudioRawInput adapter, UdpClient sender,

@@ -50,7 +50,11 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 faceObject.transform.localRotation = Quaternion.identity;
                 faceObject.transform.localScale = Vector3.one;
                 var controller = Undo.AddComponent<HoVtsIrController>(faceObject);
+                Undo.RecordObject(controller, "连接 VTS 面捕参数和驱动网格");
                 controller.ParameterReceiver = receiver;
+                foreach (var renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    if (renderer != null && renderer.sharedMesh != null && renderer.sharedMesh.blendShapeCount > 0)
+                        controller.TargetMeshes.Add(renderer);
 
                 var lookAtObject = new GameObject("HoVTSLookAt");
                 Undo.RegisterCreatedObjectUndo(lookAtObject, "创建 HoVTS LookAt 物体");
@@ -59,6 +63,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 lookAtObject.transform.localRotation = Quaternion.identity;
                 lookAtObject.transform.localScale = Vector3.one;
                 var pose = Undo.AddComponent<HoVtsLookAt>(lookAtObject);
+                Undo.RecordObject(pose, "连接 VTS 头眼姿态参数");
                 pose.ParameterReceiver = receiver;
                 pose.ReferenceFrame = root.transform;
                 pose.AutoRun = false;
