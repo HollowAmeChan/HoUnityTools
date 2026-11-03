@@ -154,6 +154,25 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");
                 EditorGUILayout.LabelField("来源", receiver.Source);
+                var rawAdapters = receiver.GetComponentsInChildren<HoFaceStudioRawInput>(true);
+                if (rawAdapters.Length == 1)
+                {
+                    var raw = rawAdapters[0];
+                    EditorGUILayout.LabelField("HoFaceStudio", raw.Status);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        if (GUILayout.Button("开始 Unity raw")) raw.StartListening();
+                        if (GUILayout.Button("停止")) raw.StopListening();
+                    }
+                }
+                else if (rawAdapters.Length > 1)
+                {
+                    EditorGUILayout.HelpBox("角色下有多个 HoFaceStudioRawInput，无法自动选择。", MessageType.Warning);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox("Play 模式不会自动连接。需要 Unity 侧调试时，在角色下添加 HoFaceStudioRawInput。", MessageType.Info);
+                }
                 if (!string.IsNullOrEmpty(receiver.RuleError)) EditorGUILayout.HelpBox(receiver.RuleError, MessageType.Error);
             }
         }

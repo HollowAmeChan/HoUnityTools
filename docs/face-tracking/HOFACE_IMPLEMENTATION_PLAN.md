@@ -118,7 +118,27 @@ Blender 只做薄预览和编辑配合；不再扩建旧混合矩阵，不复制
 
 保留数据备份、必要迁移工具、角色层级与独立姿态消费者。UI 迁移按能力逐项核对，不能以“新窗口已打开”作为功能完成。
 
-## 9. 仓库与验证要求
+## 9. 三路收口
+
+### Blender / HoTools
+
+正式名称为 **HoFace**。它接收 HoFaceStudio 的最终权重帧，维护需要驱动的物体列表，显示连接状态，并提供清空选中目标形态键权重、目标启用/停用和基型/钉固预检查开关。它不求值 `.hoface.value.json` 或 `.hoface.ir.json`，也不再维护混合矩阵坐标和权重算法。
+
+混合矩阵模块先迁出有效交互和数据，再从 HoTools 面板注册与入口退役。清空形态键属于破坏性操作，必须走 Blender Undo，并在操作名和状态栏中明确显示。
+
+### HoFaceStudio UI
+
+WPF 界面按现代制作工具收口：顶部只保留打开、模式和连接状态；保存、撤销、重做以快捷键为主；value/IR 以左侧目录、中间编辑画布、右侧检查器组织。空文档、断连、无目标和解析错误使用明确的空状态，不让白色默认控件泄露到深色主题。
+
+HoFaceStudio 提供本地 AI 控制通道。命令只操作文档、选择、输入、预览和诊断，不开放任意命令执行。录制、回放、冻结和诊断导出沿用同一结构化接口。
+
+### Unity / HoUnityTools
+
+最终 Unity 调试入口收进 `HoVtsParameterReceiver` Inspector：只在 Play 模式显示连接、追踪、来源和超时状态；找到 `HoFaceStudioRawInput` 时提供启动/停止和自动开始。Unity 侧只接 raw，让 value、LookAt 和其他消费者继续运行。
+
+HoFaceStudio 成为规则与 IR 的正式编辑入口后，退役 `HoFaceProfileWindow`、旧面捕测试窗口、全局调试宿主、旧调试会话和影子求值依赖。删除前先检查引用、迁移能力和测试；旧控制器编辑/绑定工具在 WTD IR 迁移完成前保留为迁移工具。
+
+## 10. 仓库与验证要求
 
 桌面项目放在 `Tools~/HoFaceStudio/`，核心主本放在 Runtime。随附多根工作区同时显示 HoUnityTools 与 Warudo 插件仓库。
 

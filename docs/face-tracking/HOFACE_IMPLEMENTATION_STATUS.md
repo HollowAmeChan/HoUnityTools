@@ -23,6 +23,7 @@
 - Warudo Mod 侧不增加作者调试桥接：Warudo 只作为最终消费端，角色组件内部执行 value + IR。桌面会话保留原始帧事件边界，未来若需要仅接 Unity 编辑器适配器。
 - Unity 编辑器专用 `HoFaceStudioRawInput` 已接入共享 `hoface.raw` v1 解析，接收后调用现有角色参数接收器；Blender 继续只接收最终形态键权重。
 - `HoVtsIrController` 已接入角色运行时：直接读取 value 输出、求值 IR 并写形态键，不依赖 Animator；独立 Unity 工程验证通过。
+- HoFaceStudio 本地 AI 控制通道已接入：状态、截图、打开/保存、撤销/重做、选区、VTS、模式和预览命令已通过命名管道验证；录制/回放/冻结/诊断接口列为下一阶段。
 - 核心编译无警告；本机已有 .NET 10 SDK 与 WindowsDesktop 运行环境，暂未安装新环境。
 
 包级验证说明：原全量 Editor 扫描因既有 MMD 编辑器的 `Volume` 类型引用列表缺失而失败；给本机临时响应文件补上工程已存在的 `Unity.RenderPipelines.Core.Runtime.dll` 后，完整扫描可编译。未修改该 MMD 代码或将此问题归因于本次核心提取。真实 Unity 隔离工程则直接编译并执行了相关面捕源码。

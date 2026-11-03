@@ -7,6 +7,9 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Text.Json;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
 using HoFace.Transport;
@@ -18,6 +21,7 @@ namespace HoFace.Studio
         private readonly AuthoringDocument document = new AuthoringDocument();
         private readonly AuthoringSession session = new AuthoringSession();
         private readonly DispatcherTimer pollTimer;
+        private readonly HoFaceAutomationServer automation;
         private AuthoringSnapshot editBefore;
         private string mode = "Preview";
         private string valueFilter = "";
@@ -67,6 +71,8 @@ namespace HoFace.Studio
         public MainWindow()
         {
             InitializeComponent(); DataContext = this;
+            automation = new HoFaceAutomationServer(this);
+            automation.Start();
             Plot.SizeChanged += (s, e) => Plot.Fit();
             session.StatusChanged += status => Dispatcher.Invoke(() =>
             {
@@ -92,10 +98,13 @@ namespace HoFace.Studio
         }
         private void OnClosing(object sender, CancelEventArgs e)
         {
-            if (!document.IsDirty) return;
-            var answer = MessageBox.Show("当前有未保存的 value / IR 编辑，是否保存？", "HoFaceStudio", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-            if (answer == MessageBoxResult.Cancel) e.Cancel = true;
-            else if (answer == MessageBoxResult.Yes) try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message); e.Cancel = true; }
+            if (document.IsDirty)
+            {
+                var answer = MessageBox.Show("当前有未保存的 value / IR 编辑，是否保存？", "HoFaceStudio", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+                if (answer == MessageBoxResult.Cancel) e.Cancel = true;
+                else if (answer == MessageBoxResult.Yes) try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message); e.Cancel = true; }
+            }
+            if (!e.Cancel) automation.Dispose();
         }
         private void OpenClicked(object sender, RoutedEventArgs e) => OpenDocument();
         private void SaveClicked(object sender, RoutedEventArgs e) => TrySave();
@@ -197,6 +206,115 @@ namespace HoFace.Studio
         private void PlotSelectionChanged() { OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); }
         private void PlotPreviewChanged(double x, double y) { Plot.CursorX = x; Plot.CursorY = y; Plot.InvalidateVisual(); }
         private void OnPropertyChanged([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        public object ExecuteAutomation(string command, JsonElement payload)
+        {
+            switch (command)
+            {
+                case "status":
+                    return new
+                    {
+                        app = "HoFaceStudio",
+                        mode = Mode,
+                        dirty = document.IsDirty,
+                        valuePath = document.ValuePath,
+                        irPath = document.IrPath,
+                        status = Status,
+                        input = InputStatus,
+                        target = TargetStatus,
+                        selectedValue = selectedValueRow?.parameter,
+                        selectedNode = selectedNode?.id,
+                        frames = session.Frames,
+                        preview = session.PreviewStatus
+                    };
+                case "screenshot":
+                    return new { path = CaptureScreenshot(ReadString(payload, "path")) };
+                case "open":
+                    OpenPaths(RequiredString(payload, "valuePath"), RequiredString(payload, "irPath"));
+                    return ExecuteAutomation("status", default);
+                case "save":
+                    SaveDocument(); return ExecuteAutomation("status", default);
+                case "undo":
+                    document.Undo(); ReloadEditors(); return ExecuteAutomation("status", default);
+                case "redo":
+                    document.Redo(); ReloadEditors(); return ExecuteAutomation("status", default);
+                case "mode":
+                    Mode = RequiredString(payload, "value") == "RawForward" ? "RawForward" : "Preview";
+                    session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
+                    return ExecuteAutomation("status", default);
+                case "selectValue":
+                    SelectedValueRow = ValueRows.FirstOrDefault(x => x.parameter == RequiredString(payload, "parameter"));
+                    return ExecuteAutomation("status", default);
+                case "selectNode":
+                    SelectedNodeRow = NodeRows.FirstOrDefault(x => x.Node.id == RequiredString(payload, "id"));
+                    return ExecuteAutomation("status", default);
+                case "cursor":
+                    PlotPreviewChanged(ReadDouble(payload, "x"), ReadDouble(payload, "y"));
+                    return ExecuteAutomation("status", default);
+                case "vtsStart":
+                    StartVtsFromPayload(payload); return ExecuteAutomation("status", default);
+                case "vtsStop":
+                    session.Stop(); return ExecuteAutomation("status", default);
+                case "previewStart":
+                    session.Preview.Start(); return ExecuteAutomation("status", default);
+                case "previewStop":
+                    session.Preview.Stop(); return ExecuteAutomation("status", default);
+                case "text":
+                    document.ApplyText(RequiredString(payload, "value"), RequiredString(payload, "ir"));
+                    ReloadEditors(); return ExecuteAutomation("status", default);
+                default: throw new InvalidOperationException("未知 HoFaceStudio 命令：" + command);
+            }
+        }
+
+        private void OpenPaths(string valuePath, string irPath)
+        {
+            document.Open(valuePath, irPath);
+            session.Configure(document);
+            ReloadEditors();
+        }
+
+        private void StartVtsFromPayload(JsonElement payload)
+        {
+            string ip = ReadString(payload, "phoneIp") ?? PhoneIp;
+            int phone = ReadInt(payload, "phonePort", int.Parse(PhonePort));
+            int local = ReadInt(payload, "localPort", int.Parse(LocalPort));
+            session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
+            session.Start(new VtsIphoneOptions { PhoneAddress = ip, PhonePort = phone, LocalPort = local });
+        }
+
+        private string CaptureScreenshot(string requestedPath)
+        {
+            string path = string.IsNullOrWhiteSpace(requestedPath)
+                ? Path.Combine(AppContext.BaseDirectory, ".user", "screenshots",
+                    DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + ".png")
+                : requestedPath;
+            string directory = Path.GetDirectoryName(Path.GetFullPath(path));
+            Directory.CreateDirectory(directory);
+            int width = Math.Max(1, (int)Math.Ceiling(ActualWidth));
+            int height = Math.Max(1, (int)Math.Ceiling(ActualHeight));
+            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(this);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+            encoder.Save(stream);
+            return Path.GetFullPath(path);
+        }
+
+        private static string RequiredString(JsonElement payload, string name)
+        {
+            string value = ReadString(payload, name);
+            if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("缺少参数：" + name);
+            return value;
+        }
+        private static string ReadString(JsonElement payload, string name) =>
+            payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() : null;
+        private static int ReadInt(JsonElement payload, string name, int fallback) =>
+            payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetInt32(out int result) ? result : fallback;
+        private static double ReadDouble(JsonElement payload, string name) =>
+            payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetDouble(out double result)
+                ? result : throw new ArgumentException("缺少数值参数：" + name);
         public sealed class RuleRow
         {
             public HoFaceOutput Row { get; }

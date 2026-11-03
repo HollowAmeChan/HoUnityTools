@@ -74,16 +74,26 @@
     <Style TargetType="TabControl">
       <Setter Property="Background" Value="#20262F"/>
       <Setter Property="BorderBrush" Value="#354251"/>
+      <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
     </Style>
     <Style TargetType="TabItem">
       <Setter Property="Padding" Value="18,7"/>
-      <Setter Property="Background" Value="#303B49"/>
-      <Setter Property="Foreground" Value="#20262F"/>
+      <Setter Property="Background" Value="#27313D"/>
+      <Setter Property="Foreground" Value="#CBD5E0"/>
+      <Setter Property="BorderBrush" Value="#354251"/>
     </Style>
     <Style TargetType="GroupBox">
+      <Setter Property="Background" Value="#20262F"/>
       <Setter Property="Foreground" Value="#AEBFD0"/>
       <Setter Property="BorderBrush" Value="#354251"/>
       <Setter Property="Padding" Value="8"/>
+    </Style>
+    <Style TargetType="ScrollViewer">
+      <Setter Property="Background" Value="#20262F"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+    </Style>
+    <Style TargetType="TabPanel">
+      <Setter Property="Background" Value="#20262F"/>
     </Style>
   </Application.Resources>
 </Application>

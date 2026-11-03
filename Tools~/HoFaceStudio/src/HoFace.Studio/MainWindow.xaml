@@ -21,20 +21,17 @@
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <Button Content="打开 value + IR" Click="OpenClicked"/>
-        <Button Grid.Column="1" Content="保存" Click="SaveClicked"/>
-        <Button Grid.Column="2" Content="撤销" Click="UndoClicked"/>
-        <Button Grid.Column="3" Content="重做" Click="RedoClicked"/>
-        <TextBlock Grid.Column="4" Margin="14,0,0,0" Text="{Binding HeaderStatus}"/>
-        <ComboBox Grid.Column="5" Width="180" SelectedValuePath="Tag" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
+        <TextBlock Grid.Column="1" Margin="14,0,0,0" Text="{Binding HeaderStatus}"/>
+        <ComboBox Grid.Column="2" Width="180" SelectedValuePath="Tag" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
           <ComboBoxItem Tag="Preview">制作预览：外部求值</ComboBoxItem>
           <ComboBoxItem Tag="RawForward">裸值转发：角色链路</ComboBoxItem>
         </ComboBox>
-        <StackPanel Grid.Row="1" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,8,0,0">
+        <TextBlock Grid.Column="3" Margin="14,0,0,0" Foreground="#8296AA" Text="Ctrl+S 保存 · Ctrl+Z 撤销 · Ctrl+Y 重做"/>
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,8,0,0">
           <Label Content="手机 IP"/>
           <TextBox Width="130" Text="{Binding PhoneIp, UpdateSourceTrigger=PropertyChanged}"/>
           <Label Content="手机端口" Margin="12,0,0,0"/>

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/HoFace.Core/HoFace.Core.csproj" />
+    <Project Path="src/HoFace.Console/HoFace.Console.csproj" />
     <Project Path="src/HoFace.Transport/HoFace.Transport.csproj" />
     <Project Path="src/HoFace.Studio/HoFace.Studio.csproj" />
   </Folder>

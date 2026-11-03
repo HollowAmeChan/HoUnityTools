@@ -6,6 +6,8 @@
 
 当前实现范围与复现命令见 [核心契约](CORE_CONTRACT.md)，阶段状态见 [实施记录](../../docs/face-tracking/HOFACE_IMPLEMENTATION_STATUS.md)。
 
+AI / 自动化接口见 [AI_AUTOMATION.md](AI_AUTOMATION.md)。它通过本机命名管道提供状态、截图、文档、选区、VTS、预览和保存操作；录制、回放、冻结和诊断命令按后续版本扩展。
+
 Release 构建与启动：
 
 ```powershell
