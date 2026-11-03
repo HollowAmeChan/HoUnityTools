@@ -87,16 +87,23 @@ namespace HoFace.Studio
                 liveStatus = status;
                 OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
             });
-            session.PreviewUpdated += (values, weights) => Dispatcher.Invoke(() =>
+            session.RawForward.StatusChanged += status => Dispatcher.Invoke(() =>
             {
-                liveStatus = "VTS " + session.Frames + " 帧 · value " + values.Count + " · 权重 " + weights.Count;
+                liveStatus = status;
+                OnPropertyChanged(nameof(LiveStatus));
+            });
+            session.PreviewUpdated += (values, weights, tracked) => Dispatcher.Invoke(() =>
+            {
+                liveStatus = tracked
+                    ? "VTS " + session.Frames + " 帧 · value " + values.Count + " · 权重 " + weights.Count
+                    : "VTS " + session.Frames + " 帧 · 未追踪";
                 if (session.Preview.Running)
-                    session.Preview.Send(values, weights, true, session.Frames / 60.0);
+                    session.Preview.Send(values, weights, tracked, session.Frames / 60.0);
                 OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
             });
             session.RawFrameForward += frame => Dispatcher.Invoke(() =>
             {
-                liveStatus = "裸值已收到 " + session.Frames + " 帧 · 等待角色桥接";
+                liveStatus = "VTS raw " + session.Frames + " 帧 · " + session.RawForward.Status;
                 OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
             });
             pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -112,7 +119,12 @@ namespace HoFace.Studio
                 if (answer == MessageBoxResult.Cancel) e.Cancel = true;
                 else if (answer == MessageBoxResult.Yes) try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message); e.Cancel = true; }
             }
-            if (!e.Cancel) automation.Dispose();
+            if (!e.Cancel)
+            {
+                automation.Dispose();
+                pollTimer.Stop();
+                session.Dispose();
+            }
         }
         private void OpenClicked(object sender, RoutedEventArgs e) => OpenDocument();
         private void SaveClicked(object sender, RoutedEventArgs e) => TrySave();
@@ -279,6 +291,7 @@ namespace HoFace.Studio
                         selectedNode = selectedNode?.id,
                         frames = session.Frames,
                         preview = session.PreviewStatus,
+                        rawForward = session.RawForwardStatus,
                         recording = session.Recording,
                         recordedFrames = session.RecordedFrames,
                         replayLoaded = session.ReplayLoaded,
