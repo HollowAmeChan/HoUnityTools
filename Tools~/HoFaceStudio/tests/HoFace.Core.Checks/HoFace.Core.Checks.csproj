@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/HoFace.Core/HoFace.Core.csproj" />
+    <ProjectReference Include="../../src/HoFace.Transport/HoFace.Transport.csproj" />
     <Content Include="../../samples/*.json" Link="samples/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

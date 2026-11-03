@@ -2,8 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
+using HoFace.Transport;
 
 internal static class Program
 {
@@ -12,7 +16,7 @@ internal static class Program
     {
         try
         {
-            Curves(); Value(); Ir(); Sessions();
+            Curves(); Value(); Ir(); Sessions(); PreviewTransport();
             string root = args.Length > 0 ? args[0] : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../../.."));
             foreach (string file in new[]
             {
@@ -162,6 +166,22 @@ internal static class Program
         evaluator = new HoFaceIrEvaluator(ir); evaluator.Evaluate(null);
         Near(evaluator.Values["jaw"], 1, "large Direct weights cannot produce NaN");
         Near(evaluator.Values["smileL"], .5f, "large Direct weights normalize without overflow");
+    }
+    private static void PreviewTransport()
+    {
+        using var receiver = new UdpClient(21415);
+        receiver.Client.ReceiveTimeout = 1000;
+        using var sender = new HoFacePreviewSender();
+        sender.Start(new PreviewUdpOptions { Port = 21415 });
+        var targets = new List<HoFaceIrTarget> { new HoFaceIrTarget { id = "jaw", slot = "Face", shape = "JawOpen" } };
+        sender.Send(new Dictionary<string, float> { { "Mouth/Open", .4f } },
+            new Dictionary<string, float> { { "jaw", .7f } }, targets, true, 1.25);
+        IPEndPoint endpoint = new IPEndPoint(IPAddress.Loopback, 0);
+        string json = Encoding.UTF8.GetString(receiver.Receive(ref endpoint));
+        Check(json.Contains("\"type\":\"hoface.preview\""), "preview packet type");
+        Check(json.Contains("\"weights\":{\"jaw\":0.7"), "preview final weight");
+        Check(json.Contains("\"slot\":\"Face\""), "preview target binding");
+        Check(json.Contains("\"tracked\":true"), "preview tracking state");
     }
     private static void Check(bool value, string label)
     {

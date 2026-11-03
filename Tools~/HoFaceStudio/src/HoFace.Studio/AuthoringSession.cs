@@ -14,10 +14,12 @@ namespace HoFace.Studio
         private HoFaceValueSession valueSession;
         private HoFaceIrEvaluator irEvaluator;
         public readonly VtsIphoneReceiver Receiver = new VtsIphoneReceiver();
+        public readonly HoFacePreviewSender Preview = new HoFacePreviewSender();
         public AuthoringMode Mode { get; private set; } = AuthoringMode.Preview;
         public bool HasDocument => valueSession != null && irEvaluator != null;
         public bool Running => Receiver.Running;
         public string TransportStatus => Receiver.Status;
+        public string PreviewStatus => Preview.Status;
         public long Frames => Receiver.Packets;
         public long InvalidFrames => Receiver.InvalidPackets;
         public IReadOnlyDictionary<string, float> Values => valueSession?.Values;
@@ -72,6 +74,6 @@ namespace HoFace.Studio
             PreviewUpdated?.Invoke(valueSession.Values, irEvaluator.Values);
         }
 
-        public void Dispose() => Receiver.Dispose();
+        public void Dispose() { Receiver.Dispose(); Preview.Dispose(); }
     }
 }
