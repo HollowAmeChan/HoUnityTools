@@ -82,6 +82,7 @@ public static class HoVtsControllerValidation
         Delivery();
         Timing();
         Pose();
+        Ir();
         var root = new GameObject("Character");
         var originalAnimator = root.AddComponent<Animator>();
         originalAnimator.enabled = false;
@@ -365,6 +366,46 @@ public static class HoVtsControllerValidation
         pose.ReferenceFrame = head;
         Check(!pose.EvaluateNow(0), "driven bone cannot also be its reference frame");
         UnityEngine.Object.Destroy(root);
+    }
+
+    private static void Ir()
+    {
+        var root = new GameObject("IrCharacter");
+        var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var rules = new HoFaceMiddleware();
+        rules.outputs.Add(new HoFaceOutput { parameter = "Mouth/Open", expression = "Raw" });
+        receiver.SetMiddleware(rules);
+
+        var face = new GameObject("Face");
+        face.transform.SetParent(root.transform, false);
+        var mesh = new Mesh { vertices = new[] { Vector3.zero, Vector3.right, Vector3.up }, triangles = new[] { 0, 1, 2 } };
+        mesh.AddBlendShapeFrame("Jaw", 100, new Vector3[3], new Vector3[3], new Vector3[3]);
+        AssetDatabase.CreateAsset(mesh, "Assets/IrFace.asset");
+        var renderer = face.AddComponent<SkinnedMeshRenderer>();
+        renderer.sharedMesh = mesh;
+
+        string json = "{\"format\":\"ho-face-ir\",\"version\":1,\"id\":\"ir-test\",\"displayName\":\"IR test\",\"root\":\"root\","
+            + "\"parameters\":[{\"name\":\"Mouth/Open\",\"defaultValue\":0,\"min\":0,\"max\":1}],"
+            + "\"targets\":[{\"id\":\"jaw\",\"slot\":\"Face\",\"shape\":\"Jaw\",\"min\":0,\"max\":1}],"
+            + "\"nodes\":["
+            + "{\"id\":\"rest\",\"name\":\"Rest\",\"type\":\"pose\",\"weights\":[]},"
+            + "{\"id\":\"open\",\"name\":\"Open\",\"type\":\"pose\",\"weights\":[{\"target\":\"jaw\",\"value\":1}]},"
+            + "{\"id\":\"root\",\"name\":\"Root\",\"type\":\"blend1d\",\"parameterX\":\"Mouth/Open\",\"children\":["
+            + "{\"node\":\"rest\",\"threshold\":0,\"weight\":1},{\"node\":\"open\",\"threshold\":1,\"weight\":1}]}]}";
+        var ir = root.AddComponent<HoVtsIrController>();
+        ir.ParameterReceiver = receiver;
+        ir.OutputRoot = root.transform;
+        ir.IrAsset = new TextAsset(json);
+        ir.AutoRun = false;
+        ir.WeightScale = 100;
+
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 1, "ir-test");
+        Check(ir.EvaluateNow(), "IR component evaluates a processed parameter");
+        Near(renderer.GetBlendShapeWeight(0), 100, "IR component writes final Unity weight");
+        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 0 } }, false, 2, "ir-test");
+        Check(!ir.EvaluateNow(), "IR component stops after tracking loss");
+        Near(renderer.GetBlendShapeWeight(0), 0, "IR component restores baseline on release");
+        UnityEngine.Object.DestroyImmediate(root);
     }
 
     private static void RotationNear(Quaternion actual, Quaternion expected, string name) =>
