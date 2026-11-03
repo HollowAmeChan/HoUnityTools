@@ -27,7 +27,6 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         private UdpClient socket;
         private double lastPacketTime = -1;
         private string status = "未启动";
-        private readonly byte[] buffer = new byte[65535];
 
         public HoVtsParameterReceiver ParameterReceiver
         {

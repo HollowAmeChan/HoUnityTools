@@ -101,7 +101,11 @@ namespace HoFace.Studio
         private void SaveClicked(object sender, RoutedEventArgs e) => TrySave();
         private void UndoClicked(object sender, RoutedEventArgs e) { document.Undo(); ReloadEditors(); }
         private void RedoClicked(object sender, RoutedEventArgs e) { document.Redo(); ReloadEditors(); }
-        private void ModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) { OnPropertyChanged(nameof(Status)); }
+        private void ModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
+            OnPropertyChanged(nameof(Status));
+        }
         private void ConnectClicked(object sender, RoutedEventArgs e)
         {
             if (!int.TryParse(PhonePort, out int phone) || !int.TryParse(LocalPort, out int local))
