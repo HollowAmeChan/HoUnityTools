@@ -13,7 +13,7 @@ dotnet build HoFaceStudio.slnx -c Release
 .\src\HoFace.Studio\bin\Release\net10.0-windows\HoFaceStudio.exe
 ```
 
-打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、IR 节点列表、曲线/1D/2D 图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS iPhone UDP 接收已接入制作会话；制作预览会执行外部 value + IR，最终权重可通过 UDP 发给 Blender 薄适配器；裸值转发模式会发送独立 `hoface.raw` 帧给 Warudo Mod 桥接节点，不执行外部规则。Unity 预览仍未接入。
+打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、IR 节点列表、曲线/1D/2D 图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS iPhone UDP 接收已接入制作会话；制作预览会执行外部 value + IR，最终权重可通过 UDP 发给 Blender 薄适配器。Warudo Mod 不增加作者调试桥接，正式运行由角色组件内部执行 value + IR；Unity 编辑器适配仍未接入。
 
 ## 文档
 
