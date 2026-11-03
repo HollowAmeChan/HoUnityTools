@@ -2,7 +2,9 @@
 
 这里是计划内嵌于 HoUnityTools 的 Windows 面捕制作控制台工程位置。
 
-**当前仅包含规划入口与工作区配置，尚无应用代码、项目文件或可执行程序。**
+**当前已建立可独立编译的 value / IR 核心、诊断样例与验证工程；桌面编辑器、预览传输和角色 IR 接入仍在推进。**
+
+当前实现范围与复现命令见 [核心契约](CORE_CONTRACT.md)，阶段状态见 [实施记录](../../docs/face-tracking/HOFACE_IMPLEMENTATION_STATUS.md)。
 
 ## 文档
 

@@ -1,6 +1,6 @@
 # HoFace 双文件架构与外部制作流程
 
-决策日期：2026-11-03。状态：用户确认的目标与规划，尚未实现。
+决策日期：2026-11-03。状态：用户确认的目标，已开始实施；实际完成范围见 [实施记录](HOFACE_IMPLEMENTATION_STATUS.md)，本架构不代表整套集成已经完成。
 
 当前可用代码见 [角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)；桌面工具选型见 [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md)，落地顺序见 [实施计划](HOFACE_IMPLEMENTATION_PLAN.md)。
 

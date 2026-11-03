@@ -1,6 +1,6 @@
 # HoFaceStudio：Windows 桌面 UI 技术决策
 
-调研日期：2026-11-03。结论状态：推荐方案，未创建应用骨架，未做性能实测或完成依赖锁定。
+调研日期：2026-11-03。WPF + .NET 10 已由用户确认并开始实施。交互性能与第三方 UI 依赖仍需原型验证，实际完成范围见 [实施记录](HOFACE_IMPLEMENTATION_STATUS.md)。
 
 本决策服务于 [双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md)。软件暂名 HoFaceStudio，工程放在 HoUnityTools 的 `Tools~/HoFaceStudio/`。
 

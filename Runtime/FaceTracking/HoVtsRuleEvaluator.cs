@@ -19,7 +19,11 @@
 
 using System;
 using System.Collections.Generic;
+#if HO_FACE_PORTABLE
+using Mathf = Hollow.HoUnityTools.FaceTracking.Core.HoFacePortableMath;
+#else
 using UnityEngine;
+#endif
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
@@ -134,6 +138,8 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         /// <summary>这份链编译自哪套中间层（面板显示用）。</summary>
         public readonly HoFaceMiddleware Middleware;
+        public int? FrameIndex { get; set; }
+        public Func<float, float, float> RandomRange { get; set; }
 
         public HoVtsRuleEvaluator(HoFaceMiddleware middleware)
         {
@@ -305,7 +311,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 {
                     touched.Add(name);
                     return Raw(rawValues, name);
-                });
+                }, null, FrameIndex ?? HoFaceExpression.Frame, RandomRange);
 
                 bool present = touched.Count > 0;
                 for (int i = 0; i < touched.Count; i++)
@@ -336,7 +342,9 @@ namespace Hollow.HoUnityTools.FaceTracking
                 // 修饰符照走 —— 想让常量入场时爬上去，给它加一个 Smooth。
                 // ⚠️ 引用顺序不对的行（引用了下面的行 / 引用了不存在的行）在编译期就被置成 null
                 //    ⇒ 走同一条路：**始终输出 defaultValue**。
-                float value = expressions[row] != null ? expressions[row].Evaluate(Lookup, LookupOutput) : output.defaultValue;
+                float value = expressions[row] != null
+                    ? expressions[row].Evaluate(Lookup, LookupOutput, FrameIndex ?? HoFaceExpression.Frame, RandomRange)
+                    : output.defaultValue;
                 outputExpressionsSeen[row] = value;
                 if (expressions[row] != null) value = output.Transform(value);
                 outputCurvesSeen[row] = value;

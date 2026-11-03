@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+#if HO_FACE_PORTABLE
+using Mathf = Hollow.HoUnityTools.FaceTracking.Core.HoFacePortableMath;
+using FaceRandom = Hollow.HoUnityTools.FaceTracking.Core.HoFacePortableRandom;
+#else
 using UnityEngine;
+using FaceRandom = UnityEngine.Random;
+#endif
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
@@ -69,6 +75,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             public Func<string, float> Variable;
             public Func<string, float> Output;
+            public int Frame;
+            public Func<float, float, float> Random;
         }
 
         private enum TokenKind
@@ -157,7 +165,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// </summary>
         public float Evaluate(Func<string, float> variable, Func<string, float> output)
         {
-            var scope = new Scope { Variable = variable, Output = output };
+            return Evaluate(variable, output, Frame, null);
+        }
+
+        public float Evaluate(Func<string, float> variable, Func<string, float> output,
+            int frame, Func<float, float, float> random)
+        {
+            var scope = new Scope { Variable = variable, Output = output, Frame = frame, Random = random };
             try
             {
                 return Eval(_root, scope);
@@ -368,10 +382,10 @@ namespace Hollow.HoUnityTools.FaceTracking
                     float step = Eval(args[0], scope);
                     float period = Eval(args[1], scope);
                     if (period <= 0f) return 0f; // 模数非正：没有周期可言（也算不到 NaN）
-                    return Finite((step * Frame) % period);
+                    return Finite((step * scope.Frame) % period);
                 }
                 case Builtin.Rand:
-                    return Finite(UnityEngine.Random.Range(Eval(args[0], scope), Eval(args[1], scope)));
+                    return Finite((scope.Random ?? FaceRandom.Range)(Eval(args[0], scope), Eval(args[1], scope)));
                 case Builtin.Clamp:
                     // Mathf.Clamp 的下限大于上限也不抛，只是按顺序夹一次。
                     return Finite(Mathf.Clamp(Eval(args[0], scope), Eval(args[1], scope), Eval(args[2], scope)));

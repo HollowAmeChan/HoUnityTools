@@ -1,6 +1,6 @@
 # HoFace 双文件与制作控制台实施计划
 
-日期：2026-11-03。状态：规划；本次没有创建应用骨架、迁移作品或修改运行代码。
+日期：2026-11-03。状态：已启动实施；各阶段完成情况见 [实施记录](HOFACE_IMPLEMENTATION_STATUS.md)，不能将本计划的完成条件当成已通过的验证。
 
 依据：[架构](HOFACE_VALUE_IR_ARCHITECTURE.md) · [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md)。
 

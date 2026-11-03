@@ -1,6 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+#if HO_FACE_PORTABLE
+using AnimationCurve = Hollow.HoUnityTools.FaceTracking.Core.HoFaceCurveData;
+using TooltipAttribute = Hollow.HoUnityTools.FaceTracking.Core.HoFaceTooltipAttribute;
+using InspectorNameAttribute = Hollow.HoUnityTools.FaceTracking.Core.HoFaceInspectorNameAttribute;
+#else
 using UnityEngine;
+#endif
 
 namespace Hollow.HoUnityTools.FaceTracking
 {

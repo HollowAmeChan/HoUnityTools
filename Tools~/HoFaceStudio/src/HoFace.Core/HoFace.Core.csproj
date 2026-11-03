@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <DefineConstants>$(DefineConstants);HO_FACE_PORTABLE</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>Hollow.HoUnityTools.FaceTracking</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(HoFaceRuntimeSource)/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceExpression.cs" Link="Value/HoFaceExpression.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceMiddleware.cs" Link="Value/HoFaceMiddleware.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceProfile.cs" Link="Value/HoFaceProfile.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceProfileJson.cs" Link="Value/HoFaceProfileJson.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceOutputTable.cs" Link="Value/HoFaceOutputTable.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceNaming.cs" Link="Value/HoFaceNaming.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoFaceTrackingChannels.cs" Link="Value/HoFaceTrackingChannels.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoVtsRuleEvaluator.cs" Link="Value/HoVtsRuleEvaluator.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoJson.cs" Link="Protocol/HoJson.cs" />
+    <Compile Include="$(HoFaceRuntimeSource)/HoVtsPacket.cs" Link="Protocol/HoVtsPacket.cs" />
+  </ItemGroup>
+</Project>

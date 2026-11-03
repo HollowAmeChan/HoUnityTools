@@ -8,7 +8,9 @@
 *.csproj
 !Tools~/PmxImport/ParserValidation/ParserValidation.csproj
 !Tools~/PmxImport/DataValidation/DataValidation.csproj
+!Tools~/HoFaceStudio/**/*.csproj
 *.sln
+!Tools~/HoFaceStudio/*.sln
 *.user
 *.pidb
 *.booproj
@@ -35,5 +37,7 @@
 # 构建产物与缓存（Tools~ 下那些 C# 探针工程也会生成；2026-09-29 清过一次）
 Tools~/**/bin/
 Tools~/**/obj/
+Tools~/HoFaceStudio/artifacts/
+Tools~/HoFaceStudio/.user/
 **/__pycache__/
 *.pyc

@@ -1,0 +1,19 @@
+{
+  "format": "ho-face-value",
+  "version": 1,
+  "displayName": "嘴部诊断样例（非生产迁移件）",
+  "notes": "用于验证编辑器与薄预览，不宣称已经还原 WTD 的生产表情。",
+  "inputs": [
+    { "parameter": "jawOpen", "expression": "JawOpen", "defaultValue": 0 },
+    { "parameter": "smileLeft", "expression": "MouthSmileLeft", "defaultValue": 0 },
+    { "parameter": "smileRight", "expression": "MouthSmileRight", "defaultValue": 0 }
+  ],
+  "outputs": [
+    { "parameter": "Mouth/Open", "expression": "clamp(jawOpen,0,1)", "defaultValue": 0,
+      "curve": { "keys": [
+        { "t": 0, "v": 0, "inT": 1, "outT": 1 },
+        { "t": 1, "v": 1, "inT": 1, "outT": 1 }
+      ] } },
+    { "parameter": "Mouth/Form", "expression": "(smileLeft+smileRight)*0.5", "defaultValue": 0 }
+  ]
+}

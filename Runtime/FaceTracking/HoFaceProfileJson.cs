@@ -2,7 +2,12 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+#if HO_FACE_PORTABLE
+using AnimationCurve = Hollow.HoUnityTools.FaceTracking.Core.HoFaceCurveData;
+using Keyframe = Hollow.HoUnityTools.FaceTracking.Core.HoFaceCurveKey;
+#else
 using UnityEngine;
+#endif
 
 namespace Hollow.HoUnityTools.FaceTracking
 {
@@ -22,10 +27,15 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>把一套中间层写成配置文件文本（2 空格缩进，可 diff）。</summary>
         public static string Write(HoFaceMiddleware middleware)
         {
+            return Write(middleware, HoFaceProfile.Format, HoFaceProfile.Version);
+        }
+
+        internal static string Write(HoFaceMiddleware middleware, string format, int version)
+        {
             var text = new StringBuilder(4096);
             text.Append("{\n");
-            text.Append("  \"format\": ").Append(Quote(HoFaceProfile.Format)).Append(",\n");
-            text.Append("  \"version\": ").Append(HoFaceProfile.Version.ToString(CultureInfo.InvariantCulture)).Append(",\n");
+            text.Append("  \"format\": ").Append(Quote(format)).Append(",\n");
+            text.Append("  \"version\": ").Append(version.ToString(CultureInfo.InvariantCulture)).Append(",\n");
             text.Append("  \"displayName\": ").Append(Quote(middleware != null ? middleware.displayName : "")).Append(",\n");
             text.Append("  \"notes\": ").Append(Quote(middleware != null ? middleware.notes : "")).Append(",\n");
             text.Append("  \"inputs\": ");
@@ -231,6 +241,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             var result = new HoFaceMiddleware();
             var warnings = new List<string>();
             string format = null;
+            double version = 0;
 
             try
             {
@@ -240,7 +251,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     switch (key)
                     {
                         case "format": format = r.ReadString(); break;
-                        case "version": r.ReadNumber(); break;          // 保留字段，读进来不用
+                        case "version": version = r.ReadNumber(); break;
                         case "displayName": result.displayName = r.ReadString(); break;
                         case "notes": result.notes = r.ReadString(); break;
                         case "inputs": ParseRows(r, result.inputs, warnings); break;
@@ -255,7 +266,12 @@ namespace Hollow.HoUnityTools.FaceTracking
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(format) && format != HoFaceProfile.Format)
+            if (format == "ho-face-value" && version != 1)
+            {
+                error = "不支持的 ho-face-value 版本：" + version.ToString(CultureInfo.InvariantCulture);
+                return false;
+            }
+            if (!string.IsNullOrEmpty(format) && format != HoFaceProfile.Format && format != "ho-face-value")
             {
                 error = "这不是 Ho 的中间层配置（format = " + format + "）。";
                 return false;
