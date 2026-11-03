@@ -1,6 +1,7 @@
 param(
     [string] $Project,
-    [string] $Unity = 'D:\Unity\Unity 2021.3.45f2\Editor\Unity.exe'
+    [string] $Unity = 'D:\Unity\Unity 2021.3.45f2\Editor\Unity.exe',
+    [switch] $PlayMode
 )
 $ErrorActionPreference = 'Stop'
 $package = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
@@ -30,13 +31,16 @@ foreach ($name in @('HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceM
 Get-ChildItem -LiteralPath (Join-Path $package 'Runtime\FaceTracking\Core') -Filter '*.cs' |
     Copy-Item -Destination $runtime
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JellyEyeValidation.cs') -Destination $editor
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'JellyEyeFrameProbe.cs') -Destination $runtime
 $inspector = Join-Path $package 'Editor\FaceTracking\HoVtsJellyEyeEditor.cs'
 if (Test-Path -LiteralPath $inspector) { Copy-Item -LiteralPath $inspector -Destination $editor }
-$log = Join-Path $Project 'jelly-eye.log'
+$method = if ($PlayMode) { 'HoVtsJellyEyeValidation.RunPlayMode' } else { 'HoVtsJellyEyeValidation.RunBatch' }
+$log = Join-Path $Project $(if ($PlayMode) { 'jelly-playmode.log' } else { 'jelly-eye.log' })
 $process = Start-Process -FilePath $Unity -ArgumentList @('-batchmode','-nographics',
-    '-projectPath',('"' + $Project + '"'),'-executeMethod','HoVtsJellyEyeValidation.RunBatch',
+    '-projectPath',('"' + $Project + '"'),'-executeMethod',$method,
     '-logFile',('"' + $log + '"')) -WindowStyle Hidden -PassThru
 $process.WaitForExit()
 Get-Content -LiteralPath $log | Select-String 'HO_VTS_JELLY|error CS|Exception:'
 if ($process.ExitCode -ne 0) { throw "Unity jelly validation failed; see $log" }
-if (-not (Select-String -LiteralPath $log -Pattern 'HO_VTS_JELLY PASS' -Quiet)) { throw 'Jelly PASS marker missing' }
+$pass = if ($PlayMode) { 'HO_VTS_JELLY_PLAYMODE PASS' } else { 'HO_VTS_JELLY PASS' }
+if (-not (Select-String -LiteralPath $log -Pattern $pass -Quiet)) { throw 'Jelly PASS marker missing' }

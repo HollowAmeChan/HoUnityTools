@@ -20,6 +20,7 @@
 | [摆锤约束](PENDULUM_CONSTRAINT.md) | 摆锤与液面参数、材质契约和验证记录 |
 | [眨眼约束](BLINK_CONSTRAINT.md) | 自动眨眼、果冻眼及形态键输出的合并方式 |
 | [注视约束](LOOKAT_CONSTRAINT.md) | 目标选择、头颈/眼睛跟随、鼠标输入和形态键输出 |
+| [VTS 果冻眼](VTS_JELLY_EYE.md) | 读取 IR 最终形态键；瞳孔与各层高光独立配置位移、缩放、压扁拉长弹簧 |
 
 约束互相覆盖或与物理抢骨骼时，另查 [Animator IK 与更新时机](../pitfalls/UNITY_IK_AND_TIMING.md)；形态键清场和重复注册问题见 [形态键输出](../pitfalls/SHAPE_KEY_OUTPUT.md)。
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
 using UnityEditor;
@@ -9,6 +10,7 @@ public static class HoVtsJellyEyeValidation
 {
     private static int assertions;
     private const float Dt = 1f / 60f;
+    private const string PlayPending = "HoVtsJellyEyeValidation.PlayPending";
     private static readonly string[] InputKeys = { "BlinkL", "BlinkR", "LookLeft", "LookRight", "LookUp", "LookDown" };
     private static readonly string[] OutputKeys = { "Right", "Left", "Up", "Down", "Large", "Small", "Tall", "Flat" };
 
@@ -16,6 +18,7 @@ public static class HoVtsJellyEyeValidation
     {
         try
         {
+            RequireDisposableProject();
             ValidateSpring();
             ValidateDirectionsAndRest();
             ValidateOptionalKeysAndSettings();
@@ -23,10 +26,117 @@ public static class HoVtsJellyEyeValidation
             ValidateLifecycle();
             ValidateMeshChanges();
             ValidateThreeLayers();
+            ValidateAuthoring();
             Debug.Log("HO_VTS_JELLY PASS assertions=" + assertions);
             EditorApplication.Exit(0);
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+    }
+
+    public static void RunPlayMode()
+    {
+        RequireDisposableProject();
+        SessionState.SetBool(PlayPending, true);
+        EditorApplication.isPlaying = true;
+    }
+
+    private static void RequireDisposableProject()
+    {
+        string project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        if (!File.Exists(Path.Combine(project, ".ho-vts-jelly-validation"))
+            && !File.Exists(Path.Combine(project, ".ho-vts-ir-validation")))
+            throw new InvalidOperationException("Disposable jelly project marker missing.");
+    }
+
+    [InitializeOnLoadMethod]
+    private static void ResumePlayMode() => EditorApplication.update += StartPlayModeProbe;
+
+    private static void StartPlayModeProbe()
+    {
+        if (!SessionState.GetBool(PlayPending, false) || !EditorApplication.isPlaying || EditorApplication.isCompiling) return;
+        SessionState.EraseBool(PlayPending);
+        try
+        {
+            var f = new Fixture();
+            f.ir.AutoRun = true;
+            f.receiver.InputTimeoutSeconds = 0.08f;
+            var pupil = f.AddLayer("");
+            var h1 = f.AddLayer("H1");
+            var h2 = f.AddLayer("H2");
+            pupil.AutoRun = h1.AutoRun = h2.AutoRun = true;
+            var probe = f.root.AddComponent<HoVtsJellyEyeFrameProbe>();
+            probe.receiver = f.receiver; probe.ir = f.ir; probe.layers = new[] { pupil, h1, h2 }; probe.face = f.face;
+            probe.Assert = Check;
+            probe.Failed = error => { Debug.LogException(error); EditorApplication.Exit(1); };
+            probe.Completed = () =>
+            {
+                Debug.Log("HO_VTS_JELLY_PLAYMODE PASS assertions=" + assertions);
+                EditorApplication.Exit(0);
+            };
+        }
+        catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+    }
+
+    private static void ValidateAuthoring()
+    {
+        string folder = "Assets/JellyAuthoring_" + Guid.NewGuid().ToString("N");
+        AssetDatabase.CreateFolder("Assets", Path.GetFileName(folder));
+        try
+        {
+            using (var f = new Fixture())
+            {
+                AssetDatabase.CreateAsset(f.face.sharedMesh, folder + "/Face.asset");
+                AssetDatabase.CreateAsset(f.secondary.sharedMesh, folder + "/Secondary.asset");
+                AssetDatabase.CreateAsset(f.unlisted.sharedMesh, folder + "/Unlisted.asset");
+                string irPath = folder + "/Role.hoface.ir.json";
+                File.WriteAllText(Path.GetFullPath(Path.Combine(Application.dataPath, "..", irPath)), f.ir.IrAsset.text);
+                AssetDatabase.ImportAsset(irPath, ImportAssetOptions.ForceSynchronousImport);
+                f.ir.IrAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(irPath);
+                var pupil = f.AddLayer("");
+                var h1 = f.AddLayer("H1");
+                var h2 = f.AddLayer("H2");
+                pupil.Scale.response.strength = 0.42f;
+                pupil.Scale.response.damping = 0.6f;
+                pupil.Scale.enlarge = "";
+                var editor = UnityEditor.Editor.CreateEditor(pupil);
+                Check(editor.GetType().Name == "HoVtsJellyEyeEditor", "Unity selects the native Chinese jelly Inspector");
+                UnityEngine.Object.DestroyImmediate(editor);
+                var serialized = new SerializedObject(pupil);
+                var strength = serialized.FindProperty("scale.response.strength");
+                Check(strength != null && serialized.FindProperty("movement.response.damping") != null,
+                    "Inspector can address independent serialized response settings");
+                Undo.IncrementCurrentGroup();
+                strength.floatValue = 0.9f;
+                serialized.ApplyModifiedProperties();
+                Undo.FlushUndoRecordObjects();
+                Near(pupil.Scale.response.strength, 0.9f, "Inspector property changes apply natively");
+                Undo.PerformUndo();
+                Near(pupil.Scale.response.strength, 0.42f, "Inspector edits support Unity Undo");
+                Undo.PerformRedo();
+                Near(pupil.Scale.response.strength, 0.9f, "Inspector edits support Unity Redo");
+                string prefabPath = folder + "/Character.prefab";
+                var prefab = PrefabUtility.SaveAsPrefabAsset(f.root, prefabPath);
+                Check(prefab != null, "three-layer authoring fixture saves as a native prefab");
+                var clone = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                try
+                {
+                    var layers = clone.GetComponents<HoVtsJellyEye>();
+                    var cloneIr = clone.GetComponent<HoVtsIrController>();
+                    Check(layers.Length == 3, "prefab retains three separate instances of the same component type");
+                    Check(layers[0].IrController == cloneIr && layers[1].IrController == cloneIr && layers[2].IrController == cloneIr,
+                        "prefab retains internal references to its own IR instance");
+                    Check(layers[0].TargetMeshes.Count == 2 && layers[0].TargetMeshes[0].transform.IsChildOf(clone.transform),
+                        "prefab renderer lists refer to the cloned role");
+                    Check(layers[0].Scale.enlarge == "" && layers[0].Inputs.blinkKeys.Count == 2,
+                        "prefab preserves optional directions and explicit input names");
+                    Near(layers[0].Scale.response.strength, 0.9f, "prefab preserves per-effect intensity");
+                    Near(layers[0].Scale.response.damping, 0.6f, "prefab preserves per-effect damping");
+                    Check(!layers[0].AutoRun && !cloneIr.AutoRun, "AutoRun remains serialized independently of enabled state");
+                }
+                finally { UnityEngine.Object.DestroyImmediate(clone); }
+            }
+        }
+        finally { AssetDatabase.DeleteAsset(folder); }
     }
 
     private static void ValidateSpring()
@@ -355,7 +465,8 @@ public static class HoVtsJellyEyeValidation
         public void Dispose()
         {
             UnityEngine.Object.DestroyImmediate(root);
-            foreach (var resource in resources) if (resource != null) UnityEngine.Object.DestroyImmediate(resource);
+            foreach (var resource in resources)
+                if (resource != null && !EditorUtility.IsPersistent(resource)) UnityEngine.Object.DestroyImmediate(resource);
         }
     }
 

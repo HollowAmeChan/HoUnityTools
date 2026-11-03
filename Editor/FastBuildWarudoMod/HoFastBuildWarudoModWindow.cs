@@ -2224,6 +2224,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                        "Hollow.HoUnityTools.FaceTracking.HoVtsIrController",
                        StringComparison.Ordinal) ||
                    string.Equals(typeName,
+                       "Hollow.HoUnityTools.FaceTracking.HoVtsJellyEye",
+                       StringComparison.Ordinal) ||
+                   string.Equals(typeName,
                        "Hollow.HoUnityTools.FaceTracking.HoVtsLookAt",
                        StringComparison.Ordinal);
         }
