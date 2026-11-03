@@ -17,6 +17,8 @@ import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
 from bpy.types import Operator, Panel, PropertyGroup, UIList
 
+_sockets = {}
+
 
 def _state(scene):
     return getattr(scene, "ho_face_preview_state", None)
@@ -24,13 +26,13 @@ def _state(scene):
 
 def _close_socket(scene):
     state = _state(scene)
-    if state is None:
-        return
-    sock = getattr(state, "socket", None)
+    sock = _sockets.pop(scene.as_pointer(), None)
     if sock is not None:
         sock.close()
-    state.socket = None
-    state.last_status = "已停止"
+    if state is not None:
+        state.last_status = "已停止"
+    if not _sockets and bpy.app.timers.is_registered(_poll):
+        bpy.app.timers.unregister(_poll)
 
 
 def _apply_packet(scene, packet):
@@ -56,11 +58,12 @@ def _apply_packet(scene, packet):
 def _poll():
     scene = bpy.context.scene
     state = _state(scene)
-    if state is None or state.socket is None:
-        return 0.03
+    sock = _sockets.get(scene.as_pointer())
+    if state is None or sock is None:
+        return 0.03 if _sockets else None
     try:
         while True:
-            payload, _address = state.socket.recvfrom(1024 * 1024)
+            payload, _address = sock.recvfrom(1024 * 1024)
             packet = json.loads(payload.decode("utf-8"))
             _apply_packet(scene, packet)
             state.last_sequence = int(packet.get("sequence", state.last_sequence))
@@ -79,7 +82,6 @@ class HO_PG_FacePreviewState(bpy.types.PropertyGroup):
     port: bpy.props.IntProperty(name="端口", default=21414, min=1, max=65535)
     last_status: bpy.props.StringProperty(name="状态", default="未启动")
     last_sequence: bpy.props.IntProperty(name="序号", default=0)
-    socket = None
 
 
 class HO_PG_FacePreviewTarget(PropertyGroup):
@@ -126,12 +128,14 @@ class HO_OT_FacePreviewStart(bpy.types.Operator):
     bl_label = "开始 HoFace 预览"
 
     def execute(self, context):
-        _close_socket(context.scene)
-        state = _state(context.scene)
-        state.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        state.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        state.socket.bind(("127.0.0.1", state.port))
-        state.socket.setblocking(False)
+        scene = context.scene
+        _close_socket(scene)
+        state = _state(scene)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", state.port))
+        sock.setblocking(False)
+        _sockets[scene.as_pointer()] = sock
         state.last_status = "监听 127.0.0.1:{}".format(state.port)
         if not bpy.app.timers.is_registered(_poll):
             bpy.app.timers.register(_poll, first_interval=0.03, persistent=True)

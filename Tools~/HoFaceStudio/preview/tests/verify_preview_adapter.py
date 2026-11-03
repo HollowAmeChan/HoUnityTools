@@ -1,5 +1,7 @@
 import importlib.util
+import json
 from pathlib import Path
+import socket
 
 import bpy
 
@@ -70,6 +72,37 @@ try:
         "weights": {"JawOpen": 0.9},
     })
     check(abs(listed_key.value - 0.25) < 1e-6, "old preview protocol is ignored")
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    probe.bind(("127.0.0.1", 0))
+    udp_port = probe.getsockname()[1]
+    probe.close()
+    entry.enabled = True
+    scene.ho_face_preview_state.port = udp_port
+    check(bpy.ops.ho.face_preview_start() == {"FINISHED"}, "Blender operator opens the loopback receiver")
+    check(scene.as_pointer() in adapter._sockets, "Blender retains its active scene socket")
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender.sendto(json.dumps({
+        "type": "hoface.preview", "version": 2, "sequence": 41, "time": 1.5,
+        "tracked": True, "values": {"jawOpen": 0.5}, "weights": {"JawOpen": 0.64},
+    }).encode("utf-8"), ("127.0.0.1", udp_port))
+    adapter._poll()
+    check(abs(listed_key.value - 0.64) < 1e-6,
+          "loopback UDP frame is polled and applied to Blender: value={}, status={}, sequence={}".format(
+              listed_key.value, scene.ho_face_preview_state.last_status, scene.ho_face_preview_state.last_sequence))
+    check(scene.ho_face_preview_state.last_sequence == 41
+          and scene.ho_face_preview_state.last_status.endswith("41"),
+          "loopback UDP updates the visible receiver status")
+    sender.sendto(json.dumps({
+        "type": "hoface.preview", "version": 2, "sequence": 42, "time": 1.6,
+        "tracked": False, "values": {"jawOpen": 0.5}, "weights": {"JawOpen": 0.64},
+    }).encode("utf-8"), ("127.0.0.1", udp_port))
+    adapter._poll()
+    check(abs(listed_key.value) < 1e-6, "loopback tracking-loss frame releases the Blender key")
+    sender.close()
+    check(bpy.ops.ho.face_preview_stop() == {"FINISHED"}, "Blender operator closes the loopback receiver")
+    check(scene.as_pointer() not in adapter._sockets, "stopping removes the scene socket")
+    check(not bpy.app.timers.is_registered(adapter._poll), "stopping the last listener removes the poll timer")
 finally:
     adapter.unregister()
     for object_name in ("HoFaceListed", "HoFaceUnlisted"):
