@@ -15,6 +15,7 @@ namespace HoFace.Studio
         private HoFaceIrEvaluator irEvaluator;
         public readonly VtsIphoneReceiver Receiver = new VtsIphoneReceiver();
         public readonly HoFacePreviewSender Preview = new HoFacePreviewSender();
+        public readonly HoFaceRawForwardSender RawForward = new HoFaceRawForwardSender();
         public AuthoringMode Mode { get; private set; } = AuthoringMode.Preview;
         public bool HasDocument => valueSession != null && irEvaluator != null;
         public bool Running => Receiver.Running;
@@ -64,6 +65,8 @@ namespace HoFace.Studio
         {
             if (Mode == AuthoringMode.RawForward)
             {
+                if (!RawForward.Running) RawForward.Start();
+                RawForward.Send(frame.Values, frame.FaceFound, clock.Elapsed.TotalSeconds);
                 RawFrameForward?.Invoke(frame);
                 return;
             }
@@ -74,6 +77,6 @@ namespace HoFace.Studio
             PreviewUpdated?.Invoke(valueSession.Values, irEvaluator.Values);
         }
 
-        public void Dispose() { Receiver.Dispose(); Preview.Dispose(); }
+        public void Dispose() { Receiver.Dispose(); Preview.Dispose(); RawForward.Dispose(); }
     }
 }

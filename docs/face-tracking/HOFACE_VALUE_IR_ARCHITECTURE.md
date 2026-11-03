@@ -99,6 +99,8 @@ VTS / 录样
 
 目标是角色参数接收器组件，不是把两份作品 JSON 塞进网络接收节点。优先保留既有帧桥接接口；不能再次通过隐式消息或随意扩展载荷改变参数含义。
 
+当前桌面原型使用 `hoface.raw` v1 UDP 包发送这一模式：`type`、`version`、单调 `time`、`tracked` 和完整 `values` 字典。Warudo Mod 的 `HoFaceStudio裸值桥接` 节点只解析这个包，再调用现有 `HoVtsFrameDelivery`；它不执行 value、IR 或最终权重写入。默认端口为 `127.0.0.1:21415`，与最终权重预览端口分离。
+
 ## 6. Warudo 正式运行
 
 ```text
