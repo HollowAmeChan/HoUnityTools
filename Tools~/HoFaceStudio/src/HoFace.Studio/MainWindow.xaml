@@ -3,7 +3,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:HoFace.Studio"
     Title="HoFaceStudio" Width="1440" Height="900" MinWidth="1000" MinHeight="620"
-    WindowStartupLocation="CenterScreen">
+    WindowStartupLocation="CenterScreen"
+    Background="{StaticResource WindowBrush}"
+    Foreground="{StaticResource TextBrush}">
   <Window.CommandBindings>
     <CommandBinding Command="ApplicationCommands.Open" Executed="OpenExecuted"/>
     <CommandBinding Command="ApplicationCommands.Save" Executed="SaveExecuted" CanExecute="SaveCanExecute"/>
@@ -16,8 +18,8 @@
     <KeyBinding Command="ApplicationCommands.Undo" Modifiers="Control" Key="Z"/>
     <KeyBinding Command="ApplicationCommands.Redo" Modifiers="Control" Key="Y"/>
   </Window.InputBindings>
-  <DockPanel>
-    <Border DockPanel.Dock="Top" Background="#20262F" BorderBrush="#354251" BorderThickness="0,0,0,1" Padding="10,8">
+  <DockPanel Background="{StaticResource WindowBrush}">
+    <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0,0,0,1" Padding="10,8">
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -27,10 +29,10 @@
         <Button Content="打开 value + IR" Click="OpenClicked"/>
         <TextBlock Grid.Column="1" Margin="14,0,0,0" Text="{Binding HeaderStatus}"/>
         <ComboBox Grid.Column="2" Width="180" SelectedValuePath="Tag" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
-          <ComboBoxItem Tag="Preview">制作预览：外部求值</ComboBoxItem>
-          <ComboBoxItem Tag="RawForward">裸值转发：角色链路</ComboBoxItem>
+          <ComboBoxItem Tag="Preview">Blender · 表情权重</ComboBoxItem>
+          <ComboBoxItem Tag="RawForward">Unity · Raw 中间数据</ComboBoxItem>
         </ComboBox>
-        <TextBlock Grid.Column="3" Margin="14,0,0,0" Foreground="#8296AA" Text="Ctrl+S 保存 · Ctrl+Z 撤销 · Ctrl+Y 重做"/>
+        <TextBlock Grid.Column="3" Margin="14,0,0,0" Foreground="{StaticResource MutedBrush}" Text="Ctrl+S 保存 · Ctrl+Z 撤销 · Ctrl+Y 重做"/>
         <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,8,0,0">
           <Label Content="手机 IP"/>
           <TextBox Width="130" Text="{Binding PhoneIp, UpdateSourceTrigger=PropertyChanged}"/>
@@ -46,7 +48,7 @@
         </StackPanel>
       </Grid>
     </Border>
-    <StatusBar DockPanel.Dock="Bottom" Background="#20262F" Foreground="#AEBFD0">
+    <StatusBar DockPanel.Dock="Bottom">
       <StatusBarItem Content="{Binding Status}"/>
       <Separator/>
       <StatusBarItem Content="{Binding InputStatus}"/>
@@ -57,7 +59,7 @@
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
       </Grid.RowDefinitions>
-      <Border Grid.Row="0" Background="#20262F" BorderBrush="#354251" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+      <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" Padding="10" Margin="0,0,0,10">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/>
@@ -110,17 +112,18 @@
               </Grid>
             </TabItem>
           </TabControl>
-          <TextBlock Grid.Row="1" Margin="2,7,0,0" Text="{Binding PlotHint}" Foreground="#90A9BF"/>
+          <TextBlock Grid.Row="1" Margin="2,7,0,0" Text="{Binding PlotHint}" Foreground="{StaticResource MutedBrush}"/>
         </Grid>
         <GroupBox Grid.Column="2" Header="{Binding InspectorTitle}">
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
               <TextBlock Text="{Binding InspectorSummary}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-              <TextBlock Text="名称 / 类型" Foreground="#90A9BF"/>
-              <TextBox Text="{Binding InspectorName, UpdateSourceTrigger=PropertyChanged}" Margin="0,3,0,9"/>
-              <TextBlock Text="表达式 / 参数轴" Foreground="#90A9BF"/>
-              <TextBox Text="{Binding InspectorExpression, UpdateSourceTrigger=PropertyChanged}" Margin="0,3,0,9"/>
-              <DataGrid ItemsSource="{Binding InspectorWeights}" Height="240" Margin="0,3,0,9">
+              <TextBlock Text="名称 / 类型" Foreground="{StaticResource MutedBrush}"/>
+              <TextBox Text="{Binding InspectorName}" IsReadOnly="True" Margin="0,3,0,9"/>
+              <TextBlock Text="表达式 / 参数轴" Foreground="{StaticResource MutedBrush}"/>
+              <TextBox Text="{Binding InspectorExpression}" IsReadOnly="True" Margin="0,3,0,9"/>
+              <DataGrid ItemsSource="{Binding InspectorWeights}" CellEditEnding="WeightsCellEditEnding"
+                  Height="240" Margin="0,3,0,9">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="目标 / 参数" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                   <DataGridTextColumn Header="值" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="90"/>

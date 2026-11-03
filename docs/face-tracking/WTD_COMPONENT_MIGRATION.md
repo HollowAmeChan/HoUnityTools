@@ -2,6 +2,16 @@
 
 日期：2026-10-30。工作工程：D:/Unity_Project/BreakWarudo，Unity 2021.3.45f2。
 
+## 2026-11-03：IR 与网格清单分离
+
+当前生产 prefab 的面捕组件已替换为 `HoVtsIrController`，保留原接收器引用，引用 `FT/WTD-BUILD.hoface.ir.json`。旧控制器和动画保留为迁移来源，prefab 不再依赖它们进行面捕求值。下方 2026-10-30 的控制器构建/加载结果是历史基线，不代表这次 IR 版本已在 Warudo 客户端验收。
+
+IR v2 只保存 52 个逻辑形态键输出及混合图，不包含 mesh 名、路径或 slot。组件上直接引用 6 个 `SkinnedMeshRenderer`：Body、眉、睫毛上、睫毛下、瞳孔、鼻尖；只在此列表内写同名键，缺键跳过。原 0/1 插值阈值、ARKit 总门和大小写（例如输出键 `browdownLeft`）保留。
+
+隔离 Unity 2021.3 工程导入实际 WTD 源模型，确认 52 个输出展开为原先全部 208 个绑定；1,036 组输入（单轴、负值、超范围、总门与混合随机输入）共 215,488 个权重对照通过，额外未列网格保持原值。生产 prefab 的副本也实际加载确认 6 个 renderer 引用、receiver 与 IR 引用有效。通用组件回归另通过 16 项，覆盖多网格同名写入、缺键、无关键、物体改名、列表移除/清空与释放基线。
+
+本次迁移前备份位于 `%TEMP%/hoface-mesh-migration-pv2en46y/`，保留原 prefab 和原 IR。未触发实际工程播放、Character Mod 重建或客户端部署。
+
 ## 已保存的角色配置
 
 预制件 Assets/Hollow/WTD/WTD-BUILD.prefab 新增分层的 HoVTS 组件物体：

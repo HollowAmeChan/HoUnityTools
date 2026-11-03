@@ -32,6 +32,10 @@ HoFace.Console.exe screenshot '{}'
 | `selectValue` | 按参数名选择 value 行 |
 | `selectNode` | 按稳定 id 选择 IR 节点 |
 | `cursor` | 设置当前预览游标 |
+| `setValueCurveKey` | 修改 value 曲线指定点的时间、值或切线 |
+| `setIrChild` | 修改 IR 1D/2D 子项控制点或 Direct 权重 |
+| `setPoseWeight` | 修改 Pose 目标权重 |
+| `setDirectWeight` | 修改 Direct 子项常量权重 |
 | `vtsStart` / `vtsStop` | 启停 VTS 输入 |
 | `previewStart` / `previewStop` | 启停 Blender 最终权重预览 |
 | `text` | 传完整 `value` 与 `ir` 文本，校验后替换当前文档 |
@@ -52,4 +56,4 @@ HoFace.Console.exe screenshot '{}'
 - `diagnostics` 导出 value 阶段、IR 权重和目标绑定
 - `selection` 返回当前曲线点、IR 子项和目标权重
 
-每个命令必须有结构化结果，不能要求 AI 解析 UI 文本猜状态。
+每个命令必须有结构化结果，不能要求 AI 解析 UI 文本猜状态。接口还覆盖 value 曲线、IR 参数轴、1D/2D 控制点、Pose 权重与 Direct 子项权重的读取和提交；图形控件和 AI 命令最终修改同一个作者文档模型，并共用撤销/重做栈。

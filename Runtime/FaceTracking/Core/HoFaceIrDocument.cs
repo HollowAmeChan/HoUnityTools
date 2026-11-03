@@ -12,7 +12,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
     }
     [Serializable] public sealed class HoFaceIrTarget
     {
-        public string id, slot, shape;
+        public string id;
         public float min, max = 1;
     }
     [Serializable] public sealed class HoFaceIrWeight
@@ -35,7 +35,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
     [Serializable] public sealed class HoFaceIrDocument
     {
         public const string Format = "ho-face-ir";
-        public const int Version = 1;
+        public const int Version = 2;
         public string id, displayName, root;
         public List<HoFaceIrParameter> parameters = new List<HoFaceIrParameter>();
         public List<HoFaceIrTarget> targets = new List<HoFaceIrTarget>();
@@ -98,8 +98,8 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
                 switch (k)
                 {
                     case "id": t.id = v.ReadString(); break;
-                    case "slot": t.slot = v.ReadString(); break;
-                    case "shape": t.shape = v.ReadString(); break;
+                    case "slot":
+                    case "shape": throw new FormatException("IR v2 不保存网格绑定；请将网格配置在宿主对象列表中。");
                     case "min": t.min = v.ReadFloat(); break;
                     case "max": t.max = v.ReadFloat(); break;
                     default: v.SkipValue(); break;
@@ -162,7 +162,6 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
             var errors = new List<string>();
             var p = new HashSet<string>(StringComparer.Ordinal);
             var t = new HashSet<string>(StringComparer.Ordinal);
-            var bindings = new HashSet<string>(StringComparer.Ordinal);
             var n = new Dictionary<string, HoFaceIrNode>(StringComparer.Ordinal);
             if (string.IsNullOrWhiteSpace(id)) errors.Add("IR 缺少稳定 id。");
             foreach (var item in parameters)
@@ -176,9 +175,6 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
             {
                 if (item == null || string.IsNullOrWhiteSpace(item.id) || !t.Add(item.id))
                 { errors.Add("目标 id 为空或重复。"); continue; }
-                if (string.IsNullOrWhiteSpace(item.slot) || string.IsNullOrWhiteSpace(item.shape))
-                    errors.Add(item.id + "：需要明确 slot 与形态键名称。");
-                if (!bindings.Add(item.slot + "\n" + item.shape)) errors.Add(item.id + "：目标绑定重复。");
                 if (!Finite(item.min) || !Finite(item.max) || item.max < item.min) errors.Add(item.id + "：最终权重范围无效。");
             }
             if (targets.Count == 0) errors.Add("IR 没有目标。");
@@ -250,7 +246,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
             var s = new StringBuilder();
             Func<string, string> q = HoFaceProfileJson.Quote;
             Func<float, string> f = x => x.ToString("R", CultureInfo.InvariantCulture);
-            s.Append("{\n  \"format\": ").Append(q(Format)).Append(",\n  \"version\": 1,\n  \"id\": ").Append(q(id))
+            s.Append("{\n  \"format\": ").Append(q(Format)).Append(",\n  \"version\": ").Append(Version).Append(",\n  \"id\": ").Append(q(id))
                 .Append(",\n  \"displayName\": ").Append(q(displayName)).Append(",\n  \"root\": ").Append(q(root)).Append(",\n  \"parameters\": [");
             for (int i = 0; i < parameters.Count; i++)
             {
@@ -263,8 +259,8 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
             for (int i = 0; i < targets.Count; i++)
             {
                 var t = targets[i];
-                s.Append(i == 0 ? "\n" : ",\n").Append("    { \"id\": ").Append(q(t.id)).Append(", \"slot\": ").Append(q(t.slot))
-                    .Append(", \"shape\": ").Append(q(t.shape)).Append(", \"min\": ").Append(f(t.min)).Append(", \"max\": ").Append(f(t.max)).Append(" }");
+                s.Append(i == 0 ? "\n" : ",\n").Append("    { \"id\": ").Append(q(t.id))
+                    .Append(", \"min\": ").Append(f(t.min)).Append(", \"max\": ").Append(f(t.max)).Append(" }");
             }
             s.Append("\n  ],\n  \"nodes\": [");
             for (int i = 0; i < nodes.Count; i++)

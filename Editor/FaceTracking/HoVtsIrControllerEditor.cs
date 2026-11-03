@@ -12,7 +12,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("parameterReceiver"), new GUIContent("参数接收器"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("irAsset"), new GUIContent("IR 文件"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("outputRoot"), new GUIContent("输出根物体"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("targetMeshes"), new GUIContent("驱动网格"), true);
+            EditorGUILayout.HelpBox("只处理清单中的网格。IR target ID 按同名形态键写入，不扫描其他场景物体。", MessageType.Info);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("weightScale"), new GUIContent("Unity 权重倍率"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("autoRun"), new GUIContent("自动运行"));
             serializedObject.ApplyModifiedProperties();

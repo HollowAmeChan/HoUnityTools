@@ -17,6 +17,7 @@ internal static class Program
         try
         {
             Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording();
+            AuthoringHistory(args.Length > 0 ? args[0] : FindRepositoryRoot());
             string root = args.Length > 0 ? args[0] : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../../.."));
             foreach (string file in new[]
             {
@@ -120,6 +121,12 @@ internal static class Program
         Check(HoFaceIrDocument.TryParse(Sample("ir"), out var ir, out string error), error);
         Check(HoFaceIrDocument.TryParse(ir.Write(), out var roundTrip, out error), error);
         Check(roundTrip.Write() == ir.Write(), "IR stable roundtrip");
+        Check(!ir.Write().Contains("\"slot\"") && !ir.Write().Contains("\"shape\""),
+            "IR targets contain no host mesh bindings");
+        Check(!HoFaceIrDocument.TryParse(Sample("ir").Replace("\"version\": 2", "\"version\": 1"), out _, out _),
+            "legacy mesh-bound IR version rejected");
+        Check(!HoFaceIrDocument.TryParse(Sample("ir").Replace("\"id\": \"jawOpen\"", "\"id\": \"jawOpen\", \"slot\": \"Face\""), out _, out _),
+            "IR v2 rejects accidental host mesh bindings");
         var evaluator = new HoFaceIrEvaluator(ir);
         for (int xi = 0; xi <= 10; xi++)
             for (int yi = 0; yi <= 10; yi++)
@@ -129,18 +136,18 @@ internal static class Program
                 foreach (float w in evaluator.Values.Values) Check(w >= 0 && w <= 1, "final weight is in target range");
             }
         evaluator.Evaluate(new Dictionary<string, float> { { "Mouth/Form", 0 }, { "Mouth/Open", 1 } });
-        Near(evaluator.Values["jaw"], 1, "exact open point");
-        Near(evaluator.Values["smileL"], 0, "open point does not leak smile");
+        Near(evaluator.Values["jawOpen"], 1, "exact open point");
+        Near(evaluator.Values["mouthSmileLeft"], 0, "open point does not leak smile");
         evaluator.Evaluate(new Dictionary<string, float> { { "Mouth/Form", 1 }, { "Mouth/Open", 1 } });
-        Near(evaluator.Values["jaw"], 1, "combined pose retains jaw");
-        Near(evaluator.Values["smileL"], 1, "combined pose contains smile");
+        Near(evaluator.Values["jawOpen"], 1, "combined pose retains jaw");
+        Near(evaluator.Values["mouthSmileLeft"], 1, "combined pose contains smile");
         var root = ir.nodes.Find(x => x.id == "mouth");
         root.children[1].x = root.children[0].x; root.children[1].y = root.children[0].y;
         Check(ir.Validate().Count > 0, "duplicate 2D point rejected");
         root.children.RemoveAt(1);
         root.children[0].node = "mouth";
         Check(ir.Validate().Any(x => x.Contains("环")), "cycle rejected");
-        Check(!HoFaceIrDocument.TryParse(Sample("ir").Replace("\"version\": 1", "\"version\": 99"), out _, out _), "future IR version rejected");
+        Check(!HoFaceIrDocument.TryParse(Sample("ir").Replace("\"version\": 2", "\"version\": 99"), out _, out _), "future IR version rejected");
         Check(!HoFaceIrDocument.TryParse(Sample("ir") + "false", out _, out _), "trailing JSON rejected");
 
         Check(HoFaceIrDocument.TryParse(Sample("ir"), out ir, out error), error);
@@ -150,22 +157,22 @@ internal static class Program
         root.children.Add(new HoFaceIrChild { node = "rest", threshold = 0 });
         evaluator = new HoFaceIrEvaluator(ir);
         evaluator.Evaluate(new Dictionary<string, float> { { "Mouth/Open", .4f } });
-        Near(evaluator.Values["jaw"], .4f, "unsorted 1D thresholds");
+        Near(evaluator.Values["jawOpen"], .4f, "unsorted 1D thresholds");
         root.type = "direct"; root.children.Clear();
         root.children.Add(new HoFaceIrChild { node = "open", weight = .6f });
         root.children.Add(new HoFaceIrChild { node = "openSmile", weight = .8f });
         evaluator = new HoFaceIrEvaluator(ir); evaluator.Evaluate(null);
-        Near(evaluator.UnclampedValues["jaw"], 1.4f, "Direct accumulates contributions");
-        Near(evaluator.Values["jaw"], 1, "one final target clamp");
+        Near(evaluator.UnclampedValues["jawOpen"], 1.4f, "Direct accumulates contributions");
+        Near(evaluator.Values["jawOpen"], 1, "one final target clamp");
         root.normalize = true;
         evaluator = new HoFaceIrEvaluator(ir); evaluator.Evaluate(null);
-        Near(evaluator.Values["jaw"], 1, "normalized Direct");
-        Near(evaluator.Values["smileL"], .8f / 1.4f, "normalized independent contribution");
+        Near(evaluator.Values["jawOpen"], 1, "normalized Direct");
+        Near(evaluator.Values["mouthSmileLeft"], .8f / 1.4f, "normalized independent contribution");
         root.children[0].weight = float.MaxValue;
         root.children[1].weight = float.MaxValue;
         evaluator = new HoFaceIrEvaluator(ir); evaluator.Evaluate(null);
-        Near(evaluator.Values["jaw"], 1, "large Direct weights cannot produce NaN");
-        Near(evaluator.Values["smileL"], .5f, "large Direct weights normalize without overflow");
+        Near(evaluator.Values["jawOpen"], 1, "large Direct weights cannot produce NaN");
+        Near(evaluator.Values["mouthSmileLeft"], .5f, "large Direct weights normalize without overflow");
     }
     private static void PreviewTransport()
     {
@@ -173,14 +180,14 @@ internal static class Program
         receiver.Client.ReceiveTimeout = 1000;
         using var sender = new HoFacePreviewSender();
         sender.Start(new PreviewUdpOptions { Port = 21415 });
-        var targets = new List<HoFaceIrTarget> { new HoFaceIrTarget { id = "jaw", slot = "Face", shape = "JawOpen" } };
         sender.Send(new Dictionary<string, float> { { "Mouth/Open", .4f } },
-            new Dictionary<string, float> { { "jaw", .7f } }, targets, true, 1.25);
+            new Dictionary<string, float> { { "jawOpen", .7f } }, true, 1.25);
         IPEndPoint endpoint = new IPEndPoint(IPAddress.Loopback, 0);
         string json = Encoding.UTF8.GetString(receiver.Receive(ref endpoint));
         Check(json.Contains("\"type\":\"hoface.preview\""), "preview packet type");
-        Check(json.Contains("\"weights\":{\"jaw\":0.7"), "preview final weight");
-        Check(json.Contains("\"slot\":\"Face\""), "preview target binding");
+        Check(json.Contains("\"weights\":{\"jawOpen\":0.7"), "preview final weight");
+        Check(json.Contains("\"version\":2"), "preview uses logical-output v2");
+        Check(!json.Contains("\"targets\""), "preview packet carries no host mesh bindings");
         Check(json.Contains("\"tracked\":true"), "preview tracking state");
     }
     private static void RawFrameEnvelope()
@@ -209,6 +216,55 @@ internal static class Program
             Near(frames[0].values["JawOpen"], .2f, "record value");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Tools~", "HoFaceStudio", "HoFaceStudio.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("HoUnityTools root was not found.");
+    }
+    private static void AuthoringHistory(string root)
+    {
+        string valuePath = Path.Combine(root, "Tools~", "HoFaceStudio", "samples", "Mouth.hoface.value.json");
+        string irPath = Path.Combine(root, "Tools~", "HoFaceStudio", "samples", "Mouth.hoface.ir.json");
+        string directory = Path.Combine(Path.GetTempPath(), "hoface-authoring-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string v = Path.Combine(directory, "Mouth.hoface.value.json");
+        string ir = Path.Combine(directory, "Mouth.hoface.ir.json");
+        try
+        {
+            File.Copy(valuePath, v); File.Copy(irPath, ir);
+            var document = new HoFace.Studio.AuthoringDocument();
+            document.Open(v, ir);
+            var before = document.Snapshot();
+            var curve = document.Value.outputs.First(x => x.parameter == "Mouth/Open").curve.keys;
+            curve[1].value = .8f;
+            document.Edit((profile, graph) => profile.outputs.First(x => x.parameter == "Mouth/Open").curve.keys = curve);
+            Check(document.IsDirty && document.CanUndo, "authored value edit marks dirty and creates undo");
+            document.Undo();
+            Check(document.Snapshot().Value == before.Value, "undo restores value edit");
+            document.Redo();
+            var graph = document.Ir.nodes.First(x => x.id == "mouth");
+            graph.children[1].x = -.2f;
+            var editedIr = document.Ir.Write();
+            Check(HoFaceIrDocument.TryParse(editedIr, out var candidate, out string error), error);
+            document.ApplyText(document.Snapshot().Value, candidate.Write());
+            Check(document.CanUndo && document.IsDirty, "IR edit writes through shared authoring document");
+            document.Save();
+            Check(!document.IsDirty && File.ReadAllText(ir).Contains("\"x\": -0.2"), "save commits IR data");
+            File.AppendAllText(v, " ");
+            bool conflict = false;
+            try { document.Save(); } catch (IOException) { conflict = true; }
+            Check(conflict, "external edits are not overwritten");
+            Check(document.Ir.nodes.First(x => x.id == "mouth").children[1].x == -.2f,
+                "IR editor and authoring document share the same node model");
+        }
+        finally { Directory.Delete(directory, true); }
     }
     private static void Check(bool value, string label)
     {

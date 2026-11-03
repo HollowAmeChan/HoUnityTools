@@ -24,8 +24,8 @@ namespace HoFace.Studio
         private int tangent;
         private Point last;
         private readonly Brush ink = new SolidColorBrush(Color.FromRgb(187, 204, 219));
-        private readonly Brush accent = new SolidColorBrush(Color.FromRgb(82, 190, 224));
-        private readonly Brush hot = new SolidColorBrush(Color.FromRgb(255, 194, 101));
+        private readonly Brush accent = new SolidColorBrush(Color.FromRgb(104, 183, 168));
+        private readonly Brush hot = new SolidColorBrush(Color.FromRgb(221, 168, 112));
         private readonly Typeface typeface = new Typeface("Microsoft YaHei UI");
         private Rect Plot => new Rect(48, 22, Math.Max(10, ActualWidth - 72), Math.Max(10, ActualHeight - 64));
         public ParameterPlot()
@@ -68,8 +68,8 @@ namespace HoFace.Studio
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
-            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(19, 27, 36)), null, new Rect(RenderSize));
-            var grid = new Pen(new SolidColorBrush(Color.FromRgb(45, 58, 72)), 1);
+            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(21, 27, 33)), null, new Rect(RenderSize));
+            var grid = new Pen(new SolidColorBrush(Color.FromRgb(48, 59, 69)), 1);
             for (int i = 0; i <= 5; i++)
             {
                 double x = Plot.Left + Plot.Width * i / 5, y = Plot.Top + Plot.Height * i / 5;
@@ -106,7 +106,7 @@ namespace HoFace.Studio
             for (int i = 0; i < points.Count; i++)
             {
                 Point p = Screen(points[i]);
-                dc.DrawEllipse(i == SelectedIndex ? hot : accent, new Pen(Brushes.White, .7), p, 6, 6);
+                dc.DrawEllipse(i == SelectedIndex ? hot : accent, new Pen(new SolidColorBrush(Color.FromRgb(169, 181, 191)), .7), p, 6, 6);
                 string label = Rule != null ? i.ToString() : Node.children[i].node;
                 Text(dc, label, new Point(p.X + 10, p.Y - 18));
             }

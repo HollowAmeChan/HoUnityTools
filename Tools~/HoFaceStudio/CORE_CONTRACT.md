@@ -6,7 +6,7 @@
 
 `HoFace.Core.csproj` 链接 `Runtime/FaceTracking/` 的实际规则与协议源码，没有复制第二份表达式或修饰符实现。
 
-`HO_FACE_PORTABLE` 只为独立编译选择无 Unity 依赖的数学、曲线与显示属性适配；Unity 原有序列化字段仍保留原类型，未移动组件或重绑生产资产。便携程序集目标为 `netstandard2.0`，没有 UnityEngine 引用。
+`HO_FACE_PORTABLE` 只为独立编译选择无 Unity 依赖的数学、曲线与显示属性适配。便携程序集目标为 `netstandard2.0`，没有 UnityEngine 引用。物理网格引用属于宿主序列化，不进入核心。
 
 曲线只支持现有 JSON 保存的非加权 Hermite 切线，不增加 Unity weighted tangents 或 wrap modes。端点钳制和空曲线直通维持原语义。
 
@@ -20,10 +20,10 @@
 
 ## IR
 
-新文件使用 `format: "ho-face-ir"`、`version: 1`。完整可运行的小样见 `samples/`，这是诊断件，尚未迁移生产角色。
+新文件使用 `format: "ho-face-ir"`、`version: 2`。完整可运行的小样见 `samples/`。
 
 - `parameters`：声明参数名、默认值及编辑范围；编辑范围不隐式钳制输入。
-- `targets`：稳定 id、slot、形态键名称、最终输出范围。slot 是宿主绑定名，不是自动猜测的对象。
+- `targets`：逻辑形态键名称 `id` 与最终输出范围，不包含 mesh、对象名、路径或 slot。
 - `nodes`：`pose`、`blend1d`、`blend2d`、`direct`，由 `root` 指定入口。
 - Pose 权重按 target id 绑定；同一姿势内重复目标拒绝，省略的拥有目标贡献为零。
 - 1D 阈值不要求文件内排序，端点外取边界姿势，重复阈值拒绝。
@@ -33,6 +33,8 @@
 - 图必须无环，嵌套上限 64 层；引用、稳定 id、参数与目标范围均有校验。
 
 求值器使用构造时的图数据；修改作品后需要建立并验证新求值器。UI 不能直接修改正在运行的快照。
+
+Blender HoFace 的对象列表和 Unity 组件的 `SkinnedMeshRenderer` 列表各自决定写入范围。同一输出写到清单内所有网格的同名键，缺键跳过；适配器不扫描场景。`hoface.preview` v2 只传逻辑输出权重，不传网格绑定。旧 IR/预览 v1 需要显式迁移，不能按新语义静默读取。
 
 ## 验证
 

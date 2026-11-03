@@ -158,7 +158,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");
                 EditorGUILayout.LabelField("来源", receiver.Source);
-                var rawAdapters = receiver.GetComponentsInChildren<HoFaceStudioRawInput>(true);
+                var rawAdapters = receiver.transform.root.GetComponentsInChildren<HoFaceStudioRawInput>(true);
                 if (rawAdapters.Length == 1)
                 {
                     var raw = rawAdapters[0];

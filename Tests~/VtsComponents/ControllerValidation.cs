@@ -384,17 +384,17 @@ public static class HoVtsControllerValidation
         var renderer = face.AddComponent<SkinnedMeshRenderer>();
         renderer.sharedMesh = mesh;
 
-        string json = "{\"format\":\"ho-face-ir\",\"version\":1,\"id\":\"ir-test\",\"displayName\":\"IR test\",\"root\":\"root\","
+        string json = "{\"format\":\"ho-face-ir\",\"version\":2,\"id\":\"ir-test\",\"displayName\":\"IR test\",\"root\":\"root\","
             + "\"parameters\":[{\"name\":\"Mouth/Open\",\"defaultValue\":0,\"min\":0,\"max\":1}],"
-            + "\"targets\":[{\"id\":\"jaw\",\"slot\":\"Face\",\"shape\":\"Jaw\",\"min\":0,\"max\":1}],"
+            + "\"targets\":[{\"id\":\"Jaw\",\"min\":0,\"max\":1}],"
             + "\"nodes\":["
             + "{\"id\":\"rest\",\"name\":\"Rest\",\"type\":\"pose\",\"weights\":[]},"
-            + "{\"id\":\"open\",\"name\":\"Open\",\"type\":\"pose\",\"weights\":[{\"target\":\"jaw\",\"value\":1}]},"
+            + "{\"id\":\"open\",\"name\":\"Open\",\"type\":\"pose\",\"weights\":[{\"target\":\"Jaw\",\"value\":1}]},"
             + "{\"id\":\"root\",\"name\":\"Root\",\"type\":\"blend1d\",\"parameterX\":\"Mouth/Open\",\"children\":["
             + "{\"node\":\"rest\",\"threshold\":0,\"weight\":1},{\"node\":\"open\",\"threshold\":1,\"weight\":1}]}]}";
         var ir = root.AddComponent<HoVtsIrController>();
         ir.ParameterReceiver = receiver;
-        ir.OutputRoot = root.transform;
+        ir.TargetMeshes.Add(renderer);
         ir.IrAsset = new TextAsset(json);
         ir.AutoRun = false;
         ir.WeightScale = 100;

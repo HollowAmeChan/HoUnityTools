@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using Hollow.HoUnityTools.FaceTracking.Core;
 
 namespace HoFace.Transport
 {
@@ -35,30 +34,22 @@ namespace HoFace.Transport
             sequence = 0; SentFrames = 0; Status = "预览发送 " + destination;
         }
         public void Send(IReadOnlyDictionary<string, float> values, IReadOnlyDictionary<string, float> weights,
-            IReadOnlyList<HoFaceIrTarget> targets, bool tracked, double time)
+            bool tracked, double time)
         {
             if (socket == null) return;
             var packet = new PreviewPacket
             {
                 type = "hoface.preview",
-                version = 1,
+                version = 2,
                 sequence = ++sequence,
                 time = time,
                 tracked = tracked,
                 values = values == null ? new Dictionary<string, float>() : new Dictionary<string, float>(values),
-                weights = weights == null ? new Dictionary<string, float>() : new Dictionary<string, float>(weights),
-                targets = targets == null ? new List<PreviewTarget>() : MapTargets(targets)
+                weights = weights == null ? new Dictionary<string, float>() : new Dictionary<string, float>(weights)
             };
             byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(packet, json));
             socket.Send(bytes, bytes.Length, destination);
             SentFrames++;
-        }
-        private static List<PreviewTarget> MapTargets(IReadOnlyList<HoFaceIrTarget> items)
-        {
-            var result = new List<PreviewTarget>(items.Count);
-            foreach (var item in items)
-                result.Add(new PreviewTarget { id = item.id, slot = item.slot, shape = item.shape });
-            return result;
         }
         public void Stop()
         {
@@ -74,11 +65,6 @@ namespace HoFace.Transport
             public double time;
             public bool tracked;
             public Dictionary<string, float> values, weights;
-            public List<PreviewTarget> targets;
-        }
-        private sealed class PreviewTarget
-        {
-            public string id, slot, shape;
         }
     }
 }

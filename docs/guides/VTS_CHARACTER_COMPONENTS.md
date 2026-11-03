@@ -8,7 +8,7 @@
 
 1. 在场景或预制件编辑模式中选择角色根物体，执行 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**。
 2. 新建的 `HoVTS` 物体挂接收器；其子物体挂 `HoVtsIrController` 与 `HoVtsLookAt`。以后新增果冻眼等消费者时继续作为同级子物体添加。已有组件时工具会停止，直接编辑现有组件即可。创建支持 Undo。
-3. 在接收器引用可复用的 value JSON，在 `HoVtsIrController` 引用 IR JSON，刷新目标形态键绑定。旧 `HoVtsController` 只作为迁移兼容，不是新表情主链。
+3. 在接收器引用可复用的 value JSON，在 `HoVtsIrController` 引用 IR JSON，将需要驱动的 `SkinnedMeshRenderer` 拖入“驱动网格”列表。IR 只输出形态键名与权重；组件只写列表内所有网格上的同名键，缺键跳过，不扫描场景。旧 `HoVtsController` 只作为迁移兼容。
 4. 需要 Unity 作者预览时，在 Play 模式挂 `HoFaceStudioRawInput`，HoFaceStudio 发送 raw；Unity 侧 value、LookAt 和其他消费者继续运行。
 5. 保存预制件，两个 JSON 和运行组件引用随正常 Character Mod 打包。
 
@@ -20,7 +20,7 @@
 
 打开 HoFaceStudio，选择 value/IR 文件并连接 VTS。Unity 侧只在 Play 模式显示接收器状态和 HoFaceStudio raw 入口；旧 Unity 面捕调试窗口已退役。
 
-组件通过 **Add Component → HoUnityTools → 面捕** 分类可见：VTS 参数接收器、VTS 表情控制器、VTS 头眼姿态。创建入口是 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**，会在角色下建立 HoVTS 空物体并填写基础引用。
+组件通过 **Add Component → HoUnityTools → 面捕** 分类可见：VTS 参数接收器、VTS 表情 IR、VTS 头眼姿态。创建入口是 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**，会在角色下建立 HoVTS 空物体并填写基础引用，网格列表由作者显式指定。
 
 - value/IR 的阶段读数、覆盖、隔离、录制和回放由 HoFaceStudio 提供；录制通过 AI/自动化接口也可控制。
 - Unity 接收器只显示连接、来源、追踪和超时；失去输入后角色组件回到规则中性值并停止写入。

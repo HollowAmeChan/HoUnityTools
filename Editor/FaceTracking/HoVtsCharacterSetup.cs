@@ -22,13 +22,14 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             catch (Exception error) { Debug.LogError("[Ho VTS] " + error.Message); }
         }
 
-        public static HoVtsController Create(GameObject root)
+        public static HoVtsIrController Create(GameObject root)
         {
             if (Application.isPlaying) throw new InvalidOperationException("请在编辑模式配置角色组件。");
             if (root == null || EditorUtility.IsPersistent(root) || !root.scene.IsValid())
                 throw new InvalidOperationException("请在场景或预制件编辑模式中选择角色根物体。");
             if (root.GetComponentInChildren<HoVtsParameterReceiver>(true) != null
-                || root.GetComponentInChildren<HoVtsController>(true) != null || root.GetComponentInChildren<HoVtsLookAt>(true) != null)
+                || root.GetComponentInChildren<HoVtsController>(true) != null
+                || root.GetComponentInChildren<HoVtsIrController>(true) != null || root.GetComponentInChildren<HoVtsLookAt>(true) != null)
                 throw new InvalidOperationException("所选对象下已有 VTS 组件，请编辑现有组件。");
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
@@ -48,9 +49,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 faceObject.transform.localPosition = Vector3.zero;
                 faceObject.transform.localRotation = Quaternion.identity;
                 faceObject.transform.localScale = Vector3.one;
-                var controller = Undo.AddComponent<HoVtsController>(faceObject);
+                var controller = Undo.AddComponent<HoVtsIrController>(faceObject);
                 controller.ParameterReceiver = receiver;
-                controller.OutputRoot = root.transform;
 
                 var lookAtObject = new GameObject("HoVTSLookAt");
                 Undo.RegisterCreatedObjectUndo(lookAtObject, "创建 HoVTS LookAt 物体");

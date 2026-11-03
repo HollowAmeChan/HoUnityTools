@@ -1,6 +1,6 @@
 {
   "format": "ho-face-ir",
-  "version": 1,
+  "version": 2,
   "id": "hoface.diagnostic.mouth",
   "displayName": "嘴部二维诊断样例",
   "root": "mouth",
@@ -9,20 +9,20 @@
     { "name": "Mouth/Open", "defaultValue": 0, "min": 0, "max": 1 }
   ],
   "targets": [
-    { "id": "jaw", "slot": "Face", "shape": "JawOpen", "min": 0, "max": 1 },
-    { "id": "smileL", "slot": "Face", "shape": "MouthSmileLeft", "min": 0, "max": 1 },
-    { "id": "smileR", "slot": "Face", "shape": "MouthSmileRight", "min": 0, "max": 1 }
+    { "id": "jawOpen", "min": 0, "max": 1 },
+    { "id": "mouthSmileLeft", "min": 0, "max": 1 },
+    { "id": "mouthSmileRight", "min": 0, "max": 1 }
   ],
   "nodes": [
     { "id": "rest", "name": "闭嘴", "type": "pose", "weights": [] },
     { "id": "open", "name": "张嘴", "type": "pose", "weights": [
-      { "target": "jaw", "value": 1 }
+      { "target": "jawOpen", "value": 1 }
     ] },
     { "id": "smile", "name": "微笑", "type": "pose", "weights": [
-      { "target": "smileL", "value": 1 }, { "target": "smileR", "value": 1 }
+      { "target": "mouthSmileLeft", "value": 1 }, { "target": "mouthSmileRight", "value": 1 }
     ] },
     { "id": "openSmile", "name": "张嘴笑", "type": "pose", "weights": [
-      { "target": "jaw", "value": 1 }, { "target": "smileL", "value": 1 }, { "target": "smileR", "value": 1 }
+      { "target": "jawOpen", "value": 1 }, { "target": "mouthSmileLeft", "value": 1 }, { "target": "mouthSmileRight", "value": 1 }
     ] },
     { "id": "mouth", "name": "嘴部", "type": "blend2d",
       "parameterX": "Mouth/Form", "parameterY": "Mouth/Open",

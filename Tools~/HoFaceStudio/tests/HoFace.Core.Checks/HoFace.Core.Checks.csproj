@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/HoFace.Core/HoFace.Core.csproj" />
     <ProjectReference Include="../../src/HoFace.Transport/HoFace.Transport.csproj" />
+    <ProjectReference Include="../../src/HoFace.Studio/HoFace.Studio.csproj" />
     <Content Include="../../samples/*.json" Link="samples/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

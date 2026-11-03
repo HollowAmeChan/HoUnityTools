@@ -23,6 +23,13 @@ namespace HoFace.Studio
         private readonly Stack<AuthoringSnapshot> redo = new Stack<AuthoringSnapshot>();
         public bool CanUndo => undo.Count != 0;
         public bool CanRedo => redo.Count != 0;
+        public void Edit(Action<HoFaceMiddleware, HoFaceIrDocument> edit)
+        {
+            if (edit == null) throw new ArgumentNullException(nameof(edit));
+            var before = Snapshot();
+            edit(Value, Ir);
+            Remember(before);
+        }
         public bool IsDirty => Value != null && (Snapshot().Value != savedValue || Snapshot().Ir != savedIr);
         public AuthoringSnapshot Snapshot() => new AuthoringSnapshot { Value = HoFaceValueDocument.Write(Value), Ir = Ir.Write() };
         public void Open(string valuePath, string irPath)

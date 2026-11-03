@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -10,6 +11,7 @@ using System.Windows.Threading;
 using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Interop;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
 using HoFace.Transport;
@@ -64,13 +66,19 @@ namespace HoFace.Studio
         public string TargetStatus => TargetName;
         public string InspectorTitle => selectedValueRow != null ? "value 行" : selectedNode != null ? "IR 节点" : "检查器";
         public string InspectorSummary => selectedValueRow != null ? selectedValueRow.parameter : selectedNode != null ? selectedNode.id : "选择左侧规则或 IR 节点";
+        public bool WeightsReadOnly => selectedNode == null;
         public string InspectorName { get => selectedValueRow?.parameter ?? selectedNode?.name ?? ""; set { if (selectedValueRow != null) selectedValueRow.parameter = value; else if (selectedNode != null) selectedNode.name = value; OnPropertyChanged(); } }
         public string InspectorExpression { get => selectedValueRow?.expression ?? (selectedNode?.type + " · " + selectedNode?.parameterX + " / " + selectedNode?.parameterY) ?? ""; set { if (selectedValueRow != null) selectedValueRow.expression = value; OnPropertyChanged(); } }
-        public string Diagnostics { get; private set; } = "默认制作模式会在外部执行 value + IR。\n切换到裸值转发后才会把原始字典交给角色接收器。";
-        public string PlotHint => selectedValueRow != null ? "双击空白添加曲线点；拖点或切线；滚轮缩放；右键平移。" : "IR 图形编辑将在选择 IR 节点后显示。";
+        public string Diagnostics { get; private set; } = "Blender：HoFaceStudio 执行 value + IR，仅写入表情权重。\nUnity：只转发 raw，value / LookAt 由 Unity 消费。";
+        public string PlotHint => selectedValueRow != null ? "曲线点/切线可拖动；双击添加点；滚轮缩放；右键平移。"
+            : selectedNode == null ? "选择一个 IR 节点查看参数。" : selectedNode.type == "pose"
+            ? "修改右侧形态键权重。" : selectedNode.type == "direct"
+            ? "修改右侧子项权重；组合按 IR 归一化设置求值。" : "拖动或编辑右侧控制点坐标；预览游标是临时输入。";
         public MainWindow()
         {
-            InitializeComponent(); DataContext = this;
+            InitializeComponent();
+            SourceInitialized += (_, _) => ApplyDarkWindowChrome();
+            DataContext = this;
             automation = new HoFaceAutomationServer(this);
             automation.Start();
             Plot.SizeChanged += (s, e) => Plot.Fit();
@@ -83,7 +91,7 @@ namespace HoFace.Studio
             {
                 liveStatus = "VTS " + session.Frames + " 帧 · value " + values.Count + " · 权重 " + weights.Count;
                 if (session.Preview.Running)
-                    session.Preview.Send(values, weights, document.Ir.targets, true, session.Frames / 60.0);
+                    session.Preview.Send(values, weights, true, session.Frames / 60.0);
                 OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
             });
             session.RawFrameForward += frame => Dispatcher.Invoke(() =>
@@ -149,6 +157,21 @@ namespace HoFace.Studio
         private void UndoCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.CanUndo;
         private void RedoExecuted(object sender, ExecutedRoutedEventArgs e) { document.Redo(); ReloadEditors(); }
         private void RedoCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.CanRedo;
+        private void WeightsCellEditEnding(object sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
+        {
+            if (e.EditAction != System.Windows.Controls.DataGridEditAction.Commit || e.Row.Item is not WeightRow row) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!float.TryParse(row.Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float value)) { ReloadEditors(); return; }
+                try
+                {
+                    if (row.Kind == "pose") EditIrPoseWeight(row.NodeId, row.TargetId, value);
+                    else EditIrChild(row.NodeId, row.ChildId, -1, row.Kind, value);
+                }
+                catch (Exception error) { MessageBox.Show(error.Message, "IR 编辑失败", MessageBoxButton.OK, MessageBoxImage.Warning); ReloadEditors(); }
+            }));
+        }
         private void OpenDocument()
         {
             var value = new Microsoft.Win32.OpenFileDialog { Filter = "HoFace value (*.hoface.value.json;*.hoface.json)|*.hoface.value.json;*.hoface.json|JSON|*.json" };
@@ -197,8 +220,38 @@ namespace HoFace.Studio
             if (selectedValueRow != null)
                 InspectorWeights.Add(new WeightRow("expression", selectedValueRow.expression));
             if (selectedNode != null)
-                foreach (var w in selectedNode.weights) InspectorWeights.Add(new WeightRow(w.target, w.value.ToString("0.###")));
+            {
+                if (selectedNode.type == "pose")
+                    foreach (var target in document.Ir.targets)
+                    {
+                        var weight = selectedNode.weights.FirstOrDefault(x => x.target == target.id);
+                        InspectorWeights.Add(new WeightRow(target.id,
+                            (weight?.value ?? 0).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "pose", selectedNode.id, target.id));
+                    }
+                else if (selectedNode.type == "direct")
+                    foreach (var child in selectedNode.children)
+                        InspectorWeights.Add(new WeightRow(child.node,
+                            child.weight.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "weight", selectedNode.id, childId: child.node));
+                else if (selectedNode.type == "blend1d")
+                    foreach (var child in selectedNode.children)
+                        InspectorWeights.Add(new WeightRow(child.node,
+                            child.threshold.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "threshold", selectedNode.id, childId: child.node));
+                else if (selectedNode.type == "blend2d")
+                    foreach (var child in selectedNode.children)
+                    {
+                        InspectorWeights.Add(new WeightRow(child.node + " · X",
+                            child.x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "x", selectedNode.id, childId: child.node));
+                        InspectorWeights.Add(new WeightRow(child.node + " · Y",
+                            child.y.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "y", selectedNode.id, childId: child.node));
+                    }
+            }
             OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); OnPropertyChanged(nameof(InspectorSummary)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(PlotHint));
+            OnPropertyChanged(nameof(WeightsReadOnly));
         }
         private void PlotEditBeginning() { editBefore ??= document.Snapshot(); }
         private void PlotEditChanged() { Plot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
@@ -253,6 +306,14 @@ namespace HoFace.Studio
                 case "selectNode":
                     SelectedNodeRow = NodeRows.FirstOrDefault(x => x.Node.id == RequiredString(payload, "id"));
                     return ExecuteAutomation("status", default);
+                case "setValueCurveKey":
+                    SetValueCurveKey(payload); return ExecuteAutomation("status", default);
+                case "setIrChild":
+                    SetIrChild(payload); return ExecuteAutomation("status", default);
+                case "setPoseWeight":
+                    SetPoseWeight(payload); return ExecuteAutomation("status", default);
+                case "setDirectWeight":
+                    SetDirectWeight(payload); return ExecuteAutomation("status", default);
                 case "cursor":
                     PlotPreviewChanged(ReadDouble(payload, "x"), ReadDouble(payload, "y"));
                     return ExecuteAutomation("status", default);
@@ -290,6 +351,113 @@ namespace HoFace.Studio
             session.Configure(document);
             ReloadEditors();
         }
+
+        private void ApplyDarkWindowChrome()
+        {
+            try
+            {
+                var handle = new WindowInteropHelper(this).Handle;
+                int darkMode = 1;
+                DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int));
+                int captionColor = 0x00201A15; // COLORREF for #151A20.
+                int textColor = 0x00ECE7E2; // COLORREF for #E2E7EC.
+                DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref captionColor, sizeof(int));
+                DwmSetWindowAttribute(handle, DwmwaTextColor, ref textColor, sizeof(int));
+            }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+
+        private const int DwmwaUseImmersiveDarkMode = 20;
+        private const int DwmwaCaptionColor = 35;
+        private const int DwmwaTextColor = 36;
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd, int attribute, ref int value, int valueSize);
+
+        private void SetValueCurveKey(JsonElement payload)
+        {
+            string parameter = RequiredString(payload, "parameter");
+            int index = ReadInt(payload, "index", -1);
+            var row = document.Value.outputs.FirstOrDefault(x => x.parameter == parameter);
+            if (row == null || index < 0 || row.curve == null || index >= row.curve.keys.Length)
+                throw new InvalidOperationException("value 曲线行或点位不存在。");
+            var keys = row.curve.keys;
+            var key = keys[index];
+            if (payload.TryGetProperty("time", out var time)) key.time = time.GetSingle();
+            if (payload.TryGetProperty("value", out var value)) key.value = value.GetSingle();
+            if (payload.TryGetProperty("inTangent", out var inTangent)) key.inTangent = inTangent.GetSingle();
+            if (payload.TryGetProperty("outTangent", out var outTangent)) key.outTangent = outTangent.GetSingle();
+            keys[index] = key;
+            document.Edit((profile, ir) => row.curve.keys = keys);
+            ReloadEditors();
+        }
+
+        private void SetIrChild(JsonElement payload)
+        {
+            EditIrChild(RequiredString(payload, "nodeId"), ReadString(payload, "childId"),
+                ReadInt(payload, "index", -1), ReadString(payload, "property"), ReadFloat(payload, "value"));
+        }
+
+        private void SetPoseWeight(JsonElement payload)
+        {
+            EditIrPoseWeight(RequiredString(payload, "nodeId"), RequiredString(payload, "targetId"), ReadFloat(payload, "value"));
+        }
+
+        private void EditIrPoseWeight(string nodeId, string targetId, float value)
+        {
+            var before = SnapshotDocument();
+            AuthoringDocument.Parse(before.Value, before.Ir, out _, out var graph);
+            var node = graph.nodes.FirstOrDefault(x => x.id == nodeId && x.type == "pose");
+            if (node == null || !graph.targets.Any(x => x.id == targetId))
+                throw new InvalidOperationException("Pose 节点或目标不存在。");
+            var weight = node.weights.FirstOrDefault(x => x.target == targetId);
+            if (weight == null) node.weights.Add(new HoFaceIrWeight { target = targetId, value = value });
+            else weight.value = value;
+            var errors = graph.Validate();
+            if (errors.Count != 0) throw new InvalidOperationException(string.Join("\n", errors));
+            document.ApplyText(before.Value, graph.Write());
+            ReloadEditors();
+        }
+
+        private void SetDirectWeight(JsonElement payload)
+        {
+            string nodeId = RequiredString(payload, "nodeId");
+            string childId = RequiredString(payload, "childId");
+            float value = ReadFloat(payload, "value");
+            EditIrChild(nodeId, childId, -1, "weight", value);
+        }
+
+        private void EditIrChild(string nodeId, string childId, int index, string property, float value)
+        {
+            var before = SnapshotDocument();
+            AuthoringDocument.Parse(before.Value, before.Ir, out _, out var graph);
+            var node = graph.nodes.FirstOrDefault(x => x.id == nodeId);
+            if (node == null) throw new InvalidOperationException("IR 节点不存在。");
+            var child = !string.IsNullOrEmpty(childId)
+                ? node.children.FirstOrDefault(x => x.node == childId)
+                : index >= 0 && index < node.children.Count ? node.children[index] : null;
+            if (child == null) throw new InvalidOperationException("IR 子项不存在。");
+            switch (property)
+            {
+                case "x": child.x = value; break;
+                case "y": child.y = value; break;
+                case "threshold": child.threshold = value; break;
+                case "weight": child.weight = value; break;
+                default: throw new ArgumentException("无效 IR 子项属性：" + property);
+            }
+            var errors = graph.Validate();
+            if (errors.Count != 0) throw new InvalidOperationException(string.Join("\n", errors));
+            document.ApplyText(before.Value, graph.Write());
+            ReloadEditors();
+        }
+
+        private AuthoringSnapshot SnapshotDocument() => new AuthoringSnapshot
+        {
+            Value = HoFaceValueDocument.Write(document.Value),
+            Ir = document.Ir.Write()
+        };
 
         private void StartVtsFromPayload(JsonElement payload)
         {
@@ -330,6 +498,9 @@ namespace HoFace.Studio
                 ? value.GetString() : null;
         private static int ReadInt(JsonElement payload, string name, int fallback) =>
             payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetInt32(out int result) ? result : fallback;
+        private static float ReadFloat(JsonElement payload, string name) =>
+            payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetSingle(out float result)
+                ? result : throw new ArgumentException("缺少数值参数：" + name);
         private static double ReadDouble(JsonElement payload, string name) =>
             payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty(name, out var value) && value.TryGetDouble(out double result)
                 ? result : throw new ArgumentException("缺少数值参数：" + name);
@@ -344,7 +515,14 @@ namespace HoFace.Studio
         {
             public string Name { get; }
             public string Value { get; set; }
-            public WeightRow(string name, string value) { Name = name; Value = value; }
+            public string Kind { get; }
+            public string NodeId { get; }
+            public string TargetId { get; }
+            public string ChildId { get; }
+            public WeightRow(string name, string value, string kind = "", string nodeId = "", string targetId = "", string childId = "")
+            {
+                Name = name; Value = value; Kind = kind; NodeId = nodeId; TargetId = targetId; ChildId = childId;
+            }
         }
         public sealed class NodeRow
         {

@@ -7,14 +7,15 @@ Usage inside Blender:
   1. Run this file from the Text Editor, or install it as an add-on.
   2. Open the HoFace Preview panel in the 3D View sidebar.
   3. Start listening on port 21414.
-  4. Name Blender objects to match IR target ``slot`` values.
+  4. Add the meshes to the explicit preview target list.
 """
 
 import json
 import socket
-import time
 
 import bpy
+from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
+from bpy.types import Operator, Panel, PropertyGroup, UIList
 
 
 def _state(scene):
@@ -33,25 +34,23 @@ def _close_socket(scene):
 
 
 def _apply_packet(scene, packet):
-    if packet.get("type") != "hoface.preview" or packet.get("version") != 1:
+    if packet.get("type") != "hoface.preview" or packet.get("version") != 2:
         return
-    targets = packet.get("targets") or []
     weights = packet.get("weights") or {}
     tracked = bool(packet.get("tracked", False))
-    for target in targets:
-        target_id = target.get("id")
-        slot = target.get("slot") or ""
-        shape = target.get("shape") or ""
-        if not target_id or not shape:
+    for target in scene.ho_face_preview_targets:
+        obj = target.object
+        if not target.enabled or obj is None or obj.type != "MESH":
             continue
-        obj = bpy.data.objects.get(slot)
-        if obj is None or obj.data is None or not getattr(obj.data, "shape_keys", None):
+        shape_keys = getattr(getattr(obj, "data", None), "shape_keys", None)
+        if shape_keys is None:
             continue
-        key = obj.data.shape_keys.key_blocks.get(shape)
-        if key is None:
-            continue
-        value = float(weights.get(target_id, 0.0)) if tracked else 0.0
-        key.value = max(key.slider_min, min(key.slider_max, value))
+        for target_id, weight in weights.items():
+            key = shape_keys.key_blocks.get(target_id)
+            if key is None:
+                continue
+            value = float(weight) if tracked else 0.0
+            key.value = max(key.slider_min, min(key.slider_max, value))
 
 
 def _poll():
@@ -81,6 +80,45 @@ class HO_PG_FacePreviewState(bpy.types.PropertyGroup):
     last_status: bpy.props.StringProperty(name="状态", default="未启动")
     last_sequence: bpy.props.IntProperty(name="序号", default=0)
     socket = None
+
+
+class HO_PG_FacePreviewTarget(PropertyGroup):
+    object: PointerProperty(type=bpy.types.Object, name="网格")
+    enabled: BoolProperty(name="启用", default=True)
+
+
+class HO_UL_FacePreviewTargets(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.prop(item, "enabled", text="")
+        row.prop(item, "object", text="", emboss=False, icon="MESH_DATA")
+
+
+class HO_OT_FacePreviewAddSelected(Operator):
+    bl_idname = "ho.face_preview_add_selected"
+    bl_label = "添加选中网格"
+
+    def execute(self, context):
+        targets = context.scene.ho_face_preview_targets
+        existing = {item.object for item in targets if item.object}
+        for obj in context.selected_objects:
+            if obj.type == "MESH" and obj not in existing:
+                targets.add().object = obj
+                existing.add(obj)
+        return {"FINISHED"}
+
+
+class HO_OT_FacePreviewRemoveTarget(Operator):
+    bl_idname = "ho.face_preview_remove_target"
+    bl_label = "移除网格"
+
+    def execute(self, context):
+        scene = context.scene
+        index = scene.ho_face_preview_target_index
+        if 0 <= index < len(scene.ho_face_preview_targets):
+            scene.ho_face_preview_targets.remove(index)
+            scene.ho_face_preview_target_index = min(index, max(0, len(scene.ho_face_preview_targets) - 1))
+        return {"FINISHED"}
 
 
 class HO_OT_FacePreviewStart(bpy.types.Operator):
@@ -124,11 +162,19 @@ class HO_PT_FacePreview(bpy.types.Panel):
         row.operator(HO_OT_FacePreviewStart.bl_idname, icon="PLAY")
         row.operator(HO_OT_FacePreviewStop.bl_idname, icon="PAUSE")
         layout.label(text=state.last_status)
-        layout.label(text="IR slot 必须对应 Blender 物体名")
+        box = layout.box()
+        box.label(text="驱动物体")
+        box.template_list("HO_UL_FacePreviewTargets", "", context.scene, "ho_face_preview_targets",
+                          context.scene, "ho_face_preview_target_index", rows=3)
+        row = box.row(align=True)
+        row.operator(HO_OT_FacePreviewAddSelected.bl_idname, text="添加选中", icon="ADD")
+        row.operator(HO_OT_FacePreviewRemoveTarget.bl_idname, text="", icon="REMOVE")
+        box.label(text="IR target ID 按同名形态键写入")
 
 
-CLASSES = (HO_PG_FacePreviewState, HO_OT_FacePreviewStart,
-           HO_OT_FacePreviewStop, HO_PT_FacePreview)
+CLASSES = (HO_PG_FacePreviewState, HO_PG_FacePreviewTarget, HO_UL_FacePreviewTargets,
+           HO_OT_FacePreviewAddSelected, HO_OT_FacePreviewRemoveTarget,
+           HO_OT_FacePreviewStart, HO_OT_FacePreviewStop, HO_PT_FacePreview)
 
 
 def register():
@@ -136,6 +182,8 @@ def register():
         bpy.utils.register_class(cls)
     bpy.types.Scene.ho_face_preview_state = bpy.props.PointerProperty(
         type=HO_PG_FacePreviewState)
+    bpy.types.Scene.ho_face_preview_targets = CollectionProperty(type=HO_PG_FacePreviewTarget)
+    bpy.types.Scene.ho_face_preview_target_index = IntProperty(default=0)
 
 
 def unregister():
@@ -143,6 +191,10 @@ def unregister():
         for scene in bpy.data.scenes:
             _close_socket(scene)
         del bpy.types.Scene.ho_face_preview_state
+    if hasattr(bpy.types.Scene, "ho_face_preview_target_index"):
+        del bpy.types.Scene.ho_face_preview_target_index
+    if hasattr(bpy.types.Scene, "ho_face_preview_targets"):
+        del bpy.types.Scene.ho_face_preview_targets
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
 
