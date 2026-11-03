@@ -1,6 +1,6 @@
 ﻿# 面捕
 
-> **下一阶段目标（2026-11-03）**：[HoFace 双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md)。外部控制台编辑 value / IR 并承担默认制作求值，角色内嵌模块用于发布运行及裸值转发测试。参见 [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md) 与 [实施计划](HOFACE_IMPLEMENTATION_PLAN.md)。当前仅有规划，尚未替代稳定实现。
+> **当前主线（2026-11-03）**：[HoFaceStudio](../../Tools~/HoFaceStudio/README.md) 编辑 value / IR 并承担默认制作求值；Blender HoFace 接收最终权重，Unity HoFaceStudioRawInput 接收 raw，Warudo 角色组件执行正式 value + IR。旧 Unity 面捕编辑/调试链已退役。
 >
 > 当前使用入口见 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md)，现有架构边界见 [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md)。旧的 Warudo 参数处理节点、HoFace 控制求解节点和 HoFT AssetBundle 仅在归档中保留。
 
@@ -10,10 +10,10 @@
 
 | 想查什么 | 文档或工具 |
 | --- | --- |
-| **下一阶段目标**：双文件、两种调试模式、跨宿主共享核心 | [HoFace 双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md) |
+| 双文件、两种调试模式、跨宿主共享核心 | [HoFace 双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md) |
 | Windows 图形编辑器选型与同工作区工程布局 | [UI 技术决策](HOFACE_STUDIO_TECH_DECISION.md) · [工程入口](../../Tools~/HoFaceStudio/README.md) |
 | 实施里程碑、迁移与退役验收 | [实施计划](HOFACE_IMPLEMENTATION_PLAN.md) |
-| **当前实现基线**：角色组件中枢、控制器、LookAt、Unity 调试 | [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md) |
+| **角色运行基线**：接收器、IR、LookAt、Unity raw 适配 | [VTS 角色组件架构](VTS_COMPONENT_ARCHITECTURE.md) |
 | 整条链的分工、输入输出和资产归属 | [组件架构](VTS_COMPONENT_ARCHITECTURE.md) · [WTD 记录](WTD_COMPONENT_MIGRATION.md) |
 | 控制器结构、绑定属性和角色配置 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
 | 原始线名、姿态字段、标定和设备输入 | [角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) |
@@ -27,7 +27,7 @@
 
 ## 修改与验证
 
-当前操作从 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md) 开始：角色持有规则和控制器，Unity 调试只选择对象，Warudo 侧保留网络接收、标定及角色输入。旧文档中的独立控制器 Bundle 路线仅供历史参考。
+当前作者操作从 [HoFaceStudio](../../Tools~/HoFaceStudio/README.md) 开始；角色运行配置见 [VTS 角色组件使用](../guides/VTS_CHARACTER_COMPONENTS.md)。Warudo 侧保留网络接收、标定及角色输入，旧控制器 Bundle 路线仅供迁移历史参考。
 
 1. 调整单个区域时，先在隔离控制器与小配置中验证。
 2. 使用录样、统计和检查工具判断结果；参数数量和刻度以生成器、检查器及实际资产为准。

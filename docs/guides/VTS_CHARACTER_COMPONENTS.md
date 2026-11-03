@@ -1,33 +1,29 @@
 # VTS 角色组件使用
 
-角色预制件持有规则和控制器。外部输入经标定后交给角色接收器；表情由独立控制器组件求值，姿态可继续使用 Warudo 官方节点。
+角色预制件持有 `.hoface.value.json`、`.hoface.ir.json` 和运行组件。外部输入经标定后交给角色接收器；表情由 `HoVtsIrController` 求值，姿态可继续使用 Warudo 官方节点。
 
-> 本页说明当前可用实现。2026-11-03 确定的下一阶段目标见 [HoFace 双文件架构](../face-tracking/HOFACE_VALUE_IR_ARCHITECTURE.md)：外部控制台承担默认制作求值，角色组件保留正式运行与裸值转发测试职责。新流程尚未实现，暂不按规划删除当前组件或资产。
+> 本页说明角色侧正式运行基线。作者编辑和实时制作统一使用 [HoFaceStudio](../../Tools~/HoFaceStudio/README.md)；Warudo Mod 不接作者调试桥接。
 
 ## 在 Unity 配置角色
 
 1. 在场景或预制件编辑模式中选择角色根物体，执行 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**。
-2. 新建的 `HoVTS` 物体只挂接收器；其子物体 `HoVTS面捕` 挂表情控制器，`HoVTSLookAt` 挂头眼姿态。以后新增果冻眼等消费者时继续作为同级子物体添加。已有组件时工具会停止，直接编辑现有组件即可。创建支持 Undo。
-3. 在 HoVtsController 的“动画控制器”槽中拖入角色控制器。输出根物体应与动画绑定路径的根一致，工具默认使用选中的角色根。
-4. 点击“刷新动画绑定”。所有路径、目标形态键和支持的属性都必须有效；只支持形态键和 Transform 动画。原角色 Animator 可以禁用。
-5. 在 HoVtsParameterReceiver 点击“编辑角色规则”，导入作者已有的 .hoface.json 或编辑输入/输出行，然后“保存到组件”。保存前的规则备份位于 Logs/HoVtsRuleBackups。
-6. 保存预制件，控制器、动画及规则 JSON 引用随正常 Character Mod 打包。
+2. 新建的 `HoVTS` 物体挂接收器；其子物体挂 `HoVtsIrController` 与 `HoVtsLookAt`。以后新增果冻眼等消费者时继续作为同级子物体添加。已有组件时工具会停止，直接编辑现有组件即可。创建支持 Undo。
+3. 在接收器引用可复用的 value JSON，在 `HoVtsIrController` 引用 IR JSON，刷新目标形态键绑定。旧 `HoVtsController` 只作为迁移兼容，不是新表情主链。
+4. 需要 Unity 作者预览时，在 Play 模式挂 `HoFaceStudioRawInput`，HoFaceStudio 发送 raw；Unity 侧 value、LookAt 和其他消费者继续运行。
+5. 保存预制件，两个 JSON 和运行组件引用随正常 Character Mod 打包。
 
-组件规则编辑直接保存角色引用的规则 JSON；多个角色可以复用同一份文件。
+规则编辑在 HoFaceStudio 中完成；多个角色可以复用同一份 value/IR 文件。
 
 若继续使用官方姿态链，HoVtsLookAt 保持“自动运行”关闭。UMod 实测会把组件的 enabled=false 恢复成 true，所以不能只依赖组件标题上的勾选框。以后改用自有头眼姿态时，再明确启用自动运行并解除官方链对同一骨骼的写入。自有组件只写头眼旋转，不把头位置当作全身根位移。
 
 ## Unity 调试
 
-打开现有的 **HoUnityTools → 面捕 → 调试面板**，选择已配置的场景角色；如果 Hierarchy 当前选中的是带接收器的角色，面板会直接进入组件模式。填写手机 IP 和本机 UDP 端口、连接输入，再进入播放模式。可自动开始或手动点击“开始调试”。不需要在面板另填控制器或规则文件。
+打开 HoFaceStudio，选择 value/IR 文件并连接 VTS。Unity 侧只在 Play 模式显示接收器状态和 HoFaceStudio raw 入口；旧 Unity 面捕调试窗口已退役。
 
 组件通过 **Add Component → HoUnityTools → 面捕** 分类可见：VTS 参数接收器、VTS 表情控制器、VTS 头眼姿态。创建入口是 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**，会在角色下建立 HoVTS 空物体并填写基础引用。
 
-- 原始输入、规则输入、规则输出分别显示；输出行悬浮提示显示表达式、曲线、修饰后与发布值。
-- 临时覆盖只属于当前会话；取消某行覆盖或清除全部覆盖可恢复正常求值。
-- 规则输出页可按 ARKit 区域或当前筛选范围隔离。其他表达式输出临时使用各行默认值，常量保留；恢复后原手动覆盖仍在。
-- 录样时长以秒计，间隔 0 表示每次实际求值。JSONL 保存在 Logs/HoVtsTraces，可通过面板定位文件。
-- 关闭窗口后会话继续运行；“停止并交还”释放当前输入、写入对象和录样。接收器超时则回到规则中性值，并保留原始快照供排查。
+- value/IR 的阶段读数、覆盖、隔离、录制和回放由 HoFaceStudio 提供；录制通过 AI/自动化接口也可控制。
+- Unity 接收器只显示连接、来源、追踪和超时；失去输入后角色组件回到规则中性值并停止写入。
 
 ## Warudo 连接
 
@@ -41,10 +37,10 @@ HoFaceVTS接收器.新鲜 → HoVTS角色输入.输入新鲜
 
 HoVTS角色输入选择对应角色。节点自动求值，不需额外执行线，不再填写规则 JSON 或控制器 Bundle。
 
-角色组件直接接收标定后的完整 VTS 字典，HoVtsLookAt 从角色接收器读取头眼姿态；正式蓝图不再需要 HoFaceVTS姿态输出节点。官方姿态链仍可作为外部兼容方案自行接入，但不属于角色输入主链。原 HoFace参数处理、HoFace控制求解及官方表情写入路线应从该角色的新表情链中移开，避免同时写入。
+角色组件直接接收标定后的完整 VTS 字典，HoVtsIrController 从接收器读取 value 输出，HoVtsLookAt 读取姿态参数；正式蓝图不再需要 HoFaceVTS姿态输出节点。官方姿态链仍可作为外部兼容方案自行接入，但不属于角色输入主链。旧控制器表情写入路线不要与 IR 组件同时启用。
 
 输入标定保存在 Warudo 蓝图中。标定按输入范围映射、乘倍率、最后限制输出范围；正负姿态的倍率以零点为中心。FaceFound、Hotkey、Timestamp 与未知键透传。
 
 ## 当前交付
 
-HoFT 独立 Bundle 页面和构建器已移除。原控制器编辑等作者工具仍保留，旧节点和旧调试实现的进一步清理在继续。WTD 的组件、实际 Mod 构建及 SDK 产物加载记录见 [WTD 接入记录](../face-tracking/WTD_COMPONENT_MIGRATION.md)。后续 Build Mod 与 Warudo 客户端实测由用户执行。
+HoFT 独立 Bundle 页面、旧 Unity 面捕调试窗口、旧 JSON 编辑器和影子求值已退役。HoFaceStudio、HoVtsIrController、HoFaceStudioRawInput 和 WTD 角色迁移的实际 Mod 构建及 SDK 产物加载记录见 [WTD 接入记录](../face-tracking/WTD_COMPONENT_MIGRATION.md)。后续 Build Mod 与 Warudo 客户端实测由用户执行。

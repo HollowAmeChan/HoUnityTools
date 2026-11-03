@@ -2,7 +2,7 @@
 
 调研日期：2026-11-03。WPF + .NET 10 已由用户确认并开始实施。首版已用自绘 WPF 控件验证曲线编辑、点/切线操作与文档框架；交互性能与第三方 UI 依赖仍需真实制作原型验证，实际完成范围见 [实施记录](HOFACE_IMPLEMENTATION_STATUS.md)。
 
-本决策服务于 [双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md)。软件暂名 HoFaceStudio，工程放在 HoUnityTools 的 `Tools~/HoFaceStudio/`。
+本决策服务于 [双文件架构](HOFACE_VALUE_IR_ARCHITECTURE.md)。正式软件名称为 HoFaceStudio，工程放在 HoUnityTools 的 `Tools~/HoFaceStudio/`。
 
 ## 1. 首要需求
 
