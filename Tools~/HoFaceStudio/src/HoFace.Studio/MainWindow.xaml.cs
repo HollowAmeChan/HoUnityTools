@@ -6,18 +6,26 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
+using HoFace.Transport;
 
 namespace HoFace.Studio
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private readonly AuthoringDocument document = new AuthoringDocument();
+        private readonly AuthoringSession session = new AuthoringSession();
+        private readonly DispatcherTimer pollTimer;
         private AuthoringSnapshot editBefore;
         private string mode = "Preview";
         private string valueFilter = "";
         private int centerTab;
+        private string phoneIp = "127.0.0.1";
+        private string phonePort = "21412";
+        private string localPort = "21413";
+        private string liveStatus = "VTS 未连接";
         private HoFaceOutput selectedValueRow;
         private HoFaceIrNode selectedNode;
         public ObservableCollection<RuleRow> ValueRows { get; } = new ObservableCollection<RuleRow>();
@@ -36,7 +44,11 @@ namespace HoFace.Studio
         }
         public string HeaderStatus => document.Value == null ? "未打开文档" : (document.IsDirty ? "● 有未保存编辑" : "已保存");
         public string Status => document.Value == null ? "先打开一对 .hoface.value.json + .hoface.ir.json" : "就绪 · " + Mode;
-        public string InputStatus => "输入：未连接（编辑器骨架）";
+        public string InputStatus => "输入：" + session.TransportStatus;
+        public string PhoneIp { get => phoneIp; set { phoneIp = value; OnPropertyChanged(); } }
+        public string PhonePort { get => phonePort; set { phonePort = value; OnPropertyChanged(); } }
+        public string LocalPort { get => localPort; set { localPort = value; OnPropertyChanged(); } }
+        public string LiveStatus => liveStatus;
         public string TargetStatus => TargetName;
         public string InspectorTitle => selectedValueRow != null ? "value 行" : selectedNode != null ? "IR 节点" : "检查器";
         public string InspectorSummary => selectedValueRow != null ? selectedValueRow.parameter : selectedNode != null ? selectedNode.id : "选择左侧规则或 IR 节点";
@@ -48,6 +60,24 @@ namespace HoFace.Studio
         {
             InitializeComponent(); DataContext = this;
             Plot.SizeChanged += (s, e) => Plot.Fit();
+            session.StatusChanged += status => Dispatcher.Invoke(() =>
+            {
+                liveStatus = status;
+                OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
+            });
+            session.PreviewUpdated += (values, weights) => Dispatcher.Invoke(() =>
+            {
+                liveStatus = "VTS " + session.Frames + " 帧 · value " + values.Count + " · 权重 " + weights.Count;
+                OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
+            });
+            session.RawFrameForward += frame => Dispatcher.Invoke(() =>
+            {
+                liveStatus = "裸值已收到 " + session.Frames + " 帧 · 等待角色桥接";
+                OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
+            });
+            pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            pollTimer.Tick += (s, e) => session.Poll();
+            pollTimer.Start();
             Closing += OnClosing;
         }
         private void OnClosing(object sender, CancelEventArgs e)
@@ -62,6 +92,24 @@ namespace HoFace.Studio
         private void UndoClicked(object sender, RoutedEventArgs e) { document.Undo(); ReloadEditors(); }
         private void RedoClicked(object sender, RoutedEventArgs e) { document.Redo(); ReloadEditors(); }
         private void ModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) { OnPropertyChanged(nameof(Status)); }
+        private void ConnectClicked(object sender, RoutedEventArgs e)
+        {
+            if (!int.TryParse(PhonePort, out int phone) || !int.TryParse(LocalPort, out int local))
+            {
+                MessageBox.Show("端口必须是整数。", "连接失败", MessageBoxButton.OK, MessageBoxImage.Warning); return;
+            }
+            try
+            {
+                session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
+                session.Start(new VtsIphoneOptions { PhoneAddress = PhoneIp, PhonePort = phone, LocalPort = local });
+                OnPropertyChanged(nameof(InputStatus)); OnPropertyChanged(nameof(LiveStatus));
+            }
+            catch (Exception error) { MessageBox.Show(error.Message, "连接失败", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+        private void StopClicked(object sender, RoutedEventArgs e)
+        {
+            session.Stop(); OnPropertyChanged(nameof(InputStatus)); OnPropertyChanged(nameof(LiveStatus));
+        }
         private void OpenExecuted(object sender, ExecutedRoutedEventArgs e) => OpenDocument();
         private void SaveExecuted(object sender, ExecutedRoutedEventArgs e) => TrySave();
         private void SaveCanExecute(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = document.Value != null && document.IsDirty;
@@ -75,7 +123,7 @@ namespace HoFace.Studio
             if (value.ShowDialog() != true) return;
             var ir = new Microsoft.Win32.OpenFileDialog { Filter = "HoFace IR (*.hoface.ir.json)|*.hoface.ir.json|JSON|*.json" };
             if (ir.ShowDialog() != true) return;
-            try { document.Open(value.FileName, ir.FileName); ReloadEditors(); }
+            try { document.Open(value.FileName, ir.FileName); session.Configure(document); ReloadEditors(); }
             catch (Exception error) { MessageBox.Show(error.Message, "打开失败", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
         private void TrySave() { try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message, "保存失败", MessageBoxButton.OK, MessageBoxImage.Error); } }

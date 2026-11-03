@@ -13,7 +13,7 @@ dotnet build HoFaceStudio.slnx -c Release
 .\src\HoFace.Studio\bin\Release\net10.0-windows\HoFaceStudio.exe
 ```
 
-打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、曲线视图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS 网络、Blender/Unity 预览和 IR 节点图形编辑仍未接入。
+打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、曲线视图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS iPhone UDP 接收已接入制作会话；制作预览会执行外部 value + IR，裸值转发模式只发布原始帧事件。Blender/Unity 预览、角色桥接和 IR 节点图形编辑仍未接入。
 
 ## 文档
 

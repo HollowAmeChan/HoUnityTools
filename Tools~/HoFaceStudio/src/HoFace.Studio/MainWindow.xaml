@@ -19,6 +19,7 @@
   <DockPanel>
     <Border DockPanel.Dock="Top" Background="#20262F" BorderBrush="#354251" BorderThickness="0,0,0,1" Padding="10,8">
       <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
@@ -29,10 +30,21 @@
         <Button Grid.Column="2" Content="撤销" Click="UndoClicked"/>
         <Button Grid.Column="3" Content="重做" Click="RedoClicked"/>
         <TextBlock Grid.Column="4" Margin="14,0,0,0" Text="{Binding HeaderStatus}"/>
-        <ComboBox Grid.Column="5" Width="180" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
+        <ComboBox Grid.Column="5" Width="180" SelectedValuePath="Tag" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
           <ComboBoxItem Tag="Preview">制作预览：外部求值</ComboBoxItem>
           <ComboBoxItem Tag="RawForward">裸值转发：角色链路</ComboBoxItem>
         </ComboBox>
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,8,0,0">
+          <Label Content="手机 IP"/>
+          <TextBox Width="130" Text="{Binding PhoneIp, UpdateSourceTrigger=PropertyChanged}"/>
+          <Label Content="手机端口" Margin="12,0,0,0"/>
+          <TextBox Width="66" Text="{Binding PhonePort, UpdateSourceTrigger=PropertyChanged}"/>
+          <Label Content="本机端口" Margin="12,0,0,0"/>
+          <TextBox Width="66" Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}"/>
+          <Button Content="连接 VTS" Click="ConnectClicked" Margin="14,0,0,0"/>
+          <Button Content="停止" Click="StopClicked"/>
+          <TextBlock Text="{Binding LiveStatus}" Margin="12,0,0,0"/>
+        </StackPanel>
       </Grid>
     </Border>
     <StatusBar DockPanel.Dock="Bottom" Background="#20262F" Foreground="#AEBFD0">
