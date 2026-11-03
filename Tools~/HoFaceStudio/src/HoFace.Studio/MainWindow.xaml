@@ -1,0 +1,115 @@
+<Window x:Class="HoFace.Studio.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:HoFace.Studio"
+    Title="HoFaceStudio" Width="1440" Height="900" MinWidth="1000" MinHeight="620"
+    WindowStartupLocation="CenterScreen">
+  <Window.CommandBindings>
+    <CommandBinding Command="ApplicationCommands.Open" Executed="OpenExecuted"/>
+    <CommandBinding Command="ApplicationCommands.Save" Executed="SaveExecuted" CanExecute="SaveCanExecute"/>
+    <CommandBinding Command="ApplicationCommands.Undo" Executed="UndoExecuted" CanExecute="UndoCanExecute"/>
+    <CommandBinding Command="ApplicationCommands.Redo" Executed="RedoExecuted" CanExecute="RedoCanExecute"/>
+  </Window.CommandBindings>
+  <Window.InputBindings>
+    <KeyBinding Command="ApplicationCommands.Open" Modifiers="Control" Key="O"/>
+    <KeyBinding Command="ApplicationCommands.Save" Modifiers="Control" Key="S"/>
+    <KeyBinding Command="ApplicationCommands.Undo" Modifiers="Control" Key="Z"/>
+    <KeyBinding Command="ApplicationCommands.Redo" Modifiers="Control" Key="Y"/>
+  </Window.InputBindings>
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#20262F" BorderBrush="#354251" BorderThickness="0,0,0,1" Padding="10,8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Button Content="打开 value + IR" Click="OpenClicked"/>
+        <Button Grid.Column="1" Content="保存" Click="SaveClicked"/>
+        <Button Grid.Column="2" Content="撤销" Click="UndoClicked"/>
+        <Button Grid.Column="3" Content="重做" Click="RedoClicked"/>
+        <TextBlock Grid.Column="4" Margin="14,0,0,0" Text="{Binding HeaderStatus}"/>
+        <ComboBox Grid.Column="5" Width="180" SelectedValue="{Binding Mode}" SelectionChanged="ModeChanged">
+          <ComboBoxItem Tag="Preview">制作预览：外部求值</ComboBoxItem>
+          <ComboBoxItem Tag="RawForward">裸值转发：角色链路</ComboBoxItem>
+        </ComboBox>
+      </Grid>
+    </Border>
+    <StatusBar DockPanel.Dock="Bottom" Background="#20262F" Foreground="#AEBFD0">
+      <StatusBarItem Content="{Binding Status}"/>
+      <Separator/>
+      <StatusBarItem Content="{Binding InputStatus}"/>
+      <Separator/>
+      <StatusBarItem Content="{Binding TargetStatus}"/>
+    </StatusBar>
+    <Grid Margin="10">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Border Grid.Row="0" Background="#20262F" BorderBrush="#354251" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="value 文件" Margin="0,0,8,0"/>
+          <TextBox Grid.Column="1" Text="{Binding ValuePath, UpdateSourceTrigger=PropertyChanged}"/>
+          <TextBlock Grid.Column="2" Text="IR 文件" Margin="16,0,8,0"/>
+          <TextBox Grid.Column="3" Text="{Binding IrPath, UpdateSourceTrigger=PropertyChanged}"/>
+          <TextBlock Grid.Column="4" Text="预览目标" Margin="16,0,8,0"/>
+          <TextBox Grid.Column="5" Text="{Binding TargetName, UpdateSourceTrigger=PropertyChanged}"/>
+        </Grid>
+      </Border>
+      <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="260"/><ColumnDefinition Width="*"/><ColumnDefinition Width="360"/>
+        </Grid.ColumnDefinitions>
+        <GroupBox Header="value 规则" Margin="0,0,10,0">
+          <DockPanel>
+            <TextBox DockPanel.Dock="Top" Margin="0,0,0,7" Text="{Binding ValueFilter, UpdateSourceTrigger=PropertyChanged}" ToolTip="筛选参数或表达式"/>
+            <ListBox ItemsSource="{Binding ValueRows}" SelectedItem="{Binding SelectedValueRow}" DisplayMemberPath="Display"/>
+          </DockPanel>
+        </GroupBox>
+        <Grid Grid.Column="1" Margin="0,0,10,0">
+          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <TabControl SelectedIndex="{Binding CenterTab}">
+            <TabItem Header="曲线 / 混合图">
+              <local:ParameterPlot x:Name="Plot" EditBeginning="PlotEditBeginning" EditChanged="PlotEditChanged"
+                  EditCommitted="PlotEditCommitted" SelectionChanged="PlotSelectionChanged"
+                  PreviewChanged="PlotPreviewChanged"/>
+            </TabItem>
+            <TabItem Header="JSON 文本">
+              <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <TextBox x:Name="ValueText" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                    FontFamily="Cascadia Mono" FontSize="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                <TextBox x:Name="IrText" Grid.Row="1" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                    FontFamily="Cascadia Mono" FontSize="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+              </Grid>
+            </TabItem>
+          </TabControl>
+          <TextBlock Grid.Row="1" Margin="2,7,0,0" Text="{Binding PlotHint}" Foreground="#90A9BF"/>
+        </Grid>
+        <GroupBox Grid.Column="2" Header="{Binding InspectorTitle}">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <TextBlock Text="{Binding InspectorSummary}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <TextBlock Text="名称 / 类型" Foreground="#90A9BF"/>
+              <TextBox Text="{Binding InspectorName, UpdateSourceTrigger=PropertyChanged}" Margin="0,3,0,9"/>
+              <TextBlock Text="表达式 / 参数轴" Foreground="#90A9BF"/>
+              <TextBox Text="{Binding InspectorExpression, UpdateSourceTrigger=PropertyChanged}" Margin="0,3,0,9"/>
+              <DataGrid ItemsSource="{Binding InspectorWeights}" Height="240" Margin="0,3,0,9">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="目标 / 参数" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                  <DataGridTextColumn Header="值" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                </DataGrid.Columns>
+              </DataGrid>
+              <TextBlock Text="{Binding Diagnostics}" TextWrapping="Wrap" Foreground="#F1B17E"/>
+            </StackPanel>
+          </ScrollViewer>
+        </GroupBox>
+      </Grid>
+    </Grid>
+  </DockPanel>
+</Window>

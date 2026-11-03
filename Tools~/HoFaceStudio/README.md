@@ -6,6 +6,15 @@
 
 当前实现范围与复现命令见 [核心契约](CORE_CONTRACT.md)，阶段状态见 [实施记录](../../docs/face-tracking/HOFACE_IMPLEMENTATION_STATUS.md)。
 
+Release 构建与启动：
+
+```powershell
+dotnet build HoFaceStudio.slnx -c Release
+.\src\HoFace.Studio\bin\Release\net10.0-windows\HoFaceStudio.exe
+```
+
+打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、曲线视图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS 网络、Blender/Unity 预览和 IR 节点图形编辑仍未接入。
+
 ## 文档
 
 - [双文件与两种调试模式](../../docs/face-tracking/HOFACE_VALUE_IR_ARCHITECTURE.md)
