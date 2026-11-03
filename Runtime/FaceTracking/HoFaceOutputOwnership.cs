@@ -11,6 +11,9 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public static bool IsReserved(SkinnedMeshRenderer mesh, int index) => mesh != null && Owners.ContainsKey((mesh, index));
 
+        public static bool IsReservedBy(SkinnedMeshRenderer mesh, int index, object owner) =>
+            mesh != null && Owners.TryGetValue((mesh, index), out object existing) && ReferenceEquals(existing, owner);
+
         public static void Reserve(SkinnedMeshRenderer mesh, int index, object owner)
         {
             if (Owners.TryGetValue((mesh, index), out object existing) && !ReferenceEquals(existing, owner))

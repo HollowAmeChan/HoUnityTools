@@ -14,7 +14,7 @@ $editor = Join-Path $Project 'Assets\Editor'
 New-Item -ItemType Directory -Force -Path $runtime, $editor | Out-Null
 foreach ($name in @('HoVtsController.cs','HoVtsLookAt.cs','HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs',
     'HoFaceMiddleware.cs','HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs',
-    'HoVtsIrController.cs','HoJson.cs','HoFaceProfile.cs','HoFaceProfileJson.cs')) {
+    'HoVtsIrController.cs','HoFaceOutputOwnership.cs','HoJson.cs','HoFaceProfile.cs','HoFaceProfileJson.cs')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot "Runtime\FaceTracking\$name") -Destination $runtime
 }
 foreach ($file in Get-ChildItem -LiteralPath (Join-Path $packageRoot 'Runtime\FaceTracking\Core') -Filter '*.cs') {

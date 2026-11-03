@@ -19,7 +19,7 @@ foreach ($obsoletePath in @($obsoleteEditorAdapter, ($obsoleteEditorAdapter + '.
 }
 foreach ($name in @('HoVtsController.cs','HoVtsLookAt.cs','HoVtsParameterReceiver.cs','HoVtsRuleEvaluator.cs','HoFaceMiddleware.cs',
     'HoFaceExpression.cs','HoFaceOutputTable.cs','HoFaceTrackingChannels.cs','HoFaceProfile.cs',
-    'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs','HoFaceStudioRawInput.cs')) {
+    'HoFaceProfileJson.cs','HoJson.cs','HoVtsIrController.cs','HoFaceOutputOwnership.cs','HoFaceStudioRawInput.cs')) {
     Copy-Item -LiteralPath (Join-Path $package "Runtime\FaceTracking\$name") -Destination $runtime
 }
 Get-ChildItem -LiteralPath (Join-Path $package 'Runtime\FaceTracking\Core') -Filter '*.cs' |

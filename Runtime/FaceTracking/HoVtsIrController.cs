@@ -29,15 +29,58 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly List<Mesh> loadedMeshes = new List<Mesh>();
         private readonly Dictionary<string, float> parameters = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, List<ShapeWriter>> writers = new Dictionary<string, List<ShapeWriter>>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> finalWeights = new Dictionary<string, float>(StringComparer.Ordinal);
+        private bool hasOutputFrame;
+        private double outputReceiverTime = -1;
         private string status = "未初始化";
 
         public HoVtsParameterReceiver ParameterReceiver { get => parameterReceiver; set { Stop(); parameterReceiver = value; } }
         public List<SkinnedMeshRenderer> TargetMeshes => targetMeshes;
         public TextAsset IrAsset { get => irAsset; set { Stop(); irAsset = value; } }
-        public float WeightScale { get => weightScale; set => weightScale = Mathf.Max(0, value); }
+        public float WeightScale
+        {
+            get => weightScale;
+            set { weightScale = Finite(value) ? Mathf.Max(0, value) : 100f; InvalidateOutput(); }
+        }
         public bool AutoRun { get => autoRun; set => autoRun = value; }
         public string Status => status;
         public int TargetCount => document?.targets.Count ?? 0;
+        /// <summary>Only the last completed write for the receiver's current evaluation is readable.</summary>
+        public bool HasOutputFrame => hasOutputFrame && isActiveAndEnabled
+            && parameterReceiver != null && parameterReceiver.isActiveAndEnabled
+            && parameterReceiver.HasFrame && parameterReceiver.Tracked
+            && outputReceiverTime == parameterReceiver.LastEvaluationTime
+            && loadedAsset == irAsset && MeshesUnchanged();
+        public ulong OutputRevision { get; private set; }
+        /// <summary>Changes when the IR document or explicit mesh bindings are rebuilt.</summary>
+        public ulong BindingRevision { get; private set; }
+
+        /// <summary>
+        /// Read the cached, range-clamped and WeightScale-multiplied value actually written
+        /// to at least one listed mesh. Reading never evaluates the IR or reads a downstream writer.
+        /// </summary>
+        public bool TryGetFinalWeight(string keyName, out float weight)
+        {
+            weight = 0;
+            return !string.IsNullOrEmpty(keyName) && HasOutputFrame && finalWeights.TryGetValue(keyName, out weight);
+        }
+
+        public void CopyFinalWeightsTo(IDictionary<string, float> destination)
+        {
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            destination.Clear();
+            if (HasOutputFrame) foreach (var pair in finalWeights) destination.Add(pair.Key, pair.Value);
+        }
+
+        /// <summary>Binding ownership, including a target whose present output happens to be zero.</summary>
+        public bool IsTargetBound(SkinnedMeshRenderer renderer, int index)
+        {
+            if (renderer == null || renderer.sharedMesh == null || index < 0
+                || index >= renderer.sharedMesh.blendShapeCount) return false;
+            if (!writers.TryGetValue(renderer.sharedMesh.GetBlendShapeName(index), out List<ShapeWriter> bindings)) return false;
+            foreach (var binding in bindings) if (binding.Matches(renderer, index)) return true;
+            return false;
+        }
 
         private void LateUpdate()
         {
@@ -46,6 +89,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public bool EvaluateNow()
         {
+            if (!isActiveAndEnabled) { Release(); status = "组件未启用"; return false; }
             if (!EnsureRuntime()) return false;
             if (!parameterReceiver.HasFrame || !parameterReceiver.Tracked)
             {
@@ -55,12 +99,26 @@ namespace Hollow.HoUnityTools.FaceTracking
             }
             parameterReceiver.CopyValuesTo(parameters);
             evaluator.Evaluate(parameters);
-            foreach (var target in document.targets)
+            InvalidateOutput();
+            try
             {
-                if (!writers.TryGetValue(target.id, out List<ShapeWriter> targetWriters)) continue;
-                float value = evaluator.Values.TryGetValue(target.id, out float weight) ? weight : 0;
-                foreach (var writer in targetWriters) writer.Write(value * weightScale);
+                // Reserve the complete set before writing anything, so conflicts cannot leave a partial pose.
+                foreach (var targetWriters in writers.Values)
+                    foreach (var writer in targetWriters) writer.Reserve(this);
+                foreach (var target in document.targets)
+                {
+                    if (!writers.TryGetValue(target.id, out List<ShapeWriter> targetWriters)) continue;
+                    float value = evaluator.Values.TryGetValue(target.id, out float weight) ? weight : 0;
+                    float final = value * weightScale;
+                    if (!Finite(final)) throw new InvalidOperationException("形态键权重不是有限数：" + target.id);
+                    foreach (var writer in targetWriters) writer.Write(final);
+                    finalWeights[target.id] = final;
+                }
             }
+            catch (Exception exception) { Release(); status = "IR 写入失败：" + exception.Message; return false; }
+            outputReceiverTime = parameterReceiver.LastEvaluationTime;
+            hasOutputFrame = true;
+            OutputRevision++;
             status = "运行中";
             return true;
         }
@@ -91,6 +149,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 document = parsed;
                 evaluator = new HoFaceIrEvaluator(document);
                 BuildWriters();
+                BindingRevision++;
                 loadedAsset = irAsset;
                 loadedHash = hash;
                 status = "已加载 " + document.targets.Count + " 个目标";
@@ -130,7 +189,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private bool MeshesUnchanged()
         {
-            if (loadedRenderers.Count != targetMeshes.Count) return false;
+            if (targetMeshes == null || loadedRenderers.Count != targetMeshes.Count) return false;
             for (int i = 0; i < targetMeshes.Count; i++)
                 if (targetMeshes[i] == null || loadedRenderers[i] != targetMeshes[i] ||
                     loadedMeshes[i] != targetMeshes[i].sharedMesh) return false;
@@ -139,9 +198,14 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public void Release()
         {
+            InvalidateOutput();
             foreach (var targetWriters in writers.Values)
-                foreach (var writer in targetWriters) writer.Restore();
+                foreach (var writer in targetWriters) writer.Restore(this);
+            HoFaceOutputOwnership.Release(this);
         }
+
+        private void InvalidateOutput() { hasOutputFrame = false; outputReceiverTime = -1; finalWeights.Clear(); }
+        private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         public void Stop()
         {
@@ -159,19 +223,35 @@ namespace Hollow.HoUnityTools.FaceTracking
             private readonly SkinnedMeshRenderer renderer;
             private readonly Mesh mesh;
             private readonly int index;
-            private readonly float initial;
+            private float initial, lastWritten;
+            private bool written;
             public ShapeWriter(SkinnedMeshRenderer renderer, int index)
             {
                 this.renderer = renderer; mesh = renderer.sharedMesh;
-                this.index = index; initial = renderer.GetBlendShapeWeight(index);
+                this.index = index;
+            }
+            public bool Matches(SkinnedMeshRenderer target, int targetIndex) =>
+                renderer == target && mesh == target.sharedMesh && index == targetIndex;
+            public void Reserve(object owner)
+            {
+                HoFaceOutputOwnership.Reserve(renderer, index, owner);
+                if (!written) initial = renderer.GetBlendShapeWeight(index);
             }
             public void Write(float value)
             {
-                if (renderer != null && renderer.sharedMesh == mesh) renderer.SetBlendShapeWeight(index, value);
+                if (renderer != null && renderer.sharedMesh == mesh)
+                {
+                    renderer.SetBlendShapeWeight(index, value);
+                    lastWritten = value; written = true;
+                }
             }
-            public void Restore()
+            public void Restore(object owner)
             {
-                if (renderer != null && renderer.sharedMesh == mesh) renderer.SetBlendShapeWeight(index, initial);
+                if (written && renderer != null && renderer.sharedMesh == mesh
+                    && HoFaceOutputOwnership.IsReservedBy(renderer, index, owner)
+                    && Mathf.Approximately(renderer.GetBlendShapeWeight(index), lastWritten))
+                    renderer.SetBlendShapeWeight(index, initial);
+                written = false;
             }
         }
     }

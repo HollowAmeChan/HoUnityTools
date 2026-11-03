@@ -83,12 +83,97 @@ public static class HoVtsIrComponentValidation
             Check(!ir.EvaluateNow(), "empty mesh list does not fall back to scene scanning");
             Near(renderer.GetBlendShapeWeight(0), 17, "clearing the list releases owned values");
             UnityEngine.Object.DestroyImmediate(root);
+            ValidateFinalOutputSnapshot();
             ValidateCharacterSetup();
             ValidateHoFaceStudioRawInput();
             Debug.Log("HO_VTS_IR_COMPONENT PASS assertions=" + assertions);
             EditorApplication.Exit(0);
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+    }
+
+    private static void ValidateFinalOutputSnapshot()
+    {
+        var root = new GameObject("FinalIrOutput");
+        try
+        {
+            var receiver = root.AddComponent<HoVtsParameterReceiver>();
+            var middleware = new HoFaceMiddleware();
+            middleware.outputs.Add(new HoFaceOutput { parameter = "Drive", expression = "Raw" });
+            receiver.SetMiddleware(middleware);
+            var renderer = AddMesh(root, "FinalFace", "Shape");
+            renderer.SetBlendShapeWeight(0, 12);
+            var ir = root.AddComponent<HoVtsIrController>();
+            ir.AutoRun = false;
+            ir.ParameterReceiver = receiver;
+            ir.TargetMeshes.Add(renderer);
+            ir.IrAsset = new TextAsset("{\"format\":\"ho-face-ir\",\"version\":2,\"id\":\"final\","
+                + "\"root\":\"root\",\"parameters\":[{\"name\":\"Drive\",\"min\":0,\"max\":1}],"
+                + "\"targets\":[{\"id\":\"Shape\",\"min\":0,\"max\":0.8},{\"id\":\"Missing\",\"min\":0,\"max\":1}],"
+                + "\"nodes\":[{\"id\":\"pose\",\"type\":\"pose\",\"weights\":[{\"target\":\"Shape\",\"value\":2}]},"
+                + "{\"id\":\"root\",\"type\":\"direct\",\"children\":[{\"node\":\"pose\",\"weightParameter\":\"Drive\",\"weight\":1}]}]}");
+            ir.WeightScale = 125;
+            Check(!ir.HasOutputFrame && !ir.TryGetFinalWeight("Shape", out _), "no final output before the first completed write");
+            receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 1);
+            Check(ir.EvaluateNow(), "final snapshot evaluation succeeds");
+            Check(ir.TryGetFinalWeight("Shape", out float final) && ir.HasOutputFrame, "completed write exposes final output");
+            Near(final, 100, "final output includes target clamp and Unity weight scale");
+            Near(final, renderer.GetBlendShapeWeight(0), "snapshot matches the value actually written");
+            Check(!ir.TryGetFinalWeight("Missing", out _) && !ir.TryGetFinalWeight(null, out _),
+                "unbound and empty targets do not invent final output");
+            Check(ir.IsTargetBound(renderer, 0) && HoFaceOutputOwnership.IsReservedBy(renderer, 0, ir),
+                "IR publishes binding ownership and reserves actual output keys");
+            ulong revision = ir.OutputRevision, bindingRevision = ir.BindingRevision;
+            var copy = new Dictionary<string, float> { { "Old", 9 } };
+            ir.CopyFinalWeightsTo(copy);
+            Check(copy.Count == 1 && copy.ContainsKey("Shape"), "copy replaces caller contents with bound final values");
+            copy["Shape"] = -99;
+            renderer.SetBlendShapeWeight(0, 45);
+            for (int i = 0; i < 3; i++)
+            {
+                Check(ir.TryGetFinalWeight("Shape", out final), "multiple consumers can read the same output");
+                Near(final, 100, "reads use the upstream snapshot, not downstream mesh mutations");
+            }
+            Check(ir.OutputRevision == revision && ir.BindingRevision == bindingRevision,
+                "readers never evaluate or rebuild IR");
+            receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 0 } }, true, 2);
+            Check(!ir.HasOutputFrame && !ir.TryGetFinalWeight("Shape", out _), "new receiver evaluation invalidates old output");
+            ir.CopyFinalWeightsTo(copy);
+            Check(copy.Count == 0, "copy never returns a stale frame");
+            Check(ir.EvaluateNow() && ir.OutputRevision == revision + 1, "only an explicit evaluation advances the output revision");
+            Check(ir.TryGetFinalWeight("Shape", out final), "explicit zero output remains a valid result");
+            Near(final, 0, "zero output is cached rather than treated as a missing key");
+            ir.Release();
+            Near(renderer.GetBlendShapeWeight(0), 12, "release restores the original pre-IR value");
+            Check(!ir.HasOutputFrame && !HoFaceOutputOwnership.IsReserved(renderer, 0), "release invalidates output and hands back ownership");
+            renderer.SetBlendShapeWeight(0, 24);
+            Check(ir.EvaluateNow(), "IR can reacquire released keys");
+            ir.Release();
+            Near(renderer.GetBlendShapeWeight(0), 24, "reacquisition captures the new external baseline");
+
+            var competitor = new object();
+            HoFaceOutputOwnership.Reserve(renderer, 0, competitor);
+            Check(!ir.EvaluateNow() && !ir.HasOutputFrame, "an occupied target rejects the whole output frame");
+            Near(renderer.GetBlendShapeWeight(0), 24, "failed IR write leaves the competing writer unchanged");
+            Check(HoFaceOutputOwnership.IsReservedBy(renderer, 0, competitor), "failed cleanup does not release another owner");
+            HoFaceOutputOwnership.Release(competitor);
+            Check(ir.EvaluateNow(), "IR recovers after an ownership conflict is removed");
+            renderer.SetBlendShapeWeight(0, 36);
+            ir.Release();
+            Near(renderer.GetBlendShapeWeight(0), 36, "release preserves a newer external write");
+            Check(ir.EvaluateNow(), "IR resumes after external handoff");
+            ir.WeightScale = 50;
+            Check(!ir.HasOutputFrame && !ir.TryGetFinalWeight("Shape", out _), "changing the weight scale invalidates the old units");
+            Check(ir.EvaluateNow(), "IR writes using the new scale");
+            receiver.ClearFrame();
+            Check(!ir.HasOutputFrame && !ir.TryGetFinalWeight("Shape", out _), "cleared receiver makes the snapshot unreadable immediately");
+            Check(!ir.EvaluateNow() && !HoFaceOutputOwnership.IsReserved(renderer, 0), "tracking loss releases IR reservations");
+            receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 3);
+            Check(ir.EvaluateNow(), "IR resumes after tracking loss");
+            ir.enabled = false;
+            Check(!ir.HasOutputFrame && !ir.EvaluateNow(), "disabled IR cannot expose or manually write a frame");
+        }
+        finally { UnityEngine.Object.DestroyImmediate(root); }
     }
 
     private static void ValidateHoFaceStudioRawInput()
