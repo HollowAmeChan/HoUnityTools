@@ -68,11 +68,21 @@ public static class HoVtsControllerValidation
             timingHead.SetParent(timingProbe.transform, false);
             var pose = timingProbe.AddComponent<HoVtsLookAt>();
             pose.ParameterReceiver = timingReceiver; pose.ReferenceFrame = timingProbe.transform; pose.Head = timingHead;
+            pose.AutoRun = true;
+            var poseRules = new HoFaceMiddleware();
+            poseRules.inputs.Add(new HoFaceOutput { parameter = "Rotation_x", expression = "Rotation_x" });
+            poseRules.inputs.Add(new HoFaceOutput { parameter = "Rotation_y", expression = "Rotation_y" });
+            poseRules.inputs.Add(new HoFaceOutput { parameter = "Rotation_z", expression = "Rotation_z" });
+            poseRules.outputs.Add(new HoFaceOutput { parameter = "Rotation_x", expression = "Rotation_x" });
+            poseRules.outputs.Add(new HoFaceOutput { parameter = "Rotation_y", expression = "Rotation_y" });
+            poseRules.outputs.Add(new HoFaceOutput { parameter = "Rotation_z", expression = "Rotation_z" });
+            timingReceiver.SetMiddleware(poseRules);
             timingStarted = Time.realtimeSinceStartupAsDouble;
             timingFrame = Time.frameCount;
             timingReceiver.ApplyRawFrame(new Dictionary<string, float> { { "Rotation_x", 0 }, { "Rotation_y", 30 }, { "Rotation_z", 0 } }, true, timingStarted);
             pose.EvaluateNow(0);
-            RotationNear(timingHead.localRotation, Quaternion.Euler(0, 30, 0), "automatic timeout probe starts with an active pose");
+            RotationNear(timingHead.localRotation, PoseRotation(0, 30, 0, false),
+                "automatic timeout probe starts with an active pose using official semantic axes");
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
     }
@@ -260,14 +270,18 @@ public static class HoVtsControllerValidation
         receiver.Tick(10.6);
         Check(receiver.Tracked && !receiver.InputExpired, "input is valid through timeout boundary");
         receiver.Tick(10.60001);
-        Check(!receiver.Tracked && receiver.InputExpired && receiver.HasFrame, "stopped adapter expires without another input frame");
+        Check(!receiver.Tracked && receiver.InputExpired && !receiver.HasFrame, "stopped adapter expires without another input frame");
         Near(receiver.Get("Smoothed"), 0, "timeout resets stale expression to neutral");
-        Near(receiver.Get("One"), 1, "timeout preserves author constants");
+        Check(!receiver.TryGet("One", out _), "timeout clears processed values with the frame");
         Near(receiver.GetRaw("Raw"), 1, "timeout preserves raw diagnostic snapshot");
-        Check(receiver.Source == "clock-test" && receiver.LastFrameTime == 10.1, "timeout does not pretend a new packet arrived");
+        Check(string.IsNullOrEmpty(receiver.Source) && receiver.LastFrameTime < 0,
+            "timeout invalidates active frame metadata without replacing the raw diagnostic snapshot");
         receiver.Tick(10.8);
         receiver.ApplyRawFrame(new Dictionary<string, float> { { "Raw", 1 } }, true, 11, "clock-test");
-        Check(receiver.Tracked && !receiver.InputExpired && receiver.Get("Smoothed") > 0 && receiver.Get("Smoothed") < 1, "fresh input reacquires from neutral state");
+        receiver.Tick(11.1);
+        float reacquired = receiver.Get("Smoothed");
+        Check(receiver.Tracked && !receiver.InputExpired && Mathf.Abs(reacquired - 1) < .0001f,
+            "reacquired rule session initializes smoothing at the first fresh sample");
         Check(!receiver.Tick(10.9), "backward host time cannot rewind filters");
         bool rejected = false;
         try { receiver.ApplyRawFrame(snapshot, true, 10.9); }
@@ -283,6 +297,14 @@ public static class HoVtsControllerValidation
         var root = new GameObject("PoseCharacter");
         root.transform.rotation = Quaternion.Euler(12, 150, -5);
         var receiver = root.AddComponent<HoVtsParameterReceiver>();
+        var poseRules = new HoFaceMiddleware();
+        foreach (string name in new[] { "Rotation_x", "Rotation_y", "Rotation_z",
+            "EyeLeft_x", "EyeLeft_y", "EyeLeft_z", "EyeRight_x", "EyeRight_y", "EyeRight_z" })
+        {
+            poseRules.inputs.Add(new HoFaceOutput { parameter = name, expression = name });
+            poseRules.outputs.Add(new HoFaceOutput { parameter = name, expression = name });
+        }
+        receiver.SetMiddleware(poseRules);
         var head = new GameObject("Head").transform;
         head.SetParent(root.transform, false);
         head.localRotation = Quaternion.Euler(7, 5, 11);
@@ -330,26 +352,30 @@ public static class HoVtsControllerValidation
         Check(left.localRotation != leftRest, "eyes remain independently driven");
         pose.HeadEnabled = true;
         pose.EvaluateNow(0);
-        receiver.ApplyRawFrame(raw, false, 2);
-        Check(pose.EvaluateNow(0), "lost tracking returns pose");
-        RotationNear(head.localRotation, animatedBase, "lost tracking head neutral");
-        RotationNear(left.localRotation, leftRest, "lost tracking eye neutral");
-
         pose.SmoothingSeconds = .2f;
-        receiver.ApplyRawFrame(raw, true, 3);
+        var changedRaw = new Dictionary<string, float>(raw);
+        changedRaw["Rotation_y"] = 15;
+        receiver.ApplyRawFrame(changedRaw, true, 2);
         pose.EvaluateNow(.2f);
-        Quaternion smoothOffset = Quaternion.Slerp(Quaternion.identity, headOffset, 1 - Mathf.Exp(-1));
+        Quaternion changedOffset = PoseRotation(10, 15, 8, false);
+        Quaternion smoothOffset = Quaternion.Slerp(headOffset, changedOffset, 1 - Mathf.Exp(-1));
         RotationNear(head.rotation, root.transform.rotation * smoothOffset * animatedBase, "pose smoothing uses elapsed time");
         pose.SmoothingSeconds = 0;
         pose.EvaluateNow(0);
+        receiver.SetProcessedValues(new Dictionary<string, float> { { "Rotation_x", 89 } });
         Quaternion held = head.localRotation;
-        receiver.ApplyRawFrame(new Dictionary<string, float> { { "Rotation_x", 89 } }, true, 4);
-        pose.EvaluateNow(0);
-        RotationNear(head.localRotation, held, "partial rotation packet holds last complete rotation");
-        pose.ParameterSource = HoVtsPoseParameterSource.Processed;
+        Check(pose.EvaluateNow(0), "pose remains active when a processed vector is incomplete");
+        RotationNear(head.localRotation, held, "incomplete processed pose holds the last complete target");
         receiver.SetProcessedValues(new Dictionary<string, float> { { "Rotation_x", 0 }, { "Rotation_y", 15 }, { "Rotation_z", 0 } });
-        Check(pose.EvaluateNow(0), "processed pose is an explicit optional source");
-        RotationNear(head.rotation, root.transform.rotation * PoseRotation(0, 15, 0, false) * animatedBase, "processed source does not secretly read raw pose");
+        Check(pose.EvaluateNow(0), "pose reads the processed output table");
+        RotationNear(head.rotation, root.transform.rotation * PoseRotation(0, 15, 0, false) * animatedBase, "pose consumes processed values rather than a raw mode");
+
+        receiver.ApplyRawFrame(raw, false, 3);
+        Check(!pose.EvaluateNow(0), "lost tracking stops pose consumer");
+        RotationNear(head.localRotation, animatedBase, "lost tracking head neutral");
+        RotationNear(left.localRotation, leftRest, "lost tracking eye neutral");
+        receiver.ApplyRawFrame(raw, true, 4);
+        Check(pose.EvaluateNow(0), "pose reacquires after tracking returns");
 
         Quaternion external = Quaternion.Euler(20, 10, 30);
         head.localRotation = external;
@@ -362,7 +388,6 @@ public static class HoVtsControllerValidation
         Check(!pose.EvaluateNow(0), "input release stops pose constraint");
         RotationNear(head.localRotation, external, "input release restores pose baseline");
         receiver.ApplyRawFrame(raw, true, 5);
-        pose.ParameterSource = HoVtsPoseParameterSource.CalibratedRaw;
         pose.ReferenceFrame = head;
         Check(!pose.EvaluateNow(0), "driven bone cannot also be its reference frame");
         UnityEngine.Object.Destroy(root);
@@ -413,8 +438,8 @@ public static class HoVtsControllerValidation
 
     private static Quaternion PoseRotation(float x, float y, float z, bool eye)
     {
-        float yaw = eye ? x : y;
-        float pitch = eye ? -y : x;
+        float yaw = x;
+        float pitch = eye ? -y : y;
         return Quaternion.AngleAxis(yaw, Vector3.up)
             * Quaternion.AngleAxis(pitch, Vector3.right)
             * Quaternion.AngleAxis(z, Vector3.forward);
@@ -445,7 +470,7 @@ public static class HoVtsControllerValidation
         Check(delivery.Deliver(character, raw, false, 2, "test"), "stale input delivered as untracked");
         Check(!receiver.Tracked, "freshness participates in tracking");
         Near(receiver.Get("Drive"), 0, "lost tracking releases stale expression");
-        Near(receiver.Get("One"), 1, "lost tracking preserves author constants");
+        Check(!receiver.TryGet("One", out _), "lost tracking clears processed constants with the frame");
         raw["FaceFound"] = 0;
         delivery.Deliver(character, raw, true, 3, "test");
         Check(!receiver.Tracked, "FaceFound zero overrides fresh network input");
