@@ -14,6 +14,7 @@
     <SolidColorBrush x:Key="AccentBrush" Color="#68B7A8"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#80C9B8"/>
     <SolidColorBrush x:Key="SelectionBrush" Color="#2F514B"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#1C232B"/>
     <Style TargetType="ToolTip">
       <Setter Property="Background" Value="#29333D"/>
       <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -97,6 +98,7 @@
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="ToolTipService.InitialShowDelay" Value="450"/>
       <Setter Property="ToolTipService.ShowDuration" Value="20000"/>
+      <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
@@ -141,7 +143,11 @@
             <Border x:Name="TextBoxBorder" Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
                 CornerRadius="2" SnapsToDevicePixels="True">
-              <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+              <Grid>
+                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" Margin="{TemplateBinding Padding}" Foreground="{StaticResource MutedBrush}"
+                    IsHitTestVisible="False" Opacity="0.65" Visibility="Collapsed"/>
+              </Grid>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsKeyboardFocused" Value="True">
@@ -150,6 +156,7 @@
               <Trigger Property="IsReadOnly" Value="True">
                 <Setter TargetName="TextBoxBorder" Property="Background" Value="{StaticResource SurfaceBrush}"/>
               </Trigger>
+              <Trigger Property="Text" Value=""><Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/></Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="TextBoxBorder" Property="Opacity" Value="0.55"/>
               </Trigger>
@@ -425,6 +432,11 @@
         <ControlTemplate TargetType="ScrollBar">
           <Grid Background="{TemplateBinding Background}">
             <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="{TemplateBinding Orientation}">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton x:Name="PageBefore" Command="ScrollBar.PageUpCommand" Focusable="False">
+                  <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                </RepeatButton>
+              </Track.DecreaseRepeatButton>
               <Track.Thumb><Thumb>
                 <Thumb.Template><ControlTemplate TargetType="Thumb">
                   <Border x:Name="ThumbBorder" Background="#465460" CornerRadius="4" Margin="2"/>
@@ -433,10 +445,19 @@
                   </ControlTemplate.Triggers>
                 </ControlTemplate></Thumb.Template>
               </Thumb></Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton x:Name="PageAfter" Command="ScrollBar.PageDownCommand" Focusable="False">
+                  <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                </RepeatButton>
+              </Track.IncreaseRepeatButton>
             </Track>
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="Orientation" Value="Horizontal"><Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/></Trigger>
+            <Trigger Property="Orientation" Value="Horizontal">
+              <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+              <Setter TargetName="PageBefore" Property="Command" Value="ScrollBar.PageLeftCommand"/>
+              <Setter TargetName="PageAfter" Property="Command" Value="ScrollBar.PageRightCommand"/>
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value></Setter>

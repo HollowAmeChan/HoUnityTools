@@ -5,4 +5,7 @@
     <AssemblyName>HoFace.Console</AssemblyName>
     <RootNamespace>HoFace.Console</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../shared/AutomationContract.cs" Link="AutomationContract.cs" />
+  </ItemGroup>
 </Project>

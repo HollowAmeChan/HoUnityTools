@@ -2,11 +2,11 @@
 
 这里是计划内嵌于 HoUnityTools 的 Windows 面捕制作控制台工程位置。
 
-**当前已建立可独立编译的 value / IR 核心、诊断样例与验证工程；桌面编辑器、预览传输和角色 IR 接入仍在推进。**
+当前包括可独立编译的共享 value / IR 核心、WPF 桌面作者工具、本机 CLI/命名管道、VTS 输入、Blender 权重预览及 Unity raw 转发。诊断样例用于验证链路，不代替生产角色调参验收。
 
 当前实现范围与复现命令见 [核心契约](CORE_CONTRACT.md)，阶段状态见 [实施记录](../../docs/face-tracking/HOFACE_IMPLEMENTATION_STATUS.md)。
 
-AI / 自动化接口见 [AI_AUTOMATION.md](AI_AUTOMATION.md)。它通过本机命名管道提供状态、截图、文档、选区、VTS、预览和保存操作；录制、回放、冻结和诊断命令按后续版本扩展。
+AI / 自动化接口见 [AI_AUTOMATION.md](AI_AUTOMATION.md)。它通过本机命名管道提供可发现的完整命令、文档与节点读写、后台截图、选区、诊断求值、临时参数覆盖、VTS、预览、保存及录制回放。冻结分阶段求值仍是后续工作。
 
 Release 构建与启动：
 
@@ -15,7 +15,9 @@ dotnet build HoFaceStudio.slnx -c Release
 .\src\HoFace.Studio\bin\Release\net10.0-windows\HoFaceStudio.exe
 ```
 
-打开一对 `.hoface.value.json` 与 `.hoface.ir.json` 后，当前首版支持 value 行筛选、IR 节点列表、曲线/1D/2D 图、曲线点/切线操作、JSON 文本页、保存、撤销/重做和外部文件变更保护。VTS iPhone UDP 接收已接入制作会话；制作预览会执行外部 value + IR，最终权重可通过 UDP 发给 Blender 薄适配器。Warudo Mod 不增加作者调试桥接，正式运行由角色组件内部的 `HoVtsIrController` 执行 value + IR；Unity 编辑器侧可挂 `HoFaceStudioRawInput` 接收 raw 帧，让 Unity 的 value、LookAt 和其他消费者继续运行。
+打开 `.hoface.value.json` 时优先寻找同名 `.hoface.ir.json`，无需重复选择已有配对文件。界面支持筛选列表、独立记忆 Value / IR 选择、曲线/1D/2D 编辑、精确数值、表达式与参数轴、JSON 草稿、保存和撤销/重做。两条分隔条可拖动；连接与文件信息默认收起；底部“收起编辑区”可把空间留给属性。说明集中在悬停提示，错误保留为可操作的行内反馈。布局关闭时保存到本机用户目录，不进入作品。
+
+VTS iPhone UDP 接收已接入制作会话；制作预览执行外部 value + IR，最终权重通过 UDP 发给 Blender 薄适配器。Warudo Mod 不增加作者调试桥接，正式运行由角色组件内部的 `HoVtsIrController` 执行 value + IR；Unity 可挂 `HoFaceStudioRawInput` 接收 raw 帧，让 Unity 的 value、LookAt 和其他消费者继续运行。两种输出模式互斥，录制与作品状态独立。
 
 ## 文档
 

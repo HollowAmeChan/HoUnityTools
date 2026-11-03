@@ -14,6 +14,7 @@ namespace HoFace.Studio
     public partial class MainWindow
     {
         public ObservableCollection<CurveRow> CurveRows { get; } = new ObservableCollection<CurveRow>();
+        public ObservableCollection<ControlPointRow> ControlPoints { get; } = new ObservableCollection<ControlPointRow>();
         public int ValueCount => ValueRows.Count;
         public int NodeCount => NodeRows.Count;
         public bool HasValueSelection => selectedValueRow != null;
@@ -26,23 +27,52 @@ namespace HoFace.Studio
             selectedNode?.type == "blend1d" ? "子项阈值" : selectedNode?.type == "blend2d" ? "控制点坐标" : "子项权重";
         public bool HasAxisX => selectedNode?.type == "blend1d" || selectedNode?.type == "blend2d";
         public bool HasAxisY => selectedNode?.type == "blend2d";
+        public bool HasWeightSelection => HasNodeSelection && !HasAxisX;
         private string draftName = "", draftExpression = "", draftAxisX = "", draftAxisY = "";
-        public string DraftName { get => draftName; set { draftName = value; OnPropertyChanged(); } }
-        public string DraftExpression { get => draftExpression; set { draftExpression = value; OnPropertyChanged(); } }
-        public string DraftAxisX { get => draftAxisX; set { draftAxisX = value; OnPropertyChanged(); } }
-        public string DraftAxisY { get => draftAxisY; set { draftAxisY = value; OnPropertyChanged(); } }
+        private bool loadingInspector;
+        public bool HasPropertyDraft => !loadingInspector && HasSelection &&
+            (DraftName != (selectedValueRow?.parameter ?? selectedNode?.name ?? "") ||
+            HasValueSelection && DraftExpression != (selectedValueRow.expression ?? "") ||
+            HasAxisX && DraftAxisX != (selectedNode.parameterX ?? "") || HasAxisY && DraftAxisY != (selectedNode.parameterY ?? ""));
+        public bool CanEditGraph => HasDocument && !HasTextDraft && !HasPropertyDraft;
+        public bool CanEditProperties => HasSelection && !HasTextDraft;
+        public string DraftName { get => draftName; set { draftName = value; PropertyDraftChanged(); OnPropertyChanged(); } }
+        public string DraftExpression { get => draftExpression; set { draftExpression = value; PropertyDraftChanged(); OnPropertyChanged(); } }
+        public string DraftAxisX { get => draftAxisX; set { draftAxisX = value; PropertyDraftChanged(); OnPropertyChanged(); } }
+        public string DraftAxisY { get => draftAxisY; set { draftAxisY = value; PropertyDraftChanged(); OnPropertyChanged(); } }
+        private void PropertyDraftChanged()
+        {
+            if (loadingInspector) return;
+            foreach (string name in new[] { nameof(HasPropertyDraft), nameof(CanEditGraph), nameof(CanEditProperties), nameof(HasUnsavedChanges), nameof(HeaderStatus) })
+                OnPropertyChanged(name);
+            CommandManager.InvalidateRequerySuggested();
+        }
         private void RefreshInspector()
         {
+            loadingInspector = true;
             DraftName = selectedValueRow?.parameter ?? selectedNode?.name ?? "";
             DraftExpression = selectedValueRow?.expression ?? "";
             DraftAxisX = selectedNode?.parameterX ?? "";
             DraftAxisY = selectedNode?.parameterY ?? "";
             CurveRows.Clear();
+            ControlPoints.Clear();
             var keys = selectedValueRow?.curve?.keys;
             if (keys != null)
                 for (int i = 0; i < keys.Length; i++) CurveRows.Add(new CurveRow(i, keys[i]));
+            if (HasAxisX)
+                for (int i = 0; i < selectedNode.children.Count; i++)
+                {
+                    var child = selectedNode.children[i];
+                    ControlPoints.Add(new ControlPointRow(i, child.node,
+                        HasAxisY ? child.x : child.threshold, child.y));
+                }
+            ControlPointXColumn.Header = HasAxisY ? "X" : "阈值";
+            ControlPointYColumn.Visibility = HasAxisY ? Visibility.Visible : Visibility.Collapsed;
+            loadingInspector = false;
+            if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count) CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
+            PropertyDraftChanged();
             foreach (string name in new[] { nameof(HasValueSelection), nameof(HasNodeSelection), nameof(HasSelection),
-                nameof(SelectionTitle), nameof(SelectionKind), nameof(WeightSectionTitle), nameof(HasAxisX), nameof(HasAxisY) })
+                nameof(SelectionTitle), nameof(SelectionKind), nameof(WeightSectionTitle), nameof(HasAxisX), nameof(HasAxisY), nameof(HasWeightSelection) })
                 OnPropertyChanged(name);
         }
         private void TextDraftChanged()
@@ -51,6 +81,8 @@ namespace HoFace.Studio
             OnPropertyChanged(nameof(HasTextDraft));
             OnPropertyChanged(nameof(HasUnsavedChanges));
             OnPropertyChanged(nameof(HeaderStatus));
+            OnPropertyChanged(nameof(CanEditGraph));
+            OnPropertyChanged(nameof(CanEditProperties));
             CommandManager.InvalidateRequerySuggested();
         }
         private void ShowError(string message)
@@ -70,10 +102,11 @@ namespace HoFace.Studio
         private void EnsureNoDraft()
         {
             if (HasTextDraft) throw new InvalidOperationException("JSON 文本有待应用编辑。请先执行 applyText 或 revertText。");
+            if (HasPropertyDraft) throw new InvalidOperationException("属性有待应用编辑。请先执行 applyProperties 或 revertProperties。");
         }
         private void UndoDocument()
         {
-            try { SyncText(); document.Undo(); ReloadEditors(); }
+            try { CommitPropertyDraft(); SyncText(); document.Undo(); ReloadEditors(); }
             catch (Exception error) { ShowError(error.Message); }
         }
         private void RedoDocument()
@@ -90,10 +123,13 @@ namespace HoFace.Studio
         private void FitClicked(object sender, RoutedEventArgs e) => Plot.Fit();
         private void ApplyPropertiesClicked(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                EnsureNoDraft();
-                if (!HasSelection) return;
+            try { CommitPropertyDraft(); ReloadEditors(); }
+            catch (Exception error) { RecoverFailedEdit(); ShowError(error.Message); }
+        }
+        private void CommitPropertyDraft()
+        {
+                if (!HasPropertyDraft) return;
+                if (HasTextDraft) throw new InvalidOperationException("请先应用或还原 JSON 文本。");
                 string name = DraftName, expression = DraftExpression, axisX = DraftAxisX, axisY = DraftAxisY;
                 document.Edit((value, ir) =>
                 {
@@ -111,13 +147,14 @@ namespace HoFace.Studio
                         if (HasAxisY) node.parameterY = axisY;
                     }
                 });
-                ReloadEditors();
-            }
-            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+                if (HasValueSelection) RememberValueSelection();
+                ResolveSelection();
+                PropertyDraftChanged();
         }
         private void ReloadEditorsKeepingDraft()
         {
-            if (!HasTextDraft) ReloadEditors();
+            ResolveSelection();
+            if (!HasTextDraft && !HasPropertyDraft) ReloadEditors();
         }
         private void CurveCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
         {
@@ -199,6 +236,22 @@ namespace HoFace.Studio
         {
             if (sender is DataGrid grid && grid.SelectedItem is CurveRow row) Plot.SelectIndex(row.Index);
         }
+        private void ControlPointSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is DataGrid grid && grid.SelectedItem is ControlPointRow row) Plot.SelectIndex(row.Index);
+        }
+        private void ControlPointCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        {
+            if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not ControlPointRow row) return;
+            string nodeId = selectedNodeId;
+            string property = e.Column.SortMemberPath == "Y" ? "y" : HasAxisY ? "x" : "threshold";
+            string text = (e.EditingElement as TextBox)?.Text;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { EnsureNoDraft(); EditIrChild(nodeId, row.ChildId, -1, property, ParseNumber(text)); }
+                catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+            }));
+        }
         private int FindOutputIndex(string parameter, int requestedIndex)
         {
             if (document.Value == null) throw new InvalidOperationException("请先打开作品。");
@@ -215,7 +268,7 @@ namespace HoFace.Studio
         }
         private static float FiniteFloat(JsonElement element, string name)
         {
-            if (!element.TryGetSingle(out float value) || !float.IsFinite(value))
+            if (element.ValueKind != JsonValueKind.Number || !element.TryGetSingle(out float value) || !float.IsFinite(value))
                 throw new ArgumentException(name + " 必须是有限数值。");
             return value;
         }
@@ -242,6 +295,19 @@ namespace HoFace.Studio
                 InTangent = Format(key.inTangent); OutTangent = Format(key.outTangent);
             }
             private static string Format(float value) => value.ToString("G7", CultureInfo.InvariantCulture);
+        }
+        public sealed class ControlPointRow
+        {
+            public int Index { get; }
+            public string ChildId { get; }
+            public string X { get; set; }
+            public string Y { get; set; }
+            public ControlPointRow(int index, string id, float x, float y)
+            {
+                Index = index; ChildId = id;
+                X = x.ToString("G7", CultureInfo.InvariantCulture);
+                Y = y.ToString("G7", CultureInfo.InvariantCulture);
+            }
         }
     }
 }

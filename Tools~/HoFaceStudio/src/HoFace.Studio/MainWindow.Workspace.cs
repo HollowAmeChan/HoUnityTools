@@ -10,6 +10,33 @@ namespace HoFace.Studio
     public partial class MainWindow
     {
         private bool showFiles, showConnection;
+        private bool showEditor = true;
+        private double preferredPlotRatio = .475;
+        public bool ShowEditor
+        {
+            get => showEditor;
+            set
+            {
+                if (showEditor == value) return;
+                if (!value)
+                {
+                    double total = PlotColumn.ActualWidth + InspectorColumn.ActualWidth;
+                    if (total > 0) preferredPlotRatio = PlotColumn.ActualWidth / total;
+                    PlotColumn.MinWidth = 0; PlotColumn.Width = new GridLength(0);
+                    EditorSplitterColumn.Width = new GridLength(0);
+                    InspectorColumn.Width = new GridLength(1, GridUnitType.Star);
+                }
+                else
+                {
+                    PlotColumn.MinWidth = 280;
+                    PlotColumn.Width = new GridLength(preferredPlotRatio, GridUnitType.Star);
+                    InspectorColumn.Width = new GridLength(1 - preferredPlotRatio, GridUnitType.Star);
+                    EditorSplitterColumn.Width = new GridLength(8);
+                }
+                showEditor = value; OnPropertyChanged(); OnPropertyChanged(nameof(EditorVisibilityAction));
+            }
+        }
+        public string EditorVisibilityAction => ShowEditor ? "收起编辑区" : "展开编辑区";
         private bool persistWorkspace;
         private DateTime lastTransportRefresh;
         public bool ShowFiles { get => showFiles; set { showFiles = value; OnPropertyChanged(); } }
@@ -29,7 +56,7 @@ namespace HoFace.Studio
         {
             foreach (string name in new[] { nameof(HasDocument), nameof(CanPreview), nameof(ConnectionAction),
                 nameof(PreviewAction), nameof(OutputStatus), nameof(RecordAction), nameof(ReplayAction),
-                nameof(ReplayLoaded), nameof(RecordingStatus), nameof(DocumentName) })
+                nameof(ReplayLoaded), nameof(RecordingStatus), nameof(DocumentName), nameof(InputStatus) })
                 OnPropertyChanged(name);
         }
         private void ConnectionToggleClicked(object sender, RoutedEventArgs e)
@@ -50,6 +77,7 @@ namespace HoFace.Studio
                 if (session.Recording) session.StopRecording();
                 else
                 {
+                    if (session.ReplayPlaying) throw new InvalidOperationException("请先暂停回放，再录制实时输入。");
                     var dialog = new SaveFileDialog { Filter = "HoFace 录制 (*.jsonl)|*.jsonl", FileName = "face-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".jsonl" };
                     if (dialog.ShowDialog(this) != true) return;
                     session.StartRecording(dialog.FileName, document.ValuePath, document.IrPath);
@@ -69,17 +97,30 @@ namespace HoFace.Studio
         {
             try
             {
-                if (session.ReplayPlaying) session.PauseReplay(); else session.PlayReplay();
+                if (session.ReplayPlaying) session.PauseReplay();
+                else
+                {
+                    session.StopRecording();
+                    if (session.Running) session.Stop();
+                    session.PlayReplay();
+                }
                 RefreshTransport();
             }
             catch (Exception error) { ShowError(error.Message); }
         }
         private void ResetLayoutClicked(object sender, RoutedEventArgs e) => ResetLayout();
+        private void ToggleEditorClicked(object sender, RoutedEventArgs e) => ShowEditor = !ShowEditor;
+        private void SetPlotRatio(double ratio)
+        {
+            preferredPlotRatio = ratio;
+            if (!ShowEditor) return;
+            PlotColumn.Width = new GridLength(ratio, GridUnitType.Star);
+            InspectorColumn.Width = new GridLength(1 - ratio, GridUnitType.Star);
+        }
         private void ResetLayout()
         {
             StructureColumn.Width = new GridLength(240);
-            PlotColumn.Width = new GridLength(.95, GridUnitType.Star);
-            InspectorColumn.Width = new GridLength(1.05, GridUnitType.Star);
+            ShowEditor = true; SetPlotRatio(.475);
         }
         private static string WorkspacePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoFaceStudio", "workspace.json");
@@ -92,11 +133,12 @@ namespace HoFace.Studio
                 var state = json.RootElement;
                 double structure = state.GetProperty("structure").GetDouble();
                 double plot = state.GetProperty("plotRatio").GetDouble();
-                if (double.IsFinite(structure) && double.IsFinite(plot) && structure >= 180 && structure <= 500 && plot >= .1 && plot <= .9)
+                if (double.IsFinite(structure) && double.IsFinite(plot) && structure >= 180 && structure <= 500 && plot > 0 && plot < 1)
                 {
                     StructureColumn.Width = new GridLength(structure);
-                    PlotColumn.Width = new GridLength(plot, GridUnitType.Star);
-                    InspectorColumn.Width = new GridLength(1 - plot, GridUnitType.Star);
+                    SetPlotRatio(plot);
+                    UpdateLayout();
+                    if (state.TryGetProperty("editorVisible", out var visible)) ShowEditor = visible.GetBoolean();
                 }
             }
             catch (Exception error) when (error is IOException || error is JsonException ||
@@ -114,7 +156,8 @@ namespace HoFace.Studio
                 File.WriteAllText(WorkspacePath, JsonSerializer.Serialize(new
                 {
                     structure = StructureColumn.ActualWidth,
-                    plotRatio = PlotColumn.ActualWidth / total
+                    plotRatio = ShowEditor ? PlotColumn.ActualWidth / total : preferredPlotRatio,
+                    editorVisible = ShowEditor
                 }));
             }
             catch (IOException) { }

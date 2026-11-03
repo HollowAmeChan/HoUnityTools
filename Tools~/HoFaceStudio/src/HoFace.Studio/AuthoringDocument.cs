@@ -38,10 +38,20 @@ namespace HoFace.Studio
                 throw;
             }
         }
-        public bool IsDirty => Value != null && (Snapshot().Value != savedValue || Snapshot().Ir != savedIr);
+        public bool IsDirty
+        {
+            get
+            {
+                if (Value == null) return false;
+                var snapshot = Snapshot();
+                return snapshot.Value != savedValue || snapshot.Ir != savedIr;
+            }
+        }
         public AuthoringSnapshot Snapshot() => new AuthoringSnapshot { Value = HoFaceValueDocument.Write(Value), Ir = Ir.Write() };
         public void Open(string valuePath, string irPath)
         {
+            valuePath = Path.GetFullPath(valuePath); irPath = Path.GetFullPath(irPath);
+            if (string.Equals(valuePath, irPath, StringComparison.OrdinalIgnoreCase)) throw new IOException("两种文件不能使用同一路径。");
             string value = File.ReadAllText(valuePath), ir = File.ReadAllText(irPath);
             Parse(value, ir, out var profile, out var graph);
             Value = profile; Ir = graph; ValuePath = valuePath; IrPath = irPath;
@@ -76,6 +86,11 @@ namespace HoFace.Studio
             Parse(snapshot.Value, snapshot.Ir, out var profile, out var graph);
             Value = profile; Ir = graph;
         }
+        public void CancelEdit(AuthoringSnapshot before)
+        {
+            if (before == null) throw new ArgumentNullException(nameof(before));
+            Restore(before);
+        }
         public void Undo()
         {
             if (undo.Count == 0) return;
@@ -91,11 +106,12 @@ namespace HoFace.Studio
             var snapshot = Snapshot();
             Parse(snapshot.Value, snapshot.Ir, out _, out _);
             valuePath = valuePath ?? ValuePath; irPath = irPath ?? IrPath;
-            if (valuePath == ValuePath && File.ReadAllText(valuePath) != diskValue)
+            valuePath = Path.GetFullPath(valuePath); irPath = Path.GetFullPath(irPath);
+            if (string.Equals(valuePath, ValuePath, StringComparison.OrdinalIgnoreCase) && File.ReadAllText(valuePath) != diskValue)
                 throw new IOException("value 文件已被外部修改。请重新载入或另存为，避免覆盖。");
-            if (irPath == IrPath && File.ReadAllText(irPath) != diskIr)
+            if (string.Equals(irPath, IrPath, StringComparison.OrdinalIgnoreCase) && File.ReadAllText(irPath) != diskIr)
                 throw new IOException("IR 文件已被外部修改。请重新载入或另存为，避免覆盖。");
-            if (Path.GetFullPath(valuePath) == Path.GetFullPath(irPath)) throw new IOException("两种文件不能使用同一路径。");
+            if (string.Equals(valuePath, irPath, StringComparison.OrdinalIgnoreCase)) throw new IOException("两种文件不能使用同一路径。");
             AtomicWrite(valuePath, snapshot.Value);
             AtomicWrite(irPath, snapshot.Ir);
             ValuePath = valuePath; IrPath = irPath;

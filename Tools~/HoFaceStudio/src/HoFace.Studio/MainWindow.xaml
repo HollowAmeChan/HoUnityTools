@@ -27,7 +27,7 @@
     <KeyBinding Command="ApplicationCommands.Redo" Modifiers="Control" Key="Y"/>
     <KeyBinding Command="ApplicationCommands.Redo" Modifiers="Control+Shift" Key="Z"/>
   </Window.InputBindings>
-  <Grid>
+  <Grid Background="{StaticResource WindowBrush}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
@@ -62,8 +62,12 @@
           </ComboBox>
           <Button Grid.Column="1" Content="{Binding ConnectionAction}" Click="ConnectionToggleClicked" Margin="12,0,7,0"
               IsEnabled="{Binding HasDocument}" ToolTip="连接或停止 VTS iPhone 输入"/>
-          <Button Grid.Column="2" Content="{Binding PreviewAction}" Click="PreviewToggleClicked" IsEnabled="{Binding CanPreview}"
-              ToolTip="启停发往 Blender 的最终权重；仅在 Blender 模式可用"/>
+          <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <Button Content="{Binding PreviewAction}" Click="PreviewToggleClicked" IsEnabled="{Binding CanPreview}"
+                ToolTip="启停发往 Blender 的最终权重；仅在 Blender 模式可用"/>
+            <Button Content="恢复实时" Click="ClearManualPreviewClicked" Visibility="{Binding HasManualPreview, Converter={StaticResource VisibleIf}}"
+                ToolTip="取消临时参数覆盖；未连接实时输入时释放预览权重"/>
+          </StackPanel>
           <TextBlock Grid.Column="3" Text="{Binding LiveStatus}" Foreground="{StaticResource MutedBrush}" FontSize="11"
               Margin="12,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding InputStatus}"/>
           <ToggleButton Grid.Column="4" Content="连接与回放" IsChecked="{Binding ShowConnection}" ToolTip="手机地址、端口、录制与回放设置"/>
@@ -103,7 +107,7 @@
         <ColumnDefinition x:Name="StructureColumn" Width="240" MinWidth="180" MaxWidth="500"/>
         <ColumnDefinition Width="8"/>
         <ColumnDefinition x:Name="PlotColumn" Width="0.95*" MinWidth="280"/>
-        <ColumnDefinition Width="8"/>
+        <ColumnDefinition x:Name="EditorSplitterColumn" Width="8"/>
         <ColumnDefinition x:Name="InspectorColumn" Width="1.05*" MinWidth="320"/>
       </Grid.ColumnDefinitions>
       <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="5">
@@ -114,7 +118,7 @@
             <TabItem Header="Value" ToolTip="输入处理后的输出参数与响应曲线">
               <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBox Margin="6,4,6,9" Text="{Binding ValueFilter, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Margin="6,4,6,9" Tag="筛选参数…" Text="{Binding ValueFilter, UpdateSourceTrigger=PropertyChanged}"
                     AutomationProperties.Name="筛选 Value 参数" ToolTip="筛选参数名称或表达式；筛选不会清除当前编辑项"/>
                 <ListBox Grid.Row="1" x:Name="ValueList" ItemsSource="{Binding ValueRows}" SelectedItem="{Binding SelectedValueRow}"
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
@@ -131,7 +135,7 @@
             <TabItem Header="IR" ToolTip="姿势、1D / 2D 混合与 Direct 节点">
               <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBox Margin="6,4,6,9" Text="{Binding IrFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="筛选 IR 节点" ToolTip="筛选节点名称、ID、类型或参数轴"/>
+                <TextBox Margin="6,4,6,9" Tag="筛选节点…" Text="{Binding IrFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="筛选 IR 节点" ToolTip="筛选节点名称、ID、类型或参数轴"/>
                 <ListBox Grid.Row="1" x:Name="NodeList" ItemsSource="{Binding NodeRows}" SelectedItem="{Binding SelectedNodeRow}"
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                   <ListBox.ItemTemplate><DataTemplate>
@@ -149,7 +153,7 @@
       </Border>
       <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns"
           ResizeBehavior="PreviousAndNext" ShowsPreview="True" ToolTip="拖动调整结构列表宽度" AutomationProperties.Name="结构列表分隔条"/>
-      <Grid Grid.Column="2">
+      <Grid Grid.Column="2" Visibility="{Binding ShowEditor, Converter={StaticResource VisibleIf}}">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid Margin="2,0,0,10">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -162,8 +166,8 @@
         <TabControl Grid.Row="1" SelectedIndex="{Binding CenterTab}">
           <TabItem Header="曲线 / 混合" ToolTip="{Binding PlotHint}">
             <local:ParameterPlot x:Name="Plot" EditBeginning="PlotEditBeginning" EditChanged="PlotEditChanged"
-                EditCommitted="PlotEditCommitted" SelectionChanged="PlotSelectionChanged" PreviewChanged="PlotPreviewChanged"
-                ToolTip="{Binding PlotHint}" AutomationProperties.Name="曲线与混合图编辑器"/>
+                EditCommitted="PlotEditCommitted" EditCanceled="PlotEditCanceled" SelectionChanged="PlotSelectionChanged" PreviewChanged="PlotPreviewChanged"
+                IsEnabled="{Binding CanEditGraph}" ToolTip="{Binding PlotHint}" AutomationProperties.Name="曲线与混合图编辑器"/>
           </TabItem>
           <TabItem Header="JSON" ToolTip="直接编辑作品文本；应用时执行完整校验">
             <Grid>
@@ -185,13 +189,14 @@
         </TabControl>
       </Grid>
       <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns"
+          Visibility="{Binding ShowEditor, Converter={StaticResource VisibleIf}}"
           ResizeBehavior="PreviousAndNext" ShowsPreview="True" ToolTip="拖动调整图形与属性区域的比例" AutomationProperties.Name="属性区域分隔条"/>
       <Border Grid.Column="4" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="5">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <TextBlock Text="属性" FontWeight="SemiBold" Margin="16,12,16,10"/>
           <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="16,2,16,12" IsEnabled="{Binding HasSelection}">
+            <StackPanel x:Name="PropertiesPanel" Margin="16,2,16,12" IsEnabled="{Binding CanEditProperties}">
               <TextBlock Text="名称" Style="{StaticResource SectionLabel}"/>
               <TextBox Text="{Binding DraftName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,14" ToolTip="Value 参数名或 IR 节点的显示名称；点击应用属性提交"/>
               <StackPanel Visibility="{Binding HasValueSelection, Converter={StaticResource VisibleIf}}">
@@ -207,8 +212,8 @@
                 <TextBlock Text="Y 参数" Style="{StaticResource SectionLabel}"/>
                 <TextBox Text="{Binding DraftAxisY, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" ToolTip="二维混合的第二参数轴"/>
               </StackPanel>
-              <Button Content="应用属性" Click="ApplyPropertiesClicked" HorizontalAlignment="Left" Margin="0,0,0,22" ToolTip="校验并提交名称、表达式或参数轴，支持撤销"/>
-              <StackPanel Visibility="{Binding HasValueSelection, Converter={StaticResource VisibleIf}}">
+              <Button Content="应用属性" Click="ApplyPropertiesClicked" IsEnabled="{Binding HasPropertyDraft}" HorizontalAlignment="Left" Margin="0,0,0,22" ToolTip="校验并提交名称、表达式或参数轴，支持撤销；切换选择时也会自动提交有效编辑"/>
+              <StackPanel Visibility="{Binding HasValueSelection, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
                 <DockPanel Margin="0,0,0,9">
                   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="＋" Click="AddCurvePointClicked" ToolTip="在最大间隔中添加曲线点" AutomationProperties.Name="添加曲线点" Padding="8,2"/>
@@ -227,7 +232,19 @@
                   </DataGrid.Columns>
                 </DataGrid>
               </StackPanel>
-              <StackPanel Visibility="{Binding HasNodeSelection, Converter={StaticResource VisibleIf}}">
+              <StackPanel Visibility="{Binding HasAxisX, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
+                <TextBlock Text="混合控制点" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                <DataGrid x:Name="ControlPointGrid" ItemsSource="{Binding ControlPoints}" CellEditEnding="ControlPointCellEditEnding"
+                    SelectionChanged="ControlPointSelectionChanged" CanUserSortColumns="False" CanUserReorderColumns="False"
+                    SelectionMode="Single" SelectionUnit="FullRow" MinHeight="150" MaxHeight="420" ToolTip="选中行与图中的控制点联动；双击 X / Y 或阈值进行精确编辑">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="姿势" Binding="{Binding ChildId}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn x:Name="ControlPointXColumn" Header="X" Binding="{Binding X}" SortMemberPath="X" Width="85"/>
+                    <DataGridTextColumn x:Name="ControlPointYColumn" Header="Y" Binding="{Binding Y}" SortMemberPath="Y" Width="85"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+              </StackPanel>
+              <StackPanel Visibility="{Binding HasWeightSelection, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
                 <TextBlock Text="{Binding WeightSectionTitle}" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <DataGrid x:Name="WeightsGrid" ItemsSource="{Binding InspectorWeights}" CellEditEnding="WeightsCellEditEnding" CanUserSortColumns="False"
                     CanUserReorderColumns="False" MinHeight="150" MaxHeight="420" ToolTip="双击数值或按 F2 编辑；每次有效修改都可撤销">
@@ -251,10 +268,12 @@
     </Grid>
     <Border Grid.Row="3" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0,1,0,0" Padding="16,6" Background="{StaticResource SurfaceBrush}">
       <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock Text="{Binding InputStatus}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis"/>
         <TextBlock Grid.Column="1" Text="{Binding OutputStatus}" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="16,0" ToolTip="{Binding OutputStatus}"/>
-        <Button Grid.Column="2" Content="重置布局" Click="ResetLayoutClicked" Padding="6,1" Margin="0" FontSize="10" ToolTip="恢复默认宽度；拖动后的布局会自动记住"/>
+        <Button Grid.Column="2" Content="{Binding EditorVisibilityAction}" Click="ToggleEditorClicked" Padding="6,1" Margin="0,0,8,0" FontSize="10"
+            ToolTip="收起中间图形与 JSON 区，将空间留给属性；再次展开会恢复宽度比例"/>
+        <Button Grid.Column="3" Content="重置布局" Click="ResetLayoutClicked" Padding="6,1" Margin="0" FontSize="10" ToolTip="恢复默认宽度；拖动后的布局会自动记住"/>
       </Grid>
     </Border>
   </Grid>

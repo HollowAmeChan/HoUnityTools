@@ -18,7 +18,7 @@ namespace HoFace.Studio
         public double CursorX { get; set; }
         public double CursorY { get; set; }
         public object Viewport => new { minX, maxX, minY, maxY };
-        public event Action EditBeginning, EditChanged, EditCommitted, SelectionChanged;
+        public event Action EditBeginning, EditChanged, EditCommitted, EditCanceled, SelectionChanged;
         public event Action<double, double> PreviewChanged;
         private double minX = -.1, maxX = 1.1, minY = -.1, maxY = 1.1;
         private bool editing, panning;
@@ -101,14 +101,27 @@ namespace HoFace.Studio
                 return;
             }
             var grid = new Pen(new SolidColorBrush(Color.FromRgb(48, 59, 69)), 1);
-            for (int i = 0; i <= 5; i++)
+            double Step(double span)
             {
-                double x = Plot.Left + Plot.Width * i / 5, y = Plot.Top + Plot.Height * i / 5;
-                dc.DrawLine(grid, new Point(x, Plot.Top), new Point(x, Plot.Bottom));
-                dc.DrawLine(grid, new Point(Plot.Left, y), new Point(Plot.Right, y));
-                Text(dc, (minX + (maxX - minX) * i / 5).ToString("0.###"), new Point(x - 12, Plot.Bottom + 9));
-                Text(dc, (maxY - (maxY - minY) * i / 5).ToString("0.###"), new Point(2, y - 7));
+                double scale = Math.Pow(10, Math.Floor(Math.Log10(span / 5)));
+                double basis = span / 5 / scale;
+                return (basis <= 1 ? 1 : basis <= 2 ? 2 : basis <= 2.5 ? 2.5 : basis <= 5 ? 5 : 10) * scale;
             }
+            string Number(double value) => Math.Abs(value) < 1e-8 ? "0" : value.ToString("0.####", CultureInfo.InvariantCulture);
+            double stepX = Step(maxX - minX), stepY = Step(maxY - minY);
+            for (double tick = Math.Ceiling(minX / stepX) * stepX; tick <= maxX + stepX * .001; tick += stepX)
+            {
+                double x = Screen(new Point(tick, 0)).X;
+                dc.DrawLine(grid, new Point(x, Plot.Top), new Point(x, Plot.Bottom));
+                Text(dc, Number(tick), new Point(x - 9, Plot.Bottom + 9));
+            }
+            for (double tick = Math.Ceiling(minY / stepY) * stepY; tick <= maxY + stepY * .001; tick += stepY)
+            {
+                double y = Screen(new Point(0, tick)).Y;
+                dc.DrawLine(grid, new Point(Plot.Left, y), new Point(Plot.Right, y));
+                Text(dc, Number(tick), new Point(3, y - 7));
+            }
+            dc.DrawRectangle(null, grid, Plot);
             if (Rule != null)
             {
                 var geometry = new StreamGeometry();
@@ -121,7 +134,9 @@ namespace HoFace.Studio
                         if (i == 0) context.BeginFigure(p, false, false); else context.LineTo(p, true, false);
                     }
                 geometry.Freeze();
+                dc.PushClip(new RectangleGeometry(Plot));
                 dc.DrawGeometry(null, new Pen(accent, 2), geometry);
+                dc.Pop();
             }
             var points = DataPoints();
             if (Rule != null && SelectedIndex >= 0 && SelectedIndex < points.Count)
@@ -141,9 +156,11 @@ namespace HoFace.Studio
                 string label = Rule != null ? i.ToString() : Node.children[i].node;
                 Text(dc, label, new Point(p.X + 10, p.Y - 18));
             }
+            dc.PushClip(new RectangleGeometry(Plot));
             Point cursor = Screen(new Point(CursorX, Rule != null ? HoFaceCurve.Transfer(Rule.curve, (float)CursorX) : CursorY));
             dc.DrawLine(new Pen(hot, 1), new Point(cursor.X - 7, cursor.Y), new Point(cursor.X + 7, cursor.Y));
             dc.DrawLine(new Pen(hot, 1), new Point(cursor.X, cursor.Y - 7), new Point(cursor.X, cursor.Y + 7));
+            dc.Pop();
             Text(dc, Rule != null ? "输入 → 输出" : Node.parameterX +
                 (Node.type == "blend2d" ? " / " + Node.parameterY : ""), new Point(Plot.Left, 2));
         }
@@ -165,7 +182,7 @@ namespace HoFace.Studio
             if (!Plot.Contains(last)) return;
             if (Rule == null && Node?.type != "blend1d" && Node?.type != "blend2d") return;
             if (e.ChangedButton == MouseButton.Right || e.ChangedButton == MouseButton.Middle)
-            { panning = true; CaptureMouse(); e.Handled = true; return; }
+            { panning = true; Cursor = Cursors.ScrollAll; CaptureMouse(); e.Handled = true; return; }
             if (e.ChangedButton != MouseButton.Left) return;
             var points = DataPoints();
             tangent = 0;
@@ -190,9 +207,10 @@ namespace HoFace.Studio
                 {
                     keys.Add(new HoFaceCurveKey((float)p.X, (float)p.Y, 1, 1));
                     Rule.curve = new HoFaceCurveData(keys.ToArray());
+                    SelectedIndex = Array.FindIndex(Rule.curve.keys, k => Math.Abs(k.time - p.X) < 1e-5);
                     EditChanged?.Invoke();
                 }
-                EditCommitted?.Invoke(); InvalidateVisual(); return;
+                EditCommitted?.Invoke(); SelectionChanged?.Invoke(); InvalidateVisual(); return;
             }
             SelectionChanged?.Invoke();
             if (SelectedIndex >= 0)
@@ -254,11 +272,11 @@ namespace HoFace.Studio
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
             base.OnMouseUp(e);
-            FinishEdit(); panning = false; ReleaseMouseCapture();
+            FinishEdit(); panning = false; Cursor = Cursors.Cross; ReleaseMouseCapture();
         }
         protected override void OnLostMouseCapture(MouseEventArgs e)
         {
-            base.OnLostMouseCapture(e); FinishEdit(); panning = false;
+            base.OnLostMouseCapture(e); FinishEdit(); panning = false; Cursor = Cursors.Cross;
         }
         private void FinishEdit()
         {
@@ -278,7 +296,37 @@ namespace HoFace.Studio
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
+            if (e.Key == Key.Escape && editing)
+            {
+                editing = false; panning = false; ReleaseMouseCapture();
+                EditCanceled?.Invoke(); InvalidateVisual(); e.Handled = true; return;
+            }
             if (e.Key == Key.F) { Fit(); e.Handled = true; }
+            if (SelectedIndex >= 0 && (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Up || e.Key == Key.Down))
+            {
+                double multiplier = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 10 : 1;
+                float dx = (float)((e.Key == Key.Left ? -1 : e.Key == Key.Right ? 1 : 0) * (maxX - minX) / 200 * multiplier);
+                float dy = (float)((e.Key == Key.Down ? -1 : e.Key == Key.Up ? 1 : 0) * (maxY - minY) / 200 * multiplier);
+                EditBeginning?.Invoke();
+                if (Rule?.curve != null && SelectedIndex < Rule.curve.length)
+                {
+                    var keys = Rule.curve.keys;
+                    var key = keys[SelectedIndex]; key.time += dx; key.value += dy;
+                    if (!keys.Where((_, i) => i != SelectedIndex).Any(k => Math.Abs(k.time - key.time) < 1e-5))
+                    {
+                        keys[SelectedIndex] = key; Rule.curve.keys = keys;
+                        SelectedIndex = Array.FindIndex(Rule.curve.keys, k => k.time == key.time);
+                    }
+                }
+                else if (Node != null && SelectedIndex < Node.children.Count)
+                {
+                    var child = Node.children[SelectedIndex];
+                    if (Node.type == "blend1d") child.threshold += dx;
+                    else { child.x += dx; child.y += dy; }
+                }
+                EditChanged?.Invoke(); EditCommitted?.Invoke(); SelectionChanged?.Invoke();
+                InvalidateVisual(); e.Handled = true;
+            }
             if (e.Key == Key.Delete && Rule?.curve != null && SelectedIndex >= 0 && Rule.curve.keys.Length > 2)
             {
                 EditBeginning?.Invoke();
