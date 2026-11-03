@@ -21,13 +21,13 @@
 - WPF 桌面工程已能以 Release 配置构建，应用启动探针保持进程运行并正常退出。
 - VTS iPhone UDP 接收与制作会话已接入：预览模式执行外部 value + IR，裸值模式只发布原始帧，不重复求值。
 - IR 节点列表与曲线/1D/2D 画布已接入 WPF；最终权重 UDP 预览协议与 Blender 4.5.8 薄适配器原型已通过回环/注册测试。
-- Warudo Mod 侧不增加作者调试桥接：Warudo 只作为最终消费端，角色组件内部执行 value + IR。桌面会话保留原始帧事件边界，未来若需要仅接 Unity 编辑器适配器。
+- Warudo Mod 侧不增加作者调试桥接：Warudo 只作为最终消费端，角色组件内部执行 value + IR。作者调试由 HoFaceStudio 处理，Unity 编辑器通过独立 raw 适配器复用现有参数接收器。
 - Unity 编辑器专用 `HoFaceStudioRawInput` 已接入共享 `hoface.raw` v1 解析；loopback 收包后按 Unity 本地单调时钟更新角色接收器，并返回逐帧 ACK。raw/preview 模式切换互斥，失追、断连和停止预览会释放该输出端拥有的值。
 - `HoVtsIrController` 已接入角色运行时：直接读取 value 输出、求值 IR 并写形态键，不依赖 Animator；独立 Unity 工程验证通过。
 - IR v2 只保存逻辑形态键输出名与范围；Unity 组件和 Blender HoFace 各自维护显式网格对象列表，同名键写到所有列表内网格，缺键跳过，清单外对象不查找、不写入。预览 v2 不携带物体绑定。
 - WTD 的 52 个逻辑输出与 6 个网格引用已保存；隔离 Unity 工程验证实际模型的 208 个匹配绑定，1,036 组输入、215,488 个权重与迁移基线一致，生产 prefab 副本中的 6 个 renderer 引用及接收器/IR 引用均成功加载。组件网格列表回归 16 项，Blender 两个薄适配器回归 14 项。
 - Unity 2021 隔离工程中的 HoFaceStudio raw 组件编译与回环验证通过 **27 项**，覆盖可挂载、loopback 收包/ACK、回放时间回退、失追释放与停止释放。
-- HoFaceStudio 本地 AI 控制通道已接入：状态、截图、打开/保存、撤销/重做、选区、VTS、模式和预览命令已通过命名管道验证；录制/回放/冻结/诊断接口列为下一阶段。
+- HoFaceStudio 本地 AI 控制通道已接入：状态、截图、打开/保存、撤销/重做、选区、value/IR 编辑、VTS、模式、预览、录制和回放命令通过命名管道提供；冻结与诊断导出仍待实现。
 - Unity 旧 JSON/面捕调试窗口已从菜单入口撤下，旧全局调试宿主不再自动 tick；接收器 Inspector 改为启动 HoFaceStudio 并显示 Play 模式 raw 状态。
 - 已删除旧 JSON 编辑器、旧面捕测试窗口、组件调试视图、旧 Unity 调试会话和旧 trace 记录器；控制器迁移工具与运行时稳定组件保留。
 - 旧影子 AnimationSession、全局 DebugSettings/Host、输入 Hub、旧 Unity VTS 适配器和控制器编辑窗口已物理删除；HoVtsController 运行组件仅作为迁移兼容保留。
@@ -38,10 +38,9 @@
 
 ## 尚未完成
 
-- WPF 曲线 / 控制点编辑器已建立首版：曲线绘制、点/切线拖动、双击加点、缩放平移、value/IR 文档打开/保存、撤销/重做和外部修改检测；仍缺真实 VTS 与 IR 节点选择联动的制作验收。
-- 录制回放，以及 Unity 编辑器适配器的连接、断开和所有权验收。
-- Blender / Unity 薄预览适配及其写入所有权验证。
-- Unity 预览适配及写入所有权验证。
+- WPF 曲线 / 控制点编辑器、稳定选择、精确值编辑、录制/回放及 AI 命令已有自动化覆盖；仍缺真实 VTS 设备与生产角色配合的完整制作验收。
+- Unity raw 适配器的 loopback、逐帧 ACK、追踪丢失、重连时钟和输入释放已在隔离 Unity 工程验证；仍缺用户角色上的 Play 模式 Inspector 实际调试验收。
+- Blender 与 Unity 协议/适配器自动验证已通过；仍需用实际模型确认 Blender 形态键写入和完整 VTS→HoFaceStudio→Blender 视觉闭环。
 - WTD IR v2 在实际 Warudo Character Mod 中的构建与客户端验收。
 
 现有稳定实现继续保留。核心里程碑通过不代表以上集成已完成；后续按独立提交更新本记录。
