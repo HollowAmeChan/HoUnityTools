@@ -21,6 +21,7 @@
 - VTS iPhone UDP 接收与制作会话已接入：预览模式执行外部 value + IR，裸值模式只发布原始帧，不重复求值。
 - IR 节点列表与曲线/1D/2D 画布已接入 WPF；最终权重 UDP 预览协议与 Blender 4.5.8 薄适配器原型已通过回环/注册测试。
 - Warudo Mod 侧不增加作者调试桥接：Warudo 只作为最终消费端，角色组件内部执行 value + IR。桌面会话保留原始帧事件边界，未来若需要仅接 Unity 编辑器适配器。
+- Unity 编辑器专用 `HoFaceStudioRawInput` 已接入共享 `hoface.raw` v1 解析，接收后调用现有角色参数接收器；Blender 继续只接收最终形态键权重。
 - 核心编译无警告；本机已有 .NET 10 SDK 与 WindowsDesktop 运行环境，暂未安装新环境。
 
 包级验证说明：原全量 Editor 扫描因既有 MMD 编辑器的 `Volume` 类型引用列表缺失而失败；给本机临时响应文件补上工程已存在的 `Unity.RenderPipelines.Core.Runtime.dll` 后，完整扫描可编译。未修改该 MMD 代码或将此问题归因于本次核心提取。真实 Unity 隔离工程则直接编译并执行了相关面捕源码。

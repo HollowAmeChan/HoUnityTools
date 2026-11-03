@@ -101,6 +101,8 @@ VTS / 录样
 
 当前桌面原型保留裸值转发的会话边界，但不向 Warudo Mod 增加调试桥接。Warudo 是最终消费场所：角色组件在 Mod 内执行 value + IR；外部程序默认只用于作者制作预览。未来若需要向 Unity 编辑器中的角色组件转发裸值，单独增加 Unity 侧适配器，不能把作者调试协议塞进 Warudo 发布 Mod。
 
+Unity 侧适配器已开始实现为编辑器专用的 `HoFaceStudioRawInput` 组件：它监听 `127.0.0.1:21415` 的 `hoface.raw` v1 帧，调用现有 `HoVtsParameterReceiver.ApplyRawFrame`，再由 Unity 侧的 value、HoVtsLookAt 和其他消费者继续运行。该组件不进入 Warudo Mod 发布路径；Blender 仍接收另一条最终权重预览帧。
+
 ## 6. Warudo 正式运行
 
 ```text

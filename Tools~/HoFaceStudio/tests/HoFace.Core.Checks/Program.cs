@@ -16,7 +16,7 @@ internal static class Program
     {
         try
         {
-            Curves(); Value(); Ir(); Sessions(); PreviewTransport();
+            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope();
             string root = args.Length > 0 ? args[0] : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../../.."));
             foreach (string file in new[]
             {
@@ -182,6 +182,16 @@ internal static class Program
         Check(json.Contains("\"weights\":{\"jaw\":0.7"), "preview final weight");
         Check(json.Contains("\"slot\":\"Face\""), "preview target binding");
         Check(json.Contains("\"tracked\":true"), "preview tracking state");
+    }
+    private static void RawFrameEnvelope()
+    {
+        const string json = "{\"type\":\"hoface.raw\",\"version\":1,\"sequence\":4,\"time\":2.5,\"tracked\":true,\"values\":{\"JawOpen\":0.7,\"Rotation_x\":-12}}";
+        Check(HoFaceRawFrameJson.TryParse(json, out var frame, out string error), error);
+        Check(frame.Tracked && frame.Values.Count == 2, "raw Unity envelope");
+        Near(frame.Values["JawOpen"], .7f, "raw Unity expression value");
+        Near((float)frame.Time, 2.5f, "raw Unity frame time");
+        Check(!HoFaceRawFrameJson.TryParse(json.Replace("\"version\":1", "\"version\":9"), out _, out _),
+            "future raw envelope rejected");
     }
     private static void Check(bool value, string label)
     {
