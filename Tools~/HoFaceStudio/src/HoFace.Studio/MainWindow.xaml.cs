@@ -225,7 +225,12 @@ namespace HoFace.Studio
                         selectedValue = selectedValueRow?.parameter,
                         selectedNode = selectedNode?.id,
                         frames = session.Frames,
-                        preview = session.PreviewStatus
+                        preview = session.PreviewStatus,
+                        recording = session.Recording,
+                        recordedFrames = session.RecordedFrames,
+                        replayLoaded = session.ReplayLoaded,
+                        replayPlaying = session.ReplayPlaying,
+                        replayIndex = session.ReplayIndex
                     };
                 case "screenshot":
                     return new { path = CaptureScreenshot(ReadString(payload, "path")) };
@@ -259,6 +264,19 @@ namespace HoFace.Studio
                     session.Preview.Start(); return ExecuteAutomation("status", default);
                 case "previewStop":
                     session.Preview.Stop(); return ExecuteAutomation("status", default);
+                case "recordStart":
+                    session.StartRecording(RequiredString(payload, "path"), document.ValuePath, document.IrPath);
+                    return ExecuteAutomation("status", default);
+                case "recordStop":
+                    session.StopRecording(); return ExecuteAutomation("status", default);
+                case "replayOpen":
+                    session.OpenReplay(RequiredString(payload, "path")); return ExecuteAutomation("status", default);
+                case "replayPlay":
+                    session.PlayReplay(); return ExecuteAutomation("status", default);
+                case "replayPause":
+                    session.PauseReplay(); return ExecuteAutomation("status", default);
+                case "replaySeek":
+                    session.SeekReplay(ReadDouble(payload, "time")); return ExecuteAutomation("status", default);
                 case "text":
                     document.ApplyText(RequiredString(payload, "value"), RequiredString(payload, "ir"));
                     ReloadEditors(); return ExecuteAutomation("status", default);

@@ -11,8 +11,14 @@ namespace HoFace.Studio
     public sealed class AuthoringSession : IDisposable
     {
         private readonly Stopwatch clock = Stopwatch.StartNew();
+        private readonly Stopwatch replayClock = new Stopwatch();
         private HoFaceValueSession valueSession;
         private HoFaceIrEvaluator irEvaluator;
+        private HoFaceRecordingWriter recording;
+        private List<HoFaceRecordedFrame> replayFrames;
+        private int replayIndex;
+        private bool replayPlaying;
+        private double replayOffset;
         public readonly VtsIphoneReceiver Receiver = new VtsIphoneReceiver();
         public readonly HoFaceRawForwardSender RawForward = new HoFaceRawForwardSender();
         public readonly HoFacePreviewSender Preview = new HoFacePreviewSender();
@@ -23,6 +29,11 @@ namespace HoFace.Studio
         public string PreviewStatus => Preview.Status;
         public long Frames => Receiver.Packets;
         public long InvalidFrames => Receiver.InvalidPackets;
+        public bool Recording => recording != null;
+        public bool ReplayLoaded => replayFrames != null;
+        public bool ReplayPlaying => replayPlaying;
+        public int RecordedFrames => recording?.Frames ?? 0;
+        public int ReplayIndex => replayIndex;
         public IReadOnlyDictionary<string, float> Values => valueSession?.Values;
         public IReadOnlyDictionary<string, float> Weights => irEvaluator?.Values;
         public event Action<VtsFrame> RawFrameForward;
@@ -59,10 +70,25 @@ namespace HoFace.Studio
 
         public void Stop() => Receiver.Stop();
 
-        public void Poll() => Receiver.Poll();
-
-        private void OnFrame(VtsFrame frame)
+        public void Poll()
         {
+            Receiver.Poll();
+            if (!replayPlaying || replayFrames == null) return;
+            double time = replayOffset + replayClock.Elapsed.TotalSeconds;
+            while (replayIndex < replayFrames.Count && replayFrames[replayIndex].time <= time)
+            {
+                var frame = replayFrames[replayIndex++];
+                ProcessFrame(new VtsFrame(new Dictionary<string, float>(frame.values), frame.tracked), frame.time, false);
+            }
+            if (replayIndex >= replayFrames.Count) PauseReplay();
+        }
+
+        private void OnFrame(VtsFrame frame) => ProcessFrame(frame, clock.Elapsed.TotalSeconds, true);
+
+        private void ProcessFrame(VtsFrame frame, double time, bool record)
+        {
+            if (record && recording != null)
+                recording.Write(new HoFaceRecordedFrame { time = time, tracked = frame.FaceFound, values = new Dictionary<string, float>(frame.Values) });
             if (Mode == AuthoringMode.RawForward)
             {
                 if (!RawForward.Running) RawForward.Start();
@@ -71,12 +97,38 @@ namespace HoFace.Studio
                 return;
             }
             if (!HasDocument) return;
-            double time = clock.Elapsed.TotalSeconds;
             valueSession.Evaluate(frame.Values, time);
             irEvaluator.Evaluate(valueSession.Values);
             PreviewUpdated?.Invoke(valueSession.Values, irEvaluator.Values);
         }
 
-        public void Dispose() { Receiver.Dispose(); Preview.Dispose(); RawForward.Dispose(); }
+        public void StartRecording(string path, string valuePath, string irPath)
+        {
+            StopRecording();
+            recording = new HoFaceRecordingWriter(path, valuePath, irPath);
+        }
+        public void StopRecording() { recording?.Dispose(); recording = null; }
+        public void OpenReplay(string path)
+        {
+            replayFrames = HoFaceRecordingReader.Read(path);
+            replayIndex = 0; replayPlaying = false; replayOffset = 0;
+        }
+        public void PlayReplay()
+        {
+            if (replayFrames == null || replayFrames.Count == 0) throw new InvalidOperationException("没有可播放的录制。");
+            replayPlaying = true;
+            replayClock.Restart();
+            replayOffset = replayIndex < replayFrames.Count ? replayFrames[replayIndex].time : 0;
+        }
+        public void PauseReplay() { replayPlaying = false; replayClock.Stop(); }
+        public void SeekReplay(double time)
+        {
+            if (replayFrames == null) throw new InvalidOperationException("没有打开录制。");
+            replayIndex = 0;
+            while (replayIndex < replayFrames.Count && replayFrames[replayIndex].time < Math.Max(0, time)) replayIndex++;
+            replayOffset = Math.Max(0, time);
+        }
+
+        public void Dispose() { StopRecording(); Receiver.Dispose(); Preview.Dispose(); RawForward.Dispose(); }
     }
 }

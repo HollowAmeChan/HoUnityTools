@@ -16,7 +16,7 @@ internal static class Program
     {
         try
         {
-            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope();
+            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording();
             string root = args.Length > 0 ? args[0] : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../../.."));
             foreach (string file in new[]
             {
@@ -192,6 +192,23 @@ internal static class Program
         Near((float)frame.Time, 2.5f, "raw Unity frame time");
         Check(!HoFaceRawFrameJson.TryParse(json.Replace("\"version\":1", "\"version\":9"), out _, out _),
             "future raw envelope rejected");
+    }
+    private static void Recording()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "hoface-check-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        try
+        {
+            using (var writer = new HoFaceRecordingWriter(path, "value.json", "face.ir.json"))
+            {
+                writer.Write(new HoFaceRecordedFrame { time = 0, tracked = true, values = new Dictionary<string, float> { { "JawOpen", .2f } } });
+                writer.Write(new HoFaceRecordedFrame { time = .1, tracked = false, values = new Dictionary<string, float> { { "JawOpen", .3f } } });
+                Check(writer.Frames == 2, "record frame count");
+            }
+            var frames = HoFaceRecordingReader.Read(path);
+            Check(frames.Count == 2 && frames[1].tracked == false, "record replay roundtrip");
+            Near(frames[0].values["JawOpen"], .2f, "record value");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
     }
     private static void Check(bool value, string label)
     {
