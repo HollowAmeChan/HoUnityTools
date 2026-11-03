@@ -130,6 +130,8 @@ namespace HoFace.Studio
         public MainWindow(bool startAutomation)
         {
             InitializeComponent();
+            persistWorkspace = startAutomation;
+            Loaded += (_, _) => LoadWorkspace();
             SourceInitialized += (_, _) => ApplyDarkWindowChrome();
             DataContext = this;
             if (startAutomation)
@@ -164,7 +166,14 @@ namespace HoFace.Studio
                 OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(InputStatus));
             });
             pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            pollTimer.Tick += (s, e) => session.Poll();
+            pollTimer.Tick += (s, e) =>
+            {
+                session.Poll();
+                if ((DateTime.UtcNow - lastTransportRefresh).TotalMilliseconds >= 250)
+                {
+                    lastTransportRefresh = DateTime.UtcNow; RefreshTransport();
+                }
+            };
             if (startAutomation) pollTimer.Start();
             Closing += OnClosing;
         }
@@ -178,6 +187,7 @@ namespace HoFace.Studio
             }
             if (!e.Cancel)
             {
+                SaveWorkspace();
                 automation?.Dispose();
                 pollTimer.Stop();
                 session.Dispose();
@@ -191,6 +201,7 @@ namespace HoFace.Studio
         {
             session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
             OnPropertyChanged(nameof(Status));
+            RefreshTransport();
         }
         private void ConnectClicked(object sender, RoutedEventArgs e)
         {
@@ -279,6 +290,7 @@ namespace HoFace.Studio
             Title = (document.IsDirty ? "● " : "") + (document.ValuePath == null ? "" : Path.GetFileName(document.ValuePath).Replace(".hoface.value.json", "") + " · ") + "HoFaceStudio";
             OnPropertyChanged(nameof(ValuePath)); OnPropertyChanged(nameof(IrPath)); OnPropertyChanged(nameof(HeaderStatus));
             OnPropertyChanged(nameof(Status)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(InspectorSummary));
+            RefreshTransport();
         }
         private void RefreshRows()
         {
@@ -368,7 +380,12 @@ namespace HoFace.Studio
             try { document.Remember(before); ReloadEditors(); }
             catch (Exception error) { ReloadEditors(); ShowError(error.Message); }
         }
-        private void PlotSelectionChanged() { OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); }
+        private void PlotSelectionChanged()
+        {
+            if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count)
+                CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
+            OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression));
+        }
         private void PlotPreviewChanged(double x, double y) { Plot.CursorX = x; Plot.CursorY = y; Plot.InvalidateVisual(); }
         private void OnPropertyChanged([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
