@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+  <title>HoFaceStudio</title>
+  <desc>A tracked face with a response-curve smile and an amber control point.</desc>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#253B43"/>
+      <stop offset="1" stop-color="#101B24"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#tile)"/>
+  <rect x="9" y="9" width="238" height="238" rx="53" fill="none" stroke="#47625F" stroke-width="1.5"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 52 81 V 65 Q 52 51 66 51 H 82" stroke="#68B7A8" stroke-width="11"/>
+    <path d="M 204 175 V 191 Q 204 205 190 205 H 174" stroke="#68B7A8" stroke-width="11"/>
+    <path d="M 177 101 V 139 C 177 170 156 191 128 191 C 100 191 79 170 79 139 V 101 C 79 76 100 62 128 62 C 156 62 177 76 177 101 Z"
+          stroke="#A0E3CC" stroke-width="14"/>
+    <path d="M 108 111 V 120 M 148 111 V 120" stroke="#A0E3CC" stroke-width="13"/>
+    <path d="M 105 150 C 114 163 137 165 152 146" stroke="#A0E3CC" stroke-width="12"/>
+  </g>
+  <circle cx="152" cy="146" r="8.5" fill="#E9B578"/>
+</svg>

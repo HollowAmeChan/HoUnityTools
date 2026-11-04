@@ -21,6 +21,7 @@ internal static class Program
             var application = new App();
             application.InitializeComponent();
             var window = new MainWindow(false);
+            Check(window.Icon != null, "studio window loads the product icon resource");
             string sampleValuePath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.value.json"));
             string sampleIrPath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.ir.json"));
             Check(((Button)window.FindName("BrowseValueFileButton")).IsEnabled, "value browse button works before opening a document");

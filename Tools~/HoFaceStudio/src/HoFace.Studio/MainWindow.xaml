@@ -5,7 +5,7 @@
     Title="HoFaceStudio" Width="1380" Height="860" MinWidth="1024" MinHeight="640"
     WindowStartupLocation="CenterScreen" FontFamily="Microsoft YaHei UI" FontSize="13"
     UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
-    Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}">
+    Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}" Icon="Assets/hoface-studio.ico">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="VisibleIf"/>
     <Style x:Key="SectionLabel" TargetType="TextBlock">
