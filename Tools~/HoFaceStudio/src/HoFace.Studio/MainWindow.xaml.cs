@@ -25,11 +25,13 @@ namespace HoFace.Studio
         private readonly AuthoringSession session = new AuthoringSession();
         private readonly DispatcherTimer pollTimer;
         private readonly HoFaceAutomationServer automation;
+        internal AuthoringSession SessionForChecks => session;
         private AuthoringSnapshot editBefore;
         private string mode = "Preview";
         private string valueFilter = "";
         private string irFilter = "";
         private int centerTab;
+        private ParameterPlot ActivePlot => CenterTab == 1 ? BlendPlot : Plot;
         private string phoneIp = "127.0.0.1";
         private string phonePort = "21412";
         private string localPort = "21413";
@@ -81,12 +83,9 @@ namespace HoFace.Studio
             set
             {
                 if (centerTab == value) return;
-                if (value == 1)
-                {
-                    try { CommitPropertyDraft(); }
-                    catch (Exception error) { ShowError(error.Message); OnPropertyChanged(); return; }
-                }
-                if (centerTab == 1 && HasTextDraft)
+                try { CommitPropertyDraft(); }
+                catch (Exception error) { ShowError(error.Message); OnPropertyChanged(); return; }
+                if (centerTab == 3 && HasTextDraft)
                 {
                     try { SyncText(); ReloadEditors(); }
                     catch (Exception error)
@@ -96,7 +95,9 @@ namespace HoFace.Studio
                         return;
                     }
                 }
-                centerTab = value; OnPropertyChanged();
+                centerTab = value; OnPropertyChanged(); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(SelectionKind));
+                OnPropertyChanged(nameof(SelectionTitle)); OnPropertyChanged(nameof(CanFitPlot));
             }
         }
         public RuleRow SelectedValueRow
@@ -109,8 +110,11 @@ namespace HoFace.Studio
                 selectedOutputIndex = value.Index;
                 RememberValueSelection();
                 structureTab = 0;
+                centerTab = 0;
                 ResolveSelection(); RefreshPlot(true);
                 OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
+                OnPropertyChanged(nameof(CenterTab)); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(SelectionKind));
             }
         }
         public NodeRow SelectedNodeRow
@@ -122,8 +126,11 @@ namespace HoFace.Studio
                 try { CommitPropertyDraft(); } catch (Exception error) { ShowError(error.Message); OnPropertyChanged(); return; }
                 selectedNodeId = value.Node.id;
                 structureTab = 1;
+                centerTab = 1;
                 ResolveSelection(); RefreshPlot(true);
                 OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
+                OnPropertyChanged(nameof(CenterTab)); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(SelectionKind));
             }
         }
         public string HeaderStatus => HasPendingFilePaths ? "等待配对文件" : document.Value == null ? "未打开作品" : (HasTextDraft ? "文本待应用" : HasPropertyDraft ? "属性待应用" : document.IsDirty ? "● 未保存" : "已保存");
@@ -152,6 +159,7 @@ namespace HoFace.Studio
             Loaded += (_, _) => LoadWorkspace();
             SourceInitialized += (_, _) => ApplyDarkWindowChrome();
             DataContext = this;
+            InitializeMonitorViews();
             if (startAutomation)
             {
                 automation = new HoFaceAutomationServer(this);
@@ -169,6 +177,7 @@ namespace HoFace.Studio
                 liveStatus = status;
                 OnPropertyChanged(nameof(LiveStatus));
             });
+            session.MonitorUpdated += frame => Dispatcher.Invoke(() => UpdateRealtimeMonitor(frame));
             session.PreviewUpdated += (values, weights, tracked) => Dispatcher.Invoke(() =>
             {
                 if (parameterOverrides != null) ApplyParameterOverrides(values);
@@ -222,6 +231,7 @@ namespace HoFace.Studio
             session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
             OnPropertyChanged(nameof(Status));
             RefreshTransport();
+            NotifyMonitorState();
         }
         private void ConnectClicked(object sender, RoutedEventArgs e)
         {
@@ -232,6 +242,8 @@ namespace HoFace.Studio
             }
             try
             {
+                if (Mode == "Preview" && !HasDocument)
+                    throw new InvalidOperationException("Blender 权重预览需要先打开并校验 value + IR；切换到 Unity · 原始输入即可无作品连接。");
                 session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
                 session.PauseReplay();
                 session.Start(new VtsIphoneOptions { PhoneAddress = PhoneIp, PhonePort = phone, LocalPort = local });
@@ -314,6 +326,7 @@ namespace HoFace.Studio
             ResolveSelection();
             RefreshRows(); RefreshPlot();
             if (document.Value != null) session.Configure(document);
+            ResetMonitorRows();
             Diagnostics = "";
             OnPropertyChanged(nameof(Diagnostics)); OnPropertyChanged(nameof(HasTextDraft));
             OnPropertyChanged(nameof(HasUnsavedChanges));
@@ -386,9 +399,17 @@ namespace HoFace.Studio
         private void RefreshPlot(bool newSelection = false)
         {
             Plot.Rule = selectedValueRow;
-            Plot.Node = selectedNode;
-            if (newSelection) { Plot.ClearSelection(); Plot.Fit(); }
+            Plot.Node = null;
+            BlendPlot.Rule = null;
+            BlendPlot.Node = selectedNode;
+            if (newSelection)
+            {
+                Plot.ClearSelection(); BlendPlot.ClearSelection();
+                if (selectedValueRow != null) Plot.Fit();
+                else if (selectedNode != null) BlendPlot.Fit();
+            }
             Plot.ValidateSelection(); Plot.InvalidateVisual();
+            BlendPlot.ValidateSelection(); BlendPlot.InvalidateVisual();
             InspectorWeights.Clear();
             if (selectedNode != null)
             {
@@ -426,7 +447,7 @@ namespace HoFace.Studio
             RefreshInspector();
         }
         private void PlotEditBeginning() { editBefore ??= document.Snapshot(); }
-        private void PlotEditChanged() { Plot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
+        private void PlotEditChanged() { Plot.InvalidateVisual(); BlendPlot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
         private void PlotEditCommitted()
         {
             if (editBefore == null) return;
@@ -441,11 +462,18 @@ namespace HoFace.Studio
         }
         private void PlotSelectionChanged()
         {
-            if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count)
-                CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
-            if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < ControlPoints.Count)
-                ControlPointGrid.SelectedItem = ControlPoints[Plot.SelectedIndex];
             OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression));
+        }
+        private void CurvePlotSelectionChanged()
+        {
+            if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count) CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
+            PlotSelectionChanged();
+        }
+        private void BlendPlotSelectionChanged()
+        {
+            if (BlendPlot.SelectedIndex >= 0 && BlendPlot.SelectedIndex < ControlPoints.Count)
+                ControlPointGrid.SelectedItem = ControlPoints[BlendPlot.SelectedIndex];
+            PlotSelectionChanged();
         }
         private void PlotPreviewChanged(double x, double y)
         {
@@ -462,8 +490,10 @@ namespace HoFace.Studio
         private void RecoverFailedEdit()
         {
             ResolveSelection(); RefreshRows();
-            Plot.Rule = selectedValueRow; Plot.Node = selectedNode;
+            Plot.Rule = selectedValueRow; Plot.Node = null;
+            BlendPlot.Rule = null; BlendPlot.Node = selectedNode;
             Plot.ValidateSelection(); Plot.InvalidateVisual();
+            BlendPlot.ValidateSelection(); BlendPlot.InvalidateVisual();
             PropertyDraftChanged();
         }
         private object ExecuteAutomationCore(string command, JsonElement payload)
@@ -483,8 +513,11 @@ namespace HoFace.Studio
                 case "list": return ReadItems(ReadString(payload, "filter"));
                 case "selection": return ReadSelection();
                 case "diagnostics": return ReadDiagnostics();
+                case "monitor": return ReadMonitor();
+                case "setMonitorOverride": return SetMonitorOverrideFromAutomation(payload);
+                case "clearMonitorOverrides": return ClearMonitorOverridesFromAutomation(payload);
                 case "view": return ConfigureView(payload);
-                case "selectPoint": Plot.SelectIndex(ReadInt(payload, "index", -1)); return ReadSelection();
+                case "selectPoint": ActivePlot.SelectIndex(ReadInt(payload, "index", -1)); return ReadSelection();
                 case "setValueExpression": SetValueExpression(payload); break;
                 case "setNode": SetNode(payload); break;
                 case "addValueCurveKey": AddValueCurveKey(payload); break;
@@ -493,7 +526,7 @@ namespace HoFace.Studio
                     if (HasPropertyDraft) throw new InvalidOperationException("请先应用或还原属性草稿。");
                     if (payload.TryGetProperty("value", out var valueDraft)) ValueText.Text = valueDraft.GetString();
                     if (payload.TryGetProperty("ir", out var irDraft)) IrText.Text = irDraft.GetString();
-                    CenterTab = 1; break;
+                    CenterTab = 3; break;
                 case "applyText": SyncText(); ReloadEditors(); break;
                 case "revertText": ReloadEditors(); break;
                 case "applyProperties": CommitPropertyDraft(); ReloadEditors(); break;
@@ -527,13 +560,14 @@ namespace HoFace.Studio
                         selectedValue = selectedValueRow?.parameter,
                         selectedValueIndex = selectedValueRow == null ? (int?)null : selectedOutputIndex,
                         selectedNode = selectedNode?.id,
-                        selectedPoint = Plot.SelectedIndex,
+                        selectedPoint = ActivePlot.SelectedIndex,
                         structureTab = StructureTab,
                         centerTab = CenterTab,
                         manualPreview = manualWeights != null,
                         frames = session.Frames,
                         preview = session.PreviewStatus,
                         rawForward = session.RawForwardStatus,
+                        monitor = MonitorStatus,
                         recording = session.Recording,
                         recordedFrames = session.RecordedFrames,
                         replayLoaded = session.ReplayLoaded,
@@ -589,6 +623,8 @@ namespace HoFace.Studio
                     PreviewAtCursor(ReadDouble(payload, "x"), payload.TryGetProperty("y", out _) ? ReadDouble(payload, "y") : 0);
                     return ReadDiagnostics();
                 case "vtsStart":
+                    if (Mode == "Preview" && !HasDocument)
+                        throw new InvalidOperationException("Preview 模式需要先打开作品；RawForward 模式可无作品连接。");
                     StartVtsFromPayload(payload); return ExecuteAutomation("status", default);
                 case "vtsStop":
                     session.Stop(); return ExecuteAutomation("status", default);
@@ -598,6 +634,7 @@ namespace HoFace.Studio
                 case "previewStop":
                     session.Preview.Stop(); return ExecuteAutomation("status", default);
                 case "recordStart":
+                    if (Mode == "Preview" && !HasDocument) throw new InvalidOperationException("Preview 模式录制需要先打开作品。");
                     if (session.ReplayPlaying) throw new InvalidOperationException("请先暂停回放，再录制实时输入。");
                     session.StartRecording(RequiredString(payload, "path"), document.ValuePath, document.IrPath);
                     return ExecuteAutomation("status", default);
@@ -606,6 +643,7 @@ namespace HoFace.Studio
                 case "replayOpen":
                     session.OpenReplay(RequiredString(payload, "path")); return ExecuteAutomation("status", default);
                 case "replayPlay":
+                    if (Mode == "Preview" && !HasDocument) throw new InvalidOperationException("Preview 模式回放需要先打开作品。");
                     session.StopRecording();
                     if (session.Running) session.Stop();
                     session.PlayReplay(); return ExecuteAutomation("status", default);
@@ -625,6 +663,7 @@ namespace HoFace.Studio
         private void OpenPaths(string valuePath, string irPath)
         {
             document.Open(valuePath, irPath);
+            session.ClearMonitorOverrides();
             chosenValuePath = null; chosenIrPath = null;
             ClearManualPreview();
             selectedOutputIndex = document.Value.outputs.Count > 0 ? 0 : -1;
@@ -633,7 +672,7 @@ namespace HoFace.Studio
             structureTab = 0;
             OnPropertyChanged(nameof(StructureTab));
             ReloadEditors();
-            Plot.Fit();
+            Plot.Fit(); BlendPlot.Fit();
         }
 
         private void ApplyDarkWindowChrome()

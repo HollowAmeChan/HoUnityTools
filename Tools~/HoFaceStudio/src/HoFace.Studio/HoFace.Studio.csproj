@@ -10,6 +10,7 @@
   <ItemGroup>
     <Resource Include="Assets/hoface-studio.ico" />
     <Compile Include="../../shared/AutomationContract.cs" Link="AutomationContract.cs" />
+    <InternalsVisibleTo Include="HoFace.Studio.Checks" />
     <ProjectReference Include="../HoFace.Core/HoFace.Core.csproj" />
     <ProjectReference Include="../HoFace.Transport/HoFace.Transport.csproj" />
     <Content Include="../../samples/*.json" Link="samples/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

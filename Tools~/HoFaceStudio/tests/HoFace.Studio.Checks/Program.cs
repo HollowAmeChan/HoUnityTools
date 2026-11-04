@@ -5,8 +5,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using HoFace.Automation;
 using HoFace.Studio;
+using Hollow.HoUnityTools.FaceTracking;
+using Hollow.HoUnityTools.FaceTracking.Core;
 
 internal static class Program
 {
@@ -21,6 +26,26 @@ internal static class Program
             var application = new App();
             application.InitializeComponent();
             var window = new MainWindow(false);
+            Check(window.CanConnect == false, "Preview mode still requires a work document");
+            window.Mode = "RawForward";
+            Check(window.CanConnect, "RawForward can connect VTS without a work document");
+            window.Mode = "Preview";
+            using (var rawOutputReceiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            using (var phone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            using (var rawSession = new AuthoringSession())
+            {
+                rawOutputReceiver.Client.ReceiveTimeout = 1000;
+                rawSession.RawForwardPort = ((IPEndPoint)rawOutputReceiver.Client.LocalEndPoint).Port;
+                rawSession.SetMode(AuthoringMode.RawForward);
+                rawSession.Start(new HoFace.Transport.VtsIphoneOptions
+                { PhoneAddress = "127.0.0.1", PhonePort = 9, LocalPort = FreeUdpPort() });
+                SendVtsFrame(phone, rawSession.Receiver.LocalPort, .65f, .2f, .4f);
+                rawSession.Poll();
+                IPEndPoint packetSource = new IPEndPoint(IPAddress.Any, 0);
+                using var forwarded = JsonDocument.Parse(rawOutputReceiver.Receive(ref packetSource));
+                Check(forwarded.RootElement.GetProperty("values").GetProperty("JawOpen").GetSingle() == .65f,
+                    "RawForward connects and forwards VTS with no document");
+            }
             Check(window.Icon != null, "studio window loads the product icon resource");
             string sampleValuePath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.value.json"));
             string sampleIrPath = Path.GetFullPath(Path.Combine(samples, "Mouth.hoface.ir.json"));
@@ -54,6 +79,145 @@ internal static class Program
             }
             Call("open", new { valuePath = Path.Combine(samples, "Mouth.hoface.value.json"), irPath = Path.Combine(samples, "Mouth.hoface.ir.json") });
             Check(((StackPanel)window.FindName("PropertiesPanel")).IsEnabled, "native property controls enable after opening");
+            Check(window.RawMonitorRows.Count == 3 && window.ValueMonitorRows.Count == 2 && window.IrMonitorRows.Count == 3,
+                "monitor preloads all three layers from the work document");
+            using (var phone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            {
+                var liveSession = window.SessionForChecks;
+                liveSession.Start(new HoFace.Transport.VtsIphoneOptions
+                { PhoneAddress = "127.0.0.1", PhonePort = 9, LocalPort = FreeUdpPort() });
+                SendVtsFrame(phone, liveSession.Receiver.LocalPort, .7f, .4f, .6f);
+                liveSession.Poll();
+                Near(window.RawMonitorRows.First(x => x.Key == "JawOpen").Value, .7f, "monitor shows source wire input");
+                Near(window.ValueMonitorRows.First(x => x.Key == "Mouth/Open").Value, .7f, "monitor shows value output");
+                Near(window.ValueMonitorRows.First(x => x.Key == "Mouth/Form").Value, .5f, "monitor evaluates another value output");
+                Near(window.IrMonitorRows.First(x => x.Key == "jawOpen").Value, .625f, "monitor shows final IR output");
+                Check(window.CenterTab == 0, "curve view remains the initial work view");
+                Call("selectValue", new { parameter = "Mouth/Open" });
+                Check(window.CenterTab == 0, "selecting a value output switches to the curve view");
+                Call("selectNode", new { id = "mouth" });
+                Check(window.CenterTab == 1, "selecting an IR node switches to the blend view");
+
+                liveSession.SetMonitorOverride(MonitorStage.Value, "Mouth/Open", 1);
+                SendVtsFrame(phone, liveSession.Receiver.LocalPort, .3f, .2f, .4f);
+                liveSession.Poll();
+                var valueRow = window.ValueMonitorRows.First(x => x.Key == "Mouth/Open");
+                Near(valueRow.LiveValue, .3f, "value monitor retains the live reading beside an override");
+                Near(valueRow.Value, 1, "value-stage override reaches the value meter");
+                float liveJawBeforeIrPin = window.IrMonitorRows.First(x => x.Key == "jawOpen").LiveValue;
+                Check(Math.Abs(liveJawBeforeIrPin - 1) > .01f,
+                    "IR live monitor evaluates the physical raw/value pipeline, not pinned value output");
+                Near(window.IrMonitorRows.First(x => x.Key == "jawOpen").Value, 1,
+                    "effective IR pipeline observes the upstream value override");
+                liveSession.SetMonitorOverride(MonitorStage.Ir, "jawOpen", -1);
+                SendVtsFrame(phone, liveSession.Receiver.LocalPort, .3f, .2f, .4f);
+                liveSession.Poll();
+                var weightRow = window.IrMonitorRows.First(x => x.Key == "jawOpen");
+                Near(weightRow.LiveValue, liveJawBeforeIrPin, "IR override does not corrupt the independent live snapshot");
+                Near(weightRow.Value, -1, "IR-stage override replaces the final output weight");
+                Near(window.SessionForChecks.LiveWeights["jawOpen"], liveJawBeforeIrPin, "IR published override does not mutate evaluator live values");
+                Near(window.SessionForChecks.LiveUnclampedWeights["jawOpen"], liveJawBeforeIrPin,
+                    "IR published override does not mutate the independent live unclamped snapshot");
+                liveSession.SetMonitorOverride(MonitorStage.Value, "Mouth/Open", null);
+                liveSession.SetMonitorOverride(MonitorStage.Raw, "JawOpen", 1);
+                SendVtsFrame(phone, liveSession.Receiver.LocalPort, .15f, .2f, .4f);
+                liveSession.Poll();
+                Near(window.RawMonitorRows.First(x => x.Key == "JawOpen").LiveValue, .15f, "raw meter keeps the physical reading");
+                Near(window.RawMonitorRows.First(x => x.Key == "JawOpen").Value, 1, "raw-stage override reaches the next processing layer");
+                Near(window.SessionForChecks.LiveValues["Mouth/Open"], .15f,
+                    "live value snapshot evaluates unmodified physical input");
+                Near(window.SessionForChecks.Values["Mouth/Open"], 1,
+                    "raw-stage pin enters the effective value evaluator before expression evaluation");
+                Call("view", new { centerTab = 2 });
+                var monitor = Result("monitor");
+                Check(monitor.GetProperty("raw").GetArrayLength() == 3 &&
+                    monitor.GetProperty("values").GetArrayLength() == 2 &&
+                    monitor.GetProperty("weights").GetArrayLength() == 3,
+                    "monitor CLI reads raw wire values and all processed/output stages");
+                Check(window.CenterTab == 2 && window.RawMonitorCount == 3,
+                    "three-stage realtime monitor tab is available (" + window.CenterTab + ", " + window.RawMonitorCount + ")");
+                var monitorWorkspace = (System.Windows.Controls.Grid)window.FindName("MonitorWorkspace");
+                Check(monitorWorkspace.Visibility == System.Windows.Visibility.Visible,
+                    "realtime tab expands into the full-width monitor workspace");
+                var monitorTemplate = (DataTemplate)window.FindResource("MonitorParameterTemplate");
+                var meterTemplate = (System.Windows.Controls.Border)monitorTemplate.LoadContent();
+                Check(meterTemplate.Height == 26 && meterTemplate.Width == 184,
+                    "monitor meters stay compact at 26 pixels");
+                Check(monitorTemplate.Triggers.OfType<Trigger>().Any(trigger => trigger.SourceName == "MeterArea" &&
+                    trigger.Setters.OfType<Setter>().Any(setter => setter.TargetName == "OverrideActions" &&
+                        Equals(setter.Value, Visibility.Visible))),
+                    "override actions appear only while hovering a meter");
+                var rawItems = (ItemsControl)window.FindName("RawMonitorItems");
+                Check(rawItems.ItemsPanel.LoadContent() is System.Windows.Controls.WrapPanel,
+                    "each monitor page densely wraps meters across the available width");
+                var rawPage = (System.Windows.Controls.Border)window.FindName("RawMonitorPage");
+                var valuePage = (System.Windows.Controls.Border)window.FindName("ValueMonitorPage");
+                var irPage = (System.Windows.Controls.Border)window.FindName("IrMonitorPage");
+                var valueTab = (ToggleButton)window.FindName("ValueMonitorTab");
+                valueTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, valueTab));
+                window.UpdateLayout();
+                Check(window.CenterTab == 2 && valuePage.Visibility == Visibility.Visible &&
+                    rawPage.Visibility == Visibility.Collapsed && irPage.Visibility == Visibility.Collapsed,
+                    "realtime processing is a separate page from input and output");
+                var irTab = (ToggleButton)window.FindName("IrMonitorTab");
+                irTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, irTab));
+                window.UpdateLayout();
+                Check(irPage.Visibility == Visibility.Visible && valuePage.Visibility == Visibility.Collapsed,
+                    "realtime output opens as its own page");
+                var rawTab = (ToggleButton)window.FindName("RawMonitorTab");
+                rawTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, rawTab));
+                window.UpdateLayout();
+                Check(rawPage.Visibility == Visibility.Visible && irPage.Visibility == Visibility.Collapsed,
+                    "realtime input opens as its own page");
+                window.MonitorFilter = "Mouth/Open";
+                Check(window.RawMonitorCount == 0 && window.ValueMonitorCount == 1 && window.IrMonitorCount == 0,
+                    "one search filters all three preview panes and refreshes counts");
+                Check(window.RawMonitorEmptyText == "没有匹配的参数" &&
+                    window.ValueMonitorEmptyVisibility == Visibility.Collapsed,
+                    "search results show a useful empty state only where needed");
+                window.MonitorFilter = "";
+                window.CenterTab = 0;
+                window.UpdateLayout();
+                Check(monitorWorkspace.Visibility == System.Windows.Visibility.Collapsed,
+                    "monitor workspace closes when returning to an editor tab");
+                window.CenterTab = 2;
+                Call("clearMonitorOverrides");
+                liveSession.Stop();
+            }
+            Check(HoFaceValueDocument.TryParse(File.ReadAllText(Path.Combine(samples, "Mouth.hoface.value.json")),
+                out var downstreamProfile, out string parseError), parseError);
+            downstreamProfile.outputs.Add(new HoFaceOutput
+            {
+                parameter = "Mouth/Derived",
+                expression = "out(\"Mouth/Open\") * 2",
+                defaultValue = 0
+            });
+            downstreamProfile.outputs.Add(new HoFaceOutput
+            {
+                parameter = "Mouth/Open",
+                expression = "JawOpen",
+                defaultValue = 0
+            });
+            var downstreamLiveSession = new HoFaceValueSession(downstreamProfile, 1);
+            var downstreamEffectiveSession = new HoFaceValueSession(downstreamProfile, 1);
+            downstreamEffectiveSession.Evaluator.SetOverrides(null, new System.Collections.Generic.Dictionary<string, float>
+            {
+                ["Mouth/Open"] = 1
+            });
+            var rawFrame = new System.Collections.Generic.Dictionary<string, float>
+            {
+                ["JawOpen"] = .3f, ["MouthSmileLeft"] = 0, ["MouthSmileRight"] = 0
+            };
+            downstreamLiveSession.Evaluate(new System.Collections.Generic.Dictionary<string, float>(rawFrame), 0);
+            downstreamEffectiveSession.Evaluate(new System.Collections.Generic.Dictionary<string, float>(rawFrame), 0);
+            Near(downstreamLiveSession.Values["Mouth/Derived"], .6f,
+                "unoverridden downstream out reference retains the physical authoring value");
+            Near(downstreamEffectiveSession.Values["Mouth/Derived"], 2,
+                "downstream out reference observes the upstream value pin");
+            Near(downstreamLiveSession.Values["Mouth/Open"], .3f,
+                "unoverridden evaluator keeps the physical output value");
+            Near(downstreamEffectiveSession.Values["Mouth/Open"], 1,
+                "later duplicate exported rows preserve the pinned last-row output");
             Call("selectValue", new { parameter = "Mouth/Open" });
             Call("setValueCurveKey", new { parameter = "Mouth/Open", index = 1, value = .73 });
             Check(State().GetProperty("dirty").GetBoolean(), "curve edit is dirty");
@@ -123,6 +287,8 @@ internal static class Program
             string validText = Result("document").GetProperty("valueText").GetString();
             Call("draftText", new { value = "{" });
             Check(window.HasTextDraft && window.HasUnsavedChanges, "text draft participates in dirty state");
+            Reject("setMonitorOverride", new { stage = "value", parameter = "Mouth/Open", mode = "0" },
+                "monitor override protects unapplied JSON drafts");
             Reject("applyText", new { }, "invalid JSON cannot apply");
             Reject("undo", new { }, "undo does not silently destroy JSON drafts");
             Reject("setValueCurveKey", new { parameter = "Mouth/Open", index = 1, value = .2 }, "graph mutations protect JSON drafts");
@@ -182,5 +348,23 @@ internal static class Program
     {
         if (!passed) throw new InvalidOperationException(label);
         checks++;
+    }
+    private static void Near(float actual, float expected, string label)
+    {
+        Check(Math.Abs(actual - expected) < .0001f, label + " (expected " + expected + ", got " + actual + ")");
+    }
+    private static int FreeUdpPort()
+    {
+        using var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        return ((IPEndPoint)socket.Client.LocalEndPoint).Port;
+    }
+    private static void SendVtsFrame(UdpClient sender, int port, float jaw, float smileLeft, float smileRight)
+    {
+        string json = "{\"Timestamp\":1,\"FaceFound\":true,\"BlendShapes\":["
+            + "{\"k\":\"JawOpen\",\"v\":" + jaw.ToString(System.Globalization.CultureInfo.InvariantCulture) + "},"
+            + "{\"k\":\"MouthSmileLeft\",\"v\":" + smileLeft.ToString(System.Globalization.CultureInfo.InvariantCulture) + "},"
+            + "{\"k\":\"MouthSmileRight\",\"v\":" + smileRight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}]}";
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, port));
     }
 }

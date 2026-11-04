@@ -110,7 +110,7 @@ namespace HoFace.Studio
         public string OutputStatus => Mode == "RawForward" ? session.RawForwardStatus : session.PreviewStatus;
         private void RefreshTransport()
         {
-            foreach (string name in new[] { nameof(HasDocument), nameof(CanPreview), nameof(ConnectionAction),
+            foreach (string name in new[] { nameof(HasDocument), nameof(CanPreview), nameof(CanConnect), nameof(CanRecord), nameof(CanUseReplay), nameof(ConnectionAction),
                 nameof(PreviewAction), nameof(OutputStatus), nameof(RecordAction), nameof(ReplayAction),
                 nameof(ReplayLoaded), nameof(RecordingStatus), nameof(DocumentName), nameof(InputStatus) })
                 OnPropertyChanged(name);

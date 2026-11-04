@@ -5,7 +5,7 @@ namespace HoFace.Automation
 {
     public static class AutomationContract
     {
-        public const int Version = 2;
+        public const int Version = 3;
         public static string PipeName
         {
             get
@@ -25,6 +25,9 @@ namespace HoFace.Automation
             new CommandDefinition("list", "列出参数行、IR 节点、目标与参数定义", "filter?:string", true, true),
             new CommandDefinition("selection", "读取当前行/节点、曲线点、游标与视口", "", true),
             new CommandDefinition("diagnostics", "读取当前 values、weights 与校验结果", "", true, true),
+            new CommandDefinition("monitor", "读取原始输入、value 输出和 IR 权重三层实时参数", "", true),
+            new CommandDefinition("setMonitorOverride", "临时覆写单个实时参数；支持自动、-1、0、1", "stage:raw|value|ir, parameter:string, mode:auto|-1|0|1"),
+            new CommandDefinition("clearMonitorOverrides", "清除指定阶段或全部实时参数覆写", "stage?:raw|value|ir"),
             new CommandDefinition("screenshot", "将 WPF 内容渲染为 PNG，无需操作桌面", "path?:string", true),
             new CommandDefinition("open", "校验并打开作品；默认保护未保存编辑", "valuePath:string, irPath:string, discardChanges?:bool"),
             new CommandDefinition("save", "应用有效文本并保存；可指定另存路径", "valuePath?:string, irPath?:string", false, true),
@@ -48,17 +51,17 @@ namespace HoFace.Automation
             new CommandDefinition("applyProperties", "校验并应用属性面板草稿", "", false, true),
             new CommandDefinition("revertProperties", "还原属性面板草稿", "", false, true),
             new CommandDefinition("mode", "切换互斥输出模式", "value:Preview|RawForward, rawForwardPort?:int"),
-            new CommandDefinition("view", "读取或设置分栏、标签页、折叠区与窗口尺寸", "structureWidth?:number, plotRatio?:number, structureTab?:0|1, centerTab?:0|1, showConnection?:bool, showFiles?:bool, showEditor?:bool, width?:number, height?:number, reset?:bool"),
+            new CommandDefinition("view", "读取或设置分栏、标签页、折叠区与窗口尺寸", "structureWidth?:number, plotRatio?:number, structureTab?:0|1, centerTab?:0|1|2|3 (曲线/混合/监控/JSON), showConnection?:bool, showFiles?:bool, showEditor?:bool, width?:number, height?:number, reset?:bool"),
             new CommandDefinition("cursor", "设置临时输入并实际求值；不写作品", "x:number, y?:number", false, true),
             new CommandDefinition("clearPreview", "清除手动预览结果与临时输入", "", false, true),
             new CommandDefinition("evaluate", "以共享核心独立求值一帧 raw；不改变实时会话", "raw:object<string,number>, time?:number", true, true),
-            new CommandDefinition("vtsStart", "连接 VTS 输入", "phoneIp?:string, phonePort?:int, localPort?:int", false, true),
+            new CommandDefinition("vtsStart", "连接 VTS 输入；Preview 需要作品，RawForward 可以无作品", "phoneIp?:string, phonePort?:int, localPort?:int"),
             new CommandDefinition("vtsStop", "停止 VTS 并释放输出", ""),
             new CommandDefinition("previewStart", "启用 Blender 权重发送，仅限 Preview 模式", "", false, true),
             new CommandDefinition("previewStop", "释放 Blender 输出并停止发送", ""),
-            new CommandDefinition("recordStart", "开始 JSONL 原始输入录制", "path:string", false, true),
+            new CommandDefinition("recordStart", "开始 JSONL 原始输入录制；RawForward 可无作品", "path:string"),
             new CommandDefinition("recordStop", "停止录制", ""),
-            new CommandDefinition("replayOpen", "打开 JSONL 录制", "path:string", false, true),
+            new CommandDefinition("replayOpen", "打开 JSONL 录制", "path:string"),
             new CommandDefinition("replayPlay", "播放录制", "", false, true),
             new CommandDefinition("replayPause", "暂停录制", ""),
             new CommandDefinition("replaySeek", "跳转录制时间", "time:number", false, true),

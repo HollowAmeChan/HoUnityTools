@@ -13,6 +13,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
         private readonly bool[] evaluated;
         private IReadOnlyDictionary<string, float> parameters;
         public readonly Dictionary<string, float> Values = new Dictionary<string, float>(StringComparer.Ordinal);
+        public readonly Dictionary<string, float> LiveValues = new Dictionary<string, float>(StringComparer.Ordinal);
         public readonly Dictionary<string, float> UnclampedValues = new Dictionary<string, float>(StringComparer.Ordinal);
         public HoFaceIrDocument Document => document;
         public HoFaceIrEvaluator(HoFaceIrDocument document)
@@ -31,17 +32,20 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
                 weights[i] = new float[document.nodes[i].children.Count];
             }
         }
-        public void Evaluate(IReadOnlyDictionary<string, float> parameters)
+        public void Evaluate(IReadOnlyDictionary<string, float> parameters, IReadOnlyDictionary<string, float> overrides = null)
         {
             this.parameters = parameters;
             Array.Clear(evaluated, 0, evaluated.Length);
             var root = EvaluateNode(nodeIds[document.root]);
-            Values.Clear(); UnclampedValues.Clear();
+            Values.Clear(); LiveValues.Clear(); UnclampedValues.Clear();
             for (int i = 0; i < root.Length; i++)
             {
                 var t = document.targets[i];
                 UnclampedValues[t.id] = root[i];
-                Values[t.id] = HoFacePortableMath.Clamp(root[i], t.min, t.max);
+                float live = HoFacePortableMath.Clamp(root[i], t.min, t.max);
+                LiveValues[t.id] = live;
+                Values[t.id] = overrides != null && overrides.TryGetValue(t.id, out float pinned)
+                    ? pinned : live;
             }
         }
         public float[] CopyChildWeights(string id)

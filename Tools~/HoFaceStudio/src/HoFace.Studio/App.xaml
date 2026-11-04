@@ -363,7 +363,8 @@
       </Setter>
     </Style>
     <Style TargetType="TabItem">
-      <Setter Property="Padding" Value="15,7"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="FontSize" Value="12"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
       <Setter Property="BorderBrush" Value="Transparent"/>

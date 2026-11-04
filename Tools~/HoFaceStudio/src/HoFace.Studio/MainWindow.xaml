@@ -8,6 +8,47 @@
     Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}" Icon="Assets/hoface-studio.ico">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="VisibleIf"/>
+    <DataTemplate x:Key="MonitorParameterTemplate" DataType="{x:Type local:MonitorParameterRow}">
+      <Border x:Name="MeterCard" Width="184" Height="26" Margin="2,2" Background="{StaticResource RaisedBrush}"
+          BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="3" ToolTip="{Binding DetailText}">
+        <Grid x:Name="MeterArea" Margin="2,0" Background="Transparent">
+          <ProgressBar x:Name="Meter" Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Value="{Binding Value, Mode=OneWay}"
+              Background="{StaticResource InputBrush}" Foreground="{StaticResource AccentBrush}" BorderThickness="0"
+              IsHitTestVisible="False" Focusable="False"/>
+          <Border BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0.5" CornerRadius="2"
+              IsHitTestVisible="False"/>
+          <Grid x:Name="MeterReadout" Margin="6,0" IsHitTestVisible="False">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="10"/>
+            <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="10" FontWeight="SemiBold" Margin="6,0,0,0"/>
+          </Grid>
+          <StackPanel x:Name="OverrideActions" Orientation="Horizontal" HorizontalAlignment="Right"
+              Background="{StaticResource RaisedBrush}" Visibility="Collapsed">
+            <Button Content="×" Tag="auto" Click="SetMonitorOverrideClicked" Padding="4,0" MinWidth="22" Margin="1,0"
+                FontSize="10" ToolTip="恢复实时输入" AutomationProperties.Name="恢复实时输入"/>
+            <Button Content="−1" Tag="-1" Click="SetMonitorOverrideClicked" Padding="4,0" MinWidth="28" Margin="1,0"
+                FontSize="10" ToolTip="临时覆盖为 -1" AutomationProperties.Name="临时覆盖为负一"/>
+            <Button Content="0" Tag="0" Click="SetMonitorOverrideClicked" Padding="4,0" MinWidth="23" Margin="1,0"
+                FontSize="10" ToolTip="临时覆盖为 0" AutomationProperties.Name="临时覆盖为零"/>
+            <Button Content="1" Tag="1" Click="SetMonitorOverrideClicked" Padding="4,0" MinWidth="23" Margin="1,0"
+                FontSize="10" ToolTip="临时覆盖为 1" AutomationProperties.Name="临时覆盖为正一"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="MeterArea" Property="IsMouseOver" Value="True">
+          <Setter TargetName="OverrideActions" Property="Visibility" Value="Visible"/>
+          <Setter TargetName="MeterReadout" Property="Visibility" Value="Collapsed"/>
+        </Trigger>
+        <Trigger SourceName="MeterCard" Property="IsMouseOver" Value="True">
+          <Setter TargetName="MeterCard" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        </Trigger>
+        <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+          <Setter TargetName="MeterCard" Property="BorderBrush" Value="#E9B578"/>
+          <Setter TargetName="Meter" Property="Foreground" Value="#E9B578"/>
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
     <Style x:Key="SectionLabel" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
       <Setter Property="FontSize" Value="11"/>
@@ -61,7 +102,7 @@
             <ComboBoxItem Tag="RawForward">Unity · 原始输入</ComboBoxItem>
           </ComboBox>
           <Button Grid.Column="1" Content="{Binding ConnectionAction}" Click="ConnectionToggleClicked" Margin="12,0,7,0"
-              IsEnabled="{Binding HasDocument}" ToolTip="连接或停止 VTS iPhone 输入"/>
+              IsEnabled="{Binding CanConnect}" ToolTip="Preview 模式需先打开作品；RawForward 模式可无作品接收并转发 VTS 原始输入"/>
           <StackPanel Grid.Column="2" Orientation="Horizontal">
             <Button Content="{Binding PreviewAction}" Click="PreviewToggleClicked" IsEnabled="{Binding CanPreview}"
                 ToolTip="启停发往 Blender 的最终权重；仅在 Blender 模式可用"/>
@@ -97,9 +138,9 @@
               <TextBox Width="75" Text="{Binding LocalPort, UpdateSourceTrigger=PropertyChanged}" ToolTip="本机接收端口，默认 21413；需与其他接收器错开"/>
             </WrapPanel>
             <WrapPanel Margin="0,10,0,0">
-              <Button Content="{Binding RecordAction}" Click="RecordToggleClicked" IsEnabled="{Binding HasDocument}" ToolTip="将原始输入记录为 JSONL；录制文件与作品分开保存"/>
-              <Button Content="打开录制" Click="OpenReplayClicked" IsEnabled="{Binding HasDocument}" ToolTip="选择本地 JSONL 原始帧录制"/>
-              <Button Content="{Binding ReplayAction}" Click="ReplayToggleClicked" IsEnabled="{Binding ReplayLoaded}" ToolTip="播放或暂停已打开的录制"/>
+              <Button Content="{Binding RecordAction}" Click="RecordToggleClicked" IsEnabled="{Binding CanRecord}" ToolTip="将 VTS 原始输入记录为 JSONL；RawForward 模式无需打开作品"/>
+              <Button Content="打开录制" Click="OpenReplayClicked" IsEnabled="{Binding CanUseReplay}" ToolTip="选择本地 JSONL 原始帧录制"/>
+              <Button Content="{Binding ReplayAction}" Click="ReplayToggleClicked" IsEnabled="{Binding ReplayLoaded}" ToolTip="播放或暂停已打开的录制；权重预览需先打开作品"/>
               <TextBlock Text="{Binding RecordingStatus}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="8,0"/>
             </WrapPanel>
           </StackPanel>
@@ -165,15 +206,23 @@
             <TextBlock Text="{Binding SelectionKind}" FontSize="10" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
             <TextBlock Text="{Binding SelectionTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectionTitle}"/>
           </StackPanel>
-          <Button Grid.Column="1" Content="适应视图" Click="FitClicked" ToolTip="将曲线或控制点完整显示 · 图中按 F"/>
+          <Button Grid.Column="1" Content="适应视图" Click="FitClicked" IsEnabled="{Binding CanFitPlot}" ToolTip="将当前曲线或混合图完整显示 · 图中按 F"/>
         </Grid>
         <TabControl Grid.Row="1" SelectedIndex="{Binding CenterTab}">
-          <TabItem Header="曲线 / 混合" ToolTip="{Binding PlotHint}">
+          <TabItem Header="曲线" ToolTip="编辑 value 输出响应曲线">
             <local:ParameterPlot x:Name="Plot" EditBeginning="PlotEditBeginning" EditChanged="PlotEditChanged"
-                EditCommitted="PlotEditCommitted" EditCanceled="PlotEditCanceled" SelectionChanged="PlotSelectionChanged" PreviewChanged="PlotPreviewChanged"
-                IsEnabled="{Binding CanEditGraph}" ToolTip="{Binding PlotHint}" AutomationProperties.Name="曲线与混合图编辑器"/>
+                EditCommitted="PlotEditCommitted" EditCanceled="PlotEditCanceled" SelectionChanged="CurvePlotSelectionChanged" PreviewChanged="PlotPreviewChanged"
+                IsEnabled="{Binding CanEditGraph}" ToolTip="{Binding PlotHint}" AutomationProperties.Name="Value 曲线编辑器"/>
           </TabItem>
-          <TabItem Header="JSON" ToolTip="直接编辑作品文本；应用时执行完整校验">
+          <TabItem Header="混合图" ToolTip="编辑 IR 的 1D / 2D 混合与姿势预览">
+            <local:ParameterPlot x:Name="BlendPlot" EditBeginning="PlotEditBeginning" EditChanged="PlotEditChanged"
+                EditCommitted="PlotEditCommitted" EditCanceled="PlotEditCanceled" SelectionChanged="BlendPlotSelectionChanged" PreviewChanged="PlotPreviewChanged"
+                IsEnabled="{Binding CanEditGraph}" ToolTip="{Binding PlotHint}" AutomationProperties.Name="IR 混合图编辑器"/>
+          </TabItem>
+          <TabItem Header="实时输入" ToolTip="查看 VTS 原始输入；可切换实时输入、处理结果与输出页">
+            <Grid/>
+          </TabItem>
+          <TabItem Header="JSON" ToolTip="直接编辑两份作品文本；应用时执行完整校验">
             <Grid>
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="7"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <DockPanel Margin="2,2,2,8">
@@ -269,6 +318,106 @@
           </Border>
         </Grid>
       </Border>
+      <Grid x:Name="MonitorWorkspace" Grid.ColumnSpan="5" Panel.ZIndex="10" Background="{StaticResource WindowBrush}"
+          Visibility="{Binding MonitorWorkspaceVisibility}">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid Margin="4,0,4,10">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal">
+            <Button Content="曲线" Click="MonitorNavigationClicked" Tag="0" Padding="8,4" ToolTip="打开 Value 曲线编辑页"/>
+            <Button Content="混合图" Click="MonitorNavigationClicked" Tag="1" Padding="8,4" ToolTip="打开 IR 混合图编辑页"/>
+            <ToggleButton x:Name="RawMonitorTab" Content="实时输入" IsChecked="{Binding IsRawMonitorTab, Mode=OneWay}"
+                Click="MonitorStageNavigationClicked" Tag="0" Padding="8,4" ToolTip="查看 VTS 原始参数输入"/>
+            <ToggleButton x:Name="ValueMonitorTab" Content="实时处理" IsChecked="{Binding IsValueMonitorTab, Mode=OneWay}"
+                Click="MonitorStageNavigationClicked" Tag="1" Padding="8,4" ToolTip="查看 Value 规则处理结果"/>
+            <ToggleButton x:Name="IrMonitorTab" Content="实时输出" IsChecked="{Binding IsIrMonitorTab, Mode=OneWay}"
+                Click="MonitorStageNavigationClicked" Tag="2" Padding="8,4" ToolTip="查看 IR 最终形态键权重"/>
+            <Button Content="JSON" Click="MonitorNavigationClicked" Tag="3" Padding="8,4" ToolTip="打开 JSON 文本编辑页"/>
+          </StackPanel>
+          <TextBlock Grid.Column="1" Text="{Binding MonitorStatus}" Foreground="{StaticResource MutedBrush}"
+              FontSize="11" Margin="12,0" TextTrimming="CharacterEllipsis"/>
+          <TextBox x:Name="MonitorSearchBox" Grid.Column="2" Width="220" Tag="搜索参数名称或 ID…"
+              Text="{Binding MonitorFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="搜索实时参数"
+              ToolTip="同步筛选原始输入、Value 输出和 IR 权重"/>
+        </Grid>
+        <Border x:Name="RawMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"
+            Visibility="{Binding IsRawMonitorTab, Converter={StaticResource VisibleIf}}">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="VTS · 原始通道" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="1" Text="{Binding RawMonitorCount, StringFormat={}{0} 路}"
+                    Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,0,8,0"/>
+                <Button Grid.Column="2" Content="清除" Tag="Raw" Click="ClearMonitorOverridesClicked" Padding="5,2" Margin="0"
+                    FontSize="10" Visibility="{Binding HasRawMonitorOverrides, Converter={StaticResource VisibleIf}}"
+                    ToolTip="恢复本组全部实时输入"/>
+              </Grid>
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="RawMonitorItems" ItemsSource="{Binding RawMonitorView}"
+                    ItemTemplate="{StaticResource MonitorParameterTemplate}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                </ItemsControl>
+              </ScrollViewer>
+              <TextBlock Text="{Binding RawMonitorEmptyText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Visibility="{Binding RawMonitorEmptyVisibility}"/>
+            </Grid>
+        </Border>
+        <Border x:Name="ValueMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"
+            Visibility="{Binding IsValueMonitorTab, Converter={StaticResource VisibleIf}}">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Value · 规则处理结果" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="1" Text="{Binding ValueMonitorCount, StringFormat={}{0} 项}"
+                    Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,0,8,0"/>
+                <Button Grid.Column="2" Content="清除" Tag="Value" Click="ClearMonitorOverridesClicked" Padding="5,2" Margin="0"
+                    FontSize="10" Visibility="{Binding HasValueMonitorOverrides, Converter={StaticResource VisibleIf}}"
+                    ToolTip="恢复本组全部实时 value 结果"/>
+              </Grid>
+              <Grid Grid.Row="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl x:Name="ValueMonitorItems" ItemsSource="{Binding ValueMonitorView}"
+                      ItemTemplate="{StaticResource MonitorParameterTemplate}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="{Binding ValueMonitorEmptyText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ValueMonitorEmptyVisibility}"/>
+              </Grid>
+            </Grid>
+        </Border>
+        <Border x:Name="IrMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"
+            Visibility="{Binding IsIrMonitorTab, Converter={StaticResource VisibleIf}}">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="IR · 最终权重输出" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="1" Text="{Binding IrMonitorCount, StringFormat={}{0} 个目标}"
+                    Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,0,8,0"/>
+                <Button Grid.Column="2" Content="清除" Tag="Ir" Click="ClearMonitorOverridesClicked" Padding="5,2" Margin="0"
+                    FontSize="10" Visibility="{Binding HasIrMonitorOverrides, Converter={StaticResource VisibleIf}}"
+                    ToolTip="恢复本组全部实时 IR 权重"/>
+              </Grid>
+              <Grid Grid.Row="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl x:Name="IrMonitorItems" ItemsSource="{Binding IrMonitorView}"
+                      ItemTemplate="{StaticResource MonitorParameterTemplate}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="{Binding IrMonitorEmptyText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding IrMonitorEmptyVisibility}"/>
+              </Grid>
+            </Grid>
+        </Border>
+      </Grid>
     </Grid>
     <Border Grid.Row="3" BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0,1,0,0" Padding="16,6" Background="{StaticResource SurfaceBrush}">
       <Grid>

@@ -44,7 +44,10 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `document` | 读取完整已应用 value / IR JSON、原文和待应用草稿 |
 | `list` | 读取 inputs、outputs、IR 节点、参数与目标；可传 `filter` |
 | `selection` | 读取输出行号、节点 id、曲线点、游标和视口 |
-| `diagnostics` | 读取当前 values、weights、手动覆盖和 IR 校验结果 |
+| `diagnostics` | 读取实际生效 values/weights、未覆写实时快照和 IR 校验结果 |
+| `monitor` | 读取 raw 物理输入/转发值、value live/effective、IR live/effective 三层参数 |
+| `setMonitorOverride` | 按 `stage`、`parameter` 设置临时值 `auto`、`-1`、`0` 或 `1` |
+| `clearMonitorOverrides` | 清除指定阶段或全部实时覆写 |
 | `screenshot` | 截取完整 WPF 窗口；可传 `{"path":"D:\\temp\\hoface.png"}` |
 | `open` | 传 `valuePath` 与 `irPath`；有未保存编辑时拒绝，除非显式 `discardChanges:true` |
 | `save` | 保存；可传另存路径；每个文件原子替换，不宣称两个文件构成跨文件事务 |
@@ -67,7 +70,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `text` | 传完整 `value` 与 `ir` 文本，校验后替换当前文档 |
 | `draftText` / `applyText` / `revertText` | 编辑、应用、还原 JSON 草稿；无效输入不覆盖有效模型 |
 | `applyProperties` / `revertProperties` | 应用或还原属性面板草稿 |
-| `view` | 读取或设置分栏、窗口尺寸、标签页、设置区和编辑区可见性 |
+| `view` | 读取或设置分栏、窗口尺寸、设置区、编辑区和工作页；中间页索引：0 曲线、1 混合、2 实时监控工作区、3 JSON |
 | `recordStart` / `recordStop` | 以 JSONL 记录 raw 帧，传 `{"path":"D:\\temp\\face.jsonl"}` |
 | `replayOpen` | 打开 JSONL 录制 |
 | `replayPlay` / `replayPause` | 播放或暂停录制 |
@@ -80,7 +83,9 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 
 - 先 `status` / `document` / `list`，再修改，最后读回验证；未打开作品时文档命令返回 `INVALID_STATE`。不存在的选择项、无效模式、重名行和非法数值都会显式拒绝。
 - 待应用 JSON 或属性草稿不会被图形/CLI 修改静默覆盖。先应用或还原草稿。图形拖动期间拒绝其他写命令，避免一个撤销操作吞并另一个写入。
-- `cursor` 在 value 行使用表达式输入作为 X，再经过响应曲线；在混合节点使用 X/Y 参数。它持续覆盖指定参数，其他实时参数继续更新；`clearPreview` 或界面“恢复实时”解除。RawForward 不允许 Blender 权重预览。
+- 三层监控中，`live` 是物理 raw / 未覆写输入下的完整求值快照，`value` 是逐阶段覆写后实际生效的结果。Raw 与 effective value 使用独立状态求值器，因此 stateful modifiers 不会在一帧内被重复推进。Value 覆写进入逐行 output evaluation，下游 `out("...")` 会看到覆写；同名输出仍按原行序最后一行决定导出值。IR 覆写只影响目标发布，不会改写 `LiveValues`、`LiveWeights` 或 `UnclampedValues`。IR `-1/0/1` 覆写有意绕过目标范围夹取，用于临时压力测试，清除后恢复正常范围。
+- Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区把输入、Value 处理、IR 输出拆成三个独立页签，共用名称/ID 搜索。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
+- VTS `vtsStart` 在 `Preview` 模式需要已打开作品；`RawForward` 可在无作品状态连接、转发和录制 raw 帧。Processed replay 与 Blender 权重预览仍需作品。图形绘制输入游标与三阶段参数覆写分别管理，`clearPreview` 不会清除 monitor pins。
 - `evaluate.raw` 使用 **wire 原始字段名**，例如诊断样例的 `JawOpen`、`MouthSmileLeft`、`MouthSmileRight`。不是归一化后的 `jawOpen` 等名字；可先读取 `list.inputs` 的表达式核对映射。
 - 曲线切线可以传字符串 `Infinity` / `-Infinity` 代表阶跃。其他数值必须有限；重复曲线输入坐标被拒绝。
 - `screenshot` 渲染 WPF 内容区为 PNG，无需鼠标、键盘、窗口激活或桌面截图。它不包含系统标题栏和独立 ToolTip 弹窗；可用 `view` 切换窗口/标签页后截图。

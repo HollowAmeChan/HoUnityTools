@@ -36,6 +36,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// 由求解器决定认不认（它只挑保留名 + 其余进 `BlendShapes`）。
         /// </summary>
         public readonly Dictionary<string, float> Parameters = new Dictionary<string, float>(StringComparer.Ordinal);
+        public readonly Dictionary<string, float> LiveParameters = new Dictionary<string, float>(StringComparer.Ordinal);
 
         /// <summary>表达式里用的 `ARKit/` 前缀（配置层的写法；出口会去掉它）。</summary>
         public const string ArkitPrefix = "ARKit/";
@@ -118,6 +119,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly string[] outputKeys;        // 出口用的键（已去 `ARKit/` 前缀）
         private readonly HoFaceExpression[] expressions;
         private readonly float[] outputValues;
+        private readonly float[] effectiveOutputValues;
         private readonly int[] modifierOffset;       // 行 → 它的第一个修饰符槽位（见上面 input 那段注释）
         private readonly float[] outputSmooth;
         private readonly int[] stepIndex;
@@ -199,6 +201,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             outputKeys = new string[rows.Count];
             expressions = new HoFaceExpression[rows.Count];
             outputValues = new float[rows.Count];
+            effectiveOutputValues = new float[rows.Count];
             outputExpressionsSeen = new float[rows.Count]; outputCurvesSeen = new float[rows.Count];
             // 同上：输出行的修饰符状态也按「行 × 第几个修饰符」开槽。
             modifierOffset = new int[rows.Count];
@@ -284,12 +287,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         private void AssembleParameters()
         {
             Parameters.Clear();
+            LiveParameters.Clear();
             for (int i = 0; i < outputs.Length; i++)
             {
                 string key = outputKeys[i];
                 if (string.IsNullOrEmpty(key)) continue;
-                Parameters[key] = outputOverrides != null && outputOverrides.TryGetValue(outputs[i].parameter, out float pinned)
-                    ? pinned : outputValues[i];
+                LiveParameters[key] = outputValues[i];
+                Parameters[key] = effectiveOutputValues[i];
             }
         }
 
@@ -359,7 +363,10 @@ namespace Hollow.HoUnityTools.FaceTracking
                 if (value != 0f && Mathf.Abs(value) < 1e-6f) value = 0f;
 
                 outputValues[row] = value;
-                outputTable.Write(output.parameter, value);   // 同名多行：表里永远是"最后写的那一份"
+                float effective = outputOverrides != null && outputOverrides.TryGetValue(output.parameter, out float pinned)
+                    ? pinned : value;
+                effectiveOutputValues[row] = effective;
+                outputTable.Write(output.parameter, effective);   // 下游 out(...) 读到上游的临时覆写；同名仍以后写为准。
             }
         }
 

@@ -17,6 +17,7 @@ namespace HoFace.Studio
         {
             parameterOverrides = null; manualValues = null; manualWeights = null;
             Plot.CursorX = Plot.CursorY = 0; Plot.InvalidateVisual();
+            BlendPlot.CursorX = BlendPlot.CursorY = 0; BlendPlot.InvalidateVisual();
             if (session.Preview.Running) session.Preview.Send(session.Values, session.Weights, false, 0);
             liveStatus = session.TransportStatus;
             OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(HasManualPreview));
@@ -32,6 +33,7 @@ namespace HoFace.Studio
             var evaluator = new HoFaceIrEvaluator(document.Ir);
             evaluator.Evaluate(values);
             manualValues = values; manualWeights = new Dictionary<string, float>(evaluator.Values);
+            foreach (var pair in session.IrOverrides) manualWeights[pair.Key] = pair.Value;
         }
         private bool closingWithoutPrompt;
         private bool shutdownRequested;
@@ -94,8 +96,8 @@ namespace HoFace.Studio
                 nodeId = selectedNode?.id,
                 nodeType = selectedNode?.type,
                 curve = selectedValueRow == null ? null : ReadCurve(selectedValueRow),
-                pointIndex = Plot.SelectedIndex, cursor = new { x = Plot.CursorX, y = Plot.CursorY },
-                viewport = Plot.Viewport, structureTab = StructureTab, centerTab = CenterTab
+                pointIndex = ActivePlot.SelectedIndex, cursor = new { x = ActivePlot.CursorX, y = ActivePlot.CursorY },
+                viewport = ActivePlot.Viewport, structureTab = StructureTab, centerTab = CenterTab
             };
         }
         private object ReadDiagnostics()
@@ -106,7 +108,11 @@ namespace HoFace.Studio
                 manualPreview = manualWeights != null, frames = session.Frames, invalidFrames = session.InvalidFrames,
                 values = manualValues ?? (object)session.Values ?? new Dictionary<string, float>(),
                 weights = manualWeights ?? (object)session.Weights ?? new Dictionary<string, float>(),
+                liveValues = (object)session.LiveValues ?? new Dictionary<string, float>(),
+                liveWeights = (object)session.LiveWeights ?? new Dictionary<string, float>(),
                 errors = document.Ir.Validate().ToArray(), message = Diagnostics,
+                liveUnclampedWeights = session.LiveUnclampedWeights ?? new Dictionary<string, float>(),
+                effectiveUnclampedWeights = session.UnclampedWeights ?? new Dictionary<string, float>(),
                 preview = session.PreviewStatus, rawForward = session.RawForwardStatus
             };
         }
@@ -144,7 +150,7 @@ namespace HoFace.Studio
             }
             parameterOverrides = overrides;
             ApplyParameterOverrides(values);
-            Plot.CursorX = x; Plot.CursorY = y; Plot.InvalidateVisual();
+            ActivePlot.CursorX = x; ActivePlot.CursorY = y; ActivePlot.InvalidateVisual();
             liveStatus = "手动预览 · 临时参数覆盖";
             if (session.Preview.Running) session.Preview.Send(manualValues, manualWeights, true, 0);
             OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(HasManualPreview));
@@ -219,8 +225,8 @@ namespace HoFace.Studio
             var width = Number("width", MinWidth, 7680);
             var height = Number("height", MinHeight, 4320);
             int structureIndex = ReadInt(payload, "structureTab", StructureTab), centerIndex = ReadInt(payload, "centerTab", CenterTab);
-            if (structureIndex < 0 || structureIndex > 1 || centerIndex < 0 || centerIndex > 1)
-                throw new ArgumentException("标签页索引必须为 0 或 1。");
+            if (structureIndex < 0 || structureIndex > 1 || centerIndex < 0 || centerIndex > 3)
+                throw new ArgumentException("结构标签索引必须为 0 或 1；中间页签索引为 0–3（曲线、混合、监控、JSON）。");
             if (HasTextDraft && centerIndex != CenterTab) throw new InvalidOperationException("请先应用或还原 JSON 文本。");
             if (ReadBool(payload, "reset")) ResetLayout();
             if (structure.HasValue) StructureColumn.Width = new GridLength(structure.Value);
@@ -244,7 +250,7 @@ namespace HoFace.Studio
                 inspectorWidth = InspectorColumn.ActualWidth, plotRatio = preferredPlotRatio,
                 structureTab = StructureTab, centerTab = CenterTab, showConnection = ShowConnection, showFiles = ShowFiles,
                 showEditor = ShowEditor,
-                viewport = Plot.Viewport
+                viewport = ActivePlot.Viewport
             };
         }
         private static bool ReadBool(JsonElement payload, string name, bool fallback = false)

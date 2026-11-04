@@ -13,19 +13,24 @@ namespace HoFace.Studio
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly Stopwatch replayClock = new Stopwatch();
         private HoFaceValueSession valueSession;
+        private HoFaceValueSession effectiveValueSession;
         private HoFaceIrEvaluator irEvaluator;
+        private HoFaceIrEvaluator liveIrEvaluator;
         private HoFaceRecordingWriter recording;
         private List<HoFaceRecordedFrame> replayFrames;
         private int replayIndex;
         private bool replayPlaying;
         private double replayOffset;
+        private readonly Dictionary<string, float> rawOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> valueOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> irOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         public readonly VtsIphoneReceiver Receiver = new VtsIphoneReceiver();
         public readonly HoFaceRawForwardSender RawForward = new HoFaceRawForwardSender();
         public readonly HoFacePreviewSender Preview = new HoFacePreviewSender();
         public AuthoringMode Mode { get; private set; } = AuthoringMode.Preview;
         public string RawForwardAddress { get; set; } = "127.0.0.1";
         public int RawForwardPort { get; set; } = 21415;
-        public bool HasDocument => valueSession != null && irEvaluator != null;
+        public bool HasDocument => valueSession != null && effectiveValueSession != null && irEvaluator != null && liveIrEvaluator != null;
         public bool Running => Receiver.Running;
         public string TransportStatus => Receiver.Status;
         public string PreviewStatus => Preview.Status;
@@ -37,10 +42,19 @@ namespace HoFace.Studio
         public bool ReplayPlaying => replayPlaying;
         public int RecordedFrames => recording?.Frames ?? 0;
         public int ReplayIndex => replayIndex;
-        public IReadOnlyDictionary<string, float> Values => valueSession?.Values;
+        public IReadOnlyDictionary<string, float> Values => effectiveValueSession?.Values;
+        public IReadOnlyDictionary<string, float> LiveValues => valueSession?.LiveValues;
         public IReadOnlyDictionary<string, float> Weights => irEvaluator?.Values;
+        public IReadOnlyDictionary<string, float> LiveWeights => liveIrEvaluator?.Values;
+        public IReadOnlyDictionary<string, float> UnclampedWeights => irEvaluator?.UnclampedValues;
+        public IReadOnlyDictionary<string, float> LiveUnclampedWeights => liveIrEvaluator?.UnclampedValues;
+        public IReadOnlyDictionary<string, float> RawOverrides => rawOverrides;
+        public IReadOnlyDictionary<string, float> ValueOverrides => valueOverrides;
+        public IReadOnlyDictionary<string, float> IrOverrides => irOverrides;
+        public AuthoringMonitorFrame LatestMonitorFrame { get; private set; }
         public event Action<VtsFrame> RawFrameForward;
         public event Action<IReadOnlyDictionary<string, float>, IReadOnlyDictionary<string, float>, bool> PreviewUpdated;
+        public event Action<AuthoringMonitorFrame> MonitorUpdated;
         public event Action<string> StatusChanged;
 
         public AuthoringSession()
@@ -55,7 +69,11 @@ namespace HoFace.Studio
             if (HasDocument && Preview.Running)
                 Preview.Send(Values, Weights, false, clock.Elapsed.TotalSeconds);
             valueSession = new HoFaceValueSession(document.Value, 1);
+            effectiveValueSession = new HoFaceValueSession(document.Value, 1);
+            effectiveValueSession.Evaluator.SetOverrides(null, valueOverrides);
             irEvaluator = new HoFaceIrEvaluator(document.Ir);
+            liveIrEvaluator = new HoFaceIrEvaluator(document.Ir);
+            LatestMonitorFrame = null;
             clock.Restart();
             StatusChanged?.Invoke("文档已载入");
         }
@@ -72,10 +90,45 @@ namespace HoFace.Studio
 
         public void Start(VtsIphoneOptions options)
         {
-            if (!HasDocument) throw new InvalidOperationException("请先打开并校验 value + IR 文档。");
+            if (Mode != AuthoringMode.RawForward && !HasDocument)
+                throw new InvalidOperationException("权重预览需要先打开并校验 value + IR 文档；原始转发模式可直接连接。");
             Receiver.Start(options);
             clock.Restart();
         }
+
+        public void SetMonitorOverride(MonitorStage stage, string parameter, float? value)
+        {
+            if (string.IsNullOrWhiteSpace(parameter)) throw new ArgumentException("参数名不能为空。", nameof(parameter));
+            if (value.HasValue && (float.IsNaN(value.Value) || float.IsInfinity(value.Value)))
+                throw new ArgumentOutOfRangeException(nameof(value), "临时覆盖必须是有限数值。");
+            var overrides = OverridesFor(stage);
+            if (value.HasValue) overrides[parameter] = value.Value;
+            else overrides.Remove(parameter);
+        }
+
+        public void ClearMonitorOverrides(MonitorStage? stage = null)
+        {
+            if (!stage.HasValue || stage == MonitorStage.Raw) rawOverrides.Clear();
+            if (!stage.HasValue || stage == MonitorStage.Value) valueOverrides.Clear();
+            if (!stage.HasValue || stage == MonitorStage.Ir) irOverrides.Clear();
+        }
+
+        private Dictionary<string, float> OverridesFor(MonitorStage stage) => stage switch
+        {
+            MonitorStage.Raw => rawOverrides,
+            MonitorStage.Value => valueOverrides,
+            MonitorStage.Ir => irOverrides,
+            _ => throw new ArgumentOutOfRangeException(nameof(stage))
+        };
+
+        private static void ApplyOverrides(Dictionary<string, float> values, IReadOnlyDictionary<string, float> overrides)
+        {
+            foreach (var pair in overrides) values[pair.Key] = pair.Value;
+        }
+
+        private static Dictionary<string, float> Copy(IReadOnlyDictionary<string, float> values) =>
+            values == null ? new Dictionary<string, float>(StringComparer.Ordinal) :
+                new Dictionary<string, float>(values, StringComparer.Ordinal);
 
         public void Stop()
         {
@@ -105,19 +158,61 @@ namespace HoFace.Studio
         {
             if (record && recording != null)
                 recording.Write(new HoFaceRecordedFrame { time = time, tracked = frame.FaceFound, values = new Dictionary<string, float>(frame.Values) });
+            var raw = Copy(frame.Values);
+            var effectiveRaw = Copy(raw);
+            ApplyOverrides(effectiveRaw, rawOverrides);
             if (Mode == AuthoringMode.RawForward)
             {
                 if (Preview.Running) StopPreviewOutput();
                 if (!RawForward.Running) RawForward.Start(RawForwardAddress, RawForwardPort);
-                RawForward.Send(frame.Values, frame.FaceFound, time);
-                RawFrameForward?.Invoke(frame);
+                RawForward.Send(effectiveRaw, frame.FaceFound, time);
+                var monitor = EvaluateMonitor(raw, effectiveRaw, frame.FaceFound, time);
+                LatestMonitorFrame = monitor;
+                MonitorUpdated?.Invoke(monitor);
+                RawFrameForward?.Invoke(new VtsFrame(effectiveRaw, frame.FaceFound));
                 return;
             }
             if (RawForward.Running) StopRawOutput();
-            if (!HasDocument) return;
-            valueSession.Evaluate(frame.Values, time);
-            irEvaluator.Evaluate(valueSession.Values);
-            PreviewUpdated?.Invoke(valueSession.Values, irEvaluator.Values, frame.FaceFound);
+            if (!HasDocument)
+            {
+                LatestMonitorFrame = new AuthoringMonitorFrame(raw, effectiveRaw, null, null, null, null, frame.FaceFound, time);
+                MonitorUpdated?.Invoke(LatestMonitorFrame);
+                return;
+            }
+            var result = EvaluateMonitorStages(raw, effectiveRaw, frame.FaceFound, time);
+            LatestMonitorFrame = result;
+            MonitorUpdated?.Invoke(result);
+            PreviewUpdated?.Invoke(result.ValuesEffective, result.WeightsEffective,
+                frame.FaceFound || rawOverrides.Count > 0 || valueOverrides.Count > 0 || irOverrides.Count > 0);
+        }
+
+        private AuthoringMonitorFrame EvaluateMonitor(
+            IReadOnlyDictionary<string, float> raw,
+            IReadOnlyDictionary<string, float> effectiveRaw,
+            bool tracked,
+            double time) => HasDocument
+                ? EvaluateMonitorStages(raw, effectiveRaw, tracked, time)
+                : new AuthoringMonitorFrame(raw, effectiveRaw, null, null, null, null, tracked, time);
+
+        private AuthoringMonitorFrame EvaluateMonitorStages(
+            IReadOnlyDictionary<string, float> raw,
+            IReadOnlyDictionary<string, float> effectiveRaw,
+            bool tracked,
+            double time)
+        {
+            valueSession.Evaluator.SetOverrides(null, null);
+            valueSession.Evaluate(new Dictionary<string, float>(raw, StringComparer.Ordinal), time);
+            var liveValues = Copy(valueSession.LiveValues);
+            effectiveValueSession.Evaluator.SetOverrides(null, valueOverrides);
+            effectiveValueSession.Evaluate(new Dictionary<string, float>(effectiveRaw, StringComparer.Ordinal), time);
+            var effectiveValues = Copy(effectiveValueSession.Values);
+
+            liveIrEvaluator.Evaluate(liveValues);
+            irEvaluator.Evaluate(effectiveValues, irOverrides);
+            var liveWeights = Copy(liveIrEvaluator.Values);
+            var effectiveWeights = Copy(irEvaluator.Values);
+            return new AuthoringMonitorFrame(raw, effectiveRaw, liveValues, effectiveValues,
+                liveWeights, effectiveWeights, tracked, time);
         }
 
         private void ReleaseActiveOutput()
@@ -143,8 +238,15 @@ namespace HoFace.Studio
         private void ClearOutputs()
         {
             valueSession?.Evaluator.Parameters.Clear();
+            valueSession?.Evaluator.LiveParameters.Clear();
+            effectiveValueSession?.Evaluator.Parameters.Clear();
+            effectiveValueSession?.Evaluator.LiveParameters.Clear();
             irEvaluator?.Values.Clear();
+            irEvaluator?.LiveValues.Clear();
             irEvaluator?.UnclampedValues.Clear();
+            liveIrEvaluator?.Values.Clear();
+            liveIrEvaluator?.LiveValues.Clear();
+            liveIrEvaluator?.UnclampedValues.Clear();
         }
 
         public void StartRecording(string path, string valuePath, string irPath)
@@ -157,11 +259,14 @@ namespace HoFace.Studio
         {
             replayFrames = HoFaceRecordingReader.Read(path);
             replayIndex = 0; replayPlaying = false; replayOffset = 0;
+            ResetReplayEvaluation();
         }
         public void PlayReplay()
         {
             if (replayFrames == null || replayFrames.Count == 0) throw new InvalidOperationException("没有可播放的录制。");
+            if (Receiver.Running) Stop();
             if (replayIndex >= replayFrames.Count) replayIndex = 0;
+            if (replayIndex == 0) ResetReplayEvaluation();
             replayPlaying = true;
             replayClock.Restart();
             replayOffset = replayIndex < replayFrames.Count ? replayFrames[replayIndex].time : 0;
@@ -176,6 +281,14 @@ namespace HoFace.Studio
             while (replayIndex < replayFrames.Count && replayFrames[replayIndex].time < target) replayIndex++;
             replayOffset = target;
             if (wasPlaying) replayClock.Restart();
+        }
+
+        private void ResetReplayEvaluation()
+        {
+            valueSession?.Reset();
+            effectiveValueSession?.Reset();
+            effectiveValueSession?.Evaluator.SetOverrides(null, valueOverrides);
+            ClearOutputs();
         }
 
         public void Dispose()

@@ -20,10 +20,32 @@ $valuePath = Join-Path $work 'Mouth.hoface.value.json'
 $irPath = Join-Path $work 'Mouth.hoface.ir.json'
 Copy-Item -LiteralPath (Join-Path $studioRoot 'samples/Mouth.hoface.value.json') -Destination $valuePath
 Copy-Item -LiteralPath (Join-Path $studioRoot 'samples/Mouth.hoface.ir.json') -Destination $irPath
+$valueDraft = [System.Text.Json.Nodes.JsonNode]::Parse([IO.File]::ReadAllText($valuePath))
+$derivedRule = [System.Text.Json.Nodes.JsonObject]::new()
+$derivedRule['parameter'] = [System.Text.Json.Nodes.JsonValue]::Create('Mouth/Derived')
+$derivedRule['expression'] = [System.Text.Json.Nodes.JsonValue]::Create('out("Mouth/Open") * 2')
+$derivedRule['defaultValue'] = [System.Text.Json.Nodes.JsonValue]::Create(0)
+$valueDraft['outputs'].AsArray().Add($derivedRule)
+[IO.File]::WriteAllText($valuePath, $valueDraft.ToJsonString(), [Text.UTF8Encoding]::new($false))
 $script:assertions = 0
 function Assert-Check([bool]$Condition, [string]$Label) {
     if (!$Condition) { throw $Label }
     $script:assertions++
+}
+function Get-FreeUdpPort {
+    $socket = [Net.Sockets.UdpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Loopback, 0))
+    try { return ([Net.IPEndPoint]$socket.Client.LocalEndPoint).Port }
+    finally { $socket.Dispose() }
+}
+function Send-VtsFrame([int]$Port, [double]$Jaw, [double]$SmileLeft, [double]$SmileRight) {
+    $packet = '{"Timestamp":1,"FaceFound":true,"BlendShapes":[' +
+        '{"k":"JawOpen","v":' + $Jaw.ToString([Globalization.CultureInfo]::InvariantCulture) + '},' +
+        '{"k":"MouthSmileLeft","v":' + $SmileLeft.ToString([Globalization.CultureInfo]::InvariantCulture) + '},' +
+        '{"k":"MouthSmileRight","v":' + $SmileRight.ToString([Globalization.CultureInfo]::InvariantCulture) + '}]}' + ''
+    $bytes = [Text.Encoding]::UTF8.GetBytes($packet)
+    $sender = [Net.Sockets.UdpClient]::new()
+    try { $sender.Send($bytes, $bytes.Length, [Net.IPEndPoint]::new([Net.IPAddress]::Loopback, $Port)) | Out-Null }
+    finally { $sender.Dispose() }
 }
 function New-ChildInfo([string]$Exe) {
     $info = [Diagnostics.ProcessStartInfo]::new($Exe)
@@ -81,15 +103,87 @@ try {
     $idlePipe.Connect(1000)
     $state = Call-Studio 'status'
     Assert-Check (!$state.hasDocument) 'Idle client does not block a second client'
+    $previewWithoutDocument = Invoke-Cli @('vtsStart', (@{ phoneIp='127.0.0.1'; phonePort=9; localPort=(Get-FreeUdpPort) } | ConvertTo-Json -Compress))
+    Assert-Check ($previewWithoutDocument.exitCode -eq 1) 'Preview mode still protects its document prerequisite'
+    $rawSink = [Net.Sockets.UdpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Loopback, 0))
+    try {
+        $rawSink.Client.ReceiveTimeout = 1000
+        $rawPort = ([Net.IPEndPoint]$rawSink.Client.LocalEndPoint).Port
+        $null = Call-Studio 'mode' @{ value='RawForward'; rawForwardPort=$rawPort }
+        $rawInputPort = Get-FreeUdpPort
+        $rawConnected = Call-Studio 'vtsStart' @{ phoneIp='127.0.0.1'; phonePort=9; localPort=$rawInputPort }
+        Assert-Check (!$rawConnected.hasDocument -and $rawConnected.input -like '*已绑定*') 'RawForward connects VTS without opening a work file'
+        Send-VtsFrame $rawInputPort .4 .2 .3
+        $rawPacketEndpoint = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
+        $rawPacket = ([Text.Encoding]::UTF8.GetString($rawSink.Receive([ref]$rawPacketEndpoint))) | ConvertFrom-Json
+        Assert-Check ([Math]::Abs($rawPacket.values.JawOpen - .4) -lt .001) 'RawForward transmits a real VTS frame without a work file'
+        $null = Call-Studio 'vtsStop'
+        $null = Call-Studio 'mode' @{ value='Preview' }
+    } finally { $rawSink.Dispose() }
     $state = Call-Studio 'open' @{ valuePath = $valuePath; irPath = $irPath }
     Assert-Check ($state.selectedValue -eq 'Mouth/Open') 'Open selects a useful first row'
     $items = Call-Studio 'list'
-    Assert-Check ($items.inputs.Count -eq 3 -and $items.outputs.Count -eq 2 -and $items.nodes.Count -eq 5) 'AI can inspect all input/output/node definitions'
+    Assert-Check ($items.inputs.Count -eq 3 -and $items.outputs.Count -eq 3 -and $items.nodes.Count -eq 5) 'AI can inspect all input/output/node definitions'
     $capture = Call-Studio 'screenshot' @{ path = (Join-Path $work 'value.png') }
     Assert-Check ((Get-Item -LiteralPath $capture.path).Length -gt 5000) 'Background WPF screenshot'
     $layout = Call-Studio 'view' @{ width = 1024; height = 640; structureWidth = 210; plotRatio = 0.42 }
     Assert-Check ($layout.plotWidth -ge 280 -and $layout.inspectorWidth -ge 320) 'Minimum window has usable resizable panels'
     $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'compact.png') }
+    $monitor = Call-Studio 'monitor'
+    Assert-Check ($monitor.raw.Count -eq 3 -and $monitor.values.Count -eq 3 -and $monitor.weights.Count -eq 3) 'Realtime monitor starts with configured raw, value, and IR parameters'
+    $null = Call-Studio 'view' @{ centerTab = 2; width = 1380; height = 860 }
+    $inputPort = Get-FreeUdpPort
+    $null = Call-Studio 'vtsStart' @{ phoneIp='127.0.0.1'; phonePort=9; localPort=$inputPort }
+    Send-VtsFrame $inputPort .3 .2 .4
+    $monitor = Call-Studio 'monitor'
+    for ($attempt = 0; $attempt -lt 20 -and !($monitor.raw | Where-Object { $_.key -eq 'JawOpen' }).fresh; $attempt++) {
+        Start-Sleep -Milliseconds 50
+        $monitor = Call-Studio 'monitor'
+    }
+    $rawJaw = $monitor.raw | Where-Object { $_.key -eq 'JawOpen' }
+    Assert-Check ($rawJaw.fresh -and [Math]::Abs($rawJaw.live - .3) -lt .001) 'Live monitor reads a real VTS UDP frame'
+    Assert-Check ([Math]::Abs(($monitor.values | Where-Object { $_.key -eq 'Mouth/Derived' }).live - .6) -lt .001) 'Live output rule evaluates the real raw frame'
+    $null = Call-Studio 'setMonitorOverride' @{ stage='raw'; parameter='JawOpen'; mode='1' }
+    Send-VtsFrame $inputPort .15 .2 .4
+    Start-Sleep -Milliseconds 80
+    $monitor = Call-Studio 'monitor'
+    $rawJaw = $monitor.raw | Where-Object { $_.key -eq 'JawOpen' }
+    Assert-Check ([Math]::Abs($rawJaw.live - .15) -lt .001 -and $rawJaw.value -eq 1) 'Raw stage distinguishes physical and forwarded values'
+    $null = Call-Studio 'setMonitorOverride' @{ stage='value'; parameter='Mouth/Open'; mode='1' }
+    Send-VtsFrame $inputPort .15 .2 .4
+    Start-Sleep -Milliseconds 80
+    $monitor = Call-Studio 'monitor'
+    $derived = $monitor.values | Where-Object { $_.key -eq 'Mouth/Derived' }
+    Assert-Check ([Math]::Abs($derived.live - .3) -lt .001 -and [Math]::Abs($derived.value - 2) -lt .001) 'Upstream value pin propagates into the downstream out expression'
+    $null = Call-Studio 'setMonitorOverride' @{ stage='value'; parameter='Mouth/Open'; mode='0' }
+    Send-VtsFrame $inputPort .15 .2 .4
+    Start-Sleep -Milliseconds 80
+    $monitor = Call-Studio 'monitor'
+    $derived = $monitor.values | Where-Object { $_.key -eq 'Mouth/Derived' }
+    Assert-Check ([Math]::Abs($derived.live - .3) -lt .001 -and [Math]::Abs($derived.value) -lt .001) 'Changing the upstream value pin updates downstream evaluation without altering live readings'
+    $null = Call-Studio 'setMonitorOverride' @{ stage='ir'; parameter='jawOpen'; mode='-1' }
+    Send-VtsFrame $inputPort .15 .2 .4
+    Start-Sleep -Milliseconds 80
+    $monitor = Call-Studio 'monitor'
+    $liveWeight = $monitor.weights | Where-Object { $_.key -eq 'jawOpen' }
+    Assert-Check ($liveWeight.live -ge 0 -and $liveWeight.value -eq -1) 'IR pin preserves the clamped unmodified live target'
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'realtime.png') }
+    $compactMonitor = Call-Studio 'view' @{ width = 1024; height = 640; centerTab = 2 }
+    Assert-Check ($compactMonitor.width -ge 1024 -and $compactMonitor.plotWidth -ge 280 -and $compactMonitor.inspectorWidth -ge 320) 'Realtime monitor fits the compact window while keeping its data scrollable'
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'realtime-compact.png') }
+    $null = Call-Studio 'view' @{ width = 1380; height = 860; centerTab = 2 }
+    $null = Call-Studio 'clearMonitorOverrides'
+    $null = Call-Studio 'vtsStop'
+    $monitor = Call-Studio 'monitor'
+    $releasedWeight = $monitor.weights | Where-Object { $_.key -eq 'jawOpen' }
+    Assert-Check ($releasedWeight.value -eq $releasedWeight.live -and $releasedWeight.value -ge 0) 'Clearing pins restores normal range-clamped evaluation'
+    $valueOverride = Call-Studio 'setMonitorOverride' @{ stage='value'; parameter='Mouth/Open'; mode='1' }
+    Assert-Check (($valueOverride.values | Where-Object key -eq 'Mouth/Open').overridden) 'AI can set temporary per-parameter stage override'
+    $null = Call-Studio 'clearMonitorOverrides' @{ stage='value' }
+    $afterClear = Call-Studio 'monitor'
+    Assert-Check (!($afterClear.values | Where-Object key -eq 'Mouth/Open').overridden) 'AI can restore live stage values'
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'realtime-cleared.png') }
+    $null = Call-Studio 'view' @{ centerTab = 0 }
     $null = Call-Studio 'view' @{ width = 1380; height = 860; reset = $true }
     $null = Call-Studio 'selectNode' @{ id = 'mouth' }
     $weights = Call-Studio 'cursor' @{ x = 1; y = 1 }
@@ -146,7 +240,7 @@ try {
     $fromStdin = Invoke-Cli @('selectNode', '--stdin') '{"id":"mouth"}'
     Assert-Check ($fromStdin.exitCode -eq 0 -and $fromStdin.data.result.selectedNode -eq 'mouth') 'Payload stdin'
     $null = Call-Studio 'draftText' @{ value = '{' }
-    $null = Call-Studio 'view' @{ centerTab = 1 }
+    $null = Call-Studio 'view' @{ centerTab = 3 }
     $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'json-draft.png') }
     $badSave = Invoke-Cli @('save')
     Assert-Check ($badSave.exitCode -eq 1) 'Invalid text cannot overwrite saved files'

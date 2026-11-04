@@ -20,9 +20,13 @@ namespace HoFace.Studio
         public bool HasValueSelection => selectedValueRow != null;
         public bool HasNodeSelection => selectedNode != null;
         public bool HasSelection => HasValueSelection || HasNodeSelection;
-        public string SelectionTitle => selectedValueRow?.parameter ??
+        public string SelectionTitle => CenterTab == 2 ? "原始输入 · Value · IR" :
+            CenterTab == 3 ? "Value + IR JSON" : selectedValueRow?.parameter ??
             (string.IsNullOrWhiteSpace(selectedNode?.name) ? selectedNode?.id : selectedNode.name) ?? "未选择";
-        public string SelectionKind => HasValueSelection ? "VALUE / 响应曲线" : selectedNode?.type?.ToUpperInvariant() ?? "作品编辑器";
+        public string SelectionKind => CenterTab == 2 ? "REALTIME / 三层参数监控" :
+            CenterTab == 3 ? "SOURCE / VALUE + IR JSON" :
+            HasValueSelection ? "VALUE / 响应曲线" : selectedNode?.type?.ToUpperInvariant() ?? "作品编辑器";
+        public bool CanFitPlot => CenterTab < 2;
         public string WeightSectionTitle => selectedNode?.type == "pose" ? "姿势权重" :
             selectedNode?.type == "blend1d" ? "子项阈值" : selectedNode?.type == "blend2d" ? "控制点坐标" : "子项权重";
         public bool HasAxisX => selectedNode?.type == "blend1d" || selectedNode?.type == "blend2d";
@@ -120,7 +124,7 @@ namespace HoFace.Studio
             catch (Exception error) { ShowError(error.Message); }
         }
         private void RevertTextClicked(object sender, RoutedEventArgs e) => ReloadEditors();
-        private void FitClicked(object sender, RoutedEventArgs e) => Plot.Fit();
+        private void FitClicked(object sender, RoutedEventArgs e) => ActivePlot.Fit();
         private void ApplyPropertiesClicked(object sender, RoutedEventArgs e)
         {
             try { CommitPropertyDraft(); ReloadEditors(); }
@@ -238,7 +242,7 @@ namespace HoFace.Studio
         }
         private void ControlPointSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is DataGrid grid && grid.SelectedItem is ControlPointRow row) Plot.SelectIndex(row.Index);
+            if (sender is DataGrid grid && grid.SelectedItem is ControlPointRow row) BlendPlot.SelectIndex(row.Index);
         }
         private void ControlPointCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
         {

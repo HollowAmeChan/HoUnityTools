@@ -14,6 +14,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
         private readonly uint seed;
         public HoVtsRuleEvaluator Evaluator => evaluator;
         public IReadOnlyDictionary<string, float> Values => evaluator.Parameters;
+        public IReadOnlyDictionary<string, float> LiveValues => evaluator.LiveParameters;
         public HoFaceValueSession(HoFaceMiddleware profile, uint seed = 1)
         {
             this.profile = profile ?? throw new ArgumentNullException(nameof(profile));
