@@ -50,6 +50,8 @@ PMX 贴图路径以 PMX 所在目录为基准；EMD 引用以 EMD 所在目录�
 
 开启“读取 Ray 配套材质”后，自动查找 PMX 同目录及直属子目录中的唯一 Material_MME.emd。存在多份时列出提示，由用户在 Inspector 指定文件，不自动挑选。
 
+非致命的兼容性与转换提示保存在 PMX 子资产的“导入信息”中，不重复输出为 Console 黄标；导入失败仍会输出 Console 错误。
+
 支持已知 material_common 模板的：
 
 - EMD 中 Obj[材质槽序号] 到 FX 的映射。

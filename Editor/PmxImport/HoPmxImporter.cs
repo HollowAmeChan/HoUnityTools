@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 
 namespace Hollow.HoUnityTools.Editor.Pmx
 {
-    [ScriptedImporter(1, "pmx", 100)]
+    [ScriptedImporter(2, "pmx", 100)]
     public sealed class HoPmxImporter : ScriptedImporter
     {
         [SerializeField, Min(0.00001f)] public float scale = 0.08f;
@@ -129,8 +129,6 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                     report.warnings.Add("已保留 Toon 来源；初始材质使用 Ho lilToon 阴影参数，不把 MMD 光照 Ramp 当作 UV 阴影贴图。");
                 if (report.materials.Exists(x => x.sphereMode != 0 && !string.IsNullOrEmpty(x.sphereTexturePath)))
                     report.warnings.Add("Sphere 来源已记录；当前未自动转换其混合/采样行为。");
-                if (report.warnings.Count > 0)
-                    context.LogImportWarning("Ho PMX 导入完成，" + report.warnings.Count + " 条提示，详见 Inspector 的导入信息。");
             }
             catch (Exception e)
             {
