@@ -62,12 +62,12 @@ namespace HoFace.Studio
                 inputs = document.Value.inputs.Select((row, index) => new
                 {
                     index, parameter = row.parameter, expression = row.expression,
-                    defaultValue = row.defaultValue, curve = ReadCurve(row)
+                    defaultValue = row.defaultValue, curve = ReadCurve(row), modifiers = ReadModifiers(row)
                 }).Where(x => Match(x.parameter + " " + x.expression)).ToArray(),
                 outputs = document.Value.outputs.Select((row, index) => new
                 {
                     index, parameter = row.parameter, expression = row.expression,
-                    defaultValue = row.defaultValue, curve = ReadCurve(row)
+                    defaultValue = row.defaultValue, curve = ReadCurve(row), modifiers = ReadModifiers(row)
                 }).Where(x => Match(x.parameter + " " + x.expression)).ToArray(),
                 nodes = document.Ir.nodes.Where(n => Match(n.id + " " + n.name + " " + n.type + " " + n.parameterX + " " + n.parameterY))
                     .Select(n => new { id = n.id, name = n.name, type = n.type, parameterX = n.parameterX,
@@ -84,6 +84,26 @@ namespace HoFace.Studio
                 index = i, time = k.time, value = k.value,
                 inTangent = TangentJson(k.inTangent), outTangent = TangentJson(k.outTangent)
             }).ToArray();
+        private static object[] ReadModifiers(HoFaceOutput row) =>
+            (row.modifiers ?? new List<HoFaceModifier>()).Select((modifier, index) => (object)new
+            {
+                index,
+                kind = modifier == null ? null : ModifierKindName(modifier.kind),
+                seconds = modifier?.seconds ?? 0,
+                active = modifier?.Active ?? false,
+                steps = (modifier?.steps ?? new List<HoFaceStep>()).Select((step, stepIndex) => new
+                {
+                    index = stepIndex, trigger = step.trigger, target = step.target, hold = step.hold,
+                    threshold = step.threshold, enterSeconds = step.enterSeconds, exitSeconds = step.exitSeconds
+                }).ToArray()
+            }).ToArray();
+        private static string ModifierKindName(HoFaceModifierKind kind) => kind switch
+        {
+            HoFaceModifierKind.Smooth => "smooth",
+            HoFaceModifierKind.Delay => "delay",
+            HoFaceModifierKind.Steps => "steps",
+            _ => "unknown"
+        };
         private static object TangentJson(float value) => float.IsInfinity(value) ? (object)(value > 0 ? "Infinity" : "-Infinity") : value;
         private object ReadSelection()
         {
@@ -93,6 +113,7 @@ namespace HoFace.Studio
                 parameter = selectedValueRow?.parameter,
                 outputIndex = HasValueSelection ? (int?)selectedOutputIndex : null,
                 expression = selectedValueRow?.expression,
+                modifiers = selectedValueRow == null ? null : ReadModifiers(selectedValueRow),
                 nodeId = selectedNode?.id,
                 nodeType = selectedNode?.type,
                 curve = selectedValueRow == null ? null : ReadCurve(selectedValueRow),
@@ -162,6 +183,69 @@ namespace HoFace.Studio
             document.Edit((value, ir) => value.outputs[index].expression = expression);
             ReloadEditors();
         }
+        private void SetValueModifiers(JsonElement payload)
+        {
+            int index = FindOutputIndex(RequiredString(payload, "parameter"), ReadInt(payload, "outputIndex", -1));
+            if (!payload.TryGetProperty("modifiers", out var array) || array.ValueKind != JsonValueKind.Array)
+                throw new ArgumentException("modifiers 必须是数组。");
+            var modifiers = ParseModifiers(array);
+            document.Edit((value, ir) => value.outputs[index].modifiers = modifiers);
+            selectedModifierIndex = modifiers.Count - 1;
+            ReloadEditors();
+        }
+        private static List<HoFaceModifier> ParseModifiers(JsonElement array)
+        {
+            const int maximumModifiers = 128;
+            const int maximumSteps = 256;
+            if (array.GetArrayLength() > maximumModifiers)
+                throw new ArgumentException("单条规则最多支持 128 个修饰器。");
+            var result = new List<HoFaceModifier>();
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) throw new ArgumentException("每个修饰器都必须是对象。");
+                string kind = ReadString(item, "kind")?.ToLowerInvariant();
+                var modifier = new HoFaceModifier
+                {
+                    kind = kind switch
+                    {
+                        "smooth" => HoFaceModifierKind.Smooth,
+                        "delay" => HoFaceModifierKind.Delay,
+                        "steps" => HoFaceModifierKind.Steps,
+                        _ => throw new ArgumentException("修饰器 kind 必须是 smooth、delay 或 steps。")
+                    },
+                    seconds = OptionalFiniteFloat(item, "seconds", 0),
+                    steps = new List<HoFaceStep>()
+                };
+                if (modifier.seconds < 0) throw new ArgumentException("修饰器 seconds 不能为负数。");
+                if (item.TryGetProperty("steps", out var steps))
+                {
+                    if (steps.ValueKind != JsonValueKind.Array) throw new ArgumentException("修饰器 steps 必须是数组。");
+                    if (steps.GetArrayLength() > maximumSteps) throw new ArgumentException("单个维持修饰器最多支持 256 个步骤。");
+                    foreach (var stepJson in steps.EnumerateArray())
+                    {
+                        if (stepJson.ValueKind != JsonValueKind.Object) throw new ArgumentException("维持步骤必须是对象。");
+                        var step = new HoFaceStep
+                        {
+                            trigger = OptionalFiniteFloat(stepJson, "trigger", .3f),
+                            target = OptionalFiniteFloat(stepJson, "target", .4f),
+                            hold = OptionalFiniteFloat(stepJson, "hold", 0),
+                            threshold = OptionalFiniteFloat(stepJson, "threshold", .1f),
+                            enterSeconds = OptionalFiniteFloat(stepJson, "enterSeconds", 0),
+                            exitSeconds = OptionalFiniteFloat(stepJson, "exitSeconds", 0)
+                        };
+                        if (step.hold < 0 || step.threshold < 0 || step.enterSeconds < 0 || step.exitSeconds < 0)
+                            throw new ArgumentException("维持步骤的保持、回差和进入/退出时间不能为负数。");
+                        if (modifier.steps.Count > 0 && modifier.steps[modifier.steps.Count - 1].trigger >= step.trigger)
+                            throw new ArgumentException("维持步骤必须按 trigger 严格递增排列。");
+                        modifier.steps.Add(step);
+                    }
+                }
+                result.Add(modifier);
+            }
+            return result;
+        }
+        private static float OptionalFiniteFloat(JsonElement payload, string name, float fallback) =>
+            payload.TryGetProperty(name, out var value) ? FiniteFloat(value, name) : fallback;
         private void SetNode(JsonElement payload)
         {
             string id = RequiredString(payload, "id");

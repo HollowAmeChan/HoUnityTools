@@ -126,6 +126,17 @@ try {
     Assert-Check ($items.inputs.Count -eq 3 -and $items.outputs.Count -eq 3 -and $items.nodes.Count -eq 5) 'AI can inspect all input/output/node definitions'
     $capture = Call-Studio 'screenshot' @{ path = (Join-Path $work 'value.png') }
     Assert-Check ((Get-Item -LiteralPath $capture.path).Length -gt 5000) 'Background WPF screenshot'
+    $modifierChain = @(
+        @{ kind='smooth'; seconds=.08; steps=@() },
+        @{ kind='steps'; seconds=0; steps=@(@{trigger=.5; target=1; hold=.2; threshold=.05; enterSeconds=.1; exitSeconds=.05}) }
+    )
+    $null = Call-Studio 'setValueModifiers' @{ parameter='Mouth/Open'; modifiers=$modifierChain }
+    $modifierList = Call-Studio 'list' @{ filter='Mouth/Open' }
+    $listedChain = $modifierList.outputs | Where-Object { $_.parameter -eq 'Mouth/Open' }
+    Assert-Check ($listedChain.modifiers.Count -eq 2 -and $listedChain.modifiers[1].steps[0].enterSeconds -eq .1) 'CLI roundtrips ordered modifier and hold-step data'
+    $modifierCapture = Call-Studio 'screenshot' @{ path = (Join-Path $work 'modifier-chain.png') }
+    Assert-Check ((Get-Item -LiteralPath $modifierCapture.path).Length -gt 5000) 'Modifier chain editor renders with configured steps'
+    $null = Call-Studio 'setValueModifiers' @{ parameter='Mouth/Open'; modifiers=[object[]]@() }
     $layout = Call-Studio 'view' @{ width = 1024; height = 640; structureWidth = 210; plotRatio = 0.42 }
     Assert-Check ($layout.plotWidth -ge 280 -and $layout.inspectorWidth -ge 320) 'Minimum window has usable resizable panels'
     $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'compact.png') }

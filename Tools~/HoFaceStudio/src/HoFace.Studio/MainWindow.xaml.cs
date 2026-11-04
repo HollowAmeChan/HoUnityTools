@@ -519,6 +519,7 @@ namespace HoFace.Studio
                 case "view": return ConfigureView(payload);
                 case "selectPoint": ActivePlot.SelectIndex(ReadInt(payload, "index", -1)); return ReadSelection();
                 case "setValueExpression": SetValueExpression(payload); break;
+                case "setValueModifiers": SetValueModifiers(payload); break;
                 case "setNode": SetNode(payload); break;
                 case "addValueCurveKey": AddValueCurveKey(payload); break;
                 case "deleteValueCurveKey": DeleteValueCurveKey(payload); break;

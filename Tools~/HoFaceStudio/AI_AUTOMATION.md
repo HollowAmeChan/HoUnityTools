@@ -1,6 +1,6 @@
 # HoFaceStudio 自动化接口
 
-HoFaceStudio 提供本机命名管道 `HoFaceStudio`，供 AI、自动化脚本和测试工具调用。协议版本为 **2**；接口只执行作品、预览、文件与编辑器领域命令，不执行任意 shell。桌面与 CLI 共享 `shared/AutomationContract.cs` 的命令契约。
+HoFaceStudio 提供本机命名管道 `HoFaceStudio`，供 AI、自动化脚本和测试工具调用。协议版本为 **4**；接口只执行作品、预览、文件与编辑器领域命令，不执行任意 shell。桌面与 CLI 共享 `shared/AutomationContract.cs` 的命令契约。
 
 ## 调用方式
 
@@ -61,6 +61,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `setValueCurveKey` | 修改 value 曲线指定点的时间、值或切线 |
 | `addValueCurveKey` / `deleteValueCurveKey` | 增删曲线点；坐标不能重复，删除时至少保留两个 |
 | `setValueExpression` | 修改并校验输出表达式 |
+| `setValueModifiers` | 按顺序替换输出规则的 `smooth` / `delay` / `steps` 修饰器链；`list` 会返回完整链与步骤 |
 | `setNode` | 修改显示名或合法的 IR 参数轴 |
 | `setIrChild` | 修改 IR 1D/2D 子项控制点或 Direct 权重 |
 | `setPoseWeight` | 修改 Pose 目标权重 |
@@ -84,6 +85,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 - 先 `status` / `document` / `list`，再修改，最后读回验证；未打开作品时文档命令返回 `INVALID_STATE`。不存在的选择项、无效模式、重名行和非法数值都会显式拒绝。
 - 待应用 JSON 或属性草稿不会被图形/CLI 修改静默覆盖。先应用或还原草稿。图形拖动期间拒绝其他写命令，避免一个撤销操作吞并另一个写入。
 - 三层监控中，`live` 是物理 raw / 未覆写输入下的完整求值快照，`value` 是逐阶段覆写后实际生效的结果。Raw 与 effective value 使用独立状态求值器，因此 stateful modifiers 不会在一帧内被重复推进。Value 覆写进入逐行 output evaluation，下游 `out("...")` 会看到覆写；同名输出仍按原行序最后一行决定导出值。IR 覆写只影响目标发布，不会改写 `LiveValues`、`LiveWeights` 或 `UnclampedValues`。IR `-1/0/1` 覆写有意绕过目标范围夹取，用于临时压力测试，清除后恢复正常范围。
+- Value 输出规则的修饰器在曲线之后按链顺序逐个执行。`smooth` / `delay` 使用 `seconds`；`steps` 按 `trigger` 严格递增，包含 `target`、`hold`、`threshold`、`enterSeconds` 和 `exitSeconds`。UI 与 `setValueModifiers` 共用该格式；空链保持原规则行为。
 - Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区把输入、Value 处理、IR 输出拆成三个独立页签，共用名称/ID 搜索。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
 - VTS `vtsStart` 在 `Preview` 模式需要已打开作品；`RawForward` 可在无作品状态连接、转发和录制 raw 帧。Processed replay 与 Blender 权重预览仍需作品。图形绘制输入游标与三阶段参数覆写分别管理，`clearPreview` 不会清除 monitor pins。
 - `evaluate.raw` 使用 **wire 原始字段名**，例如诊断样例的 `JawOpen`、`MouthSmileLeft`、`MouthSmileRight`。不是归一化后的 `jawOpen` 等名字；可先读取 `list.inputs` 的表达式核对映射。

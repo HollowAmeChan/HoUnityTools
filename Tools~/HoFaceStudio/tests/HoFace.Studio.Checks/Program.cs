@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -26,6 +27,19 @@ internal static class Program
             var application = new App();
             application.InitializeComponent();
             var window = new MainWindow(false);
+            string legacyProfilePath = Path.Combine(root, "Editor", "FaceTracking", "Profiles", "ho-iPhoneVTS.hoface.json");
+            if (File.Exists(legacyProfilePath))
+            {
+                Check(HoFaceValueDocument.TryParse(File.ReadAllText(legacyProfilePath), out var legacyProfile, out string legacyError),
+                    "legacy HoFace profile parses for modifier migration: " + legacyError);
+                int legacyModifierCount = legacyProfile.outputs.Sum(row => row.modifiers?.Count ?? 0);
+                Check(legacyModifierCount > 0, "legacy HoFace profile contains ordered rule modifiers");
+                string migratedValue = HoFaceValueDocument.Write(legacyProfile);
+                Check(HoFaceValueDocument.TryParse(migratedValue, out var reloadedProfile, out string reloadError),
+                    "migrated value document reloads with modifiers: " + reloadError);
+                Check(reloadedProfile.outputs.Sum(row => row.modifiers?.Count ?? 0) == legacyModifierCount,
+                    "legacy modifier chains survive new value-document serialization");
+            }
             Check(window.CanConnect == false, "Preview mode still requires a work document");
             window.Mode = "RawForward";
             Check(window.CanConnect, "RawForward can connect VTS without a work document");
@@ -184,6 +198,74 @@ internal static class Program
                 Call("clearMonitorOverrides");
                 liveSession.Stop();
             }
+            Call("selectValue", new { parameter = "Mouth/Open" });
+            var modifierChain = new object[]
+            {
+                new { kind = "smooth", seconds = .08, steps = Array.Empty<object>() },
+                new
+                {
+                    kind = "steps", seconds = 0,
+                    steps = new[] { new { trigger = .5, target = 1, hold = .2, threshold = .05, enterSeconds = .1, exitSeconds = .05 } }
+                }
+            };
+            Call("setValueModifiers", new { parameter = "Mouth/Open", modifiers = modifierChain });
+            var listedModifiers = Result("list").GetProperty("outputs").EnumerateArray()
+                .First(x => x.GetProperty("parameter").GetString() == "Mouth/Open").GetProperty("modifiers");
+            Check(listedModifiers.GetArrayLength() == 2 &&
+                listedModifiers[0].GetProperty("kind").GetString() == "smooth" &&
+                listedModifiers[1].GetProperty("steps")[0].GetProperty("enterSeconds").GetSingle() == .1f,
+                "CLI reads and writes the ordered modifier chain and full hold-step fields");
+            Check(window.ModifierRows.Count == 2 && window.FindName("ModifierList") is ListBox &&
+                window.FindName("ModifierStepsGrid") is DataGrid,
+                "selected value rules expose modifier-chain and hold-step editors");
+            window.SelectedModifierIndex = 1;
+            Check(window.ModifierKindDraft == "维持" && window.ModifierStepRows.Count == 1,
+                "modifier selection loads its editable step details");
+            Reject("setValueModifiers", new
+            {
+                parameter = "Mouth/Open",
+                modifiers = new[] { new { kind = "steps", seconds = 0, steps = new[]
+                {
+                    new { trigger = .8, target = 1, hold = 0, threshold = 0, enterSeconds = 0, exitSeconds = 0 },
+                    new { trigger = .5, target = 0, hold = 0, threshold = 0, enterSeconds = 0, exitSeconds = 0 }
+                } } }
+            }, "hold-step triggers must be strictly increasing");
+            Call("setValueModifiers", new { parameter = "Mouth/Open", modifiers = Array.Empty<object>() });
+            var addSmooth = (Button)window.FindName("AddSmoothModifierButton");
+            addSmooth.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, addSmooth));
+            Check(window.ModifierRows.Count == 1 && window.ModifierRows[0].Display.Contains("平滑"),
+                "modifier add button creates an undoable smooth stage (rows=" + window.ModifierRows.Count +
+                ", enabled=" + addSmooth.IsEnabled + ", selected=" + window.HasValueSelection +
+                ", draft=" + window.HasPropertyDraft + ", error=" + window.Diagnostics + ")");
+            var addDelay = (Button)window.FindName("AddDelayModifierButton");
+            addDelay.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, addDelay));
+            Check(window.ModifierRows.Count == 2 && window.ModifierRows[1].Display.Contains("延迟"),
+                "modifier chain supports a second ordered delay stage");
+            var moveModifierUp = (Button)window.FindName("MoveModifierUpButton");
+            Check(window.CanMoveModifierUp, "modifier chain enables moving a later stage upward (selected=" +
+                window.SelectedModifierIndex + ", count=" + window.ModifierRows.Count +
+                ", has=" + window.HasSelectedModifier + ")");
+            typeof(MainWindow).GetMethod("MoveModifierClicked", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(window, new object[] { moveModifierUp, new RoutedEventArgs() });
+            Check(window.ModifierRows[0].Display.Contains("延迟") && window.SelectedModifierIndex == 0,
+                "modifier move controls change evaluation order (first=" + window.ModifierRows[0].Display +
+                ", selected=" + window.SelectedModifierIndex + ", enabled=" + moveModifierUp.IsEnabled +
+                ", error=" + window.Diagnostics + ")");
+            addSmooth.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, addSmooth));
+            Check(window.ModifierRows.Count == 3 && window.ModifierRows[2].Display.Contains("平滑"),
+                "modifier chain preserves repeated kinds as independent stages");
+            var deleteModifier = (Button)window.FindName("DeleteModifierButton");
+            typeof(MainWindow).GetMethod("DeleteModifierClicked", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(window, new object[] { deleteModifier, new RoutedEventArgs() });
+            Check(window.ModifierRows.Count == 2, "modifier delete button removes only the selected stage");
+            var addSteps = (Button)window.FindName("AddStepsModifierButton");
+            addSteps.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, addSteps));
+            Check(window.ModifierKindDraft == "维持" && window.ModifierStepRows.Count == 1,
+                "modifier chain can create an editable hold-step stage");
+            for (int i = 0; i < 3; i++)
+                typeof(MainWindow).GetMethod("DeleteModifierClicked", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(window, new object[] { deleteModifier, new RoutedEventArgs() });
+            Check(window.ModifierRows.Count == 0, "modifier chain removes stages independently");
             Check(HoFaceValueDocument.TryParse(File.ReadAllText(Path.Combine(samples, "Mouth.hoface.value.json")),
                 out var downstreamProfile, out string parseError), parseError);
             downstreamProfile.outputs.Add(new HoFaceOutput
@@ -338,7 +420,10 @@ internal static class Program
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form" && State().GetProperty("selectedValueIndex").GetInt32() == 0, "text reorder preserves logical selected row");
             Call("undo");
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form" && State().GetProperty("selectedValueIndex").GetInt32() == 1, "undo reorder preserves logical selected row");
-            Check(Result("capabilities").GetProperty("commands").GetArrayLength() >= 40, "CLI discovers complete command contract");
+            var capabilities = Result("capabilities");
+            Check(capabilities.GetProperty("protocolVersion").GetInt32() == 4 &&
+                capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "setValueModifiers"),
+                "CLI advertises the modifier editor command in protocol v4");
             Console.WriteLine("Passed " + checks + " Studio interaction checks.");
             return 0;
         }

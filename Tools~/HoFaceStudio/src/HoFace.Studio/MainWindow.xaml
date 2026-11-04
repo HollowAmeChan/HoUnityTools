@@ -284,6 +284,75 @@
                     <DataGridTextColumn Header="出切线" Binding="{Binding OutTangent}" SortMemberPath="OutTangent" Width="*"/>
                   </DataGrid.Columns>
                 </DataGrid>
+                <StackPanel Margin="0,14,0,0">
+                  <DockPanel Margin="0,0,0,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <Button x:Name="AddSmoothModifierButton" Content="＋平滑" Tag="smooth" Click="AddModifierClicked" Padding="5,2" ToolTip="添加平滑修饰器"/>
+                      <Button x:Name="AddDelayModifierButton" Content="＋延迟" Tag="delay" Click="AddModifierClicked" Padding="5,2" ToolTip="添加延迟修饰器"/>
+                      <Button x:Name="AddStepsModifierButton" Content="＋维持" Tag="steps" Click="AddModifierClicked" Padding="5,2" Margin="0" ToolTip="添加维持步骤修饰器"/>
+                    </StackPanel>
+                    <TextBlock Text="规则约束 · 修饰器链" FontWeight="SemiBold"/>
+                  </DockPanel>
+                  <ListBox x:Name="ModifierList" ItemsSource="{Binding ModifierRows}"
+                      SelectedIndex="{Binding SelectedModifierIndex, Mode=TwoWay}" MinHeight="36" MaxHeight="108"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="有序修饰器链">
+                    <ListBox.ItemTemplate><DataTemplate>
+                      <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis"/>
+                    </DataTemplate></ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock Text="尚未添加修饰器" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                      HorizontalAlignment="Center" Margin="0,6"
+                      Visibility="{Binding ModifierEmptyVisibility}"/>
+                  <Grid Margin="0,5,0,4">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding ModifierOrderSummary}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                    <Button x:Name="MoveModifierUpButton" Grid.Column="1" Content="↑" Tag="up" Click="MoveModifierClicked" Padding="5,1" Margin="0,0,3,0"
+                        IsEnabled="{Binding CanMoveModifierUp}" ToolTip="上移修饰器"/>
+                    <Button x:Name="MoveModifierDownButton" Grid.Column="2" Content="↓" Tag="down" Click="MoveModifierClicked" Padding="5,1" Margin="0,0,3,0"
+                        IsEnabled="{Binding CanMoveModifierDown}" ToolTip="下移修饰器"/>
+                    <Button x:Name="DeleteModifierButton" Grid.Column="3" Content="×" Click="DeleteModifierClicked" Padding="5,1" Margin="0"
+                        IsEnabled="{Binding HasSelectedModifier}" ToolTip="删除所选修饰器"/>
+                  </Grid>
+                  <Grid Visibility="{Binding SelectedModifierVisibility}">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,6">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
+                      <ComboBox x:Name="ModifierKindCombo" ItemsSource="{Binding ModifierKindOptions}"
+                          SelectedItem="{Binding ModifierKindDraft, Mode=OneWay}" SelectionChanged="ModifierKindChanged"
+                          MinHeight="28" ToolTip="选择此步骤链中的变换类型"/>
+                      <TextBlock Grid.Column="1" Text="秒" Foreground="{StaticResource MutedBrush}" Margin="8,0"
+                          Visibility="{Binding SelectedModifierSecondsVisibility}"/>
+                      <TextBox Grid.Column="2" Text="{Binding ModifierSecondsDraft, UpdateSourceTrigger=PropertyChanged}"
+                          LostFocus="ModifierSecondsLostFocus" Visibility="{Binding SelectedModifierSecondsVisibility}"
+                          AutomationProperties.Name="修饰器时长" ToolTip="平滑或延迟时长，单位秒"/>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Visibility="{Binding SelectedModifierStepsVisibility}">
+                      <DockPanel Margin="0,0,0,5">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                          <Button Content="＋" Click="AddModifierStepClicked" Padding="5,1" ToolTip="添加维持步骤"/>
+                          <Button Content="×" Click="DeleteModifierStepClicked" Padding="5,1" Margin="0"
+                              IsEnabled="{Binding CanDeleteModifierStep}" ToolTip="删除所选维持步骤"/>
+                        </StackPanel>
+                        <TextBlock Text="维持步骤" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                      </DockPanel>
+                      <DataGrid x:Name="ModifierStepsGrid" ItemsSource="{Binding ModifierStepRows}"
+                          SelectedIndex="{Binding SelectedModifierStepIndex, Mode=TwoWay}"
+                          CellEditEnding="ModifierStepCellEditEnding" CanUserSortColumns="False"
+                          CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow"
+                          MinHeight="56" MaxHeight="180" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ToolTip="按触发值严格递增；保持、回差和进入/退出时间均以秒计">
+                        <DataGrid.Columns>
+                          <DataGridTextColumn Header="触发" Binding="{Binding Trigger}" SortMemberPath="Trigger" Width="*"/>
+                          <DataGridTextColumn Header="目标" Binding="{Binding Target}" SortMemberPath="Target" Width="*"/>
+                          <DataGridTextColumn Header="保持" Binding="{Binding Hold}" SortMemberPath="Hold" Width="*"/>
+                          <DataGridTextColumn Header="回差" Binding="{Binding Threshold}" SortMemberPath="Threshold" Width="*"/>
+                          <DataGridTextColumn Header="进入" Binding="{Binding EnterSeconds}" SortMemberPath="EnterSeconds" Width="*"/>
+                          <DataGridTextColumn Header="退出" Binding="{Binding ExitSeconds}" SortMemberPath="ExitSeconds" Width="*"/>
+                        </DataGrid.Columns>
+                      </DataGrid>
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
               </StackPanel>
               <StackPanel Visibility="{Binding HasAxisX, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
                 <TextBlock Text="混合控制点" FontWeight="SemiBold" Margin="0,0,0,10"/>

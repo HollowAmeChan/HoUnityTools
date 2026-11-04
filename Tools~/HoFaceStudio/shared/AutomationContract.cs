@@ -5,7 +5,7 @@ namespace HoFace.Automation
 {
     public static class AutomationContract
     {
-        public const int Version = 3;
+        public const int Version = 4;
         public static string PipeName
         {
             get
@@ -40,6 +40,7 @@ namespace HoFace.Automation
             new CommandDefinition("addValueCurveKey", "添加曲线点", "parameter:string, outputIndex?:int, time:number, value:number, inTangent?:number|string, outTangent?:number|string", false, true),
             new CommandDefinition("deleteValueCurveKey", "删除曲线点，至少保留两个", "parameter:string, outputIndex?:int, index:int", false, true),
             new CommandDefinition("setValueExpression", "修改表达式", "parameter:string, outputIndex?:int, expression:string", false, true),
+            new CommandDefinition("setValueModifiers", "按顺序替换输出规则的平滑、延迟与维持修饰器链", "parameter:string, outputIndex?:int, modifiers:array", false, true),
             new CommandDefinition("setNode", "修改 IR 显示名和参数轴", "id:string, name?:string, parameterX?:string, parameterY?:string", false, true),
             new CommandDefinition("setIrChild", "修改 1D/2D 子项或 Direct 权重", "nodeId:string, childId?:string, index?:int, property:x|y|threshold|weight, value:number", false, true),
             new CommandDefinition("setPoseWeight", "修改姿势目标权重", "nodeId:string, targetId:string, value:number", false, true),

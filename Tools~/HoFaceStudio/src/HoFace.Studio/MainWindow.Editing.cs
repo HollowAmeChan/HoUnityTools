@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
@@ -15,6 +16,9 @@ namespace HoFace.Studio
     {
         public ObservableCollection<CurveRow> CurveRows { get; } = new ObservableCollection<CurveRow>();
         public ObservableCollection<ControlPointRow> ControlPoints { get; } = new ObservableCollection<ControlPointRow>();
+        public ObservableCollection<ModifierRow> ModifierRows { get; } = new ObservableCollection<ModifierRow>();
+        public ObservableCollection<ModifierStepRow> ModifierStepRows { get; } = new ObservableCollection<ModifierStepRow>();
+        public string[] ModifierKindOptions { get; } = new[] { "平滑", "延迟", "维持" };
         public int ValueCount => ValueRows.Count;
         public int NodeCount => NodeRows.Count;
         public bool HasValueSelection => selectedValueRow != null;
@@ -33,6 +37,56 @@ namespace HoFace.Studio
         public bool HasAxisY => selectedNode?.type == "blend2d";
         public bool HasWeightSelection => HasNodeSelection && !HasAxisX;
         private string draftName = "", draftExpression = "", draftAxisX = "", draftAxisY = "";
+        private int selectedModifierIndex = -1, selectedModifierStepIndex = -1;
+        private bool loadingModifier;
+        private string modifierKindDraft = "", modifierSecondsDraft = "0";
+        public int SelectedModifierIndex
+        {
+            get => selectedModifierIndex;
+            set
+            {
+                if (selectedModifierIndex == value) return;
+                selectedModifierIndex = value;
+                RefreshModifierDraft();
+            }
+        }
+        public int SelectedModifierStepIndex
+        {
+            get => selectedModifierStepIndex;
+            set
+            {
+                if (selectedModifierStepIndex == value) return;
+                selectedModifierStepIndex = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanDeleteModifierStep));
+            }
+        }
+        public string ModifierKindDraft
+        {
+            get => modifierKindDraft;
+            private set { if (modifierKindDraft != value) { modifierKindDraft = value; OnPropertyChanged(); } }
+        }
+        public string ModifierSecondsDraft
+        {
+            get => modifierSecondsDraft;
+            set { if (modifierSecondsDraft != value) { modifierSecondsDraft = value; OnPropertyChanged(); } }
+        }
+        private HoFaceModifier SelectedModifier =>
+            selectedValueRow?.modifiers != null && selectedModifierIndex >= 0 && selectedModifierIndex < selectedValueRow.modifiers.Count
+                ? selectedValueRow.modifiers[selectedModifierIndex] : null;
+        public bool HasSelectedModifier => SelectedModifier != null;
+        public Visibility ModifierEmptyVisibility => HasValueSelection && ModifierRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SelectedModifierVisibility => HasSelectedModifier ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SelectedModifierSecondsVisibility => SelectedModifier?.kind == HoFaceModifierKind.Steps
+            ? Visibility.Collapsed : HasSelectedModifier ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SelectedModifierStepsVisibility => SelectedModifier?.kind == HoFaceModifierKind.Steps
+            ? Visibility.Visible : Visibility.Collapsed;
+        public string ModifierOrderSummary => HasSelectedModifier
+            ? (selectedModifierIndex + 1) + " / " + ModifierRows.Count : "";
+        public bool CanMoveModifierUp => HasSelectedModifier && selectedModifierIndex > 0;
+        public bool CanMoveModifierDown => HasSelectedModifier && selectedModifierIndex < ModifierRows.Count - 1;
+        public bool CanDeleteModifierStep => SelectedModifier?.kind == HoFaceModifierKind.Steps &&
+            selectedModifierStepIndex >= 0 && selectedModifierStepIndex < (SelectedModifier.steps?.Count ?? 0);
         private bool loadingInspector;
         public bool HasPropertyDraft => !loadingInspector && HasSelection &&
             (DraftName != (selectedValueRow?.parameter ?? selectedNode?.name ?? "") ||
@@ -73,11 +127,49 @@ namespace HoFace.Studio
             ControlPointXColumn.Header = HasAxisY ? "X" : "阈值";
             ControlPointYColumn.Visibility = HasAxisY ? Visibility.Visible : Visibility.Collapsed;
             loadingInspector = false;
+            RefreshModifierRows();
             if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count) CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
             PropertyDraftChanged();
             foreach (string name in new[] { nameof(HasValueSelection), nameof(HasNodeSelection), nameof(HasSelection),
                 nameof(SelectionTitle), nameof(SelectionKind), nameof(WeightSectionTitle), nameof(HasAxisX), nameof(HasAxisY), nameof(HasWeightSelection) })
                 OnPropertyChanged(name);
+        }
+        private void RefreshModifierRows()
+        {
+            ModifierRows.Clear();
+            if (selectedValueRow?.modifiers != null)
+                for (int i = 0; i < selectedValueRow.modifiers.Count; i++)
+                    ModifierRows.Add(new ModifierRow(i, selectedValueRow.modifiers[i]));
+            if (ModifierRows.Count == 0) selectedModifierIndex = -1;
+            else if (selectedModifierIndex < 0 || selectedModifierIndex >= ModifierRows.Count) selectedModifierIndex = 0;
+            OnPropertyChanged(nameof(SelectedModifierIndex));
+            RefreshModifierDraft();
+        }
+        private void RefreshModifierDraft()
+        {
+            loadingModifier = true;
+            var modifier = SelectedModifier;
+            ModifierKindDraft = modifier == null ? "" : ModifierLabel(modifier.kind);
+            ModifierSecondsDraft = modifier == null ? "0" :
+                modifier.seconds.ToString("G7", CultureInfo.InvariantCulture);
+            ModifierStepRows.Clear();
+            if (modifier?.steps != null)
+                for (int i = 0; i < modifier.steps.Count; i++)
+                    ModifierStepRows.Add(new ModifierStepRow(i, modifier.steps[i]));
+            if (selectedModifierStepIndex >= ModifierStepRows.Count) selectedModifierStepIndex = -1;
+            loadingModifier = false;
+            foreach (string name in new[] { nameof(HasSelectedModifier), nameof(ModifierEmptyVisibility),
+                nameof(SelectedModifierVisibility), nameof(SelectedModifierSecondsVisibility),
+                nameof(SelectedModifierStepsVisibility), nameof(ModifierOrderSummary), nameof(CanMoveModifierUp),
+                nameof(CanMoveModifierDown), nameof(CanDeleteModifierStep),
+                nameof(SelectedModifierStepIndex) })
+                OnPropertyChanged(name);
+        }
+        private void ReloadEditorsKeepingModifier(int modifierIndex, int stepIndex = -1)
+        {
+            ReloadEditors();
+            SelectedModifierIndex = modifierIndex >= 0 && modifierIndex < ModifierRows.Count ? modifierIndex : -1;
+            SelectedModifierStepIndex = stepIndex >= 0 && stepIndex < ModifierStepRows.Count ? stepIndex : -1;
         }
         private void TextDraftChanged()
         {
@@ -240,6 +332,187 @@ namespace HoFace.Studio
         {
             if (sender is DataGrid grid && grid.SelectedItem is CurveRow row) Plot.SelectIndex(row.Index);
         }
+        private static string ModifierLabel(HoFaceModifierKind kind) => kind switch
+        {
+            HoFaceModifierKind.Smooth => "平滑",
+            HoFaceModifierKind.Delay => "延迟",
+            HoFaceModifierKind.Steps => "维持",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+        private static HoFaceModifierKind ParseModifierKind(string label) => label switch
+        {
+            "平滑" or "smooth" => HoFaceModifierKind.Smooth,
+            "延迟" or "delay" => HoFaceModifierKind.Delay,
+            "维持" or "steps" => HoFaceModifierKind.Steps,
+            _ => throw new ArgumentException("修饰器类型必须是平滑、延迟或维持。")
+        };
+        private void AddModifierClicked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                EnsureNoDraft();
+                if (selectedValueRow == null || sender is not Button button) return;
+                var kind = ParseModifierKind(button.Tag?.ToString());
+                var modifier = new HoFaceModifier
+                {
+                    kind = kind,
+                    seconds = kind == HoFaceModifierKind.Smooth ? .08f : kind == HoFaceModifierKind.Delay ? .05f : 0,
+                    steps = kind == HoFaceModifierKind.Steps
+                        ? new List<HoFaceStep> { new HoFaceStep { trigger = .5f, target = 1, threshold = .05f } }
+                        : new List<HoFaceStep>()
+                };
+                int outputIndex = selectedOutputIndex;
+                document.Edit((value, ir) =>
+                {
+                    value.outputs[outputIndex].modifiers ??= new List<HoFaceModifier>();
+                    value.outputs[outputIndex].modifiers.Add(modifier);
+                });
+                int modifierIndex = selectedValueRow.modifiers.Count - 1;
+                ReloadEditorsKeepingModifier(modifierIndex, kind == HoFaceModifierKind.Steps ? 0 : -1);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void DeleteModifierClicked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                EnsureNoDraft();
+                if (SelectedModifier == null) return;
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
+                document.Edit((value, ir) => value.outputs[outputIndex].modifiers.RemoveAt(modifierIndex));
+                ReloadEditorsKeepingModifier(Math.Min(modifierIndex, selectedValueRow.modifiers.Count - 1));
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void MoveModifierClicked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                EnsureNoDraft();
+                if (sender is not Button button || SelectedModifier == null) return;
+                int direction = button.Tag?.ToString() == "up" ? -1 : 1;
+                int from = selectedModifierIndex, to = from + direction;
+                if (to < 0 || to >= selectedValueRow.modifiers.Count) return;
+                int outputIndex = selectedOutputIndex;
+                document.Edit((value, ir) =>
+                {
+                    var chain = value.outputs[outputIndex].modifiers;
+                    var modifier = chain[from];
+                    chain.RemoveAt(from);
+                    chain.Insert(to, modifier);
+                });
+                ReloadEditorsKeepingModifier(to, selectedModifierStepIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void ModifierKindChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (loadingModifier || sender is not ComboBox combo || SelectedModifier == null) return;
+            try
+            {
+                EnsureNoDraft();
+                var kind = ParseModifierKind(combo.SelectedItem?.ToString());
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
+                document.Edit((value, ir) =>
+                {
+                    var modifier = value.outputs[outputIndex].modifiers[modifierIndex];
+                    modifier.kind = kind;
+                    if (kind == HoFaceModifierKind.Steps)
+                    {
+                        modifier.steps ??= new List<HoFaceStep>();
+                        if (modifier.steps.Count == 0)
+                            modifier.steps.Add(new HoFaceStep { trigger = .5f, target = 1, threshold = .05f });
+                    }
+                });
+                ReloadEditorsKeepingModifier(modifierIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void ModifierSecondsLostFocus(object sender, RoutedEventArgs e)
+        {
+            if (loadingModifier || SelectedModifier == null || SelectedModifier.kind == HoFaceModifierKind.Steps) return;
+            try
+            {
+                EnsureNoDraft();
+                float seconds = ParseNumber(ModifierSecondsDraft);
+                if (seconds < 0) throw new ArgumentException("时长不能为负数。");
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
+                document.Edit((value, ir) => value.outputs[outputIndex].modifiers[modifierIndex].seconds = seconds);
+                ReloadEditorsKeepingModifier(modifierIndex, selectedModifierStepIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void AddModifierStepClicked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                EnsureNoDraft();
+                if (SelectedModifier?.kind != HoFaceModifierKind.Steps) return;
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
+                int stepIndex = SelectedModifier.steps?.Count ?? 0;
+                document.Edit((value, ir) =>
+                {
+                    var modifier = value.outputs[outputIndex].modifiers[modifierIndex];
+                    modifier.steps ??= new List<HoFaceStep>();
+                    float trigger = modifier.steps.Count == 0 ? .5f : modifier.steps[modifier.steps.Count - 1].trigger + .1f;
+                    modifier.steps.Add(new HoFaceStep { trigger = trigger, target = 1, threshold = .05f });
+                });
+                ReloadEditorsKeepingModifier(modifierIndex, stepIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void DeleteModifierStepClicked(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                EnsureNoDraft();
+                if (SelectedModifier?.kind != HoFaceModifierKind.Steps ||
+                    selectedModifierStepIndex < 0 || selectedModifierStepIndex >= SelectedModifier.steps.Count) return;
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex, stepIndex = selectedModifierStepIndex;
+                document.Edit((value, ir) => value.outputs[outputIndex].modifiers[modifierIndex].steps.RemoveAt(stepIndex));
+                ReloadEditorsKeepingModifier(modifierIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void ModifierStepCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        {
+            if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not ModifierStepRow row) return;
+            string property = e.Column.SortMemberPath;
+            string text = (e.EditingElement as TextBox)?.Text;
+            int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex, stepIndex = row.Index;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    EnsureNoDraft();
+                    float number = ParseNumber(text);
+                    if ((property == "Hold" || property == "Threshold" || property == "EnterSeconds" || property == "ExitSeconds") &&
+                        number < 0) throw new ArgumentException("保持、回差、进入和退出时长不能为负数。");
+                    document.Edit((value, ir) =>
+                    {
+                        var steps = value.outputs[outputIndex].modifiers[modifierIndex].steps;
+                        var step = steps[stepIndex];
+                        switch (property)
+                        {
+                            case "Trigger":
+                                if (stepIndex > 0 && steps[stepIndex - 1].trigger >= number ||
+                                    stepIndex + 1 < steps.Count && steps[stepIndex + 1].trigger <= number)
+                                    throw new ArgumentException("维持步骤按触发值严格递增排列。");
+                                step.trigger = number; break;
+                            case "Target": step.target = number; break;
+                            case "Hold": step.hold = number; break;
+                            case "Threshold": step.threshold = number; break;
+                            case "EnterSeconds": step.enterSeconds = number; break;
+                            case "ExitSeconds": step.exitSeconds = number; break;
+                            default: throw new ArgumentException("未知维持步骤属性。");
+                        }
+                        steps[stepIndex] = step;
+                    });
+                    ReloadEditorsKeepingModifier(modifierIndex, stepIndex);
+                }
+                catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+            }));
+        }
         private void ControlPointSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (sender is DataGrid grid && grid.SelectedItem is ControlPointRow row) BlendPlot.SelectIndex(row.Index);
@@ -312,6 +585,42 @@ namespace HoFace.Studio
                 X = x.ToString("G7", CultureInfo.InvariantCulture);
                 Y = y.ToString("G7", CultureInfo.InvariantCulture);
             }
+        }
+        public sealed class ModifierRow
+        {
+            public int Index { get; }
+            public string Display { get; }
+            public ModifierRow(int index, HoFaceModifier modifier)
+            {
+                Index = index;
+                if (modifier == null) { Display = (index + 1) + " · 无效修饰器"; return; }
+                string kind = ModifierLabel(modifier.kind);
+                string detail = modifier.kind == HoFaceModifierKind.Steps
+                    ? (modifier.steps?.Count ?? 0) + " 步"
+                    : modifier.seconds.ToString("0.###", CultureInfo.InvariantCulture) + " s";
+                Display = (index + 1) + " · " + kind + " · " + detail;
+            }
+        }
+        public sealed class ModifierStepRow
+        {
+            public int Index { get; }
+            public string Trigger { get; set; }
+            public string Target { get; set; }
+            public string Hold { get; set; }
+            public string Threshold { get; set; }
+            public string EnterSeconds { get; set; }
+            public string ExitSeconds { get; set; }
+            public ModifierStepRow(int index, HoFaceStep step)
+            {
+                Index = index;
+                Trigger = Format(step.trigger);
+                Target = Format(step.target);
+                Hold = Format(step.hold);
+                Threshold = Format(step.threshold);
+                EnterSeconds = Format(step.enterSeconds);
+                ExitSeconds = Format(step.exitSeconds);
+            }
+            private static string Format(float value) => value.ToString("G7", CultureInfo.InvariantCulture);
         }
     }
 }
