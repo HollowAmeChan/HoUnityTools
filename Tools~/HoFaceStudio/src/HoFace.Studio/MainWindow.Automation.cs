@@ -57,6 +57,7 @@ namespace HoFace.Studio
         private object ReadItems(string filter)
         {
             bool Match(string text) => string.IsNullOrWhiteSpace(filter) || text.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+            var reachable = new HashSet<string>(ReachableIrNodes(document.Ir).Select(x => x.id), StringComparer.Ordinal);
             return new
             {
                 inputs = document.Value.inputs.Select((row, index) => new
@@ -69,11 +70,14 @@ namespace HoFace.Studio
                     index, parameter = row.parameter, expression = row.expression,
                     defaultValue = row.defaultValue, curve = ReadCurve(row), modifiers = ReadModifiers(row)
                 }).Where(x => Match(x.parameter + " " + x.expression)).ToArray(),
-                nodes = document.Ir.nodes.Where(n => Match(n.id + " " + n.name + " " + n.type + " " + n.parameterX + " " + n.parameterY))
+                nodes = document.Ir.nodes.Where(n => reachable.Contains(n.id) &&
+                    Match(n.id + " " + n.name + " " + n.type + " " + n.parameterX + " " + n.parameterY))
                     .Select(n => new { id = n.id, name = n.name, type = n.type, parameterX = n.parameterX,
                         parameterY = n.parameterY, children = n.children.Select(c => new { node = c.node, x = c.x, y = c.y,
                             threshold = c.threshold, weight = c.weight }).ToArray(),
                         weights = n.weights.Select(w => new { target = w.target, value = w.value }).ToArray() }).ToArray(),
+                orphanNodes = document.Ir.nodes.Where(n => !reachable.Contains(n.id) &&
+                    Match(n.id + " " + n.name + " " + n.type)).Select(n => new { id = n.id, name = n.name, type = n.type }).ToArray(),
                 parameters = document.Ir.parameters.Select(p => new { p.name, p.defaultValue, p.min, p.max }).ToArray(),
                 targets = document.Ir.targets.Select(t => new { t.id, t.min, t.max }).ToArray()
             };
@@ -165,9 +169,11 @@ namespace HoFace.Studio
             if (selectedValueRow != null) overrides[selectedValueRow.parameter] = HoFaceCurve.Transfer(selectedValueRow.curve, (float)x);
             else
             {
-                if (!HasAxisX) throw new InvalidOperationException("当前节点没有可预览的参数轴。");
-                overrides[selectedNode.parameterX] = (float)x;
-                if (HasAxisY) overrides[selectedNode.parameterY] = (float)y;
+                var previewNode = BlendPreviewNode;
+                if (previewNode?.type != "blend1d" && previewNode?.type != "blend2d")
+                    throw new InvalidOperationException("当前规则不属于可预览的 Blend Tree。");
+                overrides[previewNode.parameterX] = (float)x;
+                if (previewNode.type == "blend2d") overrides[previewNode.parameterY] = (float)y;
             }
             parameterOverrides = overrides;
             ApplyParameterOverrides(values);

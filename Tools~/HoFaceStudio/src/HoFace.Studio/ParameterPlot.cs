@@ -14,6 +14,7 @@ namespace HoFace.Studio
     {
         public HoFaceOutput Rule { get; set; }
         public HoFaceIrNode Node { get; set; }
+        public Func<string, string> NodeLabelResolver { get; set; }
         public int SelectedIndex { get; private set; } = -1;
         public double CursorX { get; set; }
         public double CursorY { get; set; }
@@ -153,7 +154,8 @@ namespace HoFace.Studio
             {
                 Point p = Screen(points[i]);
                 dc.DrawEllipse(i == SelectedIndex ? hot : accent, new Pen(new SolidColorBrush(Color.FromRgb(169, 181, 191)), .7), p, 6, 6);
-                string label = Rule != null ? i.ToString() : Node.children[i].node;
+                string label = Rule != null ? i.ToString() :
+                    NodeLabelResolver?.Invoke(Node.children[i].node) ?? Node.children[i].node;
                 Text(dc, label, new Point(p.X + 10, p.Y - 18));
             }
             dc.PushClip(new RectangleGeometry(Plot));

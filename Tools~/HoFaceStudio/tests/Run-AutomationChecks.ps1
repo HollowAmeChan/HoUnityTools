@@ -124,8 +124,34 @@ try {
     Assert-Check ($state.selectedValue -eq 'Mouth/Open') 'Open selects a useful first row'
     $items = Call-Studio 'list'
     Assert-Check ($items.inputs.Count -eq 3 -and $items.outputs.Count -eq 3 -and $items.nodes.Count -eq 5) 'AI can inspect all input/output/node definitions'
+    $rootRule = $items.nodes | Where-Object { $_.id -eq 'mouth' }
+    Assert-Check ($rootRule.children.Count -eq 4 -and $items.orphanNodes.Count -eq 0) 'IR list describes the root-reachable Blend Tree and separates orphans'
+    $documentState = Call-Studio 'document'
+    $irWithOrphan = [System.Text.Json.Nodes.JsonNode]::Parse($documentState.irText)
+    $irWithOrphan['nodes'].AsArray().Add([System.Text.Json.Nodes.JsonNode]::Parse(
+        '{"id":"unusedPose","name":"Unused","type":"pose","weights":[]}'))
+    $null = Call-Studio 'text' @{ value=$documentState.valueText; ir=$irWithOrphan.ToJsonString() }
+    Assert-Check ((Call-Studio 'list').orphanNodes.Count -eq 1) 'CLI reports rules not reachable from root'
+    $null = Call-Studio 'clearIrOrphans'
+    Assert-Check ((Call-Studio 'list').orphanNodes.Count -eq 0) 'CLI can remove root-unreachable rules'
+    $newPose = Call-Studio 'addIrRule' @{ parentId='mouth'; type='pose'; name='CLI 新姿势' }
+    $items = Call-Studio 'list'
+    Assert-Check ($items.nodes.Count -eq 6 -and ($items.nodes | Where-Object id -eq 'mouth').children.Count -eq 5) 'CLI creates an aliased Pose beneath its Blend Tree'
+    $null = Call-Studio 'deleteIrChild' @{ nodeId='mouth'; index=4 }
+    $items = Call-Studio 'list'
+    Assert-Check ($items.nodes.Count -eq 5) 'Deleting the stored Blend child prunes its unreferenced pose rule'
+    $nestedBlend = Call-Studio 'addIrRule' @{ parentId='mouth'; type='blend2d'; name='嵌套树' }
+    Assert-Check ((Call-Studio 'list').nodes.Count -eq 7) 'CLI adds a nested Blend Tree with its starter Pose'
+    $null = Call-Studio 'deleteIrRule' @{ id=$nestedBlend.created }
+    Assert-Check ((Call-Studio 'list').nodes.Count -eq 5) 'CLI deletes a nested Blend Tree and cleans its orphaned child'
     $capture = Call-Studio 'screenshot' @{ path = (Join-Path $work 'value.png') }
     Assert-Check ((Get-Item -LiteralPath $capture.path).Length -gt 5000) 'Background WPF screenshot'
+    $irCompact = Call-Studio 'view' @{ width=1024; height=640; structureTab=1; centerTab=1 }
+    $null = Call-Studio 'selectNode' @{ id='mouth' }
+    $irTreeCapture = Call-Studio 'screenshot' @{ path = (Join-Path $work 'ir-tree-compact.png') }
+    Assert-Check ($irCompact.width -ge 1024 -and (Get-Item -LiteralPath $irTreeCapture.path).Length -gt 5000) 'IR Blend Tree hierarchy and controls render at compact size'
+    $null = Call-Studio 'view' @{ width=1380; height=860; structureTab=0; centerTab=0 }
+    $null = Call-Studio 'selectValue' @{ parameter='Mouth/Open' }
     $modifierChain = @(
         @{ kind='smooth'; seconds=.08; steps=@() },
         @{ kind='steps'; seconds=0; steps=@(@{trigger=.5; target=1; hold=.2; threshold=.05; enterSeconds=.1; exitSeconds=.05}) }
@@ -228,6 +254,12 @@ try {
     Assert-Check (!$state.dirty -and $state.selectedValue -eq 'Mouth/Form') 'Undo preserves active selection over IPC'
     $state = Call-Studio 'redo'
     Assert-Check ($state.dirty -and $state.selectedValue -eq 'Mouth/Form') 'Redo preserves active selection over IPC'
+    $null = Call-Studio 'setPoseWeight' @{ nodeId='open'; targetId='Custom/TypedTarget'; value=.35 }
+    $items = Call-Studio 'list'
+    Assert-Check (($items.nodes | Where-Object id -eq 'open').weights.target -contains 'Custom/TypedTarget') 'Pose CLI accepts a free-text target and declares it'
+    $null = Call-Studio 'deletePoseWeight' @{ nodeId='open'; targetId='Custom/TypedTarget' }
+    $items = Call-Studio 'list'
+    Assert-Check (!(($items.nodes | Where-Object id -eq 'open').weights.target -contains 'Custom/TypedTarget')) 'Pose CLI deletes explicit stored weights and prunes unused target declarations'
     $protected = Invoke-Cli @('open', (@{valuePath=$valuePath;irPath=$irPath} | ConvertTo-Json -Compress))
     Assert-Check ($protected.exitCode -eq 1) 'Opening another document protects unsaved work'
     $protectedClose = Invoke-Cli @('shutdown')

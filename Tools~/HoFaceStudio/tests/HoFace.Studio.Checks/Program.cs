@@ -93,6 +93,103 @@ internal static class Program
             }
             Call("open", new { valuePath = Path.Combine(samples, "Mouth.hoface.value.json"), irPath = Path.Combine(samples, "Mouth.hoface.ir.json") });
             Check(((StackPanel)window.FindName("PropertiesPanel")).IsEnabled, "native property controls enable after opening");
+            Check(window.NodeRows.Count == 5 && window.IrTreeRoots.Count == 1 &&
+                window.IrTreeRoots[0].NodeId == "mouth" && window.IrTreeRoots[0].Children.Count == 4,
+                "IR navigation is a root-reachable hierarchy with child poses nested under the Blend Tree");
+            Check(window.IrTreeRoots[0].Name == "嘴部" && window.IrTreeRoots[0].Children[1].Name == "张嘴",
+                "IR tree displays aliases instead of rule IDs");
+            var irWithOrphan = JsonNode.Parse(Result("document").GetProperty("irText").GetString());
+            irWithOrphan["nodes"].AsArray().Add(JsonNode.Parse(
+                "{\"id\":\"unusedPose\",\"name\":\"未引用\",\"type\":\"pose\",\"weights\":[]}"));
+            Call("text", new
+            {
+                value = Result("document").GetProperty("valueText").GetString(),
+                ir = irWithOrphan.ToJsonString()
+            });
+            Check(window.NodeRows.Count == 5 && window.OrphanIrNodeCount == 1 &&
+                window.IrTreeRoots[0].Children.Count == 4,
+                "unreferenced IR nodes are hidden from the Blend Tree and identified separately");
+            typeof(MainWindow).GetMethod("ClearOrphanRulesClicked", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(window, new object[] { null, new RoutedEventArgs() });
+            Check(window.OrphanIrNodeCount == 0 &&
+                Result("document").GetProperty("ir").GetProperty("nodes").GetArrayLength() == 5,
+                "orphan cleanup removes rules outside root and preserves reachable tree");
+            Call("undo");
+            Check(window.OrphanIrNodeCount == 1, "orphan cleanup is undoable");
+            Call("redo");
+            Check(window.OrphanIrNodeCount == 0, "orphan cleanup can be redone");
+            Call("selectNode", new { id = "rest" });
+            Check(window.InspectorWeights.Count == 0 &&
+                window.FindName("AddPoseWeightButton") is Button,
+                "an empty Pose shows no synthetic choices, only a free-text target editor");
+            window.PoseTargetDraft = "freeFormTarget";
+            window.PoseWeightDraft = "0.35";
+            ((Button)window.FindName("AddPoseWeightButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("AddPoseWeightButton")));
+            Check(window.InspectorWeights.Count == 1 &&
+                window.InspectorWeights[0].TargetId == "freeFormTarget",
+                "Pose target IDs can be typed and saved without a target picker");
+            Check(Result("document").GetProperty("ir").GetProperty("targets").EnumerateArray()
+                .Any(x => x.GetProperty("id").GetString() == "freeFormTarget"),
+                "typing a new Pose target creates its declared IR output");
+            ((DataGrid)window.FindName("WeightsGrid")).SelectedIndex = 0;
+            ((Button)window.FindName("DeletePoseWeightButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("DeletePoseWeightButton")));
+            Check(window.InspectorWeights.Count == 0 &&
+                !Result("document").GetProperty("ir").GetProperty("targets").EnumerateArray()
+                    .Any(x => x.GetProperty("id").GetString() == "freeFormTarget"),
+                "deleting the last stored Pose weight prunes its unused output target");
+            Call("selectNode", new { id = "open" });
+            Check(window.InspectorWeights.Count == 1 &&
+                window.InspectorWeights[0].TargetId == "jawOpen",
+                "Pose inspector only lists targets actually saved by that rule");
+            typeof(MainWindow).GetMethod("EditPoseWeightTarget", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(window, new object[] { "open", "jawOpen", "Free/TextTarget" });
+            Check(window.InspectorWeights.Single().TargetId == "Free/TextTarget",
+                "editing a Pose target field commits the typed target ID");
+            Call("undo");
+            Check(window.InspectorWeights.Single().TargetId == "jawOpen",
+                "typed Pose target edits participate in the document undo stack");
+            var createdRule = Result("addIrRule", new { parentId = "mouth", type = "pose", name = "测试姿势" });
+            string createdPoseId = createdRule.GetProperty("created").GetString();
+            Check(window.IrTreeRoots[0].Children.Any(x => x.NodeId == createdPoseId && x.Name == "测试姿势"),
+                "CLI rule creation adds an aliased Pose beneath the selected Blend Tree");
+            Call("deleteIrRule", new { id = createdPoseId });
+            Check(window.NodeRows.Count == 5, "deleting a rule removes its unreferenced node");
+            var nestedRule = Result("addIrRule", new { parentId = "mouth", type = "blend2d", name = "嵌套混合" });
+            string nestedId = nestedRule.GetProperty("created").GetString();
+            Check(window.NodeRows.Count == 7 && window.NodeRows.Any(x => x.Node.id == nestedId),
+                "nested Blend Tree creation adds a parent and its starter Pose");
+            string nestedPoseId = Result("list").GetProperty("nodes").EnumerateArray()
+                .First(x => x.GetProperty("id").GetString() == nestedId)
+                .GetProperty("children")[0].GetProperty("node").GetString();
+            Call("selectNode", new { id = nestedPoseId });
+            Check(window.IrTreeRoots[0].Children.Any(x => x.NodeId == nestedId && x.IsExpanded &&
+                x.Children.Any(child => child.NodeId == nestedPoseId && child.IsSelected)),
+                "selecting a nested rule expands its parent path in the Blend Tree");
+            Call("deleteIrRule", new { id = nestedId });
+            Check(window.NodeRows.Count == 5, "deleting a nested Blend Tree prunes its orphaned starter Pose");
+            Call("selectNode", new { id = "mouth" });
+            ((Button)window.FindName("AddPoseRuleButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("AddPoseRuleButton")));
+            Check(window.NodeRows.Count == 6 && window.SelectedNodeRow?.Node.type == "pose",
+                "tree toolbar adds a Pose rule as a child of the selected Blend Tree");
+            ((Button)window.FindName("DeleteSelectedRuleButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("DeleteSelectedRuleButton")));
+            Check(window.NodeRows.Count == 5 && window.SelectedNodeRow?.Node.id == "mouth",
+                "tree toolbar deletes the selected rule and returns selection to root");
+            ((Button)window.FindName("AddPoseRuleButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("AddPoseRuleButton")));
+            Check(window.ControlPoints.Count == 0 && window.SelectedNodeRow?.Node.type == "pose",
+                "the Blend Tree toolbar adds and selects a Pose rule");
+            Call("selectNode", new { id = "mouth" });
+            Check(window.ControlPoints.Count == 5, "new Pose rule is stored as a new Blend Tree child");
+            ((DataGrid)window.FindName("ControlPointGrid")).SelectedIndex = 4;
+            ((Button)window.FindName("DeleteControlPointButton")).RaiseEvent(
+                new RoutedEventArgs(ButtonBase.ClickEvent, window.FindName("DeleteControlPointButton")));
+            Check(window.ControlPoints.Count == 4 && window.NodeRows.Count == 5,
+                "deleting a blend point removes its unused child rule");
+            Call("view", new { centerTab = 0 });
             Check(window.RawMonitorRows.Count == 3 && window.ValueMonitorRows.Count == 2 && window.IrMonitorRows.Count == 3,
                 "monitor preloads all three layers from the work document");
             using (var phone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
@@ -317,6 +414,12 @@ internal static class Program
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form", "redo preserves selection");
             Call("selectNode", new { id = "mouth" });
             Check(window.ControlPoints.Count == 4, "2D control points use one row per child");
+            Check(window.ControlPoints[0].ChildId == "闭嘴",
+                "Blend Tree child table uses Pose aliases while keeping stable node IDs internally");
+            window.IrFilter = "张嘴";
+            Check(window.VisibleIrNodeCount == 3 && window.IrTreeRoots[0].Children.Count == 2,
+                "Blend Tree search retains matching descendants with their root path");
+            window.IrFilter = "";
             Call("setIrChild", new { nodeId = "mouth", childId = "open", property = "y", value = .82 });
             Call("undo");
             Check(State().GetProperty("selectedNode").GetString() == "mouth", "IR undo preserves stable node id");
@@ -421,9 +524,10 @@ internal static class Program
             Call("undo");
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form" && State().GetProperty("selectedValueIndex").GetInt32() == 1, "undo reorder preserves logical selected row");
             var capabilities = Result("capabilities");
-            Check(capabilities.GetProperty("protocolVersion").GetInt32() == 4 &&
-                capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "setValueModifiers"),
-                "CLI advertises the modifier editor command in protocol v4");
+            Check(capabilities.GetProperty("protocolVersion").GetInt32() == 5 &&
+                capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "addIrRule") &&
+                capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "deleteIrChild"),
+                "CLI advertises hierarchical IR rule editing in protocol v5");
             Console.WriteLine("Passed " + checks + " Studio interaction checks.");
             return 0;
         }

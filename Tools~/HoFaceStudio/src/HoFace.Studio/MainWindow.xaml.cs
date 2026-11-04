@@ -62,6 +62,7 @@ namespace HoFace.Studio
         public bool HasUnsavedChanges => HasTextDraft || HasPropertyDraft || document.IsDirty;
         public ObservableCollection<RuleRow> ValueRows { get; } = new ObservableCollection<RuleRow>();
         public ObservableCollection<NodeRow> NodeRows { get; } = new ObservableCollection<NodeRow>();
+        public ObservableCollection<IrTreeItem> IrTreeRoots { get; } = new ObservableCollection<IrTreeItem>();
         public ObservableCollection<WeightRow> InspectorWeights { get; } = new ObservableCollection<WeightRow>();
         public event PropertyChangedEventHandler PropertyChanged;
         public string ValuePath => document.ValuePath;
@@ -96,6 +97,7 @@ namespace HoFace.Studio
                     }
                 }
                 centerTab = value; OnPropertyChanged(); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(ShowIrGraphActions));
                 OnPropertyChanged(nameof(SelectionKind));
                 OnPropertyChanged(nameof(SelectionTitle)); OnPropertyChanged(nameof(CanFitPlot));
             }
@@ -114,6 +116,7 @@ namespace HoFace.Studio
                 ResolveSelection(); RefreshPlot(true);
                 OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
                 OnPropertyChanged(nameof(CenterTab)); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(ShowIrGraphActions));
                 OnPropertyChanged(nameof(SelectionKind));
             }
         }
@@ -128,8 +131,10 @@ namespace HoFace.Studio
                 structureTab = 1;
                 centerTab = 1;
                 ResolveSelection(); RefreshPlot(true);
+                SelectIrTreeItem(selectedNodeId);
                 OnPropertyChanged(); OnPropertyChanged(nameof(StructureTab));
                 OnPropertyChanged(nameof(CenterTab)); OnPropertyChanged(nameof(MonitorWorkspaceVisibility));
+                OnPropertyChanged(nameof(ShowIrGraphActions));
                 OnPropertyChanged(nameof(SelectionKind));
             }
         }
@@ -274,11 +279,19 @@ namespace HoFace.Studio
         private void WeightsCellEditEnding(object sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
         {
             if (e.EditAction != System.Windows.Controls.DataGridEditAction.Commit || e.Row.Item is not WeightRow row) return;
+            string property = e.Column.SortMemberPath;
+            string editedText = (e.EditingElement as System.Windows.Controls.TextBox)?.Text;
+            string originalTarget = row.OriginalTargetId;
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 try
                 {
                     EnsureNoDraft();
+                    if (row.Kind == "pose" && property == "TargetId")
+                    {
+                        EditPoseWeightTarget(row.NodeId, originalTarget, editedText);
+                        return;
+                    }
                     float value = ParseNumber(row.Value);
                     if (row.Kind == "pose") EditIrPoseWeight(row.NodeId, row.TargetId, value);
                     else EditIrChild(row.NodeId, row.ChildId, -1, row.Kind, value);
@@ -353,11 +366,10 @@ namespace HoFace.Studio
                 var rules = document.Value?.outputs.Select((row, index) => new RuleRow(row, index))
                     .Where(x => string.IsNullOrWhiteSpace(ValueFilter) || x.Display.IndexOf(ValueFilter, StringComparison.OrdinalIgnoreCase) >= 0)
                     .ToArray() ?? Array.Empty<RuleRow>();
-                var nodes = document.Ir?.nodes.Where(x => string.IsNullOrWhiteSpace(IrFilter)
-                    || (x.id + " " + x.name + " " + x.type + " " + x.parameterX + " " + x.parameterY).IndexOf(IrFilter, StringComparison.OrdinalIgnoreCase) >= 0)
-                    .Select(x => new NodeRow(x)).ToArray() ?? Array.Empty<NodeRow>();
+                var nodes = ReachableIrNodes(document.Ir).Select(x => new NodeRow(x)).ToArray();
                 Reconcile(ValueRows, rules, x => x.Index.ToString(), (old, next) => old.Update(next.Row));
                 Reconcile(NodeRows, nodes, x => x.Node.id, (old, next) => old.Update(next.Node));
+                RefreshIrTree();
                 OnPropertyChanged(nameof(SelectedValueRow));
                 OnPropertyChanged(nameof(SelectedNodeRow));
                 OnPropertyChanged(nameof(ValueCount)); OnPropertyChanged(nameof(NodeCount));
@@ -375,7 +387,13 @@ namespace HoFace.Studio
             }
             selectedValueRow = structureTab == 0 && selectedOutputIndex >= 0 && document.Value != null &&
                 selectedOutputIndex < document.Value.outputs.Count ? document.Value.outputs[selectedOutputIndex] : null;
-            selectedNode = structureTab == 1 ? document.Ir?.nodes.FirstOrDefault(x => x.id == selectedNodeId) : null;
+            if (structureTab == 1 && document.Ir != null)
+            {
+                var reachable = ReachableIds(document.Ir);
+                if (!reachable.Contains(selectedNodeId)) selectedNodeId = document.Ir.root;
+                selectedNode = document.Ir.nodes.FirstOrDefault(x => x.id == selectedNodeId);
+            }
+            else selectedNode = null;
         }
         private void RememberValueSelection()
         {
@@ -401,12 +419,13 @@ namespace HoFace.Studio
             Plot.Rule = selectedValueRow;
             Plot.Node = null;
             BlendPlot.Rule = null;
-            BlendPlot.Node = selectedNode;
+            BlendPlot.NodeLabelResolver = NodeAlias;
+            BlendPlot.Node = BlendPreviewNode;
             if (newSelection)
             {
                 Plot.ClearSelection(); BlendPlot.ClearSelection();
                 if (selectedValueRow != null) Plot.Fit();
-                else if (selectedNode != null) BlendPlot.Fit();
+                else if (BlendPlot.Node != null) BlendPlot.Fit();
             }
             Plot.ValidateSelection(); Plot.InvalidateVisual();
             BlendPlot.ValidateSelection(); BlendPlot.InvalidateVisual();
@@ -414,37 +433,20 @@ namespace HoFace.Studio
             if (selectedNode != null)
             {
                 if (selectedNode.type == "pose")
-                    foreach (var target in document.Ir.targets)
-                    {
-                        var weight = selectedNode.weights.FirstOrDefault(x => x.target == target.id);
-                        InspectorWeights.Add(new WeightRow(target.id,
-                            (weight?.value ?? 0).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                            "pose", selectedNode.id, target.id));
-                    }
+                    foreach (var weight in selectedNode.weights)
+                        InspectorWeights.Add(new WeightRow(weight.target,
+                            weight.value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                            "pose", selectedNode.id, weight.target));
                 else if (selectedNode.type == "direct")
                     foreach (var child in selectedNode.children)
-                        InspectorWeights.Add(new WeightRow(child.node,
+                        InspectorWeights.Add(new WeightRow(NodeAlias(child.node),
                             child.weight.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
                             "weight", selectedNode.id, childId: child.node));
-                else if (selectedNode.type == "blend1d")
-                    foreach (var child in selectedNode.children)
-                        InspectorWeights.Add(new WeightRow(child.node,
-                            child.threshold.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                            "threshold", selectedNode.id, childId: child.node));
-                else if (selectedNode.type == "blend2d")
-                    foreach (var child in selectedNode.children)
-                    {
-                        InspectorWeights.Add(new WeightRow(child.node + " · X",
-                            child.x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                            "x", selectedNode.id, childId: child.node));
-                        InspectorWeights.Add(new WeightRow(child.node + " · Y",
-                            child.y.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                            "y", selectedNode.id, childId: child.node));
-                    }
             }
             OnPropertyChanged(nameof(InspectorName)); OnPropertyChanged(nameof(InspectorExpression)); OnPropertyChanged(nameof(InspectorSummary)); OnPropertyChanged(nameof(InspectorTitle)); OnPropertyChanged(nameof(PlotHint));
             OnPropertyChanged(nameof(WeightsReadOnly));
             RefreshInspector();
+            SelectIrTreeItem(selectedNodeId);
         }
         private void PlotEditBeginning() { editBefore ??= document.Snapshot(); }
         private void PlotEditChanged() { Plot.InvalidateVisual(); BlendPlot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
@@ -521,6 +523,11 @@ namespace HoFace.Studio
                 case "setValueExpression": SetValueExpression(payload); break;
                 case "setValueModifiers": SetValueModifiers(payload); break;
                 case "setNode": SetNode(payload); break;
+                case "addIrRule": return AddIrRuleFromAutomation(payload);
+                case "deleteIrRule": return DeleteIrRuleFromAutomation(payload);
+                case "deleteIrChild": return DeleteIrChildFromAutomation(payload);
+                case "clearIrOrphans": return ClearOrphanRulesFromAutomation();
+                case "deletePoseWeight": return DeletePoseWeightFromAutomation(payload);
                 case "addValueCurveKey": AddValueCurveKey(payload); break;
                 case "deleteValueCurveKey": DeleteValueCurveKey(payload); break;
                 case "draftText":
@@ -608,7 +615,7 @@ namespace HoFace.Studio
                     return ExecuteAutomation("status", default);
                 case "selectNode":
                     string nodeId = RequiredString(payload, "id");
-                    if (!document.Ir.nodes.Any(x => x.id == nodeId)) throw new ArgumentException("节点不存在：" + nodeId);
+                    if (!NodeRows.Any(x => x.Node.id == nodeId)) throw new ArgumentException("root Blend Tree 中没有此节点：" + nodeId);
                     CommitPropertyDraft();
                     IrFilter = ""; SelectedNodeRow = NodeRows.First(x => x.Node.id == nodeId);
                     return ExecuteAutomation("status", default);
@@ -740,8 +747,10 @@ namespace HoFace.Studio
             var before = SnapshotDocument();
             AuthoringDocument.Parse(before.Value, before.Ir, out _, out var graph);
             var node = graph.nodes.FirstOrDefault(x => x.id == nodeId && x.type == "pose");
-            if (node == null || !graph.targets.Any(x => x.id == targetId))
-                throw new InvalidOperationException("Pose 节点或目标不存在。");
+            if (node == null) throw new InvalidOperationException("Pose 节点不存在。");
+            if (string.IsNullOrWhiteSpace(targetId)) throw new ArgumentException("目标 ID 不能为空。");
+            if (!graph.targets.Any(x => x.id == targetId))
+                graph.targets.Add(new HoFaceIrTarget { id = targetId, min = 0, max = 1 });
             var weight = node.weights.FirstOrDefault(x => x.target == targetId);
             if (weight == null) node.weights.Add(new HoFaceIrWeight { target = targetId, value = value });
             else weight.value = value;
@@ -868,11 +877,13 @@ namespace HoFace.Studio
             public string Value { get; set; }
             public string Kind { get; }
             public string NodeId { get; }
-            public string TargetId { get; }
+            public string TargetId { get; set; }
+            public string OriginalTargetId { get; }
             public string ChildId { get; }
             public WeightRow(string name, string value, string kind = "", string nodeId = "", string targetId = "", string childId = "")
             {
-                Name = name; Value = value; Kind = kind; NodeId = nodeId; TargetId = targetId; ChildId = childId;
+                Name = name; Value = value; Kind = kind; NodeId = nodeId;
+                TargetId = targetId; OriginalTargetId = targetId; ChildId = childId;
             }
         }
         public sealed class NodeRow : INotifyPropertyChanged

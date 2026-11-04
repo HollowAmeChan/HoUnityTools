@@ -23,6 +23,7 @@ namespace HoFace.Studio
         public int NodeCount => NodeRows.Count;
         public bool HasValueSelection => selectedValueRow != null;
         public bool HasNodeSelection => selectedNode != null;
+        public bool HasPoseSelection => selectedNode?.type == "pose";
         public bool HasSelection => HasValueSelection || HasNodeSelection;
         public string SelectionTitle => CenterTab == 2 ? "原始输入 · Value · IR" :
             CenterTab == 3 ? "Value + IR JSON" : selectedValueRow?.parameter ??
@@ -35,7 +36,7 @@ namespace HoFace.Studio
             selectedNode?.type == "blend1d" ? "子项阈值" : selectedNode?.type == "blend2d" ? "控制点坐标" : "子项权重";
         public bool HasAxisX => selectedNode?.type == "blend1d" || selectedNode?.type == "blend2d";
         public bool HasAxisY => selectedNode?.type == "blend2d";
-        public bool HasWeightSelection => HasNodeSelection && !HasAxisX;
+        public bool HasWeightSelection => selectedNode?.type == "direct";
         private string draftName = "", draftExpression = "", draftAxisX = "", draftAxisY = "";
         private int selectedModifierIndex = -1, selectedModifierStepIndex = -1;
         private bool loadingModifier;
@@ -121,17 +122,21 @@ namespace HoFace.Studio
                 for (int i = 0; i < selectedNode.children.Count; i++)
                 {
                     var child = selectedNode.children[i];
-                    ControlPoints.Add(new ControlPointRow(i, child.node,
+                    ControlPoints.Add(new ControlPointRow(i, NodeAlias(child.node), child.node,
                         HasAxisY ? child.x : child.threshold, child.y));
                 }
+            SelectedControlPointIndex = -1;
+            if (selectedPoseWeightIndex >= InspectorWeights.Count) SelectedPoseWeightIndex = -1;
             ControlPointXColumn.Header = HasAxisY ? "X" : "阈值";
             ControlPointYColumn.Visibility = HasAxisY ? Visibility.Visible : Visibility.Collapsed;
             loadingInspector = false;
             RefreshModifierRows();
             if (Plot.SelectedIndex >= 0 && Plot.SelectedIndex < CurveRows.Count) CurveGrid.SelectedItem = CurveRows[Plot.SelectedIndex];
             PropertyDraftChanged();
-            foreach (string name in new[] { nameof(HasValueSelection), nameof(HasNodeSelection), nameof(HasSelection),
-                nameof(SelectionTitle), nameof(SelectionKind), nameof(WeightSectionTitle), nameof(HasAxisX), nameof(HasAxisY), nameof(HasWeightSelection) })
+            foreach (string name in new[] { nameof(HasValueSelection), nameof(HasNodeSelection), nameof(HasPoseSelection), nameof(HasSelection),
+                nameof(SelectionTitle), nameof(SelectionKind), nameof(WeightSectionTitle), nameof(HasAxisX), nameof(HasAxisY),
+                nameof(HasWeightSelection), nameof(BlendChildrenTitle), nameof(PoseWeightEmptyVisibility), nameof(PoseWeightEmptyText),
+                nameof(CanAddPoseRule), nameof(CanAddBlendRule), nameof(CanDeleteSelectedNode), nameof(ShowIrGraphActions) })
                 OnPropertyChanged(name);
         }
         private void RefreshModifierRows()
@@ -525,7 +530,7 @@ namespace HoFace.Studio
             string text = (e.EditingElement as TextBox)?.Text;
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                try { EnsureNoDraft(); EditIrChild(nodeId, row.ChildId, -1, property, ParseNumber(text)); }
+                try { EnsureNoDraft(); EditIrChild(nodeId, row.NodeId, -1, property, ParseNumber(text)); }
                 catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
             }));
         }
@@ -577,11 +582,12 @@ namespace HoFace.Studio
         {
             public int Index { get; }
             public string ChildId { get; }
+            public string NodeId { get; }
             public string X { get; set; }
             public string Y { get; set; }
-            public ControlPointRow(int index, string id, float x, float y)
+            public ControlPointRow(int index, string childName, string nodeId, float x, float y)
             {
-                Index = index; ChildId = id;
+                Index = index; ChildId = childName; NodeId = nodeId;
                 X = x.ToString("G7", CultureInfo.InvariantCulture);
                 Y = y.ToString("G7", CultureInfo.InvariantCulture);
             }

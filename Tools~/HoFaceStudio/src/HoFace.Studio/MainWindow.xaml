@@ -8,6 +8,29 @@
     Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}" Icon="Assets/hoface-studio.ico">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="VisibleIf"/>
+    <HierarchicalDataTemplate x:Key="IrTreeItemTemplate" DataType="{x:Type local:IrTreeItem}"
+        ItemsSource="{Binding Children}">
+      <StackPanel Orientation="Horizontal" ToolTip="{Binding Tooltip}">
+        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding KindLabel}" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="8,0,0,0"/>
+      </StackPanel>
+    </HierarchicalDataTemplate>
+    <Style TargetType="TreeViewItem">
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+      <Setter Property="Padding" Value="4,3"/>
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+      <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
     <DataTemplate x:Key="MonitorParameterTemplate" DataType="{x:Type local:MonitorParameterRow}">
       <Border x:Name="MeterCard" Width="184" Height="26" Margin="2,2" Background="{StaticResource RaisedBrush}"
           BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="3" ToolTip="{Binding DetailText}">
@@ -180,17 +203,18 @@
             <TabItem Header="IR" ToolTip="姿势、1D / 2D 混合与 Direct 节点">
               <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBox Margin="6,4,6,9" Tag="筛选节点…" Text="{Binding IrFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="筛选 IR 节点" ToolTip="筛选节点名称、ID、类型或参数轴"/>
-                <ListBox Grid.Row="1" x:Name="NodeList" ItemsSource="{Binding NodeRows}" SelectedItem="{Binding SelectedNodeRow}"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
-                  <ListBox.ItemTemplate><DataTemplate>
-                    <StackPanel ToolTip="{Binding Display}">
-                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
-                    </StackPanel>
-                  </DataTemplate></ListBox.ItemTemplate>
-                </ListBox>
-                <TextBlock Grid.Row="2" Text="{Binding NodeCount, StringFormat={}{0} 个节点}" Style="{StaticResource SectionLabel}" Margin="12,8"/>
+                <TextBox Margin="6,4,6,7" Tag="搜索树节点…" Text="{Binding IrFilter, UpdateSourceTrigger=PropertyChanged}"
+                    AutomationProperties.Name="搜索 Blend Tree 节点" ToolTip="按节点别名或规则 ID 筛选 root 下的树节点"/>
+                <TreeView x:Name="NodeTree" Grid.Row="1" ItemsSource="{Binding IrTreeRoots}"
+                    SelectedItemChanged="NodeTreeSelectionChanged" Background="{StaticResource SurfaceBrush}"
+                    BorderThickness="0" ItemTemplate="{StaticResource IrTreeItemTemplate}"
+                    AutomationProperties.Name="IR Blend Tree"/>
+                <DockPanel Grid.Row="2" Margin="12,6">
+                  <Button DockPanel.Dock="Right" Content="清理未引用" Click="ClearOrphanRulesClicked"
+                      Visibility="{Binding HasOrphanIrNodes, Converter={StaticResource VisibleIf}}"
+                      Padding="5,2" Margin="0" FontSize="10" ToolTip="移除不在 root Blend Tree 中的规则与未引用输出目标"/>
+                  <TextBlock Text="{Binding VisibleIrNodeCount, StringFormat={}{0} 个树节点}" Style="{StaticResource SectionLabel}" Margin="0"/>
+                </DockPanel>
               </Grid>
             </TabItem>
           </TabControl>
@@ -206,7 +230,23 @@
             <TextBlock Text="{Binding SelectionKind}" FontSize="10" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
             <TextBlock Text="{Binding SelectionTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectionTitle}"/>
           </StackPanel>
-          <Button Grid.Column="1" Content="适应视图" Click="FitClicked" IsEnabled="{Binding CanFitPlot}" ToolTip="将当前曲线或混合图完整显示 · 图中按 F"/>
+          <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Button x:Name="AddPoseRuleButton" Content="＋姿势" Click="AddPoseRuleClicked" IsEnabled="{Binding CanAddPoseRule}"
+                Visibility="{Binding ShowIrGraphActions, Converter={StaticResource VisibleIf}}" Padding="4,3" Margin="1"
+                FontSize="10" ToolTip="在当前 Blend Tree 下添加 Pose 子项"/>
+            <Button x:Name="AddBlendRuleButton" Content="＋混合" Click="AddBlendRuleClicked" IsEnabled="{Binding CanAddBlendRule}"
+                Visibility="{Binding ShowIrGraphActions, Converter={StaticResource VisibleIf}}" Padding="4,3" Margin="1"
+                FontSize="10" ToolTip="嵌套当前维度的 Blend Tree"/>
+            <Button x:Name="DeleteSelectedRuleButton" Content="删规则" Click="DeleteSelectedRuleClicked" IsEnabled="{Binding CanDeleteSelectedNode}"
+                Visibility="{Binding ShowIrGraphActions, Converter={StaticResource VisibleIf}}" Padding="4,3" Margin="1"
+                FontSize="10" ToolTip="删除当前规则"/>
+            <Button x:Name="DeleteControlPointButton" Content="删点" Click="DeleteControlPointClicked"
+                IsEnabled="{Binding CanDeleteSelectedControlPoint}" Visibility="{Binding ShowIrGraphActions, Converter={StaticResource VisibleIf}}"
+                Padding="4,3" Margin="1" FontSize="10" ToolTip="删除混合图或子项列表中选中的控制点"/>
+            <Button Content="适应视图" Click="FitClicked" IsEnabled="{Binding CanFitPlot}"
+                Visibility="{Binding CanFitPlot, Converter={StaticResource VisibleIf}}" Padding="6,3" Margin="1"
+                FontSize="10" ToolTip="将当前曲线或混合图完整显示 · 图中按 F"/>
+          </WrapPanel>
         </Grid>
         <TabControl Grid.Row="1" SelectedIndex="{Binding CenterTab}">
           <TabItem Header="曲线" ToolTip="编辑 value 输出响应曲线">
@@ -354,13 +394,49 @@
                   </Grid>
                 </StackPanel>
               </StackPanel>
-              <StackPanel Visibility="{Binding HasAxisX, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
-                <TextBlock Text="混合控制点" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                <DataGrid x:Name="ControlPointGrid" ItemsSource="{Binding ControlPoints}" CellEditEnding="ControlPointCellEditEnding"
-                    SelectionChanged="ControlPointSelectionChanged" CanUserSortColumns="False" CanUserReorderColumns="False"
-                    SelectionMode="Single" SelectionUnit="FullRow" MinHeight="150" MaxHeight="420" ToolTip="选中行与图中的控制点联动；双击 X / Y 或阈值进行精确编辑">
+              <StackPanel Visibility="{Binding HasPoseSelection, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
+                <DockPanel Margin="0,0,0,8">
+                  <Button x:Name="DeletePoseWeightButton" DockPanel.Dock="Right" Content="删除输出" Click="DeletePoseWeightClicked"
+                      IsEnabled="{Binding CanDeletePoseWeight}" Padding="6,2" Margin="0"
+                      ToolTip="只删除此 Pose 里选中的已存目标"/>
+                  <TextBlock Text="Pose 输出" FontWeight="SemiBold"/>
+                </DockPanel>
+                <Grid Margin="0,0,0,7">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="84"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBox Text="{Binding PoseTargetDraft, UpdateSourceTrigger=PropertyChanged}"
+                      Tag="目标 ID（可直接输入）" AutomationProperties.Name="Pose 输出目标 ID"/>
+                  <TextBox Grid.Column="1" Text="{Binding PoseWeightDraft, UpdateSourceTrigger=PropertyChanged}"
+                      Margin="6,0,0,0" AutomationProperties.Name="Pose 输出权重"/>
+                  <Button x:Name="AddPoseWeightButton" Grid.Column="2" Content="添加" Click="AddPoseWeightClicked" Padding="8,3"
+                      Margin="6,0,0,0" ToolTip="保存这条 Pose 目标权重"/>
+                </Grid>
+                <DataGrid x:Name="WeightsGrid" ItemsSource="{Binding InspectorWeights}"
+                    SelectedIndex="{Binding SelectedPoseWeightIndex, Mode=TwoWay}"
+                    CellEditEnding="WeightsCellEditEnding" CanUserSortColumns="False" CanUserReorderColumns="False"
+                    SelectionMode="Single" SelectionUnit="FullRow" MinHeight="64" MaxHeight="220"
+                    ToolTip="这里只显示此 Pose 中已保存的目标；目标 ID 可直接编辑">
                   <DataGrid.Columns>
-                    <DataGridTextColumn Header="姿势" Binding="{Binding ChildId}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="目标 ID" Binding="{Binding TargetId, UpdateSourceTrigger=LostFocus}"
+                        SortMemberPath="TargetId" Width="*"/>
+                    <DataGridTextColumn Header="权重" Binding="{Binding Value}" SortMemberPath="Value" Width="90"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding PoseWeightEmptyText}" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                    HorizontalAlignment="Center" Margin="0,8,0,0"
+                    Visibility="{Binding PoseWeightEmptyVisibility}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding HasAxisX, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
+                <DockPanel Margin="0,0,0,8">
+                  <TextBlock Text="{Binding BlendChildrenTitle}" FontWeight="SemiBold"/>
+                </DockPanel>
+                <DataGrid x:Name="ControlPointGrid" ItemsSource="{Binding ControlPoints}"
+                    SelectedIndex="{Binding SelectedControlPointIndex, Mode=TwoWay}"
+                    CellEditEnding="ControlPointCellEditEnding" SelectionChanged="ControlPointSelectionChanged"
+                    CanUserSortColumns="False" CanUserReorderColumns="False"
+                    SelectionMode="Single" SelectionUnit="FullRow" MinHeight="100" MaxHeight="320"
+                    ToolTip="列表就是此混合树实际保存的子项；姿势名显示别名，X/Y 或阈值可编辑">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="姿势别名" Binding="{Binding ChildId}" IsReadOnly="True" Width="*"/>
                     <DataGridTextColumn x:Name="ControlPointXColumn" Header="X" Binding="{Binding X}" SortMemberPath="X" Width="85"/>
                     <DataGridTextColumn x:Name="ControlPointYColumn" Header="Y" Binding="{Binding Y}" SortMemberPath="Y" Width="85"/>
                   </DataGrid.Columns>
@@ -368,7 +444,7 @@
               </StackPanel>
               <StackPanel Visibility="{Binding HasWeightSelection, Converter={StaticResource VisibleIf}}" IsEnabled="{Binding CanEditGraph}">
                 <TextBlock Text="{Binding WeightSectionTitle}" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                <DataGrid x:Name="WeightsGrid" ItemsSource="{Binding InspectorWeights}" CellEditEnding="WeightsCellEditEnding" CanUserSortColumns="False"
+                <DataGrid x:Name="DirectWeightsGrid" ItemsSource="{Binding InspectorWeights}" CellEditEnding="WeightsCellEditEnding" CanUserSortColumns="False"
                     CanUserReorderColumns="False" MinHeight="150" MaxHeight="420" ToolTip="双击数值或按 F2 编辑；每次有效修改都可撤销">
                   <DataGrid.Columns>
                     <DataGridTextColumn Header="目标 / 子项" Binding="{Binding Name}" IsReadOnly="True" Width="*"/>
