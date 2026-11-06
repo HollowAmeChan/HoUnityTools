@@ -21,6 +21,7 @@ namespace HoFace.Studio
         private int replayIndex;
         private bool replayPlaying;
         private double replayOffset;
+        private double lastProcessedTime = -1;
         private readonly Dictionary<string, float> rawOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> valueOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> irOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
@@ -74,6 +75,7 @@ namespace HoFace.Studio
             irEvaluator = new HoFaceIrEvaluator(document.Ir);
             liveIrEvaluator = new HoFaceIrEvaluator(document.Ir);
             LatestMonitorFrame = null;
+            lastProcessedTime = -1;
             clock.Restart();
             StatusChanged?.Invoke("文档已载入");
         }
@@ -156,6 +158,18 @@ namespace HoFace.Studio
 
         private void ProcessFrame(VtsFrame frame, double time, bool record)
         {
+            if (double.IsNaN(time) || double.IsInfinity(time) || time < 0) return;
+            if (lastProcessedTime >= 0 && time < lastProcessedTime)
+            {
+                // A reconnect, replay seek, or document reload can restart the
+                // host clock. Start a fresh stateful value evaluation instead of
+                // letting one stale frame terminate the Studio dispatcher.
+                valueSession?.Reset();
+                effectiveValueSession?.Reset();
+                effectiveValueSession?.Evaluator.SetOverrides(null, valueOverrides);
+                lastProcessedTime = -1;
+            }
+            lastProcessedTime = time;
             if (record && recording != null)
                 recording.Write(new HoFaceRecordedFrame { time = time, tracked = frame.FaceFound, values = new Dictionary<string, float>(frame.Values) });
             var raw = Copy(frame.Values);
@@ -288,6 +302,7 @@ namespace HoFace.Studio
             valueSession?.Reset();
             effectiveValueSession?.Reset();
             effectiveValueSession?.Evaluator.SetOverrides(null, valueOverrides);
+            lastProcessedTime = -1;
             ClearOutputs();
         }
 
