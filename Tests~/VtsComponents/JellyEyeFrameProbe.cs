@@ -54,6 +54,13 @@ public sealed class HoVtsJellyEyeFrameProbe : MonoBehaviour
                     "automatic IR evaluates once before all three jelly consumers in this actual frame");
                 Assert(ir.TryGetFinalWeight("BlinkL", out float weight) && Mathf.Abs(weight - values["BlinkL"] * 100) < 0.01f,
                     "current-frame final snapshot is available before render");
+                Assert(layers[0].Inputs.UsesBlinkGroups && layers[1].Inputs.UsesBlinkGroups &&
+                    Mathf.Abs(layers[0].BlinkInput - values["BlinkL"]) < 0.01f &&
+                    Mathf.Abs(layers[1].BlinkInput - values["BlinkL"]) < 0.01f,
+                    "grouped consumers observe this frame's IR before their real spring update");
+                Assert(!layers[2].Inputs.UsesBlinkGroups &&
+                    Mathf.Abs(layers[2].BlinkInput - values["BlinkL"]) < 0.01f,
+                    "a legacy prefab consumer remains compatible alongside grouped consumers");
             }
             previousRevision = ir.OutputRevision;
             if (phase == 0 && elapsed > 0.1) Next(1);

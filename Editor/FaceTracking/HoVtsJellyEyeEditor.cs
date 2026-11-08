@@ -30,25 +30,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
             {
                 EditorGUI.indentLevel++;
                 var input = serializedObject.FindProperty("inputs");
-                var blink = input.FindPropertyRelative("blinkKeys");
-                EditorGUILayout.LabelField(new GUIContent("眨眼 / 激励键（取最大值）", "例如左、右眨眼键。只需一侧时填一个；也可使用其他 IR 最终输出键作为激励。"));
-                for (int i = 0; i < blink.arraySize; i++)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    KeyField(blink.GetArrayElementAtIndex(i), "激励 " + (i + 1), inputChoices);
-                    if (GUILayout.Button("−", GUILayout.Width(22)))
-                    {
-                        blink.DeleteArrayElementAtIndex(i);
-                        EditorGUILayout.EndHorizontal();
-                        break;
-                    }
-                    EditorGUILayout.EndHorizontal();
-                }
-                if (GUILayout.Button("添加激励键"))
-                {
-                    blink.InsertArrayElementAtIndex(blink.arraySize);
-                    blink.GetArrayElementAtIndex(blink.arraySize - 1).stringValue = "";
-                }
+                DrawBlinkGroups(input.FindPropertyRelative("blinkGroups"));
+                DrawLegacyBlinkKeys(input.FindPropertyRelative("blinkKeys"));
                 KeyField(input.FindPropertyRelative("lookLeft"), "视线向左", inputChoices);
                 KeyField(input.FindPropertyRelative("lookRight"), "视线向右", inputChoices);
                 KeyField(input.FindPropertyRelative("lookUp"), "视线向上", inputChoices);
@@ -73,6 +56,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 using (new EditorGUI.DisabledScope(true))
                 {
                     EditorGUILayout.Vector2Field("位移附加权重", component.MovementOffset);
+                    EditorGUILayout.FloatField("当前组合激励", component.BlinkInput);
                     EditorGUILayout.FloatField("缩放附加权重", component.ScaleOffset);
                     EditorGUILayout.FloatField("拉长 / 压扁附加权重", component.SquashOffset);
                 }
@@ -80,6 +64,90 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                     EditorGUILayout.HelpBox("输入键不存在或未绑定：" + string.Join("、", component.MissingInputKeys), MessageType.Warning);
                 if (GUILayout.Button("复位弹簧")) component.ResetSprings();
                 Repaint();
+            }
+        }
+
+        private void DrawBlinkGroups(SerializedProperty groups)
+        {
+            EditorGUILayout.LabelField(new GUIContent("眨眼 / 激励组", "例如左眼一组、右眼一组。同眼不同情绪的形态键先按闭合权重相加，限制在 0～1，再在左右组之间取最大值。权重按 IR 控制点语义设置。"));
+            for (int i = 0; i < groups.arraySize; i++)
+            {
+                var group = groups.GetArrayElementAtIndex(i);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.BeginVertical(GUILayout.Width(60));
+                group.isExpanded = EditorGUILayout.Foldout(group.isExpanded, "组 " + (i + 1), true);
+                EditorGUILayout.EndVertical();
+                int groupIndent = EditorGUI.indentLevel;
+                EditorGUI.indentLevel = 0;
+                EditorGUILayout.PropertyField(group.FindPropertyRelative("name"), GUIContent.none);
+                EditorGUI.indentLevel = groupIndent;
+                if (GUILayout.Button("−", GUILayout.Width(22)))
+                {
+                    groups.DeleteArrayElementAtIndex(i);
+                    EditorGUILayout.EndHorizontal();
+                    break;
+                }
+                EditorGUILayout.EndHorizontal();
+                if (!group.isExpanded) continue;
+                EditorGUI.indentLevel++;
+                var keys = group.FindPropertyRelative("keys");
+                for (int keyIndex = 0; keyIndex < keys.arraySize; keyIndex++)
+                {
+                    var item = keys.GetArrayElementAtIndex(keyIndex);
+                    EditorGUILayout.BeginHorizontal();
+                    KeyField(item.FindPropertyRelative("key"), "", inputChoices);
+                    int keyIndent = EditorGUI.indentLevel;
+                    EditorGUI.indentLevel = 0;
+                    GUILayout.Label("×", GUILayout.Width(12));
+                    EditorGUILayout.PropertyField(item.FindPropertyRelative("weight"),
+                        new GUIContent("", "闭合贡献权重；0 跳过。不同情绪的同阶段键使用相同权重。"),
+                        GUILayout.Width(55));
+                    EditorGUI.indentLevel = keyIndent;
+                    if (GUILayout.Button("−", GUILayout.Width(22)))
+                    {
+                        keys.DeleteArrayElementAtIndex(keyIndex);
+                        EditorGUILayout.EndHorizontal();
+                        break;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+                if (GUILayout.Button("添加 IR 键"))
+                {
+                    keys.InsertArrayElementAtIndex(keys.arraySize);
+                    var added = keys.GetArrayElementAtIndex(keys.arraySize - 1);
+                    added.FindPropertyRelative("key").stringValue = "";
+                    added.FindPropertyRelative("weight").floatValue = 1;
+                }
+                EditorGUI.indentLevel--;
+            }
+            if (GUILayout.Button("添加激励组"))
+            {
+                int index = groups.arraySize;
+                groups.InsertArrayElementAtIndex(index);
+                var group = groups.GetArrayElementAtIndex(index);
+                group.FindPropertyRelative("name").stringValue = index == 0 ? "左眼" : index == 1 ? "右眼" : "输入组 " + (index + 1);
+                group.FindPropertyRelative("keys").ClearArray();
+                group.isExpanded = true;
+            }
+        }
+
+        private void DrawLegacyBlinkKeys(SerializedProperty blink)
+        {
+            if (blink.arraySize == 0) return;
+            blink.isExpanded = EditorGUILayout.Foldout(blink.isExpanded,
+                new GUIContent("旧版独立激励（兼容）", "旧预制体保持多个键取最大值。配置了有名称的分组键后只使用分组，旧列表保留以便撤回。"), true);
+            if (!blink.isExpanded) return;
+            for (int i = 0; i < blink.arraySize; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                KeyField(blink.GetArrayElementAtIndex(i), "旧激励 " + (i + 1), inputChoices);
+                if (GUILayout.Button("−", GUILayout.Width(22)))
+                {
+                    blink.DeleteArrayElementAtIndex(i);
+                    EditorGUILayout.EndHorizontal();
+                    break;
+                }
+                EditorGUILayout.EndHorizontal();
             }
         }
 
@@ -211,8 +279,26 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                         && component.IrController.TargetMeshes.Contains(renderer))
                     { warnings.Add("输出键与 IR 写入重叠：" + key); break; }
             }
-            var inputNames = new List<string>(component.Inputs.blinkKeys)
+            var inputNames = new List<string>
                 { component.Inputs.lookLeft, component.Inputs.lookRight, component.Inputs.lookUp, component.Inputs.lookDown };
+            if (component.Inputs.UsesBlinkGroups)
+            {
+                foreach (var group in component.Inputs.blinkGroups)
+                {
+                    if (group?.keys == null) continue;
+                    var groupNames = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var item in group.keys)
+                    {
+                        if (item == null || string.IsNullOrEmpty(item.key)) continue;
+                        if (float.IsNaN(item.weight) || float.IsInfinity(item.weight) || item.weight < 0)
+                            warnings.Add("激励权重必须是非负有限数：" + item.key);
+                        if (item.weight <= 0) continue;
+                        if (!groupNames.Add(item.key)) warnings.Add("同一激励组内形态键重复：" + item.key);
+                        inputNames.Add(item.key);
+                    }
+                }
+            }
+            else if (component.Inputs.blinkKeys != null) inputNames.AddRange(component.Inputs.blinkKeys);
             foreach (string key in inputNames)
                 if (!string.IsNullOrEmpty(key) && document != null && !inputChoices.Contains(key))
                     warnings.Add("IR 未声明输入键：" + key);

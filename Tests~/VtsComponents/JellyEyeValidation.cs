@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Hollow.HoUnityTools.FaceTracking;
 using Hollow.HoUnityTools.FaceTracking.Core;
 using UnityEditor;
@@ -26,6 +27,7 @@ public static class HoVtsJellyEyeValidation
             ValidateLifecycle();
             ValidateMeshChanges();
             ValidateThreeLayers();
+            ValidateGroupedInputs();
             ValidateAuthoring();
             Debug.Log("HO_VTS_JELLY PASS assertions=" + assertions);
             EditorApplication.Exit(0);
@@ -63,6 +65,8 @@ public static class HoVtsJellyEyeValidation
             var pupil = f.AddLayer("");
             var h1 = f.AddLayer("H1");
             var h2 = f.AddLayer("H2");
+            ConfigureGroupedInputs(pupil);
+            ConfigureGroupedInputs(h1);
             pupil.AutoRun = h1.AutoRun = h2.AutoRun = true;
             var probe = f.root.AddComponent<HoVtsJellyEyeFrameProbe>();
             probe.receiver = f.receiver; probe.ir = f.ir; probe.layers = new[] { pupil, h1, h2 }; probe.face = f.face;
@@ -95,6 +99,8 @@ public static class HoVtsJellyEyeValidation
                 var pupil = f.AddLayer("");
                 var h1 = f.AddLayer("H1");
                 var h2 = f.AddLayer("H2");
+                ConfigureGroupedInputs(h1);
+                h1.Inputs.blinkGroups[0].keys[0].weight = 0.6f;
                 pupil.Scale.response.strength = 0.42f;
                 pupil.Scale.response.damping = 0.6f;
                 pupil.Scale.enlarge = "";
@@ -114,9 +120,28 @@ public static class HoVtsJellyEyeValidation
                 Near(pupil.Scale.response.strength, 0.42f, "Inspector edits support Unity Undo");
                 Undo.PerformRedo();
                 Near(pupil.Scale.response.strength, 0.9f, "Inspector edits support Unity Redo");
+                var groupSerialized = new SerializedObject(h1);
+                var groupWeight = groupSerialized.FindProperty("inputs.blinkGroups").GetArrayElementAtIndex(0)
+                    .FindPropertyRelative("keys").GetArrayElementAtIndex(0).FindPropertyRelative("weight");
+                Check(groupWeight != null, "Inspector exposes a native serialized group coefficient");
+                Undo.IncrementCurrentGroup();
+                groupWeight.floatValue = 0.8f;
+                groupSerialized.ApplyModifiedProperties(); Undo.FlushUndoRecordObjects();
+                Near(h1.Inputs.blinkGroups[0].keys[0].weight, 0.8f, "group coefficient edits apply natively");
+                Undo.PerformUndo();
+                Near(h1.Inputs.blinkGroups[0].keys[0].weight, 0.6f, "group coefficients support Unity Undo");
+                Undo.PerformRedo();
+                Near(h1.Inputs.blinkGroups[0].keys[0].weight, 0.8f, "group coefficients support Unity Redo");
                 string prefabPath = folder + "/Character.prefab";
                 var prefab = PrefabUtility.SaveAsPrefabAsset(f.root, prefabPath);
                 Check(prefab != null, "three-layer authoring fixture saves as a native prefab");
+                string absolutePrefab = Path.GetFullPath(Path.Combine(Application.dataPath, "..", prefabPath));
+                string originalPrefab = File.ReadAllText(absolutePrefab);
+                string legacyPrefab = originalPrefab.Replace("    blinkGroups: []\r\n", "").Replace("    blinkGroups: []\n", "");
+                Check(legacyPrefab.Length < originalPrefab.Length, "legacy fixture omits the new empty group field");
+                File.WriteAllText(absolutePrefab, legacyPrefab);
+                AssetDatabase.ImportAsset(prefabPath, ImportAssetOptions.ForceSynchronousImport);
+                prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
                 var clone = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
                 try
                 {
@@ -131,6 +156,14 @@ public static class HoVtsJellyEyeValidation
                         "prefab preserves optional directions and explicit input names");
                     Near(layers[0].Scale.response.strength, 0.9f, "prefab preserves per-effect intensity");
                     Near(layers[0].Scale.response.damping, 0.6f, "prefab preserves per-effect damping");
+                    Check(layers[1].Inputs.UsesBlinkGroups && layers[1].Inputs.blinkGroups.Count == 2 &&
+                        layers[1].Inputs.blinkGroups[0].name == "左眼" &&
+                        layers[1].Inputs.blinkGroups[0].keys[1].key == "LookLeft",
+                        "prefab preserves named eye groups and their explicit IR keys");
+                    Near(layers[1].Inputs.blinkGroups[0].keys[0].weight, 0.8f,
+                        "prefab preserves per-stage excitation coefficients");
+                    Check(!layers[0].Inputs.UsesBlinkGroups && layers[0].Inputs.blinkKeys.Count == 2,
+                        "unchanged legacy prefab inputs retain their original semantics");
                     Check(!layers[0].AutoRun && !cloneIr.AutoRun, "AutoRun remains serialized independently of enabled state");
                 }
                 finally { UnityEngine.Object.DestroyImmediate(clone); }
@@ -372,6 +405,93 @@ public static class HoVtsJellyEyeValidation
         }
     }
 
+    private static void ConfigureGroupedInputs(HoVtsJellyEye jelly)
+    {
+        jelly.Inputs.blinkGroups.Add(new HoVtsJellyInputGroup { name = "左眼", keys = new List<HoVtsJellyInputWeight>
+        {
+            new HoVtsJellyInputWeight { key = "BlinkL" },
+            new HoVtsJellyInputWeight { key = "LookLeft" },
+            new HoVtsJellyInputWeight { key = "LookUp" }
+        } });
+        jelly.Inputs.blinkGroups.Add(new HoVtsJellyInputGroup { name = "右眼", keys = new List<HoVtsJellyInputWeight>
+        {
+            new HoVtsJellyInputWeight { key = "BlinkR" },
+            new HoVtsJellyInputWeight { key = "LookRight" },
+            new HoVtsJellyInputWeight { key = "LookDown" }
+        } });
+        jelly.Inputs.lookLeft = jelly.Inputs.lookRight = jelly.Inputs.lookUp = jelly.Inputs.lookDown = "";
+    }
+
+    private static void ValidateGroupedInputs()
+    {
+        using (var f = new Fixture())
+        {
+            f.UseEmotionGraph();
+            var jelly = f.AddLayer("");
+            ConfigureGroupedInputs(jelly);
+            var legacy = f.AddLayer("H1");
+            legacy.Inputs.lookLeft = legacy.Inputs.lookRight = legacy.Inputs.lookUp = legacy.Inputs.lookDown = "";
+            f.ApplyEmotion(emotionLeft: 0.5f);
+            Check(jelly.Step(Dt) && legacy.Step(Dt), "grouped and legacy consumers share a real nested IR result");
+            Near(legacy.BlinkInput, 0.5f, "regression fixture reproduces the legacy emotion-dependent half strength");
+            Near(jelly.BlinkInput, 1, "same-eye half-weight emotion poses combine to full excitation");
+            for (int step = 0; step <= 120; step++)
+            {
+                float emotion = step <= 60 ? step / 60f : (120 - step) / 60f;
+                f.ApplyEmotion(emotionLeft: emotion);
+                jelly.Step(Dt);
+                Near(jelly.BlinkInput, 1, "emotion changes preserve fixed eyelid excitation");
+                Near(jelly.ScaleOffset, 0, "emotion changes alone do not create a scale impulse");
+                Near(jelly.SquashOffset, 0, "emotion changes alone do not create a squash impulse");
+                Near(jelly.MovementOffset.y, 0, "emotion changes alone do not create a blink movement impulse");
+            }
+            f.ApplyEmotion(openRight: 1, emotionLeft: 0.5f, emotionRight: 0.5f); jelly.Step(Dt);
+            Near(jelly.BlinkInput, 1, "two fully closed eyes are combined by maximum, not added to two");
+            f.ApplyEmotion(openLeft: 0, openRight: 1); jelly.Step(Dt);
+            Near(jelly.BlinkInput, 1, "a right-eye-only blink still excites the layer");
+            f.ApplyEmotion(openLeft: 1, openRight: 1, gateLeft: 0); jelly.Step(Dt);
+            Near(jelly.BlinkInput, 1, "gating one eye leaves the other eye's final output available");
+            f.ApplyEmotion(openLeft: 1, openRight: 1, gateLeft: 0, gateRight: 0); jelly.Step(Dt);
+            Near(jelly.BlinkInput, 0, "both IR gates suppress excitation without reading ungated Value blink");
+            f.ApplyEmotion(openLeft: 0, openRight: 0); jelly.Step(Dt);
+            f.ApplyEmotion(openLeft: 1); jelly.Step(Dt);
+            Check(Mathf.Abs(jelly.ScaleOffset) > 0.1f, "a genuine eyelid change still produces spring motion");
+            for (int step = 0; step < 300; step++) { f.ApplyEmotion(); jelly.Step(Dt); }
+            Near(jelly.ScaleOffset, 0, "grouped excitation preserves zero-rest spring behavior");
+            f.ApplyEmotion(openLeft: 1.5f, emotionLeft: 0.5f); jelly.Step(Dt);
+            Near(jelly.BlinkInput, 1, "transition between half-close and tight-close preserves the chosen full strength");
+            jelly.Inputs.blinkGroups[0].keys[0].weight = 0.5f;
+            jelly.Inputs.blinkGroups[0].keys[1].weight = 0.5f;
+            Check(jelly.Step(Dt), "coefficient changes rebuild the input signature safely");
+            Near(jelly.BlinkInput, 0.75f, "half-close and tight-close stages use their explicit coefficients");
+            Near(jelly.ScaleOffset, 0, "configuration changes do not inject a spurious activation impulse");
+            jelly.Inputs.blinkGroups[0].keys[2].weight = 3;
+            jelly.Step(Dt);
+            Near(jelly.BlinkInput, 1, "summed group excitation is limited to the semantic zero-to-one range");
+            jelly.Inputs.blinkKeys.Add("UnusedLegacyTypo");
+            jelly.Step(Dt);
+            Check(jelly.MissingInputKeys.Count == 0, "active groups do not also consume the retained legacy list");
+            jelly.Inputs.blinkGroups[0].keys.Add(new HoVtsJellyInputWeight { key = "UnusedZeroTerm", weight = 0 });
+            Check(jelly.Step(Dt) && jelly.MissingInputKeys.Count == 0, "zero coefficients skip missing source keys");
+            jelly.Inputs.blinkGroups[0].keys[3].weight = 1;
+            Check(!jelly.Step(Dt) && jelly.MissingInputKeys.Contains("UnusedZeroTerm"),
+                "a missing active grouped key is reported instead of publishing a partial excitation");
+            jelly.Inputs.blinkGroups[0].keys.RemoveAt(3);
+            jelly.Inputs.blinkGroups[0].keys.Add(new HoVtsJellyInputWeight { key = "BlinkL" });
+            Check(!jelly.Step(Dt) && jelly.Status.Contains("重复"), "duplicate keys within a group are rejected before output writes");
+            jelly.Inputs.blinkGroups[0].keys.RemoveAt(3);
+            foreach (float invalid in new[] { -1f, float.NaN, float.PositiveInfinity })
+            {
+                jelly.Inputs.blinkGroups[0].keys[0].weight = invalid;
+                Check(!jelly.Step(Dt) && jelly.Status.Contains("非负有限数"),
+                    "invalid input coefficients fail before output ownership is acquired");
+            }
+            jelly.Inputs.blinkGroups.Clear();
+            Check(!jelly.Step(Dt) && jelly.MissingInputKeys.Contains("UnusedLegacyTypo"),
+                "clearing groups restores the retained legacy configuration");
+        }
+    }
+
     private sealed class Fixture : IDisposable
     {
         public readonly GameObject root;
@@ -454,6 +574,53 @@ public static class HoVtsJellyEyeValidation
             receiver.ApplyRawFrame(new Dictionary<string, float> { { "BlinkL", blink }, { "BlinkR", blink },
                 { "LookLeft", left }, { "LookRight", right }, { "LookUp", 0 }, { "LookDown", 0 } }, true, time);
             Check(ir.EvaluateNow(), "fixture IR writes the current frame");
+        }
+
+        public void UseEmotionGraph()
+        {
+            var middleware = new HoFaceMiddleware();
+            foreach (string key in new[] { "OpenL", "OpenR", "EmotionL", "EmotionR", "GateL", "GateR" })
+                middleware.outputs.Add(new HoFaceOutput { parameter = key, expression = key });
+            receiver.SetMiddleware(middleware);
+            var doc = new HoFaceIrDocument { id = "jelly-emotion-test", root = "root" };
+            var rootNode = new HoFaceIrNode { id = "root", type = "direct" };
+            doc.nodes.Add(rootNode);
+            foreach (string side in new[] { "L", "R" })
+            {
+                foreach (string parameter in new[] { "Open" + side, "Emotion" + side, "Gate" + side })
+                    doc.parameters.Add(new HoFaceIrParameter { name = parameter, min = 0, max = 2 });
+                string neutral = side == "L" ? "BlinkL" : "BlinkR";
+                string happy = side == "L" ? "LookLeft" : "LookRight";
+                string tight = side == "L" ? "LookUp" : "LookDown";
+                foreach (string target in new[] { neutral, happy, tight })
+                    doc.targets.Add(new HoFaceIrTarget { id = target, min = 0, max = 1 });
+                var graph = new HoFaceIrNode { id = "eye" + side, type = "blend2d",
+                    parameterX = "Emotion" + side, parameterY = "Open" + side };
+                for (int emotion = 0; emotion <= 1; emotion++)
+                for (int open = 0; open <= 2; open++)
+                {
+                    var pose = new HoFaceIrNode { id = side + emotion + "_" + open, type = "pose" };
+                    if (open > 0) pose.weights.Add(new HoFaceIrWeight
+                        { target = open == 2 ? tight : emotion == 0 ? neutral : happy, value = 1 });
+                    doc.nodes.Add(pose);
+                    graph.children.Add(new HoFaceIrChild { node = pose.id, x = emotion, y = open });
+                }
+                doc.nodes.Add(graph);
+                rootNode.children.Add(new HoFaceIrChild { node = graph.id, weightParameter = "Gate" + side });
+            }
+            ir.IrAsset = new TextAsset(doc.Write());
+            resources.Add(ir.IrAsset);
+        }
+
+        public void ApplyEmotion(float openLeft = 1, float emotionLeft = 0, float openRight = 0,
+            float emotionRight = 0, float gateLeft = 1, float gateRight = 1)
+        {
+            time += Dt;
+            receiver.ApplyRawFrame(new Dictionary<string, float> {
+                { "OpenL", openLeft }, { "OpenR", openRight }, { "EmotionL", emotionLeft },
+                { "EmotionR", emotionRight }, { "GateL", gateLeft }, { "GateR", gateRight }
+            }, true, time);
+            Check(ir.EvaluateNow(), "emotion fixture writes its completed gated blend result");
         }
 
         public int Index(string key) => face.sharedMesh.GetBlendShapeIndex(key);

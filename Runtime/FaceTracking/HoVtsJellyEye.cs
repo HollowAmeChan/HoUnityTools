@@ -21,6 +21,9 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly List<SkinnedMeshRenderer> loadedRenderers = new List<SkinnedMeshRenderer>();
         private readonly List<Mesh> loadedMeshes = new List<Mesh>();
         private readonly List<string> loadedInputNames = new List<string>();
+        private readonly List<int> loadedGroupSizes = new List<int>();
+        private readonly List<string> loadedGroupKeys = new List<string>();
+        private readonly List<float> loadedGroupWeights = new List<float>();
         private readonly string[] loadedOutputNames = new string[8];
         private readonly List<string> missingOutputKeys = new List<string>();
         private readonly List<string> missingInputKeys = new List<string>();
@@ -44,6 +47,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         public IReadOnlyList<string> MissingInputKeys => missingInputKeys;
         public Vector2 MovementOffset { get; private set; }
         public float ScaleOffset { get; private set; }
+        public float BlinkInput { get; private set; }
         /// <summary>Positive is stretch; negative is squash.</summary>
         public float SquashOffset { get; private set; }
 
@@ -61,6 +65,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (!bindingsValid) { status = bindingError; return false; }
 
             bool hasInput = TryReadInputs(out float horizontal, out float vertical, out float blink);
+            BlinkInput = hasInput ? blink : 0;
             if (hasInput)
             {
                 horizontal += blink * SafeGain(movement.blinkHorizontal);
@@ -132,11 +137,31 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (irController == null || !irController.HasOutputFrame) return false;
             irController.CopyFinalWeightsTo(frame);
             bool configured = false;
-            foreach (string key in inputs.blinkKeys)
+            if (inputs.UsesBlinkGroups)
             {
-                if (string.IsNullOrEmpty(key)) continue;
-                configured = true;
-                blink = Mathf.Max(blink, Read(key));
+                foreach (var group in inputs.blinkGroups)
+                {
+                    if (group?.keys == null) continue;
+                    float combined = 0;
+                    foreach (var item in group.keys)
+                    {
+                        if (item == null || string.IsNullOrEmpty(item.key) || item.weight == 0) continue;
+                        configured = true;
+                        combined += Mathf.Max(0, Read(item.key)) * item.weight;
+                    }
+                    blink = Mathf.Max(blink, Mathf.Clamp01(combined));
+                }
+            }
+            else
+            {
+                // Existing prefabs keep their independent-key maximum, including
+                // its original range, until the author configures grouped input.
+                foreach (string key in inputs.blinkKeys)
+                {
+                    if (string.IsNullOrEmpty(key)) continue;
+                    configured = true;
+                    blink = Mathf.Max(blink, Read(key));
+                }
             }
             horizontal = Read(inputs.lookRight) - Read(inputs.lookLeft);
             vertical = Read(inputs.lookUp) - Read(inputs.lookDown);
@@ -167,6 +192,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     || loadedMeshes[i] != targetMeshes[i].sharedMesh) return false;
             for (int i = 0; i < loadedInputNames.Count; i++)
                 if (!string.Equals(loadedInputNames[i], InputName(i), StringComparison.Ordinal)) return false;
+            if (!GroupConfigurationMatches()) return false;
             for (int i = 0; i < 8; i++)
                 if (!string.Equals(loadedOutputNames[i], OutputName(i), StringComparison.Ordinal)) return false;
             return true;
@@ -177,6 +203,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             Stop();
             inputs = inputs ?? new HoVtsJellyInputs();
             inputs.blinkKeys = inputs.blinkKeys ?? new List<string>();
+            inputs.blinkGroups = inputs.blinkGroups ?? new List<HoVtsJellyInputGroup>();
             movement = movement ?? new HoVtsJellyMovement();
             scale = scale ?? new HoVtsJellyScale();
             squash = squash ?? new HoVtsJellySquash();
@@ -187,11 +214,22 @@ namespace Hollow.HoUnityTools.FaceTracking
                 loadedRenderers.Add(renderer); loadedMeshes.Add(renderer != null ? renderer.sharedMesh : null);
             }
             for (int i = 0; i < inputs.blinkKeys.Count + 4; i++) loadedInputNames.Add(InputName(i));
+            foreach (var group in inputs.blinkGroups)
+            {
+                loadedGroupSizes.Add(group?.keys?.Count ?? 0);
+                if (group?.keys == null) continue;
+                foreach (var item in group.keys)
+                {
+                    loadedGroupKeys.Add(item?.key);
+                    loadedGroupWeights.Add(item?.weight ?? 0);
+                }
+            }
             for (int i = 0; i < 8; i++) loadedOutputNames[i] = OutputName(i);
             configurationLoaded = true;
             try
             {
                 if (irController == null) throw new InvalidOperationException("未指定 IR 组件。");
+                ValidateInputGroups();
                 if (targetMeshes == null || targetMeshes.Count == 0) throw new InvalidOperationException("未指定驱动网格列表。");
                 var renderers = new HashSet<SkinnedMeshRenderer>();
                 var keys = new HashSet<(SkinnedMeshRenderer, int)>();
@@ -222,6 +260,42 @@ namespace Hollow.HoUnityTools.FaceTracking
             catch (Exception exception) { bindingError = exception.Message; bindingsValid = false; }
         }
 
+        private bool GroupConfigurationMatches()
+        {
+            if ((inputs.blinkGroups?.Count ?? 0) != loadedGroupSizes.Count) return false;
+            int index = 0;
+            for (int groupIndex = 0; groupIndex < loadedGroupSizes.Count; groupIndex++)
+            {
+                var keys = inputs.blinkGroups[groupIndex]?.keys;
+                if ((keys?.Count ?? 0) != loadedGroupSizes[groupIndex]) return false;
+                if (keys == null) continue;
+                foreach (var item in keys)
+                {
+                    if (!string.Equals(item?.key, loadedGroupKeys[index], StringComparison.Ordinal)
+                        || !(item?.weight ?? 0).Equals(loadedGroupWeights[index])) return false;
+                    index++;
+                }
+            }
+            return true;
+        }
+
+        private void ValidateInputGroups()
+        {
+            foreach (var group in inputs.blinkGroups)
+            {
+                if (group?.keys == null) continue;
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var item in group.keys)
+                {
+                    if (item == null || string.IsNullOrEmpty(item.key)) continue;
+                    if (!Finite(item.weight) || item.weight < 0)
+                        throw new InvalidOperationException("激励权重必须是非负有限数：" + item.key);
+                    if (item.weight > 0 && !names.Add(item.key))
+                        throw new InvalidOperationException("同一激励组内形态键重复：" + item.key);
+                }
+            }
+        }
+
         private string InputName(int index)
         {
             int count = inputs.blinkKeys.Count;
@@ -249,6 +323,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             ReleaseBindings(); ClearSprings();
             bindings.Clear(); loadedRenderers.Clear(); loadedMeshes.Clear(); loadedInputNames.Clear();
+            loadedGroupSizes.Clear(); loadedGroupKeys.Clear(); loadedGroupWeights.Clear();
             missingInputKeys.Clear(); missingOutputKeys.Clear(); frame.Clear();
             configurationLoaded = bindingsValid = false; loadedController = null; bindingError = null;
             status = "已停止";
@@ -264,6 +339,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             horizontalSpring.Reset(); verticalSpring.Reset(); scaleSpring.Reset(); squashSpring.Reset();
             hadInput = false; MovementOffset = Vector2.zero; ScaleOffset = SquashOffset = 0;
+            BlinkInput = 0;
         }
 
         private void OnDisable() => Stop();
