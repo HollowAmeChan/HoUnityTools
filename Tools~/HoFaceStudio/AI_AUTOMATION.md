@@ -1,6 +1,6 @@
 # HoFaceStudio 自动化接口
 
-HoFaceStudio 提供本机命名管道 `HoFaceStudio`，供 AI、自动化脚本和测试工具调用。协议版本为 **5**；接口只执行作品、预览、文件与编辑器领域命令，不执行任意 shell。桌面与 CLI 共享 `shared/AutomationContract.cs` 的命令契约。
+HoFaceStudio 提供本机命名管道 `HoFaceStudio`，供 AI、自动化脚本和测试工具调用。协议版本为 **6**；接口只执行作品、预览、文件与编辑器领域命令，不执行任意 shell。桌面与 CLI 共享 `shared/AutomationContract.cs` 的命令契约。
 
 ## 调用方式
 
@@ -45,7 +45,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `list` | 读取 inputs、outputs、IR 节点、参数与目标；可传 `filter` |
 | `selection` | 读取输出行号、节点 id、曲线点、游标和视口 |
 | `diagnostics` | 读取实际生效 values/weights、未覆写实时快照和 IR 校验结果 |
-| `monitor` | 读取 raw 物理输入/转发值、value live/effective、IR live/effective 三层参数 |
+| `monitor` | 读取 `raw` VTS 物理输入、`controls` 控制输入、`values` 处理结果和 `weights` IR 权重 |
 | `setMonitorOverride` | 按 `stage`、`parameter` 设置临时值 `auto`、`-1`、`0` 或 `1` |
 | `clearMonitorOverrides` | 清除指定阶段或全部实时覆写 |
 | `screenshot` | 截取完整 WPF 窗口；可传 `{"path":"D:\\temp\\hoface.png"}` |
@@ -92,7 +92,9 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 - 三层监控中，`live` 是物理 raw / 未覆写输入下的完整求值快照，`value` 是逐阶段覆写后实际生效的结果。Raw 与 effective value 使用独立状态求值器，因此 stateful modifiers 不会在一帧内被重复推进。Value 覆写进入逐行 output evaluation，下游 `out("...")` 会看到覆写；同名输出仍按原行序最后一行决定导出值。IR 覆写只影响目标发布，不会改写 `LiveValues`、`LiveWeights` 或 `UnclampedValues`。IR `-1/0/1` 覆写有意绕过目标范围夹取，用于临时压力测试，清除后恢复正常范围。
 - `list.nodes` 仅返回 root 可达的树节点；不在混合树中的节点单独放在 `orphanNodes`。Studio 树视图只呈现已引用子规则。`addIrRule` 的 parent 必须是现有 blend/direct 节点；Pose target 可直接输入，缺少的 target 会以 `[0,1]` 默认范围声明。
 - Value 输出规则的修饰器在曲线之后按链顺序逐个执行。`smooth` / `delay` 使用 `seconds`；`steps` 按 `trigger` 严格递增，包含 `target`、`hold`、`threshold`、`enterSeconds` 和 `exitSeconds`。UI 与 `setValueModifiers` 共用该格式；空链保持原规则行为。
-- Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区把输入、Value 处理、IR 输出拆成三个独立页签，共用名称/ID 搜索。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
+- Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区有 VTS 原始、控制输入、实时处理、实时输出四个独立页签，共用名称/ID 搜索。`view` 的 `monitorStage` 接受 `raw|control|value|ir`，`monitorFilter` 设置搜索词。原有 `centerTab` 索引不变。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
+- `controls` 来自 profile 中不完全由 VTS 标准字段驱动的输入行，按输入参数名识别；标准字段从 profile 或实际数据包取原始拼写，不凭空制造通道。已声明的控制来源不混入 `raw` 列表，未知的实际协议扩展字段仍可在 `raw` 中显示。控制条直接显示 `defaultValue`，CLI 还返回 `usingDefault`、`source`、`fresh`；没有收到来源时显示声明的默认值，收到后缺键则保留最后一个外部值。
+- `setMonitorOverride` / `clearMonitorOverrides` 新增 `stage:"control"`，`parameter` 是输入行的参数名（如 `MouthEnabled`）。控制覆盖进入输入行求值后、输出表达式前的规范参数层，离线立即生效；`auto` 恢复外部值或默认值。控制点击不伪造手机数据包、不增加录制帧、不推进会话时钟，也不把控制值写入 RawForward。默认值属于作品配置，临时覆盖不修改默认值、不进入撤销历史。
 - 混合图直接显示 1D/2D 实时位置与子项贡献权重。实时位置是蓝色圆点；图形覆盖开启后用橙色十字表示覆盖位置，受影响的 Value 行和 IR 混合节点显示橙色“覆盖”。关闭图形覆盖时清除十字并恢复实时，三阶段监控的独立 pins 不被顺带清除。`cursor` 是显式覆盖操作，会在校验成功后自动开启图形覆盖；`selection.cursor` 返回 `enabled`/`active`，`selection.blend` 返回实时坐标、追踪状态和当前实际显示的 `childWeights`。
 - VTS `vtsStart` 在 `Preview` 模式需要已打开作品；`RawForward` 可在无作品状态连接、转发和录制 raw 帧。Processed replay 与 Blender 权重预览仍需作品。图形绘制输入游标与三阶段参数覆写分别管理，`clearPreview` 不会清除 monitor pins。
 - `evaluate.raw` 使用 **wire 原始字段名**，例如诊断样例的 `JawOpen`、`MouthSmileLeft`、`MouthSmileRight`。不是归一化后的 `jawOpen` 等名字；可先读取 `list.inputs` 的表达式核对映射。

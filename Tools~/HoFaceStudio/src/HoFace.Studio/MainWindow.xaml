@@ -50,9 +50,13 @@
           <Border BorderBrush="{StaticResource OutlineBrush}" BorderThickness="0.5" CornerRadius="2"
               IsHitTestVisible="False"/>
           <Grid x:Name="MeterReadout" Margin="6,0" IsHitTestVisible="False">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="10"/>
-            <TextBlock Grid.Column="1" Text="{Binding ValueText}" FontSize="10" FontWeight="SemiBold" Margin="6,0,0,0"/>
+            <Border Grid.Column="1" Background="#D01C242C" CornerRadius="2" Padding="3,0" Margin="4,2,0,2"
+                Visibility="{Binding HasConfiguredDefault, Converter={StaticResource VisibleIf}}">
+              <TextBlock Text="{Binding DefaultText}" FontSize="10" Foreground="#D3DCE5"/>
+            </Border>
+            <TextBlock Grid.Column="2" Text="{Binding ValueText}" FontSize="10" FontWeight="SemiBold" Margin="6,0,0,0"/>
           </Grid>
           <StackPanel x:Name="OverrideActions" Orientation="Horizontal" HorizontalAlignment="Right"
               Background="{StaticResource RaisedBrush}" Visibility="Collapsed">
@@ -519,8 +523,10 @@
           <StackPanel Orientation="Horizontal">
             <Button Content="曲线" Click="MonitorNavigationClicked" Tag="0" Padding="8,4" ToolTip="打开 Value 曲线编辑页"/>
             <Button Content="混合图" Click="MonitorNavigationClicked" Tag="1" Padding="8,4" ToolTip="打开 IR 混合图编辑页"/>
-            <ToggleButton x:Name="RawMonitorTab" Content="实时输入" IsChecked="{Binding IsRawMonitorTab, Mode=OneWay}"
+            <ToggleButton x:Name="RawMonitorTab" Content="VTS 原始" IsChecked="{Binding IsRawMonitorTab, Mode=OneWay}"
                 Click="MonitorStageNavigationClicked" Tag="0" Padding="8,4" ToolTip="查看 VTS 原始参数输入"/>
+            <ToggleButton x:Name="ControlMonitorTab" Content="控制输入" IsChecked="{Binding IsControlMonitorTab, Mode=OneWay}"
+                Click="MonitorStageNavigationClicked" Tag="3" Padding="8,4" ToolTip="查看 Gate 与形态开关；未收到外部输入时使用配置默认值"/>
             <ToggleButton x:Name="ValueMonitorTab" Content="实时处理" IsChecked="{Binding IsValueMonitorTab, Mode=OneWay}"
                 Click="MonitorStageNavigationClicked" Tag="1" Padding="8,4" ToolTip="查看 Value 规则处理结果"/>
             <ToggleButton x:Name="IrMonitorTab" Content="实时输出" IsChecked="{Binding IsIrMonitorTab, Mode=OneWay}"
@@ -531,7 +537,7 @@
               FontSize="11" Margin="12,0" TextTrimming="CharacterEllipsis"/>
           <TextBox x:Name="MonitorSearchBox" Grid.Column="2" Width="220" Tag="搜索参数名称或 ID…"
               Text="{Binding MonitorFilter, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="搜索实时参数"
-              ToolTip="同步筛选原始输入、Value 输出和 IR 权重"/>
+              ToolTip="同步筛选 VTS 原始、控制输入、Value 输出和 IR 权重"/>
         </Grid>
         <Border x:Name="RawMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"
@@ -557,6 +563,31 @@
                   HorizontalAlignment="Center" VerticalAlignment="Center"
                   Visibility="{Binding RawMonitorEmptyVisibility}"/>
             </Grid>
+        </Border>
+        <Border x:Name="ControlMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"
+            Visibility="{Binding IsControlMonitorTab, Converter={StaticResource VisibleIf}}">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid Margin="0,0,0,6">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="控制 · Gate / 形态开关" FontSize="12" FontWeight="SemiBold"
+                  ToolTip="条内显示配置默认值与当前生效值；悬停查看来源或设置临时覆盖，× 恢复自动"/>
+              <TextBlock Grid.Column="1" Text="{Binding ControlMonitorCount, StringFormat={}{0} 路}"
+                  Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="0,0,8,0"/>
+              <Button Grid.Column="2" Content="清除" Tag="Control" Click="ClearMonitorOverridesClicked" Padding="5,2" Margin="0"
+                  FontSize="10" Visibility="{Binding HasControlMonitorOverrides, Converter={StaticResource VisibleIf}}"
+                  ToolTip="清除本组临时覆盖，恢复外部输入或配置默认值"/>
+            </Grid>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl x:Name="ControlMonitorItems" ItemsSource="{Binding ControlMonitorView}"
+                  ItemTemplate="{StaticResource MonitorParameterTemplate}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              </ItemsControl>
+            </ScrollViewer>
+            <TextBlock Text="{Binding ControlMonitorEmptyText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ControlMonitorEmptyVisibility}"/>
+          </Grid>
         </Border>
         <Border x:Name="ValueMonitorPage" Grid.Row="1" Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource OutlineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,8"

@@ -5,7 +5,7 @@ namespace HoFace.Automation
 {
     public static class AutomationContract
     {
-        public const int Version = 5;
+        public const int Version = 6;
         public static string PipeName
         {
             get
@@ -25,9 +25,9 @@ namespace HoFace.Automation
             new CommandDefinition("list", "列出参数行、IR 节点、目标与参数定义", "filter?:string", true, true),
             new CommandDefinition("selection", "读取当前行/节点、曲线点、游标与视口", "", true),
             new CommandDefinition("diagnostics", "读取当前 values、weights 与校验结果", "", true, true),
-            new CommandDefinition("monitor", "读取原始输入、value 输出和 IR 权重三层实时参数", "", true),
-            new CommandDefinition("setMonitorOverride", "临时覆写单个实时参数；支持自动、-1、0、1", "stage:raw|value|ir, parameter:string, mode:auto|-1|0|1"),
-            new CommandDefinition("clearMonitorOverrides", "清除指定阶段或全部实时参数覆写", "stage?:raw|value|ir"),
+            new CommandDefinition("monitor", "读取 VTS 原始、控制输入及其默认值、Value 输出和 IR 权重", "", true),
+            new CommandDefinition("setMonitorOverride", "临时覆写单个参数；控制输入离线也立即生效", "stage:raw|control|value|ir, parameter:string, mode:auto|-1|0|1"),
+            new CommandDefinition("clearMonitorOverrides", "清除指定阶段或全部实时参数覆写", "stage?:raw|control|value|ir"),
             new CommandDefinition("screenshot", "将 WPF 内容渲染为 PNG，无需操作桌面", "path?:string", true),
             new CommandDefinition("open", "校验并打开作品；默认保护未保存编辑", "valuePath:string, irPath:string, discardChanges?:bool"),
             new CommandDefinition("save", "应用有效文本并保存；可指定另存路径", "valuePath?:string, irPath?:string", false, true),
@@ -57,7 +57,7 @@ namespace HoFace.Automation
             new CommandDefinition("applyProperties", "校验并应用属性面板草稿", "", false, true),
             new CommandDefinition("revertProperties", "还原属性面板草稿", "", false, true),
             new CommandDefinition("mode", "切换互斥输出模式", "value:Preview|RawForward, rawForwardPort?:int"),
-            new CommandDefinition("view", "读取或设置分栏、标签页、折叠区与窗口尺寸", "structureWidth?:number, plotRatio?:number, structureTab?:0|1, centerTab?:0|1|2|3 (曲线/混合/监控/JSON), showConnection?:bool, showFiles?:bool, showEditor?:bool, width?:number, height?:number, reset?:bool"),
+            new CommandDefinition("view", "读取或设置分栏、标签页、折叠区与窗口尺寸", "structureWidth?:number, plotRatio?:number, structureTab?:0|1, centerTab?:0|1|2|3 (曲线/混合/监控/JSON), monitorStage?:raw|control|value|ir, monitorFilter?:string, showConnection?:bool, showFiles?:bool, showEditor?:bool, width?:number, height?:number, reset?:bool"),
             new CommandDefinition("cursor", "设置临时输入并实际求值；不写作品", "x:number, y?:number", false, true),
             new CommandDefinition("setPreviewOverride", "切换图形覆盖模式；关闭后立即恢复实时输入", "enabled:bool", false, true),
             new CommandDefinition("clearPreview", "清除手动预览结果与临时输入", "", false, true),

@@ -385,6 +385,11 @@ namespace HoFace.Studio
             int structureIndex = ReadInt(payload, "structureTab", StructureTab), centerIndex = ReadInt(payload, "centerTab", CenterTab);
             if (structureIndex < 0 || structureIndex > 1 || centerIndex < 0 || centerIndex > 3)
                 throw new ArgumentException("结构标签索引必须为 0 或 1；中间页签索引为 0–3（曲线、混合、监控、JSON）。");
+            int stageIndex = payload.TryGetProperty("monitorStage", out _)
+                ? (int)ParseMonitorStage(RequiredString(payload, "monitorStage")) : MonitorStageTab;
+            string filter = payload.TryGetProperty("monitorFilter", out var filterJson)
+                ? filterJson.ValueKind == JsonValueKind.String ? filterJson.GetString() :
+                    throw new ArgumentException("monitorFilter 必须为字符串。") : MonitorFilter;
             if (HasTextDraft && centerIndex != CenterTab) throw new InvalidOperationException("请先应用或还原 JSON 文本。");
             if (ReadBool(payload, "reset")) ResetLayout();
             if (structure.HasValue) StructureColumn.Width = new GridLength(structure.Value);
@@ -395,6 +400,7 @@ namespace HoFace.Studio
             if (width.HasValue) Width = width.Value;
             if (height.HasValue) Height = height.Value;
             StructureTab = structureIndex; CenterTab = centerIndex;
+            MonitorStageTab = stageIndex; MonitorFilter = filter;
             if (payload.TryGetProperty("showConnection", out _)) ShowConnection = ReadBool(payload, "showConnection");
             if (payload.TryGetProperty("showFiles", out _)) ShowFiles = ReadBool(payload, "showFiles");
             if (payload.TryGetProperty("showEditor", out _)) ShowEditor = ReadBool(payload, "showEditor");
@@ -407,7 +413,8 @@ namespace HoFace.Studio
                 structureWidth = StructureColumn.ActualWidth, plotWidth = PlotColumn.ActualWidth,
                 inspectorWidth = InspectorColumn.ActualWidth, plotRatio = preferredPlotRatio,
                 structureTab = StructureTab, centerTab = CenterTab, showConnection = ShowConnection, showFiles = ShowFiles,
-                showEditor = ShowEditor,
+                showEditor = ShowEditor, monitorStage = ((MonitorStage)MonitorStageTab).ToString().ToLowerInvariant(),
+                monitorFilter = MonitorFilter,
                 viewport = ActivePlot.Viewport
             };
         }

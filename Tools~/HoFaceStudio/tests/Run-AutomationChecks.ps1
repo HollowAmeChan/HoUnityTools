@@ -37,11 +37,12 @@ function Get-FreeUdpPort {
     try { return ([Net.IPEndPoint]$socket.Client.LocalEndPoint).Port }
     finally { $socket.Dispose() }
 }
-function Send-VtsFrame([int]$Port, [double]$Jaw, [double]$SmileLeft, [double]$SmileRight) {
+function Send-VtsFrame([int]$Port, [double]$Jaw, [double]$SmileLeft, [double]$SmileRight, [Nullable[double]]$Gate = $null) {
     $packet = '{"Timestamp":1,"FaceFound":true,"BlendShapes":[' +
         '{"k":"JawOpen","v":' + $Jaw.ToString([Globalization.CultureInfo]::InvariantCulture) + '},' +
         '{"k":"MouthSmileLeft","v":' + $SmileLeft.ToString([Globalization.CultureInfo]::InvariantCulture) + '},' +
-        '{"k":"MouthSmileRight","v":' + $SmileRight.ToString([Globalization.CultureInfo]::InvariantCulture) + '}]}' + ''
+        '{"k":"MouthSmileRight","v":' + $SmileRight.ToString([Globalization.CultureInfo]::InvariantCulture) + '}' +
+        $(if ($null -ne $Gate) { ',{"k":"MouthEnabled","v":' + $Gate.ToString([Globalization.CultureInfo]::InvariantCulture) + '}' } else { '' }) + ']}'
     $bytes = [Text.Encoding]::UTF8.GetBytes($packet)
     $sender = [Net.Sockets.UdpClient]::new()
     try { $sender.Send($bytes, $bytes.Length, [Net.IPEndPoint]::new([Net.IPAddress]::Loopback, $Port)) | Out-Null }
@@ -291,6 +292,51 @@ try {
     $null = Call-Studio 'view' @{ centerTab = 0; showConnection = $true; showFiles = $true }
     $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'settings.png') }
     $null = Call-Studio 'view' @{ showConnection = $false; showFiles = $false }
+    $controlBaseline = Call-Studio 'document'
+    $controlProfile = [System.Text.Json.Nodes.JsonNode]::Parse($controlBaseline.valueText)
+    $controlProfile['inputs'].AsArray().Add([System.Text.Json.Nodes.JsonNode]::Parse(
+        '{"parameter":"MouthEnabled","expression":"MouthEnabled","defaultValue":1}'))
+    $controlProfile['inputs'].AsArray().Add([System.Text.Json.Nodes.JsonNode]::Parse(
+        '{"parameter":"PuckerEnabled","expression":"PuckerEnabled","defaultValue":0}'))
+    $controlProfile['outputs'].AsArray().Add([System.Text.Json.Nodes.JsonNode]::Parse(
+        '{"parameter":"Gate/Mouth","expression":"MouthEnabled","defaultValue":1}'))
+    $null = Call-Studio 'text' @{ value=$controlProfile.ToJsonString(); ir=$controlBaseline.irText }
+    $null = Call-Studio 'view' @{ centerTab=2; monitorStage='control'; monitorFilter='' }
+    $monitor = Call-Studio 'monitor'
+    $gate = $monitor.controls | Where-Object key -eq 'MouthEnabled'
+    Assert-Check ($monitor.controls.Count -eq 2 -and $monitor.raw.Count -eq 3) 'Phone wires and controls are separate collections'
+    Assert-Check ($gate.value -eq 1 -and $gate.defaultValue -eq 1 -and $gate.usingDefault -and !$gate.fresh) 'Offline Gate shows configured one without fake fresh data'
+    Assert-Check (($monitor.controls | Where-Object key -eq 'PuckerEnabled').defaultValue -eq 0) 'Default-zero switch is explicit'
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'control-defaults.png') }
+    $monitor = Call-Studio 'setMonitorOverride' @{ stage='control'; parameter='MouthEnabled'; mode='0' }
+    $gate = $monitor.controls | Where-Object key -eq 'MouthEnabled'
+    Assert-Check ($gate.value -eq 0 -and $gate.live -eq 1 -and $gate.overridden -and !$gate.fresh) 'Offline Gate pin is immediate and preserves its automatic default'
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'control-pin.png') }
+    $monitor = Call-Studio 'setMonitorOverride' @{ stage='control'; parameter='MouthEnabled'; mode='auto' }
+    Assert-Check (($monitor.controls | Where-Object key -eq 'MouthEnabled').value -eq 1) 'Auto restores declared fallback immediately'
+    $inputPort = Get-FreeUdpPort
+    $null = Call-Studio 'vtsStart' @{ phoneIp='127.0.0.1'; phonePort=9; localPort=$inputPort }
+    Send-VtsFrame $inputPort .5 .2 .3 0
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        $monitor = Call-Studio 'monitor'
+        if (($monitor.controls | Where-Object key -eq 'MouthEnabled').fresh) { break }
+        Start-Sleep -Milliseconds 50
+    }
+    $gate = $monitor.controls | Where-Object key -eq 'MouthEnabled'
+    Assert-Check ($gate.value -eq 0 -and $gate.fresh -and !$gate.usingDefault) 'A real external control replaces the fallback'
+    Assert-Check (!($monitor.raw | Where-Object key -eq 'MouthEnabled')) 'External control does not leak into VTS monitor'
+    $null = Call-Studio 'setMonitorOverride' @{ stage='control'; parameter='MouthEnabled'; mode='1' }
+    $monitor = Call-Studio 'setMonitorOverride' @{ stage='control'; parameter='MouthEnabled'; mode='auto' }
+    Assert-Check (($monitor.controls | Where-Object key -eq 'MouthEnabled').value -eq 0) 'Auto restores genuine external zero instead of default one'
+    $view = Call-Studio 'view' @{ monitorStage='control'; monitorFilter='Pucker' }
+    $null = Call-Studio 'screenshot' @{ path = (Join-Path $work 'control-filtered.png') }
+    Assert-Check ($view.monitorStage -eq 'control' -and $view.monitorFilter -eq 'Pucker') 'CLI selects and searches the control page'
+    $invalidStage = Invoke-Cli @('view', '{"monitorStage":"bad"}')
+    Assert-Check ($invalidStage.exitCode -ne 0) 'Invalid monitor-stage names are rejected'
+    $null = Call-Studio 'vtsStop'
+    $null = Call-Studio 'clearMonitorOverrides'
+    $null = Call-Studio 'undo'
+    Assert-Check (!(Call-Studio 'status').dirty) 'Temporary control changes add no document undo entries'
     $result = Call-Studio 'shutdown'
     Assert-Check $result.closing 'Shutdown responds before disconnecting'
     Assert-Check ($process.WaitForExit(5000)) 'Shutdown releases the process and pipe'

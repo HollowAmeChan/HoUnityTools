@@ -14,37 +14,44 @@ namespace HoFace.Studio
 {
     public partial class MainWindow
     {
-        private ICollectionView rawMonitorView, valueMonitorView, irMonitorView;
+        private ICollectionView rawMonitorView, valueMonitorView, irMonitorView, controlMonitorView;
+        private readonly System.Collections.Generic.HashSet<string> controlSourceKeys =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
         private string monitorFilter = "";
         private int monitorStageTab;
         private AuthoringMonitorFrame latestMonitorFrame;
         public ObservableCollection<MonitorParameterRow> RawMonitorRows { get; } = new ObservableCollection<MonitorParameterRow>();
         public ObservableCollection<MonitorParameterRow> ValueMonitorRows { get; } = new ObservableCollection<MonitorParameterRow>();
         public ObservableCollection<MonitorParameterRow> IrMonitorRows { get; } = new ObservableCollection<MonitorParameterRow>();
+        public ObservableCollection<MonitorParameterRow> ControlMonitorRows { get; } = new ObservableCollection<MonitorParameterRow>();
         public ICollectionView RawMonitorView => rawMonitorView;
         public ICollectionView ValueMonitorView => valueMonitorView;
         public ICollectionView IrMonitorView => irMonitorView;
+        public ICollectionView ControlMonitorView => controlMonitorView;
         public string MonitorFilter
         {
             get => monitorFilter;
             set
             {
                 monitorFilter = value ?? "";
-                rawMonitorView?.Refresh(); valueMonitorView?.Refresh(); irMonitorView?.Refresh();
+                rawMonitorView?.Refresh(); valueMonitorView?.Refresh(); irMonitorView?.Refresh(); controlMonitorView?.Refresh();
                 OnPropertyChanged();
                 NotifyMonitorState();
             }
         }
-        public string MonitorStatus => latestMonitorFrame == null ? "等待 VTS 数据" :
+        public string MonitorStatus => latestMonitorFrame == null ? (IsControlMonitorTab ? "控制输入 · 离线可用" : "等待 VTS 数据") :
+            latestMonitorFrame.Raw.Count == 0 ? "离线 · 控制输入预览" :
             latestMonitorFrame.Tracked
                 ? (session.ReplayPlaying ? "回放" : "实时") + " · " + latestMonitorFrame.Time.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " s"
                 : "未追踪 · 保留最后一帧参数";
         public int RawMonitorCount => RawMonitorView?.Cast<object>().Count() ?? 0;
         public int ValueMonitorCount => ValueMonitorView?.Cast<object>().Count() ?? 0;
         public int IrMonitorCount => IrMonitorView?.Cast<object>().Count() ?? 0;
+        public int ControlMonitorCount => ControlMonitorView?.Cast<object>().Count() ?? 0;
         public bool HasRawMonitorOverrides => session.RawOverrides.Count != 0;
         public bool HasValueMonitorOverrides => session.ValueOverrides.Count != 0;
         public bool HasIrMonitorOverrides => session.IrOverrides.Count != 0;
+        public bool HasControlMonitorOverrides => session.ControlOverrides.Count != 0;
         public int MonitorStageTab
         {
             get => monitorStageTab;
@@ -55,18 +62,24 @@ namespace HoFace.Studio
                 OnPropertyChanged(nameof(IsRawMonitorTab));
                 OnPropertyChanged(nameof(IsValueMonitorTab));
                 OnPropertyChanged(nameof(IsIrMonitorTab));
+                OnPropertyChanged(nameof(IsControlMonitorTab));
+                OnPropertyChanged(nameof(MonitorStatus));
             }
         }
         public bool IsRawMonitorTab => MonitorStageTab == 0;
         public bool IsValueMonitorTab => MonitorStageTab == 1;
         public bool IsIrMonitorTab => MonitorStageTab == 2;
+        public bool IsControlMonitorTab => MonitorStageTab == 3;
         public Visibility MonitorWorkspaceVisibility => CenterTab == 2 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility RawMonitorEmptyVisibility => RawMonitorCount == 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility ValueMonitorEmptyVisibility => ValueMonitorCount == 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility IrMonitorEmptyVisibility => IrMonitorCount == 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ControlMonitorEmptyVisibility => ControlMonitorCount == 0 ? Visibility.Visible : Visibility.Collapsed;
         public string RawMonitorEmptyText => RawMonitorRows.Count == 0 ? "连接 VTS 后显示原始输入" : "没有匹配的参数";
         public string ValueMonitorEmptyText => HasDocument ? "没有匹配的参数" : "打开作品后显示 Value 参数";
         public string IrMonitorEmptyText => HasDocument ? "没有匹配的参数" : "打开作品后显示 IR 权重";
+        public string ControlMonitorEmptyText => !HasDocument ? "打开作品后显示控制输入" :
+            ControlMonitorRows.Count == 0 ? "作品没有额外控制输入" : "没有匹配的参数";
         public Visibility NoDocumentMonitorVisibility => HasDocument ? Visibility.Collapsed : Visibility.Visible;
         public bool CanConnect => session.Running || Mode == "RawForward" || HasDocument;
         public bool CanRecord => HasDocument || Mode == "RawForward";
@@ -80,7 +93,7 @@ namespace HoFace.Studio
 
         private void MonitorStageNavigationClicked(object sender, RoutedEventArgs e)
         {
-            if (sender is ToggleButton button && int.TryParse(button.Tag?.ToString(), out int stage) && stage >= 0 && stage <= 2)
+            if (sender is ToggleButton button && int.TryParse(button.Tag?.ToString(), out int stage) && stage >= 0 && stage <= 3)
             {
                 MonitorStageTab = stage;
                 CenterTab = 2;
@@ -92,22 +105,34 @@ namespace HoFace.Studio
             rawMonitorView = CollectionViewSource.GetDefaultView(RawMonitorRows);
             valueMonitorView = CollectionViewSource.GetDefaultView(ValueMonitorRows);
             irMonitorView = CollectionViewSource.GetDefaultView(IrMonitorRows);
-            foreach (var view in new[] { rawMonitorView, valueMonitorView, irMonitorView })
+            controlMonitorView = CollectionViewSource.GetDefaultView(ControlMonitorRows);
+            foreach (var view in new[] { rawMonitorView, valueMonitorView, irMonitorView, controlMonitorView })
                 view.Filter = item => item is MonitorParameterRow row &&
                     (string.IsNullOrWhiteSpace(MonitorFilter) ||
                      (row.Label + " " + row.Key).IndexOf(MonitorFilter, StringComparison.OrdinalIgnoreCase) >= 0);
             OnPropertyChanged(nameof(RawMonitorView)); OnPropertyChanged(nameof(ValueMonitorView));
             OnPropertyChanged(nameof(IrMonitorView));
+            OnPropertyChanged(nameof(ControlMonitorView));
             NotifyMonitorState();
         }
 
         private void ResetMonitorRows()
         {
-            RawMonitorRows.Clear(); ValueMonitorRows.Clear(); IrMonitorRows.Clear();
+            RawMonitorRows.Clear(); ValueMonitorRows.Clear(); IrMonitorRows.Clear(); ControlMonitorRows.Clear();
+            controlSourceKeys.Clear();
             latestMonitorFrame = null;
             BlendPlot.ClearLivePoint();
             if (document.Value != null)
             {
+                foreach (var control in session.ControlInputs)
+                {
+                    foreach (string source in control.Sources)
+                        if (!InputMonitorSources.IsPhoneField(source)) controlSourceKeys.Add(source);
+                    string label = document.Value.outputs.FirstOrDefault(output =>
+                        output != null && output.expression?.Trim() == control.Key)?.parameter ?? control.Key;
+                    EnsureMonitorRow(ControlMonitorRows, MonitorStage.Control, control.Key, label,
+                        control.DefaultValue, control.Minimum, control.Maximum, control.DefaultValue);
+                }
                 foreach (var input in document.Value.inputs)
                 {
                     if (input == null || string.IsNullOrWhiteSpace(input.expression) ||
@@ -115,7 +140,7 @@ namespace HoFace.Studio
                     var names = new System.Collections.Generic.List<string>();
                     expression.CollectVariables(names);
                     foreach (string name in names.Distinct(StringComparer.Ordinal))
-                        if (IsDisplayableRawParameter(name))
+                        if (InputMonitorSources.IsPhoneField(name) && IsDisplayableRawParameter(name))
                             EnsureMonitorRow(RawMonitorRows, MonitorStage.Raw, name, name, 0);
                 }
                 foreach (var output in document.Value.outputs)
@@ -131,6 +156,8 @@ namespace HoFace.Studio
                     EnsureMonitorRow(RawMonitorRows, MonitorStage.Raw, pair.Key, pair.Key, pair.Value).SetPinnedValue(pair.Value);
             foreach (var pair in session.ValueOverrides)
                 ValueMonitorRows.FirstOrDefault(x => x.Key == pair.Key)?.SetPinnedValue(pair.Value);
+            foreach (var pair in session.ControlOverrides)
+                ControlMonitorRows.FirstOrDefault(x => x.Key == pair.Key)?.SetPinnedValue(pair.Value);
             foreach (var pair in session.IrOverrides)
                 IrMonitorRows.FirstOrDefault(x => x.Key == pair.Key)?.SetPinnedValue(pair.Value);
             NotifyMonitorState();
@@ -146,11 +173,12 @@ namespace HoFace.Studio
         }
 
         private static MonitorParameterRow EnsureMonitorRow(ObservableCollection<MonitorParameterRow> rows,
-            MonitorStage stage, string key, string label, float initial, float minimum = -1, float maximum = 1)
+            MonitorStage stage, string key, string label, float initial, float minimum = -1, float maximum = 1,
+            float? configuredDefault = null)
         {
             var row = rows.FirstOrDefault(x => x.Key == key);
             if (row != null) return row;
-            row = new MonitorParameterRow(stage, key, label, initial, minimum, maximum);
+            row = new MonitorParameterRow(stage, key, label, initial, minimum, maximum, configuredDefault);
             rows.Add(row);
             return row;
         }
@@ -160,6 +188,12 @@ namespace HoFace.Studio
             latestMonitorFrame = frame;
             UpdateMonitorStage(RawMonitorRows, DisplayableRaw(frame.Raw), DisplayableRaw(frame.RawEffective),
                 DisplayableRaw(session.RawOverrides), MonitorStage.Raw);
+            foreach (var row in ControlMonitorRows)
+                row.UpdateControl(
+                    frame.Controls.TryGetValue(row.Key, out float source) ? source : row.ConfiguredDefault,
+                    frame.ControlsEffective.TryGetValue(row.Key, out float result) ? result : row.ConfiguredDefault,
+                    session.ControlOverrides.TryGetValue(row.Key, out float pinned) ? pinned : (float?)null,
+                    frame.ControlFresh.TryGetValue(row.Key, out bool fresh) && fresh);
             UpdateValueMonitor(frame.Values, frame.ValuesEffective);
             UpdateMonitorStage(IrMonitorRows, frame.Weights, frame.WeightsEffective, session.IrOverrides, MonitorStage.Ir);
             RefreshBlendPlotLiveState();
@@ -198,10 +232,11 @@ namespace HoFace.Studio
                 latestMonitorFrame?.Tracked ?? false);
         }
 
-        private static bool IsDisplayableRawParameter(string key) =>
+        private bool IsDisplayableRawParameter(string key) =>
+            !controlSourceKeys.Contains(key) &&
             key != HoVtsPacket.TimestampKey && key != HoVtsPacket.FaceFoundKey && key != HoVtsPacket.HotkeyKey;
 
-        private static System.Collections.Generic.IReadOnlyDictionary<string, float> DisplayableRaw(
+        private System.Collections.Generic.IReadOnlyDictionary<string, float> DisplayableRaw(
             System.Collections.Generic.IReadOnlyDictionary<string, float> values)
         {
             if (values == null) return null;
@@ -258,7 +293,7 @@ namespace HoFace.Studio
             };
             session.SetMonitorOverride(row.Stage, row.Key, value);
             row.SetPinnedValue(value);
-            liveStatus = "临时覆写 · 等待下一帧";
+            liveStatus = row.Stage == MonitorStage.Control ? "控制输入已更新" : "临时覆写 · 等待下一帧";
             OnPropertyChanged(nameof(LiveStatus));
             NotifyMonitorState();
         }
@@ -275,6 +310,7 @@ namespace HoFace.Studio
 
         private System.Collections.Generic.IEnumerable<MonitorParameterRow> RowsFor(MonitorStage stage) =>
             stage == MonitorStage.Raw ? RawMonitorRows :
+            stage == MonitorStage.Control ? ControlMonitorRows :
             stage == MonitorStage.Value ? ValueMonitorRows : IrMonitorRows;
 
         private void NotifyMonitorState()
@@ -284,17 +320,20 @@ namespace HoFace.Studio
                 nameof(HasValueMonitorOverrides), nameof(HasIrMonitorOverrides), nameof(RawMonitorEmptyVisibility),
                 nameof(ValueMonitorEmptyVisibility), nameof(IrMonitorEmptyVisibility), nameof(RawMonitorEmptyText),
                 nameof(ValueMonitorEmptyText), nameof(IrMonitorEmptyText), nameof(NoDocumentMonitorVisibility), nameof(CanConnect),
-                nameof(CanRecord), nameof(CanUseReplay) })
+                nameof(CanRecord), nameof(CanUseReplay), nameof(ControlMonitorCount), nameof(HasControlMonitorOverrides),
+                nameof(ControlMonitorEmptyText), nameof(ControlMonitorEmptyVisibility) })
                 OnPropertyChanged(property);
         }
 
-        private static MonitorStage ReadMonitorStage(JsonElement payload)
+        private static MonitorStage ReadMonitorStage(JsonElement payload) => ParseMonitorStage(RequiredString(payload, "stage"));
+
+        private static MonitorStage ParseMonitorStage(string value)
         {
-            string value = RequiredString(payload, "stage");
             if (string.Equals(value, "raw", StringComparison.OrdinalIgnoreCase)) return MonitorStage.Raw;
             if (string.Equals(value, "value", StringComparison.OrdinalIgnoreCase)) return MonitorStage.Value;
             if (string.Equals(value, "ir", StringComparison.OrdinalIgnoreCase)) return MonitorStage.Ir;
-            throw new ArgumentException("stage 必须是 raw、value 或 ir。");
+            if (string.Equals(value, "control", StringComparison.OrdinalIgnoreCase)) return MonitorStage.Control;
+            throw new ArgumentException("stage 必须是 raw、control、value 或 ir。");
         }
 
         private object ReadMonitor()
@@ -303,7 +342,8 @@ namespace HoFace.Studio
             {
                 key = x.Key, label = x.Label, live = x.LiveValue, value = x.Value,
                 minimum = x.Minimum, maximum = x.Maximum, fresh = x.IsFresh,
-                overridden = x.IsOverridden, overrideValue = x.OverrideValue
+                overridden = x.IsOverridden, overrideValue = x.OverrideValue,
+                defaultValue = x.ConfiguredDefault, usingDefault = x.IsUsingDefault, source = x.SourceText
             }).ToArray();
             return new
             {
@@ -311,7 +351,8 @@ namespace HoFace.Studio
                 source = latestMonitorFrame == null ? "idle" :
                     session.ReplayPlaying ? "replay" : session.Running ? "vts" : "idle",
                 mode = Mode, hasDocument = HasDocument,
-                raw = Rows(MonitorStage.Raw), values = Rows(MonitorStage.Value), weights = Rows(MonitorStage.Ir)
+                raw = Rows(MonitorStage.Raw), controls = Rows(MonitorStage.Control),
+                values = Rows(MonitorStage.Value), weights = Rows(MonitorStage.Ir)
             };
         }
 
@@ -320,7 +361,7 @@ namespace HoFace.Studio
             MonitorStage stage = ReadMonitorStage(payload);
             string key = RequiredString(payload, "parameter");
             if (stage != MonitorStage.Raw && !HasDocument)
-                throw new InvalidOperationException("value 与 IR 阶段的临时覆写需要先打开作品。");
+                throw new InvalidOperationException("control、value 与 IR 阶段的临时覆写需要先打开作品。");
             float? value = RequiredString(payload, "mode") switch
             {
                 "auto" => null,
@@ -347,7 +388,7 @@ namespace HoFace.Studio
             MonitorStage? stage = payload.TryGetProperty("stage", out _) ? ReadMonitorStage(payload) : null;
             session.ClearMonitorOverrides(stage);
             foreach (var row in stage.HasValue ? RowsFor(stage.Value) :
-                RawMonitorRows.Concat(ValueMonitorRows).Concat(IrMonitorRows))
+                RawMonitorRows.Concat(ControlMonitorRows).Concat(ValueMonitorRows).Concat(IrMonitorRows))
                 row.SetPinnedValue(null);
             NotifyMonitorState();
             return ReadMonitor();

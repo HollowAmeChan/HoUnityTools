@@ -23,6 +23,7 @@ namespace HoFace.Studio
         private double replayOffset;
         private double lastProcessedTime = -1;
         private readonly Dictionary<string, float> rawOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> controlOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> valueOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> irOverrides = new Dictionary<string, float>(StringComparer.Ordinal);
         public readonly VtsIphoneReceiver Receiver = new VtsIphoneReceiver();
@@ -52,6 +53,8 @@ namespace HoFace.Studio
         public IReadOnlyList<float> GetEffectiveChildWeights(string nodeId) =>
             irEvaluator == null ? Array.Empty<float>() : irEvaluator.CopyChildWeights(nodeId);
         public IReadOnlyDictionary<string, float> RawOverrides => rawOverrides;
+        public IReadOnlyDictionary<string, float> ControlOverrides => controlOverrides;
+        public IReadOnlyList<ControlInputDefinition> ControlInputs { get; private set; } = Array.Empty<ControlInputDefinition>();
         public IReadOnlyDictionary<string, float> ValueOverrides => valueOverrides;
         public IReadOnlyDictionary<string, float> IrOverrides => irOverrides;
         public AuthoringMonitorFrame LatestMonitorFrame { get; private set; }
@@ -74,7 +77,16 @@ namespace HoFace.Studio
                 Preview.Send(Values, Weights, false, clock.Elapsed.TotalSeconds);
             valueSession = new HoFaceValueSession(document.Value, 1);
             effectiveValueSession = new HoFaceValueSession(document.Value, 1);
-            effectiveValueSession.Evaluator.SetOverrides(null, valueOverrides);
+            ControlInputs = InputMonitorSources.Controls(document.Value);
+            var validControls = new HashSet<string>();
+            foreach (var control in ControlInputs) validControls.Add(control.Key);
+            foreach (var key in new List<string>(controlOverrides.Keys))
+                if (!validControls.Contains(key)) controlOverrides.Remove(key);
+            // Retire older raw-stage pins for configured non-phone sources.
+            foreach (var control in ControlInputs)
+                foreach (var source in control.Sources)
+                    if (!InputMonitorSources.IsPhoneField(source)) rawOverrides.Remove(source);
+            effectiveValueSession.Evaluator.SetOverrides(controlOverrides, valueOverrides);
             irEvaluator = new HoFaceIrEvaluator(document.Ir);
             liveIrEvaluator = new HoFaceIrEvaluator(document.Ir);
             LatestMonitorFrame = null;
@@ -107,20 +119,33 @@ namespace HoFace.Studio
             if (value.HasValue && (float.IsNaN(value.Value) || float.IsInfinity(value.Value)))
                 throw new ArgumentOutOfRangeException(nameof(value), "临时覆盖必须是有限数值。");
             var overrides = OverridesFor(stage);
+            if (stage == MonitorStage.Control && !HasControl(parameter))
+                throw new ArgumentException("没有该控制输入：" + parameter, nameof(parameter));
             if (value.HasValue) overrides[parameter] = value.Value;
             else overrides.Remove(parameter);
+            if (stage == MonitorStage.Control) RefreshControlOverrides();
         }
 
         public void ClearMonitorOverrides(MonitorStage? stage = null)
         {
             if (!stage.HasValue || stage == MonitorStage.Raw) rawOverrides.Clear();
+            if (!stage.HasValue || stage == MonitorStage.Control) controlOverrides.Clear();
             if (!stage.HasValue || stage == MonitorStage.Value) valueOverrides.Clear();
             if (!stage.HasValue || stage == MonitorStage.Ir) irOverrides.Clear();
+            if (!stage.HasValue || stage == MonitorStage.Control) RefreshControlOverrides();
+        }
+
+        private bool HasControl(string parameter)
+        {
+            foreach (var control in ControlInputs)
+                if (control.Key == parameter) return true;
+            return false;
         }
 
         private Dictionary<string, float> OverridesFor(MonitorStage stage) => stage switch
         {
             MonitorStage.Raw => rawOverrides,
+            MonitorStage.Control => controlOverrides,
             MonitorStage.Value => valueOverrides,
             MonitorStage.Ir => irOverrides,
             _ => throw new ArgumentOutOfRangeException(nameof(stage))
@@ -169,7 +194,7 @@ namespace HoFace.Studio
                 // letting one stale frame terminate the Studio dispatcher.
                 valueSession?.Reset();
                 effectiveValueSession?.Reset();
-                effectiveValueSession?.Evaluator.SetOverrides(null, valueOverrides);
+                effectiveValueSession?.Evaluator.SetOverrides(controlOverrides, valueOverrides);
                 lastProcessedTime = -1;
             }
             lastProcessedTime = time;
@@ -200,7 +225,7 @@ namespace HoFace.Studio
             LatestMonitorFrame = result;
             MonitorUpdated?.Invoke(result);
             PreviewUpdated?.Invoke(result.ValuesEffective, result.WeightsEffective,
-                frame.FaceFound || rawOverrides.Count > 0 || valueOverrides.Count > 0 || irOverrides.Count > 0);
+                frame.FaceFound || rawOverrides.Count > 0 || controlOverrides.Count > 0 || valueOverrides.Count > 0 || irOverrides.Count > 0);
         }
 
         private AuthoringMonitorFrame EvaluateMonitor(
@@ -220,7 +245,7 @@ namespace HoFace.Studio
             valueSession.Evaluator.SetOverrides(null, null);
             valueSession.Evaluate(new Dictionary<string, float>(raw, StringComparer.Ordinal), time);
             var liveValues = Copy(valueSession.LiveValues);
-            effectiveValueSession.Evaluator.SetOverrides(null, valueOverrides);
+            effectiveValueSession.Evaluator.SetOverrides(controlOverrides, valueOverrides);
             effectiveValueSession.Evaluate(new Dictionary<string, float>(effectiveRaw, StringComparer.Ordinal), time);
             var effectiveValues = Copy(effectiveValueSession.Values);
 
@@ -228,8 +253,53 @@ namespace HoFace.Studio
             irEvaluator.Evaluate(effectiveValues, irOverrides);
             var liveWeights = Copy(liveIrEvaluator.Values);
             var effectiveWeights = Copy(irEvaluator.Values);
-            return new AuthoringMonitorFrame(raw, effectiveRaw, liveValues, effectiveValues,
+            return CreateMonitorFrame(raw, effectiveRaw, liveValues, effectiveValues,
                 liveWeights, effectiveWeights, tracked, time);
+        }
+
+        private AuthoringMonitorFrame CreateMonitorFrame(
+            IReadOnlyDictionary<string, float> raw, IReadOnlyDictionary<string, float> effectiveRaw,
+            IReadOnlyDictionary<string, float> liveValues, IReadOnlyDictionary<string, float> effectiveValues,
+            IReadOnlyDictionary<string, float> liveWeights, IReadOnlyDictionary<string, float> effectiveWeights,
+            bool tracked, double time)
+        {
+            var controls = new Dictionary<string, float>(StringComparer.Ordinal);
+            var effective = new Dictionary<string, float>(StringComparer.Ordinal);
+            var fresh = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (var control in ControlInputs)
+            {
+                if (!valueSession.Evaluator.TryReadInput(control.Index, out float source, out _, out bool received)) continue;
+                controls[control.Key] = source;
+                fresh[control.Key] = received;
+                effectiveValueSession.Evaluator.TryReadInput(control.Index, out _, out float result, out _);
+                effective[control.Key] = result;
+            }
+            return new AuthoringMonitorFrame(raw, effectiveRaw, liveValues, effectiveValues, liveWeights,
+                effectiveWeights, tracked, time, controls, effective, fresh);
+        }
+
+        private void RefreshControlOverrides()
+        {
+            if (!HasDocument) return;
+            var previous = LatestMonitorFrame;
+            var raw = Copy(previous?.Raw);
+            var effectiveRaw = Copy(raw);
+            ApplyOverrides(effectiveRaw, rawOverrides);
+            double time = lastProcessedTime < 0 ? 0 : lastProcessedTime;
+            // A UI pin is not a phone frame: do not advance session clocks,
+            // recording, random frame indices, or the raw forwarding socket.
+            if (previous == null) valueSession.Evaluator.Evaluate(raw, 0, time);
+            effectiveValueSession.Evaluator.SetOverrides(controlOverrides, valueOverrides);
+            effectiveValueSession.Evaluator.Evaluate(effectiveRaw, 0, time);
+            liveIrEvaluator.Evaluate(valueSession.LiveValues);
+            irEvaluator.Evaluate(effectiveValueSession.Values, irOverrides);
+            LatestMonitorFrame = CreateMonitorFrame(raw, effectiveRaw, valueSession.LiveValues, effectiveValueSession.Values,
+                liveIrEvaluator.Values, irEvaluator.Values, previous?.Tracked ?? false, time);
+            MonitorUpdated?.Invoke(LatestMonitorFrame);
+            if (Mode == AuthoringMode.Preview)
+                PreviewUpdated?.Invoke(LatestMonitorFrame.ValuesEffective, LatestMonitorFrame.WeightsEffective,
+                    LatestMonitorFrame.Tracked || controlOverrides.Count > 0 || rawOverrides.Count > 0 ||
+                    valueOverrides.Count > 0 || irOverrides.Count > 0);
         }
 
         private void ReleaseActiveOutput()
@@ -306,7 +376,7 @@ namespace HoFace.Studio
         {
             valueSession?.Reset();
             effectiveValueSession?.Reset();
-            effectiveValueSession?.Evaluator.SetOverrides(null, valueOverrides);
+            effectiveValueSession?.Evaluator.SetOverrides(controlOverrides, valueOverrides);
             lastProcessedTime = -1;
             ClearOutputs();
         }

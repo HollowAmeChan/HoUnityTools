@@ -566,10 +566,10 @@ internal static class Program
             Call("undo");
             Check(State().GetProperty("selectedValue").GetString() == "Mouth/Form" && State().GetProperty("selectedValueIndex").GetInt32() == 1, "undo reorder preserves logical selected row");
             var capabilities = Result("capabilities");
-            Check(capabilities.GetProperty("protocolVersion").GetInt32() == 5 &&
+            Check(capabilities.GetProperty("protocolVersion").GetInt32() == 6 &&
                 capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "addIrRule") &&
                 capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "deleteIrChild"),
-                "CLI advertises hierarchical IR rule editing in protocol v5");
+                "CLI advertises hierarchical IR editing and split inputs in protocol v6");
             var oneDimension = new HoFaceIrDocument
             {
                 id = "graph1d-check", displayName = "1D 检查", root = "oneDimension",
@@ -617,6 +617,79 @@ internal static class Program
                 { ["Mouth/Open"] = .8f, ["Gate"] = 0 });
             Check(gatedEvaluator.CopyChildWeights("oneDimension").All(weight => weight == 0),
                 "inactive nested graphs cannot display cached contributions from a previous frame");
+            Check(HoFaceValueDocument.TryParse(File.ReadAllText(sampleValuePath), out var controlProfile, out _),
+                "control fixture parses");
+            controlProfile.inputs.Add(new HoFaceOutput { parameter = "Gate", expression = "MouthEnabled", defaultValue = 1 });
+            controlProfile.inputs.Add(new HoFaceOutput { parameter = "Gate/Pucker", expression = "PuckerEnabled", defaultValue = 0 });
+            controlProfile.outputs.Add(new HoFaceOutput { parameter = "Gate", expression = "Gate", defaultValue = 1 });
+            Call("text", new { value = HoFaceValueDocument.Write(controlProfile), ir = oneDimension.Write() });
+            var gateRow = window.ControlMonitorRows.Single(row => row.Key == "Gate");
+            Check(window.ControlMonitorRows.Count == 2 && window.RawMonitorRows.Count == 3,
+                "configured control wires never seed the phone-input monitor");
+            Near(gateRow.Value, 1, "an offline Gate displays its declared default instead of zero");
+            Check(gateRow.DefaultText == "默认 1" && gateRow.IsUsingDefault && !gateRow.IsFresh,
+                "default badge is visible without pretending a packet arrived");
+            Check(window.ControlMonitorRows.Single(row => row.Key == "Gate/Pucker").DefaultText == "默认 0",
+                "default-zero variant switches remain distinguishable");
+            Call("view", new { centerTab = 2, monitorStage = "control", monitorFilter = "Gate" });
+            window.UpdateLayout();
+            Check(((Border)window.FindName("ControlMonitorPage")).Visibility == Visibility.Visible &&
+                ((Border)window.FindName("RawMonitorPage")).Visibility == Visibility.Collapsed &&
+                window.ControlMonitorCount == 2 && window.RawMonitorCount == 0,
+                "control inputs have an independent searchable page");
+            Reject("view", new { monitorStage = "invalid" }, "invalid monitor stage is rejected");
+            Reject("setMonitorOverride", new { stage = "raw", parameter = "MouthEnabled", mode = "0" },
+                "a declared control cannot be accidentally injected as a phone wire");
+            string controlText = Result("document").GetProperty("valueText").GetString();
+            long framesBefore = window.SessionForChecks.Frames;
+            Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "0" });
+            Near(gateRow.LiveValue, 1, "offline override preserves the automatic default");
+            Near(gateRow.Value, 0, "control override works immediately without a physical frame");
+            Near(window.SessionForChecks.Values["Gate"], 0, "offline control reaches the output evaluator immediately");
+            Check(!gateRow.IsFresh && gateRow.SourceText == "临时覆盖" && !gateRow.IsUsingDefault,
+                "a manual control pin is not reported as fresh physical input");
+            Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "auto" });
+            Near(gateRow.Value, 1, "auto immediately restores default-one, not a sticky synthetic zero");
+            Check(gateRow.IsUsingDefault && window.SessionForChecks.Frames == framesBefore &&
+                window.SessionForChecks.LatestMonitorFrame.Raw.Count == 0 &&
+                window.SessionForChecks.RawOverrides.Count == 0,
+                "offline control clicks create no VTS frames or injected phone fields");
+            using (var controlPhone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            {
+                window.SessionForChecks.Start(new HoFace.Transport.VtsIphoneOptions
+                { PhoneAddress = "127.0.0.1", PhonePort = 9, LocalPort = FreeUdpPort() });
+                SendVtsFrame(controlPhone, window.SessionForChecks.Receiver.LocalPort, .6f, 0, 0);
+                window.SessionForChecks.Poll();
+                Near(gateRow.Value, 1, "ordinary phone packets leave absent controls at their defaults");
+                Near(window.SessionForChecks.Weights["jawOpen"], .6f, "default-one Gate leaves the branch active");
+                Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "0" });
+                Near(window.SessionForChecks.Weights["jawOpen"], 0, "control pin immediately gates downstream IR");
+                Call("clearMonitorOverrides", new { stage = "control" });
+                Near(window.SessionForChecks.Weights["jawOpen"], .6f, "clearing control pins immediately restores downstream IR");
+                SendVtsFrame(controlPhone, window.SessionForChecks.Receiver.LocalPort, .6f, 0, 0, 0);
+                window.SessionForChecks.Poll();
+                Near(gateRow.Value, 0, "a genuine external Gate value replaces its fallback");
+                Check(gateRow.IsFresh && !gateRow.IsUsingDefault && gateRow.SourceText == "外部输入" &&
+                    window.RawMonitorRows.All(row => row.Key != "MouthEnabled"),
+                    "external controls are correctly sourced and stay out of VTS monitor rows");
+                SendVtsFrame(controlPhone, window.SessionForChecks.Receiver.LocalPort, .6f, 0, 0);
+                window.SessionForChecks.Poll();
+                Check(!gateRow.IsFresh && gateRow.SourceText == "保留上次外部输入",
+                    "missing control sources preserve the true last received value");
+                Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "1" });
+                Near(gateRow.Value, 1, "external Gate can be overridden without corrupting its live value");
+                Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "auto" });
+                Near(gateRow.Value, 0, "auto restores actual external zero, not the configured default-one");
+                Call("setMonitorOverride", new { stage = "value", parameter = "Mouth/Open", mode = "1" });
+                Call("setMonitorOverride", new { stage = "control", parameter = "Gate", mode = "1" });
+                Call("clearMonitorOverrides", new { stage = "control" });
+                Check(window.SessionForChecks.ValueOverrides.Count == 1 &&
+                    window.SessionForChecks.ControlOverrides.Count == 0, "group clear does not clear another stage");
+                Call("clearMonitorOverrides");
+                window.SessionForChecks.Stop();
+            }
+            Check(Result("document").GetProperty("valueText").GetString() == controlText,
+                "control observation, overrides and page switches do not edit the authored document");
             Console.WriteLine("Passed " + checks + " Studio interaction checks.");
             return 0;
         }
@@ -636,12 +709,14 @@ internal static class Program
         using var socket = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.Client.LocalEndPoint).Port;
     }
-    private static void SendVtsFrame(UdpClient sender, int port, float jaw, float smileLeft, float smileRight)
+    private static void SendVtsFrame(UdpClient sender, int port, float jaw, float smileLeft, float smileRight, float? mouthEnabled = null)
     {
         string json = "{\"Timestamp\":1,\"FaceFound\":true,\"BlendShapes\":["
             + "{\"k\":\"JawOpen\",\"v\":" + jaw.ToString(System.Globalization.CultureInfo.InvariantCulture) + "},"
             + "{\"k\":\"MouthSmileLeft\",\"v\":" + smileLeft.ToString(System.Globalization.CultureInfo.InvariantCulture) + "},"
-            + "{\"k\":\"MouthSmileRight\",\"v\":" + smileRight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}]}";
+            + "{\"k\":\"MouthSmileRight\",\"v\":" + smileRight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}" +
+            (mouthEnabled.HasValue ? ",{\"k\":\"MouthEnabled\",\"v\":" +
+                mouthEnabled.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}" : "") + "]}";
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         sender.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, port));
     }

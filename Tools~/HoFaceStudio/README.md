@@ -19,6 +19,8 @@ dotnet build HoFaceStudio.slnx -c Release
 
 1D/2D 混合图上直接显示实时蓝色圆点和子项权重。顶部“覆盖”默认关闭；打开后点击、拖动图形进行临时预览，橙色十字与左侧“覆盖”标记指出实际覆盖的位置和项目。关闭覆盖立即恢复实时值；实时观测不会修改控制点、JSON 或撤销记录。
 
+实时监控分为“VTS 原始”“控制输入”“实时处理”“实时输出”四个独立页，共用搜索。Gate 与形态开关在控制输入页显示配置默认值和当前值，离线也可查看及临时覆盖；悬停显示 `× / −1 / 0 / 1`，覆盖变色，`×` 恢复外部输入或配置默认值。CLI 使用 `stage:"control"` 操作控制输入，协议版本为 6。
+
 VTS iPhone UDP 接收已接入制作会话；制作预览执行外部 value + IR，最终权重通过 UDP 发给 Blender 薄适配器。Warudo Mod 不增加作者调试桥接，正式运行由角色组件内部的 `HoVtsIrController` 执行 value + IR；Unity 可挂 `HoFaceStudioRawInput` 接收 raw 帧，让 Unity 的 value、LookAt 和其他消费者继续运行。两种输出模式互斥，录制与作品状态独立。
 
 ## 文档
