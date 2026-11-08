@@ -18,16 +18,26 @@ namespace HoFace.Studio
         public int SelectedIndex { get; private set; } = -1;
         public double CursorX { get; set; }
         public double CursorY { get; set; }
+        public bool HasManualCursor { get; private set; }
+        public bool HasLivePoint { get; private set; }
+        public double LiveX { get; private set; }
+        public double LiveY { get; private set; }
+        public bool LiveTracked { get; private set; }
+        public bool PreviewEnabled { get; private set; }
+        public IReadOnlyList<float> ActiveChildWeights => HasManualCursor ? manualChildWeights : liveWeights;
         public object Viewport => new { minX, maxX, minY, maxY };
         public event Action EditBeginning, EditChanged, EditCommitted, EditCanceled, SelectionChanged;
         public event Action<double, double> PreviewChanged;
         private double minX = -.1, maxX = 1.1, minY = -.1, maxY = 1.1;
-        private bool editing, panning;
+        private bool editing, panning, previewDragging;
         private int tangent;
         private Point last;
+        private float[] liveWeights = Array.Empty<float>();
+        private float[] manualChildWeights = Array.Empty<float>();
         private readonly Brush ink = new SolidColorBrush(Color.FromRgb(187, 204, 219));
         private readonly Brush accent = new SolidColorBrush(Color.FromRgb(104, 183, 168));
         private readonly Brush hot = new SolidColorBrush(Color.FromRgb(221, 168, 112));
+        private readonly Brush live = new SolidColorBrush(Color.FromRgb(105, 201, 225));
         private readonly Typeface typeface = new Typeface("Microsoft YaHei UI");
         private Rect Plot => new Rect(48, 22, Math.Max(10, ActualWidth - 72), Math.Max(10, ActualHeight - 64));
         public ParameterPlot()
@@ -50,6 +60,35 @@ namespace HoFace.Studio
             InvalidateVisual();
         }
         public void ClearSelection() { SelectedIndex = -1; InvalidateVisual(); }
+        public void SetManualCursor(double x, double y, IReadOnlyList<float> weights = null)
+        {
+            CursorX = x; CursorY = y; HasManualCursor = true;
+            manualChildWeights = weights?.ToArray() ?? Array.Empty<float>();
+            InvalidateVisual();
+        }
+        public void SetPreviewEnabled(bool enabled)
+        {
+            PreviewEnabled = enabled;
+            if (!enabled) { HasManualCursor = false; previewDragging = false; }
+            InvalidateVisual();
+        }
+        public void ClearManualCursor()
+        {
+            HasManualCursor = false; CursorX = CursorY = 0;
+            manualChildWeights = Array.Empty<float>(); InvalidateVisual();
+        }
+        public void SetLivePoint(double x, double y, IReadOnlyList<float> weights, bool tracked)
+        {
+            LiveX = x; LiveY = y; LiveTracked = tracked;
+            liveWeights = weights == null ? Array.Empty<float>() : weights.ToArray();
+            HasLivePoint = Node != null && (Node.type == "blend1d" || Node.type == "blend2d");
+            InvalidateVisual();
+        }
+        public void ClearLivePoint()
+        {
+            HasLivePoint = false; LiveX = LiveY = 0; LiveTracked = false; liveWeights = Array.Empty<float>();
+            InvalidateVisual();
+        }
         public void SelectIndex(int index)
         {
             if (index < -1 || index >= DataPoints().Count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -153,18 +192,54 @@ namespace HoFace.Studio
             for (int i = 0; i < points.Count; i++)
             {
                 Point p = Screen(points[i]);
+                var childWeights = ActiveChildWeights;
+                Brush weightBrush = HasManualCursor ? hot : live;
+                if ((HasLivePoint || HasManualCursor) && i < childWeights.Count)
+                {
+                    double influence = Math.Max(0, Math.Min(1, childWeights[i]));
+                    if (influence > 0.001)
+                    {
+                        byte alpha = (byte)(28 + influence * 105);
+                        Color color = ((SolidColorBrush)weightBrush).Color;
+                        var glow = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
+                        glow.Freeze();
+                        dc.DrawEllipse(glow, new Pen(weightBrush, 1), p, 8 + influence * 5, 8 + influence * 5);
+                        Text(dc, childWeights[i].ToString("0.#%", CultureInfo.InvariantCulture),
+                            new Point(p.X + 10, p.Y + 3), weightBrush);
+                    }
+                }
                 dc.DrawEllipse(i == SelectedIndex ? hot : accent, new Pen(new SolidColorBrush(Color.FromRgb(169, 181, 191)), .7), p, 6, 6);
                 string label = Rule != null ? i.ToString() :
                     NodeLabelResolver?.Invoke(Node.children[i].node) ?? Node.children[i].node;
                 Text(dc, label, new Point(p.X + 10, p.Y - 18));
             }
             dc.PushClip(new RectangleGeometry(Plot));
-            Point cursor = Screen(new Point(CursorX, Rule != null ? HoFaceCurve.Transfer(Rule.curve, (float)CursorX) : CursorY));
-            dc.DrawLine(new Pen(hot, 1), new Point(cursor.X - 7, cursor.Y), new Point(cursor.X + 7, cursor.Y));
-            dc.DrawLine(new Pen(hot, 1), new Point(cursor.X, cursor.Y - 7), new Point(cursor.X, cursor.Y + 7));
+            if (PreviewEnabled && HasManualCursor)
+            {
+                Point cursor = Screen(new Point(CursorX, Rule != null ? HoFaceCurve.Transfer(Rule.curve, (float)CursorX) : CursorY));
+                dc.DrawLine(new Pen(hot, 1), new Point(cursor.X - 7, cursor.Y), new Point(cursor.X + 7, cursor.Y));
+                dc.DrawLine(new Pen(hot, 1), new Point(cursor.X, cursor.Y - 7), new Point(cursor.X, cursor.Y + 7));
+            }
+            if (HasLivePoint)
+            {
+                Point current = Screen(new Point(LiveX, Node.type == "blend1d" ? 0 : LiveY));
+                var livePen = new Pen(live, LiveTracked ? 2 : 1);
+                dc.DrawEllipse(null, livePen, current, 7, 7);
+                dc.DrawEllipse(live, null, current, 2, 2);
+            }
             dc.Pop();
-            Text(dc, Rule != null ? "输入 → 输出" : Node.parameterX +
-                (Node.type == "blend2d" ? " / " + Node.parameterY : ""), new Point(Plot.Left, 2));
+            if (HasLivePoint)
+            {
+                string state = LiveTracked ? "实时" : "实时 · 未追踪";
+                Text(dc, state + "  " + LiveX.ToString("0.###", CultureInfo.InvariantCulture) +
+                    (Node.type == "blend2d" ? ", " + LiveY.ToString("0.###", CultureInfo.InvariantCulture) : ""),
+                    new Point(Plot.Left, Plot.Bottom + 27), live);
+            }
+            string header = Rule != null ? "输入 → 输出" : Node.parameterX +
+                (Node.type == "blend2d" ? " / " + Node.parameterY : "");
+            if (HasManualCursor) header = "覆盖 · " + header;
+            else if (PreviewEnabled) header = "覆盖待输入 · " + header;
+            Text(dc, header, new Point(Plot.Left, 2), HasManualCursor ? hot : PreviewEnabled ? hot : null);
         }
         private Point? TangentHandle(int sign)
         {
@@ -186,6 +261,13 @@ namespace HoFace.Studio
             if (e.ChangedButton == MouseButton.Right || e.ChangedButton == MouseButton.Middle)
             { panning = true; Cursor = Cursors.ScrollAll; CaptureMouse(); e.Handled = true; return; }
             if (e.ChangedButton != MouseButton.Left) return;
+            if (PreviewEnabled)
+            {
+                previewDragging = true;
+                CaptureMouse();
+                PreviewChanged?.Invoke(Data(last).X, Node?.type == "blend2d" ? Data(last).Y : 0);
+                InvalidateVisual(); e.Handled = true; return;
+            }
             var points = DataPoints();
             tangent = 0;
             if (Rule != null)
@@ -219,11 +301,6 @@ namespace HoFace.Studio
             {
                 EditBeginning?.Invoke(); editing = true; CaptureMouse();
             }
-            else if (Rule == null && (Node?.type == "blend1d" || Node?.type == "blend2d"))
-            {
-                Point p = Data(last); CursorX = p.X; CursorY = Node.type == "blend1d" ? 0 : p.Y;
-                PreviewChanged?.Invoke(CursorX, CursorY);
-            }
             InvalidateVisual(); e.Handled = true;
         }
         protected override void OnMouseMove(MouseEventArgs e)
@@ -236,6 +313,12 @@ namespace HoFace.Studio
                 double dy = (current.Y - last.Y) / Plot.Height * (maxY - minY);
                 minX -= dx; maxX -= dx; minY += dy; maxY += dy; last = current;
                 InvalidateVisual(); return;
+            }
+            if (previewDragging && PreviewEnabled)
+            {
+                Point previewPoint = Data(current);
+                PreviewChanged?.Invoke(previewPoint.X, Node?.type == "blend2d" ? previewPoint.Y : 0);
+                InvalidateVisual(); e.Handled = true; return;
             }
             if (!editing) return;
             Point point = Data(current);
@@ -274,11 +357,11 @@ namespace HoFace.Studio
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
             base.OnMouseUp(e);
-            FinishEdit(); panning = false; Cursor = Cursors.Cross; ReleaseMouseCapture();
+            FinishEdit(); panning = previewDragging = false; Cursor = Cursors.Cross; ReleaseMouseCapture();
         }
         protected override void OnLostMouseCapture(MouseEventArgs e)
         {
-            base.OnLostMouseCapture(e); FinishEdit(); panning = false; Cursor = Cursors.Cross;
+            base.OnLostMouseCapture(e); FinishEdit(); panning = previewDragging = false; Cursor = Cursors.Cross;
         }
         private void FinishEdit()
         {

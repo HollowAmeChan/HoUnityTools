@@ -17,6 +17,8 @@ dotnet build HoFaceStudio.slnx -c Release
 
 打开 `.hoface.value.json` 时优先寻找同名 `.hoface.ir.json`，无需重复选择已有配对文件。界面支持筛选列表、独立记忆 Value / IR 选择、曲线/1D/2D 编辑、精确数值、表达式与参数轴、JSON 草稿、保存和撤销/重做。两条分隔条可拖动；连接与文件信息默认收起；底部“收起编辑区”可把空间留给属性。说明集中在悬停提示，错误保留为可操作的行内反馈。布局关闭时保存到本机用户目录，不进入作品。
 
+1D/2D 混合图上直接显示实时蓝色圆点和子项权重。顶部“覆盖”默认关闭；打开后点击、拖动图形进行临时预览，橙色十字与左侧“覆盖”标记指出实际覆盖的位置和项目。关闭覆盖立即恢复实时值；实时观测不会修改控制点、JSON 或撤销记录。
+
 VTS iPhone UDP 接收已接入制作会话；制作预览执行外部 value + IR，最终权重通过 UDP 发给 Blender 薄适配器。Warudo Mod 不增加作者调试桥接，正式运行由角色组件内部的 `HoVtsIrController` 执行 value + IR；Unity 可挂 `HoFaceStudioRawInput` 接收 raw 帧，让 Unity 的 value、LookAt 和其他消费者继续运行。两种输出模式互斥，录制与作品状态独立。
 
 ## 文档

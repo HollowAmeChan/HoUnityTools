@@ -59,6 +59,7 @@ namespace HoFace.Automation
             new CommandDefinition("mode", "切换互斥输出模式", "value:Preview|RawForward, rawForwardPort?:int"),
             new CommandDefinition("view", "读取或设置分栏、标签页、折叠区与窗口尺寸", "structureWidth?:number, plotRatio?:number, structureTab?:0|1, centerTab?:0|1|2|3 (曲线/混合/监控/JSON), showConnection?:bool, showFiles?:bool, showEditor?:bool, width?:number, height?:number, reset?:bool"),
             new CommandDefinition("cursor", "设置临时输入并实际求值；不写作品", "x:number, y?:number", false, true),
+            new CommandDefinition("setPreviewOverride", "切换图形覆盖模式；关闭后立即恢复实时输入", "enabled:bool", false, true),
             new CommandDefinition("clearPreview", "清除手动预览结果与临时输入", "", false, true),
             new CommandDefinition("evaluate", "以共享核心独立求值一帧 raw；不改变实时会话", "raw:object<string,number>, time?:number", true, true),
             new CommandDefinition("vtsStart", "连接 VTS 输入；Preview 需要作品，RawForward 可以无作品", "phoneIp?:string, phonePort?:int, localPort?:int"),

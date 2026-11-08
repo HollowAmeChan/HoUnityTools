@@ -190,6 +190,8 @@ internal static class Program
             Check(window.ControlPoints.Count == 4 && window.NodeRows.Count == 5,
                 "deleting a blend point removes its unused child rule");
             Call("view", new { centerTab = 0 });
+            Check(!((ParameterPlot)window.FindName("BlendPlot")).HasLivePoint,
+                "opening a work document does not manufacture a realtime origin");
             Check(window.RawMonitorRows.Count == 3 && window.ValueMonitorRows.Count == 2 && window.IrMonitorRows.Count == 3,
                 "monitor preloads all three layers from the work document");
             using (var phone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
@@ -208,10 +210,40 @@ internal static class Program
                 Check(window.CenterTab == 0, "selecting a value output switches to the curve view");
                 Call("selectNode", new { id = "mouth" });
                 Check(window.CenterTab == 1, "selecting an IR node switches to the blend view");
-
+                var blendPlot = (ParameterPlot)window.FindName("BlendPlot");
+                Check(blendPlot.HasLivePoint && blendPlot.LiveTracked,
+                    "a Blend Tree shows the actual last live point after a tracked frame");
+                Check(!blendPlot.HasManualCursor, "the graph origin is not treated as a manual preview cursor");
+                Check(!window.ManualPreviewEnabled, "manual override is disabled by default");
+                var cleanLive = Result("document");
+                Check(Math.Abs(blendPlot.ActiveChildWeights.Sum() - 1) < .0001,
+                    "live graph weights are the normalized child contributions from the shared evaluator");
+                Call("setPreviewOverride", new { enabled = true });
+                Check(blendPlot.PreviewEnabled && !window.HasManualPreview,
+                    "enabling graph override arms the cursor without changing live values");
+                Call("cursor", new { x = .9, y = .2 });
+                Check(blendPlot.HasManualCursor && window.IrTreeRoots[0].IsOverridden &&
+                    window.ValueRows.All(row => row.IsOverridden),
+                    "overridden parameter rows and their consuming Blend Tree are highlighted");
+                Near((float)blendPlot.LiveX, .5f, "manual cursor preserves the live X observation");
+                Near((float)blendPlot.LiveY, .7f, "manual cursor preserves the live Y observation");
+                Call("cursor", new { x = 1, y = 1 });
+                Near(blendPlot.ActiveChildWeights[3], 1, "graph contribution weights follow the actual manual override");
+                Call("setPreviewOverride", new { enabled = false });
+                Check(!window.HasManualPreview && !blendPlot.HasManualCursor &&
+                    !window.IrTreeRoots[0].IsOverridden && window.ValueRows.All(row => !row.IsOverridden),
+                    "turning override off clears the crosshair and all affected highlights");
+                Check(!Result("diagnostics").GetProperty("manualPreview").GetBoolean(),
+                    "disabling override immediately restores the real input pipeline");
+                Check(Result("document").GetProperty("irText").GetString() == cleanLive.GetProperty("irText").GetString(),
+                    "graph monitoring and cursor overrides never modify authored control points");
                 liveSession.SetMonitorOverride(MonitorStage.Value, "Mouth/Open", 1);
                 SendVtsFrame(phone, liveSession.Receiver.LocalPort, .3f, .2f, .4f);
                 liveSession.Poll();
+                Check(blendPlot.HasLivePoint && blendPlot.LiveTracked, "a live Blend Tree point appears after a tracked frame");
+                Near((float)blendPlot.LiveX, .3f, "live Blend Tree X follows the effective value parameter");
+                Near((float)blendPlot.LiveY, 1, "live Blend Tree Y follows the effective value override");
+
                 var valueRow = window.ValueMonitorRows.First(x => x.Key == "Mouth/Open");
                 Near(valueRow.LiveValue, .3f, "value monitor retains the live reading beside an override");
                 Near(valueRow.Value, 1, "value-stage override reaches the value meter");
@@ -491,11 +523,21 @@ internal static class Program
             Call("cursor", new { x = 1, y = 1 });
             var diagnostics = Result("diagnostics");
             Check(diagnostics.GetProperty("manualPreview").GetBoolean(), "cursor computes manual preview");
+            Check(window.ManualPreviewEnabled && ((ParameterPlot)window.FindName("BlendPlot")).HasManualCursor,
+                "manual cursor enables the explicit override state");
+            Call("selectValue", new { parameter = "Mouth/Open" });
+            Check(!((ParameterPlot)window.FindName("Plot")).HasManualCursor &&
+                window.SelectedValueRow.IsOverridden, "switching to a consumed Value highlights it without a stale curve cursor");
+            Call("selectNode", new { id = "mouth" });
             Check(diagnostics.GetProperty("weights").GetProperty("jawOpen").GetSingle() > .99f, "cursor drives actual IR weights");
             Check(diagnostics.GetProperty("weights").GetProperty("mouthSmileLeft").GetSingle() > .99f, "manual 2D preview uses both axes");
             Check(!State().GetProperty("textDraft").GetBoolean(), "manual preview does not create a draft");
             Call("clearPreview");
             Check(!Result("diagnostics").GetProperty("manualPreview").GetBoolean(), "temporary preview can be cleared");
+            Call("selectNode", new { id = "rest" });
+            Reject("cursor", new { x = double.MaxValue, y = 0 }, "invalid cursor fails before enabling override");
+            Check(!window.ManualPreviewEnabled, "invalid cursor requests cannot leave override armed");
+            Call("selectNode", new { id = "mouth" });
             var evaluation = Result("evaluate", new { raw = new { JawOpen = 1f, MouthSmileLeft = 1f, MouthSmileRight = 1f } });
             Check(evaluation.GetProperty("values").GetProperty("Mouth/Open").GetSingle() > 0, "diagnostic raw evaluation shares value core");
             Check(!evaluation.GetProperty("appliedToLiveSession").GetBoolean(), "diagnostic evaluation declares its transient scope");
@@ -528,6 +570,53 @@ internal static class Program
                 capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "addIrRule") &&
                 capabilities.GetProperty("commands").EnumerateArray().Any(x => x.GetProperty("name").GetString() == "deleteIrChild"),
                 "CLI advertises hierarchical IR rule editing in protocol v5");
+            var oneDimension = new HoFaceIrDocument
+            {
+                id = "graph1d-check", displayName = "1D 检查", root = "oneDimension",
+                parameters = { new HoFaceIrParameter { name = "Mouth/Open", min = 0, max = 1 } },
+                targets = { new HoFaceIrTarget { id = "jawOpen", min = 0, max = 1 } },
+                nodes =
+                {
+                    new HoFaceIrNode { id = "closed", type = "pose" },
+                    new HoFaceIrNode { id = "opened", type = "pose",
+                        weights = { new HoFaceIrWeight { target = "jawOpen", value = 1 } } },
+                    new HoFaceIrNode { id = "oneDimension", type = "blend1d", parameterX = "Mouth/Open",
+                        children = { new HoFaceIrChild { node = "closed", threshold = 0 },
+                            new HoFaceIrChild { node = "opened", threshold = 1 } } }
+                }
+            };
+            Call("text", new { value = File.ReadAllText(sampleValuePath), ir = oneDimension.Write() });
+            Call("selectNode", new { id = "oneDimension" });
+            var oneDPlot = (ParameterPlot)window.FindName("BlendPlot");
+            using (var oneDPhone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            {
+                window.SessionForChecks.Start(new HoFace.Transport.VtsIphoneOptions
+                { PhoneAddress = "127.0.0.1", PhonePort = 9, LocalPort = FreeUdpPort() });
+                SendVtsFrame(oneDPhone, window.SessionForChecks.Receiver.LocalPort, .35f, 0, 0);
+                window.SessionForChecks.Poll();
+                Near((float)oneDPlot.LiveX, .35f, "1D graph reads the actual threshold-axis parameter");
+                Near((float)oneDPlot.LiveY, 0, "1D graph keeps the realtime point on its single axis");
+                Near(oneDPlot.ActiveChildWeights[0], .65f, "1D graph shows lower child's actual influence");
+                Near(oneDPlot.ActiveChildWeights[1], .35f, "1D graph shows upper child's actual influence");
+                Call("cursor", new { x = .8f });
+                Near(oneDPlot.ActiveChildWeights[1], .8f, "1D manual cursor and weight visualization agree");
+                Call("setPreviewOverride", new { enabled = false });
+                Near(oneDPlot.ActiveChildWeights[1], .35f, "1D disabling override restores live influence immediately");
+                window.SessionForChecks.Stop();
+                Check(!oneDPlot.HasLivePoint, "disconnecting hides the realtime marker instead of claiming stale input is live");
+            }
+            oneDimension.parameters.Add(new HoFaceIrParameter { name = "Gate", min = 0, max = 1, defaultValue = 1 });
+            oneDimension.nodes.Add(new HoFaceIrNode { id = "gatedRoot", type = "direct",
+                children = { new HoFaceIrChild { node = oneDimension.root, weightParameter = "Gate" } } });
+            oneDimension.root = "gatedRoot";
+            var gatedEvaluator = new HoFaceIrEvaluator(oneDimension);
+            gatedEvaluator.Evaluate(new System.Collections.Generic.Dictionary<string, float>
+                { ["Mouth/Open"] = .35f, ["Gate"] = 1 });
+            Near(gatedEvaluator.CopyChildWeights("oneDimension")[1], .35f, "active nested graph exposes the evaluated blend weights");
+            gatedEvaluator.Evaluate(new System.Collections.Generic.Dictionary<string, float>
+                { ["Mouth/Open"] = .8f, ["Gate"] = 0 });
+            Check(gatedEvaluator.CopyChildWeights("oneDimension").All(weight => weight == 0),
+                "inactive nested graphs cannot display cached contributions from a previous frame");
             Console.WriteLine("Passed " + checks + " Studio interaction checks.");
             return 0;
         }

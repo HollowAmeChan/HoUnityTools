@@ -155,7 +155,7 @@ namespace HoFace.Studio
         public string PlotHint => selectedValueRow != null ? "曲线点/切线可拖动；双击添加点；滚轮缩放；右键平移。"
             : selectedNode == null ? "选择一个 IR 节点查看参数。" : selectedNode.type == "pose"
             ? "修改右侧形态键权重。" : selectedNode.type == "direct"
-            ? "修改右侧子项权重；组合按 IR 归一化设置求值。" : "拖动或编辑右侧控制点坐标；预览游标是临时输入。";
+            ? "修改右侧子项权重；组合按 IR 归一化设置求值。" : "实时点显示当前输入；拖动空白处可进行临时预览，编辑控制点不会改变实时点。";
         public MainWindow() : this(true) { }
         public MainWindow(bool startAutomation)
         {
@@ -183,6 +183,12 @@ namespace HoFace.Studio
                 OnPropertyChanged(nameof(LiveStatus));
             });
             session.MonitorUpdated += frame => Dispatcher.Invoke(() => UpdateRealtimeMonitor(frame));
+            session.OutputCleared += () => Dispatcher.Invoke(() =>
+            {
+                latestMonitorFrame = null;
+                BlendPlot.ClearLivePoint();
+                NotifyMonitorState();
+            });
             session.PreviewUpdated += (values, weights, tracked) => Dispatcher.Invoke(() =>
             {
                 if (parameterOverrides != null) ApplyParameterOverrides(values);
@@ -232,7 +238,7 @@ namespace HoFace.Studio
         private void RedoClicked(object sender, RoutedEventArgs e) => RedoDocument();
         private void ModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (HasManualPreview) ClearManualPreview();
+            if (ManualPreviewEnabled || HasManualPreview) ClearManualPreview();
             session.SetMode(Mode == "RawForward" ? AuthoringMode.RawForward : AuthoringMode.Preview);
             OnPropertyChanged(nameof(Status));
             RefreshTransport();
@@ -351,7 +357,7 @@ namespace HoFace.Studio
             if (HasManualPreview && Mode == "Preview")
             {
                 if (selectedValueRow != null && parameterOverrides.ContainsKey(selectedValueRow.parameter))
-                    parameterOverrides[selectedValueRow.parameter] = HoFaceCurve.Transfer(selectedValueRow.curve, (float)Plot.CursorX);
+                    parameterOverrides[selectedValueRow.parameter] = HoFaceCurve.Transfer(selectedValueRow.curve, (float)manualCurveX);
                 ApplyParameterOverrides(session.Values);
                 if (session.Preview.Running) session.Preview.Send(manualValues, manualWeights, true, 0);
                 liveStatus = "手动预览 · 临时参数覆盖";
@@ -375,6 +381,7 @@ namespace HoFace.Studio
                 OnPropertyChanged(nameof(ValueCount)); OnPropertyChanged(nameof(NodeCount));
             }
             finally { refreshingRows = false; }
+            RefreshManualPreviewVisuals();
         }
         private void ResolveSelection()
         {
@@ -418,9 +425,11 @@ namespace HoFace.Studio
         {
             Plot.Rule = selectedValueRow;
             Plot.Node = null;
+            Plot.SetPreviewEnabled(ManualPreviewEnabled);
             BlendPlot.Rule = null;
             BlendPlot.NodeLabelResolver = NodeAlias;
             BlendPlot.Node = BlendPreviewNode;
+            BlendPlot.SetPreviewEnabled(ManualPreviewEnabled);
             if (newSelection)
             {
                 Plot.ClearSelection(); BlendPlot.ClearSelection();
@@ -429,6 +438,7 @@ namespace HoFace.Studio
             }
             Plot.ValidateSelection(); Plot.InvalidateVisual();
             BlendPlot.ValidateSelection(); BlendPlot.InvalidateVisual();
+            RefreshBlendPlotLiveState();
             InspectorWeights.Clear();
             if (selectedNode != null)
             {
@@ -447,6 +457,7 @@ namespace HoFace.Studio
             OnPropertyChanged(nameof(WeightsReadOnly));
             RefreshInspector();
             SelectIrTreeItem(selectedNodeId);
+            RefreshManualPreviewVisuals();
         }
         private void PlotEditBeginning() { editBefore ??= document.Snapshot(); }
         private void PlotEditChanged() { Plot.InvalidateVisual(); BlendPlot.InvalidateVisual(); OnPropertyChanged(nameof(HeaderStatus)); }
@@ -493,9 +504,12 @@ namespace HoFace.Studio
         {
             ResolveSelection(); RefreshRows();
             Plot.Rule = selectedValueRow; Plot.Node = null;
-            BlendPlot.Rule = null; BlendPlot.Node = selectedNode;
+            Plot.SetPreviewEnabled(ManualPreviewEnabled);
+            BlendPlot.Rule = null; BlendPlot.Node = BlendPreviewNode;
+            BlendPlot.SetPreviewEnabled(ManualPreviewEnabled);
             Plot.ValidateSelection(); Plot.InvalidateVisual();
             BlendPlot.ValidateSelection(); BlendPlot.InvalidateVisual();
+            RefreshBlendPlotLiveState();
             PropertyDraftChanged();
         }
         private object ExecuteAutomationCore(string command, JsonElement payload)
@@ -630,6 +644,14 @@ namespace HoFace.Studio
                 case "cursor":
                     PreviewAtCursor(ReadDouble(payload, "x"), payload.TryGetProperty("y", out _) ? ReadDouble(payload, "y") : 0);
                     return ReadDiagnostics();
+                case "setPreviewOverride":
+                    if (!payload.TryGetProperty("enabled", out var previewEnabled) ||
+                        (previewEnabled.ValueKind != JsonValueKind.True && previewEnabled.ValueKind != JsonValueKind.False))
+                        throw new ArgumentException("enabled 必须是布尔值。");
+                    if (previewEnabled.GetBoolean() && (!CanPreview || !HasSelection))
+                        throw new InvalidOperationException("覆盖需要 Preview 模式并已选择曲线或混合节点。");
+                    ManualPreviewEnabled = previewEnabled.GetBoolean();
+                    return ReadSelection();
                 case "vtsStart":
                     if (Mode == "Preview" && !HasDocument)
                         throw new InvalidOperationException("Preview 模式需要先打开作品；RawForward 模式可无作品连接。");
@@ -857,6 +879,13 @@ namespace HoFace.Studio
                 ? result : throw new ArgumentException("缺少数值参数：" + name);
         public sealed class RuleRow : INotifyPropertyChanged
         {
+            private bool isOverridden;
+            public bool IsOverridden
+            {
+                get => isOverridden;
+                set { if (isOverridden == value) return; isOverridden = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOverridden))); }
+            }
             public HoFaceOutput Row { get; private set; }
             public int Index { get; }
             public string parameter => Row.parameter;

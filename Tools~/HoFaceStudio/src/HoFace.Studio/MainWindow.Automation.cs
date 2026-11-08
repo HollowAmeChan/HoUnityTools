@@ -12,16 +12,77 @@ namespace HoFace.Studio
     {
         private Dictionary<string, float> manualValues, manualWeights;
         private Dictionary<string, float> parameterOverrides;
+        private bool manualPreviewEnabled;
+        private HoFaceIrEvaluator manualIrEvaluator;
+        private string manualCurveParameter;
+        private double manualCurveX;
         public bool HasManualPreview => parameterOverrides != null;
+        public bool ManualPreviewEnabled
+        {
+            get => manualPreviewEnabled;
+            set
+            {
+                if (manualPreviewEnabled == value) return;
+                if (value && (!CanPreview || !CanEditGraph || !HasSelection)) return;
+                manualPreviewEnabled = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ManualPreviewAction));
+                if (!value) ClearManualPreview();
+                else RefreshManualPreviewVisuals();
+            }
+        }
+        public string ManualPreviewAction => ManualPreviewEnabled ? "覆盖已开" : "覆盖";
         private void ClearManualPreview()
         {
             parameterOverrides = null; manualValues = null; manualWeights = null;
-            Plot.CursorX = Plot.CursorY = 0; Plot.InvalidateVisual();
-            BlendPlot.CursorX = BlendPlot.CursorY = 0; BlendPlot.InvalidateVisual();
-            if (session.Preview.Running) session.Preview.Send(session.Values, session.Weights, false, 0);
+            manualIrEvaluator = null; manualCurveParameter = null;
+            manualPreviewEnabled = false;
+            RefreshManualPreviewVisuals();
+            if (session.Preview.Running) session.Preview.Send(session.Values, session.Weights,
+                session.LatestMonitorFrame?.Tracked ?? false, 0);
             liveStatus = session.TransportStatus;
             OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(HasManualPreview));
+            OnPropertyChanged(nameof(ManualPreviewEnabled)); OnPropertyChanged(nameof(ManualPreviewAction));
         }
+        private bool IsManuallyOverridden(string parameter) =>
+            parameter != null && parameterOverrides?.ContainsKey(parameter) == true;
+        private bool IsManuallyOverridden(HoFaceIrNode node) => node != null &&
+            (IsManuallyOverridden(node.parameterX) || IsManuallyOverridden(node.parameterY) ||
+             node.children.Any(child => IsManuallyOverridden(child.weightParameter)));
+        private float PreviewParameter(string name)
+        {
+            if (name != null && manualValues?.TryGetValue(name, out float value) == true) return value;
+            if (name != null && session.Values?.TryGetValue(name, out value) == true) return value;
+            return document.Ir?.parameters.FirstOrDefault(p => p.name == name)?.defaultValue ?? 0;
+        }
+        private void RefreshManualPreviewVisuals()
+        {
+            Plot.SetPreviewEnabled(ManualPreviewEnabled && Mode == "Preview");
+            BlendPlot.SetPreviewEnabled(ManualPreviewEnabled && Mode == "Preview");
+            Plot.ClearManualCursor(); BlendPlot.ClearManualCursor();
+            if (HasManualPreview && ManualPreviewEnabled)
+            {
+                if (selectedValueRow != null && selectedValueRow.parameter == manualCurveParameter)
+                    Plot.SetManualCursor(manualCurveX, 0);
+                var node = BlendPlot.Node;
+                if (node != null && (node.type == "blend1d" || node.type == "blend2d") && IsManuallyOverridden(node))
+                    BlendPlot.SetManualCursor(PreviewParameter(node.parameterX),
+                        node.type == "blend2d" ? PreviewParameter(node.parameterY) : 0,
+                        manualIrEvaluator?.CopyChildWeights(node.id));
+            }
+            foreach (var row in ValueRows) row.IsOverridden = IsManuallyOverridden(row.parameter);
+            void UpdateTree(IrTreeItem item)
+            {
+                item.IsOverridden = IsManuallyOverridden(item.Node);
+                foreach (var child in item.Children) UpdateTree(child);
+            }
+            foreach (var root in IrTreeRoots) UpdateTree(root);
+            OnPropertyChanged(nameof(SelectionOverridden));
+            if (latestMonitorFrame != null)
+                UpdateValueMonitor(latestMonitorFrame.Values, manualValues ?? latestMonitorFrame.ValuesEffective);
+        }
+        public bool SelectionOverridden => selectedValueRow != null
+            ? IsManuallyOverridden(selectedValueRow.parameter) : IsManuallyOverridden(BlendPlot.Node);
         private void ClearManualPreviewClicked(object sender, RoutedEventArgs e) => ClearManualPreview();
         private void ApplyParameterOverrides(IReadOnlyDictionary<string, float> current)
         {
@@ -30,10 +91,11 @@ namespace HoFace.Studio
             foreach (var parameter in document.Ir.parameters)
                 if (!values.ContainsKey(parameter.name)) values.Add(parameter.name, parameter.defaultValue);
             foreach (var pair in parameterOverrides) values[pair.Key] = pair.Value;
-            var evaluator = new HoFaceIrEvaluator(document.Ir);
-            evaluator.Evaluate(values);
-            manualValues = values; manualWeights = new Dictionary<string, float>(evaluator.Values);
+            manualIrEvaluator = new HoFaceIrEvaluator(document.Ir);
+            manualIrEvaluator.Evaluate(values);
+            manualValues = values; manualWeights = new Dictionary<string, float>(manualIrEvaluator.Values);
             foreach (var pair in session.IrOverrides) manualWeights[pair.Key] = pair.Value;
+            RefreshManualPreviewVisuals();
         }
         private bool closingWithoutPrompt;
         private bool shutdownRequested;
@@ -121,7 +183,11 @@ namespace HoFace.Studio
                 nodeId = selectedNode?.id,
                 nodeType = selectedNode?.type,
                 curve = selectedValueRow == null ? null : ReadCurve(selectedValueRow),
-                pointIndex = ActivePlot.SelectedIndex, cursor = new { x = ActivePlot.CursorX, y = ActivePlot.CursorY },
+                pointIndex = ActivePlot.SelectedIndex, cursor = new { x = ActivePlot.CursorX, y = ActivePlot.CursorY,
+                    enabled = ManualPreviewEnabled, active = ActivePlot.HasManualCursor },
+                blend = new { nodeId = BlendPlot.Node?.id, live = BlendPlot.HasLivePoint,
+                    x = BlendPlot.LiveX, y = BlendPlot.LiveY, tracked = BlendPlot.LiveTracked,
+                    childWeights = BlendPlot.ActiveChildWeights },
                 viewport = ActivePlot.Viewport, structureTab = StructureTab, centerTab = CenterTab
             };
         }
@@ -175,9 +241,11 @@ namespace HoFace.Studio
                 overrides[previewNode.parameterX] = (float)x;
                 if (previewNode.type == "blend2d") overrides[previewNode.parameterY] = (float)y;
             }
+            manualCurveParameter = selectedValueRow?.parameter;
+            manualCurveX = x;
+            ManualPreviewEnabled = true;
             parameterOverrides = overrides;
             ApplyParameterOverrides(values);
-            ActivePlot.CursorX = x; ActivePlot.CursorY = y; ActivePlot.InvalidateVisual();
             liveStatus = "手动预览 · 临时参数覆盖";
             if (session.Preview.Running) session.Preview.Send(manualValues, manualWeights, true, 0);
             OnPropertyChanged(nameof(LiveStatus)); OnPropertyChanged(nameof(HasManualPreview));

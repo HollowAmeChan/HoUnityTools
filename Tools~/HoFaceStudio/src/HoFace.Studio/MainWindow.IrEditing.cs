@@ -569,6 +569,7 @@ namespace HoFace.Studio
     {
         private bool isExpanded;
         private bool isSelected;
+        private bool isOverridden;
         public HoFaceIrNode Node { get; }
         public string NodeId => Node.id;
         public string Name => string.IsNullOrWhiteSpace(Node.name) ? Node.id : Node.name;
@@ -584,6 +585,11 @@ namespace HoFace.Studio
         public ObservableCollection<IrTreeItem> Children { get; } = new ObservableCollection<IrTreeItem>();
         public bool IsExpanded { get => isExpanded; set { isExpanded = value; OnPropertyChanged(); } }
         public bool IsSelected { get => isSelected; set { isSelected = value; OnPropertyChanged(); } }
+        public bool IsOverridden
+        {
+            get => isOverridden;
+            set { if (isOverridden == value) return; isOverridden = value; OnPropertyChanged(); }
+        }
         public event PropertyChangedEventHandler PropertyChanged;
         public IrTreeItem(HoFaceIrNode node, bool expanded) { Node = node; isExpanded = expanded; }
         private void OnPropertyChanged([CallerMemberName] string property = null) =>

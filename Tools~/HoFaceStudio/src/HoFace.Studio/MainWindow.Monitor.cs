@@ -105,6 +105,7 @@ namespace HoFace.Studio
         {
             RawMonitorRows.Clear(); ValueMonitorRows.Clear(); IrMonitorRows.Clear();
             latestMonitorFrame = null;
+            BlendPlot.ClearLivePoint();
             if (document.Value != null)
             {
                 foreach (var input in document.Value.inputs)
@@ -161,7 +162,40 @@ namespace HoFace.Studio
                 DisplayableRaw(session.RawOverrides), MonitorStage.Raw);
             UpdateValueMonitor(frame.Values, frame.ValuesEffective);
             UpdateMonitorStage(IrMonitorRows, frame.Weights, frame.WeightsEffective, session.IrOverrides, MonitorStage.Ir);
+            RefreshBlendPlotLiveState();
             NotifyMonitorState();
+        }
+
+        private void RefreshBlendPlotLiveState()
+        {
+            var node = BlendPlot.Node;
+            if (node == null || (node.type != "blend1d" && node.type != "blend2d") || !HasDocument)
+            {
+                BlendPlot.ClearLivePoint();
+                return;
+            }
+
+            if (latestMonitorFrame == null || latestMonitorFrame.ValuesEffective == null ||
+                latestMonitorFrame.ValuesEffective.Count == 0)
+            {
+                BlendPlot.ClearLivePoint();
+                return;
+            }
+            var values = latestMonitorFrame.ValuesEffective;
+
+            float Read(string name)
+            {
+                if (!string.IsNullOrWhiteSpace(name) && values.TryGetValue(name, out float value) && float.IsFinite(value))
+                    return value;
+                var parameter = document.Ir.parameters.FirstOrDefault(x => x.name == name);
+                return parameter?.defaultValue ?? 0;
+            }
+
+            BlendPlot.SetLivePoint(
+                Read(node.parameterX),
+                node.type == "blend2d" ? Read(node.parameterY) : 0,
+                session.GetEffectiveChildWeights(node.id),
+                latestMonitorFrame?.Tracked ?? false);
         }
 
         private static bool IsDisplayableRawParameter(string key) =>
@@ -187,6 +221,7 @@ namespace HoFace.Studio
                 float? liveValue = live != null && live.TryGetValue(key, out float source) ? source : (float?)null;
                 float? effectiveValue = effective != null && effective.TryGetValue(key, out float result) ? result : (float?)null;
                 float? pinned = session.ValueOverrides.TryGetValue(row.Key, out float fixedValue) ? fixedValue : (float?)null;
+                if (IsManuallyOverridden(key)) pinned = parameterOverrides[key];
                 row.Update(liveValue, effectiveValue, pinned);
             }
         }

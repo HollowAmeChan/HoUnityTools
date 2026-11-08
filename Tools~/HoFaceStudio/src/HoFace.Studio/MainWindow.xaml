@@ -11,7 +11,16 @@
     <HierarchicalDataTemplate x:Key="IrTreeItemTemplate" DataType="{x:Type local:IrTreeItem}"
         ItemsSource="{Binding Children}">
       <StackPanel Orientation="Horizontal" ToolTip="{Binding Tooltip}">
-        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis">
+          <TextBlock.Style><Style TargetType="TextBlock">
+            <Style.Triggers><DataTrigger Binding="{Binding IsOverridden}" Value="True">
+              <Setter Property="Foreground" Value="#E9B578"/>
+              <Setter Property="FontWeight" Value="SemiBold"/>
+            </DataTrigger></Style.Triggers>
+          </Style></TextBlock.Style>
+        </TextBlock>
+        <TextBlock Text="覆盖" FontSize="10" Foreground="#E9B578" Margin="6,0,0,0"
+            Visibility="{Binding IsOverridden, Converter={StaticResource VisibleIf}}"/>
         <TextBlock Text="{Binding KindLabel}" FontSize="10" Foreground="{StaticResource MutedBrush}" Margin="8,0,0,0"/>
       </StackPanel>
     </HierarchicalDataTemplate>
@@ -129,6 +138,30 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal">
             <Button Content="{Binding PreviewAction}" Click="PreviewToggleClicked" IsEnabled="{Binding CanPreview}"
                 ToolTip="启停发往 Blender 的最终权重；仅在 Blender 模式可用"/>
+            <ToggleButton x:Name="ManualOverrideToggle" Content="{Binding ManualPreviewAction}" IsChecked="{Binding ManualPreviewEnabled, Mode=TwoWay}"
+                IsEnabled="{Binding CanPreview}" Padding="7,3" Margin="6,0,0,0"
+                ToolTip="打开后在曲线或混合图中点击、拖动进行临时覆盖；关闭立即恢复实时值">
+              <ToggleButton.Style>
+                <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                  <Setter Property="Template"><Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                      <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="1" Padding="{TemplateBinding Padding}" CornerRadius="4">
+                        <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"
+                            VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                      </Border>
+                    </ControlTemplate>
+                  </Setter.Value></Setter>
+                  <Style.Triggers>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Setter Property="Foreground" Value="#E9B578"/>
+                      <Setter Property="BorderBrush" Value="#E9B578"/>
+                      <Setter Property="Background" Value="#392E24"/>
+                    </Trigger>
+                  </Style.Triggers>
+                </Style>
+              </ToggleButton.Style>
+            </ToggleButton>
             <Button Content="恢复实时" Click="ClearManualPreviewClicked" Visibility="{Binding HasManualPreview, Converter={StaticResource VisibleIf}}"
                 ToolTip="取消临时参数覆盖；未连接实时输入时释放预览权重"/>
           </StackPanel>
@@ -192,7 +225,16 @@
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                   <ListBox.ItemTemplate><DataTemplate>
                     <StackPanel ToolTip="{Binding Display}">
-                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style><Style TargetType="TextBlock">
+                          <Style.Triggers><DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                            <Setter Property="Foreground" Value="#E9B578"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                          </DataTrigger></Style.Triggers>
+                        </Style></TextBlock.Style>
+                      </TextBlock>
+                      <TextBlock Text="覆盖" FontSize="10" Foreground="#E9B578"
+                          Visibility="{Binding IsOverridden, Converter={StaticResource VisibleIf}}"/>
                       <TextBlock Text="{Binding Expression}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                     </StackPanel>
                   </DataTemplate></ListBox.ItemTemplate>
@@ -228,7 +270,13 @@
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <StackPanel>
             <TextBlock Text="{Binding SelectionKind}" FontSize="10" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
-            <TextBlock Text="{Binding SelectionTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectionTitle}"/>
+            <TextBlock Text="{Binding SelectionTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectionTitle}">
+              <TextBlock.Style><Style TargetType="TextBlock">
+                <Style.Triggers><DataTrigger Binding="{Binding SelectionOverridden}" Value="True">
+                  <Setter Property="Foreground" Value="#E9B578"/>
+                </DataTrigger></Style.Triggers>
+              </Style></TextBlock.Style>
+            </TextBlock>
           </StackPanel>
           <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
             <Button x:Name="AddPoseRuleButton" Content="＋姿势" Click="AddPoseRuleClicked" IsEnabled="{Binding CanAddPoseRule}"

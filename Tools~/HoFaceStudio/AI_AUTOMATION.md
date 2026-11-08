@@ -57,6 +57,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `selectNode` | 按稳定 id 选择 IR 节点 |
 | `selectPoint` | 按 `index` 选择当前图形中的曲线点或混合子项 |
 | `cursor` / `clearPreview` | 实际求值临时参数覆盖 / 恢复实时；不修改作品 |
+| `setPreviewOverride` | 传 `{"enabled":true}` 进入图形覆盖模式；`false` 立即清除图形覆盖并恢复实时 |
 | `evaluate` | 独立求值一帧 raw；不改变实时会话，也不向目标发送 |
 | `setValueCurveKey` | 修改 value 曲线指定点的时间、值或切线 |
 | `addValueCurveKey` / `deleteValueCurveKey` | 增删曲线点；坐标不能重复，删除时至少保留两个 |
@@ -92,6 +93,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 - `list.nodes` 仅返回 root 可达的树节点；不在混合树中的节点单独放在 `orphanNodes`。Studio 树视图只呈现已引用子规则。`addIrRule` 的 parent 必须是现有 blend/direct 节点；Pose target 可直接输入，缺少的 target 会以 `[0,1]` 默认范围声明。
 - Value 输出规则的修饰器在曲线之后按链顺序逐个执行。`smooth` / `delay` 使用 `seconds`；`steps` 按 `trigger` 严格递增，包含 `target`、`hold`、`threshold`、`enterSeconds` 和 `exitSeconds`。UI 与 `setValueModifiers` 共用该格式；空链保持原规则行为。
 - Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区把输入、Value 处理、IR 输出拆成三个独立页签，共用名称/ID 搜索。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
+- 混合图直接显示 1D/2D 实时位置与子项贡献权重。实时位置是蓝色圆点；图形覆盖开启后用橙色十字表示覆盖位置，受影响的 Value 行和 IR 混合节点显示橙色“覆盖”。关闭图形覆盖时清除十字并恢复实时，三阶段监控的独立 pins 不被顺带清除。`cursor` 是显式覆盖操作，会在校验成功后自动开启图形覆盖；`selection.cursor` 返回 `enabled`/`active`，`selection.blend` 返回实时坐标、追踪状态和当前实际显示的 `childWeights`。
 - VTS `vtsStart` 在 `Preview` 模式需要已打开作品；`RawForward` 可在无作品状态连接、转发和录制 raw 帧。Processed replay 与 Blender 权重预览仍需作品。图形绘制输入游标与三阶段参数覆写分别管理，`clearPreview` 不会清除 monitor pins。
 - `evaluate.raw` 使用 **wire 原始字段名**，例如诊断样例的 `JawOpen`、`MouthSmileLeft`、`MouthSmileRight`。不是归一化后的 `jawOpen` 等名字；可先读取 `list.inputs` 的表达式核对映射。
 - 曲线切线可以传字符串 `Infinity` / `-Infinity` 代表阶跃。其他数值必须有限；重复曲线输入坐标被拒绝。

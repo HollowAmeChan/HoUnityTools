@@ -51,6 +51,7 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
         public float[] CopyChildWeights(string id)
         {
             if (id == null || !nodeIds.TryGetValue(id, out int index)) return new float[0];
+            if (!evaluated[index]) return new float[weights[index].Length];
             return (float[])weights[index].Clone();
         }
         private float Read(string name)

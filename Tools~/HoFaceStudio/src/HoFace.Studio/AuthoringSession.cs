@@ -49,6 +49,8 @@ namespace HoFace.Studio
         public IReadOnlyDictionary<string, float> LiveWeights => liveIrEvaluator?.Values;
         public IReadOnlyDictionary<string, float> UnclampedWeights => irEvaluator?.UnclampedValues;
         public IReadOnlyDictionary<string, float> LiveUnclampedWeights => liveIrEvaluator?.UnclampedValues;
+        public IReadOnlyList<float> GetEffectiveChildWeights(string nodeId) =>
+            irEvaluator == null ? Array.Empty<float>() : irEvaluator.CopyChildWeights(nodeId);
         public IReadOnlyDictionary<string, float> RawOverrides => rawOverrides;
         public IReadOnlyDictionary<string, float> ValueOverrides => valueOverrides;
         public IReadOnlyDictionary<string, float> IrOverrides => irOverrides;
@@ -56,6 +58,7 @@ namespace HoFace.Studio
         public event Action<VtsFrame> RawFrameForward;
         public event Action<IReadOnlyDictionary<string, float>, IReadOnlyDictionary<string, float>, bool> PreviewUpdated;
         public event Action<AuthoringMonitorFrame> MonitorUpdated;
+        public event Action OutputCleared;
         public event Action<string> StatusChanged;
 
         public AuthoringSession()
@@ -251,6 +254,7 @@ namespace HoFace.Studio
 
         private void ClearOutputs()
         {
+            LatestMonitorFrame = null;
             valueSession?.Evaluator.Parameters.Clear();
             valueSession?.Evaluator.LiveParameters.Clear();
             effectiveValueSession?.Evaluator.Parameters.Clear();
@@ -261,6 +265,7 @@ namespace HoFace.Studio
             liveIrEvaluator?.Values.Clear();
             liveIrEvaluator?.LiveValues.Clear();
             liveIrEvaluator?.UnclampedValues.Clear();
+            OutputCleared?.Invoke();
         }
 
         public void StartRecording(string path, string valuePath, string irPath)
