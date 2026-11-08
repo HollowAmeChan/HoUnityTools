@@ -32,7 +32,7 @@ namespace HoFace.Studio
         private string irFilter = "";
         private int centerTab;
         private ParameterPlot ActivePlot => CenterTab == 1 ? BlendPlot : Plot;
-        private string phoneIp = "127.0.0.1";
+        private string phoneIp = "192.168.1.114";
         private string phonePort = "21412";
         private string localPort = "21413";
         private string liveStatus = "VTS 未连接";

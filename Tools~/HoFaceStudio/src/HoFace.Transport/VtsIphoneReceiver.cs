@@ -10,7 +10,7 @@ namespace HoFace.Transport
 {
     public sealed class VtsIphoneOptions
     {
-        public string PhoneAddress = "127.0.0.1";
+        public string PhoneAddress = "192.168.1.114";
         public int PhonePort = 21412;
         public int LocalPort = 21413;
         public float RequestSeconds = 5;
