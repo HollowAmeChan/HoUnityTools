@@ -22,6 +22,11 @@ ANGER_INPUT = "AngerEnabled"
 # 2026-11-09 实机采样（90 秒 180 帧）：eyeWide 峰值 0.681；但 Studio 里读到 0.6 的“输入”
 # 是**曲线之后**的值，对应原值 0.30。静息原值就有 0.10 左右（会直接让眼睛挂着 35% 宽），
 # 所以曲线先压掉 0.12 的死区，再从 0.12 线性到 0.30 = 满档。
+# 闭眼只用 blink 一根：2026-11-09 录音里笑的时候 blink 中位数只有 0.10（旧的 3.9×squint
+# 去污项一下减掉 0.6，才是“闭不死”的真凶），而完全闭眼能到 0.99。所以 0.10 以下不动、
+# 0.80 就算满闭，中间线性。
+EYE_BLINK_DEAD = 0.10
+EYE_BLINK_FULL = 0.80
 EYE_WIDE_DEAD = 0.12
 EYE_WIDE_FULL = 0.40
 # 眯眼（笑眼证据）也一样：VTS 的 eyeSquint 峰值只有 0.34（203 帧实测），
@@ -319,7 +324,7 @@ def repair_eye_axis(ir):
 
 
 def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
-           blink_floor=0.48, blink_full=0.80, cheek_knee=CHEEK_KNEE, cheek_full=CHEEK_FULL,
+           cheek_knee=CHEEK_KNEE, cheek_full=CHEEK_FULL,
            jelly_strength=None, jelly_frequency=None, jelly_damping=None):
     if (value.get("format"), value.get("version"), ir.get("format"), ir.get("version")) != (
         "ho-face-value", 1, "ho-face-ir", 2
@@ -327,8 +332,6 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         raise ValueError("Expected a HoFace Value v1 / IR v2 pair.")
     if not -0.93 < width_neutral_min < 0 < width_neutral_max < 2:
         raise ValueError("The mouth neutral interval must include zero and lie between -0.93 and 2.")
-    if not 0 < blink_floor < blink_full <= 1:
-        raise ValueError("Require 0 < blink floor < full closure <= 1.")
     value, ir = copy.deepcopy((value, ir))
     nodes = {node["id"]: node for node in ir["nodes"]}
     verify_graph_contract(nodes, ir["root"])
@@ -364,11 +367,11 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         axis = f"Eye/{side}/Open"
         opened, emotion, anger = (by_name[f"Eye/{side}/{key}"] for key in ("Open", "Emotion", "Anger"))
         blink, squint, wide = (f"eye{key}{side}" for key in ("Blink", "Squint", "Wide"))
-        # 0 常态 / 0.5 半闭 / 1 闭眼。宽输入是 ARKit 原生信号，直接把它压到 −0.2 那一端；
-        # 1.2 过闭没有对应输入，仍然只由果冻推出去。闭眼时宽项自动失效，不会把眼睛掰开。
+        # 0 常态 / 0.5 半闭 / 1 闭眼。闭眼只看 blink 的一根线性斜坡（不再减 squint：
+        # 实测笑的时候 blink 中位才 0.10，旧去污项减 0.6 会把闭合吃掉）。眼宽直接压到 −0.2；
+        # 1.2 过闭没有对应输入，仍然只由果冻推出去。
         opened["expression"] = (
-            f"clamp(max({blink} - 3.9 * {squint} - 0.06, "
-            f"({blink} - {blink_floor:g}) / {blink_full - blink_floor:g}), 0, 1) "
+            f"clamp(({blink} - {EYE_BLINK_DEAD:g}) / {EYE_BLINK_FULL - EYE_BLINK_DEAD:g}, 0, 1) "
             f"- {abs(EYE_WIDE_END):g} * clamp({wide}, 0, 1) "
             f"* clamp(({EYE_WIDE_GATE_END:g} - {blink}) / {EYE_WIDE_GATE_END - EYE_WIDE_GATE_START:g}, 0, 1)"
         )
@@ -387,10 +390,13 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
              "minimum": EYE_WIDE_END, "maximum": EYE_OVER_END},
         ]
         opened["notes"] = (
-            "0 常态睁眼，0.5 半闭，1 闭眼。眼宽输入直接压到 −0.2 张大（闭眼时自动失效）；"
+            "0 常态睁眼，0.5 半闭，1 闭眼。闭眼只看 blink 一根线性斜坡："
+            f"{EYE_BLINK_DEAD:g} 以下算睁（笑的时候 blink 中位只有 0.10），"
+            f"{EYE_BLINK_FULL:g} 就算满闭（实测完全闭眼 0.99）—— 不再减 squint，"
+            "旧的 3.9×squint 去污项会把闭合整段吃掉。"
+            "眼宽输入直接压到 −0.2 张大（闭眼时自动失效）；"
             "1.2 过闭没有对应输入，只由果冻（轴值修饰器）推出去："
             f"强度 0 = 直通，绝不会越过 {EYE_WIDE_END:g}…{EYE_OVER_END:g}；强度越大过冲越远。"
-            f"弱眨眼保留旧去眯眼串扰；blink 达 {blink_floor:g} 后强闭合保底生效，{blink_full:g} 到闭眼。"
         )
         # 这两行原本按旧刻度（半闭 = 1）写的：半闭以前等于"已闭"，现在缩到 0.5。
         emotion["expression"] = (
@@ -454,8 +460,6 @@ def main():
     parser.add_argument("output", type=Path, help="new output directory (will not overwrite files)")
     parser.add_argument("--width-neutral-min", type=float, default=-0.14)
     parser.add_argument("--width-neutral-max", type=float, default=0.40)
-    parser.add_argument("--blink-floor", type=float, default=0.48)
-    parser.add_argument("--blink-full", type=float, default=0.80)
     parser.add_argument("--cheek-knee", type=float, default=CHEEK_KNEE)
     parser.add_argument("--cheek-full", type=float, default=CHEEK_FULL)
     parser.add_argument("--jelly-strength", type=float, default=None, help="留空 = 沿用行上已有的果冻强度")
@@ -465,7 +469,6 @@ def main():
     before_value, before_ir = (json.loads(p.read_text(encoding="utf-8-sig")) for p in (args.value, args.ir))
     value, ir = repair(
         before_value, before_ir, width_neutral_min=args.width_neutral_min, width_neutral_max=args.width_neutral_max,
-        blink_floor=args.blink_floor, blink_full=args.blink_full,
         cheek_knee=args.cheek_knee, cheek_full=args.cheek_full,
         jelly_strength=args.jelly_strength, jelly_frequency=args.jelly_frequency,
         jelly_damping=args.jelly_damping,
