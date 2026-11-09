@@ -19,9 +19,11 @@ EYE_OVER_END = 1.2
 EYE_OLD_TO_NEW = {-1.0: EYE_WIDE_END, 1.0: EYE_HALF, 2.0: EYE_CLOSED}
 ANGER_GATE = "Gate/Anger"
 ANGER_INPUT = "AngerEnabled"
-# 2026-11-09 实机采样（对着手机瞪三次，90 秒 180 帧）：eyeWide 峰值 0.681，
-# 第二次实测只到 0.6 左右，静息 p90 只有 0.19 ⇒ 0.50 就算满档睁大。
-EYE_WIDE_FULL = 0.50
+# 2026-11-09 实机采样（90 秒 180 帧）：eyeWide 峰值 0.681；但 Studio 里读到 0.6 的“输入”
+# 是**曲线之后**的值，对应原值 0.30。静息原值就有 0.10 左右（会直接让眼睛挂着 35% 宽），
+# 所以曲线先压掉 0.12 的死区，再从 0.12 线性到 0.30 = 满档。
+EYE_WIDE_DEAD = 0.12
+EYE_WIDE_FULL = 0.40
 # 睁大眼只在眼睛真要闭上时才让位：blink 0.20 以下全给，0.50 归零。
 # 旧的 (0.48-blink)/0.48 在静息 blink≈0.19 时就已经砍掉四成，主动睁大永远到不了满档。
 EYE_WIDE_GATE_START = 0.20
@@ -180,23 +182,27 @@ def repair_cheek(value, ir, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
 def repair_wide_calibration(value):
     """Calibrate the raw eyeWide channel so a deliberate widen actually reaches the wide end.
 
-    The device tops out near 0.68 and a normal widen sits around 0.4, so passing it through
-    unscaled left the axis at roughly half of the -0.2 band. The input curve is the place for
-    this (the project's rule: calibration lives on the input row), and it stays draggable.
+    The device rests around 0.10 and only needs about 0.30 for a full widen, so an
+    unscaled pass-through left the axis at half of the -0.2 band while also keeping a
+    permanent wide bias at rest. Deadzone first, then a linear ramp to the top; the
+    input curve is the place for this (calibration lives on the input row) and stays
+    draggable in the Studio.
     """
-    slope = 1.0 / EYE_WIDE_FULL
+    span = EYE_WIDE_FULL - EYE_WIDE_DEAD
+    slope = 1.0 / span
     for side in ("Left", "Right"):
         name = f"eyeWide{side}"
         row = next((item for item in value["inputs"] if item["parameter"] == name), None)
         if row is None:
             raise ValueError(f"Missing input row {name}.")
         row["curve"] = {"keys": [
-            {"t": 0.0, "v": 0.0, "inT": 0, "outT": slope},
+            {"t": 0.0, "v": 0.0, "inT": 0, "outT": 0},
+            {"t": EYE_WIDE_DEAD, "v": 0.0, "inT": 0, "outT": slope},
             {"t": EYE_WIDE_FULL, "v": 1.0, "inT": slope, "outT": 0},
         ]}
         row["notes"] = (
-            f"睁大眼输入标定：{EYE_WIDE_FULL:g} 以上算满档（实机采样峰值 0.681、普通睁大 0.36~0.49、"
-            "静息 p90 0.19）；曲线外的端点按端点算，所以再大也只是 1。"
+            f"睁大眼输入标定：{EYE_WIDE_DEAD:g} 以下当 0（静息原值就有 0.10 左右），"
+            f"{EYE_WIDE_DEAD:g}→{EYE_WIDE_FULL:g} 线性到满档；曲线外按端点算。"
         )
 
 
