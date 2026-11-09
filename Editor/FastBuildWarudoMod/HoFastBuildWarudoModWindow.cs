@@ -2162,6 +2162,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             return normalized.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    IsOwnQuickCaptureSource(path) ||
                    IsOwnMmdMotionSource(path) ||
+                   IsOwnPlaySpeedSource(path) ||
                    string.Equals(
                        typeName,
                        "Hollow.HoUnityTools.BoneRendering.HoBoneRenderer",
@@ -2182,6 +2183,13 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 root.TrimEnd('/') + "/Runtime/MmdMotion/", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsOwnPlaySpeedSource(string path)
+        {
+            string root = OwnPackageRoot;
+            return !string.IsNullOrEmpty(root) && NormalizeAssetPath(path).StartsWith(
+                root.TrimEnd('/') + "/Runtime/PlaySpeed/", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string GetScriptNote(string path, string typeName, bool unsafeForRuntime,
             string assemblyName = null)
         {
@@ -2191,6 +2199,8 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     return "编辑器录制工具使用的运行时驱动，不属于角色 Mod；默认移除，避免带入文件 API。";
                 if (IsOwnMmdMotionSource(path))
                     return "MMD/VMD 播放运行时不属于角色 Mod；默认移除，避免把 System.IO 解析器带入 UMod 安全沙箱。";
+                if (IsOwnPlaySpeedSource(path))
+                    return "播放速度控制/面板锁自动化不属于角色 Mod；默认移除，避免把反射/宿主控制带入 UMod 安全沙箱。";
                 if (string.Equals(typeName, "Hollow.HoUnityTools.BoneRendering.HoBoneRenderer", StringComparison.Ordinal))
                     return "HoBoneRenderer 含编辑器侧可视化逻辑，默认不复制，并建议从临时 Prefab 移除。";
                 return "该脚本位于 Editor 目录，不能作为 Warudo 运行时组件打包。";
