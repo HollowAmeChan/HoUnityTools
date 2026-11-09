@@ -67,9 +67,10 @@ $oldIrJson = Get-Content -Raw -LiteralPath $BeforeIr | ConvertFrom-Json -AsHasht
 $newIrJson = Get-Content -Raw -LiteralPath $Ir | ConvertFrom-Json -AsHashtable -Depth 100
 $retiredParams = '^(Pupil/|Iris/|Highlight[12]/|Gate/EyeDetails$)'
 $retiredShapes = '^HO-(瞳孔|眼仁|高光)'
-$eyeOrWidth = '^(HO-眼情感-|HO-嘴宽-)'
+$eyeOrWidth = '^(HO-眼情感-|HO-嘴宽-|HO-脸颊-|HO-嘴位置-)'
 $changed = @('Mouth/Width', 'Eye/Left/Open', 'Eye/Left/Emotion', 'Eye/Left/Anger',
-    'Eye/Right/Open', 'Eye/Right/Emotion', 'Eye/Right/Anger')
+    'Eye/Right/Open', 'Eye/Right/Emotion', 'Eye/Right/Anger',
+    'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove')
 Check (@($newValues.inputs | Where-Object { $_.parameter -match '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' }).Count -eq 0) 'Eye detail inputs remain.'
 Check (@($newValues.outputs | Where-Object { $_.parameter -match $retiredParams -or $_.parameter -in @('eyeBlinkLeft','eyeBlinkRight') }).Count -eq 0) 'Retired effect axes or public blink remain.'
 Check (@($newIrJson.parameters | Where-Object { $_.name -match $retiredParams }).Count -eq 0) 'Retired IR parameters remain.'
@@ -174,6 +175,46 @@ foreach ($fps in @(30, 60, 120)) {
     for ($frame = 13; $frame -le 24; $frame++) { $session.Evaluate((Raw $release), $frame / [double]$fps) }
     $graph.Evaluate($session.Values)
     Near $graph.Values['HO-眼情感-常态睁眼Left'] 1 "Release returns to open at ${fps}fps"
+}
+
+# Cheek puff is decoupled from the lateral mouth-shift channels. The old rule
+# turned a sideways mouth move into a full cheek bag; the new rule takes the
+# amount from cheekPuff only and uses the same channels just to pick a side.
+$lateral = @{ MouthLeft = 0.86; MouthRight = 0.05; CheekPuff = 0.10 }
+$oldLateral = Sample $oldProfile $oldGraph $lateral
+$newLateral = Sample $profile $graph $lateral
+Near $oldLateral.weights['HO-脸颊-鼓Left'] 1 'Regression reproduces a full cheek bag from a sideways mouth move'
+Near $newLateral.values['Cheek/Left'] 0 'A sideways mouth move builds no left cheek amount'
+Near $newLateral.values['Cheek/Right'] 0 'A sideways mouth move builds no right cheek amount'
+Near $newLateral.weights['HO-脸颊-鼓Left'] 0 'A sideways mouth move selects no left cheek bag'
+Near $newLateral.weights['HO-脸颊-鼓Right'] 0 'A sideways mouth move selects no right cheek bag'
+Check ($newLateral.values['Mouth/MoveX'] -gt 0.3) 'The sideways mouth move itself must still reach the mouth axis'
+foreach ($side in @('Left', 'Right')) {
+    $other = if ($side -eq 'Left') { 'Right' } else { 'Left' }
+    $single = Sample $profile $graph @{ CheekPuff = 0.95; "Mouth$side" = 0.78; "Mouth$other" = 0.05 }
+    Near $single.values["Cheek/$side"] 1 "A single $side puff still fills its own cheek"
+    Near $single.values["Cheek/$other"] 0 "A single $side puff leaves the $other cheek alone"
+    Near $single.weights["HO-脸颊-鼓$side"] 1 "The $side cheek bag is fully selected"
+    Near $single.weights["HO-脸颊-鼓$other"] 0 "No $other cheek bag leaks into a single $side puff"
+    Near $single.values['Gate/MouthMove'] 0 'A live puff closes the mouth-shift branch'
+    Near $single.weights['HO-嘴位置-Left'] 0 "A live $side puff does not skew the mouth left"
+    Near $single.weights['HO-嘴位置-Right'] 0 "A live $side puff does not skew the mouth right"
+    Near $single.weights['HO-嘴位置-中'] 0 "A live $side puff adds no mouth-shift pose at all"
+}
+$double = Sample $profile $graph @{ CheekPuff = 0.95; MouthLeft = 0.03; MouthRight = 0.03 }
+Near $double.weights['HO-脸颊-鼓Left'] 1 'A symmetric puff still selects the left cheek'
+Near $double.weights['HO-脸颊-鼓Right'] 1 'A symmetric puff still selects the right cheek'
+Near $double.values['Gate/MouthMove'] 0 'A symmetric puff also closes the mouth-shift branch'
+Near (Sample $profile $graph @{ CheekPuff = 0.1769 }).values['Cheek/Left'] 0 'The measured pucker ceiling stays under the knee'
+Near (Sample $profile $graph @{ CheekPuff = 0.40 }).values['Cheek/Left'] 0 'The knee itself is still off'
+Near (Sample $profile $graph @{ CheekPuff = 0.60 }).values['Cheek/Left'] 1 'The full point is fully on'
+Near (Sample $profile $graph @{ CheekPuff = 0.60 }).values['Gate/MouthMove'] 0 'The full point closes the mouth shift'
+Near (Sample $profile $graph @{ CheekPuff = 0.30 }).values['Gate/MouthMove'] 1 'Under the knee the mouth shift branch is untouched'
+$prevPuff = 0.0
+foreach ($step in 0..100) {
+    $puff = (Sample $profile $graph @{ CheekPuff = ($step / 100.0) }).values['Cheek/Left']
+    Check ($puff -ge ($prevPuff - 0.00001) -and $puff -ge 0 -and $puff -le 1) 'Cheek puff is not monotonic and normalized.'
+    $prevPuff = $puff
 }
 
 # Regression guard for unrelated mouth, jaw, tongue, nose, cheek and gates.

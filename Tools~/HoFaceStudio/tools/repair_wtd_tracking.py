@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 
 
+CHEEK_KNEE = 0.40
+CHEEK_FULL = 0.60
+CHEEK_PUCKER_CEILING = 0.1769
 DETAIL_ROOT = "graph.eye.details"
 DETAIL_GATE = "Gate/EyeDetails"
 EYE_EFFECT_PREFIXES = ("Pupil/", "Iris/", "Highlight1/", "Highlight2/")
@@ -99,7 +102,48 @@ def strip_eye_effects(value, ir, nodes):
     value["outputs"] = [row for row in value["outputs"] if not is_retired_parameter(row["parameter"])]
 
 
-def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40, blink_floor=0.48, blink_full=0.80):
+def cheek_terms(knee, full):
+    """Return the puff amount and the two one-sided selectors as expressions."""
+    span = full - knee
+    puff = f"clamp((cheekPuff - {knee:g}) / {span:g}, 0, 1)"
+    left = f"clamp((mouthLeft - {knee:g}) / {span:g}, 0, 1)"
+    right = f"clamp((mouthRight - {knee:g}) / {span:g}, 0, 1)"
+    return puff, left, right
+
+
+def repair_cheek(value, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
+    """Take cheek puff magnitude from cheekPuff alone; keep mouth push as a side selector.
+
+    mouthLeft/mouthRight are also the lateral mouth-shift channels, so using them
+    as the puff amount made any sideways mouth movement empty a whole cheek. The
+    puff amount now gates everything, and the same channels only decide which
+    cheek is a single-side puff; both cheeks still fire for a symmetric puff.
+    A live puff also closes the mouth-shift branch, because the puff itself
+    already moves the lips and the two offsets otherwise add into a skew.
+    """
+    if not CHEEK_PUCKER_CEILING < knee < full <= 1:
+        raise ValueError(
+            f"Require {CHEEK_PUCKER_CEILING} < knee < full <= 1 (pucker ceiling is measured)."
+        )
+    puff, left, right = cheek_terms(knee, full)
+    by_name = {row["parameter"]: row for row in value["outputs"]}
+    for side, own, other in (("Left", left, right), ("Right", right, left)):
+        row = by_name[f"Cheek/{side}"]
+        row["expression"] = f"{puff} * max({own}, 1 - {other})"
+        row["notes"] = (
+            f"{side} 侧鼓嘴轴：量只由 cheekPuff 决定（{knee:g} 起、{full:g} 满），"
+            "mouthLeft/mouthRight 只用来挑单侧，不能再凭嘴巴左右平移把鼓嘴点亮。"
+        )
+    move = by_name["Gate/MouthMove"]
+    move["expression"] = f"MouthMoveEnabled * (1 - {puff})"
+    move["notes"] = (
+        "嘴整体位移的 IR 分支权重，读取输入 MouthMoveEnabled；鼓嘴量上来时按 "
+        "(1 − 鼓嘴量) 关闭位移，避免鼓嘴自己推嘴唇又被位移推一次（歪嘴）。"
+    )
+
+
+def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
+           blink_floor=0.48, blink_full=0.80, cheek_knee=CHEEK_KNEE, cheek_full=CHEEK_FULL):
     if (value.get("format"), value.get("version"), ir.get("format"), ir.get("version")) != (
         "ho-face-value", 1, "ho-face-ir", 2
     ):
@@ -116,23 +160,25 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40, blink_
     rows = value["outputs"]
     by_name = {row["parameter"]: row for row in rows}
     width = by_name["Mouth/Width"]
-    width["expression"] = "2 * (mouthDimpleLeft + mouthDimpleRight) - mouthPucker"
-    width["defaultValue"] = 0.5
-    # Keep the measured full narrow/wide endpoints from the old profile. The
-    # plateau covers both the old -0.09 rest and the current +0.356 rest sample.
-    low_slope = 0.5 / (width_neutral_min + 0.93)
-    high_slope = 0.5 / (2 - width_neutral_max)
-    width["curve"] = {"keys": [
-        {"t": -0.93, "v": 0, "inT": low_slope, "outT": low_slope},
-        {"t": width_neutral_min, "v": 0.5, "inT": 0, "outT": 0},
-        {"t": width_neutral_max, "v": 0.5, "inT": 0, "outT": 0},
-        {"t": 2, "v": 1, "inT": high_slope, "outT": high_slope},
-    ]}
-    width["notes"] = (
-        "嘴宽独立轴：0 缩，0.5 常态，1 宽。原值为 2×左右酒窝之和−噘嘴；"
-        f"在曲线上归中，{width_neutral_min:g}～{width_neutral_max:g} 固定输出 0.5；"
-        "保留旧标定的 −0.93 / +2 端点及原平滑。"
-    )
+    target_width = "2 * (mouthDimpleLeft + mouthDimpleRight) - mouthPucker"
+    if width.get("expression") != target_width:
+        width["expression"] = target_width
+        width["defaultValue"] = 0.5
+        # Keep the measured full narrow/wide endpoints from the old profile. The
+        # plateau covers both the old -0.09 rest and the current +0.356 rest sample.
+        low_slope = 0.5 / (width_neutral_min + 0.93)
+        high_slope = 0.5 / (2 - width_neutral_max)
+        width["curve"] = {"keys": [
+            {"t": -0.93, "v": 0, "inT": low_slope, "outT": low_slope},
+            {"t": width_neutral_min, "v": 0.5, "inT": 0, "outT": 0},
+            {"t": width_neutral_max, "v": 0.5, "inT": 0, "outT": 0},
+            {"t": 2, "v": 1, "inT": high_slope, "outT": high_slope},
+        ]}
+        width["notes"] = (
+            "嘴宽独立轴：0 缩，0.5 常态，1 宽。原值为 2×左右酒窝之和−噘嘴；"
+            f"在曲线上归中，{width_neutral_min:g}～{width_neutral_max:g} 固定输出 0.5；"
+            "保留旧标定的 −0.93 / +2 端点及原平滑。"
+        )
 
     for side, other in (("Left", "Right"), ("Right", "Left")):
         axis = f"Eye/{side}/Open"
@@ -168,6 +214,8 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40, blink_
             rows.remove(opened)
             rows.insert(before, opened)
 
+    repair_cheek(value, knee=cheek_knee, full=cheek_full)
+
     old_description = (
         "瞳孔和眼仁保留默认 0 的手调 Value/IR 轴。高光果冻由 Unity 专用组件读取 IR 最终形态键结果，"
         "按同眼分组加权、左右组取最大值；不另外发布 blink 直通输出，也不声明高光 IR 输出。"
@@ -175,10 +223,12 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40, blink_
     fix_note = (
         "瞳孔、眼仁及高光果冻不由面捕 Value/IR 控制；保留眼睑表情。"
         "眨眼强度与压眉分开，强 blink 到达紧闭；嘴宽静置归中。"
+        f"鼓嘴量只取 cheekPuff（{cheek_knee:g} 起、{cheek_full:g} 满），嘴巴左右平移不再触发鼓嘴，"
+        "鼓嘴生效时关闭嘴整体位移，避免叠成歪嘴。"
     )
     value["notes"] = value.get("notes", "").replace(old_description, "").rstrip()
-    if fix_note not in value["notes"]:
-        value["notes"] += "\n2026-11-09：" + fix_note
+    kept = [line for line in value["notes"].splitlines() if not line.startswith("2026-11-09：")]
+    value["notes"] = "\n".join(kept + ["2026-11-09：" + fix_note]).strip()
     unresolved = parameters_used(ir["nodes"]) - {row["parameter"] for row in rows}
     if unresolved:
         raise ValueError(f"Retained IR parameters do not have Value outputs: {sorted(unresolved)}")
@@ -194,11 +244,14 @@ def main():
     parser.add_argument("--width-neutral-max", type=float, default=0.40)
     parser.add_argument("--blink-floor", type=float, default=0.48)
     parser.add_argument("--blink-full", type=float, default=0.80)
+    parser.add_argument("--cheek-knee", type=float, default=CHEEK_KNEE)
+    parser.add_argument("--cheek-full", type=float, default=CHEEK_FULL)
     args = parser.parse_args()
     before_value, before_ir = (json.loads(p.read_text(encoding="utf-8-sig")) for p in (args.value, args.ir))
     value, ir = repair(
         before_value, before_ir, width_neutral_min=args.width_neutral_min, width_neutral_max=args.width_neutral_max,
         blink_floor=args.blink_floor, blink_full=args.blink_full,
+        cheek_knee=args.cheek_knee, cheek_full=args.cheek_full,
     )
     args.output.mkdir(parents=True, exist_ok=True)
     paths = [args.output / name for name in ("candidate.value.json", "candidate.ir.json", "apply-payload.json")]
