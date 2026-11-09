@@ -100,7 +100,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 - `evaluate.raw` 使用 **wire 原始字段名**，例如诊断样例的 `JawOpen`、`MouthSmileLeft`、`MouthSmileRight`。不是归一化后的 `jawOpen` 等名字；可先读取 `list.inputs` 的表达式核对映射。
 - 曲线切线可以传字符串 `Infinity` / `-Infinity` 代表阶跃。其他数值必须有限；重复曲线输入坐标被拒绝。
 - `screenshot` 渲染 WPF 内容区为 PNG，无需鼠标、键盘、窗口激活或桌面截图。它不包含系统标题栏和独立 ToolTip 弹窗；可用 `view` 切换窗口/标签页后截图。
-- 可设置进程级环境变量 `HOFACE_STUDIO_PIPE` 选择隔离管道，桌面与 CLI 必须一致；`HOFACE_STUDIO_NO_WORKSPACE=1` 禁止验收实例读写日常布局偏好。最多 8 个并发连接，空闲客户端不会独占后端；连接空闲 30 秒后释放。
+- 可设置进程级环境变量 `HOFACE_STUDIO_PIPE` 选择隔离管道，桌面与 CLI 必须一致；`HOFACE_STUDIO_NO_WORKSPACE=1` 禁止验收实例读写日常布局偏好与「上次打开的文件」记忆。最多 8 个并发连接，空闲客户端不会独占后端；连接空闲 30 秒后释放。
 
 ## 可重复验证
 

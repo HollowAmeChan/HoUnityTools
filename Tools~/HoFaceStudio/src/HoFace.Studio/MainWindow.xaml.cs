@@ -327,7 +327,7 @@ namespace HoFace.Studio
             catch (Exception error) { MessageBox.Show(error.Message, "打开失败", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
         private void TrySave() { try { SaveDocument(); } catch (Exception error) { MessageBox.Show(error.Message, "保存失败", MessageBoxButton.OK, MessageBoxImage.Error); } }
-        private void SaveDocument() { CommitPropertyDraft(); SyncText(); document.Save(); ReloadEditors(); }
+        private void SaveDocument() { CommitPropertyDraft(); SyncText(); document.Save(); ReloadEditors(); SaveWorkspace(); }
         private void SyncText()
         {
             if (document.Value == null) return;
@@ -605,7 +605,7 @@ namespace HoFace.Studio
                     return ExecuteAutomation("status", default);
                 case "save":
                     CommitPropertyDraft(); SyncText(); document.Save(ReadString(payload, "valuePath"), ReadString(payload, "irPath"));
-                    ReloadEditors(); return ExecuteAutomation("status", default);
+                    ReloadEditors(); SaveWorkspace(); return ExecuteAutomation("status", default);
                 case "undo":
                     EnsureNoDraft(); document.Undo(); ReloadEditors(); return ExecuteAutomation("status", default);
                 case "redo":
@@ -703,6 +703,7 @@ namespace HoFace.Studio
             OnPropertyChanged(nameof(StructureTab));
             ReloadEditors();
             Plot.Fit(); BlendPlot.Fit();
+            SaveWorkspace();   // 记住这一对，下次启动直接打开
         }
 
         private void ApplyDarkWindowChrome()

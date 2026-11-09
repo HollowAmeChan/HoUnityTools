@@ -180,6 +180,8 @@ namespace HoFace.Studio
         }
         private static string WorkspacePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoFaceStudio", "workspace.json");
+        private string lastValuePath = "";
+        private string lastIrPath = "";
         private void LoadWorkspace()
         {
             if (!persistWorkspace || !File.Exists(WorkspacePath)) return;
@@ -196,11 +198,33 @@ namespace HoFace.Studio
                     UpdateLayout();
                     if (state.TryGetProperty("editorVisible", out var visible)) ShowEditor = visible.GetBoolean();
                 }
+                RestoreLastDocument(state);
             }
             catch (Exception error) when (error is IOException || error is JsonException ||
                 error is InvalidOperationException || error is KeyNotFoundException || error is UnauthorizedAccessException)
             { ResetLayout(); }
         }
+        /// <summary>
+        /// Reopen the pair from the previous session. Only when nothing is open yet, both files
+        /// still exist, and the pair still parses; a missing or broken pair is ignored silently so
+        /// a moved file never blocks startup.
+        /// </summary>
+        private void RestoreLastDocument(JsonElement state)
+        {
+            if (document.Value != null) return;
+            lastValuePath = ReadWorkspacePath(state, "valuePath") ?? "";
+            lastIrPath = ReadWorkspacePath(state, "irPath") ?? "";
+            if (lastValuePath.Length == 0 || lastIrPath.Length == 0) return;
+            if (!File.Exists(lastValuePath) || !File.Exists(lastIrPath)) return;
+            try { OpenPaths(lastValuePath, lastIrPath); }
+            catch (Exception error) when (error is IOException || error is JsonException ||
+                error is InvalidOperationException || error is UnauthorizedAccessException ||
+                error is FormatException || error is ArgumentException)
+            { /* 文件被删/改坏时保持"未打开作品"，不打断启动。 */ }
+        }
+        private static string ReadWorkspacePath(JsonElement state, string name) =>
+            state.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String
+                ? element.GetString() : null;
         private void SaveWorkspace()
         {
             if (!persistWorkspace) return;
@@ -208,12 +232,19 @@ namespace HoFace.Studio
             {
                 double total = PlotColumn.ActualWidth + InspectorColumn.ActualWidth;
                 if (total <= 0) return;
+                if (document.Value != null)
+                {
+                    lastValuePath = document.ValuePath ?? lastValuePath;
+                    lastIrPath = document.IrPath ?? lastIrPath;
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(WorkspacePath));
                 File.WriteAllText(WorkspacePath, JsonSerializer.Serialize(new
                 {
                     structure = StructureColumn.ActualWidth,
                     plotRatio = ShowEditor ? PlotColumn.ActualWidth / total : preferredPlotRatio,
-                    editorVisible = ShowEditor
+                    editorVisible = ShowEditor,
+                    valuePath = lastValuePath,
+                    irPath = lastIrPath
                 }));
             }
             catch (IOException) { }
