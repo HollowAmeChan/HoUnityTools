@@ -151,6 +151,9 @@ foreach ($side in @('Left', 'Right')) {
     Near (EyelidSum (Sample $profile $graph $rawWink).weights $side '紧闭') 0 "The $side eyelid Gate is preserved"
     $smile = Sample $profile $graph @{ "EyeBlink$side" = 0.47; "EyeSquint$side" = 0.103 }
     Check ($smile.values["Eye/$side/Open"] -lt 0.05 -and $smile.values["Eye/$side/Emotion"] -gt 0.05) 'Old smile-squint baseline must not turn into a blink.'
+    Near (Sample $profile $graph @{ "EyeSquint$side" = 0.34 }).values["Eye/$side/Emotion"] 1 "A full $side squint smile saturates the happy axis"
+    Near (Sample $profile $graph @{ "EyeSquint$side" = 0.34 }).weights["HO-眼情感-喜悦睁眼$side"] 1 "The happy $side eye pose is fully selected"
+    Near (Sample $profile $graph @{ "EyeSquint$side" = 0.06 }).values["Eye/$side/Emotion"] 0 'The resting squint stays neutral'
     $wideOnly = Sample $profile $graph @{ "EyeWide$side" = 1 }
     Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
     Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"

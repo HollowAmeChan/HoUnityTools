@@ -24,6 +24,10 @@ ANGER_INPUT = "AngerEnabled"
 # 所以曲线先压掉 0.12 的死区，再从 0.12 线性到 0.30 = 满档。
 EYE_WIDE_DEAD = 0.12
 EYE_WIDE_FULL = 0.40
+# 眯眼（笑眼证据）也一样：VTS 的 eyeSquint 峰值只有 0.34（203 帧实测），
+# 直接当 0…1 用的话喜悦轴永远只走三分之一；0.06 以下是静息，0.28 以上算笑满。
+EYE_SMILE_DEAD = 0.06
+EYE_SMILE_FULL = 0.28
 # 睁大眼只在眼睛真要闭上时才让位：blink 0.20 以下全给，0.50 归零。
 # 旧的 (0.48-blink)/0.48 在静息 blink≈0.19 时就已经砍掉四成，主动睁大永远到不了满档。
 EYE_WIDE_GATE_START = 0.20
@@ -390,13 +394,17 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         )
         # 这两行原本按旧刻度（半闭 = 1）写的：半闭以前等于"已闭"，现在缩到 0.5。
         emotion["expression"] = (
-            f'clamp({squint} * clamp((0.5 - out("{axis}")) / 0.5, 0, 1) '
+            f'clamp(clamp(({squint} - {EYE_SMILE_DEAD:g}) / {EYE_SMILE_FULL - EYE_SMILE_DEAD:g}, 0, 1) '
+            f'* clamp((0.5 - out("{axis}")) / 0.5, 0, 1) '
             '- max(-out("Mouth/Emotion"), 0) '
             f'- (1 - out("{ANGER_GATE}")) * clamp((browDown{side} - 0.45) / 0.15, 0, 1), -1, 1)'
         )
         emotion["notes"] = (
-            "−1 悲伤，0 常态，1 喜悦。闭到一半就衰减同侧 Squint 的假笑证据；"
-            "嘴部悲伤照常叠加；愤怒开关关着时，同侧皱眉按悲伤算（Live2D 的优先级）。"
+            "−1 悲伤，0 常态，1 喜悦。眯眼证据按实测标定："
+            f"{EYE_SMILE_DEAD:g} 以下当 0（静息也在那里），{EYE_SMILE_FULL:g} 以上算笑满"
+            "（VTS 的 eyeSquint 峰值只有 0.34，直接当 0…1 用永远拉不满）。"
+            "闭到一半就衰减同侧眯眼的假笑证据；嘴部悲伤照常叠加；"
+            "愤怒开关关着时，同侧皱眉按悲伤算（Live2D 的优先级）。"
         )
         anger["expression"] = (
             f'out("{ANGER_GATE}") * clamp((browDown{side} - 0.45) / 0.15, 0, 1) * '
