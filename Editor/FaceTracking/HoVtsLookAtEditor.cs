@@ -64,6 +64,8 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 EditorGUILayout.HelpBox("编辑模式只更新 Gizmo 里的眼球目标朝向；进入 Play 模式后才会真正驱动眼球。", MessageType.Info);
 
             Field("headEnabled", "控制头部");
+            using (new EditorGUI.DisabledScope(!(serializedObject.FindProperty("headEnabled")?.boolValue ?? false)))
+                Field("headWeight", "头部转动强度", "0 = 头完全不跟 VTS 转，1 = 全量；和上身摆动强度同一含义。");
             Field("upperBodyEnabled", "上身摆动");
             using (new EditorGUI.DisabledScope(!(serializedObject.FindProperty("upperBodyEnabled")?.boolValue ?? false)))
                 Field("upperBodyWeight", "上身摆动强度");

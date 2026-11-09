@@ -88,6 +88,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private float previewYaw;
         [SerializeField] private float previewPitch;
         [SerializeField] private bool headEnabled = true;
+        [SerializeField, Range(0f, 1f)] private float headWeight = 1f;
         [SerializeField] private bool upperBodyEnabled;
         [SerializeField, Range(0f, 1f)] private float upperBodyWeight = .25f;
         [SerializeField] private bool eyesEnabled = true;
@@ -137,6 +138,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float PreviewYaw => previewYaw;
         public float PreviewPitch => previewPitch;
         public bool HeadEnabled { get => headEnabled; set => headEnabled = value; }
+        public float HeadWeight { get => headWeight; set => headWeight = Mathf.Clamp01(value); }
         public bool UpperBodyEnabled { get => upperBodyEnabled; set => upperBodyEnabled = value; }
         public float UpperBodyWeight { get => upperBodyWeight; set => upperBodyWeight = Mathf.Clamp01(value); }
         public bool EyesEnabled { get => eyesEnabled; set => eyesEnabled = value; }
@@ -187,7 +189,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             float dt = float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) ? 0 : Mathf.Max(0, deltaTime);
             float blend = smoothingSeconds > 0 ? 1 - Mathf.Exp(-dt / smoothingSeconds) : 1;
             Quaternion frame = referenceFrame.rotation;
-            bool written = Apply(headState, headEnabled, "Rotation_x", "Rotation_y", "Rotation_z", frame, blend, false);
+            bool written = Apply(headState, headEnabled, "Rotation_x", "Rotation_y", "Rotation_z", frame, blend, false, headWeight);
             written |= ApplyBody(frame, blend);
             written |= ApplyEyes(frame, blend);
             UpdateStatus(written);
@@ -216,7 +218,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 rightEyeActualRotation = rightEye != null ? rightEye.rotation : Quaternion.identity
             };
             Quaternion frame = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
-            debug.headTargetRotation = ReadPoseTarget(frame, "Rotation_x", "Rotation_y", "Rotation_z", false);
+            debug.headTargetRotation = ReadPoseTarget(frame, "Rotation_x", "Rotation_y", "Rotation_z", false, headWeight);
             if (headState != null) debug.headTargetRotation = headState.TargetRotation(frame);
             debug.leftEyeTargetRotation = EyeDebugTarget(frame, leftEye, leftBoneCalibration, leftState, "EyeLeft_x", "EyeLeft_y", "EyeLeft_z");
             debug.rightEyeTargetRotation = EyeDebugTarget(frame, rightEye, rightBoneCalibration, rightState, "EyeRight_x", "EyeRight_y", "EyeRight_z");
@@ -246,11 +248,13 @@ namespace Hollow.HoUnityTools.FaceTracking
         private static Quaternion LocalToWorld(Transform target, Quaternion local)
             => (target.parent != null ? target.parent.rotation : Quaternion.identity) * local;
 
-        private Quaternion ReadPoseTarget(Quaternion frame, string x, string y, string z, bool eye)
+        private Quaternion ReadPoseTarget(Quaternion frame, string x, string y, string z, bool eye, float weight = 1f)
         {
             if (parameterReceiver == null || !Read(x, out float vx) || !Read(y, out float vy) || !Read(z, out float vz))
                 return frame;
             Quaternion delta = PoseRotation(vx, vy, vz, eye);
+            float w = Mathf.Clamp01(weight);
+            if (w < 1f) delta = Quaternion.Slerp(Quaternion.identity, delta, w);
             return frame * delta * Quaternion.Inverse(frame);
         }
 
@@ -343,14 +347,18 @@ namespace Hollow.HoUnityTools.FaceTracking
         private bool Read(string key, out float value) => parameterReceiver.TryGet(key, out value);
 
         private bool Apply(RotationState state, bool drive, string x, string y, string z,
-            Quaternion frame, float blend, bool eye)
+            Quaternion frame, float blend, bool eye, float weight)
         {
             if (state == null) return false;
             if (!drive) { state.Release(); return false; }
             if (parameterReceiver.Tracked)
             {
                 if (Read(x, out float vx) && Read(y, out float vy) && Read(z, out float vz))
-                    state.Sample(PoseRotation(vx, vy, vz, eye));
+                {
+                    Quaternion pose = PoseRotation(vx, vy, vz, eye);
+                    float w = Mathf.Clamp01(weight);
+                    state.Sample(w >= 1f ? pose : Quaternion.Slerp(Quaternion.identity, pose, w));
+                }
             }
             else state.ReturnToNeutral();
             return state.Apply(frame, blend);
