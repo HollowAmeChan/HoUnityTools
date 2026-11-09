@@ -42,6 +42,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
         private bool tracked;
         private bool inputExpired;
+        private bool lossActive;
         private double lastFrameTime = -1.0;
         private string source = string.Empty;
 
@@ -91,6 +92,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         public bool Tracked => tracked;
+        /// <summary>
+        /// 只要收到过帧就为 true。丢追时保留这个“中性空帧”，让 LookAt 等消费者能用
+        /// 自己的 smoothingSeconds 平滑回中，而不是因为 HasFrame 变 false 直接 Stop 硬回。
+        /// </summary>
         public bool HasFrame => lastFrameTime >= 0;
         public bool InputExpired => inputExpired;
         public double LastFrameTime => lastFrameTime;
@@ -132,7 +137,10 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public void HoVtsReleaseInput(object owner)
         {
-            if (owner is string name && name == Source) ClearFrame();
+            if (!(owner is string name) || name != Source) return;
+            // 输入适配器主动停止也按丢追处理，让骨骼/瞳孔平滑回中。
+            if (HasFrame) EnterLoss(-1.0, true);
+            else ClearFrame();
         }
 
         /// <summary>Assign the reusable JSON profile used by this role.</summary>
@@ -247,11 +255,12 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             if (!faceTracked)
             {
-                // Keep the raw packet for diagnosis, but invalidate the frame so
-                // consumers stop writing bones instead of fighting the host pose.
-                ClearFrame(clearRaw: false);
+                // 保留 raw 包用于诊断；处理值清空，但不要清 lastFrameTime。
+                // 消费者看到 Tracked=false + HasFrame=true，就能用自己的平滑回中。
+                EnterLoss(timestamp, false);
                 return;
             }
+            lossActive = false;
             EvaluateAt(timestamp);
         }
 
@@ -267,9 +276,17 @@ namespace Hollow.HoUnityTools.FaceTracking
             if (!HasFrame || now <= lastEvaluationTime || now < lastFrameTime) return false;
             float timeout = inputTimeoutSeconds > 0 && !float.IsNaN(inputTimeoutSeconds) && !float.IsInfinity(inputTimeoutSeconds)
                 ? inputTimeoutSeconds : 1f;
-            if (now - lastFrameTime > timeout)
+            bool timedOut = now - lastFrameTime > timeout;
+            if (lossActive)
             {
-                ClearFrame(clearRaw: false, expired: true);
+                // 已经在中性空帧上：只更新超时标记，不重新求值、也不清掉 HasFrame。
+                if (timedOut) inputExpired = true;
+                return false;
+            }
+            if (timedOut)
+            {
+                // 输入完全静默也走同一条丢追路径：保留空帧，让消费者平滑回中。
+                EnterLoss(-1.0, true);
                 return true;
             }
             EvaluateAt(now);
@@ -300,6 +317,27 @@ namespace Hollow.HoUnityTools.FaceTracking
             Replace(values, valueIndices, processed);
         }
 
+        /// <summary>
+        /// 丢追/静默：标记 untracked、清空处理值，但保留 lastFrameTime，使 HasFrame 仍为 true。
+        /// 这样 LookAt 能看到“有帧但没追踪”，用自己的 smoothingSeconds 平滑回中；
+        /// IR 等消费者仍按 Tracked=false 走各自的释放路径。
+        /// </summary>
+        private void EnterLoss(double frameTime, bool expired)
+        {
+            EnsureTables();
+            tracked = false;
+            inputExpired = expired;
+            lossActive = true;
+            values.Clear();
+            valueIndices.Clear();
+            if (frameTime >= 0.0)
+            {
+                lastFrameTime = frameTime;
+                lastEvaluationTime = frameTime;
+            }
+            evaluatedUnityFrame = Time.frameCount;
+        }
+
         /// <summary>Clear values and mark the receiver untracked without destroying the component.</summary>
         public void ClearFrame(bool clearRaw = true, bool expired = false)
         {
@@ -313,6 +351,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             valueIndices.Clear();
             tracked = false;
             inputExpired = expired;
+            lossActive = false;
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;
