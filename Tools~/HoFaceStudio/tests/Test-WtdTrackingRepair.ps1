@@ -155,7 +155,11 @@ foreach ($side in @('Left', 'Right')) {
     Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
     Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"
     Near (Sample $profile $graph @{ "EyeWide$side" = 0.6 }).values["Eye/$side/Open"] -0.2 "A deliberate $side widen at the measured top reaches the wide end"
-    Near (Sample $profile $graph @{ "EyeWide$side" = 0.3 }).values["Eye/$side/Open"] -0.1 "Half of the calibrated widen covers half the band"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.5 }).values["Eye/$side/Open"] -0.2 "The calibrated full point already saturates"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.25 }).values["Eye/$side/Open"] -0.1 "Half of the calibrated widen covers half the band"
+    $wideOn = (Sample $profile $graph @{ "EyeWide$side" = 0.6; "EyeBlink$side" = 0.19 }).values["Eye/$side/Open"]
+    $wideOff = (Sample $profile $graph @{ "EyeWide$side" = 0; "EyeBlink$side" = 0.19 }).values["Eye/$side/Open"]
+    Near ($wideOn - $wideOff) -0.2 "A resting blink must not eat the wide contribution"
     $closedWide = Sample $profile $graph @{ "EyeBlink$side" = 1; "EyeWide$side" = 1 }
     Near $closedWide.values["Eye/$side/Open"] 1 'Wide cannot reopen a closed eye'
     Near $closedWide.weights["HO-眼情感-常态紧闭$side"] 1 'A closed eye stays closed with a wide input'

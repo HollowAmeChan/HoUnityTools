@@ -20,8 +20,12 @@ EYE_OLD_TO_NEW = {-1.0: EYE_WIDE_END, 1.0: EYE_HALF, 2.0: EYE_CLOSED}
 ANGER_GATE = "Gate/Anger"
 ANGER_INPUT = "AngerEnabled"
 # 2026-11-09 实机采样（对着手机瞪三次，90 秒 180 帧）：eyeWide 峰值 0.681，
-# 普通睁大约 0.36~0.49，静息 p90 只有 0.19。所以 0.60 就算“满档睁大”。
-EYE_WIDE_FULL = 0.60
+# 第二次实测只到 0.6 左右，静息 p90 只有 0.19 ⇒ 0.50 就算满档睁大。
+EYE_WIDE_FULL = 0.50
+# 睁大眼只在眼睛真要闭上时才让位：blink 0.20 以下全给，0.50 归零。
+# 旧的 (0.48-blink)/0.48 在静息 blink≈0.19 时就已经砍掉四成，主动睁大永远到不了满档。
+EYE_WIDE_GATE_START = 0.20
+EYE_WIDE_GATE_END = 0.50
 DETAIL_ROOT = "graph.eye.details"
 DETAIL_GATE = "Gate/EyeDetails"
 EYE_EFFECT_PREFIXES = ("Pupil/", "Iris/", "Highlight1/", "Highlight2/")
@@ -356,7 +360,7 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
             f"clamp(max({blink} - 3.9 * {squint} - 0.06, "
             f"({blink} - {blink_floor:g}) / {blink_full - blink_floor:g}), 0, 1) "
             f"- {abs(EYE_WIDE_END):g} * clamp({wide}, 0, 1) "
-            f"* clamp(({blink_floor:g} - {blink}) / {blink_floor:g}, 0, 1)"
+            f"* clamp(({EYE_WIDE_GATE_END:g} - {blink}) / {EYE_WIDE_GATE_END - EYE_WIDE_GATE_START:g}, 0, 1)"
         )
         opened["curve"] = {"keys": [
             {"t": EYE_WIDE_END, "v": EYE_WIDE_END, "inT": 1, "outT": 1},
