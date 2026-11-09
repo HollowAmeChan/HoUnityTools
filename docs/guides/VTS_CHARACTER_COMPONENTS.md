@@ -9,6 +9,7 @@
 1. 在场景或预制件编辑模式中选择角色根物体，执行 **HoUnityTools → 面捕 → 为选中角色创建 VTS 组件**。
 2. 新建的 `HoVTS` 物体挂接收器；其子物体挂 `HoVtsIrController` 与 `HoVtsLookAt`。一键创建会把角色根物体下已有形态键网格预填到 IR 的“驱动网格”列表；列表仍可手动增删。[VTS 果冻眼](VTS_JELLY_EYE.md) 可作为同级子物体手动添加，瞳孔与各层高光分别配置一个组件。已有组件时工具会停止，直接编辑现有组件即可。创建支持 Undo。
 3. 在接收器引用可复用的 value JSON，在 `HoVtsIrController` 引用 IR JSON。IR 只输出形态键名与权重；组件只写列表内所有网格上的同名键，缺键跳过，不扫描运行时场景。旧 `HoVtsController` 只作为迁移兼容。
+   - ⚠️ `HoVtsLookAt` 读的是接收器发布的**输出**参数，不是 raw：`Rotation_x/y/z`、`EyeLeft_x/y/z`、`EyeRight_x/y/z`（`Position_*` 备用）必须是 value 文档里的**输出行**。迁移时如果只留下同名输入行，LookAt 会一条都读不到、表现为“组件失效”。`repair_wtd_tracking.py` 会补这 12 条透传行（x / z 沿用旧 profile 的取反约定）。
 4. 需要 Unity 作者预览时，在 Play 模式挂 `HoFaceStudioRawInput`，HoFaceStudio 发送 raw；Unity 侧 value、LookAt 和其他消费者继续运行。
 5. 保存预制件，两个 JSON 和运行组件引用随正常 Character Mod 打包。
 

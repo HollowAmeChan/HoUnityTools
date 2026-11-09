@@ -19,6 +19,15 @@ EYE_OVER_END = 1.2
 EYE_OLD_TO_NEW = {-1.0: EYE_WIDE_END, 1.0: EYE_HALF, 2.0: EYE_CLOSED}
 ANGER_GATE = "Gate/Anger"
 ANGER_INPUT = "AngerEnabled"
+# LookAt 读的是接收器发布的**输出**参数（Rotation_x/y/z、Eye*_x/y/z），不是 raw。
+# 迁移过来的 value 文档只留了这些名字的输入行，于是 HoVtsLookAt 一条都读不到。
+# x / z 取反沿用旧 profile 的符号约定，±180 曲线是旧行的原样值域。
+HEAD_POSE_ROWS = (
+    ("Rotation_x", "-Rotation_x"), ("Rotation_y", "Rotation_y"), ("Rotation_z", "-Rotation_z"),
+    ("Position_x", "Position_x"), ("Position_y", "Position_y"), ("Position_z", "Position_z"),
+    ("EyeLeft_x", "EyeLeft_x"), ("EyeLeft_y", "EyeLeft_y"), ("EyeLeft_z", "EyeLeft_z"),
+    ("EyeRight_x", "EyeRight_x"), ("EyeRight_y", "EyeRight_y"), ("EyeRight_z", "EyeRight_z"),
+)
 # 2026-11-09 实机采样（90 秒 180 帧）：eyeWide 峰值 0.681；但 Studio 里读到 0.6 的“输入”
 # 是**曲线之后**的值，对应原值 0.30。静息原值就有 0.10 左右（会直接让眼睛挂着 35% 宽），
 # 所以曲线先压掉 0.12 的死区，再从 0.12 线性到 0.30 = 满档。
@@ -217,6 +226,31 @@ def repair_wide_calibration(value):
         )
 
 
+def repair_head_pose(value):
+    """Publish the head/eye pose channels HoVtsLookAt consumes.
+
+    The receiver hands consumers its *output* parameters; the migrated document only kept
+    the raw pose channels as inputs, so the LookAt component had nothing to read and stopped
+    driving the head. These rows pass the calibrated input values through unchanged.
+    """
+    rows = value["outputs"]
+    have = {row["parameter"] for row in rows}
+    for name, expression in HEAD_POSE_ROWS:
+        if name in have:
+            continue
+        rows.append({
+            "parameter": name,
+            "expression": expression,
+            "defaultValue": 0,
+            "notes": "LookAt 消费的姿态通道；原样透传（x / z 取反沿用旧 profile 的符号约定）。",
+            "curve": {"keys": [
+                {"t": -180, "v": -180, "inT": 1, "outT": 1},
+                {"t": 180, "v": 180, "inT": 1, "outT": 1},
+            ]},
+            "modifiers": [],
+        })
+
+
 def repair_anger_gate(value):
     """Sadness owns the brow; anger only happens behind a manual switch (Live2D habit).
 
@@ -343,6 +377,7 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
     by_name = {row["parameter"]: row for row in rows}
     repair_anger_gate(value)
     repair_wide_calibration(value)
+    repair_head_pose(value)
     by_name = {row["parameter"]: row for row in value["outputs"]}
     width = by_name["Mouth/Width"]
     target_width = "2 * (mouthDimpleLeft + mouthDimpleRight) - mouthPucker"

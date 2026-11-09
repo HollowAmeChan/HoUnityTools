@@ -70,7 +70,9 @@ $retiredShapes = '^HO-(瞳孔|眼仁|高光)'
 $eyeOrWidth = '^(HO-眼情感-|HO-嘴宽-|HO-脸颊-|HO-嘴位置-|HO-下巴位置-)'
 $changed = @('Mouth/Width', 'Eye/Left/Open', 'Eye/Left/Emotion', 'Eye/Left/Anger',
     'Eye/Right/Open', 'Eye/Right/Emotion', 'Eye/Right/Anger',
-    'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove', 'Gate/Anger')
+    'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove', 'Gate/Anger',
+    'Rotation_x', 'Rotation_y', 'Rotation_z', 'Position_x', 'Position_y', 'Position_z',
+    'EyeLeft_x', 'EyeLeft_y', 'EyeLeft_z', 'EyeRight_x', 'EyeRight_y', 'EyeRight_z')
 $authoredLateral = @('graph.mouth.move', 'graph.jaw', 'graph.cheek.left', 'graph.cheek.right',
     'graph.eye.left.main', 'graph.eye.right.main', 'graph.eye.left.anger', 'graph.eye.right.anger')
 Check (@($newValues.inputs | Where-Object { $_.parameter -match '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' }).Count -eq 0) 'Eye detail inputs remain.'
