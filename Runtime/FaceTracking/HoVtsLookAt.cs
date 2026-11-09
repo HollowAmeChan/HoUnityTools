@@ -105,7 +105,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly List<Mesh> boundEyeKeyMeshes = new List<Mesh>();
         private readonly List<string> boundEyeKeyNames = new List<string>();
         private readonly float[] eyeKeyWeights = new float[8];
-        private bool eyeKeyBindingsLoaded, eyeKeyWeightsValid;
+        private readonly float[] eyeKeyTargetWeights = new float[8];
+        private bool eyeKeyBindingsLoaded, eyeKeyWeightsValid, eyeKeyWeightsPrimed;
         private string eyeKeyBindingError;
         private Transform resolvedReference;
         private HoVtsParameterReceiver resolvedReceiver;
@@ -168,12 +169,14 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             // Warudo writes its humanoid pose after ordinary MonoBehaviour
             // LateUpdate. Re-apply our sampled pose immediately before rendering.
+            // 只重放本帧在 LateUpdate 里已经平滑过的 offset；这里若用 blend=1，
+            // 每帧渲染前都会直接贴到目标值，smoothingSeconds 就等于失效。
             Quaternion frame = referenceFrame.rotation;
             bool written = false;
-            if (headEnabled) written |= headState != null && headState.Apply(frame, 1f);
+            if (headEnabled) written |= headState != null && headState.Apply(frame, 0f);
             if (upperBodyEnabled && upperBodyStates != null)
-                foreach (var state in upperBodyStates) written |= state.Apply(frame, 1f);
-            written |= ApplyEyes(frame, 1f);
+                foreach (var state in upperBodyStates) written |= state.Apply(frame, 0f);
+            written |= ApplyEyes(frame, 0f);
             if (written) UpdateStatus(true);
         }
         public bool EvaluateNow() => EvaluateNow(Time.deltaTime);
@@ -355,7 +358,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private bool ApplyEyes(Quaternion frame, float blend)
         {
-            if (eyeDriver == HoVtsEyeDriver.ShapeKey) return ApplyEyeShapeKeys();
+            if (eyeDriver == HoVtsEyeDriver.ShapeKey) return ApplyEyeShapeKeys(blend);
             bool preview = previewCalibration && Application.isPlaying;
             bool written = false;
             written |= ApplyEyeBone(leftState, leftBoneCalibration, "EyeLeft_x", "EyeLeft_y", "EyeLeft_z", frame, blend, preview);
@@ -418,28 +421,58 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// <summary>
         /// 形态键模式求值。每侧四个键的方向权重与骨骼模式同一朝向：left 取 max(0,-yn)、
         /// right 取 max(0,yn)、up 取 max(0,pn)、down 取 max(0,-pn)。
+        /// 和骨骼模式共用 smoothingSeconds：先算目标权重，再让当前权重按 blend 追赶。
         /// </summary>
-        private bool ApplyEyeShapeKeys()
+        private bool ApplyEyeShapeKeys(float blend)
         {
             if (!eyesEnabled) { ResetEyeKeyWeights(); return false; }
             if (eyeKeyBindings.Count == 0) return false;
+
+            bool hasTarget;
             if (previewCalibration && Application.isPlaying)
             {
                 SetEyeKeyWeight(0, previewYaw, previewPitch);
                 SetEyeKeyWeight(1, previewYaw, previewPitch);
-                return WriteEyeKeyWeights();
+                hasTarget = true;
             }
-            if (!parameterReceiver.Tracked)
+            else if (!parameterReceiver.Tracked)
             {
-                ResetEyeKeyWeights();
-                return true;
+                // 丢追回中性：目标写 0，但仍按 smoothingSeconds 收回去。
+                ClearEyeKeyTarget();
+                hasTarget = true;
             }
-            if (!Read("EyeLeft_x", out float leftYaw) || !Read("EyeLeft_y", out float leftPitch)
+            else if (!Read("EyeLeft_x", out float leftYaw) || !Read("EyeLeft_y", out float leftPitch)
                 || !Read("EyeRight_x", out float rightYaw) || !Read("EyeRight_y", out float rightPitch))
-                return eyeKeyWeightsValid;
-            SetEyeKeyWeight(0, leftYaw, leftPitch);
-            SetEyeKeyWeight(1, rightYaw, rightPitch);
-            return WriteEyeKeyWeights();
+            {
+                // 参数不完整时保持上一次的目标和当前值，和骨骼路径一致。
+                if (!eyeKeyWeightsValid) return false;
+                hasTarget = false;
+            }
+            else
+            {
+                SetEyeKeyWeight(0, leftYaw, leftPitch);
+                SetEyeKeyWeight(1, rightYaw, rightPitch);
+                hasTarget = true;
+            }
+
+            if (hasTarget)
+            {
+                eyeKeyWeightsValid = true;
+                if (!eyeKeyWeightsPrimed)
+                {
+                    Array.Copy(eyeKeyTargetWeights, eyeKeyWeights, eyeKeyWeights.Length);
+                    eyeKeyWeightsPrimed = true;
+                }
+                else
+                {
+                    float t = Mathf.Clamp01(blend);
+                    for (int i = 0; i < eyeKeyWeights.Length; i++)
+                        eyeKeyWeights[i] = Mathf.Lerp(eyeKeyWeights[i], eyeKeyTargetWeights[i], t);
+                }
+            }
+
+            WriteEyeKeyWeights();
+            return true;
         }
 
         private void SetEyeKeyWeight(int side, float yaw, float pitch)
@@ -448,30 +481,38 @@ namespace Hollow.HoUnityTools.FaceTracking
             float yn = Mathf.Clamp(yaw / full, -1f, 1f);
             float pn = Mathf.Clamp(pitch / full, -1f, 1f);
             int index = side * 4;
-            eyeKeyWeights[index] = EyeKeyWeight(Mathf.Max(0f, -yn));
-            eyeKeyWeights[index + 1] = EyeKeyWeight(Mathf.Max(0f, yn));
-            eyeKeyWeights[index + 2] = EyeKeyWeight(Mathf.Max(0f, pn));
-            eyeKeyWeights[index + 3] = EyeKeyWeight(Mathf.Max(0f, -pn));
+            eyeKeyTargetWeights[index] = EyeKeyWeight(Mathf.Max(0f, -yn));
+            eyeKeyTargetWeights[index + 1] = EyeKeyWeight(Mathf.Max(0f, yn));
+            eyeKeyTargetWeights[index + 2] = EyeKeyWeight(Mathf.Max(0f, pn));
+            eyeKeyTargetWeights[index + 3] = EyeKeyWeight(Mathf.Max(0f, -pn));
+        }
+
+        private void ClearEyeKeyTarget()
+        {
+            for (int i = 0; i < eyeKeyTargetWeights.Length; i++) eyeKeyTargetWeights[i] = 0f;
         }
 
         private float EyeKeyWeight(float normalized) => Mathf.Clamp(normalized * keyWeightScale, 0f, 100f);
 
-        private bool WriteEyeKeyWeights()
+        private void WriteEyeKeyWeights()
         {
             for (int i = 0; i < eyeKeyBindings.Count; i++)
             {
                 var binding = eyeKeyBindings[i];
                 binding.Write(eyeKeyWeights[binding.Slot]);
             }
-            eyeKeyWeightsValid = eyeKeyBindings.Count > 0;
-            return eyeKeyWeightsValid;
         }
 
         private void ResetEyeKeyWeights()
         {
-            for (int i = 0; i < eyeKeyWeights.Length; i++) eyeKeyWeights[i] = 0f;
+            for (int i = 0; i < eyeKeyWeights.Length; i++)
+            {
+                eyeKeyWeights[i] = 0f;
+                eyeKeyTargetWeights[i] = 0f;
+            }
             for (int i = 0; i < eyeKeyBindings.Count; i++) eyeKeyBindings[i].Reset();
             eyeKeyWeightsValid = false;
+            eyeKeyWeightsPrimed = false;
         }
 
         /// <summary>只在网格/键名变化时重建绑定；每帧只做引用比较，不调用 GetBlendShapeIndex。</summary>
@@ -543,9 +584,14 @@ namespace Hollow.HoUnityTools.FaceTracking
             boundEyeKeyRenderers.Clear();
             boundEyeKeyMeshes.Clear();
             boundEyeKeyNames.Clear();
-            for (int i = 0; i < eyeKeyWeights.Length; i++) eyeKeyWeights[i] = 0f;
+            for (int i = 0; i < eyeKeyWeights.Length; i++)
+            {
+                eyeKeyWeights[i] = 0f;
+                eyeKeyTargetWeights[i] = 0f;
+            }
             eyeKeyBindingsLoaded = false;
             eyeKeyWeightsValid = false;
+            eyeKeyWeightsPrimed = false;
             eyeKeyBindingError = null;
         }
 
