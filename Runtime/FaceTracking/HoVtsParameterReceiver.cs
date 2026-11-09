@@ -40,9 +40,14 @@ namespace Hollow.HoUnityTools.FaceTracking
         [NonSerialized] private HoFaceMiddleware middleware = new HoFaceMiddleware();
         [SerializeField] private TextAsset profileAsset;
         [SerializeField, Min(0.01f)] private float inputTimeoutSeconds = 1f;
+        [SerializeField, Min(0f)] private float lossSmoothingSeconds = .3f;
         private bool tracked;
         private bool inputExpired;
         private bool lossActive;
+        private bool lossFading;
+        private double lossFadeStart;
+        private readonly Dictionary<string, float> lossFadeFrom = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> lossFadeTo = new Dictionary<string, float>(StringComparer.Ordinal);
         private double lastFrameTime = -1.0;
         private string source = string.Empty;
 
@@ -93,11 +98,13 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         public bool Tracked => tracked;
         /// <summary>
-        /// 只要收到过帧就为 true。丢追时保留这个“中性空帧”，让 LookAt 等消费者能用
-        /// 自己的 smoothingSeconds 平滑回中，而不是因为 HasFrame 变 false 直接 Stop 硬回。
+        /// 只要收到过帧就为 true。丢追时保留这个“中性空帧”，让消费者能平滑回中，
+        /// 而不是因为 HasFrame 变 false 直接 Stop 硬回。
         /// </summary>
         public bool HasFrame => lastFrameTime >= 0;
         public bool InputExpired => inputExpired;
+        /// <summary>正在把全部参数淡到 profile 默认值；此期间 Tracked 仍为 true，下游照常消费。</summary>
+        public bool LossFading => lossFading;
         public double LastFrameTime => lastFrameTime;
         public string Source => source ?? string.Empty;
         public int RawCount => rawValues != null ? rawValues.Count : 0;
@@ -115,6 +122,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                     throw new ArgumentOutOfRangeException(nameof(value));
                 inputTimeoutSeconds = value;
             }
+        }
+        public float LossSmoothingSeconds
+        {
+            get => lossSmoothingSeconds;
+            set => lossSmoothingSeconds = float.IsNaN(value) || float.IsInfinity(value) ? .3f : Mathf.Max(0f, value);
         }
 
         // Unity messages deliberately use only Unity/BCL types. Character and input-adapter
@@ -138,8 +150,8 @@ namespace Hollow.HoUnityTools.FaceTracking
         public void HoVtsReleaseInput(object owner)
         {
             if (!(owner is string name) || name != Source) return;
-            // 输入适配器主动停止也按丢追处理，让骨骼/瞳孔平滑回中。
-            if (HasFrame) EnterLoss(-1.0, true);
+            // 输入适配器主动停止也按丢追处理，让全部参数平滑回默认值。
+            if (HasFrame) BeginLoss(Time.realtimeSinceStartupAsDouble, false, true);
             else ClearFrame();
         }
 
@@ -255,12 +267,11 @@ namespace Hollow.HoUnityTools.FaceTracking
 
             if (!faceTracked)
             {
-                // 保留 raw 包用于诊断；处理值清空，但不要清 lastFrameTime。
-                // 消费者看到 Tracked=false + HasFrame=true，就能用自己的平滑回中。
-                EnterLoss(timestamp, false);
+                // VTS 的 tracked=false：开始把全部参数淡到 profile 默认值。
+                BeginLoss(timestamp, true, false);
                 return;
             }
-            lossActive = false;
+            CancelLoss();
             EvaluateAt(timestamp);
         }
 
@@ -273,20 +284,25 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (double.IsNaN(now) || double.IsInfinity(now) || now < 0)
                 throw new ArgumentOutOfRangeException(nameof(now));
+            if (lossFading)
+            {
+                AdvanceLossFade(now);
+                return true;
+            }
             if (!HasFrame || now <= lastEvaluationTime || now < lastFrameTime) return false;
             float timeout = inputTimeoutSeconds > 0 && !float.IsNaN(inputTimeoutSeconds) && !float.IsInfinity(inputTimeoutSeconds)
                 ? inputTimeoutSeconds : 1f;
             bool timedOut = now - lastFrameTime > timeout;
             if (lossActive)
             {
-                // 已经在中性空帧上：只更新超时标记，不重新求值、也不清掉 HasFrame。
+                // 淡出已结束：只更新超时标记，不重新求值、也不清掉 HasFrame。
                 if (timedOut) inputExpired = true;
                 return false;
             }
             if (timedOut)
             {
-                // 输入完全静默也走同一条丢追路径：保留空帧，让消费者平滑回中。
-                EnterLoss(-1.0, true);
+                // 输入完全静默也走同一条丢追路径：先把全部参数淡到默认值。
+                BeginLoss(now, false, true);
                 return true;
             }
             EvaluateAt(now);
@@ -318,16 +334,97 @@ namespace Hollow.HoUnityTools.FaceTracking
         }
 
         /// <summary>
-        /// 丢追/静默：标记 untracked、清空处理值，但保留 lastFrameTime，使 HasFrame 仍为 true。
-        /// 这样 LookAt 能看到“有帧但没追踪”，用自己的 smoothingSeconds 平滑回中；
-        /// IR 等消费者仍按 Tracked=false 走各自的释放路径。
+        /// 收到丢追信号/输入静默：把当前全部处理值在 lossSmoothingSeconds 内淡到
+        /// profile 的默认值。淡出期间 Tracked 仍为 true，IR / LookAt / Controller 都照常
+        /// 消费这份逐渐归中的参数，所以不需要各组件再各做一套丢追逻辑。
+        /// </summary>
+        private void BeginLoss(double now, bool frameArrived, bool expired)
+        {
+            if (lossFading)
+            {
+                // 淡出期间的重复丢追帧不能把 Tracked 翻回 false，否则下游会停吃这份渐变值。
+                tracked = true;
+                if (frameArrived) lastFrameTime = now;
+                if (expired) inputExpired = true;
+                return;
+            }
+            if (lossActive)
+            {
+                tracked = false;
+                if (frameArrived) lastFrameTime = now;
+                if (expired) inputExpired = true;
+                return;
+            }
+            if (values.Count == 0)
+            {
+                EnterLoss(frameArrived ? now : -1.0, expired);
+                return;
+            }
+
+            lossFadeFrom.Clear();
+            for (int i = 0; i < values.Count; i++)
+                if (!string.IsNullOrEmpty(values[i].key)) lossFadeFrom[values[i].key] = values[i].value;
+
+            lossFadeTo.Clear();
+            HoFaceMiddleware rules = Middleware;
+            if (rules != null && rules.outputs != null)
+                foreach (var output in rules.outputs)
+                    if (output != null && !string.IsNullOrEmpty(output.parameter))
+                        lossFadeTo[output.parameter] = output.defaultValue;
+
+            lossFading = true;
+            lossActive = false;
+            tracked = true;
+            inputExpired = expired;
+            lossFadeStart = now;
+            if (frameArrived) lastFrameTime = now;
+            lastEvaluationTime = now;
+            evaluatedUnityFrame = Time.frameCount;
+            if (lossSmoothingSeconds <= 0f) AdvanceLossFade(now);
+        }
+
+        private void AdvanceLossFade(double now)
+        {
+            float duration = lossSmoothingSeconds;
+            float t = duration <= 0f ? 1f : Mathf.Clamp01((float)((now - lossFadeStart) / duration));
+            float s = t * t * (3f - 2f * t);
+            for (int i = 0; i < values.Count; i++)
+            {
+                HoVtsParameterSlot slot = values[i];
+                lossFadeFrom.TryGetValue(slot.key, out float from);
+                lossFadeTo.TryGetValue(slot.key, out float to);
+                values[i] = new HoVtsParameterSlot(slot.key, Mathf.Lerp(from, to, s));
+            }
+            lastEvaluationTime = now;
+            evaluatedUnityFrame = Time.frameCount;
+            if (t < 1f) return;
+            lossFading = false;
+            lossActive = true;
+            tracked = false;
+            lossFadeFrom.Clear();
+            lossFadeTo.Clear();
+        }
+
+        private void CancelLoss()
+        {
+            lossFading = false;
+            lossActive = false;
+            lossFadeFrom.Clear();
+            lossFadeTo.Clear();
+        }
+
+        /// <summary>
+        /// 没有可淡出的参数时直接进入 untracked 空帧：保留 lastFrameTime，使 HasFrame 仍为 true。
         /// </summary>
         private void EnterLoss(double frameTime, bool expired)
         {
             EnsureTables();
             tracked = false;
             inputExpired = expired;
+            lossFading = false;
             lossActive = true;
+            lossFadeFrom.Clear();
+            lossFadeTo.Clear();
             values.Clear();
             valueIndices.Clear();
             if (frameTime >= 0.0)
@@ -351,7 +448,10 @@ namespace Hollow.HoUnityTools.FaceTracking
             valueIndices.Clear();
             tracked = false;
             inputExpired = expired;
+            lossFading = false;
             lossActive = false;
+            lossFadeFrom.Clear();
+            lossFadeTo.Clear();
             lastFrameTime = -1.0;
             source = string.Empty;
             evaluator = null;

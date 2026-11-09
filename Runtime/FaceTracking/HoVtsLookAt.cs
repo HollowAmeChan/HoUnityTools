@@ -191,7 +191,11 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (!EnsureTargets()) return false;
             float dt = float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) ? 0 : Mathf.Max(0, deltaTime);
-            float blend = smoothingSeconds > 0 ? 1 - Mathf.Exp(-dt / smoothingSeconds) : 1;
+            // 丢追淡出由接收器统一做（lossSmoothingSeconds）；这里直接跟随它的逐帧值，
+            // 不要再叠一层 smoothingSeconds，否则实际丢追时长会变成两段平滑相加。
+            float blend = parameterReceiver.LossFading
+                ? 1f
+                : smoothingSeconds > 0 ? 1 - Mathf.Exp(-dt / smoothingSeconds) : 1;
             Quaternion frame = referenceFrame.rotation;
             bool written = Apply(headState, headEnabled, "Rotation_x", "Rotation_y", "Rotation_z", frame, blend, false, headWeight);
             written |= ApplyBody(frame, blend);
@@ -635,6 +639,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (!written) status = "等待完整姿态参数";
             else if (previewCalibration && Application.isPlaying) status = "预览中";
+            else if (parameterReceiver.LossFading) status = "丢追平滑中";
             else status = parameterReceiver.Tracked ? "运行中" : "丢追回中性";
             if (eyeDriver == HoVtsEyeDriver.ShapeKey && !string.IsNullOrEmpty(eyeKeyBindingError))
                 status += "；" + eyeKeyBindingError;

@@ -128,6 +128,9 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
         {
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("inputTimeoutSeconds"), new GUIContent("输入超时（秒）"));
+            var lossSmoothing = serializedObject.FindProperty("lossSmoothingSeconds");
+            if (lossSmoothing != null)
+                EditorGUILayout.PropertyField(lossSmoothing, new GUIContent("丢追平滑（秒）", "丢追后把所有参数淡到规则默认值的时间；0 = 立即。"));
             var profileProperty = serializedObject.FindProperty("profileAsset");
             EditorGUILayout.PropertyField(profileProperty, new GUIContent("面捕规则 JSON"));
             serializedObject.ApplyModifiedProperties();
@@ -156,7 +159,7 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
                 }
             if (Application.isPlaying)
             {
-                EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");
+                EditorGUILayout.LabelField("状态", !receiver.HasFrame ? "等待输入" : receiver.LossFading ? "丢追平滑中" : receiver.InputExpired ? "输入超时" : receiver.Tracked ? "追踪中" : "未追踪");
                 EditorGUILayout.LabelField("来源", receiver.Source);
                 var rawAdapters = receiver.transform.root.GetComponentsInChildren<HoFaceStudioRawInput>(true);
                 if (rawAdapters.Length == 1)
