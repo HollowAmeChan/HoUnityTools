@@ -164,9 +164,9 @@ foreach ($side in @('Left', 'Right')) {
     Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
     Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"
     Near (Sample $profile $graph @{ "EyeWide$side" = 0.6 }).values["Eye/$side/Open"] -0.2 "A deliberate $side widen at the measured top reaches the wide end"
-    Near (Sample $profile $graph @{ "EyeWide$side" = 0.42 }).values["Eye/$side/Open"] -0.2 "A sustained $side widen saturates too"
-    Near (Sample $profile $graph @{ "EyeWide$side" = 0.26 }).values["Eye/$side/Open"] -0.1 "Half of the calibrated widen covers half the band"
-    Near (Sample $profile $graph @{ "EyeWide$side" = 0.106 }).values["Eye/$side/Open"] 0 'The resting device bias stays out of the wide end'
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.45 }).values["Eye/$side/Open"] -0.2 "A sustained $side widen saturates too"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.265 }).values["Eye/$side/Open"] -0.1 "Half of the calibrated widen covers half the band"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.06 }).values["Eye/$side/Open"] 0 'The resting device bias stays out of the wide end'
     $wideOn = (Sample $profile $graph @{ "EyeWide$side" = 0.6; "EyeBlink$side" = 0.19 }).values["Eye/$side/Open"]
     $wideOff = (Sample $profile $graph @{ "EyeWide$side" = 0; "EyeBlink$side" = 0.19 }).values["Eye/$side/Open"]
     Near ($wideOn - $wideOff) -0.2 "A resting blink must not eat the wide contribution"

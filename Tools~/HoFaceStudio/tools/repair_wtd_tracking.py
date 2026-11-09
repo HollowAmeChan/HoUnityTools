@@ -27,8 +27,10 @@ ANGER_INPUT = "AngerEnabled"
 # 0.80 就算满闭，中间线性。
 EYE_BLINK_DEAD = 0.10
 EYE_BLINK_FULL = 0.80
-EYE_WIDE_DEAD = 0.12
-EYE_WIDE_FULL = 0.40
+# 睁大：静息中位只有 0.036，p75 0.146、p95 0.418、峰值 0.513。死区只压掉静息噪声，
+# 0.08 起算、0.45 满档（一度是 0.12/0.40，低段被吃掉太多，小幅度睁大几乎没反应）。
+EYE_WIDE_DEAD = 0.08
+EYE_WIDE_FULL = 0.45
 # 眯眼（笑眼证据）也一样：VTS 的 eyeSquint 峰值只有 0.34（203 帧实测），
 # 直接当 0…1 用的话喜悦轴永远只走三分之一；0.06 以下是静息，0.28 以上算笑满。
 EYE_SMILE_DEAD = 0.06
