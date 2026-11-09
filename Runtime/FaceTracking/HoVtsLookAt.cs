@@ -89,8 +89,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         [SerializeField] private float previewPitch;
         [SerializeField] private bool headEnabled = true;
         [SerializeField, Range(0f, 1f)] private float headWeight = 1f;
+        [SerializeField, Range(0f, 180f)] private float headMaxAngle = 180f;
         [SerializeField] private bool upperBodyEnabled;
         [SerializeField, Range(0f, 1f)] private float upperBodyWeight = .25f;
+        [SerializeField, Range(0f, 180f)] private float upperBodyMaxAngle = 180f;
         [SerializeField] private bool eyesEnabled = true;
         [SerializeField] private bool autoRun = true;
         [SerializeField, Min(0)] private float smoothingSeconds;
@@ -139,8 +141,10 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float PreviewPitch => previewPitch;
         public bool HeadEnabled { get => headEnabled; set => headEnabled = value; }
         public float HeadWeight { get => headWeight; set => headWeight = Mathf.Clamp01(value); }
+        public float HeadMaxAngle { get => headMaxAngle; set => headMaxAngle = Mathf.Clamp(value, 0f, 180f); }
         public bool UpperBodyEnabled { get => upperBodyEnabled; set => upperBodyEnabled = value; }
         public float UpperBodyWeight { get => upperBodyWeight; set => upperBodyWeight = Mathf.Clamp01(value); }
+        public float UpperBodyMaxAngle { get => upperBodyMaxAngle; set => upperBodyMaxAngle = Mathf.Clamp(value, 0f, 180f); }
         public bool EyesEnabled { get => eyesEnabled; set => eyesEnabled = value; }
         public bool AutoRun { get => autoRun; set => autoRun = value; }
         public float SmoothingSeconds { get => smoothingSeconds; set => smoothingSeconds = Mathf.Max(0, value); }
@@ -252,7 +256,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         {
             if (parameterReceiver == null || !Read(x, out float vx) || !Read(y, out float vy) || !Read(z, out float vz))
                 return frame;
-            Quaternion delta = PoseRotation(vx, vy, vz, eye);
+            Quaternion delta = eye ? PoseRotation(vx, vy, vz, true) : HeadPose(vx, vy, vz);
             float w = Mathf.Clamp01(weight);
             if (w < 1f) delta = Quaternion.Slerp(Quaternion.identity, delta, w);
             return frame * delta * Quaternion.Inverse(frame);
@@ -355,7 +359,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 if (Read(x, out float vx) && Read(y, out float vy) && Read(z, out float vz))
                 {
-                    Quaternion pose = PoseRotation(vx, vy, vz, eye);
+                    Quaternion pose = eye ? PoseRotation(vx, vy, vz, true) : HeadPose(vx, vy, vz);
                     float w = Mathf.Clamp01(weight);
                     state.Sample(w >= 1f ? pose : Quaternion.Slerp(Quaternion.identity, pose, w));
                 }
@@ -650,7 +654,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 && Read("Rotation_y", out float vy)
                 && Read("Rotation_z", out float vz))
             {
-                Quaternion pose = PoseRotation(vx, vy, vz, false);
+                Quaternion pose = BodyPose(vx, vy, vz);
                 float perBone = Mathf.Clamp01(upperBodyWeight) / upperBodyStates.Length;
                 foreach (var state in upperBodyStates)
                 {
@@ -686,6 +690,19 @@ namespace Hollow.HoUnityTools.FaceTracking
             return Quaternion.AngleAxis(yaw, Vector3.up)
                 * Quaternion.AngleAxis(pitch, Vector3.right)
                 * Quaternion.AngleAxis(roll, Vector3.forward);
+        }
+
+        /// <summary>头部源姿态：按 headMaxAngle 截断总转角。</summary>
+        private Quaternion HeadPose(float x, float y, float z) => LimitedPose(x, y, z, headMaxAngle);
+
+        /// <summary>上身源姿态：按 upperBodyMaxAngle 截断总转角。</summary>
+        private Quaternion BodyPose(float x, float y, float z) => LimitedPose(x, y, z, upperBodyMaxAngle);
+
+        private static Quaternion LimitedPose(float x, float y, float z, float maxAngle)
+        {
+            Quaternion pose = PoseRotation(x, y, z, false);
+            float limit = Mathf.Clamp(maxAngle, 0f, 180f);
+            return limit >= 180f ? pose : Quaternion.RotateTowards(Quaternion.identity, pose, limit);
         }
 
         public void Stop()

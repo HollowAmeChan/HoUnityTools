@@ -65,10 +65,16 @@ namespace Hollow.HoUnityTools.Editor.FaceTracking
 
             Field("headEnabled", "控制头部");
             using (new EditorGUI.DisabledScope(!(serializedObject.FindProperty("headEnabled")?.boolValue ?? false)))
-                Field("headWeight", "头部转动强度", "0 = 头完全不跟 VTS 转，1 = 全量；和上身摆动强度同一含义。");
+            {
+                Field("headWeight", "头部转动强度", "0 = 头完全不跟 VTS 转，1 = 全量。");
+                Field("headMaxAngle", "头部最大转角", "VTS 头部姿态的总转角超过该值时截断；180 ≈ 不限制。");
+            }
             Field("upperBodyEnabled", "上身摆动");
             using (new EditorGUI.DisabledScope(!(serializedObject.FindProperty("upperBodyEnabled")?.boolValue ?? false)))
-                Field("upperBodyWeight", "上身摆动强度");
+            {
+                Field("upperBodyWeight", "上身摆动强度", "0 = 不动，1 = 全量；整条链的总量会按骨骼数平分。");
+                Field("upperBodyMaxAngle", "上身最大转角", "上身姿态的总转角超过该值时截断；按骨骼链分发前先截断。180 ≈ 不限制。");
+            }
             Field("eyesEnabled", "控制双眼");
             Field("smoothingSeconds", "姿态平滑（秒）", "0 为直通；丢追时使用同样的平滑回到中性姿态。");
             Field("drawGizmos", "场景姿态 Gizmo", "选中组件时显示参考轴、实际骨骼朝向和目标朝向。");
