@@ -29,6 +29,24 @@ VTS iPhone UDP 接收已接入制作会话；制作预览执行外部 value + IR
 - [Windows UI 选型、交互与工程结构](../../docs/face-tracking/HOFACE_STUDIO_TECH_DECISION.md)
 - [实施里程碑与验收](../../docs/face-tracking/HOFACE_IMPLEMENTATION_PLAN.md)
 
+## WTD 测试作品修复
+
+[`repair_wtd_tracking.py`](tools/repair_wtd_tracking.py) 针对现有 WTD 清爽轴的 Value／IR 配对。它不覆盖源文件，只生成候选配对和可交给 Studio 的文本请求：
+
+- 移除瞳孔、眼仁、高光的效果分支、专用轴、开关与 BS 输出声明；左右眼睑及眼部 Gate 不动。
+- 保留眼部 `−1 张大／0 睁眼／1 半闭／2 紧闭` 的同一根轴。实际模型在“半闭”仍露出瞳孔；强 blink 直接推进到紧闭，不被眯眼或同帧 Wide 抵消。弱信号沿用旧去串扰，`--blink-floor`、`--blink-full` 是可重新标定的输入阈值，默认 0.48、0.80。闭合压低同侧眯眼、压眉造成的假情绪；双侧强压眉仍允许愤怒闭眼。
+- 嘴宽继续使用现有 `0／0.5／1` 的缩、常、宽。把有符号的原值交给曲线，而不是直接夹到 0～1。保留旧 −0.93、+2 端点；中性平台默认 −0.14～+0.40，包含旧静置点及当前约 +0.356 的静置样本。
+
+从 Studio 目录运行，`$value`、`$ir` 为修复前备份，`$work` 为新的输出目录。先按上文构建 Release：
+
+```powershell
+python .\tools\repair_wtd_tracking.py $value $ir $work
+.\tests\Test-WtdTrackingRepair.ps1 -BeforeValue $value -BeforeIr $ir `
+    -Value "$work/candidate.value.json" -Ir "$work/candidate.ir.json"
+```
+
+验证脚本使用同一个共享求值器回归默认标定。通过后，在 Studio 打开确认过的实际文件，备份并确认没有草稿；使用 CLI `text --file <apply-payload.json>`、`save` 写回。整套规则进入一次撤销，不需要改变 IR 文件格式、果冻组件或 Blender 模型。
+
 ## 工程约定
 
 - 推荐 WPF + .NET 10，选型需要用真实交互原型确认。
