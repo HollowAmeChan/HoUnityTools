@@ -62,7 +62,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 | `setValueCurveKey` | 修改 value 曲线指定点的时间、值或切线 |
 | `addValueCurveKey` / `deleteValueCurveKey` | 增删曲线点；坐标不能重复，删除时至少保留两个 |
 | `setValueExpression` | 修改并校验输出表达式 |
-| `setValueModifiers` | 按顺序替换输出规则的 `smooth` / `delay` / `steps` 修饰器链；`list` 会返回完整链与步骤 |
+| `setValueModifiers` | 按顺序替换输出规则的 `smooth` / `delay` / `steps` / `jelly` 修饰器链；`list` 会返回完整链与步骤 |
 | `setNode` | 修改显示名或合法的 IR 参数轴 |
 | `addIrRule` / `deleteIrRule` | 在 root Blend Tree 下增删 Pose、嵌套 Blend Tree 或 Direct 子规则 |
 | `deleteIrChild` | 按父节点与索引删除实际存储的 Blend 子项 |
@@ -91,7 +91,7 @@ Get-Content -Raw .\curve-payload.json | & $cli setValueCurveKey --stdin
 - 待应用 JSON 或属性草稿不会被图形/CLI 修改静默覆盖。先应用或还原草稿。图形拖动期间拒绝其他写命令，避免一个撤销操作吞并另一个写入。
 - 三层监控中，`live` 是物理 raw / 未覆写输入下的完整求值快照，`value` 是逐阶段覆写后实际生效的结果。Raw 与 effective value 使用独立状态求值器，因此 stateful modifiers 不会在一帧内被重复推进。Value 覆写进入逐行 output evaluation，下游 `out("...")` 会看到覆写；同名输出仍按原行序最后一行决定导出值。IR 覆写只影响目标发布，不会改写 `LiveValues`、`LiveWeights` 或 `UnclampedValues`。IR `-1/0/1` 覆写有意绕过目标范围夹取，用于临时压力测试，清除后恢复正常范围。
 - `list.nodes` 仅返回 root 可达的树节点；不在混合树中的节点单独放在 `orphanNodes`。Studio 树视图只呈现已引用子规则。`addIrRule` 的 parent 必须是现有 blend/direct 节点；Pose target 可直接输入，缺少的 target 会以 `[0,1]` 默认范围声明。
-- Value 输出规则的修饰器在曲线之后按链顺序逐个执行。`smooth` / `delay` 使用 `seconds`；`steps` 按 `trigger` 严格递增，包含 `target`、`hold`、`threshold`、`enterSeconds` 和 `exitSeconds`。UI 与 `setValueModifiers` 共用该格式；空链保持原规则行为。
+- Value 输出规则的修饰器在曲线之后按链顺序逐个执行。`smooth` / `delay` 使用 `seconds`；`steps` 按 `trigger` 严格递增，包含 `target`、`hold`、`threshold`、`enterSeconds` 和 `exitSeconds`；`jelly` 是阻尼弹簧，字段为 `strength`（0…1，0 = 直通）、`frequency`（Hz）、`damping`（阻尼比）、`minimum` / `maximum`（输出上下界）。UI 与 `setValueModifiers` 共用该格式；空链保持原规则行为。
 - Value 页选择规则会自动打开曲线页，IR 页选择节点会打开混合页；实时监控工作区有 VTS 原始、控制输入、实时处理、实时输出四个独立页签，共用名称/ID 搜索。`view` 的 `monitorStage` 接受 `raw|control|value|ir`，`monitorFilter` 设置搜索词。原有 `centerTab` 索引不变。`cursor` 在曲线页使用表达式值，在混合页使用 X/Y 参数；它与单参数覆写独立。
 - `controls` 来自 profile 中不完全由 VTS 标准字段驱动的输入行，按输入参数名识别；标准字段从 profile 或实际数据包取原始拼写，不凭空制造通道。已声明的控制来源不混入 `raw` 列表，未知的实际协议扩展字段仍可在 `raw` 中显示。控制条直接显示 `defaultValue`，CLI 还返回 `usingDefault`、`source`、`fresh`；没有收到来源时显示声明的默认值，收到后缺键则保留最后一个外部值。
 - `setMonitorOverride` / `clearMonitorOverrides` 新增 `stage:"control"`，`parameter` 是输入行的参数名（如 `MouthEnabled`）。控制覆盖进入输入行求值后、输出表达式前的规范参数层，离线立即生效；`auto` 恢复外部值或默认值。控制点击不伪造手机数据包、不增加录制帧、不推进会话时钟，也不把控制值写入 RawForward。默认值属于作品配置，临时覆盖不修改默认值、不进入撤销历史。

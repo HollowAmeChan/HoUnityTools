@@ -156,6 +156,11 @@ namespace HoFace.Studio
                 index,
                 kind = modifier == null ? null : ModifierKindName(modifier.kind),
                 seconds = modifier?.seconds ?? 0,
+                strength = modifier?.strength ?? 0,
+                frequency = modifier?.frequency ?? 0,
+                damping = modifier?.damping ?? 0,
+                minimum = modifier?.minimum ?? 0,
+                maximum = modifier?.maximum ?? 0,
                 active = modifier?.Active ?? false,
                 steps = (modifier?.steps ?? new List<HoFaceStep>()).Select((step, stepIndex) => new
                 {
@@ -168,6 +173,7 @@ namespace HoFace.Studio
             HoFaceModifierKind.Smooth => "smooth",
             HoFaceModifierKind.Delay => "delay",
             HoFaceModifierKind.Steps => "steps",
+            HoFaceModifierKind.Jelly => "jelly",
             _ => "unknown"
         };
         private static object TangentJson(float value) => float.IsInfinity(value) ? (object)(value > 0 ? "Infinity" : "-Infinity") : value;
@@ -285,12 +291,26 @@ namespace HoFace.Studio
                         "smooth" => HoFaceModifierKind.Smooth,
                         "delay" => HoFaceModifierKind.Delay,
                         "steps" => HoFaceModifierKind.Steps,
-                        _ => throw new ArgumentException("修饰器 kind 必须是 smooth、delay 或 steps。")
+                        "jelly" => HoFaceModifierKind.Jelly,
+                        _ => throw new ArgumentException("修饰器 kind 必须是 smooth、delay、steps 或 jelly。")
                     },
                     seconds = OptionalFiniteFloat(item, "seconds", 0),
+                    strength = OptionalFiniteFloat(item, "strength", 0),
+                    frequency = OptionalFiniteFloat(item, "frequency", 6),
+                    damping = OptionalFiniteFloat(item, "damping", 0.35f),
+                    minimum = OptionalFiniteFloat(item, "minimum", -0.2f),
+                    maximum = OptionalFiniteFloat(item, "maximum", 1.2f),
                     steps = new List<HoFaceStep>()
                 };
                 if (modifier.seconds < 0) throw new ArgumentException("修饰器 seconds 不能为负数。");
+                if (modifier.strength < 0 || modifier.strength > 1)
+                    throw new ArgumentException("果冻 strength 必须在 0…1 之间。");
+                if (modifier.frequency < 0.1f || modifier.frequency > 30f)
+                    throw new ArgumentException("果冻 frequency 必须在 0.1…30 Hz 之间。");
+                if (modifier.damping < 0 || modifier.damping > 4)
+                    throw new ArgumentException("果冻 damping 必须在 0…4 之间。");
+                if (modifier.minimum >= modifier.maximum)
+                    throw new ArgumentException("果冻 minimum 必须小于 maximum。");
                 if (item.TryGetProperty("steps", out var steps))
                 {
                     if (steps.ValueKind != JsonValueKind.Array) throw new ArgumentException("修饰器 steps 必须是数组。");

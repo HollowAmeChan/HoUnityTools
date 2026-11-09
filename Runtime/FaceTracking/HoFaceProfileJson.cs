@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -134,6 +134,15 @@ namespace Hollow.HoUnityTools.FaceTracking
                     text.Append("{ \"kind\": ").Append(Quote(KindName(modifier.kind)))
                         .Append(", \"seconds\": ").Append(Num(modifier.seconds)).Append(", \"steps\": ");
                     WriteSteps(text, modifier.steps, indent + 2);
+                    // 果冻的参数只在它真的是果冻时写，老 profile 不会凭空多出一堆字段。
+                    if (modifier.kind == HoFaceModifierKind.Jelly)
+                    {
+                        text.Append(", \"strength\": ").Append(Num(modifier.strength))
+                            .Append(", \"frequency\": ").Append(Num(modifier.frequency))
+                            .Append(", \"damping\": ").Append(Num(modifier.damping))
+                            .Append(", \"minimum\": ").Append(Num(modifier.minimum))
+                            .Append(", \"maximum\": ").Append(Num(modifier.maximum));
+                    }
                     text.Append(" }");
                 }
                 text.Append(i < modifiers.Count - 1 ? ",\n" : "\n");
@@ -182,6 +191,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             {
                 case HoFaceModifierKind.Delay: return "delay";
                 case HoFaceModifierKind.Steps: return "steps";
+                case HoFaceModifierKind.Jelly: return "jelly";
                 default: return "smooth";
             }
         }
@@ -352,6 +362,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                 // 不会出现"对象建到一半发现不认识"的中间态。
                 string kind = "smooth";
                 float seconds = 0f;
+                float strength = 0f;
+                float frequency = 6f;
+                float damping = 0.35f;
+                float minimum = -0.2f;
+                float maximum = 1.2f;
                 var steps = new List<HoFaceStep>();
 
                 item.ReadObject((key, r) =>
@@ -360,6 +375,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                     {
                         case "kind": kind = r.ReadString(); break;
                         case "seconds": seconds = r.ReadFloat(); break;
+                        case "strength": strength = r.ReadFloat(); break;
+                        case "frequency": frequency = r.ReadFloat(); break;
+                        case "damping": damping = r.ReadFloat(); break;
+                        case "minimum": minimum = r.ReadFloat(); break;
+                        case "maximum": maximum = r.ReadFloat(); break;
                         case "steps": r.ReadArray(step =>
                         {
                             var parsed = new HoFaceStep();
@@ -390,6 +410,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                     case "smooth": parsedKind = HoFaceModifierKind.Smooth; break;
                     case "delay": parsedKind = HoFaceModifierKind.Delay; break;
                     case "steps": parsedKind = HoFaceModifierKind.Steps; break;
+                    case "jelly": parsedKind = HoFaceModifierKind.Jelly; break;
                     default:
                         warnings.Add("认不出的修饰符 kind = " + kind + "（" + row.parameter + "）");
                         parsedKind = HoFaceModifierKind.Smooth;
@@ -398,7 +419,11 @@ namespace Hollow.HoUnityTools.FaceTracking
                 }
 
                 if (!known) return;
-                var modifier = new HoFaceModifier { kind = parsedKind, seconds = seconds };
+                var modifier = new HoFaceModifier
+                {
+                    kind = parsedKind, seconds = seconds, strength = strength,
+                    frequency = frequency, damping = damping, minimum = minimum, maximum = maximum
+                };
                 modifier.steps = steps;
                 row.modifiers.Add(modifier);
             });

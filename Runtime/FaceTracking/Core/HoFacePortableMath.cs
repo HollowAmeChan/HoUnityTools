@@ -25,7 +25,11 @@ namespace Hollow.HoUnityTools.FaceTracking.Core
         public static float Min(float x, float y) => Math.Min(x, y);
         public static float Max(float x, float y) => Math.Max(x, y);
         public static float Clamp(float x, float min, float max) => x < min ? min : x > max ? max : x;
+        public static int Clamp(int x, int min, int max) => x < min ? min : x > max ? max : x;
+        public static float Clamp01(float x) => x < 0f ? 0f : x > 1f ? 1f : x;
+        public static int CeilToInt(float x) => (int)Math.Ceiling(x);
         public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp(t, 0, 1);
+        public const float PI = 3.14159265358979f;
     }
 
     /// <summary>Owned by one evaluation session, so replay does not use global random state.</summary>

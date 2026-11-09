@@ -1,4 +1,8 @@
+#if HO_FACE_PORTABLE
+using Mathf = Hollow.HoUnityTools.FaceTracking.Core.HoFacePortableMath;
+#else
 using UnityEngine;
+#endif
 
 namespace Hollow.HoUnityTools.FaceTracking
 {

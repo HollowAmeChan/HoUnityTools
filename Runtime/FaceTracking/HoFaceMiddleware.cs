@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 #if HO_FACE_PORTABLE
 using AnimationCurve = Hollow.HoUnityTools.FaceTracking.Core.HoFaceCurveData;
@@ -70,7 +70,8 @@ namespace Hollow.HoUnityTools.FaceTracking
     {
         [InspectorName("平滑")] Smooth,
         [InspectorName("延迟")] Delay,
-        [InspectorName("维持")] Steps
+        [InspectorName("维持")] Steps,
+        [InspectorName("果冻")] Jelly
     }
 
     /// <summary>
@@ -86,6 +87,16 @@ namespace Hollow.HoUnityTools.FaceTracking
         public float seconds;
         [Tooltip("维持：按 trigger 从小到大排列。")]
         public List<HoFaceStep> steps = new List<HoFaceStep>();
+        [Tooltip("果冻：强度 0…1。0 = 直通，绝不越出下面的两个界；1 = 全量弹簧过冲。")]
+        public float strength;
+        [Tooltip("果冻：弹簧频率（Hz）。")]
+        public float frequency = 6f;
+        [Tooltip("果冻：阻尼比。1 = 临界阻尼（不过冲），越小回弹越明显。")]
+        public float damping = 0.35f;
+        [Tooltip("果冻：输出下限。强度满、冲得快时才摸得到；强度 0 时到不了。")]
+        public float minimum = -0.2f;
+        [Tooltip("果冻：输出上限。")]
+        public float maximum = 1.2f;
 
         /// <summary>这一步用不用得上（参数填了才算）。</summary>
         public bool Active
@@ -96,6 +107,7 @@ namespace Hollow.HoUnityTools.FaceTracking
                 {
                     case HoFaceModifierKind.Smooth: return seconds > 0.0001f;
                     case HoFaceModifierKind.Delay: return seconds > 0.0001f;
+                    case HoFaceModifierKind.Jelly: return strength > 0.0001f;
                     default: return steps != null && steps.Count > 0;
                 }
             }

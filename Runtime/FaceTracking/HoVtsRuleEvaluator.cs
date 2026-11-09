@@ -100,6 +100,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly int[] inputStepRaw;           // 上一帧的候选档（变了就重新计时）
         private readonly Queue<(double At, float Value)>[] inputDelay;
         private readonly float[] inputDelayHeld;
+        private readonly HoFaceJellyState[] inputJelly;
 
         /// <summary>
         /// 规范名 → 输入行号。
@@ -128,6 +129,7 @@ namespace Hollow.HoUnityTools.FaceTracking
         private readonly int[] stepRaw;
         private readonly Queue<(double At, float Value)>[] outputDelay;
         private readonly float[] outputDelayHeld;
+        private readonly HoFaceJellyState[] outputJelly;
         private readonly HoFaceOutputTable outputTable = new HoFaceOutputTable();
 
         /// <summary>表达式引用到的变量名（草稿：每行求值时攒一遍，见 <see cref="Evaluate"/>）。</summary>
@@ -169,6 +171,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             inputStepRaw = new int[inputModifierSlots];
             inputDelay = new Queue<(double At, float Value)>[inputModifierSlots];
             inputDelayHeld = new float[inputModifierSlots];
+            inputJelly = new HoFaceJellyState[inputModifierSlots];
             for (int i = 0; i < inputStepIndex.Length; i++) inputStepIndex[i] = -1;
             for (int i = 0; i < inputStepRaw.Length; i++) inputStepRaw[i] = -1;
             for (int i = 0; i < inputList.Count; i++)
@@ -218,6 +221,7 @@ namespace Hollow.HoUnityTools.FaceTracking
             stepRaw = new int[modifierSlots];
             outputDelay = new Queue<(double At, float Value)>[modifierSlots];
             outputDelayHeld = new float[modifierSlots];
+            outputJelly = new HoFaceJellyState[modifierSlots];
             for (int i = 0; i < stepIndex.Length; i++) stepIndex[i] = -1;   // −1 = 还没进任何档
             for (int i = 0; i < stepRaw.Length; i++) stepRaw[i] = -1;
 
@@ -326,7 +330,8 @@ namespace Hollow.HoUnityTools.FaceTracking
                 value = inputRows[row].Transform(value);
                 inputCurvesSeen[row] = value;
                 value = ApplyModifiers(inputModifierOffset[row], inputRows[row], value, deltaTime, now,
-                    inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay, inputDelayHeld);
+                    inputSmooth, inputStepIndex, inputStepUntil, inputStepSince, inputStepRaw, inputDelay, inputDelayHeld,
+                    inputJelly);
                 inputValues[row] = value;
                 inputFresh[row] = true;
             }
@@ -406,30 +411,44 @@ namespace Hollow.HoUnityTools.FaceTracking
         /// </summary>
         private float ApplyModifiers(int slotBase, HoFaceOutput output, float value, float deltaTime, double now,
             float[] smooth, int[] stepRows, double[] stepUntil, double[] stepSince, int[] stepRaw,
-            Queue<(double At, float Value)>[] delay, float[] delayHeld)
+            Queue<(double At, float Value)>[] delay, float[] delayHeld, HoFaceJellyState[] jelly)
         {
             if (output.modifiers == null || output.modifiers.Count == 0) return value;
             for (int i = 0; i < output.modifiers.Count; i++)
             {
                 var modifier = output.modifiers[i];
-                if (modifier == null || !modifier.Active) continue;
+                if (modifier == null) continue;
                 int slot = slotBase + i;
                 switch (modifier.kind)
                 {
-                    case HoFaceModifierKind.Smooth:
-                        // 只有**会话第一帧**做一次性初始化，免得开场从 0 扫过来。
-                        smooth[slot] = !primed
-                            ? value
-                            : Mathf.Lerp(smooth[slot], value, 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / modifier.seconds));
-                        value = smooth[slot];
-                        break;
-                    case HoFaceModifierKind.Steps:
-                        value = Step(slot, modifier, value, now, stepRows, stepUntil, stepSince, stepRaw);
-                        break;
-                    case HoFaceModifierKind.Delay:
-                        value = Delay(slot, modifier, value, now, delay, delayHeld);
+                    case HoFaceModifierKind.Jelly:
+                        // 强度 0 = 完全直通：连弹簧都不用跑，值和没有这个修饰符一模一样。
+                        if (!modifier.Active) break;
+                        if (!primed) HoFaceJelly.Reset(ref jelly[slot], value);
+                        HoFaceJelly.Step(ref jelly[slot], value, deltaTime, modifier.frequency, modifier.damping);
+                        float blended = value + Mathf.Clamp01(modifier.strength) * (jelly[slot].value - value);
+                        float low = Mathf.Min(modifier.minimum, modifier.maximum);
+                        float high = Mathf.Max(modifier.minimum, modifier.maximum);
+                        value = Mathf.Clamp(blended, low, high);
                         break;
                     default:
+                        if (!modifier.Active) continue;
+                        switch (modifier.kind)
+                        {
+                            case HoFaceModifierKind.Smooth:
+                                // 只有**会话第一帧**做一次性初始化，免得开场从 0 扫过来。
+                                smooth[slot] = !primed
+                                    ? value
+                                    : Mathf.Lerp(smooth[slot], value, 1f - Mathf.Exp(-Mathf.Max(0f, deltaTime) / modifier.seconds));
+                                value = smooth[slot];
+                                break;
+                            case HoFaceModifierKind.Steps:
+                                value = Step(slot, modifier, value, now, stepRows, stepUntil, stepSince, stepRaw);
+                                break;
+                            case HoFaceModifierKind.Delay:
+                                value = Delay(slot, modifier, value, now, delay, delayHeld);
+                                break;
+                        }
                         break;
                 }
             }
@@ -439,7 +458,7 @@ namespace Hollow.HoUnityTools.FaceTracking
 
         private float ApplyModifiers(int row, HoFaceOutput output, float value, float deltaTime, double now) =>
             ApplyModifiers(modifierOffset[row], output, value, deltaTime, now,
-                outputSmooth, stepIndex, stepUntil, stepSince, stepRaw, outputDelay, outputDelayHeld);
+                outputSmooth, stepIndex, stepUntil, stepSince, stepRaw, outputDelay, outputDelayHeld, outputJelly);
 
         /// <summary>
         /// 延迟：一个**每行一条的 FIFO**，进去的值等 <c>seconds</c> 秒之后再出来。

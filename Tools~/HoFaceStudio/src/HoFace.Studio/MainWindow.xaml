@@ -382,6 +382,7 @@
                       <Button x:Name="AddSmoothModifierButton" Content="＋平滑" Tag="smooth" Click="AddModifierClicked" Padding="5,2" ToolTip="添加平滑修饰器"/>
                       <Button x:Name="AddDelayModifierButton" Content="＋延迟" Tag="delay" Click="AddModifierClicked" Padding="5,2" ToolTip="添加延迟修饰器"/>
                       <Button x:Name="AddStepsModifierButton" Content="＋维持" Tag="steps" Click="AddModifierClicked" Padding="5,2" Margin="0" ToolTip="添加维持步骤修饰器"/>
+                      <Button x:Name="AddJellyModifierButton" Content="＋果冻" Tag="jelly" Click="AddModifierClicked" Padding="5,2" Margin="0,0,0,0" ToolTip="添加果冻修饰器：弹簧过冲，强度 0 时完全直通、绝不越界"/>
                     </StackPanel>
                     <TextBlock Text="规则约束 · 修饰器链" FontWeight="SemiBold"/>
                   </DockPanel>
@@ -406,7 +407,7 @@
                         IsEnabled="{Binding HasSelectedModifier}" ToolTip="删除所选修饰器"/>
                   </Grid>
                   <Grid Visibility="{Binding SelectedModifierVisibility}">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Margin="0,0,0,6">
                       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
                       <ComboBox x:Name="ModifierKindCombo" ItemsSource="{Binding ModifierKindOptions}"
@@ -418,7 +419,28 @@
                           LostFocus="ModifierSecondsLostFocus" Visibility="{Binding SelectedModifierSecondsVisibility}"
                           AutomationProperties.Name="修饰器时长" ToolTip="平滑或延迟时长，单位秒"/>
                     </Grid>
-                    <StackPanel Grid.Row="1" Visibility="{Binding SelectedModifierStepsVisibility}">
+                    <Grid Grid.Row="1" Margin="0,0,0,6" Visibility="{Binding SelectedModifierJellyVisibility}">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                        <TextBlock Text="强度 0…1" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                            ToolTip="0 = 完全直通，绝不越过上下界；1 = 全量弹簧过冲"/>
+                        <TextBox Text="{Binding ModifierStrengthDraft, UpdateSourceTrigger=PropertyChanged}" Tag="strength"
+                            LostFocus="ModifierJellyLostFocus" AutomationProperties.Name="果冻强度"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="0,0,4,0">
+                        <TextBlock Text="频率 Hz" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                            ToolTip="弹簧频率：越高越脆，过冲越短"/>
+                        <TextBox Text="{Binding ModifierFrequencyDraft, UpdateSourceTrigger=PropertyChanged}" Tag="frequency"
+                            LostFocus="ModifierJellyLostFocus" AutomationProperties.Name="果冻频率"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="阻尼" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                            ToolTip="阻尼比：1 = 不过冲，越小回弹越明显"/>
+                        <TextBox Text="{Binding ModifierDampingDraft, UpdateSourceTrigger=PropertyChanged}" Tag="damping"
+                            LostFocus="ModifierJellyLostFocus" AutomationProperties.Name="果冻阻尼"/>
+                      </StackPanel>
+                    </Grid>
+                    <StackPanel Grid.Row="2" Visibility="{Binding SelectedModifierStepsVisibility}">
                       <DockPanel Margin="0,0,0,5">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                           <Button Content="＋" Click="AddModifierStepClicked" Padding="5,1" ToolTip="添加维持步骤"/>

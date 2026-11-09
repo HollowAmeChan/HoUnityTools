@@ -18,7 +18,7 @@ namespace HoFace.Studio
         public ObservableCollection<ControlPointRow> ControlPoints { get; } = new ObservableCollection<ControlPointRow>();
         public ObservableCollection<ModifierRow> ModifierRows { get; } = new ObservableCollection<ModifierRow>();
         public ObservableCollection<ModifierStepRow> ModifierStepRows { get; } = new ObservableCollection<ModifierStepRow>();
-        public string[] ModifierKindOptions { get; } = new[] { "平滑", "延迟", "维持" };
+        public string[] ModifierKindOptions { get; } = new[] { "平滑", "延迟", "维持", "果冻" };
         public int ValueCount => ValueRows.Count;
         public int NodeCount => NodeRows.Count;
         public bool HasValueSelection => selectedValueRow != null;
@@ -72,15 +72,35 @@ namespace HoFace.Studio
             get => modifierSecondsDraft;
             set { if (modifierSecondsDraft != value) { modifierSecondsDraft = value; OnPropertyChanged(); } }
         }
+        private string modifierStrengthDraft = "0";
+        private string modifierFrequencyDraft = "6";
+        private string modifierDampingDraft = "0.35";
+        public string ModifierStrengthDraft
+        {
+            get => modifierStrengthDraft;
+            set { if (modifierStrengthDraft != value) { modifierStrengthDraft = value; OnPropertyChanged(); } }
+        }
+        public string ModifierFrequencyDraft
+        {
+            get => modifierFrequencyDraft;
+            set { if (modifierFrequencyDraft != value) { modifierFrequencyDraft = value; OnPropertyChanged(); } }
+        }
+        public string ModifierDampingDraft
+        {
+            get => modifierDampingDraft;
+            set { if (modifierDampingDraft != value) { modifierDampingDraft = value; OnPropertyChanged(); } }
+        }
         private HoFaceModifier SelectedModifier =>
             selectedValueRow?.modifiers != null && selectedModifierIndex >= 0 && selectedModifierIndex < selectedValueRow.modifiers.Count
                 ? selectedValueRow.modifiers[selectedModifierIndex] : null;
         public bool HasSelectedModifier => SelectedModifier != null;
         public Visibility ModifierEmptyVisibility => HasValueSelection && ModifierRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SelectedModifierVisibility => HasSelectedModifier ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility SelectedModifierSecondsVisibility => SelectedModifier?.kind == HoFaceModifierKind.Steps
+        public Visibility SelectedModifierSecondsVisibility => SelectedModifier?.kind is HoFaceModifierKind.Steps or HoFaceModifierKind.Jelly
             ? Visibility.Collapsed : HasSelectedModifier ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SelectedModifierStepsVisibility => SelectedModifier?.kind == HoFaceModifierKind.Steps
+            ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SelectedModifierJellyVisibility => SelectedModifier?.kind == HoFaceModifierKind.Jelly
             ? Visibility.Visible : Visibility.Collapsed;
         public string ModifierOrderSummary => HasSelectedModifier
             ? (selectedModifierIndex + 1) + " / " + ModifierRows.Count : "";
@@ -157,6 +177,9 @@ namespace HoFace.Studio
             ModifierKindDraft = modifier == null ? "" : ModifierLabel(modifier.kind);
             ModifierSecondsDraft = modifier == null ? "0" :
                 modifier.seconds.ToString("G7", CultureInfo.InvariantCulture);
+            ModifierStrengthDraft = modifier == null ? "0" : modifier.strength.ToString("G7", CultureInfo.InvariantCulture);
+            ModifierFrequencyDraft = modifier == null ? "6" : modifier.frequency.ToString("G7", CultureInfo.InvariantCulture);
+            ModifierDampingDraft = modifier == null ? "0.35" : modifier.damping.ToString("G7", CultureInfo.InvariantCulture);
             ModifierStepRows.Clear();
             if (modifier?.steps != null)
                 for (int i = 0; i < modifier.steps.Count; i++)
@@ -165,7 +188,8 @@ namespace HoFace.Studio
             loadingModifier = false;
             foreach (string name in new[] { nameof(HasSelectedModifier), nameof(ModifierEmptyVisibility),
                 nameof(SelectedModifierVisibility), nameof(SelectedModifierSecondsVisibility),
-                nameof(SelectedModifierStepsVisibility), nameof(ModifierOrderSummary), nameof(CanMoveModifierUp),
+                nameof(SelectedModifierStepsVisibility), nameof(SelectedModifierJellyVisibility),
+                nameof(ModifierOrderSummary), nameof(CanMoveModifierUp),
                 nameof(CanMoveModifierDown), nameof(CanDeleteModifierStep),
                 nameof(SelectedModifierStepIndex) })
                 OnPropertyChanged(name);
@@ -342,6 +366,7 @@ namespace HoFace.Studio
             HoFaceModifierKind.Smooth => "平滑",
             HoFaceModifierKind.Delay => "延迟",
             HoFaceModifierKind.Steps => "维持",
+            HoFaceModifierKind.Jelly => "果冻",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         private static HoFaceModifierKind ParseModifierKind(string label) => label switch
@@ -349,7 +374,8 @@ namespace HoFace.Studio
             "平滑" or "smooth" => HoFaceModifierKind.Smooth,
             "延迟" or "delay" => HoFaceModifierKind.Delay,
             "维持" or "steps" => HoFaceModifierKind.Steps,
-            _ => throw new ArgumentException("修饰器类型必须是平滑、延迟或维持。")
+            "果冻" or "jelly" => HoFaceModifierKind.Jelly,
+            _ => throw new ArgumentException("修饰器类型必须是平滑、延迟、维持或果冻。")
         };
         private void AddModifierClicked(object sender, RoutedEventArgs e)
         {
@@ -362,6 +388,7 @@ namespace HoFace.Studio
                 {
                     kind = kind,
                     seconds = kind == HoFaceModifierKind.Smooth ? .08f : kind == HoFaceModifierKind.Delay ? .05f : 0,
+                    strength = kind == HoFaceModifierKind.Jelly ? .5f : 0f,
                     steps = kind == HoFaceModifierKind.Steps
                         ? new List<HoFaceStep> { new HoFaceStep { trigger = .5f, target = 1, threshold = .05f } }
                         : new List<HoFaceStep>()
@@ -435,7 +462,8 @@ namespace HoFace.Studio
         }
         private void ModifierSecondsLostFocus(object sender, RoutedEventArgs e)
         {
-            if (loadingModifier || SelectedModifier == null || SelectedModifier.kind == HoFaceModifierKind.Steps) return;
+            if (loadingModifier || SelectedModifier == null ||
+                SelectedModifier.kind is HoFaceModifierKind.Steps or HoFaceModifierKind.Jelly) return;
             try
             {
                 EnsureNoDraft();
@@ -443,6 +471,38 @@ namespace HoFace.Studio
                 if (seconds < 0) throw new ArgumentException("时长不能为负数。");
                 int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
                 document.Edit((value, ir) => value.outputs[outputIndex].modifiers[modifierIndex].seconds = seconds);
+                ReloadEditorsKeepingModifier(modifierIndex, selectedModifierStepIndex);
+            }
+            catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
+        }
+        private void ModifierJellyLostFocus(object sender, RoutedEventArgs e)
+        {
+            if (loadingModifier || SelectedModifier == null || SelectedModifier.kind != HoFaceModifierKind.Jelly) return;
+            if (sender is not FrameworkElement element) return;
+            string field = element.Tag?.ToString();
+            try
+            {
+                EnsureNoDraft();
+                float entered = ParseNumber(field switch
+                {
+                    "strength" => ModifierStrengthDraft,
+                    "frequency" => ModifierFrequencyDraft,
+                    _ => ModifierDampingDraft
+                });
+                if (field == "strength" && (entered < 0f || entered > 1f))
+                    throw new ArgumentException("果冻强度必须在 0…1 之间。");
+                if (field == "frequency" && (entered < 0.1f || entered > 30f))
+                    throw new ArgumentException("果冻频率必须在 0.1…30 Hz 之间。");
+                if (field == "damping" && (entered < 0f || entered > 4f))
+                    throw new ArgumentException("果冻阻尼必须在 0…4 之间。");
+                int outputIndex = selectedOutputIndex, modifierIndex = selectedModifierIndex;
+                document.Edit((value, ir) =>
+                {
+                    var modifier = value.outputs[outputIndex].modifiers[modifierIndex];
+                    if (field == "strength") modifier.strength = entered;
+                    else if (field == "frequency") modifier.frequency = entered;
+                    else modifier.damping = entered;
+                });
                 ReloadEditorsKeepingModifier(modifierIndex, selectedModifierStepIndex);
             }
             catch (Exception error) { ReloadEditorsKeepingDraft(); ShowError(error.Message); }
@@ -601,9 +661,13 @@ namespace HoFace.Studio
                 Index = index;
                 if (modifier == null) { Display = (index + 1) + " · 无效修饰器"; return; }
                 string kind = ModifierLabel(modifier.kind);
-                string detail = modifier.kind == HoFaceModifierKind.Steps
-                    ? (modifier.steps?.Count ?? 0) + " 步"
-                    : modifier.seconds.ToString("0.###", CultureInfo.InvariantCulture) + " s";
+                string detail = modifier.kind switch
+                {
+                    HoFaceModifierKind.Steps => (modifier.steps?.Count ?? 0) + " 步",
+                    HoFaceModifierKind.Jelly => "强度 " + modifier.strength.ToString("0.##", CultureInfo.InvariantCulture)
+                        + " · " + modifier.frequency.ToString("0.##", CultureInfo.InvariantCulture) + " Hz",
+                    _ => modifier.seconds.ToString("0.###", CultureInfo.InvariantCulture) + " s"
+                };
                 Display = (index + 1) + " · " + kind + " · " + detail;
             }
         }

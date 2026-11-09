@@ -18,7 +18,7 @@ internal static class Program
         try
         {
             string root = args.Length > 0 ? args[0] : FindRepositoryRoot();
-            Curves(); Value(); Ir(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording(); ReplayControls();
+            Curves(); Value(); Ir(); Jelly(); Sessions(); PreviewTransport(); RawFrameEnvelope(); Recording(); ReplayControls();
             RawForwardTransport(); SessionModes(root);
             AuthoringHistory(root);
             foreach (string file in new[]
@@ -45,6 +45,53 @@ internal static class Program
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
+    private static void Jelly()
+    {
+        HoFaceMiddleware Build(float strength)
+        {
+            var profile = new HoFaceMiddleware();
+            profile.inputs.Add(new HoFaceOutput { parameter = "blink", expression = "Blink" });
+            profile.outputs.Add(new HoFaceOutput
+            {
+                parameter = "Axis",
+                expression = "blink",
+                modifiers = new List<HoFaceModifier>
+                {
+                    new HoFaceModifier
+                    {
+                        kind = HoFaceModifierKind.Jelly, strength = strength,
+                        frequency = 6f, damping = .3f, minimum = -.2f, maximum = 1.2f
+                    }
+                }
+            });
+            return profile;
+        }
+
+        // Strength 0 = exactly passthrough: a blink step never leaves the base 0..1 range.
+        var off = new HoFaceValueSession(Build(0));
+        float lowest = 1f, highest = 0f;
+        for (int i = 0; i < 40; i++)
+        {
+            float blink = i < 2 ? 0f : i < 20 ? 1f : 0f;
+            off.Evaluate(new Dictionary<string, float> { ["Blink"] = blink }, i / 60.0);
+            lowest = Math.Min(lowest, off.Values["Axis"]);
+            highest = Math.Max(highest, off.Values["Axis"]);
+        }
+        Check(highest <= 1.0001f && lowest >= -0.0001f, "jelly strength 0 stays inside the base range");
+
+        // Strength 1 = full spring: a blink step overshoots past the closed end, but the
+        // modifier's own bounds still stop it before the axis limit.
+        var on = new HoFaceValueSession(Build(1));
+        float peak = 0f;
+        for (int i = 0; i < 40; i++)
+        {
+            on.Evaluate(new Dictionary<string, float> { ["Blink"] = i < 2 ? 0f : 1f }, i / 60.0);
+            peak = Math.Max(peak, on.Values["Axis"]);
+        }
+        Check(peak > 1.05f, "jelly overshoots past the closed end: " + peak);
+        Check(peak <= 1.2001f, "jelly respects the upper bound: " + peak);
+    }
+
     private static string Sample(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "samples", "Mouth.hoface." + name + ".json"));
     private static void Curves()
     {

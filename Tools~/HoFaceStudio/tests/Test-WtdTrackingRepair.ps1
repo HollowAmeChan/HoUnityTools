@@ -71,7 +71,8 @@ $eyeOrWidth = '^(HO-眼情感-|HO-嘴宽-|HO-脸颊-|HO-嘴位置-|HO-下巴位�
 $changed = @('Mouth/Width', 'Eye/Left/Open', 'Eye/Left/Emotion', 'Eye/Left/Anger',
     'Eye/Right/Open', 'Eye/Right/Emotion', 'Eye/Right/Anger',
     'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove')
-$authoredLateral = @('graph.mouth.move', 'graph.jaw', 'graph.cheek.left', 'graph.cheek.right')
+$authoredLateral = @('graph.mouth.move', 'graph.jaw', 'graph.cheek.left', 'graph.cheek.right',
+    'graph.eye.left.main', 'graph.eye.right.main', 'graph.eye.left.anger', 'graph.eye.right.anger')
 Check (@($newValues.inputs | Where-Object { $_.parameter -match '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' }).Count -eq 0) 'Eye detail inputs remain.'
 Check (@($newValues.outputs | Where-Object { $_.parameter -match $retiredParams -or $_.parameter -in @('eyeBlinkLeft','eyeBlinkRight') }).Count -eq 0) 'Retired effect axes or public blink remain.'
 Check (@($newIrJson.parameters | Where-Object { $_.name -match $retiredParams }).Count -eq 0) 'Retired IR parameters remain.'
@@ -88,7 +89,9 @@ $rootBefore = $oldNodes[$oldIrJson.root]
 $rootAfter = $newIrJson.nodes | Where-Object id -eq $newIrJson.root
 Check ((Compact @($rootBefore.children | Where-Object node -ne 'graph.eye.details')) -ceq (Compact $rootAfter.children)) 'An unrelated root branch or gate changed.'
 Check ((Compact @($oldIrJson.targets | Where-Object id -notmatch $retiredShapes)) -ceq (Compact $newIrJson.targets)) 'An unrelated target declaration changed.'
-Check ((Compact @($oldIrJson.parameters | Where-Object name -notmatch $retiredParams)) -ceq (Compact $newIrJson.parameters)) 'An unrelated IR parameter changed.'
+$rescaledParameters = @('Eye/Left/Open', 'Eye/Right/Open')
+Check ((Compact @($oldIrJson.parameters | Where-Object { $_.name -notmatch $retiredParams -and $_.name -notin $rescaledParameters })) -ceq
+    (Compact @($newIrJson.parameters | Where-Object name -notin $rescaledParameters))) 'An unrelated IR parameter changed.'
 Check ((Compact @($oldValues.outputs | Where-Object { $_.parameter -notmatch $retiredParams -and $_.parameter -notin $changed })) -ceq
     (Compact @($newValues.outputs | Where-Object parameter -notin $changed))) 'An unrelated Value rule changed.'
 
@@ -131,7 +134,7 @@ foreach ($side in @('Left', 'Right')) {
     foreach ($wideNoise in @(0, 0.2, 1)) {
         $rawWink["EyeWide$side"] = $wideNoise
         $sample = Sample $profile $graph $rawWink
-        Near $sample.values["Eye/$side/Open"] 2 "Strong $side blink reaches the actual closed knot"
+        Near $sample.values["Eye/$side/Open"] 1 "Strong $side blink reaches the closed knot on the 0..1 axis"
         Near $sample.values["Eye/$side/Anger"] 0 "Unilateral brow movement does not turn the wink into anger"
         Near $sample.weights["HO-眼情感-常态紧闭$side"] 1 "The real $side closed BS is fully selected"
         Near (EyelidSum $sample.weights $side '睁眼') 0 "No open pose leaks into a full wink"
@@ -141,7 +144,8 @@ foreach ($side in @('Left', 'Right')) {
     Near (EyelidSum (Sample $profile $graph $rawWink).weights $side '紧闭') 0 "The $side eyelid Gate is preserved"
     $smile = Sample $profile $graph @{ "EyeBlink$side" = 0.47; "EyeSquint$side" = 0.103 }
     Check ($smile.values["Eye/$side/Open"] -lt 0.05 -and $smile.values["Eye/$side/Emotion"] -gt 0.05) 'Old smile-squint baseline must not turn into a blink.'
-    Near (Sample $profile $graph @{ "EyeWide$side" = 1 }).weights["HO-眼情感-常态张大$side"] 1 'Wide still reaches its original negative-axis pose'
+    Near (Sample $profile $graph @{ "EyeWide$side" = 1 }).values["Eye/$side/Open"] 0 'The eye width input no longer drives the open axis'
+    Near (Sample $profile $graph @{ "EyeWide$side" = 1 }).weights["HO-眼情感-常态睁眼$side"] 1 'A bare eye width input leaves the eye open'
     Near (Sample $profile $graph @{ "BrowDown$side" = 0.92 }).weights["HO-眼情感-愤怒睁眼$side"] 1 'Real open-eye anger still works'
 }
 $both = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; EyeSquintLeft = 0.8; EyeSquintRight = 0.8 }
@@ -155,9 +159,9 @@ foreach ($side in @('Left','Right')) {
     foreach ($step in 0..100) {
         $sample = Sample $profile $graph @{ "EyeBlink$side" = ($step / 100.0); "EyeSquint$side" = 0.4; "BrowDown$side" = 0.9 }
         $closure = $sample.values["Eye/$side/Open"]
-        Check ($closure -ge ($prev - 0.00001) -and $closure -ge 0 -and $closure -le 2) 'Blink is not monotonic.'
+        Check ($closure -ge ($prev - 0.00001) -and $closure -ge 0 -and $closure -le 1.2) 'Blink is not monotonic.'
         if ($step -ge 80) {
-            Near $closure 2 'Strong blink does not stall at the half-closed knot'
+            Near $closure 1 'Strong blink does not stall at the half-closed knot'
             Near $sample.weights["HO-眼情感-愤怒睁眼$side"] 0 'Full blink cannot select angry open'
         }
         $prev = $closure
