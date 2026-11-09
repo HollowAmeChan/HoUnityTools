@@ -9,6 +9,9 @@ from pathlib import Path
 CHEEK_KNEE = 0.40
 CHEEK_FULL = 0.60
 CHEEK_PUCKER_CEILING = 0.1769
+CHEEK_MAX = 0.65
+MOUTH_SHIFT_X = 0.6
+JAW_SHIFT_X = 0.52
 DETAIL_ROOT = "graph.eye.details"
 DETAIL_GATE = "Gate/EyeDetails"
 EYE_EFFECT_PREFIXES = ("Pupil/", "Iris/", "Highlight1/", "Highlight2/")
@@ -103,43 +106,86 @@ def strip_eye_effects(value, ir, nodes):
 
 
 def cheek_terms(knee, full):
-    """Return the puff amount and the two one-sided selectors as expressions."""
+    """Return the puff amount as a 0..1 gate and as the cheek-axis amount."""
     span = full - knee
-    puff = f"clamp((cheekPuff - {knee:g}) / {span:g}, 0, 1)"
-    left = f"clamp((mouthLeft - {knee:g}) / {span:g}, 0, 1)"
-    right = f"clamp((mouthRight - {knee:g}) / {span:g}, 0, 1)"
-    return puff, left, right
+    gate = f"clamp((cheekPuff - {knee:g}) / {span:g}, 0, 1)"
+    amount = f"{CHEEK_MAX:g} * {gate}"
+    return gate, amount
 
 
-def repair_cheek(value, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
-    """Take cheek puff magnitude from cheekPuff alone; keep mouth push as a side selector.
+def repair_cheek(value, ir, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
+    """One symmetric cheek puff, biased by the mouth shift, instead of a left/right input.
 
-    mouthLeft/mouthRight are also the lateral mouth-shift channels, so using them
-    as the puff amount made any sideways mouth movement empty a whole cheek. The
-    puff amount now gates everything, and the same channels only decide which
-    cheek is a single-side puff; both cheeks still fire for a symmetric puff.
-    A live puff also closes the mouth-shift branch, because the puff itself
-    already moves the lips and the two offsets otherwise add into a skew.
+    ARKit only has one cheekPuff channel, so there is no honest left/right puff to
+    sample; a real sideways mouth move also lifts cheekPuff, but only up to about
+    0.35, which the knee stays above. Both cheeks now puff from cheekPuff alone and
+    the mouth shift only weakens the cheek the lips moved toward, which keeps a
+    single-side puff readable without claiming a separate left/right signal.
+    The puff pose is reached at the axis maximum so that the weakening is visible
+    instead of saturating at the old 0.39 knot.
     """
     if not CHEEK_PUCKER_CEILING < knee < full <= 1:
         raise ValueError(
             f"Require {CHEEK_PUCKER_CEILING} < knee < full <= 1 (pucker ceiling is measured)."
         )
-    puff, left, right = cheek_terms(knee, full)
-    by_name = {row["parameter"]: row for row in value["outputs"]}
-    for side, own, other in (("Left", left, right), ("Right", right, left)):
+    gate, amount = cheek_terms(knee, full)
+    rows = value["outputs"]
+    by_name = {row["parameter"]: row for row in rows}
+    move_index = rows.index(by_name["Mouth/MoveX"])
+    for side, direction in (("Left", ""), ("Right", "0 - ")):
         row = by_name[f"Cheek/{side}"]
-        row["expression"] = f"{puff} * max({own}, 1 - {other})"
+        if rows.index(row) <= move_index:
+            raise ValueError(f"Cheek/{side} must be evaluated after Mouth/MoveX.")
+        row["expression"] = f'{amount} * (1 - clamp({direction}out("Mouth/MoveX"), 0, 1))'
         row["notes"] = (
-            f"{side} 侧鼓嘴轴：量只由 cheekPuff 决定（{knee:g} 起、{full:g} 满），"
-            "mouthLeft/mouthRight 只用来挑单侧，不能再凭嘴巴左右平移把鼓嘴点亮。"
+            f"{side} 侧鼓嘴轴：不给左右独立信号，中位时两侧都鼓；"
+            "嘴巴往这一侧平移多少，就按同比例削弱这一侧的鼓嘴（平移那一侧的颊被让开）。"
         )
     move = by_name["Gate/MouthMove"]
-    move["expression"] = f"MouthMoveEnabled * (1 - {puff})"
+    move["expression"] = f"MouthMoveEnabled * (1 - {gate})"
     move["notes"] = (
         "嘴整体位移的 IR 分支权重，读取输入 MouthMoveEnabled；鼓嘴量上来时按 "
         "(1 − 鼓嘴量) 关闭位移，避免鼓嘴自己推嘴唇又被位移推一次（歪嘴）。"
     )
+
+    nodes = {node["id"]: node for node in ir["nodes"]}
+    for side in ("left", "right"):
+        node = nodes[f"graph.cheek.{side}"]
+        pose = f"pose.cheek.{side}"
+        children = {child["node"]: child for child in node["children"]}
+        if pose not in children:
+            raise ValueError(f"{node['id']} is missing the child {pose}.")
+        children[pose]["threshold"] = CHEEK_MAX
+
+
+def repair_mouth_direction(ir):
+    """Put the lateral tables back on ARKit's first-person left/right.
+
+    Pose and target names are ARKit first-person (Left is the character's own
+    left), and so are the wire channels, but both lateral tables were migrated
+    with the two ends swapped: a mouth that moves left selected the right pose.
+    Mouth/MoveX is positive toward the character's left; Jaw/Side is positive
+    toward the character's right, so the jaw table points the other way.
+    """
+    nodes = {node["id"]: node for node in ir["nodes"]}
+
+    def place(node_id, signs, reach):
+        node = nodes[node_id]
+        if node.get("type") not in ("blend1d", "blend2d"):
+            raise ValueError(f"{node_id} is not a blend node.")
+        seen = set()
+        for child in node.get("children", []):
+            sign = signs.get(child["node"])
+            if sign is None:
+                continue
+            seen.add(child["node"])
+            child["x"] = sign * (abs(child.get("x", 0)) or reach)
+        missing = set(signs) - seen
+        if missing:
+            raise ValueError(f"{node_id} is missing the children {sorted(missing)}.")
+
+    place("graph.mouth.move", {"pose.mouth.move.left": 1, "pose.mouth.move.right": -1}, MOUTH_SHIFT_X)
+    place("graph.jaw", {"pose.jaw.left": -1, "pose.jaw.right": 1}, JAW_SHIFT_X)
 
 
 def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
@@ -214,7 +260,8 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
             rows.remove(opened)
             rows.insert(before, opened)
 
-    repair_cheek(value, knee=cheek_knee, full=cheek_full)
+    repair_mouth_direction(ir)
+    repair_cheek(value, ir, knee=cheek_knee, full=cheek_full)
 
     old_description = (
         "瞳孔和眼仁保留默认 0 的手调 Value/IR 轴。高光果冻由 Unity 专用组件读取 IR 最终形态键结果，"
