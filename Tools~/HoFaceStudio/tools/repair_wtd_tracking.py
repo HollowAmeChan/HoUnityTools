@@ -19,6 +19,9 @@ EYE_OVER_END = 1.2
 EYE_OLD_TO_NEW = {-1.0: EYE_WIDE_END, 1.0: EYE_HALF, 2.0: EYE_CLOSED}
 ANGER_GATE = "Gate/Anger"
 ANGER_INPUT = "AngerEnabled"
+# 2026-11-09 实机采样（对着手机瞪三次，90 秒 180 帧）：eyeWide 峰值 0.681，
+# 普通睁大约 0.36~0.49，静息 p90 只有 0.19。所以 0.60 就算“满档睁大”。
+EYE_WIDE_FULL = 0.60
 DETAIL_ROOT = "graph.eye.details"
 DETAIL_GATE = "Gate/EyeDetails"
 EYE_EFFECT_PREFIXES = ("Pupil/", "Iris/", "Highlight1/", "Highlight2/")
@@ -170,6 +173,29 @@ def repair_cheek(value, ir, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
         children[pose]["threshold"] = CHEEK_MAX
 
 
+def repair_wide_calibration(value):
+    """Calibrate the raw eyeWide channel so a deliberate widen actually reaches the wide end.
+
+    The device tops out near 0.68 and a normal widen sits around 0.4, so passing it through
+    unscaled left the axis at roughly half of the -0.2 band. The input curve is the place for
+    this (the project's rule: calibration lives on the input row), and it stays draggable.
+    """
+    slope = 1.0 / EYE_WIDE_FULL
+    for side in ("Left", "Right"):
+        name = f"eyeWide{side}"
+        row = next((item for item in value["inputs"] if item["parameter"] == name), None)
+        if row is None:
+            raise ValueError(f"Missing input row {name}.")
+        row["curve"] = {"keys": [
+            {"t": 0.0, "v": 0.0, "inT": 0, "outT": slope},
+            {"t": EYE_WIDE_FULL, "v": 1.0, "inT": slope, "outT": 0},
+        ]}
+        row["notes"] = (
+            f"睁大眼输入标定：{EYE_WIDE_FULL:g} 以上算满档（实机采样峰值 0.681、普通睁大 0.36~0.49、"
+            "静息 p90 0.19）；曲线外的端点按端点算，所以再大也只是 1。"
+        )
+
+
 def repair_anger_gate(value):
     """Sadness owns the brow; anger only happens behind a manual switch (Live2D habit).
 
@@ -297,6 +323,7 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
     rows = value["outputs"]
     by_name = {row["parameter"]: row for row in rows}
     repair_anger_gate(value)
+    repair_wide_calibration(value)
     by_name = {row["parameter"]: row for row in value["outputs"]}
     width = by_name["Mouth/Width"]
     target_width = "2 * (mouthDimpleLeft + mouthDimpleRight) - mouthPucker"

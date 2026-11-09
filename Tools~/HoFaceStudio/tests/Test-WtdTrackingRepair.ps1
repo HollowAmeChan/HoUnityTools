@@ -80,9 +80,14 @@ Check (@($newIrJson.targets | Where-Object { $_.id -match $retiredShapes }).Coun
 Check (@($newIrJson.nodes | Where-Object { $_.id -match '^graph\.(eye\.details|pupil|iris|highlight)' }).Count -eq 0) 'Retired branches remain.'
 Check (@($newValues.inputs | Where-Object { $_.parameter -in @('eyeBlinkLeft','eyeBlinkRight') }).Count -eq 2) 'Canonical blink inputs were lost.'
 function Compact($Object) { ConvertTo-Json -InputObject $Object -Compress -Depth 100 }
-Check ((Compact @($oldValues.inputs | Where-Object { $_.parameter -notmatch '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' })) -ceq
-    (Compact @($newValues.inputs | Where-Object { $_.parameter -ne 'AngerEnabled' }))) 'Unrelated input definitions changed.'
+$changedInputs = @('AngerEnabled', 'eyeWideLeft', 'eyeWideRight')
+Check ((Compact @($oldValues.inputs | Where-Object { $_.parameter -notmatch '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' -and $_.parameter -notin $changedInputs })) -ceq
+    (Compact @($newValues.inputs | Where-Object { $_.parameter -notin $changedInputs }))) 'Unrelated input definitions changed.'
 Check (@($newValues.inputs | Where-Object { $_.parameter -eq 'AngerEnabled' -and $_.defaultValue -eq 0 }).Count -eq 1) 'The anger switch input must exist and default to 0.'
+foreach ($side in @('Left', 'Right')) {
+    $wideRow = $newValues.inputs | Where-Object { $_.parameter -eq "eyeWide$side" }
+    Check ($wideRow.curve.keys.Count -eq 2 -and [double]$wideRow.curve.keys[1].t -le 0.7) "The $side eye width input must carry its calibration curve."
+}
 $oldNodes = @{}; foreach ($node in $oldIrJson.nodes) { $oldNodes[$node.id] = $node }
 foreach ($node in $newIrJson.nodes) {
     if ($node.id -ne $newIrJson.root -and $node.id -notin $authoredLateral) { Check ((Compact $oldNodes[$node.id]) -ceq (Compact $node)) "A retained authored node changed: $($node.id)" }
@@ -149,6 +154,8 @@ foreach ($side in @('Left', 'Right')) {
     $wideOnly = Sample $profile $graph @{ "EyeWide$side" = 1 }
     Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
     Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.6 }).values["Eye/$side/Open"] -0.2 "A deliberate $side widen at the measured top reaches the wide end"
+    Near (Sample $profile $graph @{ "EyeWide$side" = 0.3 }).values["Eye/$side/Open"] -0.1 "Half of the calibrated widen covers half the band"
     $closedWide = Sample $profile $graph @{ "EyeBlink$side" = 1; "EyeWide$side" = 1 }
     Near $closedWide.values["Eye/$side/Open"] 1 'Wide cannot reopen a closed eye'
     Near $closedWide.weights["HO-眼情感-常态紧闭$side"] 1 'A closed eye stays closed with a wide input'
