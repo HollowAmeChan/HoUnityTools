@@ -154,6 +154,12 @@ foreach ($side in @('Left', 'Right')) {
     Near (Sample $profile $graph @{ "EyeSquint$side" = 0.34 }).values["Eye/$side/Emotion"] 1 "A full $side squint smile saturates the happy axis"
     Near (Sample $profile $graph @{ "EyeSquint$side" = 0.34 }).weights["HO-眼情感-喜悦睁眼$side"] 1 "The happy $side eye pose is fully selected"
     Near (Sample $profile $graph @{ "EyeSquint$side" = 0.06 }).values["Eye/$side/Emotion"] 0 'The resting squint stays neutral'
+    $grin = Sample $profile $graph @{ MouthSmileLeft = 1.0; MouthSmileRight = 1.0 }
+    Near $grin.values["Eye/$side/Emotion"] 1 "A full mouth smile carries the $side eyes to the same value"
+    Near $grin.weights["HO-眼情感-喜悦睁眼$side"] 1 "A full mouth smile selects the happy $side eye pose"
+    $halfGrin = Sample $profile $graph @{ MouthSmileLeft = 0.5; MouthSmileRight = 0.5 }
+    Near $halfGrin.values["Eye/$side/Emotion"] 0.5 "A half smile puts the $side eyes at half too"
+    Near $halfGrin.values['Mouth/Emotion'] 0.5 'The mouth reference stays at half as well'
     $wideOnly = Sample $profile $graph @{ "EyeWide$side" = 1 }
     Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
     Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"

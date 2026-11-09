@@ -394,16 +394,17 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         )
         # 这两行原本按旧刻度（半闭 = 1）写的：半闭以前等于"已闭"，现在缩到 0.5。
         emotion["expression"] = (
-            f'clamp(clamp(({squint} - {EYE_SMILE_DEAD:g}) / {EYE_SMILE_FULL - EYE_SMILE_DEAD:g}, 0, 1) '
-            f'* clamp((0.5 - out("{axis}")) / 0.5, 0, 1) '
+            f'clamp(max(max(out("Mouth/Emotion"), 0), '
+            f'clamp(({squint} - {EYE_SMILE_DEAD:g}) / {EYE_SMILE_FULL - EYE_SMILE_DEAD:g}, 0, 1) '
+            f'* clamp((0.5 - out("{axis}")) / 0.5, 0, 1)) '
             '- max(-out("Mouth/Emotion"), 0) '
             f'- (1 - out("{ANGER_GATE}")) * clamp((browDown{side} - 0.45) / 0.15, 0, 1), -1, 1)'
         )
         emotion["notes"] = (
-            "−1 悲伤，0 常态，1 喜悦。眯眼证据按实测标定："
-            f"{EYE_SMILE_DEAD:g} 以下当 0（静息也在那里），{EYE_SMILE_FULL:g} 以上算笑满"
-            "（VTS 的 eyeSquint 峰值只有 0.34，直接当 0…1 用永远拉不满）。"
-            "闭到一半就衰减同侧眯眼的假笑证据；嘴部悲伤照常叠加；"
+            "−1 悲伤，0 常态，1 喜悦。喜悦证据取「嘴的喜悦」和「眯眼证据」的较大值，"
+            "这样眼睛和嘴的值天然对齐（实测：大张嘴笑时 eyeSquint 只有 0.05，光靠眯眼永远到不了满档）；"
+            f"眯眼那一路按实测标定：{EYE_SMILE_DEAD:g} 以下当 0、{EYE_SMILE_FULL:g} 以上算满，"
+            "并且只在眼睛没闭时才算数。嘴的悲伤照常叠加；"
             "愤怒开关关着时，同侧皱眉按悲伤算（Live2D 的优先级）。"
         )
         anger["expression"] = (
