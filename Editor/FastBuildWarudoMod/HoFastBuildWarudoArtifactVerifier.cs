@@ -317,7 +317,7 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             }
 
             result.artifactFound = true;
-            using (var file = new FileStream(artifactPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var file = OpenArtifactRead(artifactPath))
             {
                 int zipStart = FindZipStart(file);
                 if (zipStart < 0)
@@ -364,6 +364,27 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                     ReadModInfo(entries, result, expectedModName);
                     ReadAssemblyModules(entries, result);
                     return ReadScriptRecords(entries, result);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 构建刚结束时 UMod / Warudo 可能还握着产物句柄。短暂重试几次，
+        /// 避免把“刚好被占用”误判成产物损坏。
+        /// </summary>
+        private static FileStream OpenArtifactRead(string path)
+        {
+            const int maxAttempts = 8;
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                }
+                catch (IOException)
+                {
+                    if (attempt >= maxAttempts - 1) throw;
+                    System.Threading.Thread.Sleep(250);
                 }
             }
         }
@@ -618,6 +639,15 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (expectedComponents == null || expectedComponents.Count == 0)
                 return;
 
+            // 产物没读出来（被 Warudo/UMod 占用、容器损坏等）时不能把“没解析到”
+            // 当成“组件缺失”：那会在构建成功后刷出一整屏假的缺失。
+            if (!string.IsNullOrEmpty(result.error) && records == null)
+            {
+                result.incomplete = true;
+                result.warnings.Add("产物读取失败，已跳过组件比对；本次缺失结论无效。");
+                return;
+            }
+
             if (records == null)
                 records = new List<ScriptRecord>();
 
@@ -772,6 +802,9 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (!result.artifactFound)
                 return "产物复核未执行：" + (string.IsNullOrEmpty(result.error) ? "未找到产物。" : result.error);
 
+            if (!string.IsNullOrEmpty(result.error) && result.verdicts.Count == 0)
+                return "产物复核未完成（无法读取产物，构建本身可能已成功）：" + result.error;
+
             var builder = new StringBuilder();
             builder.Append("产物复核：");
 
@@ -813,6 +846,12 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return builder.ToString();
             }
 
+            if (!string.IsNullOrEmpty(result.error))
+            {
+                builder.Append("  结果：无法读取 - ").AppendLine(result.error);
+                builder.AppendLine("  组件/程序集比对已跳过；构建本身可能已成功，关闭占用后可重新复核。");
+            }
+
             if (result.missingEntries.Count > 0)
                 builder.Append("  缺少条目：").AppendLine(string.Join(", ", result.missingEntries.ToArray()));
 
@@ -823,8 +862,11 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             if (result.modAssemblyNames.Count > 0)
                 builder.Append("  Mod 程序集：").AppendLine(string.Join(", ", result.modAssemblyNames.ToArray()));
 
-            builder.Append("  编译类型：").Append(result.compiledTypes.Count).AppendLine(" 个");
-            builder.Append("  程序集记录：").Append(result.recordCount).AppendLine(" 条");
+            if (string.IsNullOrEmpty(result.error))
+            {
+                builder.Append("  编译类型：").Append(result.compiledTypes.Count).AppendLine(" 个");
+                builder.Append("  程序集记录：").Append(result.recordCount).AppendLine(" 条");
+            }
 
             if (result.buildLogFound)
             {

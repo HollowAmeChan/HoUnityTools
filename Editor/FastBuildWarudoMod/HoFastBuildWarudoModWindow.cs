@@ -3206,7 +3206,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
                 return;
 
             Debug.Log(verification.report);
-            if (verification.missingCount > 0)
+            if (!string.IsNullOrEmpty(verification.error))
+                Debug.LogWarning("[HoUnityTools] 产物复核未完成（无法读取产物，构建本身可能已成功）：" + verification.error +
+                                 "\n关闭占用产物的 Warudo/进程后可点“重新复核”，无需重新构建。");
+            else if (verification.missingCount > 0)
                 Debug.LogError("[HoUnityTools] 产物复核：" + verification.missingCount + " 个组件在产物中缺失。");
             else if (verification.reviewCount > 0)
                 Debug.LogWarning("[HoUnityTools] 产物复核：" + verification.reviewCount + " 个组件待确认。");
@@ -3265,7 +3268,10 @@ namespace Hollow.HoUnityTools.Editor.Warudo
             lastVerificationHasProblems = verification.HasProblems;
 
             Debug.Log(verification.report);
-            if (verification.missingCount > 0)
+            if (!string.IsNullOrEmpty(verification.error))
+                Debug.LogWarning("[HoUnityTools] 产物复核未完成（无法读取产物，构建本身可能已成功）：" + verification.error +
+                                 "\n关闭占用产物的 Warudo/进程后可点“重新复核”，无需重新构建。");
+            else if (verification.missingCount > 0)
                 Debug.LogError("[HoUnityTools] 产物复核：" + verification.missingCount + " 个组件在产物中缺失。");
             else if (verification.reviewCount > 0)
                 Debug.LogWarning("[HoUnityTools] 产物复核：" + verification.reviewCount + " 个组件待确认。");
