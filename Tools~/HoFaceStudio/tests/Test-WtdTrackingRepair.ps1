@@ -144,8 +144,12 @@ foreach ($side in @('Left', 'Right')) {
     Near (EyelidSum (Sample $profile $graph $rawWink).weights $side '紧闭') 0 "The $side eyelid Gate is preserved"
     $smile = Sample $profile $graph @{ "EyeBlink$side" = 0.47; "EyeSquint$side" = 0.103 }
     Check ($smile.values["Eye/$side/Open"] -lt 0.05 -and $smile.values["Eye/$side/Emotion"] -gt 0.05) 'Old smile-squint baseline must not turn into a blink.'
-    Near (Sample $profile $graph @{ "EyeWide$side" = 1 }).values["Eye/$side/Open"] 0 'The eye width input no longer drives the open axis'
-    Near (Sample $profile $graph @{ "EyeWide$side" = 1 }).weights["HO-眼情感-常态睁眼$side"] 1 'A bare eye width input leaves the eye open'
+    $wideOnly = Sample $profile $graph @{ "EyeWide$side" = 1 }
+    Near $wideOnly.values["Eye/$side/Open"] -0.2 "The $side eye width input reaches the wide end of the axis"
+    Near $wideOnly.weights["HO-眼情感-常态张大$side"] 1 "Wide selects the real $side wide pose"
+    $closedWide = Sample $profile $graph @{ "EyeBlink$side" = 1; "EyeWide$side" = 1 }
+    Near $closedWide.values["Eye/$side/Open"] 1 'Wide cannot reopen a closed eye'
+    Near $closedWide.weights["HO-眼情感-常态紧闭$side"] 1 'A closed eye stays closed with a wide input'
     Near (Sample $profile $graph @{ "BrowDown$side" = 0.92 }).weights["HO-眼情感-愤怒睁眼$side"] 1 'Real open-eye anger still works'
 }
 $both = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; EyeSquintLeft = 0.8; EyeSquintRight = 0.8 }
@@ -173,11 +177,22 @@ foreach ($fps in @(30, 60, 120)) {
     $session.Evaluate((Raw @{}), 0)
     for ($frame = 1; $frame -le 12; $frame++) { $session.Evaluate((Raw $wink), $frame / [double]$fps) }
     $graph.Evaluate($session.Values)
-    Near $graph.Values['HO-眼情感-常态紧闭Left'] 1 "Stateful wink settles at closed at ${fps}fps"
+    Check ($graph.Values['HO-眼情感-常态紧闭Left'] -gt 0.99) "Stateful wink settles at closed at ${fps}fps"
     Near $graph.Values['HO-眼情感-愤怒睁眼Left'] 0 "Stateful wink does not stay on angry open at ${fps}fps"
     # An absent channel is held by the Value session; an actual release sends zeros.
+    # The jelly undershoots past the wide end on release, so watch the ring-out instead
+    # of sampling one frame: the undershoot moment differs per frame rate.
     $release = @{ EyeBlinkLeft = 0; EyeSquintLeft = 0; BrowDownLeft = 0; BrowDownRight = 0 }
-    for ($frame = 13; $frame -le 24; $frame++) { $session.Evaluate((Raw $release), $frame / [double]$fps) }
+    $minOpen = 1.0
+    $releaseFrames = [int]($fps * 0.8)
+    for ($frame = 13; $frame -le 12 + $releaseFrames; $frame++) {
+        $session.Evaluate((Raw $release), $frame / [double]$fps)
+        $minOpen = [Math]::Min($minOpen, $session.Values['Eye/Left/Open'])
+    }
+    Check ($minOpen -lt -0.05 -and $minOpen -ge -0.2) "Release undershoots into the wide band at ${fps}fps: $minOpen"
+    for ($frame = 13 + $releaseFrames; $frame -le 12 + $releaseFrames + [int]($fps * 2); $frame++) {
+        $session.Evaluate((Raw $release), $frame / [double]$fps)
+    }
     $graph.Evaluate($session.Values)
     Near $graph.Values['HO-眼情感-常态睁眼Left'] 1 "Release returns to open at ${fps}fps"
 }

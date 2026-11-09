@@ -70,12 +70,17 @@ def verify_graph_contract(nodes, root_id):
         for branch, axis in (("main", "parameterY"), ("anger", "parameterX")):
             node = nodes[f"graph.eye.{side.lower()}.{branch}"]
             coordinate = "y" if branch == "main" else "threshold"
-            if node.get(axis) != f"Eye/{side}/Open" or {
-                child[coordinate] for child in node["children"]
-            } != {-1, 0, 1, 2}:
-                raise ValueError(f"Expected the WTD {side}/{branch} eyelid knots at -1, 0, 1, 2.")
+            positions = {round(float(child[coordinate]), 4) for child in node["children"]}
+            old = {-1.0, 0.0, 1.0, 2.0}
+            new = {EYE_WIDE_END, 0.0, EYE_HALF, EYE_CLOSED}
+            if node.get(axis) != f"Eye/{side}/Open" or positions not in (old, new):
+                raise ValueError(
+                    f"Expected the WTD {side}/{branch} eyelid knots at -1, 0, 1, 2 "
+                    f"or {EYE_WIDE_END}, 0, {EYE_HALF}, {EYE_CLOSED}."
+                )
+            closed_at = {1.0: "半闭", 2.0: "紧闭"} if positions == old else {EYE_HALF: "半闭", EYE_CLOSED: "紧闭"}
             for child in node["children"]:
-                label = {1: "半闭", 2: "紧闭"}.get(child[coordinate])
+                label = closed_at.get(round(float(child[coordinate]), 4))
                 if label is not None and not any(
                     weight["target"].endswith(label + side) and weight["value"] == 1
                     for weight in nodes[child["node"]].get("weights", [])
@@ -193,33 +198,44 @@ def repair_mouth_direction(ir):
     place("graph.jaw", {"pose.jaw.left": -1, "pose.jaw.right": 1}, JAW_SHIFT_X)
 
 
+def _jelly_settings(row, default):
+    """Reuse the jelly values already authored on the row, so re-running keeps hand tuning."""
+    for modifier in row.get("modifiers") or []:
+        if modifier.get("kind") == "jelly":
+            return tuple(modifier.get(key, default[i]) for i, key in enumerate(
+                ("strength", "frequency", "damping", "minimum", "maximum")))
+    return default
+
+
 def repair_eye_axis(ir):
     """Rescale the eyelid axis to 0 open / 0.5 half / 1 closed, with -0.2 and 1.2 for jelly.
 
     The authored tables used -1 / 0 / 1 / 2 (open, half, closed); the axis now uses
     0 / 0.5 / 1 and keeps 1.2 free for the over-close shape that is still being made.
     """
-    def moved(value):
-        return EYE_OLD_TO_NEW.get(round(float(value), 4), value)
-
     for name in ("Eye/Left/Open", "Eye/Right/Open"):
         for parameter in ir["parameters"]:
             if parameter["name"] == name:
                 parameter["min"] = EYE_WIDE_END
                 parameter["max"] = EYE_OVER_END
     nodes = {node["id"]: node for node in ir["nodes"]}
+    old_positions = set(EYE_OLD_TO_NEW)
+
+    def rescale(node, coordinate):
+        positions = {round(float(child.get(coordinate, 0)), 4) for child in node["children"]}
+        if positions != old_positions:
+            return  # already on the new scale; mapping again would collide 1.0 with the half knot
+        for child in node["children"]:
+            child[coordinate] = EYE_OLD_TO_NEW[round(float(child.get(coordinate, 0)), 4)]
+
     for side in ("left", "right"):
-        main = nodes[f"graph.eye.{side}.main"]
-        for child in main["children"]:
-            child["y"] = moved(child.get("y", 0))
-        anger = nodes[f"graph.eye.{side}.anger"]
-        for child in anger["children"]:
-            child["threshold"] = moved(child.get("threshold", 0))
+        rescale(nodes[f"graph.eye.{side}.main"], "y")
+        rescale(nodes[f"graph.eye.{side}.anger"], "threshold")
 
 
 def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
            blink_floor=0.48, blink_full=0.80, cheek_knee=CHEEK_KNEE, cheek_full=CHEEK_FULL,
-           jelly_strength=0.0, jelly_frequency=6.0, jelly_damping=0.3):
+           jelly_strength=None, jelly_frequency=None, jelly_damping=None):
     if (value.get("format"), value.get("version"), ir.get("format"), ir.get("version")) != (
         "ho-face-value", 1, "ho-face-ir", 2
     ):
@@ -259,25 +275,32 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
     for side, other in (("Left", "Right"), ("Right", "Left")):
         axis = f"Eye/{side}/Open"
         opened, emotion, anger = (by_name[f"Eye/{side}/{key}"] for key in ("Open", "Emotion", "Anger"))
-        blink, squint = (f"eye{key}{side}" for key in ("Blink", "Squint"))
-        # 0 常态 / 0.5 半闭 / 1 闭眼。两侧超出（-0.2 张大、1.2 过闭）只由果冻修饰器推出去，
-        # 表达式自己不出界；眼宽输入不再直接驱动这根轴。
+        blink, squint, wide = (f"eye{key}{side}" for key in ("Blink", "Squint", "Wide"))
+        # 0 常态 / 0.5 半闭 / 1 闭眼。宽输入是 ARKit 原生信号，直接把它压到 −0.2 那一端；
+        # 1.2 过闭没有对应输入，仍然只由果冻推出去。闭眼时宽项自动失效，不会把眼睛掰开。
         opened["expression"] = (
             f"clamp(max({blink} - 3.9 * {squint} - 0.06, "
-            f"({blink} - {blink_floor:g}) / {blink_full - blink_floor:g}), 0, 1)"
+            f"({blink} - {blink_floor:g}) / {blink_full - blink_floor:g}), 0, 1) "
+            f"- {abs(EYE_WIDE_END):g} * clamp({wide}, 0, 1) "
+            f"* clamp(({blink_floor:g} - {blink}) / {blink_floor:g}, 0, 1)"
         )
         opened["curve"] = {"keys": [
             {"t": EYE_WIDE_END, "v": EYE_WIDE_END, "inT": 1, "outT": 1},
             {"t": EYE_OVER_END, "v": EYE_OVER_END, "inT": 1, "outT": 1},
         ]}
+        tuned = _jelly_settings(opened, (0.0, 6.0, 0.3, EYE_WIDE_END, EYE_OVER_END))
+        strength = jelly_strength if jelly_strength is not None else tuned[0]
+        frequency = jelly_frequency if jelly_frequency is not None else tuned[1]
+        damping = jelly_damping if jelly_damping is not None else tuned[2]
         opened["modifiers"] = [
             {"kind": "smooth", "seconds": 0.007, "steps": []},
-            {"kind": "jelly", "seconds": 0, "steps": [], "strength": jelly_strength,
-             "frequency": jelly_frequency, "damping": jelly_damping,
+            {"kind": "jelly", "seconds": 0, "steps": [], "strength": strength,
+             "frequency": frequency, "damping": damping,
              "minimum": EYE_WIDE_END, "maximum": EYE_OVER_END},
         ]
         opened["notes"] = (
-            "0 常态睁眼，0.5 半闭，1 闭眼。超出段 −0.2 张大 / 1.2 过闭只由果冻（轴值修饰器）推出："
+            "0 常态睁眼，0.5 半闭，1 闭眼。眼宽输入直接压到 −0.2 张大（闭眼时自动失效）；"
+            "1.2 过闭没有对应输入，只由果冻（轴值修饰器）推出去："
             f"强度 0 = 直通，绝不会越过 {EYE_WIDE_END:g}…{EYE_OVER_END:g}；强度越大过冲越远。"
             f"弱眨眼保留旧去眯眼串扰；blink 达 {blink_floor:g} 后强闭合保底生效，{blink_full:g} 到闭眼。"
         )
@@ -314,7 +337,7 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         f"鼓嘴量只取 cheekPuff（{cheek_knee:g} 起、{cheek_full:g} 满），嘴巴左右平移不再触发鼓嘴，"
         "鼓嘴生效时关闭嘴整体位移，避免叠成歪嘴。"
         f"眼睑轴改为 0 常态 / {EYE_HALF:g} 半闭 / {EYE_CLOSED:g} 闭眼，"
-        f"{EYE_WIDE_END:g}／{EYE_OVER_END:g} 只由果冻修饰器推出（强度 {jelly_strength:g}）。"
+        f"眼宽输入压到 {EYE_WIDE_END:g} 张大（闭眼时失效），{EYE_OVER_END:g} 过闭只由果冻修饰器推出。"
     )
     value["notes"] = value.get("notes", "").replace(old_description, "").rstrip()
     kept = [line for line in value["notes"].splitlines() if not line.startswith("2026-11-09：")]
@@ -336,9 +359,9 @@ def main():
     parser.add_argument("--blink-full", type=float, default=0.80)
     parser.add_argument("--cheek-knee", type=float, default=CHEEK_KNEE)
     parser.add_argument("--cheek-full", type=float, default=CHEEK_FULL)
-    parser.add_argument("--jelly-strength", type=float, default=0.0)
-    parser.add_argument("--jelly-frequency", type=float, default=6.0)
-    parser.add_argument("--jelly-damping", type=float, default=0.3)
+    parser.add_argument("--jelly-strength", type=float, default=None, help="留空 = 沿用行上已有的果冻强度")
+    parser.add_argument("--jelly-frequency", type=float, default=None)
+    parser.add_argument("--jelly-damping", type=float, default=None)
     args = parser.parse_args()
     before_value, before_ir = (json.loads(p.read_text(encoding="utf-8-sig")) for p in (args.value, args.ir))
     value, ir = repair(
