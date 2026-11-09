@@ -17,6 +17,8 @@ EYE_HALF = 0.5
 EYE_CLOSED = 1.0
 EYE_OVER_END = 1.2
 EYE_OLD_TO_NEW = {-1.0: EYE_WIDE_END, 1.0: EYE_HALF, 2.0: EYE_CLOSED}
+ANGER_GATE = "Gate/Anger"
+ANGER_INPUT = "AngerEnabled"
 DETAIL_ROOT = "graph.eye.details"
 DETAIL_GATE = "Gate/EyeDetails"
 EYE_EFFECT_PREFIXES = ("Pupil/", "Iris/", "Highlight1/", "Highlight2/")
@@ -168,6 +170,49 @@ def repair_cheek(value, ir, *, knee=CHEEK_KNEE, full=CHEEK_FULL):
         children[pose]["threshold"] = CHEEK_MAX
 
 
+def repair_anger_gate(value):
+    """Sadness owns the brow; anger only happens behind a manual switch (Live2D habit).
+
+    Wired as a value-layer gate instead of an IR branch weight: blend1d/blend2d children
+    ignore weightParameter, so a gate on the anger branch would fade the whole eye table.
+    """
+    inputs = value["inputs"]
+    rows = value["outputs"]
+    if not any(row["parameter"] == ANGER_INPUT for row in inputs):
+        inputs.append({
+            "parameter": ANGER_INPUT,
+            "expression": ANGER_INPUT,
+            "defaultValue": 0,
+            "notes": "外部手动开关：1 = 允许皱眉进愤怒，0（默认）= 皱眉走悲伤。",
+            "curve": {"keys": [
+                {"t": 0, "v": 0, "inT": 1, "outT": 1},
+                {"t": 1, "v": 1, "inT": 1, "outT": 1},
+            ]},
+            "modifiers": [],
+        })
+    by_name = {row["parameter"]: row for row in rows}
+    if ANGER_GATE not in by_name:
+        gate = {
+            "parameter": ANGER_GATE,
+            "expression": ANGER_INPUT,
+            "defaultValue": 0,
+            "notes": "愤怒手动开关；开着时皱眉才进愤怒表，关着时皱眉全归悲伤。",
+            "curve": {"keys": [
+                {"t": 0, "v": 0, "inT": 1, "outT": 1},
+                {"t": 1, "v": 1, "inT": 1, "outT": 1},
+            ]},
+            "modifiers": [],
+        }
+        anchor = by_name.get("Gate/Eye/Right")
+        rows.insert(rows.index(anchor) + 1 if anchor else len(rows), gate)
+        by_name = {row["parameter"]: row for row in rows}
+    gate_index = rows.index(by_name[ANGER_GATE])
+    for side in ("Left", "Right"):
+        for key in ("Emotion", "Anger"):
+            if rows.index(by_name[f"Eye/{side}/{key}"]) <= gate_index:
+                raise ValueError(f"Eye/{side}/{key} must be evaluated after {ANGER_GATE}.")
+
+
 def repair_mouth_direction(ir):
     """Put the lateral tables back on ARKit's first-person left/right.
 
@@ -251,6 +296,8 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
 
     rows = value["outputs"]
     by_name = {row["parameter"]: row for row in rows}
+    repair_anger_gate(value)
+    by_name = {row["parameter"]: row for row in value["outputs"]}
     width = by_name["Mouth/Width"]
     target_width = "2 * (mouthDimpleLeft + mouthDimpleRight) - mouthPucker"
     if width.get("expression") != target_width:
@@ -307,14 +354,19 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         # 这两行原本按旧刻度（半闭 = 1）写的：半闭以前等于"已闭"，现在缩到 0.5。
         emotion["expression"] = (
             f'clamp({squint} * clamp((0.5 - out("{axis}")) / 0.5, 0, 1) '
-            '- max(-out("Mouth/Emotion"), 0), -1, 1)'
+            '- max(-out("Mouth/Emotion"), 0) '
+            f'- (1 - out("{ANGER_GATE}")) * clamp((browDown{side} - 0.45) / 0.15, 0, 1), -1, 1)'
         )
-        emotion["notes"] = "−1 悲伤，0 常态，1 喜悦。闭到一半就衰减同侧 Squint 的假笑证据；保留嘴部悲伤来源。"
+        emotion["notes"] = (
+            "−1 悲伤，0 常态，1 喜悦。闭到一半就衰减同侧 Squint 的假笑证据；"
+            "嘴部悲伤照常叠加；愤怒开关关着时，同侧皱眉按悲伤算（Live2D 的优先级）。"
+        )
         anger["expression"] = (
-            f'clamp((browDown{side} - 0.45) / 0.15, 0, 1) * '
+            f'out("{ANGER_GATE}") * clamp((browDown{side} - 0.45) / 0.15, 0, 1) * '
             f'max(clamp(1 - 2 * out("{axis}"), 0, 1), clamp((browDown{other} - 0.6) / 0.25, 0, 1))'
         )
         anger["notes"] = (
+            "只有手动开关 Gate/Anger 打开时皱眉才进愤怒表；关着时恒 0，皱眉全走悲伤。"
             "同侧单独压眉只在眼睛睁开时保留，避免单眼 wink 切入愤怒睁眼。"
             "闭眼时，只有对侧也强压眉才保留愤怒闭眼表现。"
         )
@@ -338,6 +390,7 @@ def repair(value, ir, *, width_neutral_min=-0.14, width_neutral_max=0.40,
         "鼓嘴生效时关闭嘴整体位移，避免叠成歪嘴。"
         f"眼睑轴改为 0 常态 / {EYE_HALF:g} 半闭 / {EYE_CLOSED:g} 闭眼，"
         f"眼宽输入压到 {EYE_WIDE_END:g} 张大（闭眼时失效），{EYE_OVER_END:g} 过闭只由果冻修饰器推出。"
+        f"皱眉默认算悲伤；愤怒要手动开 {ANGER_INPUT}（{ANGER_GATE}），默认关。"
     )
     value["notes"] = value.get("notes", "").replace(old_description, "").rstrip()
     kept = [line for line in value["notes"].splitlines() if not line.startswith("2026-11-09：")]

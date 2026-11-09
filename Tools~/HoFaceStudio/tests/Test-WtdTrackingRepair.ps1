@@ -70,7 +70,7 @@ $retiredShapes = '^HO-(瞳孔|眼仁|高光)'
 $eyeOrWidth = '^(HO-眼情感-|HO-嘴宽-|HO-脸颊-|HO-嘴位置-|HO-下巴位置-)'
 $changed = @('Mouth/Width', 'Eye/Left/Open', 'Eye/Left/Emotion', 'Eye/Left/Anger',
     'Eye/Right/Open', 'Eye/Right/Emotion', 'Eye/Right/Anger',
-    'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove')
+    'Cheek/Left', 'Cheek/Right', 'Gate/MouthMove', 'Gate/Anger')
 $authoredLateral = @('graph.mouth.move', 'graph.jaw', 'graph.cheek.left', 'graph.cheek.right',
     'graph.eye.left.main', 'graph.eye.right.main', 'graph.eye.left.anger', 'graph.eye.right.anger')
 Check (@($newValues.inputs | Where-Object { $_.parameter -match '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' }).Count -eq 0) 'Eye detail inputs remain.'
@@ -80,7 +80,9 @@ Check (@($newIrJson.targets | Where-Object { $_.id -match $retiredShapes }).Coun
 Check (@($newIrJson.nodes | Where-Object { $_.id -match '^graph\.(eye\.details|pupil|iris|highlight)' }).Count -eq 0) 'Retired branches remain.'
 Check (@($newValues.inputs | Where-Object { $_.parameter -in @('eyeBlinkLeft','eyeBlinkRight') }).Count -eq 2) 'Canonical blink inputs were lost.'
 function Compact($Object) { ConvertTo-Json -InputObject $Object -Compress -Depth 100 }
-Check ((Compact @($oldValues.inputs | Where-Object { $_.parameter -notmatch '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' })) -ceq (Compact $newValues.inputs)) 'Unrelated input definitions changed.'
+Check ((Compact @($oldValues.inputs | Where-Object { $_.parameter -notmatch '^(EyeDetailsEnabled$|HoPupil|HoIris|HoHighlight)' })) -ceq
+    (Compact @($newValues.inputs | Where-Object { $_.parameter -ne 'AngerEnabled' }))) 'Unrelated input definitions changed.'
+Check (@($newValues.inputs | Where-Object { $_.parameter -eq 'AngerEnabled' -and $_.defaultValue -eq 0 }).Count -eq 1) 'The anger switch input must exist and default to 0.'
 $oldNodes = @{}; foreach ($node in $oldIrJson.nodes) { $oldNodes[$node.id] = $node }
 foreach ($node in $newIrJson.nodes) {
     if ($node.id -ne $newIrJson.root -and $node.id -notin $authoredLateral) { Check ((Compact $oldNodes[$node.id]) -ceq (Compact $node)) "A retained authored node changed: $($node.id)" }
@@ -136,7 +138,7 @@ foreach ($side in @('Left', 'Right')) {
         $sample = Sample $profile $graph $rawWink
         Near $sample.values["Eye/$side/Open"] 1 "Strong $side blink reaches the closed knot on the 0..1 axis"
         Near $sample.values["Eye/$side/Anger"] 0 "Unilateral brow movement does not turn the wink into anger"
-        Near $sample.weights["HO-眼情感-常态紧闭$side"] 1 "The real $side closed BS is fully selected"
+        Near (EyelidSum $sample.weights $side '紧闭') 1 "The real $side closed BS is fully selected"
         Near (EyelidSum $sample.weights $side '睁眼') 0 "No open pose leaks into a full wink"
         Near $sample.values["Eye/$other/Open"] 0 "The opposite eye remains open"
     }
@@ -150,14 +152,24 @@ foreach ($side in @('Left', 'Right')) {
     $closedWide = Sample $profile $graph @{ "EyeBlink$side" = 1; "EyeWide$side" = 1 }
     Near $closedWide.values["Eye/$side/Open"] 1 'Wide cannot reopen a closed eye'
     Near $closedWide.weights["HO-眼情感-常态紧闭$side"] 1 'A closed eye stays closed with a wide input'
-    Near (Sample $profile $graph @{ "BrowDown$side" = 0.92 }).weights["HO-眼情感-愤怒睁眼$side"] 1 'Real open-eye anger still works'
+    $browSad = Sample $profile $graph @{ "BrowDown$side" = 0.92 }
+    Near $browSad.values["Eye/$side/Emotion"] -1 "A bare $side brow reads as sadness"
+    Near $browSad.values["Eye/$side/Anger"] 0 'Brows stay out of anger while the gate is closed'
+    Near $browSad.weights["HO-眼情感-悲伤睁眼$side"] 1 "A bare $side brow picks the sad eye pose"
+    $angry = Sample $profile $graph @{ "BrowDown$side" = 0.92; AngerEnabled = 1 }
+    Near $angry.values["Eye/$side/Anger"] 1 'The anger gate lets a brow into anger'
+    Near $angry.weights["HO-眼情感-愤怒睁眼$side"] 1 'Real open-eye anger still works with the gate on'
+    Near $angry.values["Eye/$side/Emotion"] 0 'Brows do not also read as sadness while anger is open'
 }
 $both = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; EyeSquintLeft = 0.8; EyeSquintRight = 0.8 }
 Near $both.weights['HO-眼情感-常态紧闭Left'] 1 'Bilateral blink reaches full left closure'
 Near $both.weights['HO-眼情感-常态紧闭Right'] 1 'Bilateral blink reaches full right closure'
-$angryBlink = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; BrowDownLeft = 0.92; BrowDownRight = 0.95 }
+$angryBlink = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; BrowDownLeft = 0.92; BrowDownRight = 0.95; AngerEnabled = 1 }
 Near $angryBlink.weights['HO-眼情感-愤怒紧闭Left'] 1 'Bilateral brow evidence still allows an angry closed pose'
 Near $angryBlink.weights['HO-眼情感-愤怒紧闭Right'] 1 'Bilateral brow evidence still allows an angry closed pose'
+$sadBlink = Sample $profile $graph @{ EyeBlinkLeft = 1; EyeBlinkRight = 1; BrowDownLeft = 0.92; BrowDownRight = 0.95 }
+Near $sadBlink.weights['HO-眼情感-悲伤紧闭Left'] 1 'With the anger gate closed the same blink reads as sadness'
+Near $sadBlink.weights['HO-眼情感-悲伤紧闭Right'] 1 'With the anger gate closed the same blink reads as sadness'
 foreach ($side in @('Left','Right')) {
     $prev = 0.0
     foreach ($step in 0..100) {
@@ -177,7 +189,7 @@ foreach ($fps in @(30, 60, 120)) {
     $session.Evaluate((Raw @{}), 0)
     for ($frame = 1; $frame -le 12; $frame++) { $session.Evaluate((Raw $wink), $frame / [double]$fps) }
     $graph.Evaluate($session.Values)
-    Check ($graph.Values['HO-眼情感-常态紧闭Left'] -gt 0.99) "Stateful wink settles at closed at ${fps}fps"
+    Check ((EyelidSum $graph.Values 'Left' '紧闭') -gt 0.99) "Stateful wink settles at closed at ${fps}fps"
     Near $graph.Values['HO-眼情感-愤怒睁眼Left'] 0 "Stateful wink does not stay on angry open at ${fps}fps"
     # An absent channel is held by the Value session; an actual release sends zeros.
     # The jelly undershoots past the wide end on release, so watch the ring-out instead
