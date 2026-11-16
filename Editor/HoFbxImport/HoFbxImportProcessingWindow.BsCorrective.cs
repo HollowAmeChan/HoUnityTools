@@ -26,7 +26,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             bool valid = HoFbxBsCorrectiveImportUtility.TryPreview(bsCorrectiveJson, targetRig, out int count, out string error);
             bsCorrectivePreviewExpanded = EditorGUILayout.Foldout(
-                bsCorrectivePreviewExpanded, $"BS 修型规则预览 · {count} 条", true);
+                bsCorrectivePreviewExpanded, $"BS 修型目标预览 · {count} 个目标", true);
             if (!bsCorrectivePreviewExpanded) return;
             using (new EditorGUI.IndentLevelScope())
             {
@@ -42,9 +42,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 {
                     using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                     {
+                        HoFbxBsCorrectiveImportUtility.Target[] targets = rule.targets;
+                        if (targets == null || targets.Length == 0)
+                        {
+                            targets = string.IsNullOrWhiteSpace(rule.mesh) && string.IsNullOrWhiteSpace(rule.shapeKey)
+                                ? Array.Empty<HoFbxBsCorrectiveImportUtility.Target>()
+                                : new[] { new HoFbxBsCorrectiveImportUtility.Target { mesh = rule.mesh, shapeKey = rule.shapeKey } };
+                        }
                         EditorGUILayout.LabelField(
-                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + rule.mesh + " / " + rule.shapeKey,
+                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + targets.Length + " 个目标",
                             EditorStyles.boldLabel);
+                        foreach (HoFbxBsCorrectiveImportUtility.Target target in targets)
+                            EditorGUILayout.LabelField("目标", target.mesh + " / " + target.shapeKey);
                         EditorGUILayout.LabelField(rule.expression ?? string.Empty, EditorStyles.wordWrappedMiniLabel);
                         if (!string.IsNullOrEmpty(rule.comment))
                             EditorGUILayout.LabelField(rule.comment, EditorStyles.wordWrappedMiniLabel);

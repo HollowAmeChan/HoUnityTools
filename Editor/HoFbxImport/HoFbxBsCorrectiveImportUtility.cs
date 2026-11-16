@@ -38,9 +38,19 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string measurementBone;
             public string mesh;
             public string shapeKey;
+            // New Blender authoring format: one corrective rule may drive many targets.
+            // mesh/shapeKey remain for v1 metadata written by older HoTools versions.
+            public Target[] targets;
             public string expression;
             public string comment;
             public Variable[] variables;
+        }
+
+        [Serializable]
+        public sealed class Target
+        {
+            public string mesh;
+            public string shapeKey;
         }
 
         [Serializable]
@@ -59,7 +69,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             try
             {
                 Config config = Parse(metadata);
-                count = config.rules.Length;
+                count = config.rules.Sum(CountTargets);
                 if (rig != null) Prepare(config, rig, SourceId(metadata));
                 return true;
             }
@@ -127,9 +137,14 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 if (rule == null || string.IsNullOrWhiteSpace(rule.id) || !ids.Add(rule.id))
                     throw new InvalidDataException("BS 修型规则 id 为空或重复。");
                 string label = "BS 修型规则「" + rule.id + "」";
-                if (string.IsNullOrWhiteSpace(rule.armatureName) || string.IsNullOrWhiteSpace(rule.bone) ||
-                    string.IsNullOrWhiteSpace(rule.mesh) || string.IsNullOrWhiteSpace(rule.shapeKey))
-                    throw new InvalidDataException(label + " 缺少 armatureName / bone / mesh / shapeKey。");
+                if (string.IsNullOrWhiteSpace(rule.armatureName) || string.IsNullOrWhiteSpace(rule.bone))
+                    throw new InvalidDataException(label + " 缺少 armatureName / bone。");
+                Target[] targets = TargetsFor(rule);
+                if (targets.Length == 0)
+                    throw new InvalidDataException(label + " 缺少 targets（或旧格式 mesh / shapeKey）。");
+                foreach (Target target in targets)
+                    if (target == null || string.IsNullOrWhiteSpace(target.mesh) || string.IsNullOrWhiteSpace(target.shapeKey))
+                        throw new InvalidDataException(label + " 包含不完整的目标网格或形态键。");
                 var names = new HashSet<string>(StringComparer.Ordinal);
                 foreach (Variable variable in rule.variables ?? Array.Empty<Variable>())
                 {
@@ -147,7 +162,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private static List<HoBsCorrective.Rule> Prepare(Config config, GameObject rig, string sourceId)
         {
             Transform searchRoot = ResolveSearchRoot(rig.transform);
-            Transform[] transforms = searchRoot.GetComponentsInChildren<Transform>(true);
             SkinnedMeshRenderer[] renderers = searchRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             var result = new List<HoBsCorrective.Rule>();
             foreach (Rule rule in config.rules)
@@ -155,12 +169,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 Transform armature = ResolveArmature(rig.transform, rule.armatureName);
                 string measurementName = string.IsNullOrWhiteSpace(rule.measurementBone) ? rule.bone : rule.measurementBone;
                 Transform bone = UniqueBone(armature, measurementName);
-                SkinnedMeshRenderer[] matchingMeshes = renderers.Where(x => x.name == rule.mesh).ToArray();
-                if (matchingMeshes.Length != 1)
-                    throw new InvalidDataException($"网格「{rule.mesh}」匹配到 {matchingMeshes.Length} 个 SkinnedMeshRenderer，必须唯一。");
-                SkinnedMeshRenderer target = matchingMeshes[0];
-                if (target.sharedMesh == null || target.sharedMesh.GetBlendShapeIndex(rule.shapeKey) < 0)
-                    throw new InvalidDataException($"网格「{rule.mesh}」没有精确名称形态键「{rule.shapeKey}」。");
                 var variables = new List<HoBsCorrective.Variable>();
                 foreach (Variable variable in rule.variables ?? Array.Empty<Variable>())
                 {
@@ -174,26 +182,49 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         sourceBone = variable.bone,
                     });
                 }
-                result.Add(new HoBsCorrective.Rule
+                Target[] targets = TargetsFor(rule);
+                for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
                 {
-                    id = rule.id,
-                    sourceId = sourceId,
-                    enabled = rule.enabled,
-                    bone = bone,
-                    target = target,
-                    shapeName = rule.shapeKey,
-                    expression = rule.expression,
-                    comment = rule.comment ?? string.Empty,
-                    bonePath = AnimationUtility.CalculateTransformPath(bone, searchRoot),
-                    targetPath = AnimationUtility.CalculateTransformPath(target.transform, searchRoot),
-                    // Keep the authored source name for auditability; bone points to
-                    // the exported MCH measurement transform when preprocessing used it.
-                    sourceBone = rule.bone,
-                    variables = variables,
-                });
+                    Target targetData = targets[targetIndex];
+                    SkinnedMeshRenderer[] matchingMeshes = renderers.Where(x => x.name == targetData.mesh).ToArray();
+                    if (matchingMeshes.Length != 1)
+                        throw new InvalidDataException($"网格「{targetData.mesh}」匹配到 {matchingMeshes.Length} 个 SkinnedMeshRenderer，必须唯一。");
+                    SkinnedMeshRenderer target = matchingMeshes[0];
+                    if (target.sharedMesh == null || target.sharedMesh.GetBlendShapeIndex(targetData.shapeKey) < 0)
+                        throw new InvalidDataException($"网格「{targetData.mesh}」没有精确名称形态键「{targetData.shapeKey}」。");
+                    result.Add(new HoBsCorrective.Rule
+                    {
+                        // Keep the old id for a single target; suffix expanded targets so
+                        // editor diagnostics can distinguish rows from one Blender rule.
+                        id = targets.Length == 1 ? rule.id : rule.id + ":" + targetIndex,
+                        sourceId = sourceId,
+                        enabled = rule.enabled,
+                        bone = bone,
+                        target = target,
+                        shapeName = targetData.shapeKey,
+                        expression = rule.expression,
+                        comment = rule.comment ?? string.Empty,
+                        bonePath = AnimationUtility.CalculateTransformPath(bone, searchRoot),
+                        targetPath = AnimationUtility.CalculateTransformPath(target.transform, searchRoot),
+                        // Keep the authored source name for auditability; bone points to
+                        // the exported MCH measurement transform when preprocessing used it.
+                        sourceBone = rule.bone,
+                        variables = new List<HoBsCorrective.Variable>(variables),
+                    });
+                }
             }
             return result;
         }
+
+        private static Target[] TargetsFor(Rule rule)
+        {
+            if (rule.targets != null && rule.targets.Length > 0) return rule.targets;
+            if (!string.IsNullOrWhiteSpace(rule.mesh) || !string.IsNullOrWhiteSpace(rule.shapeKey))
+                return new[] { new Target { mesh = rule.mesh, shapeKey = rule.shapeKey } };
+            return Array.Empty<Target>();
+        }
+
+        private static int CountTargets(Rule rule) => TargetsFor(rule).Length;
 
         private static Transform ResolveSearchRoot(Transform rig)
         {
