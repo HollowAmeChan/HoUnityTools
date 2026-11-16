@@ -1,0 +1,23 @@
+{
+  "schema": "hotools.bs-corrective",
+  "version": 1,
+  "rotationOrder": "XYZ",
+  "angleUnit": "radian",
+  "rotationSpace": "LOCAL",
+  "fbxBoneAxes": "Y_X",
+  "measurement": "source_local_rotation",
+  "rules": [
+    {
+      "id": "probe-rule",
+      "enabled": true,
+      "armatureName": "BsAuthoringArmature",
+      "bone": "UpperArm.L",
+      "measurementBone": "MCH_UpperArm.L",
+      "mesh": "Coat",
+      "shapeKey": "ArmRaise.L",
+      "expression": "clamp(x / 1.57079632679, 0, 1)",
+      "comment": "",
+      "variables": []
+    }
+  ]
+}

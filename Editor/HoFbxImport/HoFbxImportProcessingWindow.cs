@@ -18,7 +18,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
     /// user assets implicitly; this window applies the selected pieces only
     /// after confirmation.
     /// </summary>
-    internal sealed class HoFbxImportProcessingWindow : EditorWindow
+    internal sealed partial class HoFbxImportProcessingWindow : EditorWindow
     {
         private enum ToolPage
         {
@@ -375,16 +375,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             else
                 constraintJsonCandidates.Clear();
             collectionJson = null;
+            bsCorrectiveJson = null;
         }
 
         private void DrawMappingPanel()
         {
             int foundCount = (humanoidJson != null ? 1 : 0) +
                              (constraintJson != null ? 1 : 0) +
-                             (collectionJson != null ? 1 : 0);
+                             (collectionJson != null ? 1 : 0) +
+                             (bsCorrectiveJson != null ? 1 : 0);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                DrawPanelHeader("导入数据", $"已找到 {foundCount}/3", new Color(0.20f, 0.68f, 0.57f));
+                DrawPanelHeader("导入数据", $"已找到 {foundCount}/4", new Color(0.20f, 0.68f, 0.57f));
                 GUILayout.Space(5f);
                 humanoidJson = (TextAsset)EditorGUILayout.ObjectField(
                     "Humanoid 映射", humanoidJson, typeof(TextAsset), false);
@@ -393,6 +395,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 DrawConstraintCandidatePopup();
                 collectionJson = (TextAsset)EditorGUILayout.ObjectField(
                     "骨骼集合", collectionJson, typeof(TextAsset), false);
+                bsCorrectiveJson = (TextAsset)EditorGUILayout.ObjectField(
+                    "BS 修型", bsCorrectiveJson, typeof(TextAsset), false);
 
                 DrawMappingPreview();
                 GUILayout.Space(2f);
@@ -1154,7 +1158,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private void DrawTargetPanel()
         {
-            bool targetRequired = applyConstraints || applyCollections;
+            bool targetRequired = applyConstraints || applyCollections || applyBsCorrective;
             string status = targetRig != null ? "已指定" : (targetRequired ? "需要指定" : "可选");
             Color color = targetRequired && targetRig == null
                 ? new Color(0.88f, 0.42f, 0.28f)
@@ -1168,6 +1172,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     "场景 Rig", targetRig, typeof(GameObject), true);
                 // FBX 页：只有勾了「导入约束」才需要这个字段。
                 DrawConstraintRootField(applyConstraints);
+                DrawBsCorrectiveRootField();
                 GUILayout.Space(2f);
             }
         }
@@ -1299,6 +1304,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     }
                 }
                 applyCollections = EditorGUILayout.ToggleLeft("应用 Bone Renderer 骨骼集合", applyCollections);
+                applyBsCorrective = EditorGUILayout.ToggleLeft("导入 BS 修型", applyBsCorrective);
+                if (applyBsCorrective)
+                    DrawBsCorrectiveImportPreview();
                 GUILayout.Space(2f);
             }
         }
@@ -1880,7 +1888,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             return (applyHumanoid ? 1 : 0) +
                    (applyConstraints ? 1 : 0) +
-                   (applyCollections ? 1 : 0);
+                   (applyCollections ? 1 : 0) +
+                   (applyBsCorrective ? 1 : 0);
         }
 
         private void DrawPanelHeader(string title, string status, Color accent)
@@ -1945,6 +1954,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             humanoidJson = null;
             collectionJson = null;
             constraintJson = null;
+            bsCorrectiveJson = null;
             if (constraintJsonCandidates == null)
                 constraintJsonCandidates = new List<TextAsset>();
             else
@@ -1988,6 +1998,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                             collectionJson = asset;
                         else if (entry.kind == ConstraintKind)
                             AddConstraintCandidate(asset);
+                        else if (entry.kind == HoFbxBsCorrectiveImportUtility.MetadataKind && bsCorrectiveJson == null)
+                            bsCorrectiveJson = asset;
                     }
                 }
             }
@@ -1998,6 +2010,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             // Manual export mode can omit the manifest; scan only the new HoFBX folder.
             if (humanoidJson == null)
                 humanoidJson = LoadMetadataTextAsset(metadataDirectory, baseName + "_humanoid.json");
+            if (bsCorrectiveJson == null)
+                bsCorrectiveJson = LoadMetadataTextAsset(
+                    metadataDirectory, baseName + HoFbxBsCorrectiveImportUtility.MetadataSuffix);
             if (collectionJson == null)
             {
                 foreach (string path in FindMetadataJson(metadataDirectory, baseName, "_collection.json"))
@@ -2065,17 +2080,17 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             }
 
-            if (!applyHumanoid && !applyConstraints && !applyCollections)
+            if (!applyHumanoid && !applyConstraints && !applyCollections && !applyBsCorrective)
             {
                 EditorUtility.DisplayDialog("HoFBX导入处理", "至少选择一项要应用的配置。", "确定");
                 return;
             }
 
-            if ((applyConstraints || applyCollections) && targetRig == null)
+            if ((applyConstraints || applyCollections || applyBsCorrective) && targetRig == null)
             {
                 EditorUtility.DisplayDialog(
                     "HoFBX导入处理",
-                    "导入约束或骨骼集合时必须指定目标骨架。",
+                    "导入约束、骨骼集合或 BS 修型时必须指定目标骨架。",
                     "确定");
                 return;
             }
@@ -2133,11 +2148,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             }
 
+            if (applyBsCorrective && !ValidateBsCorrectiveImport())
+                return;
+
             string targetId = targetRig == null
                 ? string.Empty
                 : GlobalObjectId.GetGlobalObjectIdSlow(targetRig).ToString();
             int humanoidCount = 0;
             int constraintCount = 0;
+            int bsCorrectiveCount = 0;
             bool collectionApplied = false;
 
             if (!EditorUtility.DisplayDialog(
@@ -2172,9 +2191,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     collectionApplied = ApplyCollections(collectionJson, targetRig);
                 }
 
+                if (applyBsCorrective)
+                    bsCorrectiveCount = HoFbxBsCorrectiveImportUtility.Apply(bsCorrectiveJson, targetRig, bsCorrectiveRoot);
+
                 EditorUtility.DisplayDialog(
                     "HoFBX导入处理",
-                    $"应用完成。Humanoid：{humanoidCount}，约束：{constraintCount}，Bone Renderer：{(collectionApplied ? "已更新" : "未应用")}",
+                    $"应用完成。Humanoid：{humanoidCount}，约束：{constraintCount}，BS 修型：{bsCorrectiveCount}，Bone Renderer：{(collectionApplied ? "已更新" : "未应用")}",
                     "确定");
             }
             catch (Exception exception)
@@ -2198,6 +2220,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                    humanoidOperation +
                    (applyConstraints ? ConstraintConfirmationLine() : string.Empty) +
                    (applyCollections ? "- 更新 Bone Renderer 集合\n" : string.Empty) +
+                   (applyBsCorrective ? "- 更新 BS 修型中控（仅替换同一 JSON 来源的规则）\n" : string.Empty) +
                    "\n用户已有的手动配置不会被 AssetPostprocessor 自动覆盖。";
         }
 
