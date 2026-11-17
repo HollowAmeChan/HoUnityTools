@@ -38,6 +38,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string measurementBone;
             public string mesh;
             public string shapeKey;
+            public string bsName;
             // New Blender authoring format: one corrective rule may drive many targets.
             // mesh/shapeKey remain for v1 metadata written by older HoTools versions.
             public Target[] targets;
