@@ -29,6 +29,12 @@ namespace Hollow.HoUnityTools.Constraints
             public bool enabled = true;
             public Transform bone;
             public string expression = "clamp(x / 1.57079632679, 0, 1)";
+            public string bsName = "_BSC_pose1";
+            public string mode = "EXPRESSION";
+            public float rbfRadius = 0.5f;
+            public bool rbfIncludeBase = true;
+            public Vector3 rbfBase;
+            public List<RbfPoint> rbfPoints = new List<RbfPoint>();
             public SkinnedMeshRenderer target;
             public string shapeName = string.Empty;
             [TextArea(1, 4)] public string comment = string.Empty;
@@ -40,6 +46,13 @@ namespace Hollow.HoUnityTools.Constraints
             [NonSerialized] public string lastError;
             [NonSerialized] public Vector3 lastRadians;
             [NonSerialized] public float lastOutput;
+        }
+
+        [Serializable]
+        public sealed class RbfPoint
+        {
+            public Vector3 pose;
+            [Range(0f, 1f)] public float weight = 1f;
         }
 
         [SerializeField] private List<Rule> rules = new List<Rule>();
@@ -62,6 +75,9 @@ namespace Hollow.HoUnityTools.Constraints
             public string shapeName, text;
             public int index = -1;
             public HoBsCorrectiveExpression expression;
+            public float[] rbfCoefficients;
+            public Vector3[] rbfPositions;
+            public float[] rbfWeights;
             public VariableState[] variables;
             public readonly Dictionary<string, float> values = new Dictionary<string, float>(StringComparer.Ordinal);
             public Func<string, float> read;
@@ -128,7 +144,7 @@ namespace Hollow.HoUnityTools.Constraints
             if (rebuild || BindingsChanged() || blockedByOwner && lastOwnershipVersion != ownershipVersion) Build();
             foreach (CompiledRule item in compiled)
             {
-                if (!item.enabled || item.expression == null || !item.owns || !ValidTarget(item)) continue;
+                if (!item.enabled || (item.expression == null && !string.Equals(item.source.mode, "RBF", StringComparison.Ordinal)) || !item.owns || !ValidTarget(item)) continue;
                 if (item.bone == null || HasMissingVariableBone(item))
                 { item.source.lastError = "测量骨骼已丢失"; Restore(item); continue; }
                 if (HoFaceOutputOwnership.IsReserved(item.target, item.index))
@@ -138,7 +154,9 @@ namespace Hollow.HoUnityTools.Constraints
                 item.values["x"] = radians.x; item.values["y"] = radians.y; item.values["z"] = radians.z;
                 foreach (VariableState variable in item.variables)
                     item.values[variable.name] = Select(ReadLocalRadians(variable.bone.localRotation), variable.channel);
-                float output = item.expression.Evaluate(item.read);
+                float output = item.expression != null
+                    ? item.expression.Evaluate(item.read)
+                    : EvaluateRbf(item, radians);
                 if (float.IsNaN(output) || float.IsInfinity(output)) output = 0;
                 item.source.lastOutput = Mathf.Clamp01(output);
                 float current = item.target.GetBlendShapeWeight(item.index);
@@ -158,7 +176,66 @@ namespace Hollow.HoUnityTools.Constraints
             if (rule.target == null || rule.target.sharedMesh == null) { error = "未指定有效目标网格"; return false; }
             if (ResolveShape(rule.target.sharedMesh, rule.shapeName) < 0)
             { error = "目标网格中找不到形态键：" + rule.shapeName; return false; }
+            if (string.Equals(rule.mode, "RBF", StringComparison.Ordinal))
+            {
+                if (!TryBuildRbf(rule, out _, out _, out error)) return false;
+                return true;
+            }
             return TryExpression(rule, out _, out error);
+        }
+
+        private static bool TryBuildRbf(Rule rule, out Vector3[] positions, out float[] coefficients, out string error)
+        {
+            positions = null; coefficients = null; error = null;
+            var points = new List<RbfPoint>();
+            if (rule.rbfIncludeBase) points.Add(new RbfPoint { pose = rule.rbfBase, weight = 0f });
+            if (rule.rbfPoints != null) points.AddRange(rule.rbfPoints);
+            if (points.Count == 0) { error = "RBF 至少需要一个姿态控制点"; return false; }
+            positions = new Vector3[points.Count];
+            for (int i = 0; i < points.Count; i++)
+            {
+                positions[i] = points[i].pose;
+                for (int j = 0; j < i; j++)
+                    if ((positions[i] - positions[j]).sqrMagnitude < 1e-10f)
+                    { error = "RBF 控制点过近或重复"; return false; }
+            }
+            var matrix = new double[points.Count, points.Count];
+            for (int row = 0; row < points.Count; row++)
+                for (int column = 0; column < points.Count; column++)
+                    matrix[row, column] = Gaussian(Vector3.Distance(positions[row], positions[column]), rule.rbfRadius) + (row == column ? 1e-6 : 0);
+            var values = new double[points.Count];
+            for (int i = 0; i < points.Count; i++) values[i] = points[i].weight;
+            coefficients = SolveLinear(matrix, values);
+            return coefficients != null;
+        }
+
+        private static float Gaussian(float distance, float radius)
+        {
+            float safe = Mathf.Max(radius, 1e-6f);
+            return Mathf.Exp(-(distance * distance) / (2f * safe * safe));
+        }
+
+        private static float[] SolveLinear(double[,] source, double[] values)
+        {
+            int size = values.Length; var matrix = new double[size, size + 1];
+            for (int row = 0; row < size; row++) { for (int column = 0; column < size; column++) matrix[row, column] = source[row, column]; matrix[row, size] = values[row]; }
+            for (int pivot = 0; pivot < size; pivot++)
+            {
+                int best = pivot; for (int row = pivot + 1; row < size; row++) if (Math.Abs(matrix[row, pivot]) > Math.Abs(matrix[best, pivot])) best = row;
+                if (Math.Abs(matrix[best, pivot]) < 1e-9) return null;
+                for (int column = pivot; column <= size; column++) { double temp = matrix[pivot, column]; matrix[pivot, column] = matrix[best, column]; matrix[best, column] = temp; }
+                double divisor = matrix[pivot, pivot]; for (int column = pivot; column <= size; column++) matrix[pivot, column] /= divisor;
+                for (int row = 0; row < size; row++) { if (row == pivot) continue; double factor = matrix[row, pivot]; for (int column = pivot; column <= size; column++) matrix[row, column] -= factor * matrix[pivot, column]; }
+            }
+            var result = new float[size]; for (int i = 0; i < size; i++) result[i] = (float)matrix[i, size]; return result;
+        }
+
+        private static float EvaluateRbf(CompiledRule item, Vector3 current)
+        {
+            if (item.rbfPositions == null || item.rbfCoefficients == null) return 0f;
+            float output = 0f;
+            for (int i = 0; i < item.rbfPositions.Length; i++) output += item.rbfCoefficients[i] * Gaussian(Vector3.Distance(current, item.rbfPositions[i]), item.source.rbfRadius);
+            return output;
         }
 
         private static bool TryExpression(Rule rule, out HoBsCorrectiveExpression expression, out string error)
@@ -206,7 +283,17 @@ namespace Hollow.HoUnityTools.Constraints
                 rule.lastError = null;
                 rule.lastOutput = 0;
                 if (!item.enabled) continue;
-                if (!ValidateRule(rule, out string error) || !TryExpression(rule, out item.expression, out error))
+                if (!ValidateRule(rule, out string error))
+                { rule.lastError = error; continue; }
+                if (string.Equals(rule.mode, "RBF", StringComparison.Ordinal))
+                {
+                    if (!TryBuildRbf(rule, out item.rbfPositions, out item.rbfCoefficients, out error)) { rule.lastError = error; continue; }
+                    var weights = new List<float>();
+                    if (rule.rbfIncludeBase) weights.Add(0f);
+                    foreach (RbfPoint point in rule.rbfPoints ?? new List<RbfPoint>()) weights.Add(point.weight);
+                    item.rbfWeights = weights.ToArray();
+                }
+                else if (!TryExpression(rule, out item.expression, out error))
                 { rule.lastError = error; continue; }
                 item.index = ResolveShape(item.mesh, rule.shapeName);
                 var key = (item.target, item.mesh, item.index);
@@ -233,7 +320,28 @@ namespace Hollow.HoUnityTools.Constraints
                 if (rule.enabled != item.enabled || rule.bone != item.bone || rule.target != item.target ||
                     (rule.target != null ? rule.target.sharedMesh : null) != item.mesh ||
                     rule.shapeName != item.shapeName || rule.expression != item.text ||
+                    rule.mode != item.source.mode || rule.rbfRadius != item.source.rbfRadius ||
                     (rule.variables?.Count ?? 0) != item.variables.Length) return true;
+                if (string.Equals(rule.mode, "RBF", StringComparison.Ordinal))
+                {
+                    if (rule.rbfIncludeBase != item.source.rbfIncludeBase || rule.rbfBase != item.source.rbfBase)
+                        return true;
+                    int pointCount = (rule.rbfIncludeBase ? 1 : 0) + (rule.rbfPoints?.Count ?? 0);
+                    if (item.rbfPositions == null || item.rbfWeights == null || item.rbfPositions.Length != pointCount)
+                        return true;
+                    int pointIndex = 0;
+                    if (rule.rbfIncludeBase)
+                    {
+                        if (item.rbfWeights[pointIndex] != 0f) return true;
+                        pointIndex++;
+                    }
+                    foreach (RbfPoint point in rule.rbfPoints ?? new List<RbfPoint>())
+                    {
+                        if (item.rbfPositions[pointIndex] != point.pose || item.rbfWeights[pointIndex] != point.weight)
+                            return true;
+                        pointIndex++;
+                    }
+                }
                 for (int v = 0; v < item.variables.Length; v++)
                 {
                     Variable variable = rule.variables[v]; VariableState state = item.variables[v];

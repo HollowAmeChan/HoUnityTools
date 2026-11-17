@@ -38,7 +38,13 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     if (!deleted && rule.isExpanded)
                     {
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("bone"), new GUIContent("测量骨骼"));
-                        EditorGUILayout.PropertyField(rule.FindPropertyRelative("expression"), new GUIContent("表达式"));
+                        SerializedProperty mode = rule.FindPropertyRelative("mode");
+                        EditorGUILayout.PropertyField(mode, new GUIContent("求值模式"));
+                        if (mode.stringValue == "RBF")
+                            DrawRbf(rule);
+                        else
+                            EditorGUILayout.PropertyField(rule.FindPropertyRelative("expression"), new GUIContent("表达式"));
+                        EditorGUILayout.PropertyField(rule.FindPropertyRelative("bsName"), new GUIContent("BS 名称"));
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("target"), new GUIContent("目标网格"));
                         DrawShapeName(rule);
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("comment"), new GUIContent("注释"));
@@ -102,6 +108,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 rule.FindPropertyRelative("target").objectReferenceValue = null;
                 rule.FindPropertyRelative("shapeName").stringValue = string.Empty;
                 rule.FindPropertyRelative("expression").stringValue = "clamp(x / 1.57079632679, 0, 1)";
+                rule.FindPropertyRelative("bsName").stringValue = "_BSC_pose1";
+                rule.FindPropertyRelative("mode").stringValue = "EXPRESSION";
+                rule.FindPropertyRelative("rbfRadius").floatValue = 0.5f;
+                rule.FindPropertyRelative("rbfIncludeBase").boolValue = true;
+                rule.FindPropertyRelative("rbfBase").vector3Value = Vector3.zero;
+                rule.FindPropertyRelative("rbfPoints").arraySize = 0;
                 rule.FindPropertyRelative("comment").stringValue = string.Empty;
                 rule.FindPropertyRelative("variables").arraySize = 0;
                 foreach (string field in new[] { "sourceId", "bonePath", "targetPath", "sourceBone" })
@@ -115,7 +127,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (new EditorGUI.DisabledScope(Application.isPlaying || EditorUtility.IsPersistent(component)))
                 if (GUILayout.Button(component.EditorPreviewActive ? "停止编辑预览并恢复" : "开始编辑预览"))
                     HoBsCorrectivePreview.Set(component, !component.EditorPreviewActive);
-            EditorGUILayout.HelpBox("表达式：+ − * / **，min(a,b)、max(a,b)、abs(a)、clamp(v,0,1)、pi。附加变量读取另一根骨骼的指定通道。编辑预览在保存、撤销或重载前自动恢复原 BS 值。单个目标键只允许一条启用规则。", MessageType.None);
+            EditorGUILayout.HelpBox("RBF 模式使用主骨骼局部 XYZ 姿态、基准姿态、Gaussian 半径和多个控制点；控制点权重是该姿态的目标 BS 值。表达式模式保留旧版兼容。编辑预览在保存、撤销或重载前自动恢复原 BS 值。单个目标键只允许一条启用规则。", MessageType.None);
             if (component.EditorPreviewActive || Application.isPlaying) Repaint();
         }
 
@@ -133,6 +145,35 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 if (names[i] == name.stringValue) { selectedIndex = i; break; }
             int selected = EditorGUILayout.Popup("目标形态键", selectedIndex, names.ToArray());
             if (selected > 0) name.stringValue = names[selected];
+        }
+
+        private static void DrawRbf(SerializedProperty rule)
+        {
+            EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfRadius"), new GUIContent("RBF 半径"));
+            EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfIncludeBase"), new GUIContent("包含基准姿态"));
+            EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfBase"), new GUIContent("基准姿态 XYZ"));
+            SerializedProperty points = rule.FindPropertyRelative("rbfPoints");
+            points.isExpanded = EditorGUILayout.Foldout(points.isExpanded, "姿态控制点", true);
+            if (!points.isExpanded) return;
+            EditorGUI.indentLevel++;
+            for (int i = 0; i < points.arraySize; i++)
+            {
+                SerializedProperty point = points.GetArrayElementAtIndex(i);
+                using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                {
+                    EditorGUILayout.PropertyField(point.FindPropertyRelative("pose"), new GUIContent("姿态"));
+                    EditorGUILayout.PropertyField(point.FindPropertyRelative("weight"), new GUIContent("权重"));
+                    if (GUILayout.Button("−", GUILayout.Width(24))) { points.DeleteArrayElementAtIndex(i); break; }
+                }
+            }
+            if (GUILayout.Button("添加姿态控制点"))
+            {
+                int index = points.arraySize++;
+                SerializedProperty point = points.GetArrayElementAtIndex(index);
+                point.FindPropertyRelative("pose").vector3Value = Vector3.zero;
+                point.FindPropertyRelative("weight").floatValue = 1f;
+            }
+            EditorGUI.indentLevel--;
         }
     }
 

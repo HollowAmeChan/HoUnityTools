@@ -39,6 +39,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string mesh;
             public string shapeKey;
             public string bsName;
+            public string mode;
+            public float rbfRadius = 0.5f;
+            public bool rbfIncludeBase = true;
+            public float[] rbfBase;
+            public RbfPoint[] rbfPoints;
             // New Blender authoring format: one corrective rule may drive many targets.
             // mesh/shapeKey remain for v1 metadata written by older HoTools versions.
             public Target[] targets;
@@ -52,6 +57,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             public string mesh;
             public string shapeKey;
+        }
+
+        [Serializable]
+        public sealed class RbfPoint
+        {
+            public float[] pose;
+            public float weight = 1f;
         }
 
         [Serializable]
@@ -154,7 +166,17 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         (variable.channel != "X" && variable.channel != "Y" && variable.channel != "Z"))
                         throw new InvalidDataException(label + " 包含不完整或重复的额外旋转变量。");
                 }
-                if (!HoBsCorrectiveExpression.TryParse(rule.expression, names, out _, out string expressionError))
+                if (string.Equals(rule.mode, "RBF", StringComparison.Ordinal))
+                {
+                    if (rule.rbfPoints == null || rule.rbfPoints.Length == 0 && !rule.rbfIncludeBase)
+                        throw new InvalidDataException(label + " 至少需要一个 RBF 姿态控制点。");
+                    if (rule.rbfBase != null && rule.rbfBase.Length != 3)
+                        throw new InvalidDataException(label + " 的 rbfBase 必须包含 XYZ 三个值。");
+                    foreach (RbfPoint point in rule.rbfPoints ?? Array.Empty<RbfPoint>())
+                        if (point == null || point.pose == null || point.pose.Length != 3)
+                            throw new InvalidDataException(label + " 包含不完整的 RBF 控制点。");
+                }
+                else if (!HoBsCorrectiveExpression.TryParse(rule.expression, names, out _, out string expressionError))
                     throw new InvalidDataException(label + " 表达式无效：" + expressionError);
             }
             return config;
@@ -204,6 +226,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         target = target,
                         shapeName = targetData.shapeKey,
                         expression = rule.expression,
+                        bsName = string.IsNullOrWhiteSpace(rule.bsName) ? targetData.shapeKey : rule.bsName,
+                        mode = string.IsNullOrEmpty(rule.mode) ? "EXPRESSION" : rule.mode,
+                        rbfRadius = rule.rbfRadius,
+                        rbfIncludeBase = rule.rbfIncludeBase,
+                        rbfBase = ToVector3(rule.rbfBase),
+                        rbfPoints = ToRbfPoints(rule.rbfPoints),
                         comment = rule.comment ?? string.Empty,
                         bonePath = AnimationUtility.CalculateTransformPath(bone, searchRoot),
                         targetPath = AnimationUtility.CalculateTransformPath(target.transform, searchRoot),
@@ -226,6 +254,17 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         }
 
         private static int CountTargets(Rule rule) => TargetsFor(rule).Length;
+
+        private static Vector3 ToVector3(float[] values) => values != null && values.Length == 3
+            ? new Vector3(values[0], values[1], values[2]) : Vector3.zero;
+
+        private static List<HoBsCorrective.RbfPoint> ToRbfPoints(RbfPoint[] points)
+        {
+            var result = new List<HoBsCorrective.RbfPoint>();
+            foreach (RbfPoint point in points ?? Array.Empty<RbfPoint>())
+                result.Add(new HoBsCorrective.RbfPoint { pose = ToVector3(point.pose), weight = point.weight });
+            return result;
+        }
 
         private static Transform ResolveSearchRoot(Transform rig)
         {
