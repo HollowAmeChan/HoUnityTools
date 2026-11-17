@@ -43,9 +43,12 @@ def main(output):
     rule = settings.rules.add()
     rule.id = "probe-rule"
     rule.bone = "UpperArm.L"
-    rule.mesh = mesh
-    rule.shape_key = "ArmRaise.L"
-    rule.expression = "clamp(x / 1.57079632679, 0, 1)"
+    target = rule.targets.add()
+    target.mesh = mesh
+    target.shape_key = "ArmRaise.L"
+    point = rule.pose_points.add()
+    point.x = 1.57079632679
+    point.weight = 1.0
 
     assert generate_native_drivers(arm) == 1
     assert len(arm.data.bones) == 1
@@ -53,7 +56,8 @@ def main(output):
     assert len(mesh.data.shape_keys.animation_data.drivers) == 1
 
     config = build_export_config(arm, measurement_bones={"UpperArm.L": "MCH_UpperArm.L"})
-    assert config["measurement"] == "source_local_rotation"
+    assert config["version"] == 2
+    assert config["poseSpace"] == "LOCAL"
     assert config["rules"][0]["bone"] == "UpperArm.L"
     assert config["rules"][0]["measurementBone"] == "MCH_UpperArm.L"
 

@@ -43,18 +43,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                     {
                         HoFbxBsCorrectiveImportUtility.Target[] targets = rule.targets;
-                        if (targets == null || targets.Length == 0)
-                        {
-                            targets = string.IsNullOrWhiteSpace(rule.mesh) && string.IsNullOrWhiteSpace(rule.shapeKey)
-                                ? Array.Empty<HoFbxBsCorrectiveImportUtility.Target>()
-                                : new[] { new HoFbxBsCorrectiveImportUtility.Target { mesh = rule.mesh, shapeKey = rule.shapeKey } };
-                        }
+                        if (targets == null) targets = Array.Empty<HoFbxBsCorrectiveImportUtility.Target>();
                         EditorGUILayout.LabelField(
                             (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + targets.Length + " 个目标",
                             EditorStyles.boldLabel);
                         foreach (HoFbxBsCorrectiveImportUtility.Target target in targets)
                             EditorGUILayout.LabelField("目标", target.mesh + " / " + target.shapeKey);
-                        EditorGUILayout.LabelField(rule.expression ?? string.Empty, EditorStyles.wordWrappedMiniLabel);
+                        if (rule.rbf != null)
+                            EditorGUILayout.LabelField($"Gaussian RBF · 半径 {rule.rbf.radius:F3} · 控制点 {rule.rbf.controlPoints?.Length ?? 0}",
+                                EditorStyles.wordWrappedMiniLabel);
                         if (!string.IsNullOrEmpty(rule.comment))
                             EditorGUILayout.LabelField(rule.comment, EditorStyles.wordWrappedMiniLabel);
                     }

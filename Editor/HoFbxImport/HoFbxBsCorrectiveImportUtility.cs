@@ -21,9 +21,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             public string schema;
             public int version;
+            public string poseSpace;
             public string rotationOrder;
             public string angleUnit;
-            public string rotationSpace;
+            public string kernel;
             public string fbxBoneAxes;
             public Rule[] rules;
         }
@@ -36,20 +37,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string armatureName;
             public string bone;
             public string measurementBone;
-            public string mesh;
-            public string shapeKey;
             public string bsName;
-            public string mode;
-            public float rbfRadius = 0.5f;
-            public bool rbfIncludeBase = true;
-            public float[] rbfBase;
-            public RbfPoint[] rbfPoints;
-            // New Blender authoring format: one corrective rule may drive many targets.
-            // mesh/shapeKey remain for v1 metadata written by older HoTools versions.
             public Target[] targets;
-            public string expression;
             public string comment;
-            public Variable[] variables;
+            public RbfConfig rbf;
         }
 
         [Serializable]
@@ -63,15 +54,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         public sealed class RbfPoint
         {
             public float[] pose;
-            public float weight = 1f;
+            public float value = 1f;
         }
 
         [Serializable]
-        public sealed class Variable
+        public sealed class RbfConfig
         {
-            public string name;
-            public string bone;
-            public string channel;
+            public float radius = 0.5f;
+            public bool includeBase = true;
+            public float[] basePose;
+            public RbfPoint[] controlPoints;
         }
 
         /// <summary>Validate metadata and every scene reference without modifying the scene.</summary>
@@ -136,11 +128,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             if (metadata == null) throw new ArgumentNullException(nameof(metadata), "没有 BS 修型 JSON。");
             Config config = JsonUtility.FromJson<Config>(metadata.text);
-            if (config == null || config.schema != Schema || config.version != 1)
-                throw new InvalidDataException("不支持的 BS 修型 schema/version；需要 hotools.bs-corrective v1。");
-            if (config.rotationOrder != "XYZ" || config.angleUnit != "radian" ||
-                config.rotationSpace != "LOCAL" || config.fbxBoneAxes != "Y_X")
-                throw new InvalidDataException("BS 修型必须声明 LOCAL / XYZ / radian 和配套 HoFBX Y_X 骨轴。");
+            if (config == null || config.schema != Schema || config.version != 2)
+                throw new InvalidDataException("不支持的 BS 修型 schema/version；需要 hotools.bs-corrective v2。");
+            if (config.poseSpace != "LOCAL" || config.rotationOrder != "XYZ" || config.angleUnit != "radian" ||
+                config.kernel != "gaussian" || config.fbxBoneAxes != "Y_X")
+                throw new InvalidDataException("BS 修型必须声明 LOCAL / XYZ / radian / gaussian 和配套 HoFBX Y_X 骨轴。");
             if (config.rules == null)
                 throw new InvalidDataException("BS 修型 JSON 缺少 rules；显式空数组可清除此来源的导入规则。");
 
@@ -152,32 +144,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 string label = "BS 修型规则「" + rule.id + "」";
                 if (string.IsNullOrWhiteSpace(rule.armatureName) || string.IsNullOrWhiteSpace(rule.bone))
                     throw new InvalidDataException(label + " 缺少 armatureName / bone。");
-                Target[] targets = TargetsFor(rule);
-                if (targets.Length == 0)
-                    throw new InvalidDataException(label + " 缺少 targets（或旧格式 mesh / shapeKey）。");
+                Target[] targets = rule.targets;
+                if (targets == null || targets.Length == 0)
+                    throw new InvalidDataException(label + " 缺少 targets。");
                 foreach (Target target in targets)
                     if (target == null || string.IsNullOrWhiteSpace(target.mesh) || string.IsNullOrWhiteSpace(target.shapeKey))
                         throw new InvalidDataException(label + " 包含不完整的目标网格或形态键。");
-                var names = new HashSet<string>(StringComparer.Ordinal);
-                foreach (Variable variable in rule.variables ?? Array.Empty<Variable>())
-                {
-                    if (variable == null || string.IsNullOrWhiteSpace(variable.name) ||
-                        !names.Add(variable.name) || string.IsNullOrWhiteSpace(variable.bone) ||
-                        (variable.channel != "X" && variable.channel != "Y" && variable.channel != "Z"))
-                        throw new InvalidDataException(label + " 包含不完整或重复的额外旋转变量。");
-                }
-                if (string.Equals(rule.mode, "RBF", StringComparison.Ordinal))
-                {
-                    if (rule.rbfPoints == null || rule.rbfPoints.Length == 0 && !rule.rbfIncludeBase)
-                        throw new InvalidDataException(label + " 至少需要一个 RBF 姿态控制点。");
-                    if (rule.rbfBase != null && rule.rbfBase.Length != 3)
-                        throw new InvalidDataException(label + " 的 rbfBase 必须包含 XYZ 三个值。");
-                    foreach (RbfPoint point in rule.rbfPoints ?? Array.Empty<RbfPoint>())
-                        if (point == null || point.pose == null || point.pose.Length != 3)
-                            throw new InvalidDataException(label + " 包含不完整的 RBF 控制点。");
-                }
-                else if (!HoBsCorrectiveExpression.TryParse(rule.expression, names, out _, out string expressionError))
-                    throw new InvalidDataException(label + " 表达式无效：" + expressionError);
+                if (rule.rbf == null || rule.rbf.controlPoints == null ||
+                    rule.rbf.controlPoints.Length == 0 && !rule.rbf.includeBase)
+                    throw new InvalidDataException(label + " 至少需要一个 RBF 姿态控制点。");
+                if (rule.rbf.basePose != null && rule.rbf.basePose.Length != 3)
+                    throw new InvalidDataException(label + " 的 basePose 必须包含 XYZ 三个值。");
+                foreach (RbfPoint point in rule.rbf.controlPoints ?? Array.Empty<RbfPoint>())
+                    if (point == null || point.pose == null || point.pose.Length != 3)
+                        throw new InvalidDataException(label + " 包含不完整的 RBF 控制点。");
             }
             return config;
         }
@@ -192,20 +172,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 Transform armature = ResolveArmature(rig.transform, rule.armatureName);
                 string measurementName = string.IsNullOrWhiteSpace(rule.measurementBone) ? rule.bone : rule.measurementBone;
                 Transform bone = UniqueBone(armature, measurementName);
-                var variables = new List<HoBsCorrective.Variable>();
-                foreach (Variable variable in rule.variables ?? Array.Empty<Variable>())
-                {
-                    Transform variableBone = UniqueBone(armature, variable.bone);
-                    variables.Add(new HoBsCorrective.Variable
-                    {
-                        name = variable.name,
-                        bone = variableBone,
-                        channel = (HoBsCorrective.Channel)Enum.Parse(typeof(HoBsCorrective.Channel), variable.channel),
-                        bonePath = AnimationUtility.CalculateTransformPath(variableBone, searchRoot),
-                        sourceBone = variable.bone,
-                    });
-                }
-                Target[] targets = TargetsFor(rule);
+                Target[] targets = rule.targets;
                 for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
                 {
                     Target targetData = targets[targetIndex];
@@ -225,35 +192,24 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         bone = bone,
                         target = target,
                         shapeName = targetData.shapeKey,
-                        expression = rule.expression,
                         bsName = string.IsNullOrWhiteSpace(rule.bsName) ? targetData.shapeKey : rule.bsName,
-                        mode = string.IsNullOrEmpty(rule.mode) ? "EXPRESSION" : rule.mode,
-                        rbfRadius = rule.rbfRadius,
-                        rbfIncludeBase = rule.rbfIncludeBase,
-                        rbfBase = ToVector3(rule.rbfBase),
-                        rbfPoints = ToRbfPoints(rule.rbfPoints),
+                        rbfRadius = rule.rbf.radius,
+                        rbfIncludeBase = rule.rbf.includeBase,
+                        rbfBase = ToVector3(rule.rbf.basePose),
+                        rbfPoints = ToRbfPoints(rule.rbf.controlPoints),
                         comment = rule.comment ?? string.Empty,
                         bonePath = AnimationUtility.CalculateTransformPath(bone, searchRoot),
                         targetPath = AnimationUtility.CalculateTransformPath(target.transform, searchRoot),
                         // Keep the authored source name for auditability; bone points to
                         // the exported MCH measurement transform when preprocessing used it.
                         sourceBone = rule.bone,
-                        variables = new List<HoBsCorrective.Variable>(variables),
                     });
                 }
             }
             return result;
         }
 
-        private static Target[] TargetsFor(Rule rule)
-        {
-            if (rule.targets != null && rule.targets.Length > 0) return rule.targets;
-            if (!string.IsNullOrWhiteSpace(rule.mesh) || !string.IsNullOrWhiteSpace(rule.shapeKey))
-                return new[] { new Target { mesh = rule.mesh, shapeKey = rule.shapeKey } };
-            return Array.Empty<Target>();
-        }
-
-        private static int CountTargets(Rule rule) => TargetsFor(rule).Length;
+        private static int CountTargets(Rule rule) => rule.targets?.Length ?? 0;
 
         private static Vector3 ToVector3(float[] values) => values != null && values.Length == 3
             ? new Vector3(values[0], values[1], values[2]) : Vector3.zero;
@@ -262,7 +218,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             var result = new List<HoBsCorrective.RbfPoint>();
             foreach (RbfPoint point in points ?? Array.Empty<RbfPoint>())
-                result.Add(new HoBsCorrective.RbfPoint { pose = ToVector3(point.pose), weight = point.weight });
+                result.Add(new HoBsCorrective.RbfPoint { pose = ToVector3(point.pose), weight = point.value });
             return result;
         }
 

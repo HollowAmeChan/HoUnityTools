@@ -14,7 +14,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         {
             var component = (HoBsCorrective)target;
             serializedObject.Update();
-            EditorGUILayout.HelpBox("BS 修型中控读取导入骨骼的最终局部旋转，再按 Blender XYZ 顺序分解。x / y / z 单位是弧度，表达式输出 0～1。HoFbx 导出预处理使用 MCH 时，规则会改指对应的导出测量骨骼。", MessageType.Info);
+            EditorGUILayout.HelpBox("BS 修型中控读取导入骨骼的最终局部旋转，再按 Blender XYZ 顺序进行 RBF 插值。姿态单位是弧度，HoFBX 导出预处理使用 MCH 时，规则会改指对应的导出测量骨骼。", MessageType.Info);
             SerializedProperty rules = serializedObject.FindProperty("rules");
             for (int i = 0; i < rules.arraySize; i++)
             {
@@ -38,48 +38,11 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                     if (!deleted && rule.isExpanded)
                     {
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("bone"), new GUIContent("测量骨骼"));
-                        SerializedProperty mode = rule.FindPropertyRelative("mode");
-                        EditorGUILayout.PropertyField(mode, new GUIContent("求值模式"));
-                        if (mode.stringValue == "RBF")
-                            DrawRbf(rule);
-                        else
-                            EditorGUILayout.PropertyField(rule.FindPropertyRelative("expression"), new GUIContent("表达式"));
+                        DrawRbf(rule);
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("bsName"), new GUIContent("BS 名称"));
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("target"), new GUIContent("目标网格"));
                         DrawShapeName(rule);
                         EditorGUILayout.PropertyField(rule.FindPropertyRelative("comment"), new GUIContent("注释"));
-                        SerializedProperty variables = rule.FindPropertyRelative("variables");
-                        variables.isExpanded = EditorGUILayout.Foldout(variables.isExpanded, "附加骨骼变量（左右组合修型）", true);
-                        if (variables.isExpanded)
-                        {
-                            EditorGUI.indentLevel++;
-                            for (int v = 0; v < variables.arraySize; v++)
-                            {
-                                SerializedProperty variable = variables.GetArrayElementAtIndex(v);
-                                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-                                {
-                                    using (new EditorGUILayout.HorizontalScope())
-                                    {
-                                        EditorGUILayout.PropertyField(variable.FindPropertyRelative("name"), new GUIContent("变量名"));
-                                        if (GUILayout.Button("−", GUILayout.Width(24)))
-                                        { variables.DeleteArrayElementAtIndex(v); break; }
-                                    }
-                                    EditorGUILayout.PropertyField(variable.FindPropertyRelative("bone"), new GUIContent("测量骨骼"));
-                                    EditorGUILayout.PropertyField(variable.FindPropertyRelative("channel"), new GUIContent("局部旋转通道"));
-                                }
-                            }
-                            if (GUILayout.Button("添加骨骼变量"))
-                            {
-                                int v = variables.arraySize++;
-                                SerializedProperty variable = variables.GetArrayElementAtIndex(v);
-                                variable.FindPropertyRelative("name").stringValue = "other_" + v;
-                                variable.FindPropertyRelative("bone").objectReferenceValue = null;
-                                variable.FindPropertyRelative("channel").enumValueIndex = 0;
-                                variable.FindPropertyRelative("bonePath").stringValue = string.Empty;
-                                variable.FindPropertyRelative("sourceBone").stringValue = string.Empty;
-                            }
-                            EditorGUI.indentLevel--;
-                        }
                     }
                     if (!deleted && i < component.Rules.Count)
                     {
@@ -107,15 +70,12 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 rule.FindPropertyRelative("bone").objectReferenceValue = null;
                 rule.FindPropertyRelative("target").objectReferenceValue = null;
                 rule.FindPropertyRelative("shapeName").stringValue = string.Empty;
-                rule.FindPropertyRelative("expression").stringValue = "clamp(x / 1.57079632679, 0, 1)";
                 rule.FindPropertyRelative("bsName").stringValue = "_BSC_pose1";
-                rule.FindPropertyRelative("mode").stringValue = "EXPRESSION";
                 rule.FindPropertyRelative("rbfRadius").floatValue = 0.5f;
                 rule.FindPropertyRelative("rbfIncludeBase").boolValue = true;
                 rule.FindPropertyRelative("rbfBase").vector3Value = Vector3.zero;
                 rule.FindPropertyRelative("rbfPoints").arraySize = 0;
                 rule.FindPropertyRelative("comment").stringValue = string.Empty;
-                rule.FindPropertyRelative("variables").arraySize = 0;
                 foreach (string field in new[] { "sourceId", "bonePath", "targetPath", "sourceBone" })
                     rule.FindPropertyRelative(field).stringValue = string.Empty;
             }
@@ -127,7 +87,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (new EditorGUI.DisabledScope(Application.isPlaying || EditorUtility.IsPersistent(component)))
                 if (GUILayout.Button(component.EditorPreviewActive ? "停止编辑预览并恢复" : "开始编辑预览"))
                     HoBsCorrectivePreview.Set(component, !component.EditorPreviewActive);
-            EditorGUILayout.HelpBox("RBF 模式使用主骨骼局部 XYZ 姿态、基准姿态、Gaussian 半径和多个控制点；控制点权重是该姿态的目标 BS 值。表达式模式保留旧版兼容。编辑预览在保存、撤销或重载前自动恢复原 BS 值。单个目标键只允许一条启用规则。", MessageType.None);
+            EditorGUILayout.HelpBox("每条规则固定使用主骨骼局部 XYZ 姿态、基准姿态、Gaussian 半径和多个控制点；控制点权重是该姿态的目标 BS 值。编辑预览在保存、撤销或重载前自动恢复原 BS 值。单个目标键只允许一条启用规则。", MessageType.None);
             if (component.EditorPreviewActive || Application.isPlaying) Repaint();
         }
 

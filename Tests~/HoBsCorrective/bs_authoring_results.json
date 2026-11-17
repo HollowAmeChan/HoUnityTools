@@ -1,9 +1,10 @@
 {
   "schema": "hotools.bs-corrective",
-  "version": 1,
+  "version": 2,
+  "poseSpace": "LOCAL",
   "rotationOrder": "XYZ",
   "angleUnit": "radian",
-  "rotationSpace": "LOCAL",
+  "kernel": "gaussian",
   "fbxBoneAxes": "Y_X",
   "measurement": "source_local_rotation",
   "rules": [
@@ -13,11 +14,33 @@
       "armatureName": "BsAuthoringArmature",
       "bone": "UpperArm.L",
       "measurementBone": "MCH_UpperArm.L",
-      "mesh": "Coat",
-      "shapeKey": "ArmRaise.L",
-      "expression": "clamp(x / 1.57079632679, 0, 1)",
+      "bsName": "_BSC_pose1",
+      "targets": [
+        {
+          "mesh": "Coat",
+          "shapeKey": "ArmRaise.L"
+        }
+      ],
       "comment": "",
-      "variables": []
+      "rbf": {
+        "radius": 0.5,
+        "includeBase": true,
+        "basePose": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "controlPoints": [
+          {
+            "pose": [
+              1.5707963705062866,
+              0.0,
+              0.0
+            ],
+            "value": 1.0
+          }
+        ]
+      }
     }
   ]
 }
