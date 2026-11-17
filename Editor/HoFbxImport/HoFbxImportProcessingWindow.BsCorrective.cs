@@ -42,13 +42,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 {
                     using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                     {
-                        HoFbxBsCorrectiveImportUtility.Target[] targets = rule.targets;
-                        if (targets == null) targets = Array.Empty<HoFbxBsCorrectiveImportUtility.Target>();
                         EditorGUILayout.LabelField(
-                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + targets.Length + " 个目标",
+                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + rule.tasks.Length + " 个修型任务",
                             EditorStyles.boldLabel);
-                        foreach (HoFbxBsCorrectiveImportUtility.Target target in targets)
-                            EditorGUILayout.LabelField("目标", target.mesh + " / " + target.shapeKey);
+                        foreach (HoFbxBsCorrectiveImportUtility.Task task in rule.tasks)
+                        {
+                            EditorGUILayout.LabelField(task.bsName + " · 控制点 " + task.pointId, EditorStyles.miniBoldLabel);
+                            foreach (HoFbxBsCorrectiveImportUtility.Target target in task.targets)
+                                EditorGUILayout.LabelField("目标", target.mesh + " / " + target.shapeKey);
+                        }
                         if (rule.rbf != null)
                             EditorGUILayout.LabelField($"Gaussian RBF · 半径 {rule.rbf.radius:F3} · 控制点 {rule.rbf.controlPoints?.Length ?? 0}",
                                 EditorStyles.wordWrappedMiniLabel);

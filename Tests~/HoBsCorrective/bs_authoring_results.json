@@ -1,6 +1,6 @@
 {
   "schema": "hotools.bs-corrective",
-  "version": 2,
+  "version": 3,
   "poseSpace": "LOCAL",
   "rotationOrder": "XYZ",
   "angleUnit": "radian",
@@ -14,14 +14,47 @@
       "armatureName": "BsAuthoringArmature",
       "bone": "UpperArm.L",
       "measurementBone": "MCH_UpperArm.L",
-      "bsName": "_BSC_pose1",
-      "targets": [
+      "influenceObjects": [
+        "Coat",
+        "Trim"
+      ],
+      "tasks": [
         {
-          "mesh": "Coat",
-          "shapeKey": "ArmRaise.L"
+          "id": "task-1",
+          "bsName": "_BSC_pose1",
+          "pointId": "point-1",
+          "targets": [
+            {
+              "mesh": "Coat",
+              "shapeKey": "ArmRaise.L"
+            },
+            {
+              "mesh": "Coat",
+              "shapeKey": "ArmRaise.Second"
+            },
+            {
+              "mesh": "Trim",
+              "shapeKey": "StripeRaise"
+            }
+          ]
+        },
+        {
+          "id": "task-2",
+          "bsName": "_BSC_pose2",
+          "pointId": "point-2",
+          "targets": [
+            {
+              "mesh": "Coat",
+              "shapeKey": "ArmFold.L"
+            },
+            {
+              "mesh": "Trim",
+              "shapeKey": "StripeFold"
+            }
+          ]
         }
       ],
-      "comment": "",
+      "comment": "Two poses; one task drives several objects and shape keys.",
       "rbf": {
         "radius": 0.5,
         "includeBase": true,
@@ -32,12 +65,20 @@
         ],
         "controlPoints": [
           {
+            "id": "point-1",
             "pose": [
-              1.5707963705062866,
-              0.0,
-              0.0
-            ],
-            "value": 1.0
+              0.800000011920929,
+              0.15000000596046448,
+              -0.10000000149011612
+            ]
+          },
+          {
+            "id": "point-2",
+            "pose": [
+              -0.5,
+              0.4000000059604645,
+              0.20000000298023224
+            ]
           }
         ]
       }

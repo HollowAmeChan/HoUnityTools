@@ -72,8 +72,6 @@ namespace Hollow.HoUnityTools.Editor.Constraints
                 rule.FindPropertyRelative("shapeName").stringValue = string.Empty;
                 rule.FindPropertyRelative("bsName").stringValue = "_BSC_pose1";
                 rule.FindPropertyRelative("rbfRadius").floatValue = 0.5f;
-                rule.FindPropertyRelative("rbfIncludeBase").boolValue = true;
-                rule.FindPropertyRelative("rbfBase").vector3Value = Vector3.zero;
                 rule.FindPropertyRelative("rbfPoints").arraySize = 0;
                 rule.FindPropertyRelative("comment").stringValue = string.Empty;
                 foreach (string field in new[] { "sourceId", "bonePath", "targetPath", "sourceBone" })
@@ -87,7 +85,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
             using (new EditorGUI.DisabledScope(Application.isPlaying || EditorUtility.IsPersistent(component)))
                 if (GUILayout.Button(component.EditorPreviewActive ? "停止编辑预览并恢复" : "开始编辑预览"))
                     HoBsCorrectivePreview.Set(component, !component.EditorPreviewActive);
-            EditorGUILayout.HelpBox("每条规则固定使用主骨骼局部 XYZ 姿态、基准姿态、Gaussian 半径和多个控制点；控制点权重是该姿态的目标 BS 值。编辑预览在保存、撤销或重载前自动恢复原 BS 值。单个目标键只允许一条启用规则。", MessageType.None);
+            EditorGUILayout.HelpBox("基准姿态固定为局部零旋转。HoFBX v3 中每个控制点对应一个修型任务，导入时展开任务中的各个网格/形态键目标；该任务的点为 1，其他点为 0。编辑预览在保存、撤销或重载前自动恢复原 BS 值。", MessageType.None);
             if (component.EditorPreviewActive || Application.isPlaying) Repaint();
         }
 
@@ -110,8 +108,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
         private static void DrawRbf(SerializedProperty rule)
         {
             EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfRadius"), new GUIContent("RBF 半径"));
-            EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfIncludeBase"), new GUIContent("包含基准姿态"));
-            EditorGUILayout.PropertyField(rule.FindPropertyRelative("rbfBase"), new GUIContent("基准姿态 XYZ"));
+            EditorGUILayout.LabelField("基准姿态", "0° / 0° / 0°（固定）");
             SerializedProperty points = rule.FindPropertyRelative("rbfPoints");
             points.isExpanded = EditorGUILayout.Foldout(points.isExpanded, "姿态控制点", true);
             if (!points.isExpanded) return;
