@@ -1,18 +1,18 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
-using Hollow.HoUnityTools.HoCamera;
+using HoCameraComponent = global::Hollow.HoUnityTools.HoCamera.HoCamera;
 
 namespace Hollow.HoUnityTools.Editor.HoCamera
 {
-    [CustomEditor(typeof(HoCamera))]
-    public sealed class HoCameraEditor : Editor
+    [CustomEditor(typeof(HoCameraComponent))]
+    public sealed class HoCameraEditor : global::UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
             DrawDefaultInspector();
-            var player = (HoCamera)target;
+            var player = (HoCameraComponent)target;
             EditorGUILayout.Space(6);
             using (new EditorGUI.DisabledScope(player.Asset == null))
             {
