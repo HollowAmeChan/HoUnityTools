@@ -1,5 +1,10 @@
-#if UNITY_EDITOR
+#if UNITY_EDITOR && !UNITY_6000_0_OR_NEWER
 using System.Collections.Generic;
+#if !UNITY_2023_1_OR_NEWER
+using System;
+using System.Collections;
+using System.Reflection;
+#endif
 using UnityEditor;
 using UnityEditor.Overlays;
 using UnityEditor.Toolbars;
@@ -10,6 +15,7 @@ using UnityEngine.UIElements;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BirpSceneMSAA —— Scene 视图的多重采样开关，专门给 Built-in 管线的工程用。
+// Unity 6 不注册本功能的按钮、Overlay、菜单或渲染回调。
 //
 // 为什么是「BIRP 专属」：
 //   它靠直接改 Scene 视图相机 targetTexture.antiAliasing 实现（见下面原理）。
@@ -150,19 +156,15 @@ namespace Hollow.HoUnityTools.Editor.BirpSceneMSAA
     }
 
     /// <summary>
-    /// 把按钮挂到 Scene 视图的顶部工具栏。没有它，按钮只是个没人实例化的类。
-    ///
-    /// DockZone / Layout 这套「默认停靠」参数是较新版本才有的（2021.3 上没有，实测
-    /// Editor Toolbox v2.0.2 的写法在 2021.3 编译不过）。所以按版本分两支：
-    /// 新版直接落在顶部工具栏；老版先以浮层出现，手动拖到工具栏一次即可，之后会被记住。
+    /// 把按钮挂到 Scene 视图的顶部工具栏。
+    /// 2022.1 起支持默认停靠参数；2021.3 需要在 Unity 恢复布局后补默认位置和可见性。
     /// </summary>
-#if UNITY_6000_0_OR_NEWER
-    [Overlay(typeof(SceneView), Id, "HoUnityTools", true,
-        defaultDisplay = true,
+#if UNITY_2022_1_OR_NEWER
+    [Overlay(typeof(SceneView), Id, "BIRP Scene MSAA", true,
         defaultDockZone = DockZone.TopToolbar,
         defaultLayout = Layout.HorizontalToolbar)]
 #else
-    [Overlay(typeof(SceneView), Id, "HoUnityTools", true)]
+    [Overlay(typeof(SceneView), Id, "BIRP Scene MSAA", true)]
 #endif
     internal class HoBirpSceneMSAAOverlay : ToolbarOverlay
     {
@@ -171,6 +173,102 @@ namespace Hollow.HoUnityTools.Editor.BirpSceneMSAA
         private HoBirpSceneMSAAOverlay() : base(HoBirpSceneMSAAButton.Id)
         {
         }
+
+#if !UNITY_2023_1_OR_NEWER
+        private const BindingFlags InstanceMembers =
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        // 2021.3 的 OverlayCanvas 和停靠 API 不公开。只通过它自己的 RestoreOverlay
+        // 补默认值，让 Unity 继续管理容器、拖动、显隐和布局保存，不直接改 UI 层级。
+        private static readonly PropertyInfo CanvasProperty =
+            typeof(Overlay).GetProperty("canvas", InstanceMembers);
+        private static readonly PropertyInfo ContainerProperty =
+            typeof(Overlay).GetProperty("container", InstanceMembers);
+        private static readonly FieldInfo InitializedCallback =
+            CanvasProperty.PropertyType.GetField("afterOverlaysInitialized", InstanceMembers);
+        private static readonly MethodInfo RestoreOverlay =
+            CanvasProperty.PropertyType.GetMethod("RestoreOverlay", InstanceMembers);
+        private static readonly FieldInfo SavedLayouts =
+            CanvasProperty.PropertyType.GetField("m_SaveData", InstanceMembers);
+
+        // 和该 SceneView 的布局一起保存迁移标记，避免重新加载时覆盖用户后续的显隐/停靠选择。
+        private const string PlacementInitializedId = Id + ".placement-v1";
+
+        private object legacyCanvas;
+
+        public override void OnCreated()
+        {
+            base.OnCreated();
+            legacyCanvas = CanvasProperty.GetValue(this);
+            var initialized = (Action)InitializedCallback.GetValue(legacyCanvas);
+            InitializedCallback.SetValue(legacyCanvas, initialized + InitializeLegacyPlacement);
+
+            // 动态添加 Overlay 时不会经过整张 Canvas 的 RestoreOverlays。
+            EditorApplication.delayCall += InitializeLegacyPlacement;
+        }
+
+        public override void OnWillBeDestroyed()
+        {
+            EditorApplication.delayCall -= InitializeLegacyPlacement;
+            if (legacyCanvas != null)
+            {
+                var initialized = (Action)InitializedCallback.GetValue(legacyCanvas);
+                InitializedCallback.SetValue(legacyCanvas, initialized - InitializeLegacyPlacement);
+                legacyCanvas = null;
+            }
+            base.OnWillBeDestroyed();
+        }
+
+        private void InitializeLegacyPlacement()
+        {
+            if (legacyCanvas == null || containerWindow == null)
+                return;
+
+            try
+            {
+                var saveDataType = RestoreOverlay.GetParameters()[1].ParameterType;
+                var idField = saveDataType.GetField("id");
+                var savedLayouts = (IList)SavedLayouts.GetValue(legacyCanvas);
+                foreach (var saved in savedLayouts)
+                    if ((string)idField.GetValue(saved) == PlacementInitializedId)
+                        return;
+
+                var currentContainer = ContainerProperty.GetValue(this) as VisualElement;
+                if (currentContainer == null)
+                    return;
+#if UNITY_2022_1_OR_NEWER
+                // 旧实现没有给 2022 默认停靠参数，已保存的布局会留在右侧面板。
+                var usesLegacyDefault = currentContainer.name == "overlay-container--right";
+#else
+                // 2021.3 对没有保存记录的 Overlay 使用 displayed=false / Layout.Panel，
+                // 不读取 OverlayAttribute.defaultDisplay。只修复这个默认回退状态。
+                var defaultContainer = legacyCanvas.GetType()
+                    .GetProperty("defaultToolbarContainer", InstanceMembers).GetValue(legacyCanvas);
+                var usesLegacyDefault = ReferenceEquals(currentContainer, defaultContainer);
+#endif
+                if (!floating && layout == Layout.Panel && usesLegacyDefault)
+                {
+                    var data = Activator.CreateInstance(saveDataType);
+                    idField.SetValue(data, Id);
+                    saveDataType.GetField("containerId").SetValue(data, "overlay-toolbar__top");
+                    saveDataType.GetField("layout").SetValue(data, Layout.HorizontalToolbar);
+                    saveDataType.GetField("displayed").SetValue(data, true);
+                    saveDataType.GetField("index").SetValue(data, int.MaxValue);
+                    RestoreOverlay.Invoke(legacyCanvas, new[] { (object)this, data });
+                }
+
+                var marker = Activator.CreateInstance(saveDataType);
+                idField.SetValue(marker, PlacementInitializedId);
+                savedLayouts.Add(marker);
+                ((ISerializationCallbackReceiver)legacyCanvas).OnBeforeSerialize();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("HoUnityTools：无法初始化 BIRP Scene MSAA 工具栏位置。\n" +
+                                 exception.GetBaseException().Message);
+            }
+        }
+#endif
     }
 
     /// <summary>
