@@ -463,6 +463,13 @@ namespace Hollow.HoUnityTools.Animations
             if (!previewing)
                 return;
 
+            // 不依赖 OnValidate：运行时序列化写入或脚本改字段后，也必须让图与当前输入一致。
+            if (activeClip != clip || activeAnimator != TargetAnimator)
+            {
+                RebuildPreview(activeClip != clip);
+                return;
+            }
+
             Animator animator = activeAnimator;
             if (animator == null || !animator.isActiveAndEnabled)
             {
@@ -491,10 +498,8 @@ namespace Hollow.HoUnityTools.Animations
             if (!enabled)
                 return;
 
-            // 运行时的 Update 会在自己那一帧处理，这里不重复。
-            if (Application.isPlaying)
-                return;
-
+            // 编辑器 delayCall 和运行时 Update 共用此入口；清掉标记后必须真正重建。
+            // 后到的回调会被入口处的 pendingRebuild 检查挡住，不会重复执行。
             RebuildPreview(reset);
         }
 
@@ -538,8 +543,15 @@ namespace Hollow.HoUnityTools.Animations
             if (resetPlayhead)
                 playhead = 0.0;
 
-            BeginPreview();
             playing = wasPlaying;
+            ClampPlayhead();
+            BeginPreview();
+            if (!IsPlayableReady)
+            {
+                playing = false;
+                return;
+            }
+
             evaluationPending = true;
             EvaluateNow();
         }
@@ -1114,7 +1126,7 @@ namespace Hollow.HoUnityTools.Animations
             // 销毁图，场景里带 OnBecameVisible/OnBecameInvisible 的物体会立刻报
             // "SendMessage cannot be called during Awake, CheckConsistency, or OnValidate"。
             if (previewing && (activeClip != clip || activeAnimator != TargetAnimator || !CanPreview))
-                RequestRebuild(false);
+                RequestRebuild(activeClip != clip);
         }
     }
 }
