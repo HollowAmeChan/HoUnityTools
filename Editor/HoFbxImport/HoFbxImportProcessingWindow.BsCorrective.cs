@@ -36,26 +36,27 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     return;
                 }
                 EditorGUILayout.HelpBox(
-                    "集中导入 HoBsCorrective；输入为骨骼局部旋转弧度，输出为 0..1 形态键值。父级变换不会直接改变驱动输入。", MessageType.Info);
+                    "集中导入 HoBsCorrective；按骨骼局部四元数夹角独立驱动每个 BS，多个修型叠加。父级变换不会直接改变驱动输入。", MessageType.Info);
                 var config = HoFbxBsCorrectiveImportUtility.Parse(bsCorrectiveJson);
                 foreach (HoFbxBsCorrectiveImportUtility.Rule rule in config.rules)
                 {
                     using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                     {
                         EditorGUILayout.LabelField(
-                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + rule.tasks.Length + " 个修型任务",
+                            (rule.enabled ? string.Empty : "[停用] ") + rule.bone + " → " + rule.tasks.Length + " 个修型姿势",
                             EditorStyles.boldLabel);
                         foreach (HoFbxBsCorrectiveImportUtility.Task task in rule.tasks)
                         {
-                            EditorGUILayout.LabelField(task.bsName + " · 控制点 " + task.pointId, EditorStyles.miniBoldLabel);
+                            EditorGUILayout.LabelField(
+                                (task.enabled ? string.Empty : "[停用] ") + task.bsName +
+                                " · 姿势点 " + task.pointId + $" · 权重 {task.weight:0.###}",
+                                EditorStyles.miniBoldLabel);
                             foreach (HoFbxBsCorrectiveImportUtility.Target target in task.targets)
                                 EditorGUILayout.LabelField("目标", target.mesh + " / " + target.shapeKey);
                         }
                         if (rule.rbf != null)
-                            EditorGUILayout.LabelField($"Gaussian RBF · 半径 {rule.rbf.radius:F3} · 控制点 {rule.rbf.controlPoints?.Length ?? 0}",
+                            EditorGUILayout.LabelField($"独立角度衰减 · 姿态 {rule.rbf.controlPoints?.Length ?? 0} · 各自持有影响半径",
                                 EditorStyles.wordWrappedMiniLabel);
-                        if (!string.IsNullOrEmpty(rule.comment))
-                            EditorGUILayout.LabelField(rule.comment, EditorStyles.wordWrappedMiniLabel);
                     }
                 }
                 if (targetRig == null)

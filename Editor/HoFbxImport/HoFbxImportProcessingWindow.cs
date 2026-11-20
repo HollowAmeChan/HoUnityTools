@@ -47,26 +47,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string file;
         }
 
-        [Serializable]
-        private sealed class HumanoidMappingFile
-        {
-            public HumanoidArmature[] armatures;
-        }
-
-        [Serializable]
-        private sealed class HumanoidArmature
-        {
-            public string armatureName;
-            public HumanoidBone[] bones;
-        }
-
-        [Serializable]
-        private sealed class HumanoidBone
-        {
-            public string boneName;
-            public string humanName;
-        }
-
         private enum ConstraintPlanKind
         {
             Parent,
@@ -431,6 +411,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 EditorGUILayout.HelpBox(error, MessageType.Error);
                 return;
             }
+
+            int referenceBones = HoFbxHumanoidImportUtility.ReferenceBoneCount(humanoidJson);
+            if (referenceBones > 0)
+                EditorGUILayout.LabelField($"含 T-Pose 标定 · {referenceBones} 根骨骼 · 随映射应用", EditorStyles.miniLabel);
 
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
@@ -2214,6 +2198,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 humanoidOperation =
                     $"- 严格写入 Humanoid 映射：{mappedCount} 项映射，{HumanTrait.BoneCount - mappedCount} 项置空\n";
+                int referenceBones = HoFbxHumanoidImportUtility.ReferenceBoneCount(humanoidJson);
+                if (referenceBones > 0)
+                    humanoidOperation += $"- 应用 Blender T-Pose 标定：{referenceBones} 根骨骼\n";
             }
 
             return "将执行以下显式操作：\n" +
@@ -2246,107 +2233,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return targetRig == null ? "目标骨架" : "目标骨架「" + targetRig.name + "」";
         }
 
-        private int ApplyHumanoidMapping()
-        {
-            ModelImporter importer = AssetImporter.GetAtPath(fbxAssetPath) as ModelImporter;
-            if (importer == null)
-                throw new InvalidOperationException("无法获取 FBX ModelImporter。");
-
-            HumanBone[] humanBones;
-            int mappedCount;
-            string error;
-            if (!TryBuildHumanBones(humanoidJson, out humanBones, out mappedCount, out error))
-                throw new InvalidOperationException(error);
-            if (mappedCount == 0)
-                throw new InvalidOperationException("最终 Humanoid 映射为空。");
-
-            HumanDescription description = importer.humanDescription;
-            description.human = humanBones;
-            importer.animationType = ModelImporterAnimationType.Human;
-            importer.humanDescription = description;
-            importer.SaveAndReimport();
-            return mappedCount;
-        }
+        private int ApplyHumanoidMapping() =>
+            HoFbxHumanoidImportUtility.Apply(humanoidJson, fbxAssetPath);
 
         private static bool TryBuildHumanBones(
-            TextAsset mappingAsset,
-            out HumanBone[] humanBones,
-            out int mappedCount,
-            out string error)
-        {
-            humanBones = Array.Empty<HumanBone>();
-            mappedCount = 0;
-            error = string.Empty;
-            if (mappingAsset == null)
-            {
-                error = "没有 Humanoid 映射 JSON。";
-                return false;
-            }
-
-            HumanoidMappingFile mapping;
-            try
-            {
-                mapping = JsonUtility.FromJson<HumanoidMappingFile>(mappingAsset.text);
-            }
-            catch (Exception exception)
-            {
-                error = "Humanoid 映射 JSON 解析失败：" + exception.Message;
-                return false;
-            }
-
-            humanBones = BuildHumanBones(mapping);
-            foreach (HumanBone humanBone in humanBones)
-            {
-                if (!string.IsNullOrEmpty(humanBone.boneName))
-                    mappedCount++;
-            }
-
-            return true;
-        }
-
-        private static HumanBone[] BuildHumanBones(HumanoidMappingFile mapping)
-        {
-            var mappedBones = new Dictionary<string, string>(StringComparer.Ordinal);
-            var usedHumanNames = new HashSet<string>(StringComparer.Ordinal);
-            var usedBoneNames = new HashSet<string>(StringComparer.Ordinal);
-            if (mapping != null && mapping.armatures != null)
-            {
-                foreach (HumanoidArmature armature in mapping.armatures)
-                {
-                    if (armature == null || armature.bones == null)
-                        continue;
-
-                    foreach (HumanoidBone item in armature.bones)
-                    {
-                        if (item == null || string.IsNullOrEmpty(item.boneName) || string.IsNullOrEmpty(item.humanName))
-                            continue;
-                        if (!IsUnityHumanoidName(item.humanName) ||
-                            !usedHumanNames.Add(item.humanName) ||
-                            !usedBoneNames.Add(item.boneName))
-                            continue;
-
-                        mappedBones[item.humanName] = item.boneName;
-                    }
-                }
-            }
-
-            var result = new List<HumanBone>(mappedBones.Count);
-            foreach (string humanName in HumanTrait.BoneName)
-            {
-                if (!mappedBones.TryGetValue(humanName, out string boneName))
-                    continue;
-
-                var humanBone = new HumanBone
-                {
-                    humanName = humanName,
-                    boneName = boneName,
-                };
-                humanBone.limit.useDefaultValues = true;
-                result.Add(humanBone);
-            }
-
-            return result.ToArray();
-        }
+            TextAsset mappingAsset, out HumanBone[] humanBones, out int mappedCount, out string error) =>
+            HoFbxHumanoidImportUtility.TryBuildHumanBones(mappingAsset, out humanBones, out mappedCount, out error);
 
         private static bool TryBuildHumanBonePreview(
             TextAsset mappingAsset,
@@ -2384,16 +2276,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             return true;
         }
-        private static bool IsUnityHumanoidName(string name)
-        {
-            foreach (string knownName in HumanTrait.BoneName)
-            {
-                if (string.Equals(knownName, name, StringComparison.Ordinal))
-                    return true;
-            }
-            return false;
-        }
-
         private static GameObject ResolveTargetRig(string targetId, string assetPath)
         {
             if (!string.IsNullOrEmpty(targetId) && GlobalObjectId.TryParse(targetId, out GlobalObjectId id))

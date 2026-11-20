@@ -17,25 +17,20 @@ namespace Hollow.HoUnityTools.Constraints
             public bool enabled = true;
             public Transform bone;
             public string bsName = "_BSC_pose1";
-            public float rbfRadius = 0.5f;
-            public List<RbfPoint> rbfPoints = new List<RbfPoint>();
+            public Quaternion pose = Quaternion.identity;
+            public float radius = Mathf.PI / 6f;
+            [Range(0f, 1f)] public float weight = 1f;
             public SkinnedMeshRenderer target;
             public string shapeName = string.Empty;
-            [TextArea(1, 4)] public string comment = string.Empty;
             [HideInInspector] public string sourceId = string.Empty;
             [HideInInspector] public string bonePath = string.Empty;
             [HideInInspector] public string targetPath = string.Empty;
             [HideInInspector] public string sourceBone = string.Empty;
+            [HideInInspector] public Quaternion referenceRotation = Quaternion.identity;
+            [HideInInspector] public bool measurementIsMch;
             [NonSerialized] public string lastError;
-            [NonSerialized] public Vector3 lastRadians;
+            [NonSerialized] public float lastDistance;
             [NonSerialized] public float lastOutput;
-        }
-
-        [Serializable]
-        public sealed class RbfPoint
-        {
-            public Vector3 pose;
-            [Range(0f, 1f)] public float weight = 1f;
         }
 
         [SerializeField] private List<Rule> rules = new List<Rule>();
@@ -47,6 +42,7 @@ namespace Hollow.HoUnityTools.Constraints
         private static readonly Dictionary<(SkinnedMeshRenderer, Mesh, int), HoBsCorrective> Owners =
             new Dictionary<(SkinnedMeshRenderer, Mesh, int), HoBsCorrective>();
         private readonly List<CompiledRule> compiled = new List<CompiledRule>();
+        private readonly List<BoneInput> inputs = new List<BoneInput>();
 
         private sealed class CompiledRule
         {
@@ -57,46 +53,69 @@ namespace Hollow.HoUnityTools.Constraints
             public Mesh mesh;
             public string shapeName;
             public int index = -1;
-            public double[] rbfCoefficients;
-            public Vector3[] rbfPositions;
-            public float[] rbfWeights;
-            public float radius;
-            public SharedKernel kernel;
+            public Quaternion pose;
+            public Quaternion referenceRotation;
+            public bool measurementIsMch;
+            public float radius, weight;
+            public PoseKernel kernel;
             public bool owns, written;
             public float restoreWeight, lastWritten;
         }
 
-        // Tasks and mesh targets from one Blender domain share their Gaussian
-        // samples. Cache by local input values, never by frame number: editing
-        // several poses in one editor frame must still evaluate each new pose.
-        private sealed class SharedKernel
+        private sealed class BoneInput
         {
             public Transform bone;
-            public float radius;
-            public Vector3[] positions;
-            public double[] values;
-            private Vector3 lastInput;
-            private bool hasInput;
-
-            public void Update(Vector3 input)
+            public Quaternion rotation;
+            public Quaternion referenceRotation;
+            public bool measurementIsMch;
+            public readonly double[] normalized = new double[4];
+            public double neutral;
+            public bool valid;
+            public void Update()
             {
-                if (hasInput && input.Equals(lastInput)) return;
-                double scale = 1.0 / (2.0 * radius * radius);
-                for (int i = 0; i < positions.Length; i++)
-                {
-                    Vector3 p = positions[i];
-                    double x = ShortestAngle(input.x - p.x);
-                    double y = ShortestAngle(input.y - p.y);
-                    double z = ShortestAngle(input.z - p.z);
-                    values[i] = Math.Exp(-(x * x + y * y + z * z) * scale);
-                }
-                lastInput = input;
+                if (bone == null) { valid = false; return; }
+                Quaternion next = bone.localRotation;
+                if (valid && rotation.Equals(next)) return;
+                rotation = next;
+                Quaternion relative = ReadLocalRotation(next, referenceRotation);
+                valid = Normalize(relative, normalized);
+                neutral = valid ? NeutralAngle(normalized) : 0;
+            }
+        }
+
+        // One pose across several meshes is evaluated once per distinct local
+        // input, including edits made several times within the same frame.
+        private sealed class PoseKernel
+        {
+            public BoneInput input;
+            public readonly double[] pose = new double[4];
+            public float radius, weight, output, distance;
+            public double neutral;
+            private Quaternion lastInput;
+            private bool hasInput;
+            public void Update()
+            {
+                if (hasInput && lastInput.Equals(input.rotation)) return;
+                double d = RotationAngle(input.normalized, pose);
+                distance = (float)d;
+                output = (float)(weight * Smoothstep(1.0 - d / radius) *
+                    Smoothstep((input.neutral + neutral - d) / (2.0 * neutral)));
+                lastInput = input.rotation;
                 hasInput = true;
             }
         }
 
         public IList<Rule> Rules => rules;
         public bool EditorPreviewActive => editorPreview;
+
+        /// <summary>Remove the bone's rest orientation in its own local axes, including MCH followers.</summary>
+        public static Quaternion ReadLocalRotation(Quaternion localRotation, Quaternion referenceRotation)
+        {
+            // A rest-oriented MCH follows the zeroed main bone with its bind
+            // offset. local * inverse(bind) expresses the motion in the parent's
+            // axes; Blender TRANSFORMS / LOCAL_SPACE uses the bone's own axes.
+            return Quaternion.Inverse(referenceRotation) * localRotation;
+        }
 
         private bool ShouldEvaluate => isActiveAndEnabled && gameObject.scene.IsValid() &&
             (Application.IsPlaying(gameObject) || !Application.isPlaying && editorPreview);
@@ -143,6 +162,7 @@ namespace Hollow.HoUnityTools.Constraints
         {
             if (!ShouldEvaluate) { Release(); return; }
             if (rebuild || BindingsChanged() || blockedByOwner && lastOwnershipVersion != ownershipVersion) Build();
+            foreach (BoneInput input in inputs) input.Update();
             foreach (CompiledRule item in compiled)
             {
                 if (!item.enabled || !item.owns || !ValidTarget(item)) continue;
@@ -150,9 +170,11 @@ namespace Hollow.HoUnityTools.Constraints
                 { item.source.lastError = "测量骨骼已丢失"; Restore(item); continue; }
                 if (HoFaceOutputOwnership.IsReserved(item.target, item.index))
                 { item.source.lastError = "目标形态键已被面捕接管"; Restore(item); continue; }
-                Vector3 radians = ReadLocalRadians(item.bone.localRotation);
-                item.source.lastRadians = radians;
-                float output = EvaluateRbf(item, radians);
+                if (!item.kernel.input.valid)
+                { item.source.lastError = "骨骼局部旋转无效"; Restore(item); continue; }
+                item.kernel.Update();
+                item.source.lastDistance = item.kernel.distance;
+                float output = item.kernel.output;
                 if (float.IsNaN(output) || float.IsInfinity(output)) output = 0;
                 item.source.lastOutput = Mathf.Clamp01(output);
                 float current = item.target.GetBlendShapeWeight(item.index);
@@ -172,90 +194,56 @@ namespace Hollow.HoUnityTools.Constraints
             if (rule.target == null || rule.target.sharedMesh == null) { error = "未指定有效目标网格"; return false; }
             if (ResolveShape(rule.target.sharedMesh, rule.shapeName) < 0)
             { error = "目标网格中找不到形态键：" + rule.shapeName; return false; }
-            if (!TryBuildRbf(rule, out _, out _, out error)) return false;
-            return true;
-        }
-
-        private static bool TryBuildRbf(Rule rule, out Vector3[] positions, out double[] coefficients, out string error)
-        {
-            positions = null; coefficients = null; error = null;
-            var points = new List<RbfPoint>();
-            points.Add(new RbfPoint { pose = Vector3.zero, weight = 0f });
-            if (rule.rbfPoints != null) points.AddRange(rule.rbfPoints);
-            if (points.Count < 2) { error = "RBF 至少需要一个姿态控制点"; return false; }
-            if (float.IsNaN(rule.rbfRadius) || float.IsInfinity(rule.rbfRadius) || rule.rbfRadius <= 0)
-            { error = "RBF 半径必须为有限正数"; return false; }
-            positions = new Vector3[points.Count];
-            for (int i = 0; i < points.Count; i++)
-            {
-                if (points[i] == null || !Finite(points[i].pose.x) || !Finite(points[i].pose.y) ||
-                    !Finite(points[i].pose.z) || !Finite(points[i].weight))
-                { error = "RBF 控制点必须为有限数值"; return false; }
-                positions[i] = points[i].pose;
-                for (int j = 0; j < i; j++)
-                    if (PoseDistance(positions[i], positions[j]) < 1e-5f)
-                    { error = "RBF 控制点过近或重复"; return false; }
-            }
-            var matrix = new double[points.Count, points.Count];
-            for (int row = 0; row < points.Count; row++)
-                for (int column = 0; column < points.Count; column++)
-                    matrix[row, column] = Gaussian(PoseDistanceSquared(positions[row], positions[column]), rule.rbfRadius) + (row == column ? 1e-6 : 0);
-            var values = new double[points.Count];
-            for (int i = 0; i < points.Count; i++) values[i] = points[i].weight;
-            coefficients = SolveLinear(matrix, values);
-            if (coefficients == null) { error = "RBF 系数无法求解"; return false; }
+            var pose = new double[4];
+            if (!Normalize(rule.pose, pose) || NeutralAngle(pose) < 1e-5)
+            { error = "修型姿态四元数无效或与基准姿态相同"; return false; }
+            if (!Normalize(rule.referenceRotation, new double[4]))
+            { error = "测量骨骼静止旋转无效"; return false; }
+            if (!Finite(rule.radius) || rule.radius <= 0 || rule.radius > Math.PI + 1e-6 ||
+                !Finite(rule.weight) || rule.weight < 0 || rule.weight > 1)
+            { error = "影响半径必须在 0°..180°，权重必须在 0..1"; return false; }
             return true;
         }
 
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
-        private static double Gaussian(double distanceSquared, float radius)
+        private static bool Normalize(Quaternion q, double[] result)
         {
-            double safe = Math.Max(radius, 1e-6);
-            return Math.Exp(-distanceSquared / (2.0 * safe * safe));
+            if (!Finite(q.x) || !Finite(q.y) || !Finite(q.z) || !Finite(q.w)) return false;
+            double length = Math.Sqrt((double)q.x*q.x + (double)q.y*q.y + (double)q.z*q.z + (double)q.w*q.w);
+            if (length < 1e-12) return false;
+            result[0] = q.x/length; result[1] = q.y/length;
+            result[2] = q.z/length; result[3] = q.w/length;
+            return true;
         }
 
-        private static double[] SolveLinear(double[,] source, double[] values)
+        private static double AngleFromDot(double dot)
         {
-            int size = values.Length; var matrix = new double[size, size + 1];
-            for (int row = 0; row < size; row++) { for (int column = 0; column < size; column++) matrix[row, column] = source[row, column]; matrix[row, size] = values[row]; }
-            for (int pivot = 0; pivot < size; pivot++)
-            {
-                int best = pivot; for (int row = pivot + 1; row < size; row++) if (Math.Abs(matrix[row, pivot]) > Math.Abs(matrix[best, pivot])) best = row;
-                if (Math.Abs(matrix[best, pivot]) < 1e-9) return null;
-                for (int column = pivot; column <= size; column++) { double temp = matrix[pivot, column]; matrix[pivot, column] = matrix[best, column]; matrix[best, column] = temp; }
-                double divisor = matrix[pivot, pivot]; for (int column = pivot; column <= size; column++) matrix[pivot, column] /= divisor;
-                for (int row = 0; row < size; row++) { if (row == pivot) continue; double factor = matrix[row, pivot]; for (int column = pivot; column <= size; column++) matrix[row, column] -= factor * matrix[pivot, column]; }
-            }
-            var result = new double[size]; for (int i = 0; i < size; i++) result[i] = matrix[i, size]; return result;
+            dot = Math.Min(1.0, Math.Abs(dot));
+            return 2.0 * Math.Atan2(Math.Sqrt(Math.Max(0.0, 1.0-dot*dot)), dot);
         }
 
-        private static float EvaluateRbf(CompiledRule item, Vector3 current)
+        private static double RotationAngle(double[] a, double[] b) =>
+            AngleFromDot(a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]);
+        private static double NeutralAngle(double[] q) => AngleFromDot(q[3]);
+
+        private static double Smoothstep(double value)
         {
-            if (item.kernel == null || item.rbfCoefficients == null) return 0f;
-            item.kernel.Update(current);
-            double output = 0;
-            for (int i = 0; i < item.rbfCoefficients.Length; i++) output += item.rbfCoefficients[i] * item.kernel.values[i];
-            return (float)output;
+            double t = Math.Max(0.0, Math.Min(1.0, value));
+            return t*t*(3.0-2.0*t);
         }
 
-        private static float PoseDistance(Vector3 a, Vector3 b)
+        public static float EvaluatePose(Quaternion current, Quaternion pose, float radius, float weight = 1f)
         {
-            Vector3 delta = new Vector3(ShortestAngle(a.x - b.x), ShortestAngle(a.y - b.y), ShortestAngle(a.z - b.z));
-            return delta.magnitude;
-        }
-
-        private static double PoseDistanceSquared(Vector3 a, Vector3 b)
-        {
-            double x = ShortestAngle(a.x - b.x), y = ShortestAngle(a.y - b.y), z = ShortestAngle(a.z - b.z);
-            return x * x + y * y + z * z;
-        }
-
-        private static float ShortestAngle(float radians)
-        {
-            while (radians > Mathf.PI) radians -= Mathf.PI * 2f;
-            while (radians < -Mathf.PI) radians += Mathf.PI * 2f;
-            return radians;
+            var a = new double[4]; var b = new double[4];
+            if (!Normalize(current, a) || !Normalize(pose, b) ||
+                !Finite(radius) || radius <= 0 || radius > Math.PI+1e-6 ||
+                !Finite(weight) || weight < 0 || weight > 1) return 0;
+            double c = NeutralAngle(b);
+            if (c < 1e-5) return 0;
+            double d = RotationAngle(a,b);
+            return (float)(weight * Smoothstep(1.0-d/radius) *
+                Smoothstep((NeutralAngle(a)+c-d)/(2.0*c)));
         }
 
         private static int ResolveShape(Mesh mesh, string name)
@@ -270,14 +258,17 @@ namespace Hollow.HoUnityTools.Constraints
             Release();
             rebuild = false;
             blockedByOwner = false;
-            var kernels = new List<SharedKernel>();
+            var kernels = new List<PoseKernel>();
             foreach (Rule rule in rules)
             {
                 var item = new CompiledRule
                 {
                     source = rule, enabled = rule != null && rule.enabled, bone = rule?.bone,
                     target = rule?.target, mesh = rule?.target != null ? rule.target.sharedMesh : null,
-                    shapeName = rule?.shapeName, radius = rule?.rbfRadius ?? 0
+                    shapeName = rule?.shapeName, radius = rule?.radius ?? 0,
+                    weight = rule?.weight ?? 0, pose = rule?.pose ?? Quaternion.identity,
+                    referenceRotation = rule?.referenceRotation ?? Quaternion.identity,
+                    measurementIsMch = rule != null && rule.measurementIsMch
                 };
                 compiled.Add(item);
                 if (rule == null) continue;
@@ -286,24 +277,24 @@ namespace Hollow.HoUnityTools.Constraints
                 if (!item.enabled) continue;
                 if (!ValidateRule(rule, out string error))
                 { rule.lastError = error; continue; }
-                if (!TryBuildRbf(rule, out item.rbfPositions, out item.rbfCoefficients, out error))
-                { rule.lastError = error; continue; }
-                var weights = new List<float>();
-                weights.Add(0f);
-                foreach (RbfPoint point in rule.rbfPoints ?? new List<RbfPoint>()) weights.Add(point.weight);
-                item.rbfWeights = weights.ToArray();
-                foreach (SharedKernel kernel in kernels)
+                BoneInput input = inputs.Find(value => value.bone == rule.bone &&
+                    value.referenceRotation.Equals(rule.referenceRotation) && value.measurementIsMch == rule.measurementIsMch);
+                if (input == null)
+                { input = new BoneInput { bone = rule.bone, referenceRotation = rule.referenceRotation,
+                    measurementIsMch = rule.measurementIsMch }; inputs.Add(input); }
+                foreach (PoseKernel kernel in kernels)
                 {
-                    if (kernel.bone != item.bone || kernel.radius != item.radius || kernel.positions.Length != item.rbfPositions.Length) continue;
-                    bool same = true;
-                    for (int i = 0; i < kernel.positions.Length; i++)
-                        if (!kernel.positions[i].Equals(item.rbfPositions[i])) { same = false; break; }
-                    if (same) { item.kernel = kernel; break; }
+                    if (kernel.input != input || kernel.radius != item.radius || kernel.weight != item.weight) continue;
+                    var normalized = new double[4];
+                    Normalize(rule.pose, normalized);
+                    if (RotationAngle(kernel.pose, normalized) < 1e-7)
+                    { item.kernel = kernel; break; }
                 }
                 if (item.kernel == null)
                 {
-                    item.kernel = new SharedKernel { bone = item.bone, radius = item.radius,
-                        positions = item.rbfPositions, values = new double[item.rbfPositions.Length] };
+                    item.kernel = new PoseKernel { input = input, radius = item.radius, weight = item.weight };
+                    Normalize(rule.pose, item.kernel.pose);
+                    item.kernel.neutral = NeutralAngle(item.kernel.pose);
                     kernels.Add(item.kernel);
                 }
                 item.index = ResolveShape(item.mesh, rule.shapeName);
@@ -330,19 +321,10 @@ namespace Hollow.HoUnityTools.Constraints
                 if (rule == null) continue;
                 if (rule.enabled != item.enabled || rule.bone != item.bone || rule.target != item.target ||
                     (rule.target != null ? rule.target.sharedMesh : null) != item.mesh ||
-                    rule.shapeName != item.shapeName || rule.rbfRadius != item.radius)
+                    rule.shapeName != item.shapeName || rule.radius != item.radius ||
+                    rule.weight != item.weight || !rule.pose.Equals(item.pose) ||
+                    !rule.referenceRotation.Equals(item.referenceRotation) || rule.measurementIsMch != item.measurementIsMch)
                     return true;
-                if (!item.enabled) continue;
-                int pointCount = 1 + (rule.rbfPoints?.Count ?? 0);
-                if (item.rbfPositions == null || item.rbfWeights == null || item.rbfPositions.Length != pointCount)
-                    return true;
-                int pointIndex = 1;
-                foreach (RbfPoint point in rule.rbfPoints ?? new List<RbfPoint>())
-                {
-                    if (PoseDistance(item.rbfPositions[pointIndex], point.pose) >= 1e-5f || item.rbfWeights[pointIndex] != point.weight)
-                        return true;
-                    pointIndex++;
-                }
             }
             return false;
         }
@@ -370,39 +352,8 @@ namespace Hollow.HoUnityTools.Constraints
                 { Owners.Remove(key); ownershipVersion++; }
             }
             compiled.Clear();
+            inputs.Clear();
         }
 
-        /// <summary>
-        /// Decompose the imported local quaternion with the Blender XYZ
-        /// convention. Unity's Quaternion.eulerAngles uses a different order.
-        /// </summary>
-        private static Vector3 ReadLocalRadians(Quaternion rotation)
-        {
-            float xx = rotation.x * rotation.x;
-            float yy = rotation.y * rotation.y;
-            float zz = rotation.z * rotation.z;
-            float ww = rotation.w * rotation.w;
-            float m00 = ww + xx - yy - zz;
-            float m10 = 2f * (rotation.x * rotation.y + rotation.w * rotation.z);
-            float m20 = 2f * (rotation.x * rotation.z - rotation.w * rotation.y);
-            float m21 = 2f * (rotation.y * rotation.z + rotation.w * rotation.x);
-            float m22 = ww - xx - yy + zz;
-            float y = Mathf.Asin(Mathf.Clamp(-m20, -1f, 1f));
-            float cy = Mathf.Cos(y);
-            float x;
-            float z;
-            if (Mathf.Abs(cy) > 1e-5f)
-            {
-                x = Mathf.Atan2(m21, m22);
-                z = Mathf.Atan2(m10, m00);
-            }
-            else
-            {
-                x = Mathf.Atan2(-2f * (rotation.y * rotation.z - rotation.w * rotation.x),
-                    1f - 2f * (xx + zz));
-                z = 0f;
-            }
-            return new Vector3(x, y, z);
-        }
     }
 }

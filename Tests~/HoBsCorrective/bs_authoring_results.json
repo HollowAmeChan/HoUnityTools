@@ -1,10 +1,13 @@
 {
   "schema": "hotools.bs-corrective",
-  "version": 3,
+  "version": 5,
   "poseSpace": "LOCAL",
-  "rotationOrder": "XYZ",
+  "rotationRepresentation": "quaternion-xyzw",
   "angleUnit": "radian",
-  "kernel": "gaussian",
+  "kernel": "smoothstep-compact",
+  "evaluation": "independent",
+  "distanceMetric": "quaternion-angle",
+  "neutralMode": "triangle-smoothstep",
   "fbxBoneAxes": "Y_X",
   "measurement": "source_local_rotation",
   "rules": [
@@ -22,63 +25,66 @@
         {
           "id": "task-1",
           "bsName": "_BSC_pose1",
-          "pointId": "point-1",
+          "pointId": "task-1",
+          "enabled": true,
+          "weight": 1.0,
           "targets": [
             {
               "mesh": "Coat",
-              "shapeKey": "ArmRaise.L"
-            },
-            {
-              "mesh": "Coat",
-              "shapeKey": "ArmRaise.Second"
+              "shapeKey": "_BSC_pose1"
             },
             {
               "mesh": "Trim",
-              "shapeKey": "StripeRaise"
+              "shapeKey": "_BSC_pose1"
             }
           ]
         },
         {
           "id": "task-2",
           "bsName": "_BSC_pose2",
-          "pointId": "point-2",
+          "pointId": "task-2",
+          "enabled": true,
+          "weight": 1.0,
           "targets": [
             {
               "mesh": "Coat",
-              "shapeKey": "ArmFold.L"
+              "shapeKey": "_BSC_pose2"
             },
             {
               "mesh": "Trim",
-              "shapeKey": "StripeFold"
+              "shapeKey": "_BSC_pose2"
             }
           ]
         }
       ],
-      "comment": "Two poses; one task drives several objects and shape keys.",
       "rbf": {
-        "radius": 0.5,
         "includeBase": true,
         "basePose": [
           0.0,
           0.0,
-          0.0
+          0.0,
+          1.0
         ],
         "controlPoints": [
           {
-            "id": "point-1",
+            "id": "task-1",
             "pose": [
-              0.800000011920929,
-              0.15000000596046448,
-              -0.10000000149011612
-            ]
+              0.39128762256447197,
+              0.049520490331349004,
+              -0.07504699212907792,
+              0.9158655285780574
+            ],
+            "radius": 0.5235987901687622
           },
           {
-            "id": "point-2",
+            "id": "task-2",
             "pose": [
-              -0.5,
-              0.4000000059604645,
-              0.20000000298023224
-            ]
+              -0.2604782523656081,
+              0.16732467742646548,
+              0.14370770872327546,
+              0.9399476723851143
+            ],
+            "radius": 0.5235987901687622
           }
         ]
       }

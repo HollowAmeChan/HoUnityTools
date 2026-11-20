@@ -22,9 +22,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string schema;
             public int version;
             public string poseSpace;
-            public string rotationOrder;
+            public string rotationRepresentation;
             public string angleUnit;
             public string kernel;
+            public string evaluation;
+            public string distanceMetric;
+            public string neutralMode;
             public string fbxBoneAxes;
             public Rule[] rules;
         }
@@ -39,7 +42,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string measurementBone;
             public string[] influenceObjects;
             public Task[] tasks;
-            public string comment;
             public RbfConfig rbf;
         }
 
@@ -49,6 +51,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             public string id;
             public string bsName;
             public string pointId;
+            public bool enabled = true;
+            public float weight = 1f;
             public Target[] targets;
         }
 
@@ -64,12 +68,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             public string id;
             public float[] pose;
+            public float radius;
         }
 
         [Serializable]
         public sealed class RbfConfig
         {
-            public float radius = 0.5f;
             public bool includeBase = true;
             public float[] basePose;
             public RbfPoint[] controlPoints;
@@ -137,11 +141,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             if (metadata == null) throw new ArgumentNullException(nameof(metadata), "没有 BS 修型 JSON。");
             Config config = JsonUtility.FromJson<Config>(metadata.text);
-            if (config == null || config.schema != Schema || config.version != 3)
-                throw new InvalidDataException("不支持的 BS 修型 schema/version；需要 hotools.bs-corrective v3（控制点与修型任务）。");
-            if (config.poseSpace != "LOCAL" || config.rotationOrder != "XYZ" || config.angleUnit != "radian" ||
-                config.kernel != "gaussian" || config.fbxBoneAxes != "Y_X")
-                throw new InvalidDataException("BS 修型必须声明 LOCAL / XYZ / radian / gaussian 和配套 HoFBX Y_X 骨轴。");
+            if (config == null || config.schema != Schema || config.version != 5)
+                throw new InvalidDataException("不支持的 BS 修型 schema/version；需要 hotools.bs-corrective v5 独立叠加。");
+            if (config.poseSpace != "LOCAL" || config.rotationRepresentation != "quaternion-xyzw" || config.angleUnit != "radian" ||
+                config.kernel != "smoothstep-compact" || config.fbxBoneAxes != "Y_X" ||
+                config.evaluation != "independent" || config.distanceMetric != "quaternion-angle" ||
+                config.neutralMode != "triangle-smoothstep")
+                throw new InvalidDataException("BS 修型必须声明 v5 局部四元数角距离、独立平滑衰减及固定基准归零契约。");
             if (config.rules == null)
                 throw new InvalidDataException("BS 修型 JSON 缺少 rules；显式空数组可清除此来源的导入规则。");
 
@@ -158,13 +164,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 if (rule.rbf == null || rule.rbf.controlPoints == null ||
                     rule.rbf.controlPoints.Length == 0)
                     throw new InvalidDataException(label + " 至少需要一个 RBF 姿态控制点。");
-                if (!rule.rbf.includeBase || !ValidPose(rule.rbf.basePose) || rule.rbf.basePose.Any(x => x != 0f))
+                if (!rule.rbf.includeBase || !ValidPose(rule.rbf.basePose) ||
+                    rule.rbf.basePose[0] != 0f || rule.rbf.basePose[1] != 0f ||
+                    rule.rbf.basePose[2] != 0f || Math.Abs(rule.rbf.basePose[3]) != 1f)
                     throw new InvalidDataException(label + " 的基准姿态必须固定为零。");
-                if (!Finite(rule.rbf.radius) || rule.rbf.radius <= 0)
-                    throw new InvalidDataException(label + " 的 RBF 半径必须为有限正数。");
                 var pointIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (RbfPoint point in rule.rbf.controlPoints ?? Array.Empty<RbfPoint>())
-                    if (point == null || string.IsNullOrWhiteSpace(point.id) || !pointIds.Add(point.id) || !ValidPose(point.pose))
+                    if (point == null || string.IsNullOrWhiteSpace(point.id) || !pointIds.Add(point.id) ||
+                        !ValidPose(point.pose) || !Finite(point.radius) || point.radius <= 0f || point.radius > Math.PI + 1e-6 ||
+                        NeutralAngle(point.pose) < 1e-5)
                         throw new InvalidDataException(label + " 包含不完整、重复或非有限的 RBF 控制点。");
                 if (rule.tasks == null || rule.tasks.Length == 0)
                     throw new InvalidDataException(label + " 缺少修型任务。");
@@ -177,26 +185,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         throw new InvalidDataException(label + " 每个控制点必须唯一对应一个修型任务。");
                     if (string.IsNullOrWhiteSpace(task.bsName) || !names.Add(rule.armatureName + "\0" + task.bsName))
                         throw new InvalidDataException(label + " 的任务 BS 名称为空或重复。");
+                    if (!Finite(task.weight) || task.weight < 0f || task.weight > 1f)
+                        throw new InvalidDataException(label + " 的姿态权重必须在 0..1。");
                     if (task.targets == null || task.targets.Length == 0)
                         throw new InvalidDataException(label + " 的修型任务缺少目标。");
                     foreach (Target target in task.targets)
                     {
                         if (target == null || string.IsNullOrWhiteSpace(target.mesh) || string.IsNullOrWhiteSpace(target.shapeKey))
                             throw new InvalidDataException(label + " 包含不完整的目标网格或形态键。");
-                        if (rule.enabled && !outputs.Add(target.mesh + "\0" + target.shapeKey))
+                        if (rule.enabled && task.enabled && !outputs.Add(target.mesh + "\0" + target.shapeKey))
                             throw new InvalidDataException(label + " 存在重复驱动的目标形态键。");
                     }
                 }
                 if (!usedPoints.SetEquals(pointIds))
                     throw new InvalidDataException(label + " 有控制点未关联修型任务。");
-                var positions = new List<Vector3> { Vector3.zero };
-                foreach (RbfPoint point in rule.rbf.controlPoints)
-                {
-                    Vector3 pose = ToVector3(point.pose);
-                    if (positions.Any(other => WrappedDistanceSquared(other, pose) < 1e-10f))
-                        throw new InvalidDataException(label + " 的控制点与基准姿态或其他控制点重复。");
-                    positions.Add(pose);
-                }
             }
             return config;
         }
@@ -208,11 +210,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             var result = new List<HoBsCorrective.Rule>();
             foreach (Rule rule in config.rules)
             {
-                Transform armature = ResolveArmature(rig.transform, rule.armatureName);
+                Transform armature = ResolveArmature(rig.transform, rule.armatureName,
+                    config.rules.Select(value => value.armatureName).Distinct().Count() == 1);
                 string measurementName = string.IsNullOrWhiteSpace(rule.measurementBone) ? rule.bone : rule.measurementBone;
                 Transform bone = UniqueBone(armature, measurementName);
                 foreach (Task task in rule.tasks)
                 {
+                    RbfPoint point = rule.rbf.controlPoints.Single(value => value.id == task.pointId);
                     Target[] targets = task.targets;
                     for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
                     {
@@ -227,14 +231,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         {
                             id = rule.id + ":" + task.id + ":" + targetIndex,
                             sourceId = sourceId,
-                            enabled = rule.enabled,
+                            enabled = rule.enabled && task.enabled,
                             bone = bone,
                             target = target,
                             shapeName = targetData.shapeKey,
                             bsName = task.bsName,
-                            rbfRadius = rule.rbf.radius,
-                            rbfPoints = ToRbfPoints(rule.rbf.controlPoints, task.pointId),
-                            comment = rule.comment ?? string.Empty,
+                            // FBX Y_X exports mirror Blender's local Y/Z
+                            // quaternion components into Unity's handedness.
+                            pose = new Quaternion(point.pose[0], -point.pose[1], -point.pose[2], point.pose[3]).normalized,
+                            radius = point.radius,
+                            weight = task.weight,
+                            referenceRotation = BindRotation(bone),
+                            measurementIsMch = measurementName != rule.bone,
                             bonePath = AnimationUtility.CalculateTransformPath(bone, searchRoot),
                             targetPath = AnimationUtility.CalculateTransformPath(target.transform, searchRoot),
                             // Keep the authored source name for auditability; bone points to
@@ -250,25 +258,18 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private static int CountTargets(Rule rule) => rule.tasks.Sum(task => task.targets.Length);
 
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
-        private static bool ValidPose(float[] value) => value != null && value.Length == 3 && value.All(Finite);
-        private static float WrappedDistanceSquared(Vector3 a, Vector3 b)
+        private static bool ValidPose(float[] value) => value != null && value.Length == 4 && value.All(Finite) &&
+            Math.Abs(value.Sum(v => (double)v * v) - 1.0) < 1e-5;
+        private static Quaternion ToQuaternion(float[] value) =>
+            new Quaternion(value[0], value[1], value[2], value[3]).normalized;
+        private static Quaternion BindRotation(Transform bone)
         {
-            float x = Mathf.DeltaAngle(a.x * Mathf.Rad2Deg, b.x * Mathf.Rad2Deg) * Mathf.Deg2Rad;
-            float y = Mathf.DeltaAngle(a.y * Mathf.Rad2Deg, b.y * Mathf.Rad2Deg) * Mathf.Deg2Rad;
-            float z = Mathf.DeltaAngle(a.z * Mathf.Rad2Deg, b.z * Mathf.Rad2Deg) * Mathf.Deg2Rad;
-            return x * x + y * y + z * z;
+            Transform original = PrefabUtility.GetCorrespondingObjectFromOriginalSource(bone);
+            return original != null ? original.localRotation : bone.localRotation;
         }
-
-        private static Vector3 ToVector3(float[] values) => values != null && values.Length == 3
-            ? new Vector3(values[0], values[1], values[2]) : Vector3.zero;
-
-        private static List<HoBsCorrective.RbfPoint> ToRbfPoints(RbfPoint[] points, string activePointId)
-        {
-            var result = new List<HoBsCorrective.RbfPoint>();
-            foreach (RbfPoint point in points ?? Array.Empty<RbfPoint>())
-                result.Add(new HoBsCorrective.RbfPoint { pose = ToVector3(point.pose), weight = point.id == activePointId ? 1f : 0f });
-            return result;
-        }
+        private static double NeutralAngle(float[] value) =>
+            2.0 * Math.Atan2(Math.Sqrt((double)value[0]*value[0] + (double)value[1]*value[1] +
+                (double)value[2]*value[2]), Math.Abs(value[3]));
 
         private static Transform ResolveSearchRoot(Transform rig)
         {
@@ -279,10 +280,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             return rig.parent != null ? rig.parent : rig;
         }
 
-        private static Transform ResolveArmature(Transform rig, string name)
+        private static Transform ResolveArmature(Transform rig, string name, bool allowModelRoot)
         {
             if (rig.name == name) return rig;
             Transform[] candidates = rig.GetComponentsInChildren<Transform>(true).Where(x => x.name == name).ToArray();
+            // Unity may collapse the sole armature object into the FBX asset
+            // root and rename it after the file. Bone/mesh names remain strict.
+            if (candidates.Length == 0 && allowModelRoot) return rig;
             if (candidates.Length != 1)
                 throw new InvalidDataException($"目标骨架下的 armature「{name}」匹配到 {candidates.Length} 个物体，必须唯一。");
             return candidates[0];
