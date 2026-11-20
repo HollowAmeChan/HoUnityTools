@@ -491,6 +491,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             }
 
+            if (IsEmptyConstraintSnapshot(config))
+            {
+                EditorGUILayout.HelpBox("导出骨架没有约束；应用时仅清理之前由导入器生成的约束，保留手动配置，并继续其他导入步骤。", MessageType.Info);
+                return;
+            }
+
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 GUILayout.Label("Owner -> Target", EditorStyles.miniBoldLabel, GUILayout.Width(220f));
@@ -671,6 +677,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             BuildNeutralIrPlan(config, result);
             return result;
         }
+
+        // Called only after validation. Per-bone generateMCH flags describe
+        // authoring intent; without actual bindings they are not constraints.
+        private static bool IsEmptyConstraintSnapshot(ConstraintConfig config) =>
+            config.knownConstraints.Count == 0 && config.unknownConstraints.Count == 0 &&
+            config.mchBindings.Count == 0 && config.auxBones.All(aux => aux.constraints.Count == 0) &&
+            (config.aimBindings == null || config.aimBindings.Count == 0);
 
         private static bool TryValidateConstraintConfig(
             ConstraintConfig config,
@@ -2302,7 +2315,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             if (!TryValidateConstraintConfig(config, out string validationError))
                 throw new InvalidDataException(validationError);
 
-            if (mode == ConstraintMode.Vrc && !HoVrcConstraintBridge.IsSdkAvailable)
+            bool emptySnapshot = IsEmptyConstraintSnapshot(config);
+            if (!emptySnapshot && mode == ConstraintMode.Vrc && !HoVrcConstraintBridge.IsSdkAvailable)
             {
                 throw new InvalidOperationException(
                     "本工程没有 VRChat 约束类型（VRC.SDK3.Dynamics.Constraint）。\n" +
@@ -2316,7 +2330,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
             // 先把"能不能落盘"判完，再动任何东西。
             // 否则一旦后面抛错/全跳过，用户上一次的导入已经被清掉了，只留下半截状态。
-            ValidateBeforeClearing(config, rig, mode, plan, transformMap, explicitRoot);
+            if (!emptySnapshot)
+                ValidateBeforeClearing(config, rig, mode, plan, transformMap, explicitRoot);
             bool legacyUsable = plan.Any(e=>e.kind!=ConstraintPlanKind.Unknown&&e.kind!=ConstraintPlanKind.Direct&&
                 !(mode==ConstraintMode.HoAux&&!string.IsNullOrEmpty(e.hoAuxUnsupportedReason))&&
                 transformMap.ContainsKey(e.ownerBone)&&transformMap.ContainsKey(e.targetBone));
@@ -2326,7 +2341,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 !float.IsNaN(k.constraint.parameters.influence)&&!float.IsInfinity(k.constraint.parameters.influence)&&
                 k.constraint.parameters.influence>=0&&k.constraint.parameters.influence<=1&&
                 (k.constraint.parameters.mute||k.constraint.parameters.influence==0));
-            if(!legacyUsable&&direct.entries.Count==0&&!intentionallyDisabled)
+            if(!emptySnapshot&&!legacyUsable&&direct.entries.Count==0&&!intentionallyDisabled)
                 throw new InvalidOperationException("没有可装配的约束；现有导入保持不变。请查看已识别但不支持／unknown 的预览与诊断。");
 
             // 三种形态互斥：清掉上一次由本工具导入的三种形态，再落新的。
@@ -2357,7 +2372,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     count = ApplyStandardConstraints(plan, transformMap, config);
                     break;
             }
-            HoAuxRig directHo = mode == ConstraintMode.HoAux ? ResolveSingleHoAuxRig(directRoot.gameObject) : null;
+            HoAuxRig directHo = mode == ConstraintMode.HoAux && direct.entries.Count > 0 ? ResolveSingleHoAuxRig(directRoot.gameObject) : null;
             count += HoDirectConstraintImporter.Apply(direct,directHo);
 
             if (removedHoAux > 0)
