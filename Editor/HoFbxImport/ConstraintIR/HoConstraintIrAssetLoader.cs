@@ -12,16 +12,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
     /// <summary>One backend-specific load path for preview and apply. Cache identity includes source and registry bytes.</summary>
     public static class HoConstraintIrAssetLoader
     {
-        [Serializable] private sealed class Header { public int schemaVersion; }
-        public static ConstraintConfig Load(TextAsset asset, string backendId)
+        public static HoConstraintExecutionPlan Load(TextAsset asset, string backendId)
         {
             if (asset == null) throw new ArgumentNullException("asset");
-            var header = JsonUtility.FromJson<Header>(asset.text);
-            if (header == null || header.schemaVersion != 4) return JsonUtility.FromJson<ConstraintConfig>(asset.text);
             var registry = LoadDistributedRegistry();
             var document = HoConstraintIrV4Import.Read(asset.text, registry);
-            // A fresh DTO prevents downstream legacy preparation from contaminating the next preview/apply.
-            return HoConstraintIrV4LegacyAdapter.Project(document, registry, backendId).Config;
+            return HoConstraintIrPlanner.Build(document, registry, backendId).Plan;
         }
         public static HoConstraintIrV4Registry LoadDistributedRegistry()
         {
@@ -32,11 +28,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             if (!File.Exists(registryPath)) throw new FileNotFoundException("The distributed constraint IR registry is absent; sync it from the Blender authority.", registryPath);
             return HoConstraintIrV4Registry.Load(File.ReadAllBytes(registryPath));
         }
-        public static int SourceVersion(ConstraintConfig config) { return config != null && config.sourceContext != null ? 4 : config == null ? 0 : config.schemaVersion; }
-        public static void PersistReport(ConstraintConfig config, GameObject rig, string backendId)
+        public static int SourceVersion(HoConstraintExecutionPlan plan) { return plan == null ? 0 : plan.SourceSchemaVersion; }
+        public static void PersistReport(HoConstraintExecutionPlan config, GameObject rig, string backendId)
         {
             HoConstraintIrImportReports.instance.Record(config, rig, backendId);
-            if (config.sourceContext == null) return;
+            if (config.source == null) return;
             foreach (var marker in rig.GetComponentsInChildren<HoImportedConstraintMarker>(true))
                 if (marker.sourceArmature == config.armatureName) { Undo.RecordObject(marker, "记录源 IR 版本"); marker.exporterVersion = "4"; EditorUtility.SetDirty(marker); }
         }

@@ -17,8 +17,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         internal enum Capability { Exact, NativeApproximation, Unsupported, Invalid, Skipped }
         internal sealed class Entry
         {
-            internal ConstraintConfig config;
-            internal KnownConstraintInfo raw;
+            internal HoConstraintExecutionPlan config;
+            internal HoConstraintPlannedOperation raw;
             internal AimBindingInfo aim;
             internal string Owner { get { return aim != null ? aim.ownerBone : raw.ownerBone; } }
             internal string Type { get { return aim != null ? "AIM" : raw.constraint.constraintType; } }
@@ -29,7 +29,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         internal sealed class Prepared
         {
             internal Backend backend;
-            internal ConstraintConfig config;
+            internal HoConstraintExecutionPlan config;
             internal GameObject rig;
             internal Transform root;
             internal Dictionary<string,Transform> map;
@@ -37,12 +37,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             internal readonly List<Entry> entries = new List<Entry>();
         }
 
-        internal static List<Entry> Build(ConstraintConfig config)
+        internal static List<Entry> Build(HoConstraintExecutionPlan config)
         {
             var result = new List<Entry>();
-            if(config.schemaVersion < 3) return result;
-            foreach(var known in config.knownConstraints)
-                if(known.relationType == "DIRECT_CONSTRAINT")result.Add(new Entry {config=config,raw=known});
+            foreach(var known in config.operations)
+                if(known.operationRole == "DIRECT_CONSTRAINT")result.Add(new Entry {config=config,raw=known});
             foreach(var aim in config.aimBindings)result.Add(new Entry {config=config,aim=aim});
             return result.OrderBy(e=>e.Owner,StringComparer.Ordinal).ThenBy(e=>e.Index).ToList();
         }
@@ -65,56 +64,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         internal static IEnumerable<string> ReferencedBones(Entry e){return References(e);}
 
-        internal static bool ValidateV3(ConstraintConfig config,out string error)
-        {
-            error = null;
-            if(config.schemaVersion==2)return true;
-            if(config.aimBindings==null || config.bindingContext==null || config.bindingContext.bones==null ||
-               config.bindingContext.space!="BLENDER_ARMATURE" || config.bindingContext.matrixLayout!="ROW_MAJOR" || !ValidMatrix(config.bindingContext.objectMatrix))
-            { error="IR v3 缺少 aimBindings 或有效 bindingContext";return false; }
-            var boneNames=new HashSet<string>(StringComparer.Ordinal);
-            foreach(var b in config.bindingContext.bones)
-                if(b==null||string.IsNullOrEmpty(b.boneName)||!boneNames.Add(b.boneName)||!ValidMatrix(b.restMatrix)||!ValidMatrix(b.poseBasis))
-                {error="IR v3 骨骼绑定矩阵缺失、非有限或身份重复";return false;}
-            if(config.bindingContext.bones.Any(b=>!string.IsNullOrEmpty(b.parentBone)&&!boneNames.Contains(b.parentBone)))
-            {error="IR v3 绑定上下文缺少父骨身份";return false;}
-            var aimKeys=new HashSet<string>(StringComparer.Ordinal);
-            foreach(var aim in config.aimBindings)
-            {
-                if(aim==null||aim.semanticType!="AIM"||aim.semanticVersion!=1||aim.upMode!="OBJECT_POSITION"||
-                   string.IsNullOrEmpty(aim.ownerBone)||string.IsNullOrEmpty(aim.targetBone)||string.IsNullOrEmpty(aim.upBone)||
-                   aim.ownerBone==aim.targetBone||aim.ownerBone==aim.upBone||aim.targetBone==aim.upBone||
-                   aim.constraintStackIndices==null||aim.constraintStackIndices.Length!=2||aim.constraintStackIndices[0]<0||
-                   aim.constraintStackIndices[1]!=aim.constraintStackIndices[0]+1||!TrackAxis(aim.aimAxis,out Vector3 a)||
-                   !TrackAxis(aim.upAxis,out Vector3 u)||Mathf.Abs(Vector3.Dot(a,u))>0.001f)
-                {error="IR v3 Aim 旋转语义无效";return false;}
-                var aux=config.auxBones.FirstOrDefault(x=>x.boneName==aim.ownerBone);
-                if(aux==null||aux.auxType!="AIM"||aux.sourceBones.Count!=2||aux.sourceBones[0]!=aim.targetBone||aux.sourceBones[1]!=aim.upBone)
-                {error="Aim 没有匹配的显式 Ho 骨属性";return false;}
-                for(int i=0;i<2;i++)
-                {
-                    string key=Key(aim.ownerBone,aim.constraintStackIndices[i]);
-                    var record=config.knownConstraints.FirstOrDefault(k=>Key(k.ownerBone,k.constraint.stackIndex)==key);
-                    var c=record==null?null:record.constraint;
-                    var p=c==null?null:c.parameters;
-                    if(!aimKeys.Add(key)||record==null||record.relationType!="AIM_BINDING"||record.auxType!="AIM"||record.auxBone!=aim.ownerBone||
-                       c.constraintType!=(i==0?"DAMPED_TRACK":"LOCKED_TRACK")||c.targetObjectName!=config.armatureName||
-                       c.targetBoneName!=(i==0?aim.targetBone:aim.upBone)||!aux.constraintNames.Contains(c.name)||p==null||
-                       p.owner_space!="WORLD"||p.target_space!="WORLD"||p.influence!=1||p.mute!=aim.muted||p.head_tail!=0||p.use_bbone_shape||
-                       p.track_axis!=(i==0?aim.aimAxis:aim.upAxis)||(i==1&&p.lock_axis!="LOCK_"+aim.aimAxis.Last()))
-                    {error="Aim 语义与登记的相邻 Damped/Locked 原始约束不一致";return false;}
-                }
-            }
-            foreach(var known in config.knownConstraints)
-            {
-                if(known.relationType=="AIM_BINDING"&&!aimKeys.Contains(Key(known.ownerBone,known.constraint.stackIndex)))
-                {error="孤立 AIM_BINDING 记录";return false;}
-                if(known.relationType=="DIRECT_CONSTRAINT"&&known.constraint.constraintType!="COPY_LOCATION"&&known.constraint.constraintType!="COPY_ROTATION"&&known.constraint.constraintType!="ARMATURE")
-                {error="DIRECT_CONSTRAINT 包含未注册类型";return false;}
-            }
-            return true;
-        }
-
         internal static string Describe(Entry e,Backend backend)
         {
             string issue=Issue(e,backend);
@@ -135,8 +84,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 var seen=new HashSet<string>();string name=source;
                 while(!string.IsNullOrEmpty(name)&&seen.Add(name))
                 {
-                    if(e.config.unknownConstraints.Any(c=>c.ownerBone==name))return "来源 "+name+" 有未实现约束，读取 Unity 当前姿态";
-                    var b=e.config.bindingContext.bones.FirstOrDefault(x=>x.boneName==name);name=b==null?null:b.parentBone;
+                    if(e.config.barriers.Any(c=>c.ownerBone==name))return "来源 "+name+" 有未实现约束，读取 Unity 当前姿态";
+                    var b=e.config.finalBindings.bones.FirstOrDefault(x=>x.boneName==name);name=b==null?null:b.parentBone;
                 }
             }
             return null;
@@ -164,20 +113,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             string barrier=StackBarrier(e);
             if(barrier!=null)return barrier;
-            if(e.config.knownConstraints.Any(x=>x.ownerBone==e.Owner&&x.relationType!="DIRECT_CONSTRAINT"&&x.relationType!="AIM_BINDING"))return "同一 Owner 混合旧 Aux/MCH 与通用栈";
+            if(e.config.operations.Any(x=>x.ownerBone==e.Owner&&x.operationRole!="DIRECT_CONSTRAINT"&&x.operationRole!="AIM_BINDING"))return "同一 Owner 混合 Aux/MCH 与通用栈";
             if(backend==Backend.HoAux)
-                foreach(var legacy in e.config.knownConstraints.Where(k=>k.relationType=="MCH_BINDING"||k.relationType=="AUX_CONSTRAINT"))
+                foreach(var composite in e.config.operations.Where(k=>k.operationRole=="MCH_BINDING"||k.operationRole=="AUX_CONSTRAINT"))
                 {
-                    var legacyConstraint=legacy.constraint;
-                    if(legacyConstraint.parameters==null||legacyConstraint.parameters.mute||legacyConstraint.parameters.influence==0||legacyConstraint.targetObjectName!=e.config.armatureName)continue;
-                    string name=legacyConstraint.targetBoneName;var seen=new HashSet<string>();
+                    var compositeConstraint=composite.constraint;
+                    if(compositeConstraint.parameters==null||compositeConstraint.parameters.mute||compositeConstraint.parameters.influence==0||compositeConstraint.targetObjectName!=e.config.armatureName)continue;
+                    string name=compositeConstraint.targetBoneName;var seen=new HashSet<string>();
                     while(!string.IsNullOrEmpty(name)&&seen.Add(name))
                     {
-                        if(name==e.Owner)return "旧 Ho 层依赖此通用 Owner，首版不跨旧层反馈重排";
-                        var parent=e.config.bindingContext.bones.FirstOrDefault(b=>b.boneName==name);name=parent==null?null:parent.parentBone;
+                        if(name==e.Owner)return "组合 Ho 层依赖此通用 Owner，不跨组合层反馈重排";
+                        var parent=e.config.finalBindings.bones.FirstOrDefault(b=>b.boneName==name);name=parent==null?null:parent.parentBone;
                     }
                 }
-            var binding=e.config.bindingContext.bones.FirstOrDefault(b=>b.boneName==e.Owner);
+            var binding=e.config.finalBindings.bones.FirstOrDefault(b=>b.boneName==e.Owner);
             if(binding==null||binding.connected&&(e.Type=="COPY_LOCATION"||e.Type=="ARMATURE")||binding.inheritScale!="FULL"||!Identity(binding.poseBasis)||binding.hasPoseAnimation)return "Owner 需静置局部输入、FULL 继承；位置/Armature 操作不支持连接骨";
             if(e.aim!=null)return null; // The structural validator has checked the complete pair.
             var c=e.raw.constraint;var p=c.parameters;
@@ -211,15 +160,15 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         internal static string StackBarrier(Entry e)
         {
-            var unknown=e.config.unknownConstraints.Where(x=>x.ownerBone==e.Owner).ToList();
+            var unknown=e.config.barriers.Where(x=>x.ownerBone==e.Owner).ToList();
             if(unknown.Count==0)return null;
-            bool positionOnly=e.config.knownConstraints.Where(x=>x.ownerBone==e.Owner).All(x=>
-                x.relationType=="DIRECT_CONSTRAINT"&&x.constraint.constraintType=="COPY_LOCATION");
+            bool positionOnly=e.config.operations.Where(x=>x.ownerBone==e.Owner).All(x=>
+                x.operationRole=="DIRECT_CONSTRAINT"&&x.constraint.constraintType=="COPY_LOCATION");
             bool rotationOnlyUnknown=unknown.All(x=>x.constraint.constraintType=="DAMPED_TRACK"||x.constraint.constraintType=="LOCKED_TRACK");
             return positionOnly&&rotationOnlyUnknown?null:"同一 Owner 有影响当前通道的 unknown 栈屏障";
         }
 
-        internal static Prepared Prepare(ConstraintConfig config,GameObject rig,Transform root,
+        internal static Prepared Prepare(HoConstraintExecutionPlan config,GameObject rig,Transform root,
             Dictionary<string,Transform> map,Backend backend)
         {
             var result=new Prepared {config=config,rig=rig,root=root,map=map,backend=backend};
@@ -232,8 +181,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 string issue=null;
                 if(!map.TryGetValue(group.Key,out Transform owner)||owner==rig.transform)issue="Owner 缺失／不能驱动 rig-space 本身";
                 issue=issue??StackBarrier(group.First());
-                if(config.knownConstraints.Any(x=>x.ownerBone==group.Key&&x.relationType!="DIRECT_CONSTRAINT"&&x.relationType!="AIM_BINDING"))issue="同一 Owner 混合了旧 Aux/MCH 与通用栈，暂不跨语义重排";
-                var binding=config.bindingContext.bones.FirstOrDefault(b=>b.boneName==group.Key);
+                if(config.operations.Any(x=>x.ownerBone==group.Key&&x.operationRole!="DIRECT_CONSTRAINT"&&x.operationRole!="AIM_BINDING"))issue="同一 Owner 混合了组合 Aux/MCH 与通用栈，暂不跨语义重排";
+                var binding=config.finalBindings.bones.FirstOrDefault(b=>b.boneName==group.Key);
                 if(binding==null||!Identity(binding.poseBasis)||binding.connected&&group.Any(e=>e.Type=="COPY_LOCATION"||e.Type=="ARMATURE")||binding.inheritScale!="FULL")issue="Owner 需要 FULL 继承和静置输入，位置操作需非连接骨";
                 if(binding!=null&&!string.IsNullOrEmpty(binding.parentBone)&&
                    (!map.TryGetValue(binding.parentBone,out Transform parent)||owner==null||owner.parent!=parent))issue="Owner 父级与导出绑定不一致";
@@ -344,26 +293,26 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             internal readonly Dictionary<string,Matrix4x4> rest=new Dictionary<string,Matrix4x4>();
             internal readonly Dictionary<string,Matrix4x4> basis=new Dictionary<string,Matrix4x4>();
             internal readonly Dictionary<string,Matrix4x4> local=new Dictionary<string,Matrix4x4>();
-            internal Bindings(ConstraintConfig config,Transform rig,Dictionary<string,Transform> map,Transform host)
+            internal Bindings(HoConstraintExecutionPlan config,Transform rig,Dictionary<string,Transform> map,Transform host)
             {
                 var cached=new Dictionary<Transform,Matrix4x4>();
                 var old=new List<HoAuxRig>(rig.GetComponentsInChildren<HoAuxRig>(true));
                 if(host!=null)old.AddRange(host.GetComponents<HoAuxRig>());
-                foreach(var b in config.bindingContext.bones)
+                foreach(var b in config.finalBindings.bones)
                 {
                     if(!map.TryGetValue(b.boneName,out Transform t))continue;
                     Matrix4x4 value=BindWorld(t,rig,cached,old);
                     rest[b.boneName]=rig.worldToLocalMatrix*value;
                     local[b.boneName]=t.parent==null?value:BindWorld(t.parent,rig,cached,old).inverse*value;
                 }
-                bool needsRotationBasis=config.aimBindings.Count>0||config.knownConstraints.Any(k=>k.relationType=="DIRECT_CONSTRAINT"&&k.constraint.constraintType=="COPY_ROTATION");
+                bool needsRotationBasis=config.aimBindings.Count>0||config.operations.Any(k=>k.operationRole=="DIRECT_CONSTRAINT"&&k.constraint.constraintType=="COPY_ROTATION");
                 if(!needsRotationBasis)
                 {
                     foreach(string name in rest.Keys)basis[name]=Matrix4x4.identity;
                     return;
                 }
-                Matrix4x4 conversion=Fit(config.bindingContext,rest);
-                foreach(var b in config.bindingContext.bones)
+                Matrix4x4 conversion=Fit(config.finalBindings,rest);
+                foreach(var b in config.finalBindings.bones)
                     if(rest.ContainsKey(b.boneName))basis[b.boneName]=Matrix(b.restMatrix).inverse*conversion.inverse*rest[b.boneName];
             }
             private static Matrix4x4 BindWorld(Transform t,Transform rig,Dictionary<Transform,Matrix4x4> cache,List<HoAuxRig> old)
@@ -382,7 +331,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             private static Matrix4x4 Fit(ConstraintBindingContext context,Dictionary<string,Matrix4x4> unity)
             {
                 var bones=context.bones.Where(b=>unity.ContainsKey(b.boneName)).ToList();
-                if(bones.Count==0)throw new InvalidOperationException("IR v3 找不到配套绑定骨骼");
+                if(bones.Count==0)throw new InvalidOperationException("IR v4 找不到配套绑定骨骼");
                 Vector3 origin=Matrix(bones[0].restMatrix).GetColumn(3);
                 var second=bones.OrderByDescending(b=>Vector3.SqrMagnitude((Vector3)Matrix(b.restMatrix).GetColumn(3)-origin)).First();
                 Vector3 x=(Vector3)Matrix(second.restMatrix).GetColumn(3)-origin;

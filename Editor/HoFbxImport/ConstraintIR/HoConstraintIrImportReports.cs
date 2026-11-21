@@ -19,10 +19,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
         [SerializeField] private List<Entry> entries = new List<Entry>();
         public Entry Find(GameObject rig)
         { return entries.Find(x => x.objectId == ObjectId(rig)); }
-        public void Record(ConstraintConfig config, GameObject rig, string backend)
+        public void Record(HoConstraintExecutionPlan config, GameObject rig, string backend)
         {
             Undo.RecordObject(this, "记录约束 IR 导入报告");
-            string id = ObjectId(rig); var context = config.sourceContext;
+            string id = ObjectId(rig); var context = config.source;
             entries.RemoveAll(x => x.objectId == id);
             if (context != null) entries.Add(new Entry { objectId = id, sourceArmature = config.armatureName, backendId = backend, sourceSchemaVersion = 4,
                 inputFingerprint = context.SourceFingerprint, registrySha256 = context.RegistrySha256, authoritativeSourceJson = context.Document.ToJson(),

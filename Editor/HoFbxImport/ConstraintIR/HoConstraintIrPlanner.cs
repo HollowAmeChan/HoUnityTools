@@ -13,30 +13,30 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
         public string Code, SemanticId, SourceId, BackendId, Message;
         public override string ToString() { return Code + " / " + (SemanticId ?? SourceId) + ": " + Message; }
     }
-    public sealed class HoConstraintIrV4LegacyProjection
+    public sealed class HoConstraintIrPlanningResult
     {
         public HoConstraintIrV4Document Document;
-        public ConstraintConfig Config;
+        public HoConstraintExecutionPlan Plan;
         public readonly List<HoConstraintIrV4Diagnostic> Diagnostics = new List<HoConstraintIrV4Diagnostic>();
         public readonly List<HoConstraintJsonValue> SelectedBindings = new List<HoConstraintJsonValue>();
     }
 
-    /// <summary>Builds a disposable v3 execution view. The authoritative v4 DOM is never replaced by this fixed DTO.</summary>
-    public static class HoConstraintIrV4LegacyAdapter
+    /// <summary>Plans backend operations and execution barriers directly from authoritative IR v4.</summary>
+    public static class HoConstraintIrPlanner
     {
-        public static HoConstraintIrV4LegacyProjection Project(HoConstraintIrV4Document document, HoConstraintIrV4Registry registry, string backendId)
+        public static HoConstraintIrPlanningResult Build(HoConstraintIrV4Document document, HoConstraintIrV4Registry registry, string backendId)
         {
             if (document == null || registry == null) throw new ArgumentNullException("document/registry");
             if (backendId != "HoAux" && backendId != "Standard" && backendId != "Vrc") throw new ArgumentException("Unknown backend.", "backendId");
             // Re-read because callers may have edited the DOM since preview. Never apply a stale preview.
             document = HoConstraintIrV4Reader.Read(document.ToJson()); document.ValidateInputFingerprint(); registry.Validate(document);
-            var result = new HoConstraintIrV4LegacyProjection { Document = document, Config = NewConfig(document) };
-            var config = result.Config;
-            config.sourceContext = new HoConstraintIrImportContext { Document = document, BackendId = backendId, SourceFingerprint = document.Root.StringAt("inputFingerprint"), RegistrySha256 = registry.Sha256 };
+            var context = new HoConstraintIrImportContext { Document = document, BackendId = backendId, SourceFingerprint = document.Root.StringAt("inputFingerprint"), RegistrySha256 = registry.Sha256 };
+            var result = new HoConstraintIrPlanningResult { Document = document, Plan = new HoConstraintExecutionPlan(context) };
+            var config = result.Plan;
             var overlay = document.Root.Get("bindings");
             if (overlay == null || overlay.Get("bindingContext") == null || overlay.Get("bindingContext").Get("bones") == null)
                 throw new FormatException("IR v4 authoring snapshot has no final FBX binding overlay; it cannot assemble Unity constraints.");
-            config.bindingContext = BindingContext(overlay.Get("bindingContext"));
+            config.finalBindings = BindingContext(overlay.Get("bindingContext"));
             var boneMap = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var entry in overlay.Get("boneMap").Items) boneMap.Add(entry.StringAt("sourceBone"), entry.StringAt("exportBone"));
             var overrides = new Dictionary<string, HoConstraintJsonValue>(StringComparer.Ordinal);
@@ -73,7 +73,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 string id = semantic.StringAt("semanticId");
                 var ids = semantic.Get("sourceIds").Items.Select(x => x.Text).ToList();
                 if (ids.Any(x => document.Sources[x].StringAt("ownerKind") != "BONE"))
-                { Diagnostic(result, "UnsupportedOwner", id, null, backendId, "Object-owner constraints remain source facts; this backend adapter only drives bones."); continue; }
+                { Diagnostic(result, "UnsupportedOwner", id, null, backendId, "Object-owner constraints remain source facts; this backend only drives bones."); continue; }
                 var candidates = document.Root.Get("implementationBindings").Items.Where(x => x.StringAt("semanticId") == id && x.StringAt("backendId") == backendId).ToList();
                 var locked = candidates.Where(x => x.StringAt("selection") == "LOCKED").ToList();
                 if (locked.Count > 0) candidates = locked;
@@ -102,18 +102,24 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             var finalSlots = new HashSet<string>(StringComparer.Ordinal);
             foreach (var source in document.Sources)
             {
-                if (source.Value.StringAt("ownerKind") != "BONE") { Diagnostic(result, "UnsupportedOwner", null, source.Key, backendId, "Object-owner source retained; bone backend does not drive the armature root."); continue; }
+                if (source.Value.StringAt("ownerKind") != "BONE")
+                {
+                    const string reason = "Object-owner source retained; bone backend does not drive the armature root.";
+                    Diagnostic(result, "UnsupportedOwner", null, source.Key, backendId, reason);
+                    config.barriers.Add(new HoConstraintExecutionBarrier { sourceId = source.Key, ownerBone = owners[source.Key], constraint = records[source.Key], code = "UnsupportedOwner", reason = reason });
+                    continue;
+                }
                 if (!finalSlots.Add(owners[source.Key] + "\u001f" + records[source.Key].stackIndex)) throw new FormatException("Final binding overlay merges constraint stack slots.");
                 if (consumed.Contains(source.Key)) continue;
                 bool hasSemantic = document.Semantics.Values.Any(s => s.Get("sourceIds").Items.Any(x => x.Text == source.Key));
                 string dependencyIssue; dependencyIssues.TryGetValue(source.Key, out dependencyIssue);
-                if (hasSemantic || dependencyIssue != null) config.sourceContext.UnsupportedConstraints[owners[source.Key] + "\u001f" + records[source.Key].stackIndex] = dependencyIssue ?? string.Join("; ", result.Diagnostics.Where(x => x.Code == "Unsupported" && document.Semantics[x.SemanticId].Get("sourceIds").Items.Any(s => s.Text == source.Key)).Select(x => x.Message).ToArray());
-                config.unknownConstraints.Add(new UnknownConstraintInfo { ownerBone = owners[source.Key], constraint = records[source.Key], reason = dependencyIssue ?? (hasSemantic ? "IR v4 semantic is known but no applicable selected implementation; source retained as an execution barrier" : "UnknownSemantic / no registered semantic; source retained") });
+                string unsupported = hasSemantic ? string.Join("; ", result.Diagnostics.Where(x => x.Code == "Unsupported" && document.Semantics[x.SemanticId].Get("sourceIds").Items.Any(s => s.Text == source.Key)).Select(x => x.Message).ToArray()) : null;
+                config.barriers.Add(new HoConstraintExecutionBarrier { sourceId = source.Key, ownerBone = owners[source.Key], constraint = records[source.Key], code = dependencyIssue != null ? "ExcludedDependency" : hasSemantic ? "Unsupported" : "UnknownSemantic", reason = dependencyIssue ?? unsupported ?? "Source has no registered v4 semantic; retained as an execution barrier." });
                 if (!hasSemantic) Diagnostic(result, "UnknownSemantic", null, source.Key, backendId, "Source has no semantic record.");
             }
             foreach (var pair in selected) AddSemantic(config, pair.Item1, records, owners, boneMap);
-            foreach (var aux in config.auxBones)
-                if (aux.auxType != "AIM" && config.unknownConstraints.Any(x => x.ownerBone == aux.boneName)) throw new FormatException("Legacy composite owner has an unknown execution barrier: " + aux.boneName);
+            foreach (var aux in config.composites)
+                if (aux.auxType != "AIM" && config.barriers.Any(x => x.ownerBone == aux.boneName)) throw new FormatException("Composite owner has an unresolved execution barrier: " + aux.boneName);
             ValidateExecutionGraph(config);
             var selectedReport = HoConstraintJsonValue.Array();
             foreach (var binding in result.SelectedBindings)
@@ -121,7 +127,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 var report = binding.Clone(); var implementation = registry.FindImplementation(binding.StringAt("implementationId"), binding.Get("contractVersion").Int32());
                 report.Properties["fidelity"] = implementation.Get("fidelity").Clone(); report.Properties["verification"] = implementation.Get("verification").Clone(); selectedReport.Items.Add(report);
             }
-            config.sourceContext.SelectedImplementationsJson = HoConstraintJson.Serialize(selectedReport);
+            config.source.SelectedImplementationsJson = HoConstraintJson.Serialize(selectedReport);
             var diagnosticsReport = HoConstraintJsonValue.Array();
             foreach (var diagnostic in result.Diagnostics)
             {
@@ -129,13 +135,35 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 entry.Properties["code"] = HoConstraintJsonValue.String(diagnostic.Code); entry.Properties["semanticId"] = HoConstraintJsonValue.String(diagnostic.SemanticId);
                 entry.Properties["sourceId"] = HoConstraintJsonValue.String(diagnostic.SourceId); entry.Properties["message"] = HoConstraintJsonValue.String(diagnostic.Message); diagnosticsReport.Items.Add(entry);
             }
-            config.sourceContext.DiagnosticsJson = HoConstraintJson.Serialize(diagnosticsReport);
+            config.source.DiagnosticsJson = HoConstraintJson.Serialize(diagnosticsReport);
+            ValidatePlan(config);
             return result;
         }
-        private static void Diagnostic(HoConstraintIrV4LegacyProjection p, string code, string semantic, string source, string backend, string message)
+        /// <summary>Checks the generated plan against its v4 provenance; no secondary JSON classification contract exists.</summary>
+        public static void ValidatePlan(HoConstraintExecutionPlan plan)
+        {
+            if (plan == null || plan.source == null || plan.source.Document == null || plan.finalBindings == null)
+                throw new FormatException("A constraint execution plan requires validated IR v4 and final bindings.");
+            var document = plan.source.Document;
+            document.ValidateInputFingerprint();
+            if (plan.SourceSchemaVersion != 4) throw new FormatException("Only IR v4 can produce a constraint execution plan.");
+            var covered = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var operation in plan.operations)
+            {
+                if (operation == null || operation.constraint == null || !document.Sources.ContainsKey(operation.sourceId ?? "") ||
+                    !document.Semantics.ContainsKey(operation.semanticId ?? "") || !covered.Add(operation.sourceId))
+                    throw new FormatException("Execution operation has missing, duplicate or unrelated v4 provenance.");
+                if (!document.Semantics[operation.semanticId].Get("sourceIds").Items.Any(x => x.Text == operation.sourceId))
+                    throw new FormatException("Execution operation source is outside its v4 semantic.");
+            }
+            foreach (var barrier in plan.barriers)
+                if (barrier == null || barrier.constraint == null || !document.Sources.ContainsKey(barrier.sourceId ?? "") || !covered.Add(barrier.sourceId))
+                    throw new FormatException("Execution barrier has missing or duplicate v4 source provenance.");
+            if (covered.Count != document.Sources.Count) throw new FormatException("Execution plan does not account for every v4 source fact.");
+            ValidateExecutionGraph(plan);
+        }
+        private static void Diagnostic(HoConstraintIrPlanningResult p, string code, string semantic, string source, string backend, string message)
         { p.Diagnostics.Add(new HoConstraintIrV4Diagnostic { Code = code, SemanticId = semantic, SourceId = source, BackendId = backend, Message = message }); }
-        private static ConstraintConfig NewConfig(HoConstraintIrV4Document doc)
-        { return new ConstraintConfig { schema = "hotools.rig-constraint-ir", schemaVersion = 3, armatureName = doc.Root.StringAt("armatureName"), exportTime = doc.Root.StringAt("exportTime"), mchEnabledBones = new List<string>(), mchBindings = new List<MchBindingInfo>(), auxBones = new List<AuxBoneInfo>(), knownConstraints = new List<KnownConstraintInfo>(), unknownConstraints = new List<UnknownConstraintInfo>(), aimBindings = new List<AimBindingInfo>() }; }
         // excludedOwners is an explicit coverage boundary, not evidence that the
         // named bones are absent. Never inspect or reconstruct their omitted stacks.
         private sealed class ExcludedDependencyBoundary
@@ -143,7 +171,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             private readonly string armature;
             private readonly HashSet<string> authoredExcluded, finalExcluded;
             private readonly Dictionary<string, string> authoredParents, finalParents;
-            public ExcludedDependencyBoundary(HoConstraintIrV4Document document, Dictionary<string, string> boneMap, ConstraintConfig config)
+            public ExcludedDependencyBoundary(HoConstraintIrV4Document document, Dictionary<string, string> boneMap, HoConstraintExecutionPlan config)
             {
                 armature = document.Root.StringAt("armatureName");
                 authoredExcluded = new HashSet<string>(Strings(document.Root.Get("excludedOwners")), StringComparer.Ordinal);
@@ -156,7 +184,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                     if (bones.Kind != HoConstraintJsonKind.Array) throw new FormatException("sourceContext.bones must be an array.");
                     foreach (var bone in bones.Items) authoredParents.Add(HoConstraintIrShape.Text(bone, "boneName", "sourceContext.bones[]"), HoConstraintIrShape.Text(bone, "parentBone", "sourceContext.bones[]", true));
                 }
-                finalParents = config.bindingContext.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
+                finalParents = config.finalBindings.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
             }
             public string Issue(HoConstraintJsonValue source, BlenderConstraintInfo final, string finalOwner)
             {
@@ -189,20 +217,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 return null;
             }
         }
-        private static void AddSemantic(ConstraintConfig config, HoConstraintJsonValue semantic, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, Dictionary<string, string> boneMap)
+        private static void AddSemantic(HoConstraintExecutionPlan config, HoConstraintJsonValue semantic, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, Dictionary<string, string> boneMap)
         {
             string type = semantic.StringAt("semanticType"); var parameters = semantic.Get("parameters");
             var ids = semantic.Get("sourceIds").Items.Select(x => x.Text).ToList();
             string owner = owners[ids[0]]; var constraints = ids.Select(x => records[x]).ToList();
             if (ids.Any(x => owners[x] != owner)) throw new FormatException("Final overlay splits one semantic across multiple owners.");
             if (type == "COPY_LOCATION" || type == "COPY_ROTATION" || type == "ARMATURE")
-            { config.knownConstraints.Add(new KnownConstraintInfo { ownerBone = owner, relationType = "DIRECT_CONSTRAINT", constraint = constraints[0] }); return; }
-            if (config.auxBones.Any(x => x.boneName == owner)) throw new FormatException("Legacy execution view cannot encode multiple composite semantics on owner " + owner);
+            { config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), sourceId = ids[0], ownerBone = owner, operationRole = "DIRECT_CONSTRAINT", constraint = constraints[0] }); return; }
+            if (config.composites.Any(x => x.boneName == owner)) throw new FormatException("Backend cannot assemble multiple composite semantics on owner " + owner);
             string auxType = parameters.StringAt("auxType", type);
             if (type == "AIM") auxType = "AIM"; if (type == "MCH") auxType = "MCH";
             var sources = Strings(parameters.Get("sourceBones"));
             sources = sources.Select(x => boneMap.ContainsKey(x) ? boneMap[x] : x).ToList();
-            var aux = new AuxBoneInfo { boneName = owner, auxType = auxType, sourceBones = sources, constraintNames = constraints.Select(x => x.name).ToList(), involvedBones = new List<string>(), constraints = new List<BlenderConstraintInfo>() };
+            var aux = new AuxBoneInfo { boneName = owner, auxType = auxType, sourceBones = sources, constraints = new List<BlenderConstraintInfo>() };
             if (type == "AIM")
             {
                 var first = constraints[0]; var second = constraints[1]; aux.sourceBones = new List<string> { first.targetBoneName, second.targetBoneName };
@@ -217,15 +245,14 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             {
                 string source = constraints[0].targetBoneName; aux.sourceBones = new List<string> { source };
                 if (constraints[0].targetObjectName != config.armatureName || string.IsNullOrEmpty(source)) throw new FormatException("MCH must target a source in the same armature.");
-                if (!config.mchEnabledBones.Contains(source)) config.mchEnabledBones.Add(source);
                 config.mchBindings.Add(new MchBindingInfo { sourceBone = source, mchBone = owner, constraint = constraints[0] });
             }
             else if (type == "TWIST" || type == "FAN") aux.constraints.AddRange(constraints);
-            else throw new FormatException("Semantic has no legacy projection implementation: " + type);
-            aux.involvedBones.AddRange(aux.sourceBones.Concat(new[] { owner }).Distinct()); config.auxBones.Add(aux);
-            foreach (var constraint in constraints) config.knownConstraints.Add(new KnownConstraintInfo { ownerBone = owner, relationType = type == "AIM" ? "AIM_BINDING" : type == "MCH" ? "MCH_BINDING" : "AUX_CONSTRAINT", auxBone = owner, auxType = auxType, constraint = constraint });
+            else throw new FormatException("Semantic has no backend planning implementation: " + type);
+            config.composites.Add(aux);
+            for (int i = 0; i < constraints.Count; i++) config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), sourceId = ids[i], ownerBone = owner, operationRole = type == "AIM" ? "AIM_BINDING" : type == "MCH" ? "MCH_BINDING" : "AUX_CONSTRAINT", auxType = auxType, constraint = constraints[i] });
         }
-        private static string Applicability(HoConstraintJsonValue implementation, HoConstraintJsonValue semantic, List<BlenderConstraintInfo> constraints, List<string> owners, ConstraintConfig config, HoConstraintJsonValue binding)
+        private static string Applicability(HoConstraintJsonValue implementation, HoConstraintJsonValue semantic, List<BlenderConstraintInfo> constraints, List<string> owners, HoConstraintExecutionPlan config, HoConstraintJsonValue binding)
         {
             if (implementation.StringAt("availability") != "IMPLEMENTED") return "availability=" + implementation.StringAt("availability");
             string fidelity = implementation.StringAt("fidelity"), policy = binding.StringAt("fallbackPolicy");
@@ -242,7 +269,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 return "unimplemented rigSpace condition for this implementation";
             if (!HoConstraintIrV4Registry.Contains(rules.Get("ownerKinds"), "BONE")) return "implementation does not admit bone owners";
             if (rules.StringAt("requiredBinding") != "FINAL_FBX" || rules.StringAt("targetScope") != "SAME_ARMATURE" || rules.StringAt("stackPolicy") != "PRESERVE_ORDER_NO_UNKNOWN_WRITE_BARRIER" || rules.StringAt("dependencyPolicy") != "ACYCLIC_NO_LEGACY_FEEDBACK") return "unsupported binding/target/stack/dependency contract";
-            var ownerBinding = config.bindingContext.bones.FirstOrDefault(x => x.boneName == owners[0]);
+            var ownerBinding = config.finalBindings.bones.FirstOrDefault(x => x.boneName == owners[0]);
             if (ownerBinding == null) return "final binding context has no owner bone";
             var ownerInput = rules.Get("ownerInput");
             if (ownerInput != null)
@@ -268,20 +295,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             }
             else foreach (var c in constraints) { string issue = ParameterConditions(rules, c); if (issue != null) return issue; }
             if (type != "ARMATURE" && constraints.Any(x => x.targetObjectName != config.armatureName || string.IsNullOrEmpty(x.targetBoneName))) return "constraint target is outside the current armature or absent";
-            if (type != "ARMATURE" && constraints.Any(x => !config.bindingContext.bones.Any(b => b.boneName == x.targetBoneName))) throw new FormatException("Selected semantic references a missing final target bone.");
+            if (type != "ARMATURE" && constraints.Any(x => !config.finalBindings.bones.Any(b => b.boneName == x.targetBoneName))) throw new FormatException("Selected semantic references a missing final target bone.");
             if (type == "ARMATURE")
             {
                 if (constraints[0].references.targets == null || constraints[0].references.targets.Count == 0) return "Armature has no sources";
                 double total = 0;
                 foreach (var target in constraints[0].references.targets)
-                { var p = target.properties; if (p == null || p.target == null || p.target.name != config.armatureName || string.IsNullOrEmpty(p.subtarget) || p.weight < 0 || float.IsNaN(p.weight) || float.IsInfinity(p.weight)) return "invalid Armature source"; if (!config.bindingContext.bones.Any(b => b.boneName == p.subtarget)) throw new FormatException("Armature references missing final source bone " + p.subtarget); total += p.weight; }
+                { var p = target.properties; if (p == null || p.target == null || p.target.name != config.armatureName || string.IsNullOrEmpty(p.subtarget) || p.weight < 0 || float.IsNaN(p.weight) || float.IsInfinity(p.weight)) return "invalid Armature source"; if (!config.finalBindings.bones.Any(b => b.boneName == p.subtarget)) throw new FormatException("Armature references missing final source bone " + p.subtarget); total += p.weight; }
                 if (total <= 0 || double.IsInfinity(total)) return "Armature source weight sum is not finite positive";
             }
             if (type == "COPY_ROTATION" && implementation.StringAt("backendId") != "HoAux" && policy == "EXACT_ONLY")
             { float weight = constraints[0].parameters.influence; if (weight != 0 && weight != .5f && weight != 1) return "native rotation interpolation is approximate at this influence"; }
             return null;
         }
-        private static string PreprocessingIssue(HoConstraintIrV4Document document, HoConstraintJsonValue semantic, List<string> ids, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, ConstraintConfig config, HoConstraintJsonValue implementation)
+        private static string PreprocessingIssue(HoConstraintIrV4Document document, HoConstraintJsonValue semantic, List<string> ids, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, HoConstraintExecutionPlan config, HoConstraintJsonValue implementation)
         {
             var options = document.Root.Get("exportOptions");
             if (options != null && Boolean(options.Get("appliedConstraints"), false)) return "constraints were applied into the exported rest pose; replay would apply them twice";
@@ -293,8 +320,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 return "authoring owner poseBasis is not identity; preprocessing does not grant an exact static-input contract";
             if (!local) return null;
             var authoredTarget = authoredBones.Items.FirstOrDefault(x => x.StringAt("boneName") == source.Get("constraint").StringAt("targetBoneName"));
-            var owner = config.bindingContext.bones.FirstOrDefault(x => x.boneName == owners[ids[0]]);
-            var target = config.bindingContext.bones.FirstOrDefault(x => x.boneName == records[ids[0]].targetBoneName);
+            var owner = config.finalBindings.bones.FirstOrDefault(x => x.boneName == owners[ids[0]]);
+            var target = config.finalBindings.bones.FirstOrDefault(x => x.boneName == records[ids[0]].targetBoneName);
             if (authoredOwner == null || authoredTarget == null || owner == null || target == null) return "local Copy Rotation is missing author/final owner or target bindings";
             var finalBones = document.Root.Get("bindings").Get("bindingContext").Get("bones").Items;
             var finalOwner = finalBones.First(x => x.StringAt("boneName") == owner.boneName);
@@ -307,7 +334,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             }
             var authorObject = document.Root.Get("sourceContext").Get("objectMatrix");
             float[] authorToWorld = authorObject == null ? null : Matrix(authorObject);
-            if (!Identity(Matrix(authoredOwner.Get("poseBasis"))) || !SameReference(Matrix(authoredOwner.Get("restMatrix")), authorToWorld, owner.restMatrix, config.bindingContext.objectMatrix) || !SameReference(Matrix(authoredTarget.Get("restMatrix")), authorToWorld, target.restMatrix, config.bindingContext.objectMatrix))
+            if (!Identity(Matrix(authoredOwner.Get("poseBasis"))) || !SameReference(Matrix(authoredOwner.Get("restMatrix")), authorToWorld, owner.restMatrix, config.finalBindings.objectMatrix) || !SameReference(Matrix(authoredTarget.Get("restMatrix")), authorToWorld, target.restMatrix, config.finalBindings.objectMatrix))
                 return "authoring-to-FBX preprocessing changed local rest/pose references; original-space compensation is not implemented";
             foreach (var pair in new[] { Tuple.Create(authoredOwner, finalOwner), Tuple.Create(authoredTarget, finalTarget) })
             {
@@ -316,7 +343,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 if (string.IsNullOrEmpty(authorParent)) continue;
                 var authorParentBone = authoredBones.Items.FirstOrDefault(x => x.StringAt("boneName") == authorParent);
                 var finalParentBone = finalBones.FirstOrDefault(x => x.StringAt("boneName") == finalParent);
-                if (authorParentBone == null || finalParentBone == null || !SameReference(Matrix(authorParentBone.Get("restMatrix")), authorToWorld, Matrix(finalParentBone.Get("restMatrix")), config.bindingContext.objectMatrix)) return "local Copy Rotation author/final parent rest reference changed";
+                if (authorParentBone == null || finalParentBone == null || !SameReference(Matrix(authorParentBone.Get("restMatrix")), authorToWorld, Matrix(finalParentBone.Get("restMatrix")), config.finalBindings.objectMatrix)) return "local Copy Rotation author/final parent rest reference changed";
             }
             return null;
         }
@@ -410,10 +437,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             }
             return result;
         }
-        private static void ValidateExecutionGraph(ConstraintConfig config)
+        private static void ValidateExecutionGraph(HoConstraintExecutionPlan config)
         {
-            var operations = config.knownConstraints.GroupBy(x => x.ownerBone).ToDictionary(x => x.Key, x => x.ToList(), StringComparer.Ordinal);
-            var parents = config.bindingContext.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
+            var operations = config.operations.GroupBy(x => x.ownerBone).ToDictionary(x => x.Key, x => x.ToList(), StringComparer.Ordinal);
+            var parents = config.finalBindings.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
             var edges = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             foreach (var owner in operations)
             {

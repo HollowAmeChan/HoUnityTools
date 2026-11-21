@@ -65,7 +65,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 int written=0;
                 foreach(var e in group)
                 {
-                    bool point=e.Type=="ARMATURE"&&group.Count()==1&&p.config.bindingContext.bones.First(b=>b.boneName==e.Owner).positionOnly;
+                    bool point=e.Type=="ARMATURE"&&group.Count()==1&&p.config.finalBindings.bones.First(b=>b.boneName==e.Owner).positionOnly;
                     written|=HoAuxRig.DirectWriteChannels(e.Type,point);
                 }
                 if((written&HoAuxRig.DirectPosition)!=0)Position(p,owner,new[]{Source(previous,1)});
@@ -84,8 +84,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private static int ApplyHo(Prepared p,HoAuxRig ho)
         {
             if(ho==null)ho=Undo.AddComponent<HoAuxRig>(p.root.gameObject);
-            Undo.RecordObject(ho,"导入 IR v3 通用约束");
-            ho.RigRoot=p.root;ho.SourceArmature=p.config.armatureName;ho.ExportTime=p.config.exportTime;ho.ExporterVersion=p.config.schemaVersion.ToString();
+            Undo.RecordObject(ho,"导入 IR v4 通用约束");
+            ho.RigRoot=p.root;ho.SourceArmature=p.config.armatureName;ho.ExportTime=p.config.exportTime;ho.ExporterVersion=p.config.SourceSchemaVersion.ToString();
             ho.SetDirectSpace(p.rig.transform);
             foreach(Entry e in p.entries)
             {
@@ -97,7 +97,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 };
                 if(e.Type=="ARMATURE")
                 {
-                    op.positionOnly=p.config.bindingContext.bones.First(b=>b.boneName==e.Owner).positionOnly;
+                    op.positionOnly=p.config.finalBindings.bones.First(b=>b.boneName==e.Owner).positionOnly;
                     double total=e.raw.constraint.references.targets.Sum(t=>(double)t.properties.weight);
                     foreach(var target in e.raw.constraint.references.targets)
                         op.sources.Add(new HoAuxRig.DirectSource {bone=p.map[target.properties.subtarget],weight=(float)(target.properties.weight/total),inverseBind=p.bind.rest[target.properties.subtarget].inverse});
@@ -164,13 +164,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             var marker=go.GetComponent<HoImportedConstraintMarker>();
             if(marker==null)marker=Undo.AddComponent<HoImportedConstraintMarker>(go);
-            marker.SetMetadata(p.config.armatureName,p.config.exportTime,p.config.schemaVersion.ToString());
+            marker.SetMetadata(p.config.armatureName,p.config.exportTime,p.config.SourceSchemaVersion.ToString());
             marker.SetHost(role,HoAuxRig.GetRelativePath(p.root,go.transform));
             marker.directBackend=p.backend.ToString();EditorUtility.SetDirty(marker);return marker;
         }
         private static Transform Helper(Prepared p,Transform parent,string label)
         {
-            var go=new GameObject("[HoDirect] "+label);Undo.RegisterCreatedObjectUndo(go,"创建 IR v3 阶段");
+            var go=new GameObject("[HoDirect] "+label);Undo.RegisterCreatedObjectUndo(go,"创建 IR v4 阶段");
             go.transform.SetParent(parent,false);Marker(p,go,ConstraintHostRole.GeneratedHelper);return go.transform;
         }
         private static void Register(Prepared p,Transform owner,Component c)

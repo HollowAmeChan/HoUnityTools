@@ -26,14 +26,14 @@ namespace Hollow.HoUnityTools.RigConstraints.ConstraintIR
         }
     }
 
-    /// <summary>Shape validation and lossless reading. Does not reinterpret v2/v3 or execute any implementation.</summary>
+    /// <summary>Shape validation and lossless reading for IR v4; does not execute implementations.</summary>
     public static class HoConstraintIrV4Reader
     {
         public static HoConstraintIrV4Document Read(string json)
         {
             var root = HoConstraintJson.Parse(json); HoConstraintIrShape.Object(root, "$ ");
             if (HoConstraintIrShape.Text(root, "schema", "$") != "hotools.rig-constraint-ir" || HoConstraintIrShape.Integer(root, "schemaVersion", "$") != 4)
-                throw new FormatException("This reader accepts hotools.rig-constraint-ir schemaVersion 4 only; v2/v3 must retain their existing reader.");
+                throw new FormatException("Only hotools.rig-constraint-ir schemaVersion 4 is supported.");
             HoConstraintIrShape.Text(root, "armatureName", "$"); string timestamp = HoConstraintIrShape.Text(root, "exportTime", "$");
             DateTimeOffset parsedTime;
             if (!timestamp.EndsWith("Z", StringComparison.Ordinal) || !DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsedTime) || parsedTime.Offset != TimeSpan.Zero) throw new FormatException("exportTime must be RFC3339 UTC ending in Z.");

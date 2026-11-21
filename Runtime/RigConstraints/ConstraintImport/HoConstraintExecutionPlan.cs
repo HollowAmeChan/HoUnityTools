@@ -3,24 +3,23 @@ using System.Collections.Generic;
 namespace Hollow.HoUnityTools.RigConstraints.Import
 {
     /// <summary>
-    /// Blender 导出的中立 Rig 约束 IR。这里不保留旧版 Unity 映射 JSON。
-    /// 最终落成标准 Constraint 还是 HoAuxRig，由导入器在预览阶段决定。
+    /// In-memory backend plan produced exclusively from validated IR v4.
+    /// This is not a JSON protocol and is never serialized into imported assets.
     /// </summary>
-    [System.Serializable]
-    public class ConstraintConfig
+    public sealed class HoConstraintExecutionPlan
     {
-        public string schema;
-        public int schemaVersion;
-        public string exportTime;
-        public string armatureName;
-        public List<string> mchEnabledBones;
-        public List<MchBindingInfo> mchBindings;
-        public List<AuxBoneInfo> auxBones;
-        public List<KnownConstraintInfo> knownConstraints;
-        public List<UnknownConstraintInfo> unknownConstraints;
-        public List<AimBindingInfo> aimBindings;
-        public ConstraintBindingContext bindingContext;
-        [System.NonSerialized] public ConstraintIR.HoConstraintIrImportContext sourceContext;
+        public readonly ConstraintIR.HoConstraintIrImportContext source;
+        public string exportTime { get { return source.Document.Root.StringAt("exportTime"); } }
+        public string armatureName { get { return source.Document.Root.StringAt("armatureName"); } }
+        public int SourceSchemaVersion { get { return source.Document.Root.Get("schemaVersion").Int32(); } }
+        public readonly List<MchBindingInfo> mchBindings = new List<MchBindingInfo>();
+        public readonly List<AuxBoneInfo> composites = new List<AuxBoneInfo>();
+        public readonly List<HoConstraintPlannedOperation> operations = new List<HoConstraintPlannedOperation>();
+        public readonly List<HoConstraintExecutionBarrier> barriers = new List<HoConstraintExecutionBarrier>();
+        public readonly List<AimBindingInfo> aimBindings = new List<AimBindingInfo>();
+        public ConstraintBindingContext finalBindings;
+        public HoConstraintExecutionPlan(ConstraintIR.HoConstraintIrImportContext source)
+        { this.source = source ?? throw new System.ArgumentNullException("source"); }
     }
 
     [System.Serializable]
@@ -37,25 +36,23 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string boneName;
         public string auxType;
         public List<string> sourceBones;
-        public List<string> constraintNames;
-        public List<string> involvedBones;
         public List<BlenderConstraintInfo> constraints;
     }
 
-    [System.Serializable]
-    public class KnownConstraintInfo
+    public class HoConstraintPlannedOperation
     {
+        public string semanticId, sourceId;
         public string ownerBone;
-        public string relationType;
-        public string auxBone;
+        public string operationRole;
         public string auxType;
         public BlenderConstraintInfo constraint;
     }
 
-    [System.Serializable]
-    public class UnknownConstraintInfo
+    public class HoConstraintExecutionBarrier
     {
+        public string sourceId;
         public string ownerBone;
+        public string code;
         public string reason;
         public BlenderConstraintInfo constraint;
     }
