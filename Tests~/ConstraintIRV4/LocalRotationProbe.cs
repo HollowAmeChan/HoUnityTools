@@ -60,6 +60,7 @@ public sealed class LocalRotationProbe : MonoBehaviour
                 for(int pass=0;pass<8;pass++)foreach(var route in routes)route.ho.EvaluateNow();
                 Capture(index,"stable");
             }
+            CheckInvalidRoots();
             CheckDegenerateInput();
         }
         catch(Exception error){result.failures.Add(error.ToString());Debug.LogException(error);}
@@ -226,21 +227,74 @@ public sealed class LocalRotationProbe : MonoBehaviour
 
     private void Capture(int index,string timing)
     {
-        foreach(var route in routes)
+        foreach(var route in routes)Capture(route,index,timing);
+    }
+
+    private void Capture(Route route,int index,string timing)
+    {
+        if(!string.IsNullOrEmpty(route.ho.LastDirectError))throw new Exception(route.name+": "+route.ho.LastDirectError);
+        var expected=route.fixture.samples[index].expected.ToDictionary(b=>b.name,b=>b.Matrix);
+        foreach(string name in route.fixture.ownerNames)
         {
-            if(!string.IsNullOrEmpty(route.ho.LastDirectError))throw new Exception(route.name+": "+route.ho.LastDirectError);
-            var expected=route.fixture.samples[index].expected.ToDictionary(b=>b.name,b=>b.Matrix);
-            foreach(string name in route.fixture.ownerNames)
+            Transform actual=route.bones[name];
+            Matrix4x4 world=route.outer.localToWorldMatrix*route.conversion*expected[name]*route.correction[name];
+            float position=Vector3.Distance(actual.position,world.GetColumn(3));
+            float angle=Angle(actual.rotation,world.rotation);
+            float scale=Vector3.Distance(actual.lossyScale,Scale(world));
+            result.measurements.Add(new LocalRotationMeasurement{variant=route.name,sample=route.fixture.samples[index].name,bone=name,timing=timing,positionError=position,angleError=angle,scaleError=scale});
+            if(float.IsNaN(position)||float.IsNaN(angle)||float.IsNaN(scale)||position>1e-4f||angle>.1f||scale>1e-4f)
+                throw new Exception("CopyR parity "+route.name+"/"+route.fixture.samples[index].name+"/"+name+" "+timing+": p="+position+" a="+angle+" s="+scale);
+        }
+    }
+
+    private void CheckInvalidRoots()
+    {
+        foreach(var route in routes)
+        foreach(string mode in new[]{"singular","negative","even_negative","nonuniform","sheared"})
+        {
+            ApplyInputs(route,1);route.ho.EvaluateNow();
+            var owners=route.ho.DirectOperations.Select(op=>op.owner).Distinct().ToDictionary(t=>t,t=>Matrix4x4.TRS(t.localPosition,t.localRotation,t.localScale));
+            Vector3 beforeScale=route.outer.localScale;
+            Quaternion beforeRotation=route.rig.transform.localRotation;
+            try
             {
-                Transform actual=route.bones[name];
-                Matrix4x4 world=route.outer.localToWorldMatrix*route.conversion*expected[name]*route.correction[name];
-                float position=Vector3.Distance(actual.position,world.GetColumn(3));
-                float angle=Angle(actual.rotation,world.rotation);
-                float scale=Vector3.Distance(actual.lossyScale,Scale(world));
-                result.measurements.Add(new LocalRotationMeasurement{variant=route.name,sample=route.fixture.samples[index].name,bone=name,timing=timing,positionError=position,angleError=angle,scaleError=scale});
-                if(float.IsNaN(position)||float.IsNaN(angle)||float.IsNaN(scale)||position>1e-4f||angle>.1f||scale>1e-4f)
-                    throw new Exception("CopyR parity "+route.name+"/"+route.fixture.samples[index].name+"/"+name+" "+timing+": p="+position+" a="+angle+" s="+scale);
+                route.outer.localScale=mode=="singular"?Vector3.zero:
+                    mode=="negative"?new Vector3(-1,1,1):
+                    mode=="even_negative"?new Vector3(-1,-1,1):new Vector3(2,1,1);
+                if(mode=="sheared")
+                {
+                    route.rig.transform.localRotation=Quaternion.Euler(23,41,-17);
+                    Matrix4x4 root=route.rig.transform.localToWorldMatrix;
+                    Vector3 x=((Vector3)root.GetColumn(0)).normalized,y=((Vector3)root.GetColumn(1)).normalized,z=((Vector3)root.GetColumn(2)).normalized;
+                    if(Mathf.Max(Mathf.Abs(Vector3.Dot(x,y)),Mathf.Max(Mathf.Abs(Vector3.Dot(x,z)),Mathf.Abs(Vector3.Dot(y,z))))<.001f)
+                        throw new Exception("Root shear fixture did not create shear");
+                }
+                for(int pass=0;pass<2;pass++)
+                {
+                    route.ho.EvaluateNow();
+                    if(string.IsNullOrEmpty(route.ho.LastDirectError)||!route.ho.LastDirectError.StartsWith("Rig-space root needs ",StringComparison.Ordinal))
+                        throw new Exception(route.name+" accepted invalid root "+mode+": "+route.ho.LastDirectError);
+                    foreach(var owner in owners)
+                    {
+                        Matrix4x4 current=Matrix4x4.TRS(owner.Key.localPosition,owner.Key.localRotation,owner.Key.localScale);
+                        for(int cell=0;cell<16;cell++)if(current[cell]!=owner.Value[cell])
+                            throw new Exception(route.name+" changed owner before rejecting root "+mode+": "+owner.Key.name);
+                    }
+                    foreach(var bone in route.outer.GetComponentsInChildren<Transform>(true))
+                    {
+                        Matrix4x4 world=bone.localToWorldMatrix;
+                        for(int cell=0;cell<16;cell++)if(float.IsNaN(world[cell])||float.IsInfinity(world[cell]))
+                            throw new Exception(route.name+" produced nonfinite bone under root "+mode+": "+bone.name);
+                    }
+                }
             }
+            finally
+            {
+                route.outer.localScale=beforeScale;
+                route.rig.transform.localRotation=beforeRotation;
+            }
+            ApplyInputs(route,1);route.ho.EvaluateNow();
+            Capture(route,1,"root_recovered_"+mode);
         }
     }
 

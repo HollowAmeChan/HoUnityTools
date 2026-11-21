@@ -109,7 +109,9 @@ namespace Hollow.HoUnityTools.RigConstraints
 
         private void RestoreDirectOwners()
         {
+            if (directOperations.Count == 0) return;
             ResolveDirectReferences();
+            if (!TryDirectSpace(out _)) return;
             foreach (var group in directOperations.Where(op=>op.owner!=null).GroupBy(op=>op.owner))
             {
                 var op=group.First();int count=group.Count();
@@ -126,11 +128,41 @@ namespace Hollow.HoUnityTools.RigConstraints
             if (directWarnings.Add(message)) Debug.LogWarning("HoAuxRig direct: " + message, this);
         }
 
+        private bool TryDirectSpace(out Matrix4x4 toWorld)
+        {
+            toWorld = Matrix4x4.identity;
+            if (directSpace == null) { DirectError("Missing rig-space transform"); return false; }
+            toWorld = directSpace.localToWorldMatrix;
+            // ReadDirect removes this common frame, so invalid roots would otherwise
+            // disappear from its input checks (and a singular inverse could be read).
+            for (int index = 0; index < 16; ++index)
+                if (!Finite(toWorld[index])) return InvalidDirectSpace();
+            if (!Finite(toWorld.determinant)) return InvalidDirectSpace();
+            if (!TryDirectTrs(toWorld, out _, out _, out Vector3 scale)) return InvalidDirectSpace();
+            float largest = Mathf.Max(scale.x, Mathf.Max(scale.y, scale.z));
+            float smallest = Mathf.Min(scale.x, Mathf.Min(scale.y, scale.z));
+            if (largest - smallest > largest * .0005f) return InvalidDirectSpace();
+            // An even number of negative axes can decompose as a proper rotation.
+            // Keep that unverified authoring domain outside this positive-scale contract.
+            for (Transform frame = directSpace; frame != null; frame = frame.parent)
+            {
+                Vector3 localScale = frame.localScale;
+                if (localScale.x <= 0 || localScale.y <= 0 || localScale.z <= 0) return InvalidDirectSpace();
+            }
+            return true;
+        }
+
+        private bool InvalidDirectSpace()
+        {
+            DirectError("Rig-space root needs finite, non-degenerate, proper TRS with uniform positive scale");
+            return false;
+        }
+
         private void EvaluateDirectOperations()
         {
             if (directOperations.Count == 0) return;
             ResolveDirectReferences();
-            if (directSpace == null) { DirectError("Missing rig-space transform"); return; }
+            if (!TryDirectSpace(out Matrix4x4 toWorld)) return;
             LastDirectError = null;
             var groups = new Dictionary<Transform, List<DirectOperation>>();
             foreach (DirectOperation op in directOperations)
@@ -144,7 +176,6 @@ namespace Hollow.HoUnityTools.RigConstraints
             foreach (Transform owner in groups.Keys)
                 if (!VisitDirect(owner, groups, visiting, done, order)) { DirectError("Cyclic direct-constraint dependency"); return; }
             var values = new Dictionary<Transform, Matrix4x4>();
-            Matrix4x4 toWorld = directSpace.localToWorldMatrix;
             foreach (Transform owner in order)
             {
                 var ops = groups[owner];
