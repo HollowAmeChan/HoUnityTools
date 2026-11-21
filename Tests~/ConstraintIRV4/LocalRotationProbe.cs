@@ -194,6 +194,8 @@ public sealed class LocalRotationProbe : MonoBehaviour
         {
             var conversion=Matrix4x4.zero;conversion[3,3]=1;
             for(int axis=0;axis<3;axis++)conversion[axis,permutation[axis]]=scale*((mask&(1<<axis))==0?1:-1);
+            Vector3 offset=route.bones["Root"].position-conversion.MultiplyPoint3x4(rest["Root"].GetColumn(3));
+            conversion.SetColumn(3,new Vector4(offset.x,offset.y,offset.z,1));
             float error=rest.Max(b=>Vector3.Distance(conversion.MultiplyPoint3x4(b.Value.GetColumn(3)),route.bones[b.Key].position));
             if(error<best){best=error;answer=conversion;}
         }

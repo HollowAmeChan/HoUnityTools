@@ -20,7 +20,8 @@ foreach($taskPart in @('HoFbxImport','HoAuxRig','CombineArmature')){Copy-Item -L
 Copy-Item -LiteralPath "$taskRepo\Editor\Utils\HoEditorStyles.cs","$PSScriptRoot\LocalRotationValidation.cs" -Destination "$Project\Assets\Editor"
 Copy-Item -LiteralPath "$PSScriptRoot\LocalRotationProbe.cs" -Destination "$Project\Assets"
 foreach($taskVariant in @('Raw','Mch')){
-    foreach($taskSuffix in @('.fbx','_samples.json','_runtime_ir.json')){Copy-Item -LiteralPath (Join-Path $Fixture ($taskVariant+$taskSuffix)) -Destination "$Project\Assets\Fixture"}
+    foreach($taskSuffix in @('.fbx','_samples.json')){Copy-Item -LiteralPath (Join-Path $Fixture ($taskVariant+$taskSuffix)) -Destination "$Project\Assets\Fixture"}
+    if(-not $UseV4){Copy-Item -LiteralPath (Join-Path $Fixture ($taskVariant+'_runtime_ir.json')) -Destination "$Project\Assets\Fixture"}
     if($UseV4){Copy-Item -LiteralPath (Join-Path $Fixture ($taskVariant+'_v4.json')) -Destination "$Project\Assets\Fixture"}
 }
 if($RegistryTestOverride -and -not $UseV4){throw 'RegistryTestOverride requires UseV4.'}
