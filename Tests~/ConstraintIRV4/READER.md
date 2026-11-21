@@ -120,3 +120,12 @@ creates a new isolated Unity project. It covers actual window/automation import,
 backend switching, repeat import, report persistence/Undo, preflight protection,
 Prefab serialization without audit payload, real HoFBX MCH references, and empty
 v4/v3 compatibility. The separate local-rotation harness checks numerical output.
+
+Final acceptance (2026-11-21): actual HoFBX default-v4 fixtures from Blender
+4.5.8 and 5.2.0 each passed 36 Unity import checks and 16,188 local runtime
+measurements, without registry overrides. Maximum position/angle/scale errors
+were 1.477e-6 m / 0.05059 degrees / 3.046e-6. Thirty invalid-root scenarios check
+diagnostics, unchanged owners, finite transforms and recovery parity. Legacy v3
+runtime regression passed 8,160 measurements. VRC evidence remains shim-only.
+The authority SHA-256 is
+`46c54dff620bbc6d2239c11f55c6bd66a13fc0f18fb29b270513544fff1553be`.

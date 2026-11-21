@@ -6,6 +6,8 @@
 
 ## Blender 作者入口与兼容
 
+配套 HoFBX 默认导出 v4；旧导出预设的显式 v3 选择继续生效。需要新局部 copyR 时使用 v4 和 HoAux 后端。
+
 普通 copyR 应从 Ho 基础辅助骨的 copyR 入口创建，生成器在 owner 骨的 HoTools 属性登记 `COPY_R` 语义组；底层语义复用 `COPY_ROTATION`。v4 不自动认领未登记的手工 Copy Rotation，它仍保存为 source，并显示 UnknownSemantic。其他已登记组合按成员类型、顺序和引用验证；损坏组不按相似名称或当前位置自动修复。
 
 作者态 source 在导出预处理前采集，最终 FBX 的目标重映射、父级、静置矩阵与骨轴由 `bindings` overlay 保存。作者约束保留原目标；预处理生成的 MCH Child Of 明确记录 `EXPORT_GENERATED`，其最终目标仍是主骨，不能被再次重映射成 MCH 自引用。
@@ -32,13 +34,15 @@ v4 必须在作者与最终 bindingContext 中显式提供 owner／target 的 `i
 
 应用姿态或 owner MCH 预处理改变局部参考而未携带补偿时，显示 Unsupported。`exportOptions.appliedConstraints=true` 时约束已经固化，禁止重复播放。剪切、退化输入或不可表达 TRS 保持现有诊断。旧 v2/v3 不通过上述新准入规则重新解释。
 
-HoAux 通用 Copy Location／Copy Rotation／Armature／Aim 的 `conditions.rigSpace` 只接受受控枚举 `FINITE_POSITIVE_UNIFORM_TRS`。此条件声明执行时的骨架根矩阵必须有限、可分解为正手性 TRS 且为正的统一缩放；运行时会在恢复 owner 和通用求值之前检查。零缩放、负手性、非均匀缩放、剪切或非有限值会给出诊断并停止该通用栈，不能把计划可选误解为任意运行时根变换均已通过。陌生条件值或不适用的后端明确 Unsupported。
+HoAux 通用 Copy Location／Copy Rotation／Armature／Aim 的 `conditions.rigSpace` 只接受受控枚举 `FINITE_POSITIVE_UNIFORM_TRS`。此条件声明执行时的骨架根矩阵必须有限、可分解为正手性 TRS 且为正的统一缩放；运行时会在恢复 owner 和通用求值之前检查。零缩放、负缩放（含祖先或偶数负号）、非均匀缩放、剪切或非有限值会给出诊断并停止该通用栈，恢复有效变换后继续求值。陌生条件值或不适用的后端明确 Unsupported。
 
 ## 预览、保护与报告
 
 HoFBX 窗口的候选读取、预览和应用使用 `HoConstraintIrAssetLoader`。每次生成新执行视图，避免旧装配代码的可变 DTO 污染下次预览。校验 source 指纹、registry 字节摘要、实现版本、引用、组合重复执行和参数域后才允许清理已有导入。
 
 UnknownSemantic 与“语义已知但当前后端 Unsupported”分开显示；后者仍作为栈屏障保留。只有不支持／Object owner 的快照不能清掉上次装配。显式空快照、全静音／零影响度快照可以清理先前的受管导入，保留手工约束。装配失败使用原撤销事务回滚。
+
+普通约束引用已排除的大型 HoAux 骨、其父链或 Armature 来源集合时，保留原始 source 并报告缺失的导出依赖；Unity 独立检查作者与最终绑定，不把未导出的上游约束误当成完整输入。
 
 预览显示选中实现 ID／版本、fidelity、verification 和诊断。成功结果持久写入 `ProjectSettings/HoUnityTools/ConstraintIRImportReports.asset`：包含完整源 JSON、输入指纹、registry 摘要、最终选中契约和诊断。报告通过 editor ScriptableSingleton 保存，与场景／Prefab 和运行组件无引用，不带入 Warudo 或播放器构建；报告变更参与 Undo。为持久定位对象，应先保存场景。
 
@@ -53,3 +57,7 @@ Unity 分发副本位于 `Editor/HoFbxImport/ConstraintIR/Registry/registry.v1.j
 ```
 
 更细的 C# API、测试与运行参数见 [reader 验证说明](../../Tests~/ConstraintIRV4/READER.md)。`RunImport.ps1` 创建隔离 Unity 项目验证真实窗口应用、三后端结构、重导入、回滚、报告、Prefab、MCH 和空快照；`Run-local.ps1` 比较 Blender 实际采样的 Raw／MCH 数值。VRC shim 结果始终不能代替真实 SDK／客户端验证。
+
+2026-11-21 验收：Blender 4.5.8／5.2.0 实际 HoFBX 产物在 Unity 6000.3.15f1 各通过 36 项导入检查与 16,188 次数值测量，零失败；最大位置误差 1.477e-6 m、旋转 0.05059°、缩放 3.046e-6。包含 30 个非法根场景的拒绝及恢复；旧 v3 数值回归 8,160 次测量通过。真实 SDK 数值与 Blender UI 视觉检查未计作通过。
+
+Authority SHA256 为 `46c54dff620bbc6d2239c11f55c6bd66a13fc0f18fb29b270513544fff1553be`。权威中的 `testSuiteDefinitions` 记录实际测试入口和观察轴，HoTools 的 `python -m RigConstraints.registry --matrix` 可输出实现／条件／证据与测试的关联 JSON；它不执行注册表命令，也不将列出的轴冒充完整组合覆盖。
