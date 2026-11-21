@@ -44,7 +44,7 @@ internal static class ReaderValidation
         {
             registry = HoConstraintIrV4Registry.Load(File.ReadAllBytes(args[0]));
             if (args.Length > 2 && args[1] == "--emit") { File.WriteAllText(args[2], Read(CopyFixture()).ToJson(), new System.Text.UTF8Encoding(false)); Console.WriteLine("EMITTED " + args[2]); return 0; }
-            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites(); TestLocalAuthoringDomain();
+            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites(); TestLocalAuthoringDomain(); TestRigSpaceContract();
             if (args.Length > 1)
             {
                 var imported = HoConstraintIrV4Import.Read(File.ReadAllText(args[1]), File.ReadAllText(args[0]));
@@ -136,6 +136,28 @@ internal static class ReaderValidation
             foreach (var bone in final.Get("bones").Items) bone.Properties["restMatrix"] = Json("[0,1,0,0,-1,0,0,0,0,0,1,0,0,0,0,1]");
             Check(Project(converted).SelectedBindings.Count == 1, "Pure armature object/bone basis conversion was misclassified as rest change");
             var changed = root.Clone(); changed.Get("bindings").Get("bindingContext").Get("bones").Items[1].Get("restMatrix").Items[3] = Json("0.4"); Check(Project(changed).SelectedBindings.Count == 0, "Target author/final rest change admitted");
+        }
+        finally { registry = saved; }
+    }
+    private static void TestRigSpaceContract()
+    {
+        var saved = registry;
+        try
+        {
+            var copy = saved.Root.Clone();
+            var contract = copy.Get("implementations").Items.First(x => x.StringAt("id") == "hoaux.copy_rotation.world");
+            contract.Get("conditions").Properties["rigSpace"] = HoConstraintJsonValue.String("FINITE_POSITIVE_UNIFORM_TRS");
+            registry = HoConstraintIrV4Registry.Load(HoConstraintJson.Serialize(copy));
+            Check(Project(CopyFixture()).SelectedBindings.Count == 1, "Known HoAux runtime rig-space contract was rejected");
+            contract.Get("conditions").Properties["rigSpace"] = HoConstraintJsonValue.String("FUTURE_UNIMPLEMENTED_SPACE");
+            registry = HoConstraintIrV4Registry.Load(HoConstraintJson.Serialize(copy));
+            var unsupported = Project(CopyFixture());
+            Check(unsupported.SelectedBindings.Count == 0 && unsupported.Diagnostics.Any(x => x.Code == "Unsupported" && x.Message.Contains("rigSpace")), "Unknown rigSpace enum executed");
+            var locked = CopyFixture(); locked.Get("implementationBindings").Items[0].Properties["selection"] = HoConstraintJsonValue.String("LOCKED");
+            Reject(() => Project(locked), "Unknown locked rigSpace condition silently changed implementation");
+            contract.Get("conditions").Properties["rigSpace"] = HoConstraintJsonValue.Bool(true);
+            registry = HoConstraintIrV4Registry.Load(HoConstraintJson.Serialize(copy));
+            Check(Project(CopyFixture()).SelectedBindings.Count == 0, "Non-string rigSpace condition executed");
         }
         finally { registry = saved; }
     }

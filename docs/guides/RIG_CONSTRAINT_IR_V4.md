@@ -32,6 +32,8 @@ v4 必须在作者与最终 bindingContext 中显式提供 owner／target 的 `i
 
 应用姿态或 owner MCH 预处理改变局部参考而未携带补偿时，显示 Unsupported。`exportOptions.appliedConstraints=true` 时约束已经固化，禁止重复播放。剪切、退化输入或不可表达 TRS 保持现有诊断。旧 v2/v3 不通过上述新准入规则重新解释。
 
+HoAux 通用 Copy Location／Copy Rotation／Armature／Aim 的 `conditions.rigSpace` 只接受受控枚举 `FINITE_POSITIVE_UNIFORM_TRS`。此条件声明执行时的骨架根矩阵必须有限、可分解为正手性 TRS 且为正的统一缩放；运行时会在恢复 owner 和通用求值之前检查。零缩放、负手性、非均匀缩放、剪切或非有限值会给出诊断并停止该通用栈，不能把计划可选误解为任意运行时根变换均已通过。陌生条件值或不适用的后端明确 Unsupported。
+
 ## 预览、保护与报告
 
 HoFBX 窗口的候选读取、预览和应用使用 `HoConstraintIrAssetLoader`。每次生成新执行视图，避免旧装配代码的可变 DTO 污染下次预览。校验 source 指纹、registry 字节摘要、实现版本、引用、组合重复执行和参数域后才允许清理已有导入。

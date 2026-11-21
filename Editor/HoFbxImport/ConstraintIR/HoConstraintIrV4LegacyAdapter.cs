@@ -168,8 +168,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             if (fidelity == "UNSPECIFIED") return "unspecified fidelity is not executable";
             if (constraints.Count == 0 || owners.Any(x => x != owners[0])) return "inconsistent semantic owner";
             string type = semantic.StringAt("semanticType"); var rules = implementation.Get("conditions");
-            var acceptedConditions = new HashSet<string>(new[] { "ownerKinds", "targetScope", "ownerInput", "requiredBinding", "stackPolicy", "dependencyPolicy", "ownerSpaces", "targetSpaces", "parameters", "influence", "mixModes", "sourceWeights", "registration", "acceptedEvidence", "maintainOffset", "orderedMemberRoles", "copyRotation", "stretch", "auxTypes", "adjacent", "head_tail", "use_bbone_shape", "upMode", "signedAxes", "identities", "muted", "spacePairs" }, StringComparer.Ordinal);
+            var acceptedConditions = new HashSet<string>(new[] { "ownerKinds", "targetScope", "ownerInput", "requiredBinding", "stackPolicy", "dependencyPolicy", "ownerSpaces", "targetSpaces", "parameters", "influence", "mixModes", "sourceWeights", "registration", "acceptedEvidence", "maintainOffset", "orderedMemberRoles", "copyRotation", "stretch", "auxTypes", "adjacent", "head_tail", "use_bbone_shape", "upMode", "signedAxes", "identities", "muted", "spacePairs", "rigSpace" }, StringComparer.Ordinal);
             foreach (string key in rules.Properties.Keys) if (!acceptedConditions.Contains(key)) return "unimplemented contract condition " + key;
+            if (rules.Get("rigSpace") != null &&
+                (rules.StringAt("rigSpace") != "FINITE_POSITIVE_UNIFORM_TRS" || implementation.StringAt("backendId") != "HoAux" ||
+                 type != "COPY_LOCATION" && type != "COPY_ROTATION" && type != "ARMATURE" && type != "AIM"))
+                return "unimplemented rigSpace condition for this implementation";
             if (!HoConstraintIrV4Registry.Contains(rules.Get("ownerKinds"), "BONE")) return "implementation does not admit bone owners";
             if (rules.StringAt("requiredBinding") != "FINAL_FBX" || rules.StringAt("targetScope") != "SAME_ARMATURE" || rules.StringAt("stackPolicy") != "PRESERVE_ORDER_NO_UNKNOWN_WRITE_BARRIER" || rules.StringAt("dependencyPolicy") != "ACYCLIC_NO_LEGACY_FEEDBACK") return "unsupported binding/target/stack/dependency contract";
             var ownerBinding = config.bindingContext.bones.FirstOrDefault(x => x.boneName == owners[0]);

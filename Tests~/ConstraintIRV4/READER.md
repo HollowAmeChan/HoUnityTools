@@ -108,6 +108,13 @@ The parent identity and world rest reference must also remain unchanged. The
 legacy v2/v3 DTO defaults rotation inheritance to true without reinterpreting
 those old documents through the new admission gate.
 
+The controlled `conditions.rigSpace=FINITE_POSITIVE_UNIFORM_TRS` condition is
+admitted only for HoAux direct Copy Location/Rotation, Armature and Aim contracts.
+The runtime owns the actual rig-root matrix check before restore/evaluation;
+planning does not claim a scene transform was checked from the JSON alone.
+Unknown enum values, wrong JSON types or other backend/semantic combinations are
+unsupported. Reader tests exercise both the recognized enum and rejection paths.
+
 `RunImport.ps1 -Fixture <toy.v4.json> [-OperatorFixture <HoFBX operator directory>]`
 creates a new isolated Unity project. It covers actual window/automation import,
 backend switching, repeat import, report persistence/Undo, preflight protection,
