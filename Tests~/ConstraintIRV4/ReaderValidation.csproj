@@ -12,9 +12,9 @@
     <Compile Include="../../Runtime/RigConstraints/ConstraintIR/HoConstraintJson.cs" />
     <Compile Include="../../Runtime/RigConstraints/ConstraintIR/HoConstraintIrV4Document.cs" />
     <Compile Include="../../Runtime/RigConstraints/ConstraintIR/HoConstraintIrImportContext.cs" />
-    <Compile Include="../../Runtime/RigConstraints/ConstraintImport/ConstraintConfig.cs" />
+    <Compile Include="../../Runtime/RigConstraints/ConstraintImport/HoConstraintExecutionPlan.cs" />
     <Compile Include="../../Editor/HoFbxImport/ConstraintIR/HoConstraintIrV4Registry.cs" />
-    <Compile Include="../../Editor/HoFbxImport/ConstraintIR/HoConstraintIrV4LegacyAdapter.cs" />
+    <Compile Include="../../Editor/HoFbxImport/ConstraintIR/HoConstraintIrPlanner.cs" />
     <Compile Include="ReaderValidation.cs" />
   </ItemGroup>
 </Project>

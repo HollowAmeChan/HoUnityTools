@@ -10,7 +10,7 @@ Copy-Item -LiteralPath "$importRepo/Runtime/HoEditorOnly.cs","$importRepo/Runtim
 foreach($importPart in @('HoFbxImport','HoAuxRig','CombineArmature')){Copy-Item -LiteralPath "$importRepo/Editor/$importPart" -Destination "$Project/Assets/Editor" -Recurse}
 Copy-Item -LiteralPath "$importRepo/Editor/Utils/HoEditorStyles.cs","$PSScriptRoot/UnityImportValidation.cs" -Destination "$Project/Assets/Editor"
 [IO.Directory]::CreateDirectory("$Project/Assets/VrcApiShim")|Out-Null
-Copy-Item -LiteralPath "$importRepo/Tests~/ConstraintIRV3/VrcApiShim.cs" -Destination "$Project/Assets/VrcApiShim"
+Copy-Item -LiteralPath "$PSScriptRoot/VrcApiShim.cs" -Destination "$Project/Assets/VrcApiShim"
 foreach($importKind in @('Position','Rotation','Scale','Parent','Aim')){
     [IO.File]::WriteAllText("$Project/Assets/VrcApiShim/VRC${importKind}Constraint.cs","namespace VRC.SDK3.Dynamics.Constraint.Components { public class VRC${importKind}Constraint : VRCConstraint {} }")
 }

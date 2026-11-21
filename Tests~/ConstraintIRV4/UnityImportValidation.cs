@@ -40,8 +40,8 @@ public static class UnityImportValidation
         var rig = new GameObject("Rig");
         foreach (string name in new[] { "Owner", "Target", "Other", "MCH_Target" }) { var bone = new GameObject(name).transform; bone.SetParent(rig.transform, false); }
         EditorSceneManager.SaveScene(rig.scene, "Assets/Fixture/Validation.unity");
-        var original = HoConstraintIrAssetLoader.Load(asset, "HoAux"); Check(original.sourceContext.Document.Root.Get("schemaVersion").Int32() == 4, "Source version lost");
-        original.knownConstraints.Clear(); Check(HoConstraintIrAssetLoader.Load(asset, "HoAux").knownConstraints.Count == 1, "Mutable loader state leaked");
+        var original = HoConstraintIrAssetLoader.Load(asset, "HoAux"); Check(original.source.Document.Root.Get("schemaVersion").Int32() == 4, "Source version lost");
+        original.operations.Clear(); Check(HoConstraintIrAssetLoader.Load(asset, "HoAux").operations.Count == 1, "Mutable loader state leaked");
         int first = HoFbxConstraintImportUtility.ApplyHoAux(asset, rig, rig.transform); Check(first == 1, "World copyR v4 import did not reach runtime");
         var ho = rig.GetComponent<HoAuxRig>(); Check(ho != null && ho.DirectOperations.Count == 1 && ho.ExporterVersion == "4", "Runtime/source metadata missing");
         var report = HoConstraintIrImportReports.instance.Find(rig); Check(report != null && report.sourceSchemaVersion == 4 && report.selectedImplementationsJson.Contains("hoaux.copy_rotation.world"), "Report did not retain selected implementation");
@@ -88,18 +88,21 @@ public static class UnityImportValidation
         var skeleton = root.GetComponentsInChildren<Transform>(true).FirstOrDefault(x => x.name == source.armatureName);
         Check(skeleton != null, "Real FBX armature root could not be resolved");
         int count = HoFbxConstraintImportUtility.ApplyHoAux(json, skeleton.gameObject, skeleton);
-        Check(count == source.sourceContext.Document.Semantics.Count, "Real operator v4 did not import every registered, supported semantic: " + count);
+        Check(count == source.source.Document.Semantics.Count, "Real operator v4 did not import every registered, supported semantic: " + count);
         var runtime = skeleton.GetComponent<HoAuxRig>(); Check(runtime != null && runtime.OperationCount == count, "Real operator HoAux operation count differs");
-        Check(source.sourceContext.UnsupportedConstraints.Count == 0, "Validated local copyR remained unsupported");
+        Check(source.barriers.All(x => x.code == "UnknownSemantic"), "Validated local copyR remained unsupported");
         Check(HoConstraintIrImportReports.instance.Find(skeleton.gameObject).authoritativeSourceJson.Contains("EXPORT_GENERATED"), "Real MCH provenance lost");
         int again = HoFbxConstraintImportUtility.ApplyHoAux(json, skeleton.gameObject, skeleton); Check(again == count && skeleton.GetComponent<HoAuxRig>().OperationCount == count, "Real operator reimport grew operations");
         var projected = HoConstraintIrAssetLoader.Load(json, "HoAux"); var binding = projected.mchBindings.Single();
         Check(binding.sourceBone != binding.mchBone && binding.constraint.targetBoneName == binding.sourceBone, "MCH final source was remapped to itself");
         var empty = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Fixture/Operator/HoFBX/empty_v4_HoFbx_empty_v4_constraint.json");
         Check(HoFbxConstraintImportUtility.ApplyHoAux(empty, skeleton.gameObject, skeleton) == 0 && skeleton.GetComponent<HoAuxRig>() == null, "Explicit empty v4 did not clear previous import safely");
-        string path = "Assets/Fixture/Operator/HoFBX/compat_v3_HoFbx_compat_v3_constraint.json";
-        var legacy = HoConstraintIrAssetLoader.Load(AssetDatabase.LoadAssetAtPath<TextAsset>(path), "HoAux");
-        Check(legacy.schemaVersion == 3 && legacy.sourceContext == null, "v3 compatibility was reinterpreted through v4");
+        foreach (int retiredVersion in new[] { 2, 3 })
+        {
+            var retired = HoConstraintJson.Parse(json.text);
+            retired.Properties["schemaVersion"] = HoConstraintJson.Parse(retiredVersion.ToString());
+            Reject(() => HoConstraintIrAssetLoader.Load(new TextAsset(HoConstraintJson.Serialize(retired)), "HoAux"), "Retired IR version was accepted");
+        }
     }
 }
 #endif
