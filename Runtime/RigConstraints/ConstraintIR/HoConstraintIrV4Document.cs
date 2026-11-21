@@ -68,7 +68,7 @@ namespace Hollow.HoUnityTools.RigConstraints.ConstraintIR
                 HoConstraintIrShape.Text(semantic, "semanticType", id); HoConstraintIrShape.Integer(semantic, "semanticVersion", id, 1);
                 HoConstraintIrShape.Text(semantic, "ruleId", id); HoConstraintIrShape.Integer(semantic, "ruleVersion", id, 1);
                 string evidence = HoConstraintIrShape.Text(semantic, "evidence", id);
-                if (evidence != "RAW_TYPE" && evidence != "GENERATED" && evidence != "EXPLICIT" && evidence != "LEGACY") throw new FormatException("Unknown semantic evidence " + evidence);
+                if (evidence != "RAW_TYPE" && evidence != "GENERATED" && evidence != "EXPLICIT") throw new FormatException("Unknown semantic evidence " + evidence);
                 HoConstraintIrShape.Member(semantic, "parameters", HoConstraintJsonKind.Object, id);
                 var ids = HoConstraintIrShape.Array(semantic, "sourceIds", id); var seen = new HashSet<string>(StringComparer.Ordinal);
                 if (ids.Count == 0) throw new FormatException("Semantic " + id + " has no sourceIds.");

@@ -322,7 +322,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                  type != "COPY_LOCATION" && type != "COPY_ROTATION" && type != "ARMATURE" && type != "AIM"))
                 return "unimplemented rigSpace condition for this implementation";
             if (!HoConstraintIrV4Registry.Contains(rules.Get("ownerKinds"), "BONE")) return "implementation does not admit bone owners";
-            if (rules.StringAt("requiredBinding") != "FINAL_FBX" || rules.StringAt("targetScope") != "SAME_ARMATURE" || rules.StringAt("stackPolicy") != "PRESERVE_ORDER_NO_UNKNOWN_WRITE_BARRIER" || rules.StringAt("dependencyPolicy") != "ACYCLIC_NO_LEGACY_FEEDBACK") return "unsupported binding/target/stack/dependency contract";
+            if (rules.StringAt("requiredBinding") != "FINAL_FBX" || rules.StringAt("targetScope") != "SAME_ARMATURE" || rules.StringAt("stackPolicy") != "PRESERVE_ORDER_NO_UNKNOWN_WRITE_BARRIER" || rules.StringAt("dependencyPolicy") != "ACYCLIC_NO_COMPOSITE_FEEDBACK") return "unsupported binding/target/stack/dependency contract";
             var ownerBinding = config.finalBindings.bones.FirstOrDefault(x => x.boneName == owners[0]);
             if (ownerBinding == null) return "final binding context has no owner bone";
             var ownerInput = rules.Get("ownerInput");
@@ -335,7 +335,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 if (ownerInput.Get("connected") != null && ownerBinding.connected != Boolean(ownerInput.Get("connected"), false)) return "connected owner is unsupported";
                 if (ownerInput.Get("inheritRotation") != null && ownerBinding.inheritRotation != Boolean(ownerInput.Get("inheritRotation"), true)) return "owner rotation inheritance does not satisfy contract";
             }
-            if (rules.Get("registration") != null && semantic.StringAt("evidence") == "RAW_TYPE") return "composite requires explicit/generated/legacy registration";
+            if (rules.Get("registration") != null && semantic.StringAt("evidence") == "RAW_TYPE") return "composite requires explicit or generated registration";
             if (rules.Get("acceptedEvidence") != null && !HoConstraintIrV4Registry.Contains(rules.Get("acceptedEvidence"), semantic.StringAt("evidence"))) return "evidence outside implementation contract";
             if (rules.Get("auxTypes") != null && !HoConstraintIrV4Registry.Contains(rules.Get("auxTypes"), semantic.Get("parameters").StringAt("auxType"))) return "auxType outside implementation contract";
             if (rules.Get("adjacent") != null && Boolean(rules.Get("adjacent"), false))
