@@ -85,7 +85,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private const string ConstraintModeTooltip =
             "决定约束最终以什么形态落盘：\n" +
             "· Unity 内置约束 —— 约束组件挂在被驱动的每根骨骼上，会散在整个骨架里。\n" +
-            "· HoAux Rig —— Parent / Twist / Fan 与 v3 Copy / Armature / Aim 收进一个 HoAuxRig 中控组件。\n" +
+            "· HoAux Rig —— Parent / Twist / Fan 与 Copy / Armature / Aim 收进一个 HoAuxRig 中控组件。\n" +
             "· VRC 约束 —— 每条约束一个独立空物体、全部摊在约束根物体底下；空物体只是挂点，\n" +
             "  约束的 TargetTransform 指回被驱动的那根骨骼。需要工程里装了 VRChat SDK。\n" +
             "内置 / VRC 的 Armature 使用刚性 Parent 映射；部分旋转采用原生插值，差异会在预览标出。\n" +
@@ -711,13 +711,10 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 if (aux == null || string.IsNullOrEmpty(aux.boneName))
                     continue;
-                string auxType = string.IsNullOrEmpty(aux.auxType)
-                    ? string.Empty
-                    : aux.auxType.Trim().ToUpperInvariant();
-                BlenderConstraintInfo copyRotation = FindBlenderConstraint(aux, "COPY_ROTATION");
-                BlenderConstraintInfo stretchTo = FindBlenderConstraint(aux, "STRETCH_TO");
+                BlenderConstraintInfo copyRotation = aux.constraints.Count > 0 ? aux.constraints[0] : null;
+                BlenderConstraintInfo stretchTo = aux.constraints.Count > 1 ? aux.constraints[1] : null;
 
-                if (auxType == "TWIST" || auxType.EndsWith("_TWIST", StringComparison.Ordinal))
+                if (aux.semanticType == "TWIST")
                 {
                     if (copyRotation == null || stretchTo == null ||
                         !HaveSameCurrentArmatureTarget(config, copyRotation, stretchTo))
@@ -734,14 +731,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     };
                     if (ConstraintMuted(copyRotation) || ConstraintMuted(stretchTo))
                         continue;
-                    entry.hoAuxUnsupportedReason = ValidateHoAuxTwist(entry);
                     result.Add(entry);
                     consumed.Add(ConstraintRecordKey(aux.boneName, copyRotation));
                     consumed.Add(ConstraintRecordKey(aux.boneName, stretchTo));
                     continue;
                 }
 
-                if (auxType == "FAN" || auxType == "FAN_SINGLE" || auxType == "FAN_SIDE")
+                if (aux.semanticType == "FAN")
                 {
                     if (copyRotation == null || !TargetsCurrentArmature(config, copyRotation))
                         continue;
@@ -756,7 +752,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     };
                     if (ConstraintMuted(copyRotation))
                         continue;
-                    entry.hoAuxUnsupportedReason = ValidateHoAuxFan(entry);
                     result.Add(entry);
                     consumed.Add(ConstraintRecordKey(aux.boneName, copyRotation));
                 }
@@ -851,19 +846,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 : string.Empty;
         }
 
-        private static BlenderConstraintInfo FindBlenderConstraint(AuxBoneInfo aux, string type)
-        {
-            if (aux.constraints == null)
-                return null;
-            foreach (BlenderConstraintInfo constraint in aux.constraints)
-            {
-                if (constraint != null &&
-                    string.Equals(constraint.constraintType, type, StringComparison.OrdinalIgnoreCase))
-                    return constraint;
-            }
-            return null;
-        }
-
         private static float ConstraintInfluence(
             BlenderConstraintInfo constraint,
             float fallback)
@@ -876,65 +858,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         private static bool ConstraintMuted(BlenderConstraintInfo constraint)
         {
             return constraint != null && constraint.parameters != null && constraint.parameters.mute;
-        }
-
-        private static string ValidateHoAuxTwist(ConstraintPlanEntry entry)
-        {
-            BlenderConstraintParameters copy = entry.copyRotation == null
-                ? null
-                : entry.copyRotation.parameters;
-            BlenderConstraintParameters stretch = entry.stretchTo == null
-                ? null
-                : entry.stretchTo.parameters;
-            if (!SupportsCopyRotationSpaces(copy, true))
-                return "Copy Rotation 空间/轴/mix mode 超出当前 HoAux 能力";
-            if (stretch == null || !IsWorldSpace(stretch.owner_space) ||
-                !IsWorldSpace(stretch.target_space))
-                return "Stretch To 当前只支持 WORLD -> WORLD";
-            if (Mathf.Abs(stretch.head_tail) > 0.0001f)
-                return "Stretch To head_tail 尚未实现";
-            if (!string.IsNullOrEmpty(stretch.keep_axis) &&
-                !string.Equals(stretch.keep_axis, "SWING_Y", StringComparison.OrdinalIgnoreCase))
-                return "Stretch To 当前只支持 SWING_Y";
-            if (!string.IsNullOrEmpty(stretch.volume) &&
-                !string.Equals(stretch.volume, "NO_VOLUME", StringComparison.OrdinalIgnoreCase))
-                return "Stretch To volume 保持尚未精确实现";
-            return string.Empty;
-        }
-
-        private static string ValidateHoAuxFan(ConstraintPlanEntry entry)
-        {
-            BlenderConstraintParameters parameters = entry.copyRotation == null
-                ? null
-                : entry.copyRotation.parameters;
-            return SupportsCopyRotationSpaces(parameters, false)
-                ? string.Empty
-                : "Fan 只支持 WORLD -> WORLD、XYZ、REPLACE";
-        }
-
-        private static bool SupportsCopyRotationSpaces(
-            BlenderConstraintParameters parameters,
-            bool allowLocalOwnerOrient)
-        {
-            if (parameters == null || !parameters.use_x || !parameters.use_y ||
-                !parameters.use_z || parameters.invert_x || parameters.invert_y ||
-                parameters.invert_z)
-                return false;
-            if (!string.IsNullOrEmpty(parameters.mix_mode) &&
-                !string.Equals(parameters.mix_mode, "REPLACE", StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (IsWorldSpace(parameters.owner_space) && IsWorldSpace(parameters.target_space))
-                return true;
-            return allowLocalOwnerOrient &&
-                string.Equals(parameters.owner_space, "LOCAL", StringComparison.OrdinalIgnoreCase) &&
-                (string.Equals(parameters.target_space, "LOCAL", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(parameters.target_space, "LOCAL_OWNER_ORIENT", StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static bool IsWorldSpace(string value)
-        {
-            return string.IsNullOrEmpty(value) ||
-                string.Equals(value, "WORLD", StringComparison.OrdinalIgnoreCase);
         }
 
         private void DrawTargetPanel()

@@ -111,61 +111,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         internal static string Issue(Entry e,Backend backend)
         {
-            string barrier=StackBarrier(e);
-            if(barrier!=null)return barrier;
-            if(e.config.operations.Any(x=>x.ownerBone==e.Owner&&x.operationRole!="DIRECT_CONSTRAINT"&&x.operationRole!="AIM_BINDING"))return "同一 Owner 混合 Aux/MCH 与通用栈";
-            if(backend==Backend.HoAux)
-                foreach(var composite in e.config.operations.Where(k=>k.operationRole=="MCH_BINDING"||k.operationRole=="AUX_CONSTRAINT"))
-                {
-                    var compositeConstraint=composite.constraint;
-                    if(compositeConstraint.parameters==null||compositeConstraint.parameters.mute||compositeConstraint.parameters.influence==0||compositeConstraint.targetObjectName!=e.config.armatureName)continue;
-                    string name=compositeConstraint.targetBoneName;var seen=new HashSet<string>();
-                    while(!string.IsNullOrEmpty(name)&&seen.Add(name))
-                    {
-                        if(name==e.Owner)return "组合 Ho 层依赖此通用 Owner，不跨组合层反馈重排";
-                        var parent=e.config.finalBindings.bones.FirstOrDefault(b=>b.boneName==name);name=parent==null?null:parent.parentBone;
-                    }
-                }
-            var binding=e.config.finalBindings.bones.FirstOrDefault(b=>b.boneName==e.Owner);
-            if(binding==null||binding.connected&&(e.Type=="COPY_LOCATION"||e.Type=="ARMATURE")||binding.inheritScale!="FULL"||!Identity(binding.poseBasis)||binding.hasPoseAnimation)return "Owner 需静置局部输入、FULL 继承；位置/Armature 操作不支持连接骨";
-            if(e.aim!=null)return null; // The structural validator has checked the complete pair.
-            var c=e.raw.constraint;var p=c.parameters;
-            if(p==null||!Finite(p.influence)||p.influence<0||p.influence>1)return "影响度或参数无效";
-            bool world=p.owner_space=="WORLD"&&p.target_space=="WORLD";
-            bool localRotation=e.Type=="COPY_ROTATION"&&p.owner_space=="LOCAL"&&
-                (p.target_space=="LOCAL"||p.target_space=="LOCAL_OWNER_ORIENT");
-            if(!world&&!(backend==Backend.HoAux&&localRotation))
-                return localRotation?"局部 Copy Rotation 仅 HoAux 后端已实现；Standard/Vrc 暂不支持":"当前空间组合尚未实现";
-            if(e.Type=="ARMATURE")
-            {
-                if(p.use_deform_preserve_volume||p.use_bone_envelopes||p.use_current_location)return "Armature 的 Preserve Volume/Envelope/Current Location 暂不支持";
-                if(p.influence!=1&&p.influence!=0)return "Armature 首版只支持完整或零影响度";
-                var targets=c.references==null?null:c.references.targets;
-                if(targets==null||targets.Count==0)return "Armature 缺少多源列表";
-                double sum=0;
-                foreach(var t in targets)
-                {
-                    var s=t==null?null:t.properties;
-                    if(s==null||s.target==null||s.target.name!=e.config.armatureName||string.IsNullOrEmpty(s.subtarget)||!Finite(s.weight)||s.weight<0)return "Armature 源身份或权重无效／跨骨架尚未支持";
-                    sum+=s.weight;
-                }
-                if(sum<=0||double.IsInfinity(sum))return "Armature 权重总和必须为有限正数";
-                return null;
-            }
-            if(c.targetObjectName!=e.config.armatureName||string.IsNullOrEmpty(c.targetBoneName))return "缺少当前骨架的目标骨";
-            if(!p.use_x||!p.use_y||!p.use_z||p.invert_x||p.invert_y||p.invert_z||p.head_tail!=0||p.use_bbone_shape||p.use_offset)return "仅支持全轴、无反相／偏移／尾部／B-Bone";
-            if(e.Type=="COPY_ROTATION"&&p.mix_mode!="REPLACE")return "Copy Rotation 首版只支持 REPLACE";
-            return null;
-        }
-
-        internal static string StackBarrier(Entry e)
-        {
-            var unknown=e.config.barriers.Where(x=>x.ownerBone==e.Owner).ToList();
-            if(unknown.Count==0)return null;
-            bool positionOnly=e.config.operations.Where(x=>x.ownerBone==e.Owner).All(x=>
-                x.operationRole=="DIRECT_CONSTRAINT"&&x.constraint.constraintType=="COPY_LOCATION");
-            bool rotationOnlyUnknown=unknown.All(x=>x.constraint.constraintType=="DAMPED_TRACK"||x.constraint.constraintType=="LOCKED_TRACK");
-            return positionOnly&&rotationOnlyUnknown?null:"同一 Owner 有影响当前通道的 unknown 栈屏障";
+            return e.config.source.BackendId == backend.ToString() ? null : "执行计划与所选后端不一致";
         }
 
         internal static Prepared Prepare(HoConstraintExecutionPlan config,GameObject rig,Transform root,
@@ -180,8 +126,6 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 string issue=null;
                 if(!map.TryGetValue(group.Key,out Transform owner)||owner==rig.transform)issue="Owner 缺失／不能驱动 rig-space 本身";
-                issue=issue??StackBarrier(group.First());
-                if(config.operations.Any(x=>x.ownerBone==group.Key&&x.operationRole!="DIRECT_CONSTRAINT"&&x.operationRole!="AIM_BINDING"))issue="同一 Owner 混合了组合 Aux/MCH 与通用栈，暂不跨语义重排";
                 var binding=config.finalBindings.bones.FirstOrDefault(b=>b.boneName==group.Key);
                 if(binding==null||!Identity(binding.poseBasis)||binding.connected&&group.Any(e=>e.Type=="COPY_LOCATION"||e.Type=="ARMATURE")||binding.inheritScale!="FULL")issue="Owner 需要 FULL 继承和静置输入，位置操作需非连接骨";
                 if(binding!=null&&!string.IsNullOrEmpty(binding.parentBone)&&

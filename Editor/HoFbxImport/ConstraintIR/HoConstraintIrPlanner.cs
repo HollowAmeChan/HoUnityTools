@@ -99,6 +99,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 string verification = chosen.Get("verification").StringAt("status");
                 if (verification != "TESTED") Diagnostic(result, "Unverified", id, null, backendId, "Implementation evidence is " + verification + "; this is separate from its fidelity claim.");
             }
+            ResolveExecutionBoundaries(result, selected, consumed, records, owners, backendId);
             var finalSlots = new HashSet<string>(StringComparer.Ordinal);
             foreach (var source in document.Sources)
             {
@@ -224,13 +225,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             string owner = owners[ids[0]]; var constraints = ids.Select(x => records[x]).ToList();
             if (ids.Any(x => owners[x] != owner)) throw new FormatException("Final overlay splits one semantic across multiple owners.");
             if (type == "COPY_LOCATION" || type == "COPY_ROTATION" || type == "ARMATURE")
-            { config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), sourceId = ids[0], ownerBone = owner, operationRole = "DIRECT_CONSTRAINT", constraint = constraints[0] }); return; }
+            { config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), semanticType = type, sourceId = ids[0], ownerBone = owner, operationRole = "DIRECT_CONSTRAINT", constraint = constraints[0] }); return; }
             if (config.composites.Any(x => x.boneName == owner)) throw new FormatException("Backend cannot assemble multiple composite semantics on owner " + owner);
             string auxType = parameters.StringAt("auxType", type);
             if (type == "AIM") auxType = "AIM"; if (type == "MCH") auxType = "MCH";
             var sources = Strings(parameters.Get("sourceBones"));
             sources = sources.Select(x => boneMap.ContainsKey(x) ? boneMap[x] : x).ToList();
-            var aux = new AuxBoneInfo { boneName = owner, auxType = auxType, sourceBones = sources, constraints = new List<BlenderConstraintInfo>() };
+            var aux = new AuxBoneInfo { semanticId = semantic.StringAt("semanticId"), semanticType = type, boneName = owner, auxType = auxType, sourceBones = sources, constraints = new List<BlenderConstraintInfo>() };
             if (type == "AIM")
             {
                 var first = constraints[0]; var second = constraints[1]; aux.sourceBones = new List<string> { first.targetBoneName, second.targetBoneName };
@@ -250,7 +251,60 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             else if (type == "TWIST" || type == "FAN") aux.constraints.AddRange(constraints);
             else throw new FormatException("Semantic has no backend planning implementation: " + type);
             config.composites.Add(aux);
-            for (int i = 0; i < constraints.Count; i++) config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), sourceId = ids[i], ownerBone = owner, operationRole = type == "AIM" ? "AIM_BINDING" : type == "MCH" ? "MCH_BINDING" : "AUX_CONSTRAINT", auxType = auxType, constraint = constraints[i] });
+            for (int i = 0; i < constraints.Count; i++) config.operations.Add(new HoConstraintPlannedOperation { semanticId = semantic.StringAt("semanticId"), semanticType = type, sourceId = ids[i], ownerBone = owner, operationRole = type == "AIM" ? "AIM_BINDING" : type == "MCH" ? "MCH_BINDING" : "AUX_CONSTRAINT", auxType = auxType, constraint = constraints[i] });
+        }
+        private static bool DirectSemantic(string type)
+        { return type == "COPY_LOCATION" || type == "COPY_ROTATION" || type == "ARMATURE" || type == "AIM"; }
+
+        private static void ResolveExecutionBoundaries(HoConstraintIrPlanningResult result,
+            List<Tuple<HoConstraintJsonValue, HoConstraintJsonValue>> selected, HashSet<string> consumed,
+            Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, string backend)
+        {
+            // Selection is executable intent. Do not report a chosen implementation
+            // and then silently discard it in a later backend classification pass.
+            var parents = result.Plan.finalBindings.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
+            bool changed;
+            do
+            {
+                var rejected = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var pair in selected)
+                {
+                    var semantic = pair.Item1; string id = semantic.StringAt("semanticId"), type = semantic.StringAt("semanticType");
+                    string owner = owners[semantic.Get("sourceIds").Items[0].Text];
+                    var peers = selected.Where(x => owners[x.Item1.Get("sourceIds").Items[0].Text] == owner).ToList();
+                    var barriers = records.Where(x => !consumed.Contains(x.Key) && owners[x.Key] == owner && result.Document.Sources[x.Key].StringAt("ownerKind") == "BONE").Select(x => x.Value).ToList();
+                    bool positionOnly = peers.All(x => x.Item1.StringAt("semanticType") == "COPY_LOCATION");
+                    bool unrelatedRotation = barriers.All(x => x.constraintType == "DAMPED_TRACK" || x.constraintType == "LOCKED_TRACK");
+                    if (barriers.Count > 0 && !(positionOnly && unrelatedRotation))
+                        rejected[id] = "Owner has an unresolved source stack barrier that affects this semantic.";
+                    if (peers.Any(x => DirectSemantic(x.Item1.StringAt("semanticType")) != DirectSemantic(type)))
+                        rejected[id] = "Owner mixes direct and composite execution schedules; cross-schedule ordering is unsupported.";
+                    if (backend != "HoAux" || DirectSemantic(type)) continue;
+                    foreach (var member in semantic.Get("sourceIds").Items.Select(x => records[x.Text]))
+                    {
+                        if (member.parameters.mute || member.parameters.influence == 0 || member.targetObjectName != result.Plan.armatureName) continue;
+                        string current = member.targetBoneName; var seen = new HashSet<string>(StringComparer.Ordinal);
+                        while (!string.IsNullOrEmpty(current) && seen.Add(current))
+                        {
+                            foreach (var direct in selected.Where(x => DirectSemantic(x.Item1.StringAt("semanticType")) && owners[x.Item1.Get("sourceIds").Items[0].Text] == current))
+                            {
+                                rejected[id] = "Composite depends on a direct-stack owner; HoAux cross-schedule feedback is unsupported.";
+                                rejected[direct.Item1.StringAt("semanticId")] = "Direct owner feeds a composite schedule; HoAux cross-schedule feedback is unsupported.";
+                            }
+                            if (!parents.TryGetValue(current, out current)) break;
+                        }
+                    }
+                }
+                changed = rejected.Count > 0;
+                foreach (var pair in selected.Where(x => rejected.ContainsKey(x.Item1.StringAt("semanticId"))).ToList())
+                {
+                    string id = pair.Item1.StringAt("semanticId"), reason = rejected[id];
+                    if (pair.Item2.StringAt("selection") == "LOCKED") throw new FormatException("Locked implementation has an execution boundary for " + id + ": " + reason);
+                    Diagnostic(result, "Unsupported", id, null, backend, reason);
+                    foreach (var source in pair.Item1.Get("sourceIds").Items) consumed.Remove(source.Text);
+                    selected.Remove(pair); result.SelectedBindings.Remove(pair.Item2);
+                }
+            } while (changed);
         }
         private static string Applicability(HoConstraintJsonValue implementation, HoConstraintJsonValue semantic, List<BlenderConstraintInfo> constraints, List<string> owners, HoConstraintExecutionPlan config, HoConstraintJsonValue binding)
         {

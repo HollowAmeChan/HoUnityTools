@@ -33,6 +33,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
     [System.Serializable]
     public class AuxBoneInfo
     {
+        public string semanticId, semanticType;
         public string boneName;
         public string auxType;
         public List<string> sourceBones;
@@ -41,7 +42,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
 
     public class HoConstraintPlannedOperation
     {
-        public string semanticId, sourceId;
+        public string semanticId, semanticType, sourceId;
         public string ownerBone;
         public string operationRole;
         public string auxType;
