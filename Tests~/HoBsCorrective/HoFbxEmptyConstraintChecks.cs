@@ -8,6 +8,8 @@ using Hollow.HoUnityTools.Constraints;
 using Hollow.HoUnityTools.Editor.RigConstraints;
 using Hollow.HoUnityTools.RigConstraints;
 using Hollow.HoUnityTools.RigConstraints.Import;
+using Hollow.HoUnityTools.RigConstraints.ConstraintIR;
+using Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -20,21 +22,26 @@ public static class HoFbxEmptyConstraintChecks
         "Hollow.HoUnityTools.Editor.RigConstraints.HoFbxImportProcessingWindow");
     private static readonly Type Mode = Window.GetNestedType("ConstraintMode", BindingFlags.NonPublic);
     private static readonly List<string> Passed = new List<string>();
-    private static float[] Identity => new float[] { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+    private const string Identity = "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]";
 
     public static void Run()
+    { RunChecks(true); }
+
+    public static void RunSynthetic()
+    { RunChecks(false); }
+
+    private static void RunChecks(bool character)
     {
         try
         {
             foreach (string file in new[] { "empty_constraint_results.txt", "empty_constraint_error.txt" })
                 if (File.Exists(file)) File.Delete(file);
-            AuditMetas();
-            foreach (int version in new[] { 2, 3 })
-                foreach (string backend in new[] { "Standard", "HoAux", "Vrc" })
-                    CheckEmpty(version, backend);
+            if (character) AuditMetas();
+            foreach (string backend in new[] { "Standard", "HoAux", "Vrc" })
+                CheckEmpty(backend);
             CheckRejectedSnapshots();
             CheckSupportedImport();
-            CheckCharacterPipeline();
+            if (character) CheckCharacterPipeline();
             File.WriteAllLines("empty_constraint_results.txt", Passed.Concat(new[] { "HOFBX_EMPTY_CONSTRAINT_OK" }));
             Debug.Log("HOFBX_EMPTY_CONSTRAINT_OK");
             EditorApplication.Exit(0);
@@ -60,20 +67,33 @@ public static class HoFbxEmptyConstraintChecks
     {
         var child = new GameObject(name); child.transform.SetParent(parent, false); return child;
     }
-    private static ConstraintConfig Empty(int version) => new ConstraintConfig {
-        schema = "hotools.rig-constraint-ir", schemaVersion = version, armatureName = "Rig",
-        // The export switch can be off while the authored per-bone flags remain on.
-        mchEnabledBones = new List<string> { "Owner" }, mchBindings = new List<MchBindingInfo>(),
-        auxBones = new List<AuxBoneInfo>(), knownConstraints = new List<KnownConstraintInfo>(),
-        unknownConstraints = new List<UnknownConstraintInfo>(), aimBindings = new List<AimBindingInfo>(),
-        bindingContext = new ConstraintBindingContext { space = "BLENDER_ARMATURE", matrixLayout = "ROW_MAJOR",
-            fbxBoneAxes = "Y_X", objectMatrix = Identity, bones = new List<ConstraintBoneBinding> {
-                new ConstraintBoneBinding { boneName = "Owner", restMatrix = Identity, poseBasis = Identity, inheritScale = "FULL" },
-                new ConstraintBoneBinding { boneName = "Target", restMatrix = Identity, poseBasis = Identity, inheritScale = "FULL" } } } };
-
-    private static void CheckEmpty(int version, string backend)
+    private static HoConstraintJsonValue Empty()
     {
-        var container = new GameObject("Empty import " + version + "/" + backend);
+        var registry = HoConstraintIrAssetLoader.LoadDistributedRegistry();
+        var root = HoConstraintJson.Parse("{\"schema\":\"hotools.rig-constraint-ir\",\"schemaVersion\":4,\"armatureName\":\"Rig\",\"exportTime\":\"2026-11-21T00:00:00Z\",\"blenderVersion\":\"4.5.8\",\"captureStage\":\"AUTHORING\",\"registry\":{\"id\":\"hotools.rig-constraints.registry\",\"version\":1,\"sha256\":\"" + registry.Sha256 + "\"},\"sources\":[],\"semantics\":[],\"implementationBindings\":[],\"inputFingerprint\":\"" + new string('0', 64) + "\",\"mchPlans\":[\"Owner\"],\"excludedOwners\":[],\"bindings\":{\"captureStage\":\"POSTPROCESS\",\"boneMap\":[],\"constraintMap\":[],\"bindingContext\":{\"space\":\"BLENDER_ARMATURE\",\"matrixLayout\":\"ROW_MAJOR\",\"fbxBoneAxes\":\"Y_X\",\"objectMatrix\":" + Identity + ",\"bones\":[]}}}");
+        foreach (string name in new[] { "Owner", "Target" })
+            root.Get("bindings").Get("bindingContext").Get("bones").Items.Add(HoConstraintJson.Parse("{\"boneName\":\"" + name + "\",\"parentBone\":\"\",\"inheritScale\":\"FULL\",\"inheritRotation\":true,\"restMatrix\":" + Identity + ",\"poseBasis\":" + Identity + ",\"connected\":false,\"positionOnly\":false,\"hasPoseAnimation\":false}"));
+        root.Properties["sourceContext"] = root.Get("bindings").Get("bindingContext").Clone();
+        return root;
+    }
+    private static string Encode(HoConstraintJsonValue root)
+    {
+        var document = HoConstraintIrV4Reader.Read(HoConstraintJson.Serialize(root));
+        root.Properties["inputFingerprint"] = HoConstraintJsonValue.String(document.ComputeInputFingerprint());
+        return HoConstraintJson.Serialize(root);
+    }
+    private static void AddSource(HoConstraintJsonValue root, string kind, string targetObject = "Rig", bool semantic = false)
+    {
+        var source = HoConstraintJson.Parse("{\"sourceId\":\"c0\",\"ownerBone\":\"Owner\",\"ownerKind\":\"BONE\",\"captureStage\":\"AUTHORING\",\"constraint\":{\"name\":\"Source\",\"constraintType\":\"" + kind + "\",\"stackIndex\":0,\"targetObjectName\":\"" + targetObject + "\",\"targetBoneName\":\"Target\",\"parameters\":{\"influence\":1,\"owner_space\":\"WORLD\",\"target_space\":\"WORLD\",\"mix_mode\":\"REPLACE\",\"use_x\":true,\"use_y\":true,\"use_z\":true},\"references\":{}}}");
+        root.Get("sources").Items.Add(source);
+        if (!semantic) return;
+        root.Get("semantics").Items.Add(HoConstraintJson.Parse("{\"semanticId\":\"s0\",\"semanticType\":\"COPY_ROTATION\",\"semanticVersion\":1,\"ownerBone\":\"Owner\",\"sourceIds\":[\"c0\"],\"ruleId\":\"group.copy_r\",\"ruleVersion\":1,\"evidence\":\"GENERATED\",\"parameters\":{\"auxType\":\"COPY_R\"}}"));
+        root.Get("implementationBindings").Items.Add(HoConstraintJson.Parse("{\"semanticId\":\"s0\",\"backendId\":\"HoAux\",\"implementationId\":\"hoaux.copy_rotation.world\",\"contractVersion\":1,\"selection\":\"CANDIDATE\",\"fallbackPolicy\":\"EXACT_ONLY\"}"));
+    }
+
+    private static void CheckEmpty(string backend)
+    {
+        var container = new GameObject("Empty v4 import /" + backend);
         var rig = Child(container.transform, "Rig");
         var owner = Child(rig.transform, "Owner");
         var managed = owner.AddComponent<RotationConstraint>();
@@ -88,14 +108,14 @@ public static class HoFbxEmptyConstraintChecks
         helper.hostRole = ConstraintHostRole.GeneratedHelper; helper.sourceArmature = "Rig"; helper.directBackend = "HoAux";
         var vrc = Child(handHo.transform, "Old VRC host").AddComponent<HoImportedConstraintMarker>();
         vrc.hostRole = ConstraintHostRole.VrcConstraintObject; vrc.sourceArmature = "Rig";
-        var asset = new TextAsset(JsonUtility.ToJson(Empty(version)));
+        var asset = new TextAsset(Encode(Empty()));
         try
         {
             Check(Apply(asset, rig, backend, handHo.transform) == 0, "Empty import should return zero");
             Check(managed == null && marker == null && oldHo == null && helper == null && vrc == null, "Old generated constraints were not cleared");
             Check(manual != null && handHo != null && handHo.Layers[0].operations.Count == 1 && owner != null, "Manual content was changed");
             Check(Apply(asset, rig, backend, handHo.transform) == 0, "Repeated empty import failed");
-            Passed.Add("Empty v" + version + "/" + backend + ": cleanup, manual preservation, repeat import");
+            Passed.Add("Empty v4/" + backend + ": cleanup, manual preservation, repeat import");
         }
         finally { UnityEngine.Object.DestroyImmediate(asset); UnityEngine.Object.DestroyImmediate(container); }
     }
@@ -106,40 +126,29 @@ public static class HoFbxEmptyConstraintChecks
         {
             var rig = new GameObject("Rig"); Child(rig.transform, "Owner"); Child(rig.transform, "Target");
             var keep = rig.AddComponent<HoAuxRig>(); keep.SourceArmature = "Rig";
-            var config = Empty(3);
-            if (problem == "malformed") config.knownConstraints = null;
-            else if (problem == "unknown") config.unknownConstraints.Add(new UnknownConstraintInfo {
-                ownerBone = "Owner", reason = "unsupported source constraint", constraint = new BlenderConstraintInfo { name = "Unknown", constraintType = "LIMIT_ROTATION" } });
-            else config.knownConstraints.Add(new KnownConstraintInfo { ownerBone = "Owner", relationType = "DIRECT_CONSTRAINT",
-                constraint = new BlenderConstraintInfo { name = "Copy Rotation", constraintType = "COPY_ROTATION",
-                    targetObjectName = "Other armature", targetBoneName = "Target", parameters = CopyParameters() } });
-            // JsonUtility serializes a null list as [], so use a genuinely
-            // incomplete document to exercise missing-list validation.
+            var config = Empty();
+            if (problem == "unknown") AddSource(config, "LIMIT_ROTATION");
+            else if (problem == "unsupported") AddSource(config, "COPY_ROTATION", "Other armature", true);
             var asset = new TextAsset(problem == "malformed"
-                ? "{\"schema\":\"hotools.rig-constraint-ir\",\"schemaVersion\":3,\"armatureName\":\"Rig\"}"
-                : JsonUtility.ToJson(config));
+                ? "{\"schema\":\"hotools.rig-constraint-ir\",\"schemaVersion\":4,\"armatureName\":\"Rig\"}"
+                : Encode(config));
             try
             {
                 bool threw = false;
                 try { Apply(asset, rig, "HoAux", rig.transform); }
-                catch (Exception error) when (error is InvalidOperationException || error is InvalidDataException) { threw = true; }
+                catch (Exception error) when (error is InvalidOperationException || error is InvalidDataException || error is FormatException) { threw = true; }
                 Check(threw && keep != null, "Nonempty/invalid snapshot bypassed safety: " + problem);
                 Passed.Add(problem + ": rejected and preserved previous import");
             }
             finally { UnityEngine.Object.DestroyImmediate(asset); UnityEngine.Object.DestroyImmediate(rig); }
         }
     }
-    private static BlenderConstraintParameters CopyParameters() => new BlenderConstraintParameters {
-        influence = 1, owner_space = "WORLD", target_space = "WORLD", mix_mode = "REPLACE",
-        use_x = true, use_y = true, use_z = true };
     private static void CheckSupportedImport()
     {
         var rig = new GameObject("Rig"); Child(rig.transform, "Owner"); Child(rig.transform, "Target");
-        var config = Empty(3);
-        config.knownConstraints.Add(new KnownConstraintInfo { ownerBone = "Owner", relationType = "DIRECT_CONSTRAINT",
-            constraint = new BlenderConstraintInfo { name = "Copy Rotation", constraintType = "COPY_ROTATION",
-                targetObjectName = "Rig", targetBoneName = "Target", parameters = CopyParameters() } });
-        var asset = new TextAsset(JsonUtility.ToJson(config));
+        var config = Empty();
+        AddSource(config, "COPY_ROTATION", "Rig", true);
+        var asset = new TextAsset(Encode(config));
         try
         {
             Check(Apply(asset, rig, "HoAux", rig.transform) == 1 && rig.GetComponent<HoAuxRig>().OperationCount == 1,
@@ -157,7 +166,7 @@ public static class HoFbxEmptyConstraintChecks
         try
         {
             var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(Folder + "HoFBX/羽啾_Armature-Chu2u_constraint.json");
-            string name = JsonUtility.FromJson<ConstraintConfig>(asset.text).armatureName;
+            string name = HoConstraintIrAssetLoader.Load(asset, "HoAux").armatureName;
             var skeleton = root.GetComponentsInChildren<Transform>(true).Single(t => t.name == name);
             Check(HoFbxConstraintImportUtility.ApplyHoAux(asset, skeleton.gameObject, null) == 0, "Real empty constraint import failed");
             Check(HoFbxBsCorrectiveImportUtility.Apply(AssetDatabase.LoadAssetAtPath<TextAsset>(Folder + "HoFBX/羽啾_bs_corrective.json"), root) == 60,

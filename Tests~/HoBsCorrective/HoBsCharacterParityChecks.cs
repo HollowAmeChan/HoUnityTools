@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Hollow.HoUnityTools.Constraints;
 using Hollow.HoUnityTools.Editor.RigConstraints;
-using Hollow.HoUnityTools.RigConstraints.Import;
+using Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR;
 using UnityEditor;
 using UnityEngine;
 
@@ -246,7 +246,7 @@ public static class HoBsCharacterParityChecks
         foreach (Entry entry in manifest.files.Where(e => e.kind == "rigConstraintIR"))
         {
             TextAsset ir = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Character/HoFBX/" + entry.file);
-            ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(ir.text);
+            var config = HoConstraintIrAssetLoader.Load(ir, "HoAux");
             if (config.armatureName != armatureName) continue;
             Transform host = new GameObject("HoAux parity").transform;
             host.SetParent(instance.transform, false);
