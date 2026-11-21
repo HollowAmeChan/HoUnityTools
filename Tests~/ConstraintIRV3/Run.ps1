@@ -16,6 +16,7 @@ New-Item -ItemType Directory -Force -Path "$Project\Assets\Runtime","$Project\As
 Copy-Item -LiteralPath "$taskRepo\Runtime\RigConstraints","$taskRepo\Runtime\BoneRenderer" -Destination "$Project\Assets\Runtime" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Runtime\CombineArmature" -Destination "$Project\Assets\Runtime" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Runtime\HoEditorOnly.cs" -Destination "$Project\Assets\Runtime"
+Copy-Item -LiteralPath "$taskRepo\Runtime\Constraints\HoBsCorrective.cs","$taskRepo\Runtime\Constraints\HoBsCorrective.UpdateLoop.cs","$taskRepo\Runtime\FaceTracking\HoFaceOutputOwnership.cs" -Destination "$Project\Assets\Runtime"
 Copy-Item -LiteralPath "$taskRepo\Editor\HoFbxImport","$taskRepo\Editor\HoAuxRig" -Destination "$Project\Assets\Editor" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Editor\CombineArmature" -Destination "$Project\Assets\Editor" -Recurse
 Copy-Item -LiteralPath "$taskRepo\Editor\Utils\HoEditorStyles.cs","$PSScriptRoot\V3Validation.cs" -Destination "$Project\Assets\Editor"
