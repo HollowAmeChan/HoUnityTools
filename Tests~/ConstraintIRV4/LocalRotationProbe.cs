@@ -89,6 +89,15 @@ public sealed class LocalRotationProbe : MonoBehaviour
         var apply=type.GetMethod("ApplyConstraints",BindingFlags.NonPublic|BindingFlags.Static);
         int imported=(int)apply.Invoke(null,new object[]{configs[index],route.rig,Enum.Parse(mode,"HoAux"),route.outer});
         if(imported<30)throw new Exception("Fixture direct stack was not imported: "+imported);
+        if(File.Exists(Path.Combine(Application.dataPath,"Fixture/use-v4.txt")))
+        {
+            var reportType=AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType("Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR.HoConstraintIrImportReports")).First(t=>t!=null);
+            object reports=reportType.GetProperty("instance",BindingFlags.Public|BindingFlags.Static|BindingFlags.FlattenHierarchy).GetValue(null);
+            object report=reportType.GetMethod("Find").Invoke(reports,new object[]{route.rig});
+            if(report==null||(int)report.GetType().GetField("sourceSchemaVersion").GetValue(report)!=4||
+                string.IsNullOrEmpty((string)report.GetType().GetField("selectedImplementationsJson").GetValue(report)))
+                throw new Exception("Production v4 import window did not preserve selected implementation evidence");
+        }
         route.ho=route.outer.GetComponent<HoAuxRig>();
         if(route.ho==null)throw new Exception("External HoAux host missing");
         route.ho.Mode=HoAuxRig.UpdateMode.Manual;
