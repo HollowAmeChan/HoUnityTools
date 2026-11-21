@@ -90,7 +90,6 @@ public sealed class LocalRotationProbe : MonoBehaviour
         var apply=type.GetMethod("ApplyConstraints",BindingFlags.NonPublic|BindingFlags.Static);
         int imported=(int)apply.Invoke(null,new object[]{configs[index],route.rig,Enum.Parse(mode,"HoAux"),route.outer});
         if(imported<30)throw new Exception("Fixture direct stack was not imported: "+imported);
-        if(File.Exists(Path.Combine(Application.dataPath,"Fixture/use-v4.txt")))
         {
             var reportType=AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType("Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR.HoConstraintIrImportReports")).First(t=>t!=null);
             object reports=reportType.GetProperty("instance",BindingFlags.Public|BindingFlags.Static|BindingFlags.FlattenHierarchy).GetValue(null);
