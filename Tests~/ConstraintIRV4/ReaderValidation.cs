@@ -44,7 +44,7 @@ internal static class ReaderValidation
         {
             registry = HoConstraintIrV4Registry.Load(File.ReadAllBytes(args[0]));
             if (args.Length > 2 && args[1] == "--emit") { File.WriteAllText(args[2], Read(CopyFixture()).ToJson(), new System.Text.UTF8Encoding(false)); Console.WriteLine("EMITTED " + args[2]); return 0; }
-            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites();
+            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites(); TestLocalAuthoringDomain();
             if (args.Length > 1)
             {
                 var imported = HoConstraintIrV4Import.Read(File.ReadAllText(args[1]), File.ReadAllText(args[0]));
@@ -85,8 +85,15 @@ internal static class ReaderValidation
         var unknown = BaseDocument(); unknown.Get("sources").Items.Add(Source("u", "COPY_ROTATION", 0)); var u = Project(unknown); Check(u.Config.knownConstraints.Count == 0 && u.Config.unknownConstraints.Count == 1, "Unregistered copy rotation became executable");
         var mapped = CopyFixture(); mapped.Get("bindings").Get("constraintMap").Items.Add(Json("{\"sourceId\":\"c0\",\"targetBoneName\":\"MCH_Target\"}")); var m = Project(mapped); Check(m.Config.knownConstraints[0].constraint.targetBoneName == "MCH_Target", "Overlay target not projected"); Check(m.Document.Sources["c0"].Get("constraint").StringAt("targetBoneName") == "Target", "Overlay overwrote author source");
         var absent = CopyFixture(); absent.Properties.Remove("bindings"); Reject(() => Project(absent), "Authoring-only snapshot assembled");
-        var local = CopyFixture(); local.Get("sources").Items[0].Get("constraint").Get("parameters").Properties["owner_space"] = HoConstraintJsonValue.String("LOCAL"); local.Get("sources").Items[0].Get("constraint").Get("parameters").Properties["target_space"] = HoConstraintJsonValue.String("LOCAL"); local.Get("implementationBindings").Items[0].Properties["implementationId"] = HoConstraintJsonValue.String("hoaux.copy_rotation.local"); var l = Project(local); Check(l.SelectedBindings.Count == 0 && l.Config.unknownConstraints.Count == 1, "PLANNED local contract executed");
-        local.Get("implementationBindings").Items[0].Properties["selection"] = HoConstraintJsonValue.String("LOCKED"); Reject(() => Project(local), "Locked unsupported implementation silently changed");
+        var savedRegistry = registry;
+        var futureRegistry = registry.Root.Clone(); futureRegistry.Get("implementations").Items.First(x => x.StringAt("id") == "hoaux.copy_rotation.world").Properties["availability"] = HoConstraintJsonValue.String("PLANNED");
+        registry = HoConstraintIrV4Registry.Load(HoConstraintJson.Serialize(futureRegistry));
+        try
+        {
+            var planned = CopyFixture(); var l = Project(planned); Check(l.SelectedBindings.Count == 0 && l.Config.unknownConstraints.Count == 1, "PLANNED contract executed");
+            planned.Get("implementationBindings").Items[0].Properties["selection"] = HoConstraintJsonValue.String("LOCKED"); Reject(() => Project(planned), "Locked unsupported implementation silently changed");
+        }
+        finally { registry = savedRegistry; }
         var owner = CopyFixture(); owner.Get("sources").Items[0].Properties["ownerKind"] = HoConstraintJsonValue.String("OBJECT"); var o = Project(owner); Check(o.Config.knownConstraints.Count == 0 && o.Config.unknownConstraints.Count == 0 && o.Diagnostics.Any(x => x.Code == "UnsupportedOwner"), "Object owner projected onto bone");
         var overlap = CopyFixture(); Semantic(overlap, "s1", "COPY_ROTATION", new[] { "c0" }, "{\"auxType\":\"COPY_R\"}"); Bind(overlap, "s1", "hoaux.copy_rotation.world"); Reject(() => Project(overlap), "Double execution accepted");
         var standard = CopyFixture(); standard.Get("implementationBindings").Items.Clear(); Bind(standard, "s0", "standard.copy_rotation.world", "Standard"); standard.Get("sources").Items[0].Get("constraint").Get("parameters").Properties["influence"] = Json("0.3"); Check(Project(standard, "Standard").SelectedBindings.Count == 0, "Exact-only native non-half rotation executed");
@@ -104,5 +111,32 @@ internal static class ReaderValidation
         var twist = BaseDocument(); twist.Get("sources").Items.Add(Source("r", "COPY_ROTATION", 0)); twist.Get("sources").Items.Add(Source("t", "STRETCH_TO", 1, "Target", ",\"volume\":\"NO_VOLUME\",\"keep_axis\":\"SWING_Y\"")); Semantic(twist, "st", "TWIST", new[] { "r", "t" }, "{\"auxType\":\"TWIST\",\"sourceBones\":[\"Target\"]}"); Bind(twist, "st", "hoaux.twist.legacy", "HoAux", "ALLOW_LEGACY"); Check(Project(twist).Config.auxBones[0].constraints.Count == 2, "Twist did not preserve both constraints");
         var mch = BaseDocument(); mch.Get("sources").Items.Add(Source("m", "CHILD_OF", 0, "Target", ",\"use_location_x\":true,\"use_location_y\":true,\"use_location_z\":true,\"use_rotation_x\":true,\"use_rotation_y\":true,\"use_rotation_z\":true,\"use_scale_x\":false,\"use_scale_y\":false,\"use_scale_z\":false")); Semantic(mch, "sm", "MCH", new[] { "m" }, "{\"auxType\":\"MCH\",\"sourceBones\":[\"Target\"]}"); Bind(mch, "sm", "hoaux.mch.parent"); var m = Project(mch); Check(m.Config.mchBindings.Count == 1 && m.Config.mchEnabledBones.Contains("Target") && m.Config.auxBones[0].constraints.Count == 0, "MCH compatibility projection failed");
         var armature = BaseDocument(); var arm = Source("ar", "ARMATURE", 0); arm.Get("constraint").Get("references").Properties["targets"] = Json("[{\"rnaType\":\"ArmatureConstraintTarget\",\"properties\":{\"target\":{\"name\":\"Rig\",\"rnaType\":\"Object\"},\"subtarget\":\"Target\",\"weight\":1}}]"); armature.Get("sources").Items.Add(arm); Semantic(armature, "sa", "ARMATURE", new[] { "ar" }, "{}", "RAW_TYPE"); Bind(armature, "sa", "standard.armature.linear", "Standard"); Check(Project(armature, "Standard").SelectedBindings.Count == 0, "Exact-only native Armature approximation executed"); armature.Get("implementationBindings").Items[0].Properties["fallbackPolicy"] = HoConstraintJsonValue.String("ALLOW_APPROXIMATE"); Check(Project(armature, "Standard").Config.knownConstraints.Count == 1, "Explicit native Armature approximation was not projected");
+    }
+    private static void TestLocalAuthoringDomain()
+    {
+        var saved = registry; var testRegistry = registry.Root.Clone();
+        var localContract = testRegistry.Get("implementations").Items.First(x => x.StringAt("id") == "hoaux.copy_rotation.local");
+        localContract.Properties["availability"] = HoConstraintJsonValue.String("IMPLEMENTED"); localContract.Properties["fidelity"] = HoConstraintJsonValue.String("EXACT");
+        registry = HoConstraintIrV4Registry.Load(HoConstraintJson.Serialize(testRegistry));
+        try
+        {
+            var root = CopyFixture(); var p = root.Get("sources").Items[0].Get("constraint").Get("parameters");
+            p.Properties["owner_space"] = HoConstraintJsonValue.String("LOCAL"); p.Properties["target_space"] = HoConstraintJsonValue.String("LOCAL");
+            root.Get("implementationBindings").Items[0].Properties["implementationId"] = HoConstraintJsonValue.String("hoaux.copy_rotation.local");
+            var context = root.Get("bindings").Get("bindingContext");
+            foreach (var bone in context.Get("bones").Items) bone.Properties["inheritRotation"] = HoConstraintJsonValue.Bool(true);
+            root.Properties["sourceContext"] = context.Clone();
+            Check(Project(root).SelectedBindings.Count == 1, "Local exact authoring domain was rejected");
+            var missing = root.Clone(); missing.Get("sourceContext").Get("bones").Items[0].Properties.Remove("inheritRotation"); Check(Project(missing).SelectedBindings.Count == 0, "Missing inheritRotation admitted to Exact");
+            var disabled = root.Clone(); disabled.Get("bindings").Get("bindingContext").Get("bones").Items[1].Properties["inheritRotation"] = HoConstraintJsonValue.Bool(false); Check(Project(disabled).SelectedBindings.Count == 0, "Disabled target rotation inheritance admitted");
+            var scale = root.Clone(); scale.Get("sourceContext").Get("bones").Items[1].Properties["inheritScale"] = HoConstraintJsonValue.String("NONE"); Check(Project(scale).SelectedBindings.Count == 0, "Target nonFULL inheritance admitted");
+            var parent = root.Clone(); parent.Get("sourceContext").Get("bones").Items[0].Properties["parentBone"] = HoConstraintJsonValue.String("Other"); parent.Get("bindings").Get("bindingContext").Get("bones").Items[0].Properties["parentBone"] = HoConstraintJsonValue.String("Other"); parent.Get("bindings").Get("bindingContext").Get("bones").Items[2].Get("restMatrix").Items[3] = Json("0.3"); Check(Project(parent).SelectedBindings.Count == 0, "Parent rest reference change admitted");
+            var converted = root.Clone(); var final = converted.Get("bindings").Get("bindingContext");
+            final.Properties["objectMatrix"] = Json("[0,-1,0,0,1,0,0,0,0,0,1,0,0,0,0,1]");
+            foreach (var bone in final.Get("bones").Items) bone.Properties["restMatrix"] = Json("[0,1,0,0,-1,0,0,0,0,0,1,0,0,0,0,1]");
+            Check(Project(converted).SelectedBindings.Count == 1, "Pure armature object/bone basis conversion was misclassified as rest change");
+            var changed = root.Clone(); changed.Get("bindings").Get("bindingContext").Get("bones").Items[1].Get("restMatrix").Items[3] = Json("0.4"); Check(Project(changed).SelectedBindings.Count == 0, "Target author/final rest change admitted");
+        }
+        finally { registry = saved; }
     }
 }

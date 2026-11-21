@@ -177,10 +177,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             var ownerInput = rules.Get("ownerInput");
             if (ownerInput != null)
             {
+                foreach (string key in ownerInput.Properties.Keys) if (key != "poseBasis" && key != "inheritScale" && key != "animation" && key != "connected" && key != "inheritRotation") return "unimplemented owner input condition " + key;
                 if (ownerInput.StringAt("poseBasis") == "IDENTITY" && !Identity(ownerBinding.poseBasis)) return "owner poseBasis must be identity";
                 if (ownerInput.StringAt("inheritScale") != null && ownerBinding.inheritScale != ownerInput.StringAt("inheritScale")) return "owner inheritScale does not satisfy contract";
                 if (ownerInput.StringAt("animation") == "NONE" && ownerBinding.hasPoseAnimation) return "owner has independent pose animation";
                 if (ownerInput.Get("connected") != null && ownerBinding.connected != Boolean(ownerInput.Get("connected"), false)) return "connected owner is unsupported";
+                if (ownerInput.Get("inheritRotation") != null && ownerBinding.inheritRotation != Boolean(ownerInput.Get("inheritRotation"), true)) return "owner rotation inheritance does not satisfy contract";
             }
             if (rules.Get("registration") != null && semantic.StringAt("evidence") == "RAW_TYPE") return "composite requires explicit/generated/legacy registration";
             if (rules.Get("acceptedEvidence") != null && !HoConstraintIrV4Registry.Contains(rules.Get("acceptedEvidence"), semantic.StringAt("evidence"))) return "evidence outside implementation contract";
@@ -224,10 +226,28 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             var owner = config.bindingContext.bones.FirstOrDefault(x => x.boneName == owners[ids[0]]);
             var target = config.bindingContext.bones.FirstOrDefault(x => x.boneName == records[ids[0]].targetBoneName);
             if (authoredOwner == null || authoredTarget == null || owner == null || target == null) return "local Copy Rotation is missing author/final owner or target bindings";
+            var finalBones = document.Root.Get("bindings").Get("bindingContext").Get("bones").Items;
+            var finalOwner = finalBones.First(x => x.StringAt("boneName") == owner.boneName);
+            var finalTarget = finalBones.First(x => x.StringAt("boneName") == target.boneName);
+            foreach (var bone in new[] { authoredOwner, authoredTarget, finalOwner, finalTarget })
+            {
+                var rotation = bone.Get("inheritRotation");
+                if (rotation == null || rotation.Kind != HoConstraintJsonKind.Boolean || !rotation.Boolean) return "local Copy Rotation requires explicit inheritRotation=true on author/final owner and target";
+                if (bone.StringAt("inheritScale") != "FULL") return "local Copy Rotation requires FULL scale inheritance on author/final owner and target";
+            }
             var authorObject = document.Root.Get("sourceContext").Get("objectMatrix");
             float[] authorToWorld = authorObject == null ? null : Matrix(authorObject);
             if (!Identity(Matrix(authoredOwner.Get("poseBasis"))) || !SameReference(Matrix(authoredOwner.Get("restMatrix")), authorToWorld, owner.restMatrix, config.bindingContext.objectMatrix) || !SameReference(Matrix(authoredTarget.Get("restMatrix")), authorToWorld, target.restMatrix, config.bindingContext.objectMatrix))
                 return "authoring-to-FBX preprocessing changed local rest/pose references; original-space compensation is not implemented";
+            foreach (var pair in new[] { Tuple.Create(authoredOwner, finalOwner), Tuple.Create(authoredTarget, finalTarget) })
+            {
+                string authorParent = pair.Item1.StringAt("parentBone", ""), finalParent = pair.Item2.StringAt("parentBone", "");
+                if (authorParent != finalParent) return "local Copy Rotation author/final parent identity changed";
+                if (string.IsNullOrEmpty(authorParent)) continue;
+                var authorParentBone = authoredBones.Items.FirstOrDefault(x => x.StringAt("boneName") == authorParent);
+                var finalParentBone = finalBones.FirstOrDefault(x => x.StringAt("boneName") == finalParent);
+                if (authorParentBone == null || finalParentBone == null || !SameReference(Matrix(authorParentBone.Get("restMatrix")), authorToWorld, Matrix(finalParentBone.Get("restMatrix")), config.bindingContext.objectMatrix)) return "local Copy Rotation author/final parent rest reference changed";
+            }
             return null;
         }
         private static bool SameReference(float[] author, float[] authorObject, float[] final, float[] finalObject)
@@ -310,7 +330,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             foreach (var bone in HoConstraintIrShape.Array(value, "bones", "bindingContext"))
             {
                 string name = HoConstraintIrShape.Text(bone, "boneName", "bindingContext.bones[]"); if (!names.Add(name)) throw new FormatException("Duplicate binding bone " + name);
-                result.bones.Add(new ConstraintBoneBinding { boneName = name, parentBone = HoConstraintIrShape.Text(bone, "parentBone", name, true), inheritScale = HoConstraintIrShape.Text(bone, "inheritScale", name), restMatrix = Matrix(bone.Get("restMatrix")), poseBasis = Matrix(bone.Get("poseBasis")), connected = Boolean(bone.Get("connected"), false), positionOnly = Boolean(bone.Get("positionOnly"), false), hasPoseAnimation = Boolean(bone.Get("hasPoseAnimation"), false) });
+                result.bones.Add(new ConstraintBoneBinding { boneName = name, parentBone = HoConstraintIrShape.Text(bone, "parentBone", name, true), inheritScale = HoConstraintIrShape.Text(bone, "inheritScale", name), inheritRotation = Boolean(bone.Get("inheritRotation"), true), restMatrix = Matrix(bone.Get("restMatrix")), poseBasis = Matrix(bone.Get("poseBasis")), connected = Boolean(bone.Get("connected"), false), positionOnly = Boolean(bone.Get("positionOnly"), false), hasPoseAnimation = Boolean(bone.Get("hasPoseAnimation"), false) });
             }
             foreach (var bone in result.bones) if (!string.IsNullOrEmpty(bone.parentBone) && !names.Contains(bone.parentBone)) throw new FormatException("Binding context has missing parent " + bone.parentBone);
             foreach (var bone in result.bones)

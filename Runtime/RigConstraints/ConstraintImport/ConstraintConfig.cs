@@ -150,6 +150,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public string boneName, parentBone, inheritScale;
         public float[] restMatrix, poseBasis;
         public bool connected, positionOnly, hasPoseAnimation;
+        public bool inheritRotation = true;
     }
     [System.Serializable] public class ConstraintBindingContext
     {

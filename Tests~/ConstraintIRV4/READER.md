@@ -102,6 +102,11 @@ by a compensated final binding. Reference comparisons include each armature's
 object transform, so a pure object/bone basis conversion is not mistaken for an
 authored rest change. `exportOptions.appliedConstraints=true` prevents replaying
 constraints already applied into the exported rest state.
+Authoring and final owner/target records must explicitly declare
+`inheritRotation=true` and `inheritScale=FULL`; missing v4 facts are unsupported.
+The parent identity and world rest reference must also remain unchanged. The
+legacy v2/v3 DTO defaults rotation inheritance to true without reinterpreting
+those old documents through the new admission gate.
 
 `RunImport.ps1 -Fixture <toy.v4.json> [-OperatorFixture <HoFBX operator directory>]`
 creates a new isolated Unity project. It covers actual window/automation import,

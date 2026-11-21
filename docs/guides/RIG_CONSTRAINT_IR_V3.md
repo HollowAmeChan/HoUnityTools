@@ -1,4 +1,6 @@
-﻿# Rig Constraint IR v3 导入
+# Rig Constraint IR v3 导入
+
+新导出与三层契约见 [IR v4 与迁移](RIG_CONSTRAINT_IR_V4.md)。本页记录 v2/v3 兼容行为；旧 unknown 保持原解释，不因 v4 新能力自动重新认领。
 
 HoTools 的正式字段定义见其 `Exporter/IR_V3.md`。HoFBX 导入处理现在接受 IR v2/v3；旧 v2 的 unknown 不自动升级。
 

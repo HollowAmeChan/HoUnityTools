@@ -9,6 +9,11 @@ foreach($importPart in @('RigConstraints','BoneRenderer','CombineArmature')){Cop
 Copy-Item -LiteralPath "$importRepo/Runtime/HoEditorOnly.cs","$importRepo/Runtime/Constraints/HoBsCorrective.cs","$importRepo/Runtime/Constraints/HoBsCorrective.UpdateLoop.cs","$importRepo/Runtime/FaceTracking/HoFaceOutputOwnership.cs" -Destination "$Project/Assets/Runtime"
 foreach($importPart in @('HoFbxImport','HoAuxRig','CombineArmature')){Copy-Item -LiteralPath "$importRepo/Editor/$importPart" -Destination "$Project/Assets/Editor" -Recurse}
 Copy-Item -LiteralPath "$importRepo/Editor/Utils/HoEditorStyles.cs","$PSScriptRoot/UnityImportValidation.cs" -Destination "$Project/Assets/Editor"
+[IO.Directory]::CreateDirectory("$Project/Assets/VrcApiShim")|Out-Null
+Copy-Item -LiteralPath "$importRepo/Tests~/ConstraintIRV3/VrcApiShim.cs" -Destination "$Project/Assets/VrcApiShim"
+foreach($importKind in @('Position','Rotation','Scale','Parent','Aim')){
+    [IO.File]::WriteAllText("$Project/Assets/VrcApiShim/VRC${importKind}Constraint.cs","namespace VRC.SDK3.Dynamics.Constraint.Components { public class VRC${importKind}Constraint : VRCConstraint {} }")
+}
 Copy-Item -LiteralPath $Fixture -Destination "$Project/Assets/Fixture/toy.v4.json"
 if($OperatorFixture){Copy-Item -LiteralPath $OperatorFixture -Destination "$Project/Assets/Fixture/Operator" -Recurse}
 [IO.File]::WriteAllText("$Project/Packages/manifest.json",'{"dependencies":{"com.unity.modules.animation":"1.0.0","com.unity.modules.physics":"1.0.0","com.unity.modules.imgui":"1.0.0","com.unity.modules.jsonserialize":"1.0.0"}}')

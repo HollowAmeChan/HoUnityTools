@@ -51,8 +51,7 @@ public static class UnityImportValidation
         var invalid = HoConstraintJson.Parse(asset.text); invalid.Get("registry").Properties["sha256"] = HoConstraintJsonValue.String(new string('0', 64));
         var previousHo = rig.GetComponent<HoAuxRig>(); var previousReport = HoConstraintIrImportReports.instance.Find(rig).inputFingerprint;
         Reject(() => HoFbxConstraintImportUtility.ApplyHoAux(new TextAsset(Encode(invalid)), rig, rig.transform), "Registry mismatch accepted"); Check(rig.GetComponent<HoAuxRig>() == previousHo && HoConstraintIrImportReports.instance.Find(rig).inputFingerprint == previousReport, "Failed preflight changed existing assembly/report");
-        var unsupported = HoConstraintJson.Parse(asset.text); var p = unsupported.Get("sources").Items[0].Get("constraint").Get("parameters"); p.Properties["owner_space"] = HoConstraintJsonValue.String("LOCAL"); p.Properties["target_space"] = HoConstraintJsonValue.String("LOCAL");
-        unsupported.Get("implementationBindings").Items[0].Properties["implementationId"] = HoConstraintJsonValue.String("hoaux.copy_rotation.local");
+        var unsupported = HoConstraintJson.Parse(asset.text); var p = unsupported.Get("sources").Items[0].Get("constraint").Get("parameters"); p.Properties["use_x"] = HoConstraintJsonValue.Bool(false);
         Reject(() => HoFbxConstraintImportUtility.ApplyHoAux(new TextAsset(Encode(unsupported)), rig, rig.transform), "Unsupported-only import cleared assembly"); Check(rig.GetComponent<HoAuxRig>() == previousHo, "Unsupported import removed prior runtime");
         var objectOnly = HoConstraintJson.Parse(asset.text); objectOnly.Get("sources").Items[0].Properties["ownerKind"] = HoConstraintJsonValue.String("OBJECT");
         Reject(() => HoFbxConstraintImportUtility.ApplyHoAux(new TextAsset(Encode(objectOnly)), rig, rig.transform), "Object-only import cleared prior assembly"); Check(rig.GetComponent<HoAuxRig>() == previousHo, "Object owner damaged bone runtime");
@@ -67,6 +66,16 @@ public static class UnityImportValidation
         var standardRoot = HoConstraintJson.Parse(asset.text); standardRoot.Get("implementationBindings").Items[0].Properties["backendId"] = HoConstraintJsonValue.String("Standard"); standardRoot.Get("implementationBindings").Items[0].Properties["implementationId"] = HoConstraintJsonValue.String("standard.copy_rotation.world");
         int standard = (int)apply.Invoke(null, new object[] { new TextAsset(Encode(standardRoot)), rig, Enum.Parse(mode, "Standard"), rig.transform });
         Check(standard == 1 && rig.GetComponent<HoAuxRig>() == null && rig.transform.Find("Owner").GetComponent<RotationConstraint>() != null, "v4 Standard implementation did not replace prior backend");
+        var vrcRoot = standardRoot.Clone(); vrcRoot.Get("implementationBindings").Items[0].Properties["backendId"] = HoConstraintJsonValue.String("Vrc"); vrcRoot.Get("implementationBindings").Items[0].Properties["implementationId"] = HoConstraintJsonValue.String("vrc.copy_rotation.world");
+        int vrc = (int)apply.Invoke(null, new object[] { new TextAsset(Encode(vrcRoot)), rig, Enum.Parse(mode, "Vrc"), rig.transform });
+        Check(vrc == 1 && rig.transform.Find("Owner").GetComponent<RotationConstraint>() == null, "v4 VRC structural bridge did not replace Standard");
+        var vrcReport = HoConstraintIrImportReports.instance.Find(rig); Check(vrcReport.selectedImplementationsJson.Contains("SHIM_ONLY"), "VRC evidence was incorrectly presented as real SDK validation");
+        var vrcRuntime = rig.GetComponentsInChildren<VRC.SDK3.Dynamics.Constraint.Components.VRCConstraint>(true).First();
+        VRC.SDK3.Dynamics.Constraint.Components.VRCConstraint.ThrowOnZero = true;
+        try { Reject(() => apply.Invoke(null, new object[] { new TextAsset(Encode(vrcRoot)), rig, Enum.Parse(mode, "Vrc"), rig.transform }), "Injected VRC assembly failure did not fail"); }
+        finally { VRC.SDK3.Dynamics.Constraint.Components.VRCConstraint.ThrowOnZero = false; }
+        Check(rig.GetComponentsInChildren<VRC.SDK3.Dynamics.Constraint.Components.VRCConstraint>(true).Contains(vrcRuntime), "VRC assembly failure did not roll back previous constraint");
+        Check(HoConstraintIrImportReports.instance.Find(rig).inputFingerprint == vrcReport.inputFingerprint, "VRC rollback changed import report");
         ValidateOperatorFixtures();
     }
     private static void ValidateOperatorFixtures()
@@ -79,9 +88,9 @@ public static class UnityImportValidation
         var skeleton = root.GetComponentsInChildren<Transform>(true).FirstOrDefault(x => x.name == source.armatureName);
         Check(skeleton != null, "Real FBX armature root could not be resolved");
         int count = HoFbxConstraintImportUtility.ApplyHoAux(json, skeleton.gameObject, skeleton);
-        Check(count == 6, "Real operator v4 expected six available operations (local copyR remains planned), received " + count);
-        var runtime = skeleton.GetComponent<HoAuxRig>(); Check(runtime != null && runtime.OperationCount == 6, "Real operator HoAux operation count differs");
-        Check(source.sourceContext.UnsupportedConstraints.Count == 1, "Planned local copyR was not independently reported unsupported");
+        Check(count == source.sourceContext.Document.Semantics.Count, "Real operator v4 did not import every registered, supported semantic: " + count);
+        var runtime = skeleton.GetComponent<HoAuxRig>(); Check(runtime != null && runtime.OperationCount == count, "Real operator HoAux operation count differs");
+        Check(source.sourceContext.UnsupportedConstraints.Count == 0, "Validated local copyR remained unsupported");
         Check(HoConstraintIrImportReports.instance.Find(skeleton.gameObject).authoritativeSourceJson.Contains("EXPORT_GENERATED"), "Real MCH provenance lost");
         int again = HoFbxConstraintImportUtility.ApplyHoAux(json, skeleton.gameObject, skeleton); Check(again == count && skeleton.GetComponent<HoAuxRig>().OperationCount == count, "Real operator reimport grew operations");
         var projected = HoConstraintIrAssetLoader.Load(json, "HoAux"); var binding = projected.mchBindings.Single();
