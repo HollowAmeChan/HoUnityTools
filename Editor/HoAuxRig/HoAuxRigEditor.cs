@@ -216,7 +216,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                DrawPanelHeader("IR v3 通用约束", $"{rig.DirectOperationCount} 条", new Color(0.24f, 0.54f, 0.88f));
+                DrawPanelHeader("通用约束", $"{rig.DirectOperationCount} 条", new Color(0.24f, 0.54f, 0.88f));
                 GUILayout.Space(5f);
                 foreach (var pair in DirectTypeCounts(rig))
                     EditorGUILayout.LabelField(DirectTypeLabel(pair.Key), $"{pair.Value} 条");
