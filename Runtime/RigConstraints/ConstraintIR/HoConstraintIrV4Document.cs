@@ -123,6 +123,12 @@ namespace Hollow.HoUnityTools.RigConstraints.ConstraintIR
                 if (overlay.Get("bindingContext") != null) HoConstraintIrShape.Member(overlay, "bindingContext", HoConstraintJsonKind.Object, "$.bindings");
             }
             if (root.Get("sourceContext") != null) HoConstraintIrShape.Member(root, "sourceContext", HoConstraintJsonKind.Object, "$");
+            if (root.Get("excludedOwners") != null)
+            {
+                var excluded = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var item in HoConstraintIrShape.Array(root, "excludedOwners", "$"))
+                    if (!excluded.Add(HoConstraintIrShape.TextValue(item, "$.excludedOwners[]"))) throw new FormatException("Duplicate excludedOwners bone.");
+            }
             return new HoConstraintIrV4Document(root, sources, semantics);
         }
         private static void Stage(string value)

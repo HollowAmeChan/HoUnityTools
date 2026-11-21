@@ -20,6 +20,7 @@ internal static class ReaderValidation
         var root = Json("{\"schema\":\"hotools.rig-constraint-ir\",\"schemaVersion\":4,\"armatureName\":\"Rig\",\"exportTime\":\"2026-11-21T00:00:00Z\",\"blenderVersion\":\"4.5.8\",\"captureStage\":\"AUTHORING\",\"registry\":{\"id\":\"hotools.rig-constraints.registry\",\"version\":1,\"sha256\":\"" + registry.Sha256 + "\"},\"sources\":[],\"semantics\":[],\"implementationBindings\":[],\"inputFingerprint\":\"" + Hash + "\",\"bindings\":{\"captureStage\":\"POSTPROCESS\",\"boneMap\":[],\"constraintMap\":[],\"bindingContext\":{\"space\":\"BLENDER_ARMATURE\",\"matrixLayout\":\"ROW_MAJOR\",\"fbxBoneAxes\":\"Y_X\",\"objectMatrix\":" + Identity + ",\"bones\":[]}}}");
         foreach (string name in new[] { "Owner", "Target", "Other", "MCH_Target" })
             root.Get("bindings").Get("bindingContext").Get("bones").Items.Add(Json("{\"boneName\":\"" + name + "\",\"parentBone\":\"\",\"inheritScale\":\"FULL\",\"restMatrix\":" + Identity + ",\"poseBasis\":" + Identity + ",\"connected\":false,\"positionOnly\":false,\"hasPoseAnimation\":false}"));
+        root.Properties["sourceContext"] = root.Get("bindings").Get("bindingContext").Clone();
         return root;
     }
     private static HoConstraintJsonValue Source(string id, string type, int index, string target = "Target", string extra = "")
@@ -44,7 +45,7 @@ internal static class ReaderValidation
         {
             registry = HoConstraintIrV4Registry.Load(File.ReadAllBytes(args[0]));
             if (args.Length > 2 && args[1] == "--emit") { File.WriteAllText(args[2], Read(CopyFixture()).ToJson(), new System.Text.UTF8Encoding(false)); Console.WriteLine("EMITTED " + args[2]); return 0; }
-            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites(); TestLocalAuthoringDomain(); TestRigSpaceContract();
+            TestJson(); TestReaderAndRegistry(); TestProjection(); TestComposites(); TestLocalAuthoringDomain(); TestRigSpaceContract(); TestExcludedDependencies();
             if (args.Length > 1)
             {
                 var imported = HoConstraintIrV4Import.Read(File.ReadAllText(args[1]), File.ReadAllText(args[0]));
@@ -160,5 +161,41 @@ internal static class ReaderValidation
             Check(Project(CopyFixture()).SelectedBindings.Count == 0, "Non-string rigSpace condition executed");
         }
         finally { registry = saved; }
+    }
+    private static void TestExcludedDependencies()
+    {
+        foreach (string backend in new[] { "HoAux", "Standard", "Vrc" })
+        {
+            var root = CopyFixture(); root.Properties["excludedOwners"] = Json("[\"Target\"]");
+            var binding = root.Get("implementationBindings").Items[0];
+            binding.Properties["backendId"] = HoConstraintJsonValue.String(backend);
+            binding.Properties["implementationId"] = HoConstraintJsonValue.String(backend.ToLowerInvariant() + ".copy_rotation.world");
+            var p = Project(root, backend);
+            Check(p.SelectedBindings.Count == 0 && p.Config.knownConstraints.Count == 0 && p.Config.unknownConstraints.Count == 1 && p.Config.sourceContext.UnsupportedConstraints.Count == 1 && p.Diagnostics.Any(x => x.Code == "ExcludedDependency"), backend + " executed a dependency on omitted HoAux stack");
+            Check(p.Document.Sources["c0"].Get("constraint").StringAt("targetBoneName") == "Target", "Excluded target source fact was changed");
+            binding.Properties["selection"] = HoConstraintJsonValue.String("LOCKED"); Reject(() => Project(root, backend), "Locked excluded dependency silently changed implementation");
+        }
+        var unrelated = CopyFixture(); unrelated.Properties["excludedOwners"] = Json("[\"Other\"]"); Check(Project(unrelated).SelectedBindings.Count == 1, "Unrelated exclusion blocks ordinary source");
+        var noContext = unrelated.Clone(); noContext.Properties.Remove("sourceContext"); Check(Project(noContext).SelectedBindings.Count == 0, "Missing authoring parent graph bypassed excluded boundary");
+        var cyclicContext = unrelated.Clone(); cyclicContext.Get("sourceContext").Get("bones").Items[0].Properties["parentBone"] = HoConstraintJsonValue.String("Owner"); Check(Project(cyclicContext).SelectedBindings.Count == 0, "Cyclic authoring graph bypassed excluded boundary");
+        var generated = unrelated.Clone(); generated.Properties.Remove("sourceContext"); generated.Get("sources").Items[0].Properties["captureStage"] = HoConstraintJsonValue.String("EXPORT_GENERATED"); Check(Project(generated).SelectedBindings.Count == 1, "Export-generated source incorrectly required authoring graph");
+        var location = BaseDocument(); location.Properties["excludedOwners"] = Json("[\"Target\"]"); location.Get("sources").Items.Add(Source("l", "COPY_LOCATION", 0)); Semantic(location, "sl", "COPY_LOCATION", new[] { "l" }, "{}", "RAW_TYPE"); Bind(location, "sl", "hoaux.copy_location.world");
+        Check(Project(location).SelectedBindings.Count == 0, "Copy Location escaped excluded boundary");
+        var noSemantic = location.Clone(); noSemantic.Get("semantics").Items.Clear(); noSemantic.Get("implementationBindings").Items.Clear();
+        var raw = Project(noSemantic); Check(raw.Config.sourceContext.UnsupportedConstraints.Count == 1 && raw.Diagnostics.Any(x => x.Code == "ExcludedDependency"), "Blender omission of semantic/diagnostic bypassed Unity boundary check");
+        var armature = BaseDocument(); armature.Properties["excludedOwners"] = Json("[\"Target\"]"); var source = Source("a", "ARMATURE", 0, ""); source.Get("constraint").Properties["targetObjectName"] = HoConstraintJsonValue.String(""); source.Get("constraint").Get("references").Properties["targets"] = Json("[{\"properties\":{\"target\":{\"name\":\"Rig\",\"rnaType\":\"Object\"},\"subtarget\":\"Target\",\"weight\":1}}]"); armature.Get("sources").Items.Add(source); Semantic(armature, "sa", "ARMATURE", new[] { "a" }, "{}", "RAW_TYPE"); Bind(armature, "sa", "hoaux.armature.linear");
+        Check(Project(armature).SelectedBindings.Count == 0, "Armature collection escaped excluded boundary");
+        armature.Properties["excludedOwners"] = Json("[\"Other\"]"); Check(Project(armature).SelectedBindings.Count == 1, "Unrelated exclusion blocked Armature collection");
+        var hidden = location.Clone(); hidden.Get("bindings").Get("constraintMap").Items.Add(Json("{\"sourceId\":\"l\",\"targetBoneName\":\"Other\"}")); Check(Project(hidden).SelectedBindings.Count == 0, "Final overlay hid authoring excluded dependency");
+        var introduced = unrelated.Clone(); introduced.Get("bindings").Get("constraintMap").Items.Add(Json("{\"sourceId\":\"c0\",\"targetBoneName\":\"Other\"}")); Check(Project(introduced).SelectedBindings.Count == 0, "Final overlay introduced excluded dependency");
+        var introducedCollection = armature.Clone(); introducedCollection.Get("bindings").Get("constraintMap").Items.Add(Json("{\"sourceId\":\"a\",\"references\":{\"targets\":[{\"properties\":{\"target\":{\"name\":\"Rig\"},\"subtarget\":\"Other\",\"weight\":1}}]}}")); Check(Project(introducedCollection).SelectedBindings.Count == 0, "Final Armature collection introduced excluded dependency");
+        var mapped = unrelated.Clone(); mapped.Get("bindings").Get("boneMap").Items.Add(Json("{\"sourceBone\":\"Other\",\"exportBone\":\"MCH_Target\"}")); mapped.Get("bindings").Get("constraintMap").Items.Add(Json("{\"sourceId\":\"c0\",\"targetBoneName\":\"MCH_Target\"}")); Check(Project(mapped).SelectedBindings.Count == 0, "Mapped excluded source escaped boundary");
+        foreach (int bone in new[] { 0, 1 })
+        {
+            var parent = unrelated.Clone(); parent.Get("bindings").Get("bindingContext").Get("bones").Items[bone].Properties["parentBone"] = HoConstraintJsonValue.String("Other"); Check(Project(parent).SelectedBindings.Count == 0, "Final owner/target ancestor escaped excluded boundary");
+            var authored = unrelated.Clone(); authored.Properties["sourceContext"] = authored.Get("bindings").Get("bindingContext").Clone(); authored.Get("sourceContext").Get("bones").Items[bone].Properties["parentBone"] = HoConstraintJsonValue.String("Other"); Check(Project(authored).SelectedBindings.Count == 0, "Authoring owner/target ancestor escaped excluded boundary");
+        }
+        var external = noSemantic.Clone(); external.Get("sources").Items[0].Get("constraint").Properties["targetObjectName"] = HoConstraintJsonValue.String("OtherRig"); Check(!Project(external).Diagnostics.Any(x => x.Code == "ExcludedDependency"), "External same-name bone crossed current-rig excluded boundary");
+        foreach (string malformed in new[] { "true", "[\"Target\",\"Target\"]", "[1]" }) { var invalid = CopyFixture(); invalid.Properties["excludedOwners"] = Json(malformed); Reject(() => Read(invalid), "Malformed excludedOwners was ignored"); }
     }
 }

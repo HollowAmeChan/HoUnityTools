@@ -55,6 +55,17 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 }
                 owners.Add(item.Key, owner); records.Add(item.Key, Constraint(raw));
             }
+            var excludedBoundary = new ExcludedDependencyBoundary(document, boneMap, config);
+            var dependencyIssues = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var item in document.Sources)
+            {
+                string issue = excludedBoundary.Issue(item.Value, records[item.Key], owners[item.Key]);
+                if (issue != null)
+                {
+                    dependencyIssues.Add(item.Key, issue);
+                    Diagnostic(result, "ExcludedDependency", null, item.Key, backendId, issue);
+                }
+            }
             var consumed = new HashSet<string>(StringComparer.Ordinal);
             var selected = new List<Tuple<HoConstraintJsonValue, HoConstraintJsonValue>>();
             foreach (var semantic in document.Semantics.Values)
@@ -70,7 +81,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 foreach (var binding in candidates)
                 {
                     var implementation = registry.FindImplementation(binding.StringAt("implementationId"), binding.Get("contractVersion").Int32());
-                    string issue = PreprocessingIssue(document, semantic, ids, records, owners, config, implementation);
+                    string issue = ids.Where(dependencyIssues.ContainsKey).Select(x => dependencyIssues[x]).FirstOrDefault();
+                    issue = issue ?? PreprocessingIssue(document, semantic, ids, records, owners, config, implementation);
                     issue = issue ?? Applicability(implementation, semantic, ids.Select(x => records[x]).ToList(), ids.Select(x => owners[x]).ToList(), config, binding);
                     if (issue == null) viable.Add(binding); else reasons.Add(binding.StringAt("implementationId") + ": " + issue);
                 }
@@ -94,8 +106,9 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 if (!finalSlots.Add(owners[source.Key] + "\u001f" + records[source.Key].stackIndex)) throw new FormatException("Final binding overlay merges constraint stack slots.");
                 if (consumed.Contains(source.Key)) continue;
                 bool hasSemantic = document.Semantics.Values.Any(s => s.Get("sourceIds").Items.Any(x => x.Text == source.Key));
-                if (hasSemantic) config.sourceContext.UnsupportedConstraints[owners[source.Key] + "\u001f" + records[source.Key].stackIndex] = string.Join("; ", result.Diagnostics.Where(x => x.Code == "Unsupported" && document.Semantics[x.SemanticId].Get("sourceIds").Items.Any(s => s.Text == source.Key)).Select(x => x.Message).ToArray());
-                config.unknownConstraints.Add(new UnknownConstraintInfo { ownerBone = owners[source.Key], constraint = records[source.Key], reason = hasSemantic ? "IR v4 semantic is known but no applicable selected implementation; source retained as an execution barrier" : "UnknownSemantic / no registered semantic; source retained" });
+                string dependencyIssue; dependencyIssues.TryGetValue(source.Key, out dependencyIssue);
+                if (hasSemantic || dependencyIssue != null) config.sourceContext.UnsupportedConstraints[owners[source.Key] + "\u001f" + records[source.Key].stackIndex] = dependencyIssue ?? string.Join("; ", result.Diagnostics.Where(x => x.Code == "Unsupported" && document.Semantics[x.SemanticId].Get("sourceIds").Items.Any(s => s.Text == source.Key)).Select(x => x.Message).ToArray());
+                config.unknownConstraints.Add(new UnknownConstraintInfo { ownerBone = owners[source.Key], constraint = records[source.Key], reason = dependencyIssue ?? (hasSemantic ? "IR v4 semantic is known but no applicable selected implementation; source retained as an execution barrier" : "UnknownSemantic / no registered semantic; source retained") });
                 if (!hasSemantic) Diagnostic(result, "UnknownSemantic", null, source.Key, backendId, "Source has no semantic record.");
             }
             foreach (var pair in selected) AddSemantic(config, pair.Item1, records, owners, boneMap);
@@ -123,6 +136,59 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
         { p.Diagnostics.Add(new HoConstraintIrV4Diagnostic { Code = code, SemanticId = semantic, SourceId = source, BackendId = backend, Message = message }); }
         private static ConstraintConfig NewConfig(HoConstraintIrV4Document doc)
         { return new ConstraintConfig { schema = "hotools.rig-constraint-ir", schemaVersion = 3, armatureName = doc.Root.StringAt("armatureName"), exportTime = doc.Root.StringAt("exportTime"), mchEnabledBones = new List<string>(), mchBindings = new List<MchBindingInfo>(), auxBones = new List<AuxBoneInfo>(), knownConstraints = new List<KnownConstraintInfo>(), unknownConstraints = new List<UnknownConstraintInfo>(), aimBindings = new List<AimBindingInfo>() }; }
+        // excludedOwners is an explicit coverage boundary, not evidence that the
+        // named bones are absent. Never inspect or reconstruct their omitted stacks.
+        private sealed class ExcludedDependencyBoundary
+        {
+            private readonly string armature;
+            private readonly HashSet<string> authoredExcluded, finalExcluded;
+            private readonly Dictionary<string, string> authoredParents, finalParents;
+            public ExcludedDependencyBoundary(HoConstraintIrV4Document document, Dictionary<string, string> boneMap, ConstraintConfig config)
+            {
+                armature = document.Root.StringAt("armatureName");
+                authoredExcluded = new HashSet<string>(Strings(document.Root.Get("excludedOwners")), StringComparer.Ordinal);
+                finalExcluded = new HashSet<string>(authoredExcluded, StringComparer.Ordinal);
+                foreach (string name in authoredExcluded) { string mapped; if (boneMap.TryGetValue(name, out mapped)) finalExcluded.Add(mapped); }
+                authoredParents = new Dictionary<string, string>(StringComparer.Ordinal);
+                var context = document.Root.Get("sourceContext"); var bones = context == null ? null : context.Get("bones");
+                if (authoredExcluded.Count > 0 && bones != null)
+                {
+                    if (bones.Kind != HoConstraintJsonKind.Array) throw new FormatException("sourceContext.bones must be an array.");
+                    foreach (var bone in bones.Items) authoredParents.Add(HoConstraintIrShape.Text(bone, "boneName", "sourceContext.bones[]"), HoConstraintIrShape.Text(bone, "parentBone", "sourceContext.bones[]", true));
+                }
+                finalParents = config.bindingContext.bones.ToDictionary(x => x.boneName, x => x.parentBone, StringComparer.Ordinal);
+            }
+            public string Issue(HoConstraintJsonValue source, BlenderConstraintInfo final, string finalOwner)
+            {
+                if (authoredExcluded.Count == 0) return null;
+                bool boneOwner = source.StringAt("ownerKind") == "BONE";
+                bool generated = source.StringAt("captureStage") == "EXPORT_GENERATED";
+                return Inspect(Constraint(source.Get("constraint")), source.StringAt("ownerBone"), boneOwner, generated ? finalParents : authoredParents, generated ? finalExcluded : authoredExcluded, generated ? "generated source" : "authoring")
+                    ?? Inspect(final, finalOwner, boneOwner, finalParents, finalExcluded, "final binding");
+            }
+            private string Inspect(BlenderConstraintInfo constraint, string owner, bool boneOwner, Dictionary<string, string> parents, HashSet<string> excluded, string stage)
+            {
+                var dependencies = new List<Tuple<string, string>>();
+                if (boneOwner) dependencies.Add(Tuple.Create("owner", owner));
+                if (constraint.targetObjectName == armature) dependencies.Add(Tuple.Create("target", constraint.targetBoneName));
+                if (constraint.constraintType == "ARMATURE" && constraint.references.targets != null)
+                    foreach (var row in constraint.references.targets)
+                        if (row.properties != null && row.properties.target != null && row.properties.target.name == armature) dependencies.Add(Tuple.Create("Armature source", row.properties.subtarget));
+                foreach (var dependency in dependencies)
+                {
+                    string current = dependency.Item2; var visited = new HashSet<string>(StringComparer.Ordinal);
+                    while (!string.IsNullOrEmpty(current))
+                    {
+                        if (!visited.Add(current)) return stage + " " + dependency.Item1 + " has cyclic parent evidence; excludedOwners dependency boundary cannot be verified";
+                        if (excluded.Contains(current)) return stage + " " + dependency.Item1 + " depends on excludedOwners bone " + current + "; its constraint stack is outside this ordinary-constraint export";
+                        string parent;
+                        if (!parents.TryGetValue(current, out parent)) return stage + " " + dependency.Item1 + " has incomplete parent evidence for " + current + "; excludedOwners dependency boundary cannot be verified";
+                        current = parent;
+                    }
+                }
+                return null;
+            }
+        }
         private static void AddSemantic(ConstraintConfig config, HoConstraintJsonValue semantic, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, Dictionary<string, string> boneMap)
         {
             string type = semantic.StringAt("semanticType"); var parameters = semantic.Get("parameters");
