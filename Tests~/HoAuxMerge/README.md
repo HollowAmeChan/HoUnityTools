@@ -14,8 +14,4 @@
 
 合并副本会保存并重新实例化为 Prefab，再清空所有 Owner／Target／Up／Source／Direct Space 引用，调用生产 OnEnable 的路径恢复，检查绑定数量及后续运动。测试也在捕获之后改动过显示姿态，防止合并意外将显示结果重新捕获为绑定。原绑定姿态、规则和权重应保留。
 
-完整 WTD 配置还可使用 `Tests~/ConstraintIRV3/Run.ps1` 的 `-FullConfig` 与 `-FullModel`；附加 `-FullOutfit` 传入巫女服 FBX，会验证它合入泳装主骨架的流程。两组都会在 Play 场景自动处理时合并，保留真实的 110 条规则并与未合并结果对照。本机验证每组 2120 次比较通过；既有 IR 的 8160 次测量也通过。
-
-2026-10-26 的修复前对照使用旧版处理器运行相同数值用例，暂时跳过旧版必然不通过的路径恢复断言，600 次比较中失败 96 项；例如根运动后 Armature 点的位置差为 0.4362131。修复后失败为零。检查只比较已声明的 Unity 约束语义，不代替 Warudo／VRC 客户端验收。
-
-使用说明和迁移接口见 [Ho CombineArmature](../../docs/guides/COMBINE_ARMATURE.md)。
+普通约束的当前合并数值回归见 `Tests~/ConstraintIRV4/Run-local.ps1`，输入为配套 Blender 合成 v4 fixture。旧 WTD v3 测试入口已删除；当时两组各 2120 次比较及 8160 次测量的结果属于历史证据，不提供旧版本导入能力。

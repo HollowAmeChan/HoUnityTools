@@ -1,4 +1,4 @@
-# IR v4 reader and compatibility projection
+# IR v4 reader and execution planning
 
 Run the standard-library C# validation without Unity or external packages:
 
@@ -22,19 +22,20 @@ Editor integration:
 ```csharp
 var registry = HoConstraintIrV4Registry.Load(registryAsset.bytes);
 var document = HoConstraintIrV4Import.Read(sourceAsset.text, registry);
-var projection = HoConstraintIrV4LegacyAdapter.Project(document, registry, "HoAux");
-ConstraintConfig executionView = projection.Config;
+var result = HoConstraintIrPlanner.Build(document, registry, "HoAux");
+HoConstraintExecutionPlan plan = result.Plan;
 ```
 
 The editor types live in
 `Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR`; the DOM and shape reader
 live in `Hollow.HoUnityTools.RigConstraints.ConstraintIR`.
 
-`projection.Document` retains v4 unchanged. `Config` is a disposable v3 execution
-view for the existing import planner. The caller must still run that planner's
-scene, Animator, stack-barrier, ownership and backend-API checks before assembly.
-The projection does not instantiate Unity objects, touch assets, select a host,
-or reinterpret any v2/v3 unknown constraint.
+`result.Document` retains v4 unchanged. `Plan` contains internal backend operations,
+barriers, composite semantics and final bindings, each linked to v4 source IDs.
+It has no JSON schema identity and is not serializable. Scene, Animator,
+ownership and backend API checks run before assembly. Both preview and apply
+load and build a fresh plan from the authoritative TextAsset; no mutable plan is
+reused between them. v2/v3 inputs are rejected, with no migration path.
 
 The authority registry is supplied by the caller and validated against the
 document's exact file-byte SHA-256. There is no hardcoded Blender installation
@@ -57,7 +58,7 @@ Drivers are not read or adapted.
 
 The tests cover JSON grammar/Unicode/number precision, v4 shape and registry
 contracts, source/semantic reference integrity, input hashes, Copy R registration,
-binding overlays, composite projections, planned and locked implementations,
+binding overlays, composite plans, planned and locked implementations,
 fallback policy and dependency rejection. Optional `-Fixture` additionally reads
 a Python-produced v4 document and checks fingerprint interoperability and source
 extension preservation. This suite does not replace Unity compilation, scene
@@ -68,8 +69,7 @@ assembly, numerical runtime or real VRC SDK/client validation.
 `HoConstraintIrAssetLoader.Load(TextAsset, backendId)` is the shared path used by
 the HoFBX window's preview, candidate labels, apply, and automation utility.
 It loads the distributed `Editor/HoFbxImport/ConstraintIR/Registry/registry.v1.json`
-by its actual bytes and creates a fresh execution view on every call. Mutable
-legacy DTOs are not cached or reused between preview and apply.
+by its actual bytes and creates a fresh execution plan on every call. No JSON DTO for retired versions is read or cached.
 
 Sync the authority without reserializing it, and verify drift in CI:
 
@@ -81,7 +81,7 @@ Sync the authority without reserializing it, and verify drift in CI:
 The registry file has a local `.gitattributes` rule enforcing LF. The sync check
 compares complete bytes, including the final newline.
 
-Unsupported sources remain execution barriers in the legacy view, while the
+Unsupported sources remain execution barriers in the plan, while the
 window labels them as known-but-unsupported rather than UnknownSemantic. An
 unsupported-only or Object-owner-only import cannot clear a prior assembly.
 Explicit empty snapshots and wholly muted/zero-influence snapshots may clear
@@ -104,9 +104,7 @@ authored rest change. `exportOptions.appliedConstraints=true` prevents replaying
 constraints already applied into the exported rest state.
 Authoring and final owner/target records must explicitly declare
 `inheritRotation=true` and `inheritScale=FULL`; missing v4 facts are unsupported.
-The parent identity and world rest reference must also remain unchanged. The
-legacy v2/v3 DTO defaults rotation inheritance to true without reinterpreting
-those old documents through the new admission gate.
+The parent identity and world rest reference must also remain unchanged. Missing v4 facts are never filled from retired-version defaults.
 
 The controlled `conditions.rigSpace=FINITE_POSITIVE_UNIFORM_TRS` condition is
 admitted only for HoAux direct Copy Location/Rotation, Armature and Aim contracts.
@@ -118,14 +116,39 @@ unsupported. Reader tests exercise both the recognized enum and rejection paths.
 `RunImport.ps1 -Fixture <toy.v4.json> [-OperatorFixture <HoFBX operator directory>]`
 creates a new isolated Unity project. It covers actual window/automation import,
 backend switching, repeat import, report persistence/Undo, preflight protection,
-Prefab serialization without audit payload, real HoFBX MCH references, and empty
-v4/v3 compatibility. The separate local-rotation harness checks numerical output.
+Prefab serialization without audit payload, real HoFBX MCH references, and empty v4 imports plus explicit retired-version rejection. The separate local-rotation harness checks numerical output.
 
 Final acceptance (2026-11-21): actual HoFBX default-v4 fixtures from Blender
 4.5.8 and 5.2.0 each passed 36 Unity import checks and 16,188 local runtime
 measurements, without registry overrides. Maximum position/angle/scale errors
 were 1.477e-6 m / 0.05059 degrees / 3.046e-6. Thirty invalid-root scenarios check
-diagnostics, unchanged owners, finite transforms and recovery parity. Legacy v3
-runtime regression passed 8,160 measurements. VRC evidence remains shim-only.
+diagnostics, unchanged owners, finite transforms and recovery parity. Historical pre-retirement numerical evidence remains recorded in the original execution plan; current direct regression uses synthetic v4 fixtures. VRC evidence remains shim-only.
 The authority SHA-256 is
 `46c54dff620bbc6d2239c11f55c6bd66a13fc0f18fb29b270513544fff1553be`.
+
+Only IR v4 is exported and accepted. `Run-local.ps1 -Fixture <dir>` always uses
+the full v4 path; its former protocol selector and registry override switches
+have been removed. The VRC API shim lives in this directory. The retired v3
+harness has been deleted.
+
+`Run-direct.ps1 -Fixture <dir>` reads synthetic Blender direct fixtures exported
+by `tests/export_direct_v4_fixture.py`: location, world rotation, Armature and
+Aim use the same v4 planner and production assembly. HoAux measurements are
+compared against Blender's actual evaluated poses; Standard approximations are
+reported separately, preserving their registered fidelity boundary.
+
+## v2/v3 retirement acceptance
+
+The current v4-only reader/planner passes 99 checks including a Python HoFBX
+fixture; schema 2/3 and LEGACY inferred semantic evidence are rejected. A fresh
+Unity project passes 37 import checks (three backends, reimport, empty cleanup,
+rollback, Undo, report and prefab isolation). Both Blender 4.5.8/5.2.0 local
+fixtures pass 16,188 measurements after removal of the old protocol path.
+
+Synthetic direct fixtures additionally produce 800 records per Blender version:
+400 HoAux assertions and 400 Standard approximation observations. Assertions use
+the source semantic write channels; the Armature example is a proven position-only
+consumer domain, so its unclaimed affine rotation/scale is recorded but not asserted.
+Maximum asserted HoAux position/rotation errors are 7.343e-7 m / 5.761e-5 degrees.
+Direct first sampling occurs after two native update frames and is labeled
+initial_capture; local tests retain explicit first-evaluation coverage.

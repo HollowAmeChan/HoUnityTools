@@ -68,7 +68,7 @@ HoTransformConstraintScheduler.Evaluate(constraints);
 
 这些是普通 Unity C# 运行时组件。VRChat 上传仍需要使用其支持的约束组件；本模块没有添加自动转换。Warudo 构建还需随产物提供运行时程序集，本轮没有验证 Warudo 客户端加载。
 
-本模块提供手动创作基础设施；原有 HoFollow、HoLookAt、HoAux 与 IR v3 导入后端保持各自实现。IR v3 的具体导入能力见 [约束导入契约](RIG_CONSTRAINT_IR_V3.md)。
+本模块提供手动创作基础设施；原有 HoFollow、HoLookAt、HoAux 与 IR v4 导入后端保持各自实现。IR v4 的具体导入能力见 [约束导入契约](RIG_CONSTRAINT_IR_V4.md)。
 
 ## 验证入口
 

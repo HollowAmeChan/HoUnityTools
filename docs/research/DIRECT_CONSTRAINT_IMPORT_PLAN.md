@@ -1,6 +1,6 @@
 # 三类常用约束：三后端接线方案
 
-2026-10-25，设计记录。当前实现见 [IR v3 导入](../guides/RIG_CONSTRAINT_IR_V3.md)，字段正本位于 HoTools 的 `Exporter/IR_V3.md`。生产代码已接线；历史方案中尚未确认的映射以实际能力诊断为准。
+2026-10-25，设计记录。以下仅为退役前设计记录。当前实现见 [IR v4 导入](../guides/RIG_CONSTRAINT_IR_V4.md)，字段正本位于 HoTools 的 `RigConstraints/docs/FORMAT_V4.md`；v2/v3 读取与旧 DTO 已删除。
 
 后续澄清：Aim 是独立旋转语义，只组合登记的相邻 Damped＋Locked，不包含 Copy Location，不绑定三点或 LBS。当前已实现该标记规则及三后端映射。
 
