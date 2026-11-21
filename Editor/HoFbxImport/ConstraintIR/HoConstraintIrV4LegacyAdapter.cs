@@ -32,6 +32,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             document = HoConstraintIrV4Reader.Read(document.ToJson()); document.ValidateInputFingerprint(); registry.Validate(document);
             var result = new HoConstraintIrV4LegacyProjection { Document = document, Config = NewConfig(document) };
             var config = result.Config;
+            config.sourceContext = new HoConstraintIrImportContext { Document = document, BackendId = backendId, SourceFingerprint = document.Root.StringAt("inputFingerprint"), RegistrySha256 = registry.Sha256 };
             var overlay = document.Root.Get("bindings");
             if (overlay == null || overlay.Get("bindingContext") == null || overlay.Get("bindingContext").Get("bones") == null)
                 throw new FormatException("IR v4 authoring snapshot has no final FBX binding overlay; it cannot assemble Unity constraints.");
@@ -69,7 +70,8 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
                 foreach (var binding in candidates)
                 {
                     var implementation = registry.FindImplementation(binding.StringAt("implementationId"), binding.Get("contractVersion").Int32());
-                    string issue = Applicability(implementation, semantic, ids.Select(x => records[x]).ToList(), ids.Select(x => owners[x]).ToList(), config, binding);
+                    string issue = PreprocessingIssue(document, semantic, ids, records, owners, config, implementation);
+                    issue = issue ?? Applicability(implementation, semantic, ids.Select(x => records[x]).ToList(), ids.Select(x => owners[x]).ToList(), config, binding);
                     if (issue == null) viable.Add(binding); else reasons.Add(binding.StringAt("implementationId") + ": " + issue);
                 }
                 if (viable.Count > 1) throw new FormatException("Ambiguous implementation candidates for " + id + "/" + backendId + "; lock one contract explicitly.");
@@ -88,10 +90,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             var finalSlots = new HashSet<string>(StringComparer.Ordinal);
             foreach (var source in document.Sources)
             {
-                if (source.Value.StringAt("ownerKind") != "BONE") continue;
+                if (source.Value.StringAt("ownerKind") != "BONE") { Diagnostic(result, "UnsupportedOwner", null, source.Key, backendId, "Object-owner source retained; bone backend does not drive the armature root."); continue; }
                 if (!finalSlots.Add(owners[source.Key] + "\u001f" + records[source.Key].stackIndex)) throw new FormatException("Final binding overlay merges constraint stack slots.");
                 if (consumed.Contains(source.Key)) continue;
                 bool hasSemantic = document.Semantics.Values.Any(s => s.Get("sourceIds").Items.Any(x => x.Text == source.Key));
+                if (hasSemantic) config.sourceContext.UnsupportedConstraints[owners[source.Key] + "\u001f" + records[source.Key].stackIndex] = string.Join("; ", result.Diagnostics.Where(x => x.Code == "Unsupported" && document.Semantics[x.SemanticId].Get("sourceIds").Items.Any(s => s.Text == source.Key)).Select(x => x.Message).ToArray());
                 config.unknownConstraints.Add(new UnknownConstraintInfo { ownerBone = owners[source.Key], constraint = records[source.Key], reason = hasSemantic ? "IR v4 semantic is known but no applicable selected implementation; source retained as an execution barrier" : "UnknownSemantic / no registered semantic; source retained" });
                 if (!hasSemantic) Diagnostic(result, "UnknownSemantic", null, source.Key, backendId, "Source has no semantic record.");
             }
@@ -99,6 +102,21 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             foreach (var aux in config.auxBones)
                 if (aux.auxType != "AIM" && config.unknownConstraints.Any(x => x.ownerBone == aux.boneName)) throw new FormatException("Legacy composite owner has an unknown execution barrier: " + aux.boneName);
             ValidateExecutionGraph(config);
+            var selectedReport = HoConstraintJsonValue.Array();
+            foreach (var binding in result.SelectedBindings)
+            {
+                var report = binding.Clone(); var implementation = registry.FindImplementation(binding.StringAt("implementationId"), binding.Get("contractVersion").Int32());
+                report.Properties["fidelity"] = implementation.Get("fidelity").Clone(); report.Properties["verification"] = implementation.Get("verification").Clone(); selectedReport.Items.Add(report);
+            }
+            config.sourceContext.SelectedImplementationsJson = HoConstraintJson.Serialize(selectedReport);
+            var diagnosticsReport = HoConstraintJsonValue.Array();
+            foreach (var diagnostic in result.Diagnostics)
+            {
+                var entry = HoConstraintJsonValue.Object();
+                entry.Properties["code"] = HoConstraintJsonValue.String(diagnostic.Code); entry.Properties["semanticId"] = HoConstraintJsonValue.String(diagnostic.SemanticId);
+                entry.Properties["sourceId"] = HoConstraintJsonValue.String(diagnostic.SourceId); entry.Properties["message"] = HoConstraintJsonValue.String(diagnostic.Message); diagnosticsReport.Items.Add(entry);
+            }
+            config.sourceContext.DiagnosticsJson = HoConstraintJson.Serialize(diagnosticsReport);
             return result;
         }
         private static void Diagnostic(HoConstraintIrV4LegacyProjection p, string code, string semantic, string source, string backend, string message)
@@ -191,6 +209,38 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR
             { float weight = constraints[0].parameters.influence; if (weight != 0 && weight != .5f && weight != 1) return "native rotation interpolation is approximate at this influence"; }
             return null;
         }
+        private static string PreprocessingIssue(HoConstraintIrV4Document document, HoConstraintJsonValue semantic, List<string> ids, Dictionary<string, BlenderConstraintInfo> records, Dictionary<string, string> owners, ConstraintConfig config, HoConstraintJsonValue implementation)
+        {
+            var options = document.Root.Get("exportOptions");
+            if (options != null && Boolean(options.Get("appliedConstraints"), false)) return "constraints were applied into the exported rest pose; replay would apply them twice";
+            var source = document.Sources[ids[0]]; var authoredBones = document.Root.Get("sourceContext") == null ? null : document.Root.Get("sourceContext").Get("bones");
+            bool local = semantic.StringAt("semanticType") == "COPY_ROTATION" && records[ids[0]].parameters.owner_space != "WORLD";
+            if (authoredBones == null || authoredBones.Kind != HoConstraintJsonKind.Array) return local ? "local Copy Rotation requires authoring rest-space evidence" : null;
+            var authoredOwner = authoredBones.Items.FirstOrDefault(x => x.StringAt("boneName") == source.StringAt("ownerBone"));
+            if (authoredOwner != null && implementation.StringAt("fidelity") != "LEGACY" && !Identity(Matrix(authoredOwner.Get("poseBasis"))))
+                return "authoring owner poseBasis is not identity; preprocessing does not grant an exact static-input contract";
+            if (!local) return null;
+            var authoredTarget = authoredBones.Items.FirstOrDefault(x => x.StringAt("boneName") == source.Get("constraint").StringAt("targetBoneName"));
+            var owner = config.bindingContext.bones.FirstOrDefault(x => x.boneName == owners[ids[0]]);
+            var target = config.bindingContext.bones.FirstOrDefault(x => x.boneName == records[ids[0]].targetBoneName);
+            if (authoredOwner == null || authoredTarget == null || owner == null || target == null) return "local Copy Rotation is missing author/final owner or target bindings";
+            var authorObject = document.Root.Get("sourceContext").Get("objectMatrix");
+            float[] authorToWorld = authorObject == null ? null : Matrix(authorObject);
+            if (!Identity(Matrix(authoredOwner.Get("poseBasis"))) || !SameReference(Matrix(authoredOwner.Get("restMatrix")), authorToWorld, owner.restMatrix, config.bindingContext.objectMatrix) || !SameReference(Matrix(authoredTarget.Get("restMatrix")), authorToWorld, target.restMatrix, config.bindingContext.objectMatrix))
+                return "authoring-to-FBX preprocessing changed local rest/pose references; original-space compensation is not implemented";
+            return null;
+        }
+        private static bool SameReference(float[] author, float[] authorObject, float[] final, float[] finalObject)
+        { return authorObject == null ? SameMatrix(author, final) : SameMatrix(Multiply(authorObject, author), Multiply(finalObject, final)); }
+        private static float[] Multiply(float[] a, float[] b)
+        {
+            var result = new float[16];
+            for (int row = 0; row < 4; row++) for (int col = 0; col < 4; col++)
+                for (int i = 0; i < 4; i++) result[row * 4 + col] += a[row * 4 + i] * b[i * 4 + col];
+            return result;
+        }
+        private static bool SameMatrix(float[] a, float[] b)
+        { if (a == null || b == null || a.Length != b.Length) return false; for (int i = 0; i < a.Length; i++) if (Math.Abs(a[i] - b[i]) > .00001f) return false; return true; }
         private static string ParameterConditions(HoConstraintJsonValue rules, BlenderConstraintInfo c)
         {
             if (rules == null) return null;

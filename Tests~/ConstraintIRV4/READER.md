@@ -62,3 +62,49 @@ fallback policy and dependency rejection. Optional `-Fixture` additionally reads
 a Python-produced v4 document and checks fingerprint interoperability and source
 extension preservation. This suite does not replace Unity compilation, scene
 assembly, numerical runtime or real VRC SDK/client validation.
+
+## Unity entry point and durable reports
+
+`HoConstraintIrAssetLoader.Load(TextAsset, backendId)` is the shared path used by
+the HoFBX window's preview, candidate labels, apply, and automation utility.
+It loads the distributed `Editor/HoFbxImport/ConstraintIR/Registry/registry.v1.json`
+by its actual bytes and creates a fresh execution view on every call. Mutable
+legacy DTOs are not cached or reused between preview and apply.
+
+Sync the authority without reserializing it, and verify drift in CI:
+
+```powershell
+./SyncRegistry.ps1 -Authority 'ABSOLUTE_HOTOOLS/RigConstraints/registry/registry.v1.json'
+./SyncRegistry.ps1 -Authority 'ABSOLUTE_HOTOOLS/RigConstraints/registry/registry.v1.json' -Check
+```
+
+The registry file has a local `.gitattributes` rule enforcing LF. The sync check
+compares complete bytes, including the final newline.
+
+Unsupported sources remain execution barriers in the legacy view, while the
+window labels them as known-but-unsupported rather than UnknownSemantic. An
+unsupported-only or Object-owner-only import cannot clear a prior assembly.
+Explicit empty snapshots and wholly muted/zero-influence snapshots may clear
+previous managed imports. Contract validation happens before existing components
+are removed.
+
+Successful v4 imports record the complete authoritative document, source hash,
+registry hash, selected implementation IDs/versions/fidelity/verification and
+diagnostics in `ProjectSettings/HoUnityTools/ConstraintIRImportReports.asset`.
+This editor `ScriptableSingleton` is independent of runtime prefabs and is not
+included in player or Warudo build inputs. The window displays the same selected
+contracts and diagnostics. Report changes participate in Undo; no source JSON is
+added to a runtime component. Unsaved-scene records use session identity; save a
+scene before import for durable object identity.
+
+Local Copy Rotation rejects authoring pose/rest changes that are not represented
+by a compensated final binding. Reference comparisons include each armature's
+object transform, so a pure object/bone basis conversion is not mistaken for an
+authored rest change. `exportOptions.appliedConstraints=true` prevents replaying
+constraints already applied into the exported rest state.
+
+`RunImport.ps1 -Fixture <toy.v4.json> [-OperatorFixture <HoFBX operator directory>]`
+creates a new isolated Unity project. It covers actual window/automation import,
+backend switching, repeat import, report persistence/Undo, preflight protection,
+Prefab serialization without audit payload, real HoFBX MCH references, and empty
+v4/v3 compatibility. The separate local-rotation harness checks numerical output.

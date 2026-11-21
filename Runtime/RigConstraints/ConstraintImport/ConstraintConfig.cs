@@ -20,6 +20,7 @@ namespace Hollow.HoUnityTools.RigConstraints.Import
         public List<UnknownConstraintInfo> unknownConstraints;
         public List<AimBindingInfo> aimBindings;
         public ConstraintBindingContext bindingContext;
+        [System.NonSerialized] public ConstraintIR.HoConstraintIrImportContext sourceContext;
     }
 
     [System.Serializable]

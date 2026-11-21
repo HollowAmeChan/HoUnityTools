@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Hollow.HoUnityTools.RigConstraints;
 using Hollow.HoUnityTools.RigConstraints.Import;
+using Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR;
 using UnityEditor;
 using UnityEngine;
 
@@ -38,7 +39,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 string configPath = directory + "/" + entry.file;
                 if (!File.Exists(configPath)) continue;
                 var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(configPath);
-                var config = JsonUtility.FromJson<ConstraintConfig>(asset.text);
+                var config = HoConstraintIrAssetLoader.Load(asset, "HoAux");
                 Transform skeleton = hips;
                 while (skeleton != null && skeleton != animator.transform && skeleton.name != config.armatureName) skeleton = skeleton.parent;
                 if (skeleton == null || skeleton.name != config.armatureName) continue;

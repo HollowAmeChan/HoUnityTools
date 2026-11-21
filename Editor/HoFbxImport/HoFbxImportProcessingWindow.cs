@@ -10,6 +10,8 @@ using UnityEngine.Animations;
 using Hollow.HoUnityTools.BoneRendering;
 using Hollow.HoUnityTools.RigConstraints;
 using Hollow.HoUnityTools.RigConstraints.Import;
+using Hollow.HoUnityTools.RigConstraints.ConstraintIR;
+using Hollow.HoUnityTools.Editor.RigConstraints.ConstraintIR;
 
 namespace Hollow.HoUnityTools.Editor.RigConstraints
 {
@@ -54,6 +56,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             Fan,
             Unknown,
             Direct,
+            Unsupported,
         }
 
         /// <summary>
@@ -459,7 +462,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             {
                 try
                 {
-                    config = JsonUtility.FromJson<ConstraintConfig>(constraintJson.text);
+                    config = LoadConstraintConfig(constraintJson, constraintMode);
                     if (config != null && TryValidateConstraintConfig(config, out error))
                         plan = BuildConstraintImportPlan(config);
                 }
@@ -497,6 +500,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 return;
             }
 
+            EditorGUILayout.LabelField("源 IR 版本", HoConstraintIrAssetLoader.SourceVersion(config).ToString());
+            if (config.sourceContext != null)
+            {
+                EditorGUILayout.LabelField("实现契约 / 保真 / 验证证据", EditorStyles.boldLabel);
+                foreach (var selected in HoConstraintJson.Parse(config.sourceContext.SelectedImplementationsJson).Items)
+                    EditorGUILayout.LabelField(selected.StringAt("implementationId") + "@" + selected.Get("contractVersion").Int32(), selected.StringAt("fidelity") + " / " + selected.Get("verification").StringAt("status"));
+                foreach (var diagnostic in HoConstraintJson.Parse(config.sourceContext.DiagnosticsJson).Items)
+                    EditorGUILayout.HelpBox(diagnostic.StringAt("code") + " / " + diagnostic.StringAt("message"), MessageType.Info);
+            }
+
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 GUILayout.Label("Owner -> Target", EditorStyles.miniBoldLabel, GUILayout.Width(220f));
@@ -519,7 +532,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                         .Select(name=>ResolutionIssue(previewTransforms,name,"Target")).Where(message=>message!=null).ToArray();
                     if(sourceIssues.Length>0)description="已识别 / 跳过："+string.Join("；",sourceIssues);
                 }
-                if (entry.kind != ConstraintPlanKind.Unknown && entry.kind != ConstraintPlanKind.Direct &&
+                if (!IsNonExecutable(entry) && entry.kind != ConstraintPlanKind.Direct &&
                     !(constraintMode == ConstraintMode.HoAux &&
                       !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason)) &&
                     previewTransforms != null)
@@ -561,13 +574,13 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 constraintJson = constraintJsonCandidates[selected];
         }
 
-        private static string ConstraintCandidateLabel(TextAsset asset)
+        private string ConstraintCandidateLabel(TextAsset asset)
         {
             if (asset == null)
                 return "（缺失）";
             try
             {
-                ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(asset.text);
+                ConstraintConfig config = LoadConstraintConfig(asset, constraintMode);
                 if (config != null && !string.IsNullOrEmpty(config.armatureName))
                     return config.armatureName + "  /  " + asset.name;
             }
@@ -609,12 +622,14 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             if(entry.kind == ConstraintPlanKind.Direct)
                 return HoDirectConstraintImporter.Describe(entry.directEntry,(HoDirectConstraintImporter.Backend)(int)mode);
-            if (entry.kind == ConstraintPlanKind.Unknown)
+            if (IsNonExecutable(entry))
             {
                 string type = entry.rawConstraint == null
                     ? "未知类型"
                     : entry.rawConstraint.constraintType;
-                return $"未知约束 / 跳过  {type}  {entry.reason}";
+                return entry.kind == ConstraintPlanKind.Unsupported
+                    ? $"已知语义 / 不支持  {type}  {entry.reason}"
+                    : $"未知约束 / 跳过  {type}  {entry.reason}";
             }
 
             if (mode == ConstraintMode.HoAux)
@@ -675,12 +690,24 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             var result = new List<ConstraintPlanEntry>();
             BuildNeutralIrPlan(config, result);
+            if (config.sourceContext != null)
+                foreach (var entry in result.Where(x => x.kind == ConstraintPlanKind.Unknown && x.rawConstraint != null))
+                {
+                    string reason;
+                    if (config.sourceContext.UnsupportedConstraints.TryGetValue(entry.ownerBone + "\u001f" + entry.rawConstraint.stackIndex, out reason))
+                    { entry.kind = ConstraintPlanKind.Unsupported; entry.reason = reason; }
+                }
             return result;
         }
+        private static ConstraintConfig LoadConstraintConfig(TextAsset asset, ConstraintMode mode) =>
+            HoConstraintIrAssetLoader.Load(asset, mode.ToString());
+        private static bool IsNonExecutable(ConstraintPlanEntry entry) =>
+            entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Unsupported;
 
         // Called only after validation. Per-bone generateMCH flags describe
         // authoring intent; without actual bindings they are not constraints.
         private static bool IsEmptyConstraintSnapshot(ConstraintConfig config) =>
+            (config.sourceContext == null || config.sourceContext.SourceCount == 0) &&
             config.knownConstraints.Count == 0 && config.unknownConstraints.Count == 0 &&
             config.mchBindings.Count == 0 && config.auxBones.All(aux => aux.constraints.Count == 0) &&
             (config.aimBindings == null || config.aimBindings.Count == 0);
@@ -1593,6 +1620,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 clearedCount += hoAuxOperationCount;
                 Undo.DestroyObjectImmediate(hoAux);
             }
+            HoConstraintIrImportReports.instance.Remove(targetRig);
 
             EditorUtility.DisplayDialog(
                 "HoFBX导入处理",
@@ -2311,7 +2339,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             ConstraintMode mode,
             Transform explicitRoot)
         {
-            ConstraintConfig config = JsonUtility.FromJson<ConstraintConfig>(configAsset.text);
+            ConstraintConfig config = LoadConstraintConfig(configAsset, mode);
             if (!TryValidateConstraintConfig(config, out string validationError))
                 throw new InvalidDataException(validationError);
 
@@ -2332,15 +2360,23 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             // 否则一旦后面抛错/全跳过，用户上一次的导入已经被清掉了，只留下半截状态。
             if (!emptySnapshot)
                 ValidateBeforeClearing(config, rig, mode, plan, transformMap, explicitRoot);
-            bool legacyUsable = plan.Any(e=>e.kind!=ConstraintPlanKind.Unknown&&e.kind!=ConstraintPlanKind.Direct&&
+            bool legacyUsable = plan.Any(e=>!IsNonExecutable(e)&&e.kind!=ConstraintPlanKind.Direct&&
                 !(mode==ConstraintMode.HoAux&&!string.IsNullOrEmpty(e.hoAuxUnsupportedReason))&&
                 transformMap.ContainsKey(e.ownerBone)&&transformMap.ContainsKey(e.targetBone));
             var allDirect=HoDirectConstraintImporter.Build(config);
-            bool intentionallyDisabled=allDirect.Count>0&&allDirect.All(e=>e.Muted&&HoDirectConstraintImporter.Issue(e,(HoDirectConstraintImporter.Backend)(int)mode)==null);
-            intentionallyDisabled |= config.knownConstraints.Count>0&&config.knownConstraints.All(k=>k.constraint.parameters!=null&&
+            bool intentionallyDisabled=config.unknownConstraints.Count==0&&allDirect.Count>0&&allDirect.All(e=>e.Muted&&HoDirectConstraintImporter.Issue(e,(HoDirectConstraintImporter.Backend)(int)mode)==null);
+            intentionallyDisabled |= config.knownConstraints.Count>0&&config.unknownConstraints.Count==0&&config.knownConstraints.All(k=>k.constraint.parameters!=null&&
                 !float.IsNaN(k.constraint.parameters.influence)&&!float.IsInfinity(k.constraint.parameters.influence)&&
                 k.constraint.parameters.influence>=0&&k.constraint.parameters.influence<=1&&
                 (k.constraint.parameters.mute||k.constraint.parameters.influence==0));
+            if (config.sourceContext != null && config.sourceContext.SourceCount > 0)
+                intentionallyDisabled |= config.sourceContext.Document.Sources.Values.All(source =>
+                {
+                    var parameters = source.Get("constraint").Get("parameters");
+                    var mute = parameters.Get("mute"); var influence = parameters.Get("influence");
+                    return mute != null && mute.Kind == HoConstraintJsonKind.Boolean && mute.Boolean ||
+                        influence != null && influence.Kind == HoConstraintJsonKind.Number && influence.Single() == 0;
+                });
             if(!emptySnapshot&&!legacyUsable&&direct.entries.Count==0&&!intentionallyDisabled)
                 throw new InvalidOperationException("没有可装配的约束；现有导入保持不变。请查看已识别但不支持／unknown 的预览与诊断。");
 
@@ -2374,6 +2410,12 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             }
             HoAuxRig directHo = mode == ConstraintMode.HoAux && direct.entries.Count > 0 ? ResolveSingleHoAuxRig(directRoot.gameObject) : null;
             count += HoDirectConstraintImporter.Apply(direct,directHo);
+            if (config.sourceContext != null && mode == ConstraintMode.HoAux)
+            {
+                var importedHo = directRoot.GetComponent<HoAuxRig>();
+                if (importedHo != null) { importedHo.ExporterVersion = "4"; EditorUtility.SetDirty(importedHo); }
+            }
+            HoConstraintIrAssetLoader.PersistReport(config, rig, mode.ToString());
 
             if (removedHoAux > 0)
                 Debug.Log($"HoFBX: 已回收上一次导入的 {removedHoAux} 个 HoAuxRig。");
@@ -2403,7 +2445,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
         {
             foreach (ConstraintPlanEntry entry in plan)
             {
-                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
+                if (IsNonExecutable(entry) || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (mode == ConstraintMode.HoAux && !string.IsNullOrEmpty(entry.hoAuxUnsupportedReason))
                     continue;
@@ -2437,7 +2479,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             int count = 0;
             foreach (ConstraintPlanEntry entry in plan)
             {
-                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
+                if (IsNonExecutable(entry) || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
                     continue;
@@ -2560,7 +2602,7 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             for (int index = 0; index < plan.Count; index++)
             {
                 ConstraintPlanEntry entry = plan[index];
-                if (entry.kind == ConstraintPlanKind.Unknown || entry.kind == ConstraintPlanKind.Direct)
+                if (IsNonExecutable(entry) || entry.kind == ConstraintPlanKind.Direct)
                     continue;
                 if (!TryResolvePlanTransforms(transformMap, entry, out Transform bone, out Transform target))
                     continue;

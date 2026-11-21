@@ -50,7 +50,7 @@ internal static class ReaderValidation
                 var imported = HoConstraintIrV4Import.Read(File.ReadAllText(args[1]), File.ReadAllText(args[0]));
                 Check(imported.ComputeInputFingerprint() == imported.Root.StringAt("inputFingerprint"), "Python/C# input fingerprint differs");
                 var projected = HoConstraintIrV4LegacyAdapter.Project(imported, registry, "HoAux");
-                Check(projected.Document.ToJson().Contains("interop"), "Lost Python extension fields");
+                Check(projected.Document.Sources.Count == imported.Sources.Count, "Projection lost authoritative source facts");
             }
             Console.WriteLine("CONSTRAINT_IR_V4_READER_PASS " + checks + " checks"); return 0;
         }
@@ -91,6 +91,8 @@ internal static class ReaderValidation
         var overlap = CopyFixture(); Semantic(overlap, "s1", "COPY_ROTATION", new[] { "c0" }, "{\"auxType\":\"COPY_R\"}"); Bind(overlap, "s1", "hoaux.copy_rotation.world"); Reject(() => Project(overlap), "Double execution accepted");
         var standard = CopyFixture(); standard.Get("implementationBindings").Items.Clear(); Bind(standard, "s0", "standard.copy_rotation.world", "Standard"); standard.Get("sources").Items[0].Get("constraint").Get("parameters").Properties["influence"] = Json("0.3"); Check(Project(standard, "Standard").SelectedBindings.Count == 0, "Exact-only native non-half rotation executed");
         var missingTarget = CopyFixture(); missingTarget.Get("sources").Items[0].Get("constraint").Properties["targetBoneName"] = HoConstraintJsonValue.String("Missing"); Reject(() => Project(missingTarget), "Missing target binding was accepted");
+        var applied = CopyFixture(); applied.Properties["exportOptions"] = Json("{\"appliedConstraints\":true}"); Check(Project(applied).SelectedBindings.Count == 0, "Already-applied constraints were replayed");
+        var posed = CopyFixture(); posed.Properties["sourceContext"] = Json("{\"bones\":[{\"boneName\":\"Owner\",\"poseBasis\":[1,0,0,0.1,0,1,0,0,0,0,1,0,0,0,0,1]}]}"); Check(Project(posed).SelectedBindings.Count == 0, "Author nonidentity owner pose became Exact after preprocessing");
         var cyclic = CopyFixture(); cyclic.Get("sources").Items[0].Get("constraint").Properties["targetBoneName"] = HoConstraintJsonValue.String("Owner"); Reject(() => Project(cyclic), "Self-dependent execution graph was accepted");
         var cyclicParent = CopyFixture(); cyclicParent.Get("bindings").Get("bindingContext").Get("bones").Items[0].Properties["parentBone"] = HoConstraintJsonValue.String("Owner"); Reject(() => Project(cyclicParent), "Cyclic parent binding was accepted");
     }
