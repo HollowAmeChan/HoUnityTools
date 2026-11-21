@@ -15,6 +15,8 @@ namespace Hollow.HoUnityTools.RigConstraints
             public Matrix4x4 inverseBind = Matrix4x4.identity;
         }
 
+        public enum DirectRotationSpace { World = 0, Local = 1, LocalOwnerOrient = 2 }
+
         [Serializable] public sealed class DirectOperation
         {
             public string type, ownerPath, targetPath, upPath;
@@ -25,6 +27,13 @@ namespace Hollow.HoUnityTools.RigConstraints
             public Vector3 bindLocalPosition, bindLocalScale = Vector3.one;
             public Quaternion bindLocalRotation = Quaternion.identity;
             public Quaternion rotationCorrection = Quaternion.identity;
+            // Local modes read a delta from the target's imported bind frame.
+            // Plain Local and Owner Orientation have different change-of-basis
+            // maps. Store only their proper relative rotation, never a quaternion
+            // extracted from an individual reflected Blender/FBX basis matrix.
+            public DirectRotationSpace rotationSpace;
+            public Quaternion bindTargetLocalRotation = Quaternion.identity;
+            public Quaternion localRotationCorrection = Quaternion.identity;
             public Vector3 aimAxis = Vector3.forward, upAxis = Vector3.up;
             public List<DirectSource> sources = new List<DirectSource>();
         }
@@ -156,6 +165,24 @@ namespace Hollow.HoUnityTools.RigConstraints
                     else if (op.type == "COPY_ROTATION")
                     {
                         if (op.target == null) { valid = false; break; }
+                        if (op.rotationSpace != DirectRotationSpace.World)
+                        {
+                            if(op.rotationSpace!=DirectRotationSpace.Local&&op.rotationSpace!=DirectRotationSpace.LocalOwnerOrient)
+                            {valid=false;DirectError("Unknown local Copy Rotation space: "+owner.name);break;}
+                            Matrix4x4 ownerLocal = parent.inverse * current;
+                            Matrix4x4 targetParent = ReadDirect(op.target.parent, values);
+                            Matrix4x4 targetCurrent=ReadDirect(op.target, values);
+                            Matrix4x4 targetLocal = targetParent.inverse * targetCurrent;
+                            if (!TryDirectTrs(current,out _,out _,out _)||!TryDirectTrs(targetCurrent,out _,out _,out _)||
+                                !TryDirectTrs(ownerLocal, out Vector3 localPosition, out Quaternion beforeLocal, out Vector3 localScale) ||
+                                !TryDirectTrs(targetLocal, out _, out Quaternion targetLocalRotation, out _))
+                            { valid=false;DirectError("Local Copy Rotation needs non-degenerate local TRS input: "+owner.name);break; }
+                            Quaternion delta = Quaternion.Inverse(op.bindTargetLocalRotation) * targetLocalRotation;
+                            Quaternion mapped = op.localRotationCorrection * delta * Quaternion.Inverse(op.localRotationCorrection);
+                            Quaternion desired = op.bindLocalRotation * mapped;
+                            current = parent * Matrix4x4.TRS(localPosition, Quaternion.Slerp(beforeLocal, desired, op.weight), localScale);
+                            continue;
+                        }
                         if(!TryDirectTrs(current,out _,out Quaternion before,out Vector3 size)||
                            !TryDirectTrs(ReadDirect(op.target,values),out _,out Quaternion sourceRotation,out _))
                         {valid=false;DirectError("Copy Rotation needs non-degenerate TRS input: "+owner.name);break;}

@@ -105,7 +105,20 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                 else
                 {
                     op.target=p.map[e.Target];
-                    if(e.Type=="COPY_ROTATION")op.rotationCorrection=Correction(p,e.Target,e.Owner);
+                    if(e.Type=="COPY_ROTATION")
+                    {
+                        var parameters=e.raw.constraint.parameters;
+                        if(parameters.owner_space=="LOCAL")
+                        {
+                            op.rotationSpace=parameters.target_space=="LOCAL_OWNER_ORIENT"
+                                ?HoAuxRig.DirectRotationSpace.LocalOwnerOrient:HoAuxRig.DirectRotationSpace.Local;
+                            op.bindTargetLocalRotation=ProperRotation(p.bind.local[e.Target],"target local bind");
+                            op.localRotationCorrection=op.rotationSpace==HoAuxRig.DirectRotationSpace.LocalOwnerOrient
+                                ?Quaternion.Inverse(ProperRotation(p.bind.rest[e.Owner],"owner bind"))*ProperRotation(p.bind.rest[e.Target],"target bind")
+                                :LocalBasisCorrection(p,e.Target,e.Owner);
+                        }
+                        else op.rotationCorrection=Correction(p,e.Target,e.Owner);
+                    }
                     if(e.aim!=null)
                     {
                         op.up=p.map[e.aim.upBone];Vector3 a,u;TrackAxis(e.aim.aimAxis,out a);TrackAxis(e.aim.upAxis,out u);
@@ -122,6 +135,23 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
 
         private static Quaternion Correction(Prepared p,string target,string owner)
         {return (p.bind.basis[target].inverse*p.bind.basis[owner]).rotation;}
+        private static Quaternion LocalBasisCorrection(Prepared p,string target,string owner)
+        {
+            // K_i maps imported bone axes to Blender axes and can contain a
+            // reflection. Only K_owner^-1 K_target is a proper change of basis.
+            Matrix4x4 relative=p.bind.basis[owner].inverse*p.bind.basis[target];
+            relative.SetColumn(3,new Vector4(0,0,0,1));
+            Vector3 scale=ScaleOf(relative);
+            if(Mathf.Abs(scale.x-scale.y)>1e-4f*Mathf.Max(scale.x,scale.y)||Mathf.Abs(scale.x-scale.z)>1e-4f*Mathf.Max(scale.x,scale.z))
+                throw new InvalidOperationException("Copy Rotation relative Blender/FBX basis has nonuniform scale");
+            return ProperRotation(relative,"relative Blender/FBX local basis");
+        }
+        private static Quaternion ProperRotation(Matrix4x4 value,string label)
+        {
+            if(!HoAuxRig.TryDirectTrs(value,out _,out Quaternion rotation,out _))
+                throw new InvalidOperationException("Copy Rotation invalid "+label+"; cannot remove reflection/shear as a quaternion");
+            return rotation;
+        }
         private static Vector3 ScaleOf(Matrix4x4 m)
         {return new Vector3(m.GetColumn(0).magnitude,m.GetColumn(1).magnitude,m.GetColumn(2).magnitude);}
         private static void SetLocal(Transform t,Matrix4x4 m)

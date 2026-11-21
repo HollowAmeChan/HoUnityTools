@@ -57,6 +57,7 @@ namespace Hollow.HoUnityTools.RigConstraints
                 Transform owner = Remapped(op.owner, replacements), target = Remapped(op.target, replacements), up = Remapped(op.up, replacements);
                 Matrix4x4 parentBefore = ParentWorld(op.owner);
                 Matrix4x4 bindWorld = BindWorld(op.owner, op.bindLocalPosition, op.bindLocalRotation, op.bindLocalScale);
+                Quaternion targetBindWorld = (op.target != null && op.target.parent != null ? op.target.parent.rotation : Quaternion.identity) * op.bindTargetLocalRotation;
                 foreach (DirectSource source in op.sources)
                 {
                     Transform bone = Remapped(source.bone, replacements);
@@ -70,6 +71,8 @@ namespace Hollow.HoUnityTools.RigConstraints
                         Matrix4x4 local = (owner.parent != null ? owner.parent.worldToLocalMatrix : Matrix4x4.identity) * bindWorld;
                         RequireBindTrs(local, out op.bindLocalPosition, out op.bindLocalRotation, out op.bindLocalScale);
                     }
+                    if (target != null && op.rotationSpace != DirectRotationSpace.World)
+                        op.bindTargetLocalRotation = (target.parent != null ? Quaternion.Inverse(target.parent.rotation) : Quaternion.identity) * targetBindWorld;
                     op.ownerPath = GetOperationPath(RigRoot, owner);
                     op.targetPath = GetOperationPath(RigRoot, target);
                     op.upPath = GetOperationPath(RigRoot, up);

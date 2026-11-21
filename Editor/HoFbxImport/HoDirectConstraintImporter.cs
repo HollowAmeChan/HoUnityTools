@@ -182,7 +182,11 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
             if(e.aim!=null)return null; // The structural validator has checked the complete pair.
             var c=e.raw.constraint;var p=c.parameters;
             if(p==null||!Finite(p.influence)||p.influence<0||p.influence>1)return "影响度或参数无效";
-            if(p.owner_space!="WORLD"||p.target_space!="WORLD")return "v3 首版要求 WORLD → WORLD";
+            bool world=p.owner_space=="WORLD"&&p.target_space=="WORLD";
+            bool localRotation=e.Type=="COPY_ROTATION"&&p.owner_space=="LOCAL"&&
+                (p.target_space=="LOCAL"||p.target_space=="LOCAL_OWNER_ORIENT");
+            if(!world&&!(backend==Backend.HoAux&&localRotation))
+                return localRotation?"局部 Copy Rotation 仅 HoAux 后端已实现；Standard/Vrc 暂不支持":"当前空间组合尚未实现";
             if(e.Type=="ARMATURE")
             {
                 if(p.use_deform_preserve_volume||p.use_bone_envelopes||p.use_current_location)return "Armature 的 Preserve Volume/Envelope/Current Location 暂不支持";
@@ -242,6 +246,16 @@ namespace Hollow.HoUnityTools.Editor.RigConstraints
                     if(notice!=null)Debug.LogWarning("HoFBX direct "+e.Owner+"："+notice);
                     foreach(string name in References(e))
                         if(!map.TryGetValue(name,out Transform target)||target==owner||!result.bind.rest.ContainsKey(name))issue="目标骨缺失、引用自身或没有绑定矩阵："+name;
+                    if(issue==null&&e.Type=="COPY_ROTATION"&&e.raw.constraint.parameters.owner_space=="LOCAL")
+                    {
+                        try
+                        {
+                            ProperRotation(result.bind.local[e.Target],"target local bind");
+                            if(e.raw.constraint.parameters.target_space=="LOCAL")LocalBasisCorrection(result,e.Target,e.Owner);
+                            else {ProperRotation(result.bind.rest[e.Owner],"owner bind");ProperRotation(result.bind.rest[e.Target],"target bind");}
+                        }
+                        catch(InvalidOperationException error){issue=error.Message;}
+                    }
                 }
                 if(issue!=null){rejected.Add(group.Key);Debug.LogWarning("HoFBX direct "+group.Key+"："+issue);}
             }
