@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "version": "dev",
+  "release_tag": "dev",
+  "release_name": "HoUnityTools development build",
+  "repository": "HollowAmeChan/HoUnityTools",
+  "channel": "dev",
+  "package_name": "com.hollow.hounitytools",
+  "package_version": "0.2.0"
+}

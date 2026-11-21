@@ -1,0 +1,62 @@
+name: Auto Release Unity Installers
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional shared UTC version (YYYYMMDD-HHMMSS); blank uses current time'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout release source and LFS assets
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Verify installer contracts
+        run: python3 -m unittest discover -s .github/tests -v
+
+      - name: Build date-stamped Unity installers
+        id: build
+        run: python3 .github/scripts/build_release.py
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.build.outputs.release_tag }}
+          RELEASE_NAME: ${{ steps.build.outputs.release_name }}
+        run: |
+          set -euo pipefail
+          # Published installers are immutable: use a new date for another build.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Choose a new date version."
+            exit 1
+          fi
+          shopt -s nullglob
+          installers=(_dist/*.tgz _dist/*.unitypackage)
+          test "${#installers[@]}" -gt 0
+          gh release create "$RELEASE_TAG" "${installers[@]}" \
+            _dist/release-manifest.json _dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "$RELEASE_NAME" \
+            --notes-file _dist/RELEASE_NOTES.md --latest

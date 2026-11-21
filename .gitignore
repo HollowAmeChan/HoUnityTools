@@ -41,3 +41,5 @@ Tools~/HoFaceStudio/artifacts/
 Tools~/HoFaceStudio/.user/
 **/__pycache__/
 *.pyc
+# Local release installers
+/_dist/

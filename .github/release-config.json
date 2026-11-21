@@ -1,0 +1,8 @@
+{
+  "repository": "HollowAmeChan/HoUnityTools",
+  "packages": [
+    {
+      "path": "."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "HoUnityTools.ReleaseInfo.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.ReleaseInfo",
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
