@@ -45,6 +45,8 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             }
             else if (tab == 1)
             {
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("materialProfile"),
+                    new GUIContent("生成材质", "Environment URP 适用于舞台和环境模型。已关联的外部材质继续使用原资产。"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("readRayMaterials"), new GUIContent("读取 Ray 配套材质"));
                 if (serializedObject.FindProperty("readRayMaterials").boolValue)
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("rayMaterialMapping"),
@@ -57,7 +59,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                         if (GUILayout.Button("提取材质…"))
                         {
                             string directory = Path.GetFullPath(Path.GetDirectoryName(importer.assetPath));
-                            string folder = EditorUtility.SaveFolderPanel("提取 Ho lilToon 材质", directory, "Materials");
+                            string folder = EditorUtility.SaveFolderPanel("提取 PMX 材质", directory, "Materials");
                             if (!string.IsNullOrEmpty(folder))
                             {
                                 try

@@ -6,6 +6,12 @@ namespace Hollow.HoUnityTools.Editor.Pmx
 {
     public enum HoPmxAlphaMode { Auto, Opaque, Cutout, Transparent }
 
+    public enum HoPmxMaterialProfile
+    {
+        [InspectorName("Ho lilToon")] LilToon = 0,
+        [InspectorName("Environment URP")] EnvironmentUrp = 1,
+    }
+
     [Serializable]
     public sealed class HoPmxMaterialSetting
     {
@@ -68,6 +74,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
         public int jointCount;
         public int softBodyCount;
         public string rayMappingPath;
+        public HoPmxMaterialProfile materialProfile;
         public List<HoPmxMaterialInfo> materials = new List<HoPmxMaterialInfo>();
         public List<HoPmxMorphInfo> morphs = new List<HoPmxMorphInfo>();
         public List<string> warnings = new List<string>();

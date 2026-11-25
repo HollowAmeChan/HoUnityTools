@@ -1,6 +1,6 @@
-﻿# Ho PMX 场景导入
+# Ho PMX 场景导入
 
-直接把 .pmx 和引用的贴图放入 Unity 项目。PMX 会成为可拖入场景的模型资产，初始材质使用 Ho 渲专用 lilToon。此功能面向单向使用的静态场景资产。
+直接把 .pmx 和引用的贴图放入 Unity 项目。PMX 会成为可拖入场景的模型资产，默认生成 Ho lilToon 材质。舞台和静态环境资产可选用 Environment URP。
 
 ## 放置文件
 
@@ -27,14 +27,20 @@ PMX 贴图路径以 PMX 所在目录为基准；EMD 引用以 EMD 所在目录�
 | 页签 | 设置 |
 | --- | --- |
 | 模型 | 缩放、重算法线、启用源描边 |
-| 材质 | 读取 Ray 配套材质、可选 EMD、逐材质透明覆盖、外部材质关联、提取材质 |
+| 材质 | 生成材质、读取 Ray 配套材质、可选 EMD、逐材质透明覆盖、外部材质关联、提取材质 |
 | 表情 | 选择导入时烘焙的顶点、UV、材质或 Group 表情权重 |
 
 默认缩放为 0.08，保留原始法线。坐标为 Y 轴旋转 180 度，保留三角索引顺序；主 UV 的 V 翻转一次。每个非空源材质生成一个静态 MeshRenderer，保留对应双面和投影/接影标志。
 
 透明自动分类结合材质 Alpha 与该材质的 UV 覆盖区域：连续半透明进入 Transparent，有孔洞/少量抗锯齿边缘进入 Cutout，完全不透明进入 Opaque。分类是有界分辨率的启发式；图集细小区域、平铺和特殊透明 pass 可在材质页覆盖。已识别的 Ray 专用 Cutout 使用源设置的阈值。
 
-裁切仍由材质的 _Cutoff 参数控制：Transparent 的初始值为 0.001，Cutout 默认 0.5 或采用 Ray 专用阈值。提取材质后可在 lilToon Inspector 自行调整；没有修改 shader 的裁切实现。
+由材质的 _Cutoff 控制裁切。Transparent 的初始值为 0.001，Cutout 默认 0.5 或采用 Ray 专用阈值。提取材质后可在对应的材质 Inspector 调整。
+
+### Environment URP
+
+安装 HoShader Environment URP（UPM 包 ID 为 com.hoshader.environment-urp），在 PMX 的材质页将“生成材质”设为 **Environment URP** 并应用导入设置。新的材质槽使用 HoShader/Environment URP，可继续提取成 .mat。原有外部材质通过槽位关联继续生效，清除某槽关联后该槽会按当前选项重新生成。角色及旧项目沿用默认的 Ho lilToon。
+
+该选项使用 PMX 的颜色、贴图、双面、投影和接影设置，保留已支持的 Ray 法线、金属度、光滑度与自发光转换。老式 PMX 高光颜色用通道最大值初始化 F0，描边宽度以像素为单位初始化，可随镜头微调。透明材质使用预乘 Alpha，深度和阴影使用独立的 0.5 阈值。MMD Toon 与 Sphere 的源数据仍可在导入报告查看。
 
 ## 提取材质
 

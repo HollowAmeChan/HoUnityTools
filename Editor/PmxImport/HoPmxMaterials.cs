@@ -1,4 +1,7 @@
 using System;
+using System.Reflection;
+using UnityEditor;
+using UnityEditor.AssetImporters;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -6,8 +9,40 @@ namespace Hollow.HoUnityTools.Editor.Pmx
 {
     internal static class HoPmxMaterials
     {
+        private const string EnvironmentShaderName = "HoShader/Environment URP";
+        private const string EnvironmentShaderPath = "Packages/com.hoshader.environment-urp/Runtime/Shaders/Environment.shader";
+        private const string EnvironmentEditorType = "HoShader.EnvironmentURP.Editor.EnvironmentShaderGUI, HoShader.EnvironmentURP.Editor";
+        private static Action<Material> syncEnvironmentMaterial;
+
+        internal static Shader RequireEnvironmentShader(AssetImportContext context)
+        {
+            Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(EnvironmentShaderPath);
+            if (shader == null || shader.name != EnvironmentShaderName)
+                throw new InvalidOperationException("生成 Environment URP 材质需要 com.hoshader.environment-urp 包（Shader：" +
+                    EnvironmentShaderName + "）。安装后请重新导入 PMX。");
+            context.DependsOnArtifact(EnvironmentShaderPath);
+            if (syncEnvironmentMaterial == null)
+            {
+                var type = Type.GetType(EnvironmentEditorType, throwOnError: false);
+                var method = type?.GetMethod("SyncMaterial", BindingFlags.Public | BindingFlags.Static, null,
+                    new[] { typeof(Material) }, null);
+                if (method == null || method.ReturnType != typeof(void))
+                    throw new InvalidOperationException("Environment URP 缺少材质同步 API，请更新 com.hoshader.environment-urp 包。");
+                syncEnvironmentMaterial = (Action<Material>)Delegate.CreateDelegate(typeof(Action<Material>), method);
+            }
+            return shader;
+        }
+
+        internal static void PrepareRemappedTextures(HoPmxMaterial source, HoPmxMaterialInfo info, HoPmxRayMaterial ray,
+            HoPmxTextures textures, HoPmxImportReport report)
+        {
+            ReadBase(source, info, ray, textures, preserveDiffuseAlpha: false);
+            if (ray != null)
+                ApplyRay(null, source, info, ray, textures, report);
+        }
+
         internal static Material Build(HoPmxMaterial source, HoPmxMaterialInfo info, HoPmxRayMaterial ray,
-            HoPmxTextures textures, float scale, bool generateOutline, HoPmxImportReport report)
+            HoPmxTextures textures, float scale, bool generateOutline, Shader environmentShader, HoPmxImportReport report)
         {
             bool outline = generateOutline && (source.Flags & 16) != 0 && source.EdgeSize > 0;
             bool transparent = info.alphaMode == HoPmxAlphaMode.Transparent;
@@ -15,30 +50,19 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             string shaderName = transparent ? (outline ? "Hidden/lilToonTransparentOutline" : "Hidden/lilToonTransparent") :
                 cutout ? (outline ? "Hidden/lilToonCutoutOutline" : "Hidden/lilToonCutout") :
                 outline ? "Hidden/lilToonOutline" : "lilToon";
-            Shader shader = Shader.Find(shaderName);
+            Shader shader = environmentShader != null ? environmentShader : Shader.Find(shaderName);
             if (shader == null) throw new InvalidOperationException("缺少 Ho lilToon shader：" + shaderName);
             var material = new Material(shader) { name = source.Name };
             material.SetOverrideTag("HO_MaterialSource", "PMX");
             material.SetOverrideTag("HO_PMX_MaterialIndex", info.index.ToString());
-            Color color = HoPmxImporter.ColorOf(source.Diffuse);
-            string basePath = info.baseTexturePath;
-            if (ray != null)
+            var (color, baseTexture) = ReadBase(source, info, ray, textures, preserveDiffuseAlpha: environmentShader != null);
+            if (environmentShader != null)
             {
-                if (!string.IsNullOrEmpty(ray.BaseTexturePath)) basePath = ray.BaseTexturePath;
-                Color rayColor = new Color(ray.Albedo[0], ray.Albedo[1], ray.Albedo[2], 1);
-                if (ray.AlbedoMapFrom == 0)
-                {
-                    basePath = null;
-                    float alpha = color.a;
-                    color = rayColor * (ray.AlbedoApplyDiffuse ? color : Color.white);
-                    color.a = alpha;
-                }
-                else if (!ray.AlbedoApplyDiffuse) color = Color.white;
-                // Alpha source constants are applied only when the shader explicitly selects them.
-                if (ray.AlphaMapFrom == 0) color.a *= ray.Alpha;
+                ApplyEnvironment(material, source, info, ray, textures, scale, outline, transparent, cutout, color, baseTexture, report);
+                return material;
             }
+
             ColorValue(material, "_Color", color);
-            Texture2D baseTexture = textures.ColorTexture(basePath);
             TextureValue(material, "_MainTex", baseTexture);
             Float(material, "_Cull", (source.Flags & 1) != 0 ? 0 : 2);
             Float(material, "_FlipNormal", (source.Flags & 1) != 0 ? 1 : 0);
@@ -78,6 +102,68 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             material.SetOverrideTag("RenderType", transparent ? "Transparent" : cutout ? "TransparentCutout" : "Opaque");
             material.doubleSidedGI = (source.Flags & 1) != 0;
             return material;
+        }
+
+        private static (Color Color, Texture2D Texture) ReadBase(HoPmxMaterial source, HoPmxMaterialInfo info,
+            HoPmxRayMaterial ray, HoPmxTextures textures, bool preserveDiffuseAlpha)
+        {
+            Color color = HoPmxImporter.ColorOf(source.Diffuse);
+            string basePath = info.baseTexturePath;
+            if (ray != null)
+            {
+                if (!string.IsNullOrEmpty(ray.BaseTexturePath)) basePath = ray.BaseTexturePath;
+                Color rayColor = new Color(ray.Albedo[0], ray.Albedo[1], ray.Albedo[2], 1);
+                if (ray.AlbedoMapFrom == 0)
+                {
+                    basePath = null;
+                    float alpha = color.a;
+                    color = rayColor * (ray.AlbedoApplyDiffuse ? color : Color.white);
+                    color.a = alpha;
+                }
+                else if (!ray.AlbedoApplyDiffuse)
+                    color = new Color(1, 1, 1, preserveDiffuseAlpha ? color.a : 1);
+                // Alpha source constants are applied only when the shader explicitly selects them.
+                if (ray.AlphaMapFrom == 0) color.a *= ray.Alpha;
+            }
+            return (color, textures.ColorTexture(basePath));
+        }
+
+        private static void ApplyEnvironment(Material target, HoPmxMaterial source, HoPmxMaterialInfo info,
+            HoPmxRayMaterial ray, HoPmxTextures textures, float scale, bool outline, bool transparent, bool cutout,
+            Color color, Texture2D baseTexture, HoPmxImportReport report)
+        {
+            bool doubleSided = (source.Flags & 1) != 0;
+            bool readRay = ray != null;
+            float sourceSpecular = Mathf.Max(source.Specular.X, Mathf.Max(source.Specular.Y, source.Specular.Z));
+            target.SetColor("_BaseColor", color);
+            target.SetTexture("_BaseMap", baseTexture);
+            target.SetFloat("_Cull", (float)(doubleSided ? CullMode.Off : CullMode.Back));
+            target.SetFloat("_FlipNormal", doubleSided ? 1 : 0);
+            target.SetFloat("_ReceiveShadows", (source.Flags & 8) != 0 ? 1 : 0);
+            target.SetFloat("_CastShadows", (source.Flags & 4) != 0 ? 1 : 0);
+            target.SetFloat("_Surface", transparent ? 1 : 0);
+            target.SetFloat("_Blend", transparent ? 1 : 0);
+            target.SetFloat("_AlphaClip", cutout || transparent ? 1 : 0);
+            target.SetFloat("_Cutoff", info.alphaCutoff);
+            target.SetFloat("_SubpassCutoff", transparent ? 0.5f : -1);
+            target.SetFloat("_AlphaToMask", cutout ? 1 : 0);
+            target.SetFloat("_ZWrite", transparent ? 0 : 1);
+            target.SetFloat("_OutlineEnabled", outline ? 1 : 0);
+            if (outline)
+            {
+                target.SetColor("_OutlineColor", HoPmxImporter.ColorOf(source.EdgeColor));
+                // Environment outlines are in screen-space pixels. Seed their width
+                // from the previous material's nominal 0.08 width at one pixel.
+                target.SetFloat("_OutlineWidth", Mathf.Clamp(source.EdgeSize * 3 * scale / 0.08f, 0, 16));
+            }
+            target.SetFloat("_SpecularHighlights", readRay || sourceSpecular > 0 ? 1 : 0);
+            target.SetFloat("_EnvironmentReflections", readRay ? 1 : 0);
+            target.SetFloat("_Reflectance", readRay ? 0.04f : Mathf.Clamp01(sourceSpecular));
+            target.SetFloat("_Smoothness", HoPmxRayMaterial.ShininessToSmoothness(source.Shininess));
+            target.doubleSidedGI = doubleSided;
+            if (readRay)
+                ApplyRay(target, source, info, ray, textures, report);
+            syncEnvironmentMaterial(target);
         }
 
         private static void ApplyRay(Material target, HoPmxMaterial source, HoPmxMaterialInfo info,
@@ -137,15 +223,15 @@ namespace Hollow.HoUnityTools.Editor.Pmx
         }
         private static void Sampling(Material material, string key, float loop, int flip)
         {
-            if (!material.HasProperty(key)) return;
+            if (material == null || !material.HasProperty(key)) return;
             // Ray's bit 0 flips U; bit 1 flips V.
             float x = (flip & 1) != 0 ? -loop : loop;
             float y = (flip & 2) != 0 ? -loop : loop;
             material.SetTextureScale(key, new Vector2(x, y));
             material.SetTextureOffset(key, new Vector2(x < 0 ? loop : 0, y < 0 ? 1 : 1 - loop));
         }
-        private static void Float(Material m, string key, float value) { if (m.HasProperty(key)) m.SetFloat(key, value); }
-        private static void ColorValue(Material m, string key, Color value) { if (m.HasProperty(key)) m.SetColor(key, value); }
-        private static void TextureValue(Material m, string key, Texture value) { if (m.HasProperty(key)) m.SetTexture(key, value); }
+        private static void Float(Material m, string key, float value) { if (m != null && m.HasProperty(key)) m.SetFloat(key, value); }
+        private static void ColorValue(Material m, string key, Color value) { if (m != null && m.HasProperty(key)) m.SetColor(key, value); }
+        private static void TextureValue(Material m, string key, Texture value) { if (m != null && m.HasProperty(key)) m.SetTexture(key, value); }
     }
 }
