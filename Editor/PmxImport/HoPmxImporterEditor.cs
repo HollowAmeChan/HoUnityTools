@@ -46,7 +46,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             else if (tab == 1)
             {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("materialProfile"),
-                    new GUIContent("生成材质", "Environment URP 适用于舞台和环境模型。已关联的外部材质继续使用原资产。"));
+                    new GUIContent("生成材质", "Ho Specialized URP 按材质槽选择专职着色器；Environment URP 保留舞台导入行为。Legacy 不会自动升级，外部材质关联继续保留。"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("readRayMaterials"), new GUIContent("读取 Ray 配套材质"));
                 if (serializedObject.FindProperty("readRayMaterials").boolValue)
                     EditorGUILayout.PropertyField(serializedObject.FindProperty("rayMaterialMapping"),
@@ -96,6 +96,8 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                             }
                         }
                         DrawMaterialSetting(entry);
+                        if (importer.materialProfile == HoPmxMaterialProfile.SpecializedUrp)
+                            EditorGUILayout.LabelField(entry.targetFamily + " · " + entry.familyReason, EditorStyles.miniLabel);
                         EditorGUILayout.LabelField(entry.alphaMode + " · " + entry.alphaReason, EditorStyles.miniLabel);
                         EditorGUILayout.EndVertical();
                     }
@@ -138,6 +140,15 @@ namespace Hollow.HoUnityTools.Editor.Pmx
         {
             var settings = serializedObject.FindProperty("materialSettings");
             int index = FindIndex(settings, "materialIndex", info.index);
+            if ((HoPmxMaterialProfile)serializedObject.FindProperty("materialProfile").enumValueIndex == HoPmxMaterialProfile.SpecializedUrp)
+            {
+                var family = index < 0 ? HoPmxMaterialFamily.Auto :
+                    (HoPmxMaterialFamily)settings.GetArrayElementAtIndex(index).FindPropertyRelative("targetFamily").enumValueIndex;
+                EditorGUI.BeginChangeCheck();
+                family = (HoPmxMaterialFamily)EditorGUILayout.EnumPopup(new GUIContent("目标材质家族", "Auto 只参考源材质名及 [ho:Family] 标记；不使用文件名推断。含糊槽位请明确指定。"), family);
+                if (EditorGUI.EndChangeCheck())
+                    EnsureEntry(settings, "materialIndex", info.index).FindPropertyRelative("targetFamily").enumValueIndex = (int)family;
+            }
             HoPmxAlphaMode mode = index < 0 ? HoPmxAlphaMode.Auto :
                 (HoPmxAlphaMode)settings.GetArrayElementAtIndex(index).FindPropertyRelative("alphaMode").enumValueIndex;
             EditorGUI.BeginChangeCheck();
@@ -164,6 +175,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             i = list.arraySize++;
             var entry = list.GetArrayElementAtIndex(i);
             entry.FindPropertyRelative(key).intValue = value;
+            if (entry.FindPropertyRelative("targetFamily") != null) entry.FindPropertyRelative("targetFamily").enumValueIndex = 0;
             if (entry.FindPropertyRelative("alphaMode") != null)
             {
                 entry.FindPropertyRelative("alphaMode").enumValueIndex = 0;

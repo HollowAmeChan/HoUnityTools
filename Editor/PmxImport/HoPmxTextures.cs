@@ -206,6 +206,39 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             return texture;
         }
 
+        internal Texture2D AlphaScaledColorTexture(string path, float alpha)
+        {
+            string key = (path ?? "<constant-white>") + "|hair-cutout-alpha|" +
+                alpha.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            if (converted.TryGetValue(key, out var existing)) return existing;
+            Pixels source = path == null ? new Pixels { Width = 1, Height = 1,
+                Values = new[] { new Color32(255, 255, 255, 255) } } : ReadPixels(path);
+            if (source == null) throw new InvalidDataException("无法读取 Hair 裁切覆盖来源：" + path);
+            Texture2D original = ColorTexture(path);
+            var values = new Color32[source.Values.Length];
+            for (int i = 0; i < values.Length; ++i)
+            {
+                Color32 value = source.Values[i];
+                value.a = (byte)Mathf.RoundToInt(Mathf.Clamp01(value.a / 255f * alpha) * 255);
+                values[i] = value;
+            }
+            var texture = new Texture2D(source.Width, source.Height, TextureFormat.RGBA32,
+                original == null || original.mipmapCount > 1, original != null && !original.isDataSRGB);
+            texture.name = (path == null ? "White" : Path.GetFileNameWithoutExtension(path)) + "_Ho_HairCoverage";
+            texture.wrapModeU = original == null ? TextureWrapMode.Repeat : original.wrapModeU;
+            texture.wrapModeV = original == null ? TextureWrapMode.Repeat : original.wrapModeV;
+            texture.filterMode = original == null ? FilterMode.Bilinear : original.filterMode;
+            texture.anisoLevel = original == null ? 1 : original.anisoLevel;
+            texture.SetPixels32(values);
+            texture.Apply(true, false);
+            string identity;
+            using (var hash = System.Security.Cryptography.SHA256.Create())
+                identity = BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key))).Replace("-", "");
+            context.AddObjectToAsset("colorTexture_" + identity, texture);
+            converted.Add(key, texture);
+            return texture;
+        }
+
         internal HoPmxAlphaMode Classify(HoPmxDocument doc, HoPmxMaterial material, int indexStart,
             string texturePath, out string reason)
         {

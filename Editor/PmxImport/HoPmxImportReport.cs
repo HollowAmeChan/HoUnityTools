@@ -8,15 +8,19 @@ namespace Hollow.HoUnityTools.Editor.Pmx
 
     public enum HoPmxMaterialProfile
     {
-        [InspectorName("Ho lilToon")] LilToon = 0,
+        [InspectorName("Ho lilToon (Legacy)")] LilToon = 0,
         [InspectorName("Environment URP")] EnvironmentUrp = 1,
+        [InspectorName("Ho Specialized URP")] SpecializedUrp = 2,
     }
+
+    public enum HoPmxMaterialFamily { Auto, Cloth, Hair, Skin, Eye, Environment }
 
     [Serializable]
     public sealed class HoPmxMaterialSetting
     {
         public int materialIndex;
         public HoPmxAlphaMode alphaMode;
+        public HoPmxMaterialFamily targetFamily;
         [Range(0, 1)] public float alphaCutoff = 0.5f;
     }
 
@@ -50,6 +54,9 @@ namespace Hollow.HoUnityTools.Editor.Pmx
         public string rayEffectPath;
         public HoPmxAlphaMode alphaMode;
         public string alphaReason;
+        public HoPmxMaterialFamily targetFamily;
+        public string familyReason;
+        public bool familyNeedsReview;
         public float alphaCutoff;
         public Material material;
     }

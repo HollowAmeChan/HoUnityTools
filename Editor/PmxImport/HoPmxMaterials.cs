@@ -104,7 +104,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             return material;
         }
 
-        private static (Color Color, Texture2D Texture) ReadBase(HoPmxMaterial source, HoPmxMaterialInfo info,
+        internal static (Color Color, Texture2D Texture) ReadBase(HoPmxMaterial source, HoPmxMaterialInfo info,
             HoPmxRayMaterial ray, HoPmxTextures textures, bool preserveDiffuseAlpha)
         {
             Color color = HoPmxImporter.ColorOf(source.Diffuse);
@@ -213,7 +213,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                 report.warnings.Add("独立 Ray Alpha 来源需手动检查：" + source.Name);
         }
 
-        private static string SourcePath(int from, string explicitPath, HoPmxMaterialInfo info, string role, HoPmxImportReport report)
+        internal static string SourcePath(int from, string explicitPath, HoPmxMaterialInfo info, string role, HoPmxImportReport report)
         {
             if (from == 1) return explicitPath;
             if (from == 3) return info.baseTexturePath;
@@ -221,7 +221,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
                 report.warnings.Add("未自动映射 Ray " + role + " 来源 " + from + "：" + info.sourceName);
             return null;
         }
-        private static void Sampling(Material material, string key, float loop, int flip)
+        internal static void Sampling(Material material, string key, float loop, int flip)
         {
             if (material == null || !material.HasProperty(key)) return;
             // Ray's bit 0 flips U; bit 1 flips V.
