@@ -77,6 +77,207 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         {public string modelPath,suggestedAssetPath;public int[] intentIndices=Array.Empty<int>();public string status="NotCreated";}
         [Serializable] public sealed class Validation
         {public int verifiedIntentCount,declaredModelDefaultExceptions;public string[] blockers=Array.Empty<string>();}
+        [Serializable] public sealed class WrapperRecipe
+        {
+            public string modelPath,destinationPath,modelGuid,modelAssetSha256,modelMetaSha256,structureHash,ownerReportHash,recipeHash;
+            public int[] intentIndices=Array.Empty<int>();
+            public WrapperBinding[] bindings=Array.Empty<WrapperBinding>();
+        }
+        [Serializable] public sealed class WrapperBinding
+        {
+            public int intentIndex,componentIndex,slot;
+            public string relativeRendererPath,rendererType,targetSourceGuid,targetFamily;
+        }
+        [Serializable] public sealed class WrapperValidation
+        {public int verifiedWrapperCount,verifiedIntentCount,verifiedSubdivisionCount;public string[] blockers=Array.Empty<string>();}
+
+        // Explicit additive assets only. The enclosing transaction freezes these
+        // recipes in Preview and owns every new directory, prefab and .meta.
+        public static WrapperRecipe[] PrepareWrappers(Report report)
+        {
+            RequireReport(report);if(report.blockers.Length!=0)throw new InvalidOperationException("Blocked owner report cannot create wrappers.");
+            var recipes=new List<WrapperRecipe>();
+            foreach(var wrapper in report.wrappers)
+            {
+                if(report.remaps.Any(r=>r.modelPath==wrapper.modelPath))throw new InvalidOperationException("A wrapper model must retain its original importer defaults; separate exact remaps into another transaction: "+wrapper.modelPath);
+                RequireWrapperDestination(wrapper.suggestedAssetPath);
+                var pending=report.modelDefaults.Where(d=>d.modelPath==wrapper.modelPath&&d.wrapperRequired).Select(d=>d.intentIndex).OrderBy(i=>i).ToArray();
+                if(pending.Length==0||!pending.SequenceEqual(wrapper.intentIndices.OrderBy(i=>i)))throw new InvalidOperationException("Wrapper proposal omitted or added a pending subdivision.");
+                var stamp=report.containers.Single(c=>c.path==wrapper.modelPath);
+                var recipe=new WrapperRecipe {modelPath=wrapper.modelPath,destinationPath=wrapper.suggestedAssetPath,modelGuid=stamp.guid,
+                    modelAssetSha256=stamp.assetSha256,modelMetaSha256=stamp.metaSha256,ownerReportHash=report.coreHash};
+                RequireWrapperSource(recipe);
+                var root=AssetDatabase.LoadAssetAtPath<GameObject>(recipe.modelPath);
+                var intents=report.intents.Where(i=>i.action.containerPath==recipe.modelPath&&i.chain.Length>0&&i.chain[0].model).OrderBy(i=>i.index).ToArray();
+                recipe.intentIndices=intents.Select(i=>i.index).ToArray();
+                recipe.bindings=intents.Select(i=>
+                {
+                    var renderer=SourceRenderer(root,i.action);RequireMaterial(renderer,i.action.slot,i.action.expectedMaterialGuid,i.action.expectedMaterialLocalId);
+                    return new WrapperBinding {intentIndex=i.index,relativeRendererPath=RelativeHierarchy(root.transform,renderer.transform),rendererType=i.action.rendererType,
+                        componentIndex=i.action.componentIndex,slot=i.action.slot,targetSourceGuid=i.action.targetSourceGuid,targetFamily=i.action.targetFamily};
+                }).ToArray();
+                if(recipe.bindings.GroupBy(BindingKey).Any(g=>g.Select(b=>b.targetSourceGuid+"/"+b.targetFamily).Distinct().Count()>1))throw new InvalidOperationException("Conflicting wrapper slot intentions.");
+                recipe.structureHash=StructureHash(root,recipe.modelPath);recipe.recipeHash=RecipeDigest(recipe);recipes.Add(recipe);
+            }
+            if(recipes.GroupBy(r=>r.destinationPath,StringComparer.OrdinalIgnoreCase).Any(g=>g.Count()!=1)||recipes.GroupBy(r=>r.modelPath).Any(g=>g.Count()!=1))
+                throw new InvalidOperationException("Each wrapper model/destination must be unique.");
+            var required=report.modelDefaults.Where(d=>d.wrapperRequired).Select(d=>d.intentIndex).OrderBy(i=>i);
+            if(!required.SequenceEqual(recipes.SelectMany(r=>r.bindings).Select(b=>b.intentIndex).Where(i=>report.modelDefaults.Any(d=>d.intentIndex==i&&d.wrapperRequired)).OrderBy(i=>i)))
+                throw new InvalidOperationException("Wrapper recipes do not cover every pending subdivision exactly once.");
+            return recipes.ToArray();
+        }
+        public static void ValidateWrappersBefore(Report report,WrapperRecipe[] recipes)
+        {
+            RequireWrapperRecipes(report,recipes);
+            var current=PrepareWrappers(report);
+            if(JsonUtility.ToJson(new WrapperRecipeList {values=current})!=JsonUtility.ToJson(new WrapperRecipeList {values=recipes}))
+                throw new InvalidOperationException("Wrapper sources, recipes or destinations changed after preview.");
+        }
+        public static void CreateWrappers(Report report,WrapperRecipe[] recipes,Func<string,string,Material> finalTarget,Action<string> trackNewAssetBeforeWrite)
+        {
+            if(finalTarget==null||trackNewAssetBeforeWrite==null)throw new ArgumentNullException("The encompassing transaction must resolve final targets and track new assets before writes.");
+            ValidateWrappersBefore(report,recipes);
+            // Resolve all persistent targets before the first new asset is saved.
+            foreach(var binding in recipes.SelectMany(r=>r.bindings))RequirePersistent(finalTarget(binding.targetSourceGuid,binding.targetFamily));
+            foreach(var recipe in recipes)
+            {
+                if(!AssetDatabase.IsValidFolder(Path.GetDirectoryName(recipe.destinationPath).Replace('\\','/')))
+                    throw new InvalidOperationException("The enclosing journal must create and track the wrapper parent directory first: "+recipe.destinationPath);
+                var scene=EditorSceneManager.NewPreviewScene();GameObject instance=null;
+                try
+                {
+                    instance=(GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(recipe.modelPath),scene);
+                    if(instance==null)throw new InvalidOperationException("Could not instantiate source model for wrapper.");
+                    instance.name=Path.GetFileNameWithoutExtension(recipe.destinationPath);PrefabUtility.RecordPrefabInstancePropertyModifications(instance);
+                    foreach(var binding in recipe.bindings)
+                    {
+                        var renderer=WrapperRenderer(instance,binding);var materials=renderer.sharedMaterials;
+                        if(binding.slot<0||binding.slot>=materials.Length)throw new InvalidOperationException("Wrapper material slot disappeared.");
+                        var target=finalTarget(binding.targetSourceGuid,binding.targetFamily);if(materials[binding.slot]==target)continue;
+                        materials[binding.slot]=target;renderer.sharedMaterials=materials;PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+                    }
+                    RequireWrapperDestination(recipe.destinationPath);trackNewAssetBeforeWrite(recipe.destinationPath);RequireWrapperDestination(recipe.destinationPath);
+                    PrefabUtility.SaveAsPrefabAsset(instance,recipe.destinationPath,out bool success);
+                    if(!success)throw new IOException("Could not save model wrapper: "+recipe.destinationPath);
+                }
+                finally {if(instance!=null)Object.DestroyImmediate(instance);EditorSceneManager.ClosePreviewScene(scene);}
+                AssetDatabase.ImportAsset(recipe.destinationPath,ImportAssetOptions.ForceSynchronousImport);
+            }
+            var validation=ValidateWrappersAfter(report,recipes,finalTarget);
+            if(validation.blockers.Length!=0)throw new InvalidOperationException("Saved wrapper verification failed: "+string.Join("; ",validation.blockers));
+        }
+        public static WrapperValidation ValidateWrappersAfter(Report report,WrapperRecipe[] recipes,Func<string,string,Material> finalTarget)
+        {
+            RequireWrapperRecipes(report,recipes);var errors=new List<string>();int wrappers=0,intents=0,subdivisions=0;
+            foreach(var recipe in recipes)
+            {
+                try
+                {
+                    RequireWrapperSource(recipe);var root=AssetDatabase.LoadAssetAtPath<GameObject>(recipe.destinationPath);
+                    if(root==null||PrefabUtility.GetPrefabAssetType(root)!=PrefabAssetType.Variant)throw new InvalidOperationException("Saved wrapper must remain a model-backed prefab variant.");
+                    if(StructureHash(root,recipe.modelPath)!=recipe.structureHash)throw new InvalidOperationException("Saved wrapper hierarchy, components, mesh or rig differ from the source model.");
+                    foreach(var modification in PrefabUtility.GetPropertyModifications(root)??Array.Empty<PropertyModification>())
+                    {
+                        bool material=modification.target is Renderer&&modification.propertyPath.StartsWith("m_Materials.Array.",StringComparison.Ordinal);
+                        var modelRoot=AssetDatabase.LoadAssetAtPath<GameObject>(recipe.modelPath);
+                        bool rootName=modification.target==modelRoot&&modification.propertyPath=="m_Name";
+                        // Unity saves root placement overrides even when their
+                        // values are inherited. The structure hash above proves
+                        // position/rotation/scale remain exactly the source values.
+                        bool rootPlacement=modification.target==modelRoot.transform&&new[]{"m_LocalPosition.","m_LocalRotation.","m_LocalScale.","m_LocalEulerAnglesHint."}.Any(p=>modification.propertyPath.StartsWith(p,StringComparison.Ordinal));
+                        if(!material&&!rootName&&!rootPlacement)throw new InvalidOperationException("Unexpected non-material wrapper override: "+modification.propertyPath);
+                    }
+                    var source=AssetDatabase.LoadAssetAtPath<GameObject>(recipe.modelPath);
+                    foreach(var renderer in root.GetComponentsInChildren<Renderer>(true))
+                    {
+                        string relative=RelativeHierarchy(root.transform,renderer.transform);int index=Array.IndexOf(renderer.GetComponents<Renderer>(),renderer);
+                        var original=source.GetComponentsInChildren<Renderer>(true).Single(r=>RelativeHierarchy(source.transform,r.transform)==relative&&r.GetType()==renderer.GetType()&&Array.IndexOf(r.GetComponents<Renderer>(),r)==index);
+                        for(int slot=0;slot<renderer.sharedMaterials.Length;slot++)
+                        {
+                            var binding=recipe.bindings.FirstOrDefault(b=>b.relativeRendererPath==relative&&b.rendererType==renderer.GetType().FullName&&b.componentIndex==index&&b.slot==slot);
+                            Material target=binding==null?original.sharedMaterials[slot]:finalTarget(binding.targetSourceGuid,binding.targetFamily);
+                            if(renderer.sharedMaterials[slot]!=target)throw new InvalidOperationException("Saved wrapper target differs: "+relative+" slot "+slot);
+                        }
+                    }
+                    foreach(var binding in recipe.bindings)
+                    {
+                        var renderer=WrapperRenderer(root,binding);
+                        if(renderer.sharedMaterials[binding.slot]!=finalTarget(binding.targetSourceGuid,binding.targetFamily))throw new InvalidOperationException("A requested wrapper family was omitted.");
+                        intents++;if(report.modelDefaults.Any(d=>d.intentIndex==binding.intentIndex&&d.wrapperRequired))subdivisions++;
+                    }
+                    wrappers++;
+                }
+                catch(Exception error){errors.Add(recipe.destinationPath+": "+error.Message);}
+            }
+            return new WrapperValidation {verifiedWrapperCount=wrappers,verifiedIntentCount=intents,verifiedSubdivisionCount=subdivisions,blockers=errors.ToArray()};
+        }
+
+        [Serializable] private sealed class WrapperRecipeList {public WrapperRecipe[] values;}
+        [Serializable] private sealed class WrapperStructure {public StructureNode[] nodes;public StructureRenderer[] renderers;}
+        [Serializable] private sealed class StructureNode
+        {public string path;public bool active;public int layer,staticFlags;public string tag;public Vector3 position,scale;public Quaternion rotation;public string[] components;}
+        [Serializable] private sealed class StructureRenderer
+        {public string path,type,mesh,vertexStreams,rootBone;public int index,materialSlotCount;public string[] bones;public float[] blendShapes;}
+        private static string StructureHash(GameObject root,string modelPath)
+        {
+            var nodes=root.GetComponentsInChildren<Transform>(true).Select(t=>new StructureNode {path=RelativeHierarchy(root.transform,t),active=t.gameObject.activeSelf,
+                layer=t.gameObject.layer,staticFlags=(int)GameObjectUtility.GetStaticEditorFlags(t.gameObject),tag=t.gameObject.tag,position=t.localPosition,rotation=t.localRotation,scale=t.localScale,
+                components=t.GetComponents<Component>().Select(c=>
+                {
+                    if(c==null)throw new InvalidOperationException("Missing scripts prevent proving wrapper component preservation.");
+                    Object source=AssetDatabase.GetAssetPath(c)==modelPath?c:PrefabUtility.GetCorrespondingObjectFromOriginalSource(c);
+                    if(source==null||AssetDatabase.GetAssetPath(source)!=modelPath)throw new InvalidOperationException("Wrapper has a component without its original model source: "+c.GetType().FullName);
+                    return c.GetType().AssemblyQualifiedName+"|"+PersistentKey(source);
+                }).ToArray()}).ToArray();
+            var renderers=root.GetComponentsInChildren<Renderer>(true).Select(r=>
+            {
+                var value=new StructureRenderer {path=RelativeHierarchy(root.transform,r.transform),type=r.GetType().FullName,index=Array.IndexOf(r.GetComponents<Renderer>(),r),materialSlotCount=r.sharedMaterials.Length};
+                Mesh mesh=r is SkinnedMeshRenderer skin?skin.sharedMesh:r.GetComponent<MeshFilter>()?.sharedMesh;value.mesh=PersistentKey(mesh);
+                if(r is MeshRenderer mr)value.vertexStreams=PersistentKey(mr.additionalVertexStreams);
+                if(r is SkinnedMeshRenderer skinned){value.rootBone=RelativeHierarchy(root.transform,skinned.rootBone);value.bones=skinned.bones.Select(b=>RelativeHierarchy(root.transform,b)).ToArray();value.blendShapes=Enumerable.Range(0,mesh?.blendShapeCount??0).Select(skinned.GetBlendShapeWeight).ToArray();}
+                return value;
+            }).ToArray();
+            return Hash(System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(new WrapperStructure {nodes=nodes,renderers=renderers})));
+        }
+        private static void RequireWrapperRecipes(Report report,WrapperRecipe[] recipes)
+        {
+            RequireReport(report);if(recipes==null||recipes.Length!=report.wrappers.Length)throw new InvalidOperationException("Every proposed wrapper requires one frozen recipe.");
+            foreach(var recipe in recipes)if(recipe==null||recipe.ownerReportHash!=report.coreHash||recipe.recipeHash!=RecipeDigest(recipe))throw new InvalidOperationException("Wrapper recipe changed after preview.");
+            if(!report.wrappers.Select(w=>w.modelPath).OrderBy(p=>p,StringComparer.Ordinal).SequenceEqual(recipes.Select(r=>r.modelPath).OrderBy(p=>p,StringComparer.Ordinal)))throw new InvalidOperationException("Wrapper recipe models differ from the owner report.");
+        }
+        private static void RequireWrapperSource(WrapperRecipe recipe)
+        {
+            RequireAssetPath(recipe.modelPath);var importer=AssetImporter.GetAtPath(recipe.modelPath);
+            if(importer==null||EditorUtility.IsDirty(importer)||AssetDatabase.AssetPathToGUID(recipe.modelPath)!=recipe.modelGuid||FileHash(recipe.modelPath)!=recipe.modelAssetSha256||FileHash(recipe.modelPath+".meta")!=recipe.modelMetaSha256)
+                throw new InvalidOperationException("Wrapper source model/importer changed or has unsaved settings: "+recipe.modelPath);
+        }
+        private static void RequireWrapperDestination(string path)
+        {
+            RequireAssetPath(path);
+            if(!path.EndsWith(".prefab",StringComparison.OrdinalIgnoreCase)||File.Exists(Absolute(path))||Directory.Exists(Absolute(path))||File.Exists(Absolute(path+".meta"))||!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path,AssetPathToGUIDOptions.OnlyExistingAssets)))
+                throw new InvalidOperationException("Wrapper destination must be a completely new prefab and meta: "+path);
+            for(string parent=Path.GetDirectoryName(path).Replace('\\','/');parent!="Assets";parent=Path.GetDirectoryName(parent).Replace('\\','/'))
+                if(File.Exists(Absolute(parent)))throw new InvalidOperationException("Wrapper parent is an existing file: "+parent);
+        }
+        private static string RecipeDigest(WrapperRecipe recipe){string previous=recipe.recipeHash;recipe.recipeHash="";try{return Hash(System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(recipe)));}finally{recipe.recipeHash=previous;}}
+        private static string BindingKey(WrapperBinding binding)=>binding.relativeRendererPath+"|"+binding.rendererType+"|"+binding.componentIndex+"|"+binding.slot;
+        private static string PersistentKey(Object value){if(value==null)return "<null>";Identity(value,out string guid,out long id);return guid+":"+id;}
+        private static string RelativeHierarchy(Transform root,Transform value)
+        {
+            if(value==null)return "<null>";var names=new List<string>();
+            for(;value!=root;value=value.parent){if(value==null)throw new InvalidOperationException("Wrapper rig reference leaves the source root.");names.Add(value.name+"["+value.GetSiblingIndex()+"]");}
+            names.Reverse();return string.Join("/",names);
+        }
+        private static Renderer SourceRenderer(GameObject root,HoMaterialMigrationSlotAction action)
+        {
+            var values=root.GetComponentsInChildren<Renderer>(true).Where(r=>Hierarchy(r.transform)==action.rendererPath&&r.GetType().FullName==action.rendererType&&Array.IndexOf(r.GetComponents<Renderer>(),r)==action.componentIndex).ToArray();
+            if(values.Length!=1)throw new InvalidOperationException("Missing/ambiguous source wrapper renderer: "+action.rendererPath);return values[0];
+        }
+        private static Renderer WrapperRenderer(GameObject root,WrapperBinding binding)
+        {
+            var values=root.GetComponentsInChildren<Renderer>(true).Where(r=>RelativeHierarchy(root.transform,r.transform)==binding.relativeRendererPath&&r.GetType().FullName==binding.rendererType&&Array.IndexOf(r.GetComponents<Renderer>(),r)==binding.componentIndex).ToArray();
+            if(values.Length!=1)throw new InvalidOperationException("Missing/ambiguous root-relative wrapper renderer: "+binding.relativeRendererPath);return values[0];
+        }
 
         public static Report Resolve(HoMaterialMigrationPlan plan,bool retainMixedModelAnchors=false)
         {

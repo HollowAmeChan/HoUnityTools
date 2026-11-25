@@ -20,6 +20,7 @@ public static class HoMigrationOwnerTransactionChecks
 
     public static void Run()
     {
+        Check(!UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Any(p=>p.name=="jp.lilxyzw.liltoon"),"synthetic source fixture requires a separate host without the legacy package");
         suffix = Environment.GetEnvironmentVariable("HO_REFERENCE_FIXTURE_SUFFIX") ?? "";
         Check(System.Text.RegularExpressions.Regex.IsMatch(suffix, "^[A-Za-z0-9_-]+$"), "explicit unique fixture suffix");
         folder = "Assets/OwnerTransactionFixture" + suffix;

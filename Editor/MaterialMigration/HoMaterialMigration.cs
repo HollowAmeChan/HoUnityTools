@@ -24,6 +24,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             public string projectRoot, batchId, inputFingerprint, previewRoot;
             public HoMaterialMigrationPlan sourcePlan;
             public HoMigrationReferenceOwners.Report referenceOwners;
+            public HoMigrationReferenceOwners.WrapperRecipe[] wrapperRecipes = Array.Empty<HoMigrationReferenceOwners.WrapperRecipe>();
             public Proposal[] proposals;
             public string[] retirementNotes;
         }
@@ -98,6 +99,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if (!previewRoot.StartsWith("Assets/", StringComparison.Ordinal)) throw new InvalidOperationException("Preview must be inside Assets.");
             foreach (var row in plan.rows) RequireSource(row);
             var owners = plan.resolveReferenceOwners ? HoMigrationReferenceOwners.Resolve(plan, plan.retainMixedModelAnchors) : null;
+            var wrappers = plan.createModelWrappers ? HoMigrationReferenceOwners.PrepareWrappers(owners) : Array.Empty<HoMigrationReferenceOwners.WrapperRecipe>();
             var requests = plan.rows.Select(r => (r.sourceGuid, r.targetFamily))
                 .Concat(plan.slotActions.Where(a => a.kind == "assign-fork" || plan.resolveReferenceOwners && a.kind == "model-remap-review")
                     .Select(a => (a.targetSourceGuid, a.targetFamily))).Distinct().ToArray();
@@ -147,7 +149,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             }
             var report = new PreviewReport { projectRoot = ProjectRoot, batchId = plan.batchId,
                 inputFingerprint = Fingerprint(plan), previewRoot = previewRoot, sourcePlan = plan,
-                proposals = proposals.ToArray(), retirementNotes = plan.globalRetirementNotes, referenceOwners = owners };
+                proposals = proposals.ToArray(), retirementNotes = plan.globalRetirementNotes, referenceOwners = owners, wrapperRecipes = wrappers };
             WriteJson(reportPath, report);
             string markdown = "# Material migration preview\n\n" + "Project: " + ProjectRoot + "\n\n";
             if (owners != null)
@@ -157,6 +159,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 foreach (var value in owners.modelDefaults.Where(d => !d.requestedSubdivisionSatisfied))
                     markdown += $"- MODEL DEFAULT: {value.modelPath} uses {value.effectiveFamily} for requested {value.requestedFamily}; role subdivision is not implemented at this imported model root.\n";
                 markdown += "\n";
+                foreach (var wrapper in wrappers) markdown += $"- WRAPPER PROPOSAL: {wrapper.modelPath} -> {wrapper.destinationPath}; explicit new prefab, existing scene references unchanged.\n";
             }
             foreach (var proposal in report.proposals)
             {
@@ -182,6 +185,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 if (report.referenceOwners == null || report.referenceOwners.retainMixedModelAnchors != plan.retainMixedModelAnchors)
                     throw new InvalidOperationException("Preview is missing the selected reference-owner policy.");
                 HoMigrationReferenceOwners.ValidateBefore(plan, report.referenceOwners);
+                if (plan.createModelWrappers) HoMigrationReferenceOwners.ValidateWrappersBefore(report.referenceOwners, report.wrapperRecipes);
             }
             var slotActions = plan.resolveReferenceOwners ? HoMigrationReferenceOwners.ExecutableSlotActions(report.referenceOwners) : plan.slotActions;
             string backup = Path.GetFullPath(backupDirectory);
@@ -233,6 +237,10 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if (plan.resolveReferenceOwners)
                 forkActions.AddRange(report.referenceOwners.remaps.Where(r => plan.rows.Single(row => row.sourceGuid == r.targetSourceGuid).targetFamily != r.targetFamily)
                     .Select(r => new HoMaterialMigrationSlotAction { kind = "assign-fork", targetSourceGuid = r.targetSourceGuid, targetFamily = r.targetFamily, targetAssetPath = r.targetAssetPath }));
+            if (plan.createModelWrappers)
+                forkActions.AddRange(report.wrapperRecipes.SelectMany(w => w.bindings).Where(b => plan.rows.Single(row => row.sourceGuid == b.targetSourceGuid).targetFamily != b.targetFamily)
+                    .Select(b => new HoMaterialMigrationSlotAction { kind = "assign-fork", targetSourceGuid = b.targetSourceGuid, targetFamily = b.targetFamily,
+                        targetAssetPath = report.referenceOwners.intents.Single(i => i.index == b.intentIndex).action.targetAssetPath }));
             foreach (var group in forkActions.GroupBy(a => a.targetAssetPath, StringComparer.OrdinalIgnoreCase))
                 if (group.Select(a => Key(a.targetSourceGuid, a.targetFamily)).Distinct().Count() != 1
                     || group.Select(a => a.targetAssetPath).Distinct(StringComparer.Ordinal).Count() != 1)
@@ -248,6 +256,11 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             {
                 RequireNewAssetPath(action.targetAssetPath, true);
                 if (!selected.ContainsKey(Key(action.targetSourceGuid, action.targetFamily))) throw new InvalidOperationException("Missing owner fork proposal.");
+            }
+            foreach (var wrapper in plan.createModelWrappers ? report.wrapperRecipes : Array.Empty<HoMigrationReferenceOwners.WrapperRecipe>())
+            {
+                RequireNewAssetPath(wrapper.destinationPath, false);
+                if (!wrapper.destinationPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Wrapper output must be a new prefab.");
             }
             string[] changed = plan.rows.Select(r => r.assetPath).Concat(slotActions.Select(a => a.containerPath)).Distinct()
                 .SelectMany(p => new[] { p, p + ".meta" })
@@ -335,6 +348,15 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 }
                 if (plan.resolveReferenceOwners) HoMigrationReferenceOwners.ApplyRemaps(report.referenceOwners, FinalTarget);
                 FaultInjection?.Invoke("after-importer-remaps");
+                if (plan.createModelWrappers)
+                {
+                    foreach (var wrapper in report.wrapperRecipes) EnsureFolder(Path.GetDirectoryName(wrapper.destinationPath).Replace('\\', '/'), createdAssets, PersistCreated);
+                    HoMigrationReferenceOwners.CreateWrappers(report.referenceOwners, report.wrapperRecipes, FinalTarget, path =>
+                    {
+                        AssetPath(path);createdAssets.Add(path);PersistCreated();
+                    });
+                    FaultInjection?.Invoke("after-model-wrappers");
+                }
                 WithContainers(slotActions, (action, renderer) =>
                 {
                     var target = action.kind == "assign-fork" ? forks[action.targetAssetPath]
@@ -383,6 +405,14 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                         throw new InvalidOperationException("Expanded reference verification failed: " + string.Join("; ", validation.blockers));
                     Debug.Log($"HO_MATERIAL_REFERENCE_VERIFY_OK checked={validation.verifiedIntentCount} declaredModelDefaultExceptions={validation.declaredModelDefaultExceptions} pendingWrappers={report.referenceOwners.wrappers.Length}");
                 }
+                if (plan.createModelWrappers)
+                {
+                    var validation = HoMigrationReferenceOwners.ValidateWrappersAfter(report.referenceOwners, report.wrapperRecipes, FinalTarget);
+                    int expected = report.wrapperRecipes.Sum(w => w.bindings.Length);
+                    if (validation.blockers.Length != 0 || validation.verifiedWrapperCount != report.wrapperRecipes.Length || validation.verifiedIntentCount != expected)
+                        throw new InvalidOperationException("Wrapper output verification failed: " + string.Join("; ", validation.blockers));
+                    Debug.Log($"HO_MATERIAL_WRAPPERS_VERIFY_OK wrappers={validation.verifiedWrapperCount} intents={validation.verifiedIntentCount} subdivisions={validation.verifiedSubdivisionCount}");
+                }
                 foreach (var dependency in dependencies)
                     if (Hash(Absolute(dependency.path)) != dependency.sha256) throw new InvalidOperationException("Read-only owner dependency changed during migration: " + dependency.path);
                 foreach (var file in journal.originals) file.afterSha256 = Hash(Absolute(file.path));
@@ -426,10 +456,12 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             }
             if (guarded)
             {
-                foreach (var file in journal.originals.Where(f => f.path.EndsWith(".meta", StringComparison.Ordinal)))
+                foreach (string path in journal.originals.Select(f => f.path).Concat(CreatedFiles(journal.createdAssetPaths))
+                    .Concat((journal.readOnlyDependencies ?? Array.Empty<CreatedFile>()).Select(f => f.path))
+                    .Where(p => p.EndsWith(".meta", StringComparison.Ordinal)).Distinct())
                 {
-                    var importer = AssetImporter.GetAtPath(file.path[..^5]);
-                    if (importer != null && EditorUtility.IsDirty(importer)) throw new InvalidOperationException("Unsaved importer settings require review before restore: " + file.path);
+                    var importer = AssetImporter.GetAtPath(path[..^5]);
+                    if (importer != null && EditorUtility.IsDirty(importer)) throw new InvalidOperationException("Unsaved importer settings require review before restore: " + path);
                 }
                 foreach (string path in journal.originals.Select(f => f.path).Concat(CreatedFiles(journal.createdAssetPaths))
                     .Where(p => !p.EndsWith(".meta", StringComparison.Ordinal)).Distinct())
@@ -535,6 +567,8 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                     throw new InvalidOperationException("One fork asset path cannot represent different source/family proposals: " + fork.Key);
             if (plan.retainMixedModelAnchors && !plan.resolveReferenceOwners)
                 throw new InvalidOperationException("A model-default decision requires explicit reference-owner resolution.");
+            if (plan.createModelWrappers && (!plan.resolveReferenceOwners || !plan.retainMixedModelAnchors))
+                throw new InvalidOperationException("Creating model wrappers requires both explicit reference-owner resolution and retained model anchors.");
             if (plan.resolveReferenceOwners)
                 foreach (var group in plan.slotActions.Where(a => a.kind == "assign-fork" || a.kind == "model-remap-review")
                     .GroupBy(a => Key(a.targetSourceGuid, a.targetFamily)))

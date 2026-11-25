@@ -49,7 +49,7 @@ public static class HoConverterOutlineChecks
         var target=new Material(Shader.Find("HoShader/"+family+" URP"));Owned.Add(target);
         if(target.HasProperty("_OutlineNormalSource"))target.SetFloat("_OutlineNormalSource",1);
         blockers=new List<string>();differences=new List<string>();string before=EditorJsonUtility.ToJson(source);
-        Outline.Invoke(null,new object[]{source,target,family,source.shader.name.Contains("Transparent")?2:0,differences,blockers});
+        Outline.Invoke(null,new object[]{source,target,family,source.shader.name.Contains("Transparent")?2:0,differences,blockers,null,new HashSet<string>(StringComparer.Ordinal)});
         Require(before==EditorJsonUtility.ToJson(source),"source remains immutable");return target;
     }
     private static bool Has(List<string> values,string prefix)=>values.Any(v=>v.StartsWith(prefix,StringComparison.Ordinal));

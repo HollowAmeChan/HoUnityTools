@@ -8,6 +8,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
     {
         public int schemaVersion = 1;
         public bool resolveReferenceOwners, retainMixedModelAnchors;
+        public bool createModelWrappers;
         public string projectRoot, batchId, sourceInventoryPath, sourceInventorySha256, nativeAuditPath, nativeAuditSha256;
         public string[] globalRetirementNotes = Array.Empty<string>();
         public HoMaterialMigrationRow[] rows = Array.Empty<HoMaterialMigrationRow>();

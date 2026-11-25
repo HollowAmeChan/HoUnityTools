@@ -24,7 +24,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
     {
         private const string Owner = "HoUnityTools.HoMigrationTextureBaker";
         private static readonly Vector4 Identity = new(1, 1, 0, 0);
-        private enum Operation { Coverage, HairBase, HsvgBase, EmissionRgba, SssThinness, Channel }
+        private enum Operation { Coverage, HairBase, HsvgBase, EmissionRgba, SssThinness, Channel, OutlineCoverage, OutlineColor }
 
         [Serializable] public sealed class Input
         {
@@ -57,12 +57,16 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             Bake(source, derivedAssetFolder, blockers, Operation.HairBase);
         public static Texture2D HsvgBase(Material source, string derivedAssetFolder, List<string> blockers) =>
             Bake(source, derivedAssetFolder, blockers, Operation.HsvgBase);
-        public static Texture2D EmissionRgba(Material source, string derivedAssetFolder, bool premultiplyAlphaForCloth, List<string> blockers) =>
-            Bake(source, derivedAssetFolder, blockers, Operation.EmissionRgba, premultiply: premultiplyAlphaForCloth);
+        public static Texture2D EmissionRgba(Material source, string derivedAssetFolder, bool premultiplyAlphaForCloth, List<string> blockers, bool nativeUnboundMaskSampler = false) =>
+            Bake(source, derivedAssetFolder, blockers, Operation.EmissionRgba, premultiply: premultiplyAlphaForCloth, nativeUnboundMaskSampler: nativeUnboundMaskSampler);
         public static Texture2D SssThinness(Material source, string derivedAssetFolder, List<string> blockers) =>
             Bake(source, derivedAssetFolder, blockers, Operation.SssThinness);
         public static Texture2D Channel(Material source, string property, int channel, string derivedAssetFolder, List<string> blockers) =>
             Bake(source, derivedAssetFolder, blockers, Operation.Channel, property: property, channel: channel);
+        public static Texture2D OutlineCoverage(Material source, string derivedAssetFolder, List<string> blockers) =>
+            Bake(source, derivedAssetFolder, blockers, Operation.OutlineCoverage);
+        public static Texture2D OutlineColor(Material source, string derivedAssetFolder, List<string> blockers) =>
+            Bake(source, derivedAssetFolder, blockers, Operation.OutlineColor);
 
         public static Recipe ReadRecipe(Texture2D texture)
         {
@@ -78,7 +82,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         }
 
         private static Texture2D Bake(Material source, string folder, List<string> blockers, Operation operation,
-            bool premultiply = false, string property = null, int channel = 0)
+            bool premultiply = false, string property = null, int channel = 0, bool nativeUnboundMaskSampler = false)
         {
             if (blockers == null) throw new ArgumentNullException(nameof(blockers));
             int initial = blockers.Count;
@@ -140,12 +144,13 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 return map;
             }
 
-            Map main = Texture("_MainTex", true), mask = null, adjust = null, emission = null, sss = null, selected = null;
+            Map main = Texture("_MainTex", true), mask = null, adjust = null, emission = null, sss = null, selected = null, outline = null;
             Vector4 tone = new(0, 1, 1, 1), maskST = Identity, emissionST = Identity, emissionMaskST = Identity;
             int alphaMode = 0;
             float alpha = 1, maskScale = 1, maskValue = 0, emissionEnabled = 0, blend = 1,
                 useSSS = 0, thickness = 0, invert = 0, power = 1, strength = 1, thicknessScale = 1;
             var domainInputs = new List<Map>();
+            bool ownEmissionMask = false;
             bool baseDomain = operation == Operation.Coverage || operation == Operation.HairBase || operation == Operation.HsvgBase;
             if (baseDomain)
             {
@@ -183,7 +188,10 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 emissionEnabled = Float("_UseEmission");
                 if (emissionEnabled != 0)
                 {
-                    emission = Texture("_EmissionMap", true); mask = Texture("_EmissionBlendMask");
+                    emission = Texture("_EmissionMap", true);
+                    ownEmissionMask = nativeUnboundMaskSampler && main.Texture == null;
+                    mask = Texture("_EmissionBlendMask", ownEmissionMask);
+                    recipe.parameters.Add("unboundMainMaskSampler=" + (ownEmissionMask ? "explicit native mask-own sampler" : "legacy Main sampler"));
                     emissionST = emission.ST; emissionMaskST = mask.ST; domainInputs.Add(emission); domainInputs.Add(mask);
                     if (Float("_EmissionMap_UVMode") != 0 || Float("_EmissionParallaxDepth") != 0 || Float("_EmissionFluorescence") != 0)
                         Block("Emission requires static UV0 without parallax/lighting-dependent fluorescence.");
@@ -204,7 +212,16 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                     if (Float("_EmissionUseGrad") != 0 || Float("_EmissionBlendMode", 1) != 1) Block("Emission gradation/non-add compositing is unsupported.");
                     blend = Float("_EmissionBlend", 1) * blinkWeight;
                     float mainStrength = Float("_EmissionMainStrength");
-                    if (premultiply && mainStrength != 0) Block("Destination has no live emission-albedo influence; it cannot be folded into a static emission map.");
+                    if (premultiply && mainStrength != 0)
+                    {
+                        int mainIndex=source.shader.FindPropertyIndex("_MainTex");
+                        Color tint=source.HasProperty("_Color")?source.GetColor("_Color"):Color.white;
+                        bool white=main.Texture==null&&mainIndex>=0&&source.shader.GetPropertyTextureDefaultName(mainIndex)=="white"
+                            &&tint.r==1&&tint.g==1&&tint.b==1&&Vector("_MainTexHSVG",new Vector4(0,1,1,1))==new Vector4(0,1,1,1)
+                            &&Float("_MainGradationStrength")==0&&Float("_HoTesionEnabled")==0;
+                        if(!white)Block("Destination has no live emission-albedo influence; it cannot be folded into a static emission map.");
+                        else recipe.parameters.Add("neutralWhiteAlbedoInfluence="+mainStrength.ToString("R",CultureInfo.InvariantCulture));
+                    }
                 }
                 recipe.parameters.Add("premultiplyMapAlpha=" + premultiply);
                 recipe.parameters.Add("constantColorContract=" + (premultiply ? "destination HDR RGB=oldRGB*oldA; A=1" : "retain old HDR RGBA and MainStrength"));
@@ -220,6 +237,37 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                     invert = Float("_SSSThicknessInvert"); power = Float("_SSSPower", 1);
                     strength = Float("_SSSStrength", 1); thicknessScale = Float("_HoSSSThicknessScale", 1);
                     if (Float("_UseParallax") != 0) Block("SSS Main UV depends on parallax.");
+                }
+            }
+            else if (operation == Operation.OutlineCoverage || operation == Operation.OutlineColor)
+            {
+                outline=Texture("_OutlineTex",true);
+                CheckScroll(Vector("_OutlineTex_ScrollRotate",Vector4.zero),"outline",Block);
+                if(Float("_UseParallax")!=0)Block("View-dependent outline UV cannot be statically baked.");
+                if(operation==Operation.OutlineCoverage)
+                {
+                    recipe.domain="rawUV0; outline own ST then legacy AlphaMask ST; destination OutlineCoverageMap ST=identity";
+                    domainInputs.Add(outline);
+                    alpha=source.HasProperty("_OutlineColor")?source.GetColor("_OutlineColor").a:1;
+                    if(!Finite(alpha)||alpha<0||alpha>1)Block("Outline tint alpha outside [0,1].");
+                    recipe.parameters.Add("_OutlineColor.a="+alpha.ToString("R",CultureInfo.InvariantCulture));
+                    alphaMode=(int)Float("_AlphaMaskMode");
+                    if(alphaMode<0||alphaMode>4)Block("Unknown outline alpha-mask mode.");
+                    if(Float("_UseDither")!=0||Vector("_DissolveParams",Vector4.zero).x!=0||Vector("_DistanceFade",Vector4.zero).z!=0)
+                        Block("Dynamic outline coverage requires a live evaluator.");
+                    if(alphaMode!=0)
+                    {
+                        mask=Texture("_AlphaMask");maskST=mask.ST;maskScale=Float("_AlphaMaskScale",1);maskValue=Float("_AlphaMaskValue");
+                        domainInputs.Add(new Map {Texture=mask.Texture,Sampler=main.Sampler,Property=mask.Property,
+                            ST=new Vector4(outline.ST.x*maskST.x,outline.ST.y*maskST.y,outline.ST.z*maskST.x+maskST.z,outline.ST.w*maskST.y+maskST.w)});
+                    }
+                }
+                else
+                {
+                    recipe.domain="original outline texture UV; retain source OutlineTex ST on destination OutlineColorMap";
+                    recipe.destinationST=outline.ST;
+                    domainInputs.Add(new Map {Texture=outline.Texture,Sampler=outline.Sampler,ST=Identity,Property=outline.Property});
+                    tone=Vector("_OutlineTexHSVG",new Vector4(0,1,1,1));
                 }
             }
             else
@@ -266,8 +314,8 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if (blockers.Count != initial) return null;
             Map reference = domainInputs.FirstOrDefault(m => m.Texture != null);
             Texture2D sampler = reference?.Sampler;
-            bool scalar = operation == Operation.Coverage || operation == Operation.SssThinness || operation == Operation.Channel;
-            bool coverage = operation == Operation.Coverage || operation == Operation.HairBase || operation == Operation.HsvgBase;
+            bool scalar = operation == Operation.Coverage || operation == Operation.SssThinness || operation == Operation.Channel || operation == Operation.OutlineCoverage;
+            bool coverage = operation == Operation.Coverage || operation == Operation.HairBase || operation == Operation.HsvgBase || operation == Operation.OutlineCoverage;
             float[] cutoffs = new[] { source.HasProperty("_Cutoff") ? source.GetFloat("_Cutoff") : .5f,
                 source.HasProperty("_SubpassCutoff") ? source.GetFloat("_SubpassCutoff") : .5f, .001f }
                 .Where(v => Finite(v) && v >= 0 && v <= 1).Distinct().OrderBy(v => v).ToArray();
@@ -309,12 +357,15 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 material.SetTexture("_EmissionTex", emission?.Texture == null ? Texture2D.whiteTexture : emission.Texture);
                 material.SetTexture("_SssTex", sss?.Texture == null ? Texture2D.whiteTexture : sss.Texture);
                 material.SetTexture("_ChannelTex", selected?.Texture == null ? Texture2D.whiteTexture : selected.Texture);
+                material.SetTexture("_OutlineTexBake", outline?.Texture == null ? Texture2D.whiteTexture : outline.Texture);
                 material.SetVector("_MainST", main.ST); material.SetVector("_MaskST", maskST);
                 material.SetVector("_EmissionST", emissionST); material.SetVector("_EmissionMaskST", emissionMaskST);
                 material.SetVector("_Tone", tone); material.SetFloat("_TintAlpha", alpha); material.SetInt("_MaskMode", alphaMode);
                 material.SetFloat("_MaskScale", maskScale); material.SetFloat("_MaskValue", maskValue);
                 material.SetFloat("_EmissionEnabled", emissionEnabled); material.SetFloat("_EmissionBlend", blend);
                 material.SetFloat("_Premultiply", premultiply ? 1 : 0);
+                material.SetInt("_OwnEmissionMask",ownEmissionMask?1:0);
+                material.SetVector("_OutlineST",outline?.ST??Identity);
                 material.SetVector("_Sss", new Vector4(useSSS, thickness, invert, power));
                 material.SetVector("_SssStrength", new Vector4(strength, thicknessScale, 0, 0));
                 ShaderUtil.CompilePass(material, 0, true);
@@ -430,17 +481,17 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         private static string Hex(byte[] bytes) => BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
 
         private const string BakeShader = @"Shader ""Hidden/HoMigration/StaticTextureBake"" {
-Properties { _MainTex(""Main"",2D)=""white""{} _MaskTex(""Mask"",2D)=""white""{} _AdjustTex(""Adjust"",2D)=""white""{} _EmissionTex(""Emission"",2D)=""white""{} _SssTex(""SSS"",2D)=""white""{} _ChannelTex(""Channel"",2D)=""white""{} }
+Properties { _MainTex(""Main"",2D)=""white""{} _MaskTex(""Mask"",2D)=""white""{} _AdjustTex(""Adjust"",2D)=""white""{} _EmissionTex(""Emission"",2D)=""white""{} _SssTex(""SSS"",2D)=""white""{} _ChannelTex(""Channel"",2D)=""white""{} _OutlineTexBake(""Outline"",2D)=""white""{} }
 SubShader { Pass { Cull Off ZWrite Off ZTest Always Blend Off
 HLSLPROGRAM
 #pragma target 4.5
 #pragma vertex vert_img
 #pragma fragment frag
 #include ""UnityCG.cginc""
-Texture2D _MainTex,_MaskTex,_AdjustTex,_EmissionTex,_SssTex,_ChannelTex;
-SamplerState sampler_MainTex,sampler_EmissionTex,sampler_ChannelTex;
-int _Operation,_Channel,_MaskMode; float _TintAlpha,_MaskScale,_MaskValue,_EmissionEnabled,_EmissionBlend,_Premultiply;
-float4 _MainST,_MaskST,_EmissionST,_EmissionMaskST,_Tone,_Sss,_SssStrength;
+Texture2D _MainTex,_MaskTex,_AdjustTex,_EmissionTex,_SssTex,_ChannelTex,_OutlineTexBake;
+SamplerState sampler_MainTex,sampler_MaskTex,sampler_EmissionTex,sampler_ChannelTex,sampler_OutlineTexBake;
+int _Operation,_Channel,_MaskMode,_OwnEmissionMask; float _TintAlpha,_MaskScale,_MaskValue,_EmissionEnabled,_EmissionBlend,_Premultiply;
+float4 _MainST,_MaskST,_EmissionST,_EmissionMaskST,_Tone,_Sss,_SssStrength,_OutlineST;
 float3 Tone(float3 c) {
  c=pow(abs(c),_Tone.w);
  float4 p=(c.b>c.g)?float4(c.bg,-1.0,2.0/3.0):float4(c.gb,0.0,-1.0/3.0);
@@ -466,8 +517,9 @@ float4 frag(v2f_img input):SV_Target {
  }
  if(_Operation==3) {
   if(_EmissionEnabled==0)return float4(0,0,0,_Premultiply>.5?1:0);
-  float4 value=_EmissionTex.SampleLevel(sampler_EmissionTex,uv*_EmissionST.xy+_EmissionST.zw,0)
-   *_MaskTex.SampleLevel(sampler_MainTex,uv*_EmissionMaskST.xy+_EmissionMaskST.zw,0);
+  float2 maskUV=uv*_EmissionMaskST.xy+_EmissionMaskST.zw;
+  float4 mask=_OwnEmissionMask!=0?_MaskTex.SampleLevel(sampler_MaskTex,maskUV,0):_MaskTex.SampleLevel(sampler_MainTex,maskUV,0);
+  float4 value=_EmissionTex.SampleLevel(sampler_EmissionTex,uv*_EmissionST.xy+_EmissionST.zw,0)*mask;
   value.a*=_EmissionBlend;
   return _Premultiply>.5?float4(value.rgb*value.a,1):value;
  }
@@ -480,6 +532,16 @@ float4 frag(v2f_img input):SV_Target {
   }
   return float4(thickness,0,0,1);
  }
+ if(_Operation==6) {
+  float2 outlineUV=uv*_OutlineST.xy+_OutlineST.zw;
+  float a=_OutlineTexBake.SampleLevel(sampler_OutlineTexBake,outlineUV,0).a*_TintAlpha;
+  if(_MaskMode!=0) {
+   float m=saturate(_MaskTex.SampleLevel(sampler_MainTex,outlineUV*_MaskST.xy+_MaskST.zw,0).r*_MaskScale+_MaskValue);
+   if(_MaskMode==1)a=m;else if(_MaskMode==2)a*=m;else if(_MaskMode==3)a=saturate(a+m);else a=saturate(a-m);
+  }
+  return float4(saturate(a),0,0,1);
+ }
+ if(_Operation==7)return float4(Tone(_OutlineTexBake.SampleLevel(sampler_OutlineTexBake,uv,0).rgb),1);
  float4 value=_ChannelTex.SampleLevel(sampler_ChannelTex,uv,0);
  return float4(value[_Channel],0,0,1);
 }

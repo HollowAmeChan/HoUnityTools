@@ -36,7 +36,7 @@ def main():
         (package / "Editor/HoMigrationValidation.Editor.asmdef").write_text(json.dumps({"name": "HoMigrationValidation.Editor", "references": ["Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime"], "includePlatforms": ["Editor"], "autoReferenced": True}), encoding="utf-8")
     project = output / "Project"
     (project / "Assets/Editor").mkdir(parents=True)
-    owner_tests = {"HoMigrationReferenceOwnerChecks.cs", "HoMigrationOwnerTransactionChecks.cs"}
+    owner_tests = {"HoMigrationReferenceOwnerChecks.cs", "HoMigrationOwnerTransactionChecks.cs", "HoMigrationWrapperChecks.cs", "HoMigrationWrapperTransactionChecks.cs"}
     for source in (tool_root / "Tests~/MaterialMigration").glob("*.cs"):
         if args.native_owners != (source.name in owner_tests):
             continue
