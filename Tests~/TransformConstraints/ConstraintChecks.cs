@@ -154,6 +154,39 @@ public static class ConstraintChecks
             Activate(first);Activate(last);first.Order=1;last.Order=2;last.Weight=.5f;Eval(last,first);Near(target.position,Vector3.right*7,"Ordered writer blends earlier result");
             last.Order=first.Order;target.position=Vector3.zero;HoTransformConstraintScheduler.Evaluate(new HoTransformConstraint[]{last,first});Check(first.LastError!=null&&last.LastError!=null,"Same-order overlapping writers rejected");Near(target.position,Vector3.zero,"Ambiguous writers do not write");
         });
+        Case("Same-object conflicts affect only dependent channels", () =>
+        {
+            var target = Obj("target");
+            var source = Obj("source", new Vector3(4, 5, 6));
+            source.rotation = Quaternion.Euler(13, 27, 41);
+            source.localScale = new Vector3(2, 3, 4);
+            var first = target.gameObject.AddComponent<HoPositionConstraint>();
+            var second = target.gameObject.AddComponent<HoPositionConstraint>();
+            var rotation = target.gameObject.AddComponent<HoRotationConstraint>();
+            var scale = target.gameObject.AddComponent<HoScaleConstraint>();
+            var aim = target.gameObject.AddComponent<HoAimConstraint>();
+            aim.Order = 1;
+            var stack = new HoTransformConstraint[] { aim, scale, rotation, second, first };
+            foreach (var constraint in stack)
+            {
+                constraint.TargetTransform = target;
+                constraint.Sources.Add(new HoTransformConstraintSource { transform = source });
+                Activate(constraint);
+            }
+
+            HoTransformConstraintScheduler.Evaluate(stack);
+            Check(first.LastError != null && second.LastError != null, "Ambiguous position writers stop");
+            Check(aim.LastError != null, "Aim depends on the same target's position");
+            Check(rotation.LastError == null && scale.LastError == null, "Independent rotation and scale run");
+            Near(target.position, Vector3.zero, "Ambiguous position remains unchanged");
+            Near(target.rotation, source.rotation, "Position conflict does not suppress rotation");
+            Near(target.localScale, source.localScale, "Position conflict does not suppress scale");
+
+            second.enabled = false;
+            aim.enabled = false;
+            Eval(first, rotation, scale);
+            Near(target.position, source.position, "Disabling the conflicting writer restores position evaluation");
+        });
         Case("Cycles and invalid upstream",()=>{
             var a=Obj("a",Vector3.right);var b=Obj("b",Vector3.up);var ca=Constraint<HoPositionConstraint>(a,b);var cb=Constraint<HoPositionConstraint>(b,a);Activate(ca);Activate(cb);
             var independent=Constraint<HoPositionConstraint>(Obj("independent"),Obj("independent source",Vector3.one));Activate(independent);

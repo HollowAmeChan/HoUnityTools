@@ -5,14 +5,14 @@ namespace Hollow.HoUnityTools.Constraints
     public enum HoFollowConstraintUpdateMode
     {
         // Keep the serialized values used by scenes and prefabs.
-        LateUpdate = 0,
-        Update = 1
+        [InspectorName("动画后（LateUpdate）")] LateUpdate = 0,
+        [InspectorName("更新（Update）")] Update = 1
     }
 
     public enum HoFollowConstraintSpace
     {
-        World = 0,
-        Local = 1
+        [InspectorName("世界")] World = 0,
+        [InspectorName("父级本地")] Local = 1
     }
 
     [DisallowMultipleComponent]

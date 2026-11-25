@@ -22,28 +22,65 @@ namespace Hollow.HoUnityTools.TransformConstraints
             if(phase==HoTransformConstraintPhase.Update){if(updateFrame==Time.frameCount)return;updateFrame=Time.frameCount;}
             if(phase==HoTransformConstraintPhase.LateUpdate){if(lateFrame==Time.frameCount)return;lateFrame=Time.frameCount;}
             if(phase==HoTransformConstraintPhase.FixedUpdate){if(fixedTime==Time.fixedTimeAsDouble)return;fixedTime=Time.fixedTimeAsDouble;}
-            Evaluate(registry.Where(c=>c!=null&&Application.IsPlaying(c.gameObject)&&c.Phase==phase).ToArray());
+            Evaluate(registry.Where(c=>c!=null&&c.Phase==phase));
         }
 
         public static void Evaluate(IEnumerable<HoTransformConstraint> requested)
         {
-            var nodes=requested.Where(c=>c!=null&&c.isActiveAndEnabled&&c.ConstraintActive).Distinct().ToList();
+            var nodes = requested.Where(c => c != null && c.isActiveAndEnabled && c.ConstraintActive &&
+                HoTransformConstraint.IsRuntimeObject(c.gameObject)).Distinct().ToList();
             var blocked=new HashSet<HoTransformConstraint>();
             foreach(var c in nodes)
             {
                 c.LastError=null;
-                if(!c.ValidateConfiguration(out string error)){c.LastError=error;blocked.Add(c);}
+                if (!c.ValidateConfiguration(out string error))
+                {
+                    c.LastError = error;
+                    blocked.Add(c);
+                }
+                else if (!HoTransformConstraint.IsRuntimeObject(c.TargetTransform.gameObject))
+                {
+                    c.LastError = "被驱动物体不在运行中的场景里。";
+                    blocked.Add(c);
+                }
             }
             var potentialWriters=nodes.Where(c=>c.TargetTransform!=null&&c.Weight>0&&c.WrittenChannels!=0).ToList();
             nodes=nodes.Where(c=>!blocked.Contains(c)&&c.Weight>0&&c.WrittenChannels!=0).ToList();
             var edges=nodes.ToDictionary(c=>c,c=>new HashSet<HoTransformConstraint>());
-            foreach(var group in nodes.GroupBy(c=>c.TargetTransform))
+            foreach(var group in potentialWriters.GroupBy(c=>c.TargetTransform))
             {
                 var writers=group.OrderBy(c=>c.Order).ThenBy(c=>Priority(c.Kind)).ThenBy(c=>c.GetInstanceID()).ToList();
                 for(int i=0;i<writers.Count;i++)for(int j=i+1;j<writers.Count;j++)
                     if(writers[i].Order==writers[j].Order&&(writers[i].WrittenChannels&writers[j].WrittenChannels)!=0)
-                    {writers[i].LastError=writers[j].LastError="同一 Target／通道有相同 Order 的多个写者，请设置不同 Order";blocked.Add(writers[i]);blocked.Add(writers[j]);}
-                for(int i=1;i<writers.Count;i++)edges[writers[i]].Add(writers[i-1]);
+                    {
+                        const string conflict = "多个约束以相同顺序控制同一通道，请设置不同的执行顺序";
+                        writers[i].LastError = writers[i].LastError ?? conflict;
+                        writers[j].LastError = writers[j].LastError ?? conflict;
+                        blocked.Add(writers[i]);
+                        blocked.Add(writers[j]);
+                    }
+                for (int later = 1; later < writers.Count; later++)
+                {
+                    var writer = writers[later];
+                    if (!edges.TryGetValue(writer, out var dependencies))
+                    {
+                        continue;
+                    }
+                    var inputChannels = writer.WrittenChannels;
+                    if (writer.Kind == HoTransformConstraintKind.Aim)
+                    {
+                        inputChannels |= HoTransformChannels.Position;
+                    }
+
+                    for (int earlier = 0; earlier < later; earlier++)
+                    {
+                        var dependency = writers[earlier];
+                        if ((inputChannels & dependency.WrittenChannels) != 0)
+                        {
+                            dependencies.Add(dependency);
+                        }
+                    }
+                }
             }
             foreach(var c in nodes)
             {

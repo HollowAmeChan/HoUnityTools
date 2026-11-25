@@ -5,7 +5,6 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.TransformConstraints
 {
     /// <summary>Configuration lives on this host; only TargetTransform is driven.</summary>
-    [ExecuteAlways]
     public abstract class HoTransformConstraint : MonoBehaviour
     {
         [SerializeField] private Transform targetTransform;
@@ -16,7 +15,6 @@ namespace Hollow.HoUnityTools.TransformConstraints
         [SerializeField] private HoTransformConstraintPhase phase=HoTransformConstraintPhase.LateUpdate;
         [SerializeField] private HoTransformConstraintSpace space=HoTransformConstraintSpace.World;
         [SerializeField] private HoTransformConstraintInput input=HoTransformConstraintInput.RestPose;
-        [SerializeField] private bool previewInEditMode;
         [SerializeField] private HoTransformAxes positionAxes=HoTransformAxes.All;
         [SerializeField] private HoTransformAxes rotationAxes=HoTransformAxes.All;
         [SerializeField] private HoTransformAxes scaleAxes=HoTransformAxes.All;
@@ -34,7 +32,6 @@ namespace Hollow.HoUnityTools.TransformConstraints
         public HoTransformConstraintPhase Phase {get=>phase;set=>phase=value;}
         public HoTransformConstraintSpace Space {get=>space;set=>space=value;}
         public HoTransformConstraintInput Input {get=>input;set=>input=value;}
-        public bool PreviewInEditMode {get=>previewInEditMode;set=>previewInEditMode=value;}
         public HoTransformAxes PositionAxes {get=>positionAxes;set=>positionAxes=value;}
         public HoTransformAxes RotationAxes {get=>rotationAxes;set=>rotationAxes=value;}
         public HoTransformAxes ScaleAxes {get=>scaleAxes;set=>scaleAxes=value;}
@@ -63,8 +60,8 @@ namespace Hollow.HoUnityTools.TransformConstraints
         public bool ValidateConfiguration(out string error,bool requireBinding=true)
         {
             error=null;
-            if(targetTransform==null){error="请指定被驱动 Target；组件宿主不会自动作为 Target";return false;}
-            if(requireBinding&&!HasRestPose){error="尚未捕获基础姿态，或 Target 已更换；请重新启用／捕获";return false;}
+            if(targetTransform==null){error="请选择被驱动物体。";return false;}
+            if(requireBinding&&!HasRestPose){error="请绑定被驱动物体的初始姿态。";return false;}
             if(!Finite(weight)||weight<0||weight>1){error="总体权重必须在 0–1 之间";return false;}
             double total=0;
             foreach(var source in sources)
@@ -72,12 +69,12 @@ namespace Hollow.HoUnityTools.TransformConstraints
                 if(source==null||!Finite(source.weight)||source.weight<0){error="来源权重无效";return false;}
                 if(source.weight==0)continue;
                 if(source.transform==null){error="正权重来源缺少 Transform";return false;}
-                if(source.transform==targetTransform||source.transform.IsChildOf(targetTransform)){error="来源不能是 Target 或其子级（循环依赖）";return false;}
-                if(requireBinding&&source.offsetSource!=null&&source.offsetSource!=source.transform){error="来源已替换，请重新捕获偏移";return false;}
+                if(source.transform==targetTransform||source.transform.IsChildOf(targetTransform)){error="来源不能是被驱动物体或其子级。";return false;}
+                if(requireBinding&&source.offsetSource!=null&&source.offsetSource!=source.transform){error="来源已替换，请重新绑定约束。";return false;}
                 if(!Finite(source.positionOffset)||!Finite(source.rotationOffset)||!Finite(source.scaleMultiplier)){error="来源偏移包含非法数值";return false;}
                 total+=source.weight;
             }
-            if(total<=0||double.IsInfinity(total)){error="至少需要一个正权重来源";return false;}
+            if(total<=0||double.IsInfinity(total)){error="请添加至少一个权重大于 0 的来源。";return false;}
             if(this is HoAimConstraint aim&&!aim.ValidateAim(out error))return false;
             return true;
         }
@@ -125,12 +122,33 @@ namespace Hollow.HoUnityTools.TransformConstraints
             constraintActive=true;LastError=null;return true;
         }
 
-        public void RestoreRestPose(){if(HasRestPose)restPose.Apply(targetTransform,WrittenChannels);}
+        public void RestoreRestPose()
+        {
+            if (HasRestPose && targetTransform != null &&
+                IsRuntimeObject(gameObject) && IsRuntimeObject(targetTransform.gameObject))
+            {
+                restPose.Apply(targetTransform, WrittenChannels);
+            }
+        }
+
         public bool EvaluateNow()
         {
+            if (!IsRuntimeObject(gameObject))
+            {
+                LastError = "约束仅在运行时生效。";
+                return false;
+            }
+
             if(!isActiveAndEnabled||!constraintActive){LastError="请先启用组件并捕获／启用约束";return false;}
             HoTransformConstraintScheduler.Evaluate(new[]{this});return LastError==null;
         }
+
+        internal static bool IsRuntimeObject(GameObject item)
+        {
+            // A prefab asset has no scene, even when inspected during Play Mode.
+            return item.scene.IsValid() && Application.IsPlaying(item);
+        }
+
         protected virtual void OnDrawGizmosSelected()
         {
             if(!drawGizmos||targetTransform==null)return;

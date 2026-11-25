@@ -5,8 +5,8 @@ namespace Hollow.HoUnityTools.Constraints
 {
     public enum HoFloatingConstraintSpace
     {
-        World = 0,
-        Local = 1
+        [InspectorName("世界")] World = 0,
+        [InspectorName("初始姿态本地")] Local = 1
     }
 
     [DisallowMultipleComponent]

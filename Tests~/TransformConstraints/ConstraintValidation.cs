@@ -10,50 +10,112 @@ public static class ConstraintValidation
 {
     public static void Run()
     {
-        string reportPath=Path.GetFullPath(Path.Combine(Application.dataPath,"../results.json"));
+        string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../results.json"));
         try
         {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
-            ConstraintChecks.Run();
-            ConstraintChecks.Case("Temporary editor preview",()=>{
-                var source=ConstraintChecks.Obj("source",Vector3.right*9);var target=ConstraintChecks.Obj("target",Vector3.one);var c=ConstraintChecks.Constraint<HoPositionConstraint>(target,source);ConstraintChecks.Activate(c);c.PreviewInEditMode=true;
-                HoTransformConstraintPreview.Tick();ConstraintChecks.Near(target.position,source.position,"Edit preview follows");
-                source.position=Vector3.right*10;HoTransformConstraintPreview.Tick();ConstraintChecks.Near(target.position,source.position,"Edit preview updates source");
-                target.rotation=Quaternion.Euler(10,20,30);var q=target.rotation;c.PreviewInEditMode=false;HoTransformConstraintPreview.Tick();
-                ConstraintChecks.Near(target.position,Vector3.one,"Preview off restores author pose");ConstraintChecks.Near(target.rotation,q,"Preview restores owned channels only");
-                c.PreviewInEditMode=true;HoTransformConstraintPreview.Tick();c.enabled=false;HoTransformConstraintPreview.Tick();ConstraintChecks.Near(target.position,Vector3.one,"Disable restores preview");
-                c.enabled=true;HoTransformConstraintPreview.Tick();HoTransformConstraintPreview.RestoreAll();ConstraintChecks.Near(target.position,Vector3.one,"Reload/play restore hook");
-                using(var inspector=new EditorScope(UnityEditor.Editor.CreateEditor(c)))ConstraintChecks.Check(inspector.Value is HoTransformConstraintEditor,"Custom inspector loads");
-            });
-            ConstraintChecks.Case("Explicit target edit Undo",()=>{
-                var target=ConstraintChecks.Obj("target",Vector3.one);var source=ConstraintChecks.Obj("source",Vector3.one*9);var c=ConstraintChecks.Constraint<HoPositionConstraint>(target,source);ConstraintChecks.Activate(c);
-                Undo.RecordObject(target,"Constraint sample");ConstraintChecks.Check(c.EvaluateNow(),"Manual sample succeeds");Undo.FlushUndoRecordObjects();
-                ConstraintChecks.Near(target.position,Vector3.one*9,"Manual sample writes target");Undo.PerformUndo();ConstraintChecks.Near(target.position,Vector3.one,"Manual sample Undo restores target");Undo.PerformRedo();ConstraintChecks.Near(target.position,Vector3.one*9,"Manual sample Redo");Undo.ClearAll();
-            });
-            var prefabRoot=new GameObject("Serializable external constraint");
-            var targetNode=new GameObject("target").transform;targetNode.SetParent(prefabRoot.transform);targetNode.localPosition=new Vector3(2,3,4);
-            var sourceNode=new GameObject("source").transform;sourceNode.SetParent(prefabRoot.transform);sourceNode.localPosition=new Vector3(10,20,30);
-            var host=new GameObject("external host");host.transform.SetParent(prefabRoot.transform);var component=host.AddComponent<HoPositionConstraint>();component.TargetTransform=targetNode;component.Sources.Add(new HoTransformConstraintSource{transform=sourceNode});ConstraintChecks.Activate(component,true);component.PreviewInEditMode=true;
-            HoTransformConstraintPreview.Tick();sourceNode.localPosition+=Vector3.one;HoTransformConstraintPreview.Tick();
-            EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(),"Assets/PreviewScene.unity");
-            ConstraintChecks.Near(targetNode.localPosition,new Vector3(2,3,4),"Scene save restores author position");
-            PrefabUtility.SaveAsPrefabAsset(prefabRoot,"Assets/Constraint.prefab");UnityEngine.Object.DestroyImmediate(prefabRoot);
-            var prefab=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Constraint.prefab");var stored=prefab.GetComponentInChildren<HoPositionConstraint>();
-            ConstraintChecks.Check(stored.HasRestPose&&stored.TargetTransform!=null&&stored.Sources[0].transform!=null,"Prefab target/source/binding survive serialization");
-            var assetPose=stored.TargetTransform.localPosition;HoTransformConstraintPreview.Tick();ConstraintChecks.Near(stored.TargetTransform.localPosition,assetPose,"Persistent prefab asset is not previewed");
-            var instance=(GameObject)PrefabUtility.InstantiatePrefab(prefab);var instanced=instance.GetComponentInChildren<HoPositionConstraint>();
-            ConstraintChecks.Check(instanced.TargetTransform.IsChildOf(instance.transform)&&instanced.Sources[0].transform.IsChildOf(instance.transform),"Prefab instance references remap");
-            ConstraintChecks.Eval(instanced);ConstraintChecks.Near(instanced.TargetTransform.localPosition,new Vector3(3,4,5),"Serialized offset evaluates in prefab instance");
-            HoTransformConstraintPreview.RestoreAll();UnityEngine.Object.DestroyImmediate(instance);
-            File.WriteAllText(reportPath,JsonUtility.ToJson(ConstraintChecks.Report,true));
-            if(ConstraintChecks.Report.failures.Count!=0){EditorApplication.Exit(1);return;}
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
-            var probe=new GameObject("Play mode integration").AddComponent<ConstraintPlayProbe>();probe.reportPath=reportPath;
-            EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(),"Assets/PlayValidation.unity");EditorApplication.isPlaying=true;
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            CheckEditMode<HoPositionConstraint>();
+            CheckEditMode<HoRotationConstraint>();
+            CheckEditMode<HoScaleConstraint>();
+            CheckEditMode<HoParentConstraint>();
+            CheckEditMode<HoAimConstraint>();
+            var prefab = PreparePrefab();
+            File.WriteAllText(reportPath, JsonUtility.ToJson(ConstraintChecks.Report, true));
+            if (ConstraintChecks.Report.failures.Count != 0)
+            {
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var probe = new GameObject("Play mode integration").AddComponent<ConstraintPlayProbe>();
+            probe.reportPath = reportPath;
+            probe.prefab = prefab;
+            var sceneInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            probe.sceneConstraint = sceneInstance.GetComponentInChildren<HoPositionConstraint>();
+            EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), "Assets/PlayValidation.unity");
+            EditorApplication.isPlaying = true;
         }
-        catch(Exception error)
-        {ConstraintChecks.Report.failures.Add(error.ToString());File.WriteAllText(reportPath,JsonUtility.ToJson(ConstraintChecks.Report,true));Debug.LogException(error);EditorApplication.Exit(1);}
+        catch (Exception error)
+        {
+            ConstraintChecks.Report.failures.Add(error.ToString());
+            File.WriteAllText(reportPath, JsonUtility.ToJson(ConstraintChecks.Report, true));
+            Debug.LogException(error);
+            EditorApplication.Exit(1);
+        }
     }
-    private sealed class EditorScope:IDisposable
-    {public UnityEditor.Editor Value;public EditorScope(UnityEditor.Editor value){Value=value;}public void Dispose(){UnityEngine.Object.DestroyImmediate(Value);}}
+
+    private static void CheckEditMode<T>() where T : HoTransformConstraint
+    {
+        ConstraintChecks.Case(typeof(T).Name + " is runtime-only", () =>
+        {
+            var source = ConstraintChecks.Obj("source", new Vector3(8, 9, 10));
+            source.rotation = Quaternion.Euler(14, 28, 42);
+            source.localScale = new Vector3(3, 4, 5);
+            var target = ConstraintChecks.Obj("target", Vector3.one);
+            var constraint = ConstraintChecks.Constraint<T>(target, source);
+
+            Undo.RecordObject(constraint, "Bind constraint");
+            ConstraintChecks.Activate(constraint);
+            Undo.FlushUndoRecordObjects();
+            ConstraintChecks.Near(target.localPosition, Vector3.one, "Binding may read the editor pose");
+            Undo.PerformUndo();
+            ConstraintChecks.Check(!constraint.HasRestPose && !constraint.ConstraintActive, "Binding can be undone");
+            Undo.PerformRedo();
+            ConstraintChecks.Check(constraint.HasRestPose && constraint.ConstraintActive, "Binding can be redone");
+            Undo.ClearAll();
+
+            target.SetLocalPositionAndRotation(new Vector3(2, 3, 4), Quaternion.Euler(7, 17, 27));
+            target.localScale = new Vector3(2, 2, 2);
+            var authored = HoTransformLocalPose.Read(target);
+            ConstraintChecks.Check(!constraint.EvaluateNow(), "Component evaluation rejects Edit Mode");
+            HoTransformConstraintScheduler.Evaluate(new[] { constraint });
+            constraint.RestoreRestPose();
+            ConstraintChecks.Near(target.localPosition, authored.position, "Edit Mode preserves position");
+            ConstraintChecks.Near(target.localRotation, authored.rotation, "Edit Mode preserves rotation");
+            ConstraintChecks.Near(target.localScale, authored.scale, "Edit Mode preserves scale");
+            ConstraintChecks.Check(!typeof(T).IsDefined(typeof(ExecuteAlways), true), "Component is not registered for editor execution");
+
+            var inspector = UnityEditor.Editor.CreateEditor(constraint);
+            try
+            {
+                ConstraintChecks.Check(inspector is HoTransformConstraintEditor, "Custom inspector loads");
+                ConstraintChecks.Check(inspector.serializedObject.FindProperty("previewInEditMode") == null, "No edit preview setting");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(inspector);
+            }
+        });
+    }
+
+    private static GameObject PreparePrefab()
+    {
+        var root = new GameObject("Serializable external constraint");
+        var target = new GameObject("target").transform;
+        target.SetParent(root.transform);
+        target.localPosition = new Vector3(2, 3, 4);
+        var source = new GameObject("source").transform;
+        source.SetParent(root.transform);
+        source.localPosition = new Vector3(10, 20, 30);
+        var host = new GameObject("external host");
+        host.transform.SetParent(root.transform);
+        var component = host.AddComponent<HoPositionConstraint>();
+        component.TargetTransform = target;
+        component.Sources.Add(new HoTransformConstraintSource { transform = source });
+        ConstraintChecks.Activate(component, true);
+        source.localPosition += Vector3.one;
+        HoTransformConstraintScheduler.Evaluate(new[] { component });
+
+        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), "Assets/AuthoringScene.unity");
+        ConstraintChecks.Near(target.localPosition, new Vector3(2, 3, 4), "Scene saves the authored pose");
+        PrefabUtility.SaveAsPrefabAsset(root, "Assets/Constraint.prefab");
+        UnityEngine.Object.DestroyImmediate(root);
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Constraint.prefab");
+        var stored = prefab.GetComponentInChildren<HoPositionConstraint>();
+        ConstraintChecks.Check(stored.HasRestPose && stored.TargetTransform != null && stored.Sources[0].transform != null,
+            "Prefab target, source and binding survive serialization");
+        ConstraintChecks.Near(stored.TargetTransform.localPosition, new Vector3(2, 3, 4), "Prefab keeps the authored pose");
+        return prefab;
+    }
 }

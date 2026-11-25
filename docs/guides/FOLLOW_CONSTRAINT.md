@@ -18,6 +18,8 @@
 
 `ResetState()` 会重置运行中的阻尼状态。`SnapToTarget()` 直接写入当前设置算出的目标位姿。
 
+Follow 的「清空」和 Floating 的「清空、光环、武器、背包、无人机」预设均可在 Inspector 应用。编辑时应用预设会记录当前本地位置和旋转。播放时应用预设只替换效果参数，继续使用原运行基准。
+
 ## 更新时机
 
 `Update` 是默认选项。供 Animation Rigging 等同帧消费者读取时，在 **Script Execution Order** 里把目标驱动排在 Follow 之前，把读取 Follow 位姿的脚本排在 Follow 之后。例如目标驱动更早运行时，可把 `HoFollowConstraint` 设为 `-100`，早于默认顺序的 `RigBuilder.Update()`。细节见 [Animator IK 与更新时机](../pitfalls/UNITY_IK_AND_TIMING.md)。

@@ -4,10 +4,33 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.TransformConstraints
 {
     public enum HoTransformConstraintKind { Position, Rotation, Scale, Parent, Aim }
-    public enum HoTransformConstraintPhase { Update, LateUpdate, FixedUpdate, Manual }
-    public enum HoTransformConstraintSpace { World, Local }
-    public enum HoTransformConstraintInput { RestPose, Animated }
-    public enum HoAimUpMode { SceneUp, WorldVector, ObjectPosition, ObjectRotation }
+    public enum HoTransformConstraintPhase
+    {
+        [InspectorName("更新（Update）")] Update,
+        [InspectorName("动画后（LateUpdate）")] LateUpdate,
+        [InspectorName("固定更新（FixedUpdate）")] FixedUpdate,
+        [InspectorName("手动")] Manual
+    }
+
+    public enum HoTransformConstraintSpace
+    {
+        [InspectorName("世界")] World,
+        [InspectorName("本地")] Local
+    }
+
+    public enum HoTransformConstraintInput
+    {
+        [InspectorName("绑定姿态")] RestPose,
+        [InspectorName("当帧动画")] Animated
+    }
+
+    public enum HoAimUpMode
+    {
+        [InspectorName("场景向上")] SceneUp,
+        [InspectorName("世界方向")] WorldVector,
+        [InspectorName("参考物体位置")] ObjectPosition,
+        [InspectorName("参考物体旋转")] ObjectRotation
+    }
     public enum HoSignedAxis { PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ }
     [Flags] public enum HoTransformChannels { None=0, Position=1, Rotation=2, Scale=4 }
     [Flags] public enum HoTransformAxes { None=0, X=1, Y=2, Z=4, All=7 }
