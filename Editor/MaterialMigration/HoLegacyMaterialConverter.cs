@@ -19,7 +19,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             "Hidden/lilToonTransparent","Hidden/lilToonTransparentOutline","Hidden/lilToonOnePassTransparent",
             "Hidden/lilToonOnePassTransparentOutline","Hidden/lilToonTwoPassTransparent","Hidden/lilToonTwoPassTransparentOutline"
         };
-        internal static Material Convert(Material source,HoMigrationFamily family,List<string> differences,List<string> blockers,string derivedAssetFolder)
+        internal static Material Convert(Material source,HoMigrationFamily family,List<string> differences,List<string> blockers,string derivedAssetFolder,string[] modelDecisions=null)
         {
             if(differences==null||blockers==null)throw new ArgumentNullException(differences==null?nameof(differences):nameof(blockers));
             if(source==null||source.shader==null||!LegacyShaders.Contains(source.shader.name))
@@ -30,10 +30,25 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             try
             {
                 int mode=SurfaceMode(source);
-                CheckUnsupportedInputs(source,family,mode,differences,blockers);
+                HashSet<string> decisions=ValidateModelDecisions(source,family,modelDecisions,differences,blockers);
+                if(decisions.Contains("PreserveHiddenCoverage"))
+                {
+                    // The old vertex stage returned before every raster output.
+                    // Keep a real zero-coverage cutout so native RT alpha-any-hit
+                    // also hides it; pass-disable flags alone do not affect RT.
+                    CopyColor(source,"_Color",target,"_BaseColor",Color.white,blockers);
+                    CopyTexture(source,"_MainTex",target,"_BaseMap",false);SetAlpha(target,"_BaseColor",0);
+                    Set(target,"_SurfaceMode",1);Set(target,"_AlphaMaskMode",0);Set(target,"_Cutoff",.5f);
+                    Set(target,"_OutlineEnabled",0);Set(target,"_OutlineWidth",0);Set(target,"_UseEmission",0);
+                    Set(target,"_QueueControl",1);Sync(target,family,blockers);
+                    if(source.renderQueue>=0)target.renderQueue=source.renderQueue;
+                    Set(target,"_QueueOffset",target.renderQueue-2450);Set(target,"_HoOITMaterialQueue",target.renderQueue);
+                    MapMetadata(source,target,family);return target;
+                }
+                CheckUnsupportedInputs(source,family,mode,differences,blockers,decisions);
                 CopyColor(source,"_Color",target,"_BaseColor",Color.white,blockers);
                 CopyTexture(source,"_MainTex",target,"_BaseMap",false);
-                MapSurface(source,target,family,mode,differences,blockers,derivedAssetFolder);
+                MapSurface(source,target,family,mode,differences,blockers,derivedAssetFolder,decisions);
                 MapNormal(source,target,family,differences,blockers);
                 MapPbr(source,target,family,differences,blockers,derivedAssetFolder);
                 MapLighting(source,target,family,differences,blockers);
@@ -41,7 +56,9 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 MapEmission(source,target,family,differences,blockers,derivedAssetFolder);
                 MapTension(source,target,family,differences,blockers);
                 MapStencil(source,target,"_Stencil",blockers);
-                MapOutline(source,target,family,mode,differences,blockers);
+                if(decisions.Contains("RetireZeroWidthOutline")||decisions.Contains("RetireEyeOutline"))
+                {Set(target,"_OutlineEnabled",0);Set(target,"_OutlineWidth",0);}
+                else MapOutline(source,target,family,mode,differences,blockers);
                 MapSss(source,target,family,differences,blockers,derivedAssetFolder);
                 MapSemantics(source,target,family,differences,blockers);
                 Sync(target,family,blockers);
@@ -55,12 +72,14 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             catch(Exception error)
             {Block(blockers,"CONVERSION_ERROR: "+error.GetType().Name+": "+error.Message);return target;}
         }
-        private static void MapSurface(Material s,Material t,HoMigrationFamily family,int mode,List<string> d,List<string> b,string folder)
+        private static void MapSurface(Material s,Material t,HoMigrationFamily family,int mode,List<string> d,List<string> b,string folder,HashSet<string> decisions)
         {
             Set(t,"_SurfaceMode",mode);Set(t,"_AlphaClip",mode==1?1:0);Set(t,"_Surface",mode==2?1:0);
             Set(t,"_Cutoff",F(s,"_Cutoff",.5f));Set(t,"_SubpassCutoff",F(s,"_SubpassCutoff",.5f));
             Set(t,"_Cull",F(s,"_Cull",2));Set(t,"_QueueControl",1);
             Set(t,"_TransparentZWrite",mode==2?F(s,"_ZWrite",0):0);Set(t,"_ZWrite",F(s,"_ZWrite",mode==2?0:1));
+            if(decisions.Contains("ReplaceTwoPassTransparency"))Set(t,"_Cull",0);
+            if(decisions.Contains("UseNativeTransparentDepth")){Set(t,"_TransparentZWrite",0);Set(t,"_ZWrite",0);}
             bool oit=mode==2&&On(s,"_lilOITEnabled");
             Set(t,"_UseHoOIT",oit?1:0);
             if(oit&&!t.HasProperty("_UseHoOIT"))Block(b,"OIT_UNSUPPORTED: active legacy _lilOITEnabled requires a native OIT pass; "+family+" has none.");
@@ -78,7 +97,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             {
                 Set(t,"_Blend",F(s,"_SrcBlend",1)==1?1:0);
                 Diff(d,"TRANSPARENCY_MODEL: single-pass "+family+" blending/depth/Ho coverage replaces the legacy transparent lighting/compositing model; source queue is preserved.");
-                if((family==HoMigrationFamily.Cloth||family==HoMigrationFamily.Hair)&&F(s,"_ZWrite",0)>.5f)
+                if((family==HoMigrationFamily.Cloth||family==HoMigrationFamily.Hair)&&F(s,"_ZWrite",0)>.5f&&!decisions.Contains("UseNativeTransparentDepth"))
                     Block(b,"TRANSPARENT_DEPTH_WRITE: source Forward writes depth; "+family+" fixes transparent Forward depth write off.");
                 if(F(s,"_DstBlend",10)!=10||(F(s,"_SrcBlend",1)!=1&&F(s,"_SrcBlend",1)!=5))
                     Block(b,"TRANSPARENT_BLEND: custom legacy RGB blend factors are not a standard alpha/premultiplied target mode.");
@@ -166,7 +185,19 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                     if(!packed)SamplerDifference(s,"_SmoothnessTex",d);
                 }
                 else if(smoothMap)Block(b,"EYE_SMOOTHNESS_MAP: Eye has scalar smoothness only; source smoothness varies spatially.");
-                if(metallic>0)Block(b,"NONMETAL_FAMILY: source metallic="+metallic+" (including its map) cannot be represented by "+family+" fixed metallic=0.");
+                if(metallic>0)
+                {
+                    string metalInput=packed?"_PBRMap":"_MetallicGlossMap";
+                    string evidence="no texture actually bound to "+metalInput;
+                    bool proven=Assigned(s,metalInput)&&HoMigrationTextureAnalysis.TryProveRedConstantZero(Texture(s,metalInput),out evidence);
+                    if(proven)
+                    {
+                        // Keep the proof itself in the reviewable result. Do not
+                        // reinterpret the source scalar alone as its surface.
+                        Diff(d,"CONSTANT_ZERO_METALLIC: source scalar "+metallic+" * "+metalInput+".r is exactly zero: "+evidence+". "+family+" fixed metallic=0 preserves this static surface; external texture overrides remain caller preflight.");
+                    }
+                    else Block(b,"NONMETAL_FAMILY: source metallic="+metallic+" (including its map) cannot be represented by "+family+" fixed metallic=0; constant-zero proof unavailable: "+evidence+".");
+                }
                 if(Assigned(s,packed?"_PBRMap":"_ReflectanceTex"))Block(b,"DIELECTRIC_F0_MAP: "+family+" has no spatial F0 input; source "+(packed?"packed G":"ReflectanceTex R")+" requires explicit model review.");
                 if(family==HoMigrationFamily.Skin)
                 {Set(t,"_SpecularStrength",f0/.04f);if(f0>.08f)Block(b,"SKIN_F0_RANGE: source absolute F0="+f0+" exceeds Skin maximum .08; preview shader clamps, not an equivalent conversion.");}
@@ -295,16 +326,30 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         }
         private static void MapOutline(Material s,Material t,HoMigrationFamily family,int mode,List<string> d,List<string> b)
         {
-            bool enabled=s.shader.name.Contains("Outline")&&F(s,"_OutlineWidth")>0;
+            bool variant=s.shader.name.Contains("Outline");
+            bool forward=variant&&s.GetShaderPassEnabled("FORWARD_OUTLINE")&&s.GetShaderPassEnabled("UniversalForward")&&s.GetShaderPassEnabled("UniversalForwardOnly");
+            bool infrastructure=variant&&s.GetShaderPassEnabled("HO_OUTLINE_NORMAL_DEPTH")&&s.GetShaderPassEnabled("HoGeometryBufferOutlineNormalDepth");
+            float width=F(s,"_OutlineWidth"),bias=F(s,"_OutlineZBias");
+            bool deleted=width==0&&On(s,"_OutlineDeleteMesh");
+            bool enabled=variant&&!deleted&&(forward||infrastructure);
             Set(t,"_OutlineEnabled",enabled?1:0);if(!enabled){Set(t,"_OutlineWidth",0);return;}
+            if(width==0)
+            {
+                // The old inverted shell is not discarded when DeleteMesh is off.
+                // In particular, two real Environment sources have zero expansion
+                // but a .5 object-view displacement. A material alone cannot prove
+                // even an undisplaced shell has no depth/stencil/Ho coverage.
+                Block(b,"OUTLINE_ZERO_WIDTH_SHELL: old DeleteMesh=false retains a zero-expansion shell"+(bias!=0?" with object-view bias "+bias:"")+"; target zero-width suppression needs an explicit mesh/coverage retirement decision.");
+            }
             if(family==HoMigrationFamily.Eye){Block(b,"OUTLINE_EYE: active source outline has no Eye pass; requires an explicit role/shell decision.");return;}
             CopyColor(s,"_OutlineColor",t,"_OutlineColor",Color.black,b);MapStencil(s,t,"_OutlineStencil",b);
-            if(family==HoMigrationFamily.Cloth||family==HoMigrationFamily.Hair)
+            bool objectGeometry=(family==HoMigrationFamily.Cloth||family==HoMigrationFamily.Hair||family==HoMigrationFamily.Skin)&&t.HasProperty("_OutlineFixWidth");
+            if(objectGeometry)
             {
-                Set(t,"_OutlineWidthMode",1);
+                Set(t,"_OutlineWidthMode",family==HoMigrationFamily.Skin?2:1);
                 foreach(string name in new[]{"_OutlineWidth","_OutlineFixWidth","_OutlineVertexR2Width","_OutlineDeleteMesh","_OutlineZBias"})CopyFloat(s,name,t,name);
                 foreach(string name in new[]{"_OutlineWidthMask","_OutlineZBiasMask"})CopyTexture(s,name,t,name,false);
-                if(mode==2)Block(b,"TRANSPARENT_OUTLINE: target Cloth/Hair outline excludes transparent surfaces; legacy transparent shell cannot be retained.");
+                if(mode==2)Block(b,"TRANSPARENT_OUTLINE: target specialized outline excludes transparent surfaces; legacy transparent shell requires independent outline coverage/threshold/blending and cannot reuse body alpha implicitly.");
                 Diff(d,"OUTLINE_OBJECT_GEOMETRY: width remains source hundredths of object units, including near-distance compensation, main-UV masks, vertex RGBA/GD and object-view bias. No guessed pixel conversion.");
             }
             else
@@ -318,9 +363,40 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 }
                 Block(b,"OUTLINE_SPACE: object-space width/fix-distance/bias cannot become "+family+" meters/pixels without renderer transform/mesh context. Preview .01*oldWidth is provisional, not equivalent.");
             }
-            if(Assigned(s,"_OutlineVectorTex")&&F(s,"_OutlineVectorScale",1)!=0)Block(b,"OUTLINE_DIRECTION_TEXTURE: active old vector texture/UV mode is not consumed by the target.");
-            if(Assigned(s,"_OutlineTex")||V(s,"_OutlineTexHSVG",new Vector4(0,1,1,1))!=new Vector4(0,1,1,1))Block(b,"OUTLINE_TEXTURE: old color texture/HSVG has no target slot.");
-            Diff(d,"OUTLINE_SHADING: dedicated unlit shell tint replaces legacy shell lighting/lit-color; geometry transport and shell shading remain separate.");
+            if(width!=0&&Assigned(s,"_OutlineVectorTex")&&F(s,"_OutlineVectorScale",1)!=0&&Mathf.RoundToInt(F(s,"_OutlineVertexR2Width"))!=2)
+                Block(b,"OUTLINE_DIRECTION_TEXTURE: active old vector texture/UV mode is not consumed by the target; fixed VertexRGBA mode alone overrides that texture (GD can fall back).");
+            bool rgb=OutlineTextureRgbEffective(s);
+            bool alpha=mode!=0&&Mathf.RoundToInt(F(s,"_AlphaMaskMode"))!=1&&V(s,"_OutlineColor",new Vector4(0,0,0,1)).w!=0;
+            bool assigned=Assigned(s,"_OutlineTex");
+            Vector4 hsvg=V(s,"_OutlineTexHSVG",new Vector4(0,1,1,1));
+            bool hsvgEffective=rgb&&hsvg!=new Vector4(0,1,1,1)&&(assigned||hsvg.z<1);
+            if(assigned&&rgb)
+            {
+                if(t.HasProperty("_OutlineColorMap"))CopyTexture(s,"_OutlineTex",t,"_OutlineColorMap",false);
+                else Block(b,"OUTLINE_TEXTURE: live old RGB color texture has no target outline-color slot.");
+            }
+            if(hsvgEffective)Block(b,"OUTLINE_HSVG: live old outline tone correction requires a static outline-only bake; copying its uncorrected map is provisional.");
+            if(assigned&&alpha)Block(b,"OUTLINE_ALPHA_TEXTURE: old outline alpha uses its own texture/ST and alpha-mask chain; the target RGB map/body coverage cannot preserve it implicitly.");
+            if(assigned&&!rgb&&!alpha)Diff(d,"OUTLINE_DEAD_TEXTURE: old outline RGB coefficients are zero and opaque/replace-alpha discards its alpha; the assigned color map has no effective output and is omitted. The black shell itself remains enabled.");
+            if(Assigned(s,"_OutlineVectorTex")&&Mathf.RoundToInt(F(s,"_OutlineVertexR2Width"))==2)
+                Diff(d,"OUTLINE_DEAD_VECTOR_TEXTURE: fixed VertexRGBA correction overrides the old vector texture before expansion; that texture is omitted.");
+            Diff(d,"OUTLINE_SHADING: native unlit OutlineColor*OutlineColorMap replaces the legacy shell lighting/lit-color/shadow model; RGB maps retain their own raw-UV ST and are not composed with MainTex ST.");
+            if(F(s,"_OutlineZTest",4)!=4||F(s,"_OutlineZWrite",1)!=1||On(s,"_OutlineAlphaToMask"))
+                Diff(d,"OUTLINE_RASTER_POLICY: native shell uses the specialized LEqual/depth-write/alpha-to-coverage policy instead of saved old OutlineZTest="+F(s,"_OutlineZTest",4)+", OutlineZWrite="+F(s,"_OutlineZWrite",1)+", OutlineAlphaToMask="+F(s,"_OutlineAlphaToMask")+"; this is an explicit new raster policy, not an equivalent state copy.");
+        }
+        private static bool OutlineTextureRgbEffective(Material source)
+        {
+            Vector4 tint=V(source,"_OutlineColor",new Vector4(0,0,0,1));
+            Vector4 lit=V(source,"_OutlineLitColor",Vector4.zero);
+            float start=Mathf.Clamp01(F(source,"_OutlineLitOffset"))*lit.w;
+            float end=Mathf.Clamp01(F(source,"_OutlineLitOffset")+F(source,"_OutlineLitScale",1))*lit.w;
+            bool apply=F(source,"_OutlineLitApplyTex")!=0;
+            // The texture coefficient is affine in the light factor. Both
+            // endpoints must be zero in all channels to prove it is dead.
+            foreach(float factor in F(source,"_OutlineLitShadowReceive")!=0?new[]{start,end,0f}:new[]{start,end})
+                for(int channel=0;channel<3;channel++)
+                    if(tint[channel]*(1-factor)+(apply?lit[channel]*factor:0)!=0)return true;
+            return false;
         }
         private static void MapSss(Material s,Material t,HoMigrationFamily family,List<string> d,List<string> b,string folder)
         {
@@ -397,11 +473,11 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 Diff(d,"RIM_MODEL: AutoRim/LightRim/RimShade use target family response; spatial lighting/mask/geometry choices and separate RimShade are not claimed equivalent.");
             }
         }
-        private static void CheckUnsupportedInputs(Material s,HoMigrationFamily family,int mode,List<string> d,List<string> b)
+        private static void CheckUnsupportedInputs(Material s,HoMigrationFamily family,int mode,List<string> d,List<string> b,HashSet<string> decisions)
         {
             SourceVariant(s,"_HoSemanticMaskOn","_HO_SEMANTIC_MASK",b);
             SourceVariant(s,"_HoTesionEnabled","_HO_GD_TENSION",b);
-            if(s.shader.name.Contains("TwoPass"))Block(b,"TWO_PASS_TRANSPARENCY: source front/back ordering has two passes; one target pass needs explicit ordering/role review.");
+            if(s.shader.name.Contains("TwoPass")&&!decisions.Contains("ReplaceTwoPassTransparency"))Block(b,"TWO_PASS_TRANSPARENCY: source front/back ordering has two passes; one target pass needs explicit ordering/role review.");
             if(On(s,"_Invisible"))Block(b,"INVISIBLE_SOURCE: source discards rendering but target has no material invisible toggle.");
             if(On(s,"_UseParallax"))Block(b,"PARALLAX: active parallax/POM has no target equivalent.");
             if(On(s,"_UseDither"))Block(b,"DITHER: active old dither coverage has no target equivalent.");
@@ -412,6 +488,49 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if(V(s,"_DissolveParams",Vector4.zero).x!=0)Block(b,"DISSOLVE: active old dissolve/animated coverage needs a separate implementation.");
             if(V(s,"_DistanceFade",Vector4.zero).z!=0)Block(b,"DISTANCE_FADE: distance-dependent shading cannot be baked as a static material texture.");
             Diff(d,"ROLE_SCOPE: exactly one chosen family is converted. Shared skin/eye/hair/cloth slots, renderer bindings, animation, scripts and MPBs require caller native reference/fork preflight.");
+        }
+        private static HashSet<string> ValidateModelDecisions(Material source,HoMigrationFamily family,string[] requested,List<string> differences,List<string> blockers)
+        {
+            var accepted=new HashSet<string>(StringComparer.Ordinal);
+            if(requested==null)return accepted;
+            bool outline=source.shader.name.Contains("Outline")&&
+                ((source.GetShaderPassEnabled("FORWARD_OUTLINE")&&source.GetShaderPassEnabled("UniversalForward")&&source.GetShaderPassEnabled("UniversalForwardOnly"))||
+                 (source.GetShaderPassEnabled("HO_OUTLINE_NORMAL_DEPTH")&&source.GetShaderPassEnabled("HoGeometryBufferOutlineNormalDepth")))&&
+                !(F(source,"_OutlineWidth")==0&&On(source,"_OutlineDeleteMesh"));
+            foreach(string code in requested)
+            {
+                string evidence;
+                bool valid;
+                switch(code)
+                {
+                    case "RetireZeroWidthOutline":
+                        valid=outline&&F(source,"_OutlineWidth")==0&&F(source,"_OutlineDeleteMesh")==0;
+                        evidence="requires an enabled old outline variant with exactly zero width and DeleteMesh=false; source width="+F(source,"_OutlineWidth")+", DeleteMesh="+F(source,"_OutlineDeleteMesh")+", object-view bias="+F(source,"_OutlineZBias")+". Explicitly retire its visible/depth/stencil/Ho shell output; no expanded outline is retired.";
+                        break;
+                    case "RetireEyeOutline":
+                        valid=family==HoMigrationFamily.Eye&&outline;
+                        evidence="requires Eye and an enabled old outline; target family="+family+", source="+source.shader.name+". Explicitly retire the Eye-role shell instead of inventing an Eye outline pass; other family roles retain their own outline policy.";
+                        break;
+                    case "UseNativeTransparentDepth":
+                        valid=(family==HoMigrationFamily.Cloth||family==HoMigrationFamily.Hair)&&SurfaceMode(source)==2&&F(source,"_ZWrite",0)>.5f;
+                        evidence="requires transparent Cloth/Hair and source Forward ZWrite On; family="+family+", mode="+SurfaceMode(source)+", source ZWrite="+F(source,"_ZWrite",0)+". Adopt native transparent Forward ZWrite Off; Ho coverage/depth policy is validated separately.";
+                        break;
+                    case "ReplaceTwoPassTransparency":
+                        valid=family!=HoMigrationFamily.Skin&&source.shader.name.Contains("TwoPass")&&SurfaceMode(source)==2;
+                        evidence="requires an actual old TwoPass transparent source and a transparent-capable family; family="+family+", source="+source.shader.name+". Adopt one native transparent pass with Cull Off, replacing the old ordered back/front passes; alpha/blend/depth/Ho limitations remain independent.";
+                        break;
+                    case "PreserveHiddenCoverage":
+                        valid=family==HoMigrationFamily.Cloth&&F(source,"_Invisible")!=0;
+                        evidence="requires Cloth and a current nonzero _Invisible; family="+family+", source _Invisible="+F(source,"_Invisible")+". Preserve zero raster/Shadow/Ho/Meta coverage with native Cutout, BaseColor.a=0, AlphaMaskMode=0, Cutoff=.5, Outline/Emission Off. Old RT ignored _Invisible and could retain ghost occlusion/radiance; native alpha-any-hit now hides this submesh too. Main RGB/texture/ST, authored queue and metadata remain; invisible legacy decoration is not baked.";
+                        break;
+                    default:
+                        Block(blockers,"MODEL_DECISION: unknown code '"+(code??"<null>")+"'; only RetireZeroWidthOutline, RetireEyeOutline, UseNativeTransparentDepth, ReplaceTwoPassTransparency and PreserveHiddenCoverage are supported.");
+                        continue;
+                }
+                if(!valid){Block(blockers,"MODEL_DECISION: "+code+" is outside its permitted condition: "+evidence);continue;}
+                if(accepted.Add(code))Diff(differences,"MODEL_DECISION_"+code+": "+evidence);
+            }
+            return accepted;
         }
         private static void SourceVariant(Material source,string property,string keyword,List<string> blockers)
         {

@@ -72,7 +72,7 @@ public static class HoConverterSurfaceChecks
     {
         AssetDatabase.SaveAssetIfDirty(source);string before=EditorJsonUtility.ToJson(source);
         var differences=new List<string>();var blockers=new List<string>();
-        var t=(Material)ConvertMethod.Invoke(null,new object[]{source,family,differences,blockers,folder+"/Derived"});
+        var t=(Material)ConvertMethod.Invoke(null,new object[]{source,family,differences,blockers,folder+"/Derived",null});
         Require(t!=null&&blockers.Count==0,"unblocked fixture conversion "+family+": "+string.Join("|",blockers));
         Require(before==EditorJsonUtility.ToJson(source),"source immutable "+family);transient.Add(t);return t;
     }

@@ -14,6 +14,7 @@ public static class HoMigrationBakerChecks
     public static void Configure() { PlayerSettings.colorSpace = ColorSpace.Linear; Debug.Log("HO_BAKER_CONFIG_LINEAR"); }
     public static void Edges()
     {
+        using var exact = HoMigrationTextureFormats.UseProfile(HoMigrationTextureFormats.OutputProfile.ExactPreview);
         try
         {
             Need(Environment.GetEnvironmentVariable("HO_BAKER_FIXTURE")=="1", "private edge fixture");
@@ -51,6 +52,7 @@ public static class HoMigrationBakerChecks
     }
     public static void Run()
     {
+        using var exact = HoMigrationTextureFormats.UseProfile(HoMigrationTextureFormats.OutputProfile.ExactPreview);
         try
         {
             string suffix = Environment.GetEnvironmentVariable("HO_BAKER_FIXTURE_SUFFIX") ?? "1";

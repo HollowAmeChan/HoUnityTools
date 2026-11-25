@@ -37,16 +37,18 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         [Serializable] public sealed class Recipe
         {
             public string owner = Owner;
-            public int version = 1;
+            public int version = 2;
             public string operation, definitionHash, sourceMaterialPath, sourceMaterialGuid, sourceMaterialSha256,
                 sourceMaterialMetaSha256, sourceShaderPath, sourceShaderSha256, unity, graphicsApi, colorSpace,
-                domain, outputFormat, shaderSha256, outputGuid, outputSha256, outputMetaSha256;
+                domain, outputFormat, requestedOutputFormat, storageProfile, shaderSha256, outputGuid, outputSha256, outputMetaSha256;
+            public int storagePolicyVersion;
+            public HoMigrationTextureFormats.Measurement storage;
             public long sourceMaterialLocalId;
             public int width, height, filter, wrapU, wrapV, anisotropy;
             public Vector4 destinationST;
             public List<string> parameters = new();
             public List<Input> inputs = new();
-            public string limitations = "Static UV0, LOD0 sampled at output texel centers; baked nonlinear filtering/mips approximate source runtime filtering. External animation/script/MPB proof is required from the converter. Color outputs store shader working-space RGB as linear data; no second sRGB decode. Normal inputs are not unpacked or altered.";
+            public string limitations = "Static UV0, LOD0 sampled at output texel centers; baked nonlinear filtering/mips approximate source runtime filtering. External animation/script/MPB proof is required from the converter. Production color may use sRGB-encoded RGBA32; float/half and scalar outputs store working-space data. Format and all-mip numeric/coverage evidence are recorded. Normal inputs are not unpacked or altered.";
         }
 
         public static Texture2D Coverage(Material source, string derivedAssetFolder, List<string> blockers) =>
@@ -84,12 +86,14 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if (source == null || source.shader == null) { Block("Missing source material/shader."); return null; }
             if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) { Block("A graphics device is required; no Readable/importer fallback is performed."); return null; }
             string assetFolder;
-            try { assetFolder = ValidateFolder(folder); }
+            HoMigrationTextureFormats.OutputProfile storageProfile;
+            try { assetFolder = ValidateFolder(folder); storageProfile = HoMigrationTextureFormats.Profile; }
             catch (Exception error) { Block(error.Message); return null; }
             var recipe = new Recipe { operation = operation.ToString(), unity = Application.unityVersion,
                 graphicsApi = SystemInfo.graphicsDeviceType.ToString(), colorSpace = QualitySettings.activeColorSpace.ToString(),
                 sourceMaterialPath = AssetDatabase.GetAssetPath(source), sourceShaderPath = AssetDatabase.GetAssetPath(source.shader),
-                shaderSha256 = HashText(BakeShader), destinationST = Identity };
+                shaderSha256 = HashText(BakeShader), destinationST = Identity,
+                storageProfile = storageProfile.ToString(), storagePolicyVersion = HoMigrationTextureFormats.PolicyVersion };
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out recipe.sourceMaterialGuid, out recipe.sourceMaterialLocalId);
             recipe.sourceMaterialSha256 = FileHashOrEmpty(recipe.sourceMaterialPath);
             recipe.sourceMaterialMetaSha256 = FileHashOrEmpty(recipe.sourceMaterialPath + ".meta");
@@ -263,7 +267,16 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             Map reference = domainInputs.FirstOrDefault(m => m.Texture != null);
             Texture2D sampler = reference?.Sampler;
             bool scalar = operation == Operation.Coverage || operation == Operation.SssThinness || operation == Operation.Channel;
-            recipe.width = width; recipe.height = height; recipe.outputFormat = scalar ? "RFloat linear" : "RGBAFloat linear-data";
+            bool coverage = operation == Operation.Coverage || operation == Operation.HairBase || operation == Operation.HsvgBase;
+            float[] cutoffs = new[] { source.HasProperty("_Cutoff") ? source.GetFloat("_Cutoff") : .5f,
+                source.HasProperty("_SubpassCutoff") ? source.GetFloat("_SubpassCutoff") : .5f, .001f }
+                .Where(v => Finite(v) && v >= 0 && v <= 1).Distinct().OrderBy(v => v).ToArray();
+            recipe.parameters.Add("storageCutoffs=" + string.Join(",", cutoffs.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
+            recipe.width = width; recipe.height = height;
+            recipe.requestedOutputFormat = storageProfile == HoMigrationTextureFormats.OutputProfile.ExactPreview
+                ? scalar ? "RFloat linear" : "RGBAFloat linear-data"
+                : scalar ? "Production scalar" : operation == Operation.EmissionRgba ? "Production HDR emission" : "Production color";
+            recipe.outputFormat = recipe.requestedOutputFormat;
             recipe.filter = (int)Filter(sampler); recipe.wrapU = (int)wrapU; recipe.wrapV = (int)wrapV; recipe.anisotropy = sampler == null ? 1 : sampler.anisoLevel;
             recipe.parameters.Sort(StringComparer.Ordinal);
             recipe.definitionHash = DefinitionHash(recipe);
@@ -314,13 +327,14 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
                 readback.ReadPixels(new Rect(0, 0, width, height), 0, 0); readback.Apply(false, false);
                 Color[] pixels = readback.GetPixels();
                 if (pixels.Any(p => !Finite(p.r) || !Finite(p.g) || !Finite(p.b) || !Finite(p.a))) throw new InvalidOperationException("Bake produced nonfinite pixels.");
-                result = new Texture2D(width, height, scalar ? TextureFormat.RFloat : TextureFormat.RGBAFloat, true, true)
-                { name = slug + "_" + operation, filterMode = (FilterMode)recipe.filter, wrapModeU = wrapU, wrapModeV = wrapV, anisoLevel = recipe.anisotropy };
-                if (scalar) result.SetPixelData(pixels.Select(p => p.r).ToArray(), 0); else result.SetPixels(pixels);
-                result.Apply(true, false);
+                result = HoMigrationTextureFormats.Create(pixels, width, height, scalar, operation == Operation.EmissionRgba, coverage, cutoffs,
+                    (FilterMode)recipe.filter, wrapU, wrapV, recipe.anisotropy, out recipe.storage);
+                result.name = slug + "_" + operation;
+                recipe.outputFormat = recipe.storage.format + " / " + recipe.storage.encoding;
                 CreateFolders(assetFolder);
                 AssetDatabase.CreateAsset(result, assetPath); createdGuid = AssetDatabase.AssetPathToGUID(assetPath);
                 AssetDatabase.SaveAssetIfDirty(result);
+                HoMigrationTextureFormats.FinalizeAsset(result, recipe.storage);
                 recipe.outputGuid = createdGuid; recipe.outputSha256 = FileHashOrEmpty(assetPath); recipe.outputMetaSha256 = FileHashOrEmpty(assetPath + ".meta");
                 using (var stream = new FileStream(recordPath, FileMode.CreateNew, FileAccess.Write))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) writer.Write(JsonUtility.ToJson(recipe, true));
@@ -384,12 +398,16 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         private static string DefinitionHash(Recipe recipe)
         {
             string definition = recipe.definitionHash, guid = recipe.outputGuid, content = recipe.outputSha256, meta = recipe.outputMetaSha256;
+            string format = recipe.outputFormat;
+            var storage = recipe.storage;
             try
             {
                 recipe.definitionHash = recipe.outputGuid = recipe.outputSha256 = recipe.outputMetaSha256 = null;
+                recipe.outputFormat = string.IsNullOrEmpty(recipe.requestedOutputFormat) ? format : recipe.requestedOutputFormat;
+                recipe.storage = null;
                 return HashText(JsonUtility.ToJson(recipe));
             }
-            finally { recipe.definitionHash = definition; recipe.outputGuid = guid; recipe.outputSha256 = content; recipe.outputMetaSha256 = meta; }
+            finally { recipe.definitionHash = definition; recipe.outputGuid = guid; recipe.outputSha256 = content; recipe.outputMetaSha256 = meta; recipe.outputFormat = format; recipe.storage = storage; }
         }
         private static string Absolute(string path)
         {

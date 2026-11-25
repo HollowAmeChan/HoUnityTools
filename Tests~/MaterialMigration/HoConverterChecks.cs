@@ -13,6 +13,7 @@ public static class HoConverterChecks
     private static int checks;
     public static void Run()
     {
+        using var exact = HoMigrationTextureFormats.UseProfile(HoMigrationTextureFormats.OutputProfile.ExactPreview);
         Require(Application.isBatchMode&&Environment.GetEnvironmentVariable("HO_MIGRATION_CONVERTER_FIXTURE")=="1","explicit disposable conversion fixture");
         Require(QualitySettings.activeColorSpace==ColorSpace.Linear,"Linear host");
         Require(Shader.Find("lilToon")!=null,"actual current legacy shader installed");
