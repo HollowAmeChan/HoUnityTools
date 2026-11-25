@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Hollow.HoUnityTools.Editor.Constraints
 {
     /// <summary>
-    /// 弹簧驱动的面板。版面**照抄同目录的约束面板**（`HoFollowConstraintEditor` 那一套）：
+    /// 弹簧驱动的面板。
     /// 顶部一行粗体组件名 + 预设按钮，下面一组可折叠的 `DrawSectionHeader` 分区
     /// （各自一个强调色 + 一句摘要），分区里用 `PropertyField` / `Slider`，
     /// 依赖项用 `DisabledScope` 压灰，最后是只读的调试读数。
@@ -87,7 +87,7 @@ namespace Hollow.HoUnityTools.Editor.Constraints
 
         private SerializedProperty Find(string propertyName) => serializedObject.FindProperty(propertyName);
 
-        // ── 预设工具栏（照抄 HoFollowConstraintEditor.DrawPresetToolbar）────────────
+        // ── 预设工具栏 ─────────────────────────────────────────────────────────────
         private void DrawPresetToolbar(HoSpringConstraint component)
         {
             EditorGUILayout.LabelField("Ho 弹簧驱动", EditorStyles.boldLabel);

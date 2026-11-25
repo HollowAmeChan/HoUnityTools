@@ -70,4 +70,5 @@ NumberField / SegmentOn / SegmentOff / Button / ButtonPrimary / ButtonDanger / C
 
 - 已用 `HoConstraintEditorControls`：`HoBlinkConstraintEditor`、`HoAnimationToolsWindow`（动画工具）、`HoPlaySpeedSettingsWindow`（播放速度设置），以及 `HoSpringConstraintEditor` 的一处 `InlineFoldout`。面捕作者界面已迁移到独立 HoFaceStudio，不再维护 Unity 面捕三页。
   （速度**条**本身 `HoPlaySpeedWindow` 不走这套栅格：它要能塞进工具栏那条 24px 的缝里，所以用的是自带 `EditorStyles`；速度的**设置窗口**走这套。）
-- 仍走旧的 `HoConstraintEditorSectionGui`（分区头 + 栅格）：`HoLookAtConstraintEditor`、`HoPendulumConstraintEditor`、`HoFollowConstraintEditor`、`HoFloatingConstraintEditor`、`HoSpringConstraintEditor`。
+- 使用 Unity 默认 Inspector 的组件包括 `HoFollowConstraint` 和 `HoFloatingConstraint`。
+- `HoLookAtConstraintEditor`、`HoPendulumConstraintEditor` 和 `HoSpringConstraintEditor` 仍用 `HoConstraintEditorSectionGui` 绘制分区和栅格。
