@@ -1,0 +1,23 @@
+{
+  "name": "HoUnityTools.ShadowResponse.LWGUI.Editor",
+  "rootNamespace": "Hollow.HoUnityTools.Editor.ShadowResponse.LwguiIntegration",
+  "references": [
+    "HoUnityTools.Editor",
+    "LWGUI",
+    "LWGUI.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "HO_HAS_SHADOW_RAMP"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.jasonma.lwgui",
+      "expression": "[1.41.1,2.0.0)",
+      "define": "HO_HAS_SHADOW_RAMP"
+    }
+  ]
+}

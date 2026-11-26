@@ -253,7 +253,7 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
             if(On(s,"_UseShadow"))
             {
                 CopyColor(s,"_ShadowColor",t,"_ShadowTint",Color.gray,b);
-                Diff(d,"SHADOW_RESPONSE: old color bands/thresholds/masks are approximated by native ramp/tint; no SDF/ramp texture is inferred from old bands.");
+                Diff(d,"SHADOW_RESPONSE: only the first tint is copied here; old bands, thresholds, masks and SDF remain pending explicit shadow-response recovery from the source snapshot.");
             }
             MapDecorative(s,t,family,d,b);
         }
