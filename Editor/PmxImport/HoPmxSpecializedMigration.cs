@@ -11,6 +11,25 @@ namespace Hollow.HoUnityTools.Editor.Pmx
     // An explicit migration boundary. Neither startup nor ordinary reimport invokes Apply.
     public static class HoPmxSpecializedMigration
     {
+        public static void RunAuditLegacy()
+        {
+            string output = Environment.GetEnvironmentVariable("HO_PMX_MIGRATION_PLAN");
+            if (string.IsNullOrEmpty(output) || File.Exists(output) || Path.GetFullPath(output).StartsWith(ProjectRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Set HO_PMX_MIGRATION_PLAN to a new external file.");
+            var paths = AssetDatabase.GetAllAssetPaths().Where(p => p.StartsWith("Assets/", StringComparison.Ordinal)
+                && p.EndsWith(".pmx", StringComparison.OrdinalIgnoreCase) && AssetImporter.GetAtPath(p) is HoPmxImporter importer
+                && importer.materialProfile == HoPmxMaterialProfile.LilToon).ToArray();
+            WriteAudit(paths, output);
+            Debug.Log("HO_PMX_LEGACY_AUDIT_OK importers=" + paths.Length);
+        }
+
+        public static void RunApplyPlanned()
+        {
+            Apply(Environment.GetEnvironmentVariable("HO_PMX_MIGRATION_PLAN") ?? throw new InvalidOperationException("Set HO_PMX_MIGRATION_PLAN."),
+                Environment.GetEnvironmentVariable("HO_PMX_MIGRATION_BACKUP") ?? throw new InvalidOperationException("Set HO_PMX_MIGRATION_BACKUP."));
+            Debug.Log("HO_PMX_SPECIALIZED_MIGRATION_OK");
+        }
+
         [Serializable] public sealed class Plan
         {
             public int version = 1;

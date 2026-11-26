@@ -78,6 +78,38 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         }
         public static void RunApply() => Apply(RequiredEnvironment("HO_MATERIAL_MIGRATION_PLAN"), RequiredEnvironment("HO_MATERIAL_MIGRATION_REPORT"), RequiredEnvironment("HO_MATERIAL_MIGRATION_BACKUP"));
         public static void RunRestore() => Restore(RequiredEnvironment("HO_MATERIAL_MIGRATION_BACKUP"));
+        public static void ValidateAppliedPlan(HoMaterialMigrationPlan plan, PreviewReport report, Journal journal)
+        {
+            if (plan == null || report == null || journal == null || plan.schemaVersion != 1 || report.schemaVersion != 1 || journal.schemaVersion != 1
+                || Path.GetFullPath(plan.projectRoot) != ProjectRoot || report.projectRoot != ProjectRoot || journal.projectRoot != ProjectRoot
+                || plan.batchId != report.batchId || journal.finalRoot != "Assets/HoMaterialMigration/" + plan.batchId
+                || journal.state != "Verified" || report.inputFingerprint != Fingerprint(plan) || journal.inputFingerprint != report.inputFingerprint)
+                throw new InvalidOperationException("Applied plan, preview and journal are not the same verified transaction.");
+        }
+        public static void ValidateAppliedMaterial(Proposal proposal, Material material, string finalRoot)
+        {
+            AssetPath(finalRoot);RequireProposal(proposal);
+            var preview = AssetDatabase.LoadAssetAtPath<Material>(proposal.assetPath);
+            if (JsonUtility.ToJson(new InputList { values = Inputs(preview) }) != JsonUtility.ToJson(new InputList { values = proposal.proposedInputs })
+                || JsonUtility.ToJson(State(preview)) != JsonUtility.ToJson(proposal.proposedState))
+                throw new InvalidOperationException("Frozen preview inputs, dependencies or state changed: " + proposal.assetPath);
+            var expected = new Material(preview);
+            try
+            {
+                foreach (var resource in proposal.resources)
+                {
+                    string target = finalRoot + "/Resources/" + proposal.sourceGuid + "-" + proposal.targetFamily + "/" + Path.GetFileName(resource.assetPath);
+                    foreach (string property in expected.GetTexturePropertyNames())
+                        if (AssetDatabase.GetAssetPath(expected.GetTexture(property)) == resource.assetPath)
+                            expected.SetTexture(property, AssetDatabase.LoadAssetAtPath<Texture>(target) ?? throw new InvalidOperationException("Missing saved resource: " + target));
+                }
+                if (material == null || EditorUtility.IsDirty(material) || material.shader != preview.shader
+                    || JsonUtility.ToJson(new InputList { values = Inputs(material) }) != JsonUtility.ToJson(new InputList { values = Inputs(expected) })
+                    || JsonUtility.ToJson(State(material)) != JsonUtility.ToJson(State(expected)))
+                    throw new InvalidOperationException("Saved material inputs, dependencies or state differ from the proposal: " + AssetDatabase.GetAssetPath(material));
+            }
+            finally { Object.DestroyImmediate(expected); }
+        }
         public static void RunReferenceOwners()
         {
             var plan = ReadPlan(RequiredEnvironment("HO_MATERIAL_MIGRATION_PLAN"));

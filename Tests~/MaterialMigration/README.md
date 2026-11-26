@@ -64,3 +64,15 @@ python Tools~/MaterialMigration/prepare-validation.py --output D:/Temp/HoMateria
 此原生 profile 还包括 `HoMigrationWrapperChecks.Create/ReloadAndRestore` 与 `HoMigrationWrapperTransactionChecks.Apply/Restore`，后一个 Restore 由独立 Editor 进程执行。两份合成 shader 事务夹具会主动拒绝安装了真实旧材质包的宿主。
 
 这些夹具会创建测试资产，只用于独立工程；生产调用仅走上述显式计划入口。
+
+## 阶段四 C 的显式迁移入口
+
+`HoMaterialMigrationBatch` 用 `HO_MATERIAL_MIGRATION_BATCHES` 的外部 manifest 顺序调用原 Preview／Apply，不绕过逐材质审查或独立 journal。`RunValidateAll` 在新进程比对完整输入／状态、Shader／贴图依赖、原 GUID/localID、实际 owner 与 wrapper；结果写入新的 `HO_MATERIAL_MIGRATION_BATCH_RESULT`。`RunDeletePreviews` 只接受专用批次目录，拒绝生产依赖或额外未知资产。`RunFinalAudit` 在卸载后重新验证默认 Lit、保留输入及原生图。
+
+`HoMaterialPlatformPackageTransition.RunInstallTargets/RunRemoveLegacy` 只通过 Package Manager Client 修改依赖，使用直接 Editor batchmode、**不加 -quit**；显式提供 `HO_MATERIAL_PLATFORM_PROJECT` 与新的工程外 `HO_MATERIAL_PLATFORM_PACKAGE_REPORT`。Remove 自己生成 fresh 原生、全部导入 Assets 依赖、包材质／模型、默认 Lit 与 typed PMX 审计，只移除 `jp.lilxyzw.liltoon`。历史 Ho producer 名称和 URP-Extensions 保留，判定依据为真实 Shader、GUID 与包依赖。SessionState 只用于当前异步请求的域重载恢复，不自动发起新迁移。
+
+`HoUrpDefaultMaterialMigration.RunApply/RunVerify` 专门处理已审核的 HoURP 默认 Lit，不是任意 Packages 资产写入 API。使用 `HO_URP_DEFAULT_MIGRATION_PROJECT/REPORT/BACKUP`，固定原始 SHA／GUID、有效粉色金属输入与原生 URP 策略，保存精确源字节。
+
+`HoRetainedMaterialInputsMigration.RunApply/RunVerify/RunRestore` 是 8 批之后的独立事务：仅迁出固定 PNG 和 7 个已审核 MatCap 引用；使用 `HO_RETAINED_INPUTS_PROJECT/REPORT/BACKUP`。保原图字节、Importer、完整 mip GPU 采样和其余材质序列化字段，Verify 支持旧包已卸载。Restore 先要求原包已重装，按后置事务→PMX／默认输入→材质批次反序操作；原批次 journal 不被重写。进程中断或后续编辑会拒绝自动覆盖，必须保留工程外备份并按状态合并；不声称双文件日志具有跨进程崩溃原子性。
+
+生产验证结果与回退顺序见 HoShader 的 `docs/material-platform/10-production-migration.md`；本轮实际包含无旧包新进程和 14 个原文件精确恢复演练。
