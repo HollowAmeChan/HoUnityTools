@@ -644,11 +644,11 @@ namespace Hollow.HoUnityTools.Editor.MaterialMigration
         {
             string type=family switch
             {
-                HoMigrationFamily.Cloth=>"HoShader.ClothURP.Editor.ClothShaderGUI, HoShader.ClothURP.Editor",
-                HoMigrationFamily.Hair=>"HoShader.HairURP.Editor.HairShaderGUI, HoShader.HairURP.Editor",
-                HoMigrationFamily.Skin=>"HoShader.SkinStylizedURP.Editor.SkinShaderGUI, HoShader.SkinStylizedURP.Editor",
-                HoMigrationFamily.Eye=>"HoShader.SkinStylizedURP.Editor.EyeShaderGUI, HoShader.SkinStylizedURP.Editor",
-                _=>"HoShader.EnvironmentURP.Editor.EnvironmentShaderGUI, HoShader.EnvironmentURP.Editor"
+                HoMigrationFamily.Cloth=>"HoShader.ClothURP.Editor.ClothMaterialUtility, HoShader.ClothURP.Editor",
+                HoMigrationFamily.Hair=>"HoShader.HairURP.Editor.HairMaterialUtility, HoShader.HairURP.Editor",
+                HoMigrationFamily.Skin=>"HoShader.SkinStylizedURP.Editor.SkinMaterialUtility, HoShader.SkinStylizedURP.Editor",
+                HoMigrationFamily.Eye=>"HoShader.SkinStylizedURP.Editor.EyeMaterialUtility, HoShader.SkinStylizedURP.Editor",
+                _=>"HoShader.EnvironmentURP.Editor.EnvironmentMaterialUtility, HoShader.EnvironmentURP.Editor"
             };
             Type gui=Type.GetType(type,false);
             MethodInfo sync=gui?.GetMethod("SyncMaterial",BindingFlags.Public|BindingFlags.Static)??gui?.GetMethod("SyncSurfaceMode",BindingFlags.Public|BindingFlags.Static);
