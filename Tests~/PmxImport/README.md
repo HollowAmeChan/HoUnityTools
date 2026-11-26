@@ -13,7 +13,7 @@ python Tools~/PmxImport/prepare-specialized-validation.py --project D:/Temp/HoPm
 unity run D:/Temp/HoPmxSpecializedValidation/Project -- -nographics -executeMethod HoPmxSpecializedValidation.Run
 ```
 
-The host uses stock URP and local Cloth/Hair/Skin/Environment packages, with no lilToon material package or Ho pipeline. It copies importer source plus the two pose/IK types used by character extraction; it does not install the full HoUnityTools dependency graph. Checks cover all five families, fresh defaults, existing implicit legacy settings, stable identifiers/fileIDs/GUID, external remaps, Eye Alpha-to-Coverage conversion and retained extracted coverage, and explicit upgrade/restore. Results are under the host's `Results/`.
+The host uses stock URP and local Cloth/Hair/Skin/Environment packages, with no lilToon material package or Ho pipeline. It copies importer source plus the two pose/IK types used by character extraction; it does not install the full HoUnityTools dependency graph. Checks cover all five families, fresh defaults, existing implicit legacy settings, stable identifiers/fileIDs/GUID, external remaps, Eye Alpha-to-Coverage conversion and retained extracted coverage. Results are under the host's `Results/`.
 
 Hair uses `_Opacity` for transparent coverage and ignores `BaseColor.a`. Solid/cutout Hair clips the base texture alpha directly. The importer maps transparent diffuse alpha to `_Opacity`; cutout diffuse alpha is multiplied into a deterministic derived base texture's A (RGBA32, RGB unchanged), with neutral destination tint alpha/opacity. The conversion retains source color space/sampling settings and regenerates that texture after extraction/remapping. Import information states the 8-bit coverage bake. The synthetic checks include transparent diffuse alpha0.35, cutout alpha multiplication and retained derived texture fileID.
 
@@ -24,17 +24,6 @@ unity run D:/Temp/HoPmxSpecializedValidation/Project -- -force-d3d11 -executeMet
 ```
 
 This verifies transparent alpha0.35 and the same cutout pixels in the shipping Hair Forward and DepthOnly passes. It writes `Results/hair-coverage-gpu.json`.
-
-Production migration is an explicit API boundary, never an automatic import side effect:
-
-```csharp
-HoPmxSpecializedMigration.WriteAudit(new[] { "Assets/Character.pmx" }, auditJsonPath);
-// Review the version-1 plan; set every slot's targetFamily and reviewed=true.
-HoPmxSpecializedMigration.Apply(auditJsonPath, newExternalBackupDirectory);
-HoPmxSpecializedMigration.Restore(newExternalBackupDirectory); // refuses subsequent source/meta changes
-```
-
-`Apply` accepts only profile 0 → 2, validates source/meta SHA-256 and GUID, checks all slot names/indices and installed target packages, backs up raw metas outside the project, preserves existing alpha overrides and remaps, verifies generated material fileIDs, and restores selected metas if an upgrade fails. These APIs change importer regeneration settings. They do not convert assigned external material assets; that is a separate material migration step. Profile 1 stays on its existing environment workflow.
 
 Conversion limits are recorded as import warnings: PMX Ramp/Sphere behavior is not equivalent to dedicated URP lighting; outline pixel widths are only initial seeds; Skin rejects transparent blending and Eye uses separate linear coverage; independent Ray alpha sources and unsupported family-specific metal/smoothness/normal transforms require authoring review. Hair keeps its authored two-lobe defaults and does not reinterpret generic PBR maps as strand data. F0, skin scattering, fabric fibers/coating, strand maps, emission effects and environment lighting are not reconstructed from PMX material names. This is a regeneration entry point, not a visual-equivalence guarantee.
 

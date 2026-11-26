@@ -9,7 +9,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
 {
     internal static class HoPmxMaterials
     {
-        private const string EnvironmentShaderName = "HoShader/Environment URP";
+        private const string EnvironmentShaderName = "Ho/Environment/URP/Lit";
         private const string EnvironmentShaderPath = "Packages/com.hoshader.environment-urp/Runtime/Shaders/Environment.shader";
         private const string EnvironmentEditorType = "HoShader.EnvironmentURP.Editor.EnvironmentMaterialUtility, HoShader.EnvironmentURP.Editor";
         private static Action<Material> syncEnvironmentMaterial;

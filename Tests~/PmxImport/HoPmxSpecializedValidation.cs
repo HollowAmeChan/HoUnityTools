@@ -29,19 +29,19 @@ public static class HoPmxSpecializedValidation
             var report = Report(fresh);
             Check(report.materials.Count == 5 && report.materials.All(x => x.material != null), "five material families generated");
             foreach (var item in report.materials)
-                Check(item.material.shader.name == "HoShader/" + item.targetFamily + " URP", "shader family " + item.targetFamily);
+                Check(item.material.shader.name == (item.targetFamily == HoPmxMaterialFamily.Skin ? "Ho/Skin/URP/Stylized" : item.targetFamily == HoPmxMaterialFamily.Eye ? "Ho/Skin/URP/Eye" : item.targetFamily == HoPmxMaterialFamily.Environment ? "Ho/Environment/URP/Lit" : "Ho/" + item.targetFamily + "/URP/" + item.targetFamily), "shader family " + item.targetFamily);
             string guid = AssetDatabase.AssetPathToGUID(fresh);
             var ids = Ids(fresh);
             AssetDatabase.ImportAsset(fresh, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
             Check(ids.OrderBy(x => x).SequenceEqual(Ids(fresh).OrderBy(x => x)), "generated material fileIDs stable on reimport");
             Check(AssetDatabase.AssetPathToGUID(fresh) == guid, "PMX GUID stable");
 
-            var external = new Material(Shader.Find("HoShader/Cloth URP")) { name = "External" };
+            var external = new Material(Shader.Find("Ho/Cloth/URP/Cloth")) { name = "External" };
             AssetDatabase.CreateAsset(external, "Assets/external.mat");
             importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), HoPmxImporter.MaterialIdentifier(0)), external);
             importer.SaveAndReimport();
             Check(Report(fresh).materials[0].material == external, "external material preserved");
-            Check(Report(fresh).materials[1].material.shader.name == "HoShader/Hair URP", "unmapped slots still generated");
+            Check(Report(fresh).materials[1].material.shader.name == "Ho/Hair/URP/Hair", "unmapped slots still generated");
 
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
             texture.SetPixels(new[] { new Color(1, 1, 1, .2f), new Color(1, 1, 1, .6f), Color.white, Color.clear });
@@ -102,38 +102,7 @@ public static class HoPmxSpecializedValidation
             AssetDatabase.ImportAsset(legacy, ImportAssetOptions.ForceSynchronousImport);
             var legacyImporter = (HoPmxImporter)AssetImporter.GetAtPath(legacy);
             Check(legacyImporter.materialProfile == HoPmxMaterialProfile.LilToon, "existing missing profile remains legacy0");
-            var plan = HoPmxSpecializedMigration.Audit(new[] { legacy });
-            Check(!plan.importers[0].explicitProfile && plan.importers[0].currentProfile == HoPmxMaterialProfile.LilToon, "audit identifies implicit legacy0");
-            string metaBefore = File.ReadAllText(legacy + ".meta");
             Directory.CreateDirectory("Results");
-            const string planPath = "Results/upgrade-plan.json";
-            File.WriteAllText(planPath, JsonUtility.ToJson(plan, true));
-            string backup = Path.Combine(Path.GetFullPath(".."), "PmxSpecializedBackup-" + Guid.NewGuid().ToString("N"));
-            HoPmxSpecializedMigration.Apply(planPath, backup);
-            Check(((HoPmxImporter)AssetImporter.GetAtPath(legacy)).materialProfile == HoPmxMaterialProfile.SpecializedUrp, "explicit implicit0 upgrade");
-            HoPmxSpecializedMigration.Restore(backup);
-            Check(File.ReadAllText(legacy + ".meta") == metaBefore, "restore preserves original metadata bytes");
-
-            // A migration with authored overrides and an existing remap keeps the external asset.
-            importer = (HoPmxImporter)AssetImporter.GetAtPath(fresh);
-            foreach (var slot in Report(fresh).materials)
-                importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), slot.identifier), external);
-            importer.materialProfile = HoPmxMaterialProfile.LilToon;
-            EditorUtility.SetDirty(importer);
-            importer.SaveAndReimport();
-            var remappedPlan = HoPmxSpecializedMigration.Audit(new[] { fresh });
-            string beforeUnreviewed = File.ReadAllText(fresh + ".meta");
-            File.WriteAllText(planPath, JsonUtility.ToJson(remappedPlan, true));
-            bool rejected = false;
-            try { HoPmxSpecializedMigration.Apply(planPath, backup + "-unreviewed"); }
-            catch (InvalidOperationException) { rejected = true; }
-            Check(rejected && beforeUnreviewed == File.ReadAllText(fresh + ".meta") && !Directory.Exists(backup + "-unreviewed"),
-                "unreviewed mapping rejected before mutation");
-            foreach (var slot in remappedPlan.importers[0].slots) slot.reviewed = true;
-            File.WriteAllText(planPath, JsonUtility.ToJson(remappedPlan, true));
-            HoPmxSpecializedMigration.Apply(planPath, backup + "-remapped");
-            Check(Report(fresh).materials.All(x => x.material == external), "explicit profile0 upgrade preserves all external remaps");
-            Check(AssetDatabase.AssetPathToGUID(fresh) == guid, "explicit upgrade GUID stable");
             File.WriteAllText("Results/specialized-validation.json", "{\"status\":\"passed\",\"checks\":" + JsonUtility.ToJson(new Checks { values = Passed.ToArray() }) + "}");
             Debug.Log("HO_PMX_SPECIALIZED_PASSED " + Passed.Count);
             EditorApplication.Exit(0);

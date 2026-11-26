@@ -20,7 +20,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             if (setting != null && setting.targetFamily != HoPmxMaterialFamily.Auto)
             {
                 info.targetFamily = setting.targetFamily;
-                info.familyReason = "Inspector / migration plan override";
+                info.familyReason = "Inspector override";
                 return;
             }
             var choices = new HashSet<HoPmxMaterialFamily>();
@@ -164,7 +164,13 @@ namespace Hollow.HoUnityTools.Editor.Pmx
             string package = skin ? "com.hoshader.skin-urp-stylized" : family == HoPmxMaterialFamily.Hair ? "com.hoshader.hair-urp" : "com.hoshader.cloth-urp";
             string path = "Packages/" + package + "/Runtime/Shaders/" + family + ".shader";
             Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
-            if (shader == null || shader.name != "HoShader/" + family + " URP")
+            string shaderName = family switch
+            {
+                HoPmxMaterialFamily.Skin => "Ho/Skin/URP/Stylized",
+                HoPmxMaterialFamily.Eye => "Ho/Skin/URP/Eye",
+                _ => "Ho/" + family + "/URP/" + family
+            };
+            if (shader == null || shader.name != shaderName)
                 throw new InvalidOperationException("生成 " + family + " 材质需要 " + package + "，安装后重新导入 PMX。");
             context.DependsOnArtifact(path);
             if (!Synchronizers.ContainsKey(family))

@@ -26,7 +26,7 @@ namespace Hollow.HoUnityTools.Editor.Pmx
         public override void OnImportAsset(AssetImportContext context)
         {
             // A missing field in an existing meta is still legacy profile 0. Only a genuinely
-            // new source receives the new default; upgrades are explicit migration actions.
+            // new source receives the new default; existing sources retain their recorded profile.
             if (importSettingsMissing) materialProfile = HoPmxMaterialProfile.SpecializedUrp;
             GameObject root = null;
             try
