@@ -23,18 +23,10 @@ Ho 渲染体系配套的 Unity 创作工具集，覆盖角色、动画、面捕�
 
 | 仓库 | 用途 |
 | --- | --- |
-| [HoTools](https://github.com/HollowAmeChan/HoTools) | Blender 角色、模型、贴图、动画与自动化工具 |
 | [HoUrp17.3.0](https://github.com/HollowAmeChan/HoUrp17.3.0) | URP 渲染基座 |
 | [HoUrpConfig17.0.3](https://github.com/HollowAmeChan/HoUrpConfig17.0.3) | URP Shader 配置 |
-| [lilToon](https://github.com/HollowAmeChan/lilToon) | 角色 / NPR 着色器 |
 | [lilToon-URP-Extensions](https://github.com/HollowAmeChan/lilToon-URP-Extensions) | 光照、阴影、反射与后处理扩展 |
-| [lilToon-UnityGLTF-Extensions](https://github.com/HollowAmeChan/lilToon-UnityGLTF-Extensions) | glTF 材质契约导入 |
-
-[HoGLTF](https://github.com/HollowAmeChan/HoGLTF) 已从 Ho 渲染体系退役，不再列为当前工作流的组成部分；原仓库仅作为历史参考。
-
-## 可选材质合集
-
-- [HoShader](https://github.com/HollowAmeChan/HoShader)：宝石、皮肤、绒毛等独立材质与 Shader 实验合集，按需选用。
+| HoShader | 下一代材质底座，项目正在迁移，仓库目前为私有 |
 
 ## 日期版本与安装包
 
